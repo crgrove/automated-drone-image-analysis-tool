@@ -1,0 +1,25 @@
+{
+    "files": [
+        [
+            "resources/resources.qrc",
+            "app"
+        ],
+        [
+            "resources/views/*.ui",
+            "app/views"
+        ],
+        [
+            "resources/views/algorithms/*.ui",
+            "app/algorithms/views"
+        ],
+        [
+            "resources/widgets/*.ui",
+            "app/widgets"
+        ]
+    ],
+    "hooks": [],
+    "pyrcc": "pyrcc5",
+    "pyrcc_options": "",
+    "pyuic": "pyuic5",
+    "pyuic_options": "--import-from app"
+}

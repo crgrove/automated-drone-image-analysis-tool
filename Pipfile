@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+"PyQt5" = "*"
+opencv-python = "*"
+numpy = "*"
+qimage2ndarray = "*"
+scipy = "*"
+spectral = "*"
+piexif = "*"
+
+[dev-packages]
+pyqt-distutils = "*"
+PyInstaller = "*"
+e1839a8 = {path = ".",editable = true}
+v = {editable = true,version = "*"}
