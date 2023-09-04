@@ -1,7 +1,7 @@
 import logging
 from ast import literal_eval
 
-from ..views.ColorAnomaly_ui import Ui_ColorAnomaly
+from algorithms.ColorAnomaly.views.ColorAnomaly_ui import Ui_ColorAnomaly
 
 from PyQt5.QtGui import QFontDatabase, QFont, QIcon, QColor
 from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale, QThread, pyqtSlot

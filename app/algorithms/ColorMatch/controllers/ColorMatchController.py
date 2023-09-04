@@ -1,13 +1,13 @@
 import logging
 from ast import literal_eval
 
-from ..views.ColorMatch_ui import Ui_ColorMatch
+from algorithms.ColorMatch.views.ColorMatch_ui import Ui_ColorMatch
 
 from PyQt5.QtGui import QFontDatabase, QFont, QIcon, QColor
 from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale, QThread, pyqtSlot
 from PyQt5.QtWidgets import QWidget,QApplication, QColorDialog, QMessageBox
 
-from ...helpers.ColorUtils import ColorUtils
+from helpers.ColorUtils import ColorUtils
 
 class ColorMatch(QWidget, Ui_ColorMatch):
     """Main Window."""

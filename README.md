@@ -32,17 +32,14 @@ but not pushed to the repository, so the first time you will need to generate
 them as described in the coming section. Once done, you can run the application
 like this::
 
-    app
+    python app
 
 Resources and translations
 --------------------------
 
 In order to ease the development process, the Qt Creator project ``app.pro`` is
 provided. You can open it to edit the UI files or to manage resources.
-Translations can be edited using Qt Linguist, part of the Qt SDK. In order to
-build the translations, you will need to have the ``lrelease`` command on your
-``PATH`` or set its full path to the ``LRELEASE_BIN`` environment variable.
-UI files, translations and resources can be built like this
+UI files and resources can be built like this
 
     python setup.py build_res
 
@@ -61,4 +58,4 @@ be generated like this
  User Contributions
 --------------------
 
-If you are interesting in contributing to this project by either enhancing an existing capability or adding new features/algorithms please reach out to us at info@texsar.org
+If you are interesting in contributing to this project by either enhancing an existing capability or adding new features/algorithms please reach out to us at charlie.grove@texsar.org

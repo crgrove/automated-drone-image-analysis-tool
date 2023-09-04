@@ -11,9 +11,13 @@ qimage2ndarray = "*"
 scipy = "*"
 spectral = "*"
 piexif = "*"
+simplekml = "*"
+scikit-image = "0.18.1"
+pyinstaller = "*"
 
 [dev-packages]
 pyqt-distutils = "*"
+qt5-tools = "*"
 PyInstaller = "*"
 e1839a8 = {path = ".",editable = true}
 v = {editable = true,version = "*"}

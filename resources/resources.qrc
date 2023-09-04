@@ -2,11 +2,7 @@
     <qresource prefix="/">
         <file>style.qss</file>
         <file>fonts/Roboto-Regular.ttf</file>
-        <file>translations/ca_ES.qm</file>
-        <file>translations/en_US.qm</file>
-        <file>translations/es_ES.qm</file>
-        <file>translations/fr_FR.qm</file>
-        <file>icons/texsar.icns</file>
-        <file>icons/texsar.ico</file>
+        <file>icons/ADIAT.icns</file>
+        <file>icons/ADIAT.ico</file>
     </qresource>
 </RCC>

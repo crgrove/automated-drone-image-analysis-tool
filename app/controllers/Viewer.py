@@ -6,11 +6,12 @@ from PyQt5.QtGui import QFontDatabase, QFont, QIcon, QColor, QImage, QPainterPat
 from PyQt5.QtCore import Qt, QFile, QTextStream, QTranslator, QLocale, QThread, pyqtSlot, QRect, QSize
 from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QHBoxLayout
 
-from ..views.Viewer_ui import Ui_Viewer
-from ..views.components.QtImageViewer import QtImageViewer
-
-from ..helpers.ColorUtils import ColorUtils
-from ..helpers.XmlLoader import XmlLoader
+from views.Viewer_ui import Ui_Viewer
+from views.components.QtImageViewer import QtImageViewer
+from services.KMLService import KMLService
+from helpers.ColorUtils import ColorUtils
+from helpers.XmlLoader import XmlLoader
+from helpers.LocationInfo import LocationInfo
 
 class Viewer(QMainWindow, Ui_Viewer):
 	def __init__(self, output_dir, images = None):
@@ -21,11 +22,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 			xmlLoader = XmlLoader(output_dir+"ADIAT_Data.xml")
 			_, self.images = xmlLoader.parseFile()
 		else:
-			self.images = images;
-		self.current_image = 0;
+			self.images = images
+		self.current_image = 0
 		self.loadInitialImage()
 		self.previousImageButton.clicked.connect(self.previousImageButtonClicked)
 		self.nextImageButton.clicked.connect(self.nextImageButtonClicked)
+		self.KmlButton.clicked.connect(self.KmlButtonClicked)
 
 	def loadInitialImage(self):
 		try:
@@ -43,7 +45,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			self.horizontalLayout.replaceWidget(self.placeholderImage, self.mainImage)
 			self.fileNameLabel.setText(image['name'])
 			self.loadAreasofInterest(image)
-			gps_coords = self.getGPS(self.output_dir+image['name'])
+			gps_coords = LocationInfo.getGPS(self.output_dir+image['name'])
 			self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
 		except Exception as e:
 			logging.exception(e)
@@ -103,7 +105,23 @@ class Viewer(QMainWindow, Ui_Viewer):
 	def unloadAreasOfInterest(self):
 		for i in reversed(range(self.verticalLayout_2.count())): 
 			self.verticalLayout_2.itemAt(i).widget().deleteLater()
-	
+	def KmlButtonClicked(self):
+		fileName, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
+		self.generateKml(fileName)
+		
+	def generateKml(self, output_path):
+		kml = KMLService();
+		kml_points = list()
+		for image in self.images:
+			gps_coords = LocationInfo.getGPS(self.output_dir+image['name'])
+			point = dict()
+			point["name"] = image['name']
+			point["long"] = gps_coords['longitude']
+			point["lat"] = gps_coords['latitude']
+			kml_points.append(point)
+		kml.addPoints(kml_points)
+		kml.saveKml(output_path)
+			
 	def crop_image(self,img_arr,startx,starty, endx, endy):
 		sx = startx
 		if sx < 0:
@@ -121,37 +139,3 @@ class Viewer(QMainWindow, Ui_Viewer):
 		if ey > img_height:
 			ey = img_height	
 		return img_arr[sy:ey,sx:ex]
-
-	def getGPS(self,filepath):
-		exif_dict = piexif.load(filepath)
-		latitude = exif_dict['GPS'][piexif.GPSIFD.GPSLatitude]
-		latitude_ref = exif_dict['GPS'][piexif.GPSIFD.GPSLatitudeRef]
-		longitude = exif_dict['GPS'][piexif.GPSIFD.GPSLongitude]
-		longitude_ref = exif_dict['GPS'][piexif.GPSIFD.GPSLongitudeRef]
-		logging.info(latitude)
-		if latitude:
-			lat_value = self._convert_to_degress(latitude)
-			if latitude_ref != 'N':
-				lat_value = -lat_value
-		else:
-			return {}
-		if longitude:
-			lon_value = self._convert_to_degress(longitude)
-			if longitude_ref != 'E':
-				lon_value = -lon_value
-		else:
-			return {}
-		return {'latitude': str(lat_value), 'longitude': str(lon_value)}
-
-	def _convert_to_degress(self,value):
-		"""
-		Helper function to convert the GPS coordinates stored in the EXIF to degress in float format
-		:param value:
-		:type value: exifread.utils.Ratio
-		:rtype: float
-		"""
-		d = float(value[0][0]) / float(value[0][1])
-		m = float(value[1][0]) / float(value[1][1])
-		s = float(value[2][0]) / float(value[2][1])
-
-		return d + (m / 60.0) + (s / 3600.0)

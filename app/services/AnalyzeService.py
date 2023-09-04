@@ -5,22 +5,23 @@ import imghdr
 import xml.etree.ElementTree as ET
 import logging
 import piexif
+from services.HistagramNormalizationService import HistagramNormalizationService
 from concurrent.futures import ThreadPoolExecutor
-from ...helpers.ColorUtils import ColorUtils
+from helpers.ColorUtils import ColorUtils
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
 
 """****Import Algorithms****"""
-from .ColorMatch import ColorMatch
-from .ColorAnomaly import ColorAnomaly
+from algorithms.ColorMatch.process.ColorMatchProcess import ColorMatchProcess
+from algorithms.ColorAnomaly.process.ColorAnomalyProcess import ColorAnomalyProcess
 """****End Algorithm Import****"""
 
-class Analyze(QObject):
+class AnalyzeService(QObject):
 
 	#Signals to send info back to the GUI
 	sig_msg = pyqtSignal(str)
 	sig_done = pyqtSignal(int, int)
 
-	def __init__(self, id,algorithm, input, output, identifierColor, min_area, num_threads, options):
+	def __init__(self, id,algorithm, input, output, identifierColor, min_area, num_threads, histagram_reference_path, options):
 		super().__init__()
 		self.algorithm = algorithm
 		self.input = input
@@ -29,12 +30,8 @@ class Analyze(QObject):
 		self.identifierColor = identifierColor
 		self.options = options
 		self.min_area = min_area
-
-		#ColorAnomaly is more resource intensive.
-		if self.algorithm == 'ColorAnomaly':
-			self.num_threads = 1
-		else:
-			self.num_threads = num_threads
+		self.num_threads = num_threads
+		self.hist_ref_path = histagram_reference_path
 		self.__id = id
 		self.images_with_aois = 0
 	
@@ -45,10 +42,12 @@ class Analyze(QObject):
 			self.setupOutputDir();
 			self.setupOutputXml()
 
+			histagram_service = None
+			if self.hist_ref_path is not None:
+				histagram_service = HistagramNormalizationService(self.hist_ref_path)
 			#Create an instance of the algorithm class
-			cls = globals()[self.algorithm]
+			cls = globals()[self.algorithm+"Process"]
 			instance = cls(self.identifierColor, self.min_area, self.options)
-
 			
 			#loop through all of the files in the input directory and process them in multiple threads
 			with ThreadPoolExecutor(self.num_threads) as executor:
@@ -57,21 +56,26 @@ class Analyze(QObject):
 					if(os.path.isdir(full_path)):
 						continue
 					if imghdr.what(full_path) is not None:
-						executor.submit(self.processFile, instance, file, full_path)
+						executor.submit(self.processFile, instance, file, full_path, histagram_service)
 						#self.processFile(instance, file, full_path)
+					else:
+						self.sig_msg.emit("Skipping "+file+ " - File is not an image")
 
 			self.writeXmlFile()
 			self.sig_done.emit(self.__id, self.images_with_aois)
 		except Exception as e:
 			logging.exception(e)
 
-	def processFile(self, instance, file, full_path):
+	def processFile(self, instance, file, full_path, histagram_service):
 		self.sig_msg.emit('Processing file: '+file)
 		img = cv2.imread(full_path)
+		if histagram_service is not None:
+			img = histagram_service.matchHistagrams(img)
 		exif_dict = piexif.load(full_path)
 		exif_bytes = piexif.dump(exif_dict)
 		try:
 			result, areas_of_interest = instance.processImage(img)
+			
 			if result is not None:
 				output_file = self.output+"/"+file
 				cv2.imwrite(output_file, result)

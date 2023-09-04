@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>Automated Drone Image Analysis Tool :: Viewer - Sponsored by TEXSAR</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>../icons/ADIAT.ico</normaloff>../icons/ADIAT.ico</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
@@ -129,11 +133,23 @@
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>250</width>
-          <height>20</height>
+          <width>170</width>
+          <height>0</height>
          </size>
         </property>
        </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="KmlButton">
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Generate KML</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>
