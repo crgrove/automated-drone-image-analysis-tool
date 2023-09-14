@@ -1,10 +1,9 @@
 import logging
 import qimage2ndarray
 import piexif
-from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtGui import QFontDatabase, QFont, QIcon, QColor, QImage, QPainterPath
 from PyQt5.QtCore import Qt, QFile, QTextStream, QTranslator, QLocale, QThread, pyqtSlot, QRect, QSize
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QHBoxLayout, QSizePolicy
 
 from views.Viewer_ui import Ui_Viewer
 from views.components.QtImageViewer import QtImageViewer
@@ -34,7 +33,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 			image = self.images[self.current_image]
 			self.placeholderImage.deleteLater()
 			self.mainImage = QtImageViewer(self.centralwidget)
-			self.mainImage.setGeometry(QRect(0, 40, 650, 650))
+			#self.mainImage.setGeometry(QRect(0, 40, 650, 650))
+			self.mainImage.setMinimumSize(QSize(0, 650))
 			self.mainImage.setObjectName("mainImage")
 			self.mainImage.aspectRatioMode = Qt.KeepAspectRatio
 			self.mainImage.canZoom = True
@@ -58,6 +58,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 		self.fileNameLabel.setText(image['name'])
 		self.loadAreasofInterest(image)
 		self.mainImage.resetZoom()
+		self.scrollArea.verticalScrollBar().setValue(0);
 
 	def loadAreasofInterest(self, image):
 		self.unloadAreasOfInterest();
@@ -98,6 +99,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 		else:
 			self.current_image += 1
 		self.loadImage()
+	
+	def resizeEvent(self, event):
+		QMainWindow.resizeEvent(self, event)
+		if self.mainImage is not None:
+			#self.mainImage.updateViewer()
+			self.loadImage()
 
 	def area_of_interest_click(self, x, y, img):
 		self.mainImage.zoomToArea(img.center,4)

@@ -12,7 +12,7 @@ scipy = "*"
 spectral = "*"
 piexif = "*"
 simplekml = "*"
-scikit-image = "0.18.1"
+scikit-image = "*"
 pyinstaller = "*"
 
 [dev-packages]

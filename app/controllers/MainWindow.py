@@ -18,8 +18,9 @@ from services.SettingsService import SettingsService
 
 
 """****Import Algorithms****"""
-from algorithms.ColorMatch.controllers.ColorMatchController import ColorMatch
-from algorithms.ColorAnomaly.controllers.ColorAnomalyController import ColorAnomaly
+from algorithms import *
+#from algorithms.ColorMatch.controllers.ColorMatchController import ColorMatch
+#from algorithms.ColorAnomaly.controllers.ColorAnomalyController import ColorAnomaly
 """****End Algorithm Import****"""
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -32,7 +33,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.images = None
 		self.algorithmWidget = None
 		self.identifierColor= (0,255,0)
-		self.HistagramImgWidget.setVisible(False) 
+		self.HistogramImgWidget.setVisible(False)
 		#Adding slots for GUI elements
 		self.identifierColorButton.clicked.connect(self.identifierButtonClicked)
 		self.inputFolderButton.clicked.connect(self.inputFolderButtonClicked)
@@ -43,12 +44,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.algorithmComboBox.currentTextChanged.connect(self.algorithmComboBoxChanged)
 		self.algorithmComboBoxChanged()
 		
-		self.HistagramCheckbox.stateChanged.connect(self.histagramCheckboxChange)
-		self.HistagramButton.clicked.connect(self.histagramButtonClicked) 
+		self.HistogramCheckbox.stateChanged.connect(self.histogramCheckboxChange)
+		self.HistogramButton.clicked.connect(self.histogramButtonClicked)
 		
 		self.inputFolderLine.setReadOnly(True)
 		self.outputFolderLine.setReadOnly(True)
-		self.HistagramLine.setReadOnly(True)
+		self.HistogramLine.setReadOnly(True)
 		
 		self.settingsService  = SettingsService();
 
@@ -86,14 +87,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 			self.settingsService.setSetting('OutputFolder', path.parent.__str__())
 
-	def histagramButtonClicked(self):
+	def histogramButtonClicked(self):
 		if self.inputFolderLine.text() != "":
 			dir = self.inputFolderLine.text()
 		else:
 			dir = self.settingsService.getSetting('InputFolder')
 		filename, ok = QFileDialog.getOpenFileName(self,"Select a Reference Image", dir, "Images (*.png *.jpg)")
 		if filename:
-			self.HistagramLine.setText(filename)
+			self.HistogramLine.setText(filename)
 			
 	def startButtonClicked(self):
 		try:
@@ -113,8 +114,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			options = self.algorithmWidget.getOptions()
 
 			hist_ref_path = None
-			if self.HistagramCheckbox.isChecked() and self.HistagramLine.text() != "":
-				hist_ref_path = self.HistagramLine.text()
+			if self.HistogramCheckbox.isChecked() and self.HistogramLine.text() != "":
+				hist_ref_path = self.HistogramLine.text()
 			#Create instance of the analysis class with the selected algoritm (only ColorMatch for now)
 			analyze = AnalyzeService(1,str(self.algorithmComboBox.currentText()), self.inputFolderLine.text(),self.outputFolderLine.text(), self.identifierColor, self.minAreaSpinBox.value(), self.maxThreadsSpinBox.value(), hist_ref_path, options)
 
@@ -140,20 +141,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		cls = globals()[self.algorithmName]
 		self.algorithmWidget = cls()
 		self.verticalLayout_2.addWidget(self.algorithmWidget)
-		if self.algorithmName == "ColorAnomaly":
-			self.maxThreadsSpinBox.setProperty("value", 1)
-			self.maxThreadsSpinBox.setEnabled(False)
-		else:
-			self.maxThreadsSpinBox.setEnabled(True)
+		#if self.algorithmName == "ColorAnomaly":
+		#	self.maxThreadsSpinBox.setProperty("value", 1)
+		#	self.maxThreadsSpinBox.setEnabled(False)
+		#else:
+		#	self.maxThreadsSpinBox.setEnabled(True)
 	def viewResultsButtonClicked(self):
 		self.viewer = Viewer(self.outputFolderLine.text()+"/ADIAT_Results/", self.images)
 		self.viewer.show()          
 
-	def histagramCheckboxChange(self):
-		if self.HistagramCheckbox.isChecked():
-			self.HistagramImgWidget.setVisible(True) 
+	def histogramCheckboxChange(self):
+		if self.HistogramCheckbox.isChecked():
+			self.HistogramImgWidget.setVisible(True)
 		else:
-			self.HistagramImgWidget.setVisible(False) 
+			self.HistogramImgWidget.setVisible(False)
 		
 	def showError(self, text):
 		msg = QMessageBox()
@@ -218,3 +219,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 					self.viewResultsButton.setEnabled(False)
 		except Exception as e:
 			logging.exception(e)
+	def closeEvent(self, event):
+		for window in QApplication.topLevelWidgets():
+			window.close()

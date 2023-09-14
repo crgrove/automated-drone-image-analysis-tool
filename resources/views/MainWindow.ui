@@ -202,11 +202,11 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="HistagramLayout">
+           <layout class="QHBoxLayout" name="HistogramLayout">
             <item>
-             <widget class="QCheckBox" name="HistagramCheckbox">
+             <widget class="QCheckBox" name="HistogramCheckbox">
               <property name="text">
-               <string>Normalize Histagrams</string>
+               <string>Normalize Histograms</string>
               </property>
              </widget>
             </item>
@@ -221,7 +221,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QLineEdit" name="HistagramLine"/>
+                <widget class="QLineEdit" name="HistogramLine"/>
                </item>
                <item>
                 <widget class="QPushButton" name="HistagramButton">
@@ -346,7 +346,6 @@
         <property name="font">
          <font>
           <pointsize>10</pointsize>
-          <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
@@ -385,7 +384,6 @@ color: rgb(255, 255, 255);</string>
         <property name="font">
          <font>
           <pointsize>10</pointsize>
-          <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
@@ -440,7 +438,7 @@ color: rgb(255, 255, 255);</string>
      <x>0</x>
      <y>0</y>
      <width>897</width>
-     <height>24</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

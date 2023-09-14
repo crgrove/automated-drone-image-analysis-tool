@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 import cv2
 import os
@@ -5,14 +7,13 @@ import imghdr
 import xml.etree.ElementTree as ET
 import logging
 import piexif
-from services.HistagramNormalizationService import HistagramNormalizationService
-from concurrent.futures import ThreadPoolExecutor
+from services.HistogramNormalizationService import HistogramNormalizationService
+from concurrent.futures import ProcessPoolExecutor
 from helpers.ColorUtils import ColorUtils
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
 
 """****Import Algorithms****"""
-from algorithms.ColorMatch.process.ColorMatchProcess import ColorMatchProcess
-from algorithms.ColorAnomaly.process.ColorAnomalyProcess import ColorAnomalyProcess
+from algorithms import *
 """****End Algorithm Import****"""
 
 class AnalyzeService(QObject):
@@ -21,7 +22,7 @@ class AnalyzeService(QObject):
 	sig_msg = pyqtSignal(str)
 	sig_done = pyqtSignal(int, int)
 
-	def __init__(self, id,algorithm, input, output, identifierColor, min_area, num_threads, histagram_reference_path, options):
+	def __init__(self, id,algorithm, input, output, identifierColor, min_area, num_threads, histogram_reference_path, options):
 		super().__init__()
 		self.algorithm = algorithm
 		self.input = input
@@ -31,7 +32,7 @@ class AnalyzeService(QObject):
 		self.options = options
 		self.min_area = min_area
 		self.num_threads = num_threads
-		self.hist_ref_path = histagram_reference_path
+		self.hist_ref_path = histogram_reference_path
 		self.__id = id
 		self.images_with_aois = 0
 	
@@ -42,21 +43,23 @@ class AnalyzeService(QObject):
 			self.setupOutputDir();
 			self.setupOutputXml()
 
-			histagram_service = None
+			histogram_service = None
 			if self.hist_ref_path is not None:
-				histagram_service = HistagramNormalizationService(self.hist_ref_path)
+				histogram_service = HistogramNormalizationService(self.hist_ref_path)
 			#Create an instance of the algorithm class
 			cls = globals()[self.algorithm+"Process"]
 			instance = cls(self.identifierColor, self.min_area, self.options)
 			
 			#loop through all of the files in the input directory and process them in multiple threads
-			with ThreadPoolExecutor(self.num_threads) as executor:
+			with ProcessPoolExecutor(self.num_threads) as executor:
 				for file in os.listdir(self.input):
 					full_path =  os.path.join(self.input, file)
 					if(os.path.isdir(full_path)):
 						continue
 					if imghdr.what(full_path) is not None:
-						executor.submit(self.processFile, instance, file, full_path, histagram_service)
+						self.sig_msg.emit('Processing file: ' + file)
+						future = executor.submit(AnalyzeService.processFile, instance, file, full_path, histogram_service)
+						future.add_done_callback(functools.partial(self.processComplete, file, full_path))
 						#self.processFile(instance, file, full_path)
 					else:
 						self.sig_msg.emit("Skipping "+file+ " - File is not an image")
@@ -66,16 +69,23 @@ class AnalyzeService(QObject):
 		except Exception as e:
 			logging.exception(e)
 
-	def processFile(self, instance, file, full_path, histagram_service):
-		self.sig_msg.emit('Processing file: '+file)
+	@staticmethod
+	def processFile(instance, file, full_path, histogram_service):
 		img = cv2.imread(full_path)
-		if histagram_service is not None:
-			img = histagram_service.matchHistagrams(img)
-		exif_dict = piexif.load(full_path)
-		exif_bytes = piexif.dump(exif_dict)
+		if histogram_service is not None:
+			img = histogram_service.matchHistograms(img)
 		try:
-			result, areas_of_interest = instance.processImage(img)
-			
+			return instance.processImage(img)
+		except Exception as e:
+			logging.exception(e)
+
+	def processComplete(self, file, full_path, future):
+		if future.done():
+			exif_dict = piexif.load(full_path)
+			exif_bytes = piexif.dump(exif_dict)
+
+			result = future.result()[0]
+			areas_of_interest = future.result()[1]
 			if result is not None:
 				output_file = self.output+"/"+file
 				cv2.imwrite(output_file, result)
@@ -83,10 +93,6 @@ class AnalyzeService(QObject):
 				self.sig_msg.emit('Areas of interest identified in '+file)
 				self.images_with_aois += 1
 				piexif.insert(exif_bytes, output_file)
-
-		except Exception as e:
-			logging.exception(e)
-
 	def setupOutputDir(self):
 		try:
 			if(os.path.isdir(self.output)):

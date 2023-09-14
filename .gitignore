@@ -13,3 +13,4 @@ build*
 *.qm
 Pipfile.lock
 /.vs
+.idea/

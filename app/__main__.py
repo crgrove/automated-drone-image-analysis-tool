@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QApplication
 from controllers.MainWindow import MainWindow
 
 import resources_rc  # noqa
-
+import faulthandler
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
@@ -31,4 +31,5 @@ def main():
 
 
 if __name__ == "__main__":
+    faulthandler.enable()
     main()
