@@ -2,7 +2,7 @@ import logging
 from ast import literal_eval
 
 from algorithms.Algorithm import AlgorithmController
-from algorithms.ColorMatch.views.ColorMatch_ui import Ui_ColorMatch
+from algorithms.MatchedFilter.views.MatchedFilter_ui import Ui_MatchedFilter
 
 from PyQt5.QtGui import QFontDatabase, QFont, QIcon, QColor
 from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale, QThread, pyqtSlot
@@ -10,20 +10,16 @@ from PyQt5.QtWidgets import QWidget,QApplication, QColorDialog, QMessageBox
 
 from helpers.ColorUtils import ColorUtils
 
-class ColorMatch(QWidget, Ui_ColorMatch, AlgorithmController):
+class MatchedFilter(QWidget, Ui_MatchedFilter, AlgorithmController):
     """Main Window."""
 
     def __init__(self):
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ColorMatch', 20)
+        AlgorithmController.__init__(self, 'MatchedFilter', 10)
         self.setupUi(self)
         self.selectedColor = None
-        
+        self.thresholdSlider.valueChanged.connect(self.updateThreshold)
         self.colorButton.clicked.connect(self.colorButtonClicked)
-
-        self.rRangeSpinBox.valueChanged.connect(self.updateColors)
-        self.gRangeSpinBox.valueChanged.connect(self.updateColors)
-        self.bRangeSpinBox.valueChanged.connect(self.updateColors)
 
     def colorButtonClicked(self):
         try:
@@ -38,20 +34,20 @@ class ColorMatch(QWidget, Ui_ColorMatch, AlgorithmController):
 
     def updateColors(self):
         if self.selectedColor is not None:
-            rgb = [self.selectedColor.red(),self.selectedColor.green(),self.selectedColor.blue()]
-            self.lowerColor, self.upperColor = ColorUtils.getColorRange(rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value())
-            #Convert the RGB tuples to hex for CSS
-            hex_lower = '#%02x%02x%02x' % self.lowerColor
-            hex_upper = '#%02x%02x%02x' % self.upperColor
-            self.minColor.setStyleSheet("background-color: "+hex_lower)
-            self.midColor.setStyleSheet("background-color: "+self.selectedColor.name())
-            self.maxColor.setStyleSheet("background-color: "+hex_upper)
-
+            self.colorSample.setStyleSheet("background-color: "+self.selectedColor.name())
+    
+    def updateThreshold(self):
+        if self.thresholdSlider.value() == .1:
+            self.thresholdValueLabel.setText('.1')
+        elif self.thresholdSlider.value() == 10:
+            self.thresholdValueLabel.setText('1')   
+        else:
+            self.thresholdValueLabel.setText("."+str(self.thresholdSlider.value()))
+    
     def getOptions(self):
         options = dict()
-        options['color_range'] = [self.lowerColor, self.upperColor]
         options['selected_color'] = (self.selectedColor.red(),self.selectedColor.green(),self.selectedColor.blue())
-        options['range_values']=(self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value())
+        options['match_filter_threshold'] = float(self.thresholdValueLabel.text())
         return options
 
     def validate(self):
@@ -60,11 +56,9 @@ class ColorMatch(QWidget, Ui_ColorMatch, AlgorithmController):
         return None;
 
     def loadOptions(self, options):
-        if 'range_values' in options and 'selected_color' in options:
-            ranges = literal_eval(options['range_values'])
-            self.rRangeSpinBox.setValue(ranges[0])
-            self.gRangeSpinBox.setValue(ranges[1])
-            self.bRangeSpinBox.setValue(ranges[2])
+        if 'selected_color' in options:
             selected_color = literal_eval(options['selected_color'])
             self.selectedColor = QColor(selected_color[0],selected_color[1],selected_color[2])
-            self.updateColors()
+        if 'match_filter_threshold' in options:
+            self.thresholdValueLabel.setText(str(options['match_filter_threshold']))
+            self.thresholdSlider.setProperty("value", int(float(options['threshold'])*10))

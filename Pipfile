@@ -13,7 +13,6 @@ spectral = "*"
 piexif = "*"
 simplekml = "*"
 scikit-image = "*"
-pyinstaller = "*"
 
 [dev-packages]
 pyqt-distutils = "*"
