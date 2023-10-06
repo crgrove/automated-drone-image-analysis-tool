@@ -10,15 +10,28 @@ from helpers.ColorUtils import ColorUtils
 
 #Based on TX Spectrail Detection Algorithm seen here: http://cver.hrail.crasar.org/algorithm/
 class RXAnomalyService(AlgorithmService):
-
+    """Service that executes the RX Anomaly algorithm"""
     def __init__(self, identifier, min_area, options):
+        """
+		__init__ constructor for the algorithm
+		
+		:Tuple(int,int,int) identifier: the RGB values for the color to be used to highlight areas of interest
+		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
+		:Dictionary options: additional algorithm-specific options
+		"""
         super().__init__('RXAnomaly', identifier, options)
         self.chi_threshold = options['threshold']
         self.min_area = min_area
 
     def processImage(self, img):
-        #copy the image so we can compare back to the orginal
+        """
+		processImage processes a single image using the Color Match algorithm
+		
+		:numpy.ndarray img: numpy.ndarray representing the subject image
+        :return numpy.ndarray, List: numpy.ndarray representing the output image and a list of areas of interest
+		"""
         try:
+            #copy the image so we can compare back to the orginal
             image_copy = img.copy()
             areas_of_interest = []
             

@@ -22,7 +22,7 @@
         <string> Pick Color</string>
        </property>
        <property name="icon">
-        <iconset resource="MatchedFilter.qrc">
+        <iconset resource="ColorMatch.qrc">
          <normaloff>:/icons/color.png</normaloff>:/icons/color.png</iconset>
        </property>
       </widget>
@@ -159,6 +159,23 @@
        </property>
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="viewRangeButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>View Range</string>
+       </property>
+       <property name="icon">
+        <iconset resource="ColorMatch.qrc">
+         <normaloff>:/icons/eye.png</normaloff>:/icons/eye.png</iconset>
        </property>
       </widget>
      </item>

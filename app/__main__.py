@@ -11,6 +11,7 @@ import resources_rc  # noqa
 import faulthandler
 import qdarktheme
 
+version = '1.2.3'
 def main():
     logging.basicConfig(level=logging.DEBUG)
     app = QApplication(sys.argv)
@@ -18,7 +19,7 @@ def main():
 
     app.setWindowIcon(QIcon('ADIAT.ico'))
 
-    mw = MainWindow(qdarktheme)
+    mw = MainWindow(qdarktheme, version)
     mw.show()
 
     sys.exit(app.exec_())

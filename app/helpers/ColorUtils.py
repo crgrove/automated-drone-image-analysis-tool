@@ -2,9 +2,18 @@ import numpy as np
 import cv2
 
 class ColorUtils:
+    """Provides functions to aid in the manipulation of colors"""
     @staticmethod
     def getColorRange(rgb, r_range, g_range, b_range):
-
+        """
+		getColorRange takes a base color and then returns a min and max based on ranges provided for the red, green, and blue color channels
+        
+        :Tuple(int,int,int): the rgb values representing the base color
+        :Int r_range: the range for the red channel
+        :Int g_range: the range for the green channel
+        :Int b_range: the range fot the blue channel
+        return: Tuple(int,int,int), Tuple(int,int,int): the rgb values representing the min and max colors for the given range
+		"""
         upper_r = rgb[0]+r_range
         upper_g = rgb[1]+g_range
         upper_b = rgb[2]+b_range
@@ -26,9 +35,3 @@ class ColorUtils:
         if lower_b < 0:
             lower_b = 0 
         return  (lower_r,lower_g,lower_b), (upper_r,upper_g,upper_b)
-    
-    @staticmethod
-    def convertRgbToHsv(rgb):
-        color = np.uint8([[[rgb[0], rgb[1], rgb[2]]]])
-        hsv_color = cv2.cvtColor(color, cv2.COLOR_RGB2HSV)
-        return [hsv_color[0][0][0], hsv_color[0][0][1], hsv_color[0][0][2]]

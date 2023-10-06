@@ -79,6 +79,17 @@ class Ui_ColorMatch(object):
         self.maxColor.setFrameShadow(QtWidgets.QFrame.Raised)
         self.maxColor.setObjectName("maxColor")
         self.ColorRangeLayout.addWidget(self.maxColor)
+        self.viewRangeButton = QtWidgets.QPushButton(ColorMatch)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.viewRangeButton.sizePolicy().hasHeightForWidth())
+        self.viewRangeButton.setSizePolicy(sizePolicy)
+        icon1 = QtGui.QIcon()
+        icon1.addPixmap(QtGui.QPixmap(":/icons/eye.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.viewRangeButton.setIcon(icon1)
+        self.viewRangeButton.setObjectName("viewRangeButton")
+        self.ColorRangeLayout.addWidget(self.viewRangeButton)
         self.verticalLayout.addLayout(self.ColorRangeLayout)
 
         self.retranslateUi(ColorMatch)
@@ -92,4 +103,5 @@ class Ui_ColorMatch(object):
         self.gSensitivityLabel.setText(_translate("ColorMatch", "Green Range +/-"))
         self.bSensitivityLabel.setText(_translate("ColorMatch", "Blue Range +/-"))
         self.colorRangeLabel.setText(_translate("ColorMatch", "Color Range:"))
+        self.viewRangeButton.setText(_translate("ColorMatch", "View Range"))
 from . import ColorMatch_rc

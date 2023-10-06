@@ -19,7 +19,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>Automated Drone Image Analysis Tool  v1.2.0 - Sponsored by TEXSAR</string>
+   <string>Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -68,6 +68,9 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
           </widget>
          </item>
          <item row="0" column="0">
@@ -111,6 +114,9 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -235,7 +241,11 @@
                 </widget>
                </item>
                <item>
-                <widget class="QLineEdit" name="histogramLine"/>
+                <widget class="QLineEdit" name="histogramLine">
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
                </item>
                <item>
                 <widget class="QPushButton" name="histogramButton">
@@ -533,7 +543,7 @@ color: rgb(228, 231, 235);</string>
     <item>
      <widget class="QPlainTextEdit" name="outputWindow">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="font">
        <font>
@@ -541,7 +551,7 @@ color: rgb(228, 231, 235);</string>
        </font>
       </property>
       <property name="readOnly">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="centerOnScroll">
        <bool>true</bool>

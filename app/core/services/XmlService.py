@@ -2,12 +2,23 @@ import logging
 from ast import literal_eval
 import xml.etree.ElementTree as ET
 
-class XmlLoader:
-
+class XmlService:
+    """Service used to parse an ADIAT XML file"""
     def __init__(self, path = None):
+        """
+		__init__ constructor for the service
+        
+        :String path: path to the XML file.
+		"""
         self.path = path
 
     def parseFile(self, path= None):
+        """
+		parseFile parses an ADIAT XML file returning the settings and images
+        
+        :String path: path to the XML file.
+        :return List(Dictionary), List(Dictionary): the settings from when the analysis was run and the images containing areas of interest
+		"""
         if path is not None:
             my_path = path
         else:

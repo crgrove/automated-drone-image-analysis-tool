@@ -17,6 +17,10 @@
       "app/algorithms/ColorMatch/views"
     ],
     [
+      "resources/views/algorithms/ColorMatchRangeViewer.ui",
+      "app/algorithms/ColorMatch/views"
+    ],
+    [
       "resources/views/algorithms/MatchedFilter.ui",
       "app/algorithms/MatchedFilter/views"
     ],

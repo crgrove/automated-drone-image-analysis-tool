@@ -4,11 +4,17 @@ import cv2
 import spectral
 
 from algorithms.Algorithm import AlgorithmService
-from helpers.ColorUtils import ColorUtils
 
 class MatchedFilterService(AlgorithmService):
-
+    """Service that executes the Matched Filter algorithm"""
     def __init__(self, identifier, min_area, options):
+        """
+		__init__ constructor for the algorithm
+		
+		:Tuple(int,int,int) identifier: the RGB values for the color to be used to highlight areas of interest
+		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
+		:Dictionary options: additional algorithm-specific options
+		"""
         super().__init__('MatchedFilter', identifier, options)
         self.match_color = options['selected_color']
         self.threshold = options['match_filter_threshold']
@@ -16,8 +22,14 @@ class MatchedFilterService(AlgorithmService):
         print (self.match_color)
 
     def processImage(self, img):
-        #copy the image so we can compare back to the orginal
+        """
+		processImage processes a single image using the Color Match algorithm
+		
+		:numpy.ndarray img: numpy.ndarray representing the subject image
+        :return numpy.ndarray, List: numpy.ndarray representing the output image and a list of areas of interest
+		"""
         try:
+            #copy the image so we can compare back to the orginal
             image_copy = img.copy()
             areas_of_interest = []
             #calculate the match filter scores 
