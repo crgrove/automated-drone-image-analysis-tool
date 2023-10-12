@@ -3,11 +3,14 @@ import functools
 import cv2
 import os
 import imghdr
+import shutil
 import xml.etree.ElementTree as ET
 import logging
+from numpy import full
 import piexif
 import time
 import concurrent
+from pathlib import Path
 from core.services.HistogramNormalizationService import HistogramNormalizationService
 from core.services.KMeansClustersService import KMeansClustersService
 
@@ -70,25 +73,29 @@ class AnalyzeService(QObject):
 			self.setupOutputDir();
 			self.setupOutputXml()
 			self.futures = [];
+			image_files = []
 			
 			start_time = time.time()
-			files = os.listdir(self.input)
-			self.sig_msg.emit("Processing "+str(len(files))+" files")
+			for subdir, dirs, files in os.walk(self.input):
+				for file in files:
+					image_files.append(os.path.join(subdir, file))
+			self.sig_msg.emit("Processing "+str(len(image_files))+" files")
 			#
 			#loop through all of the files in the input directory and process them in multiple processes
 			with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
-				for file in files:
-					full_path =  os.path.join(self.input, file)
+				for full_path in image_files:
+					path = Path(full_path)
+					file_name = path.name
 					#skip if it's a directory
 					if(os.path.isdir(full_path)):
 						continue
 					#skip if the file isn't an image
 					if imghdr.what(full_path) is not None:
 						future = executor.submit(AnalyzeService.processFile, self.algorithm, self.identifier_color, self.min_area, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
-						future.add_done_callback(functools.partial(self.processComplete, file, full_path))
+						future.add_done_callback(functools.partial(self.processComplete, file_name, full_path))
 						self.futures.append(future);
 					else:
-						self.sig_msg.emit("Skipping "+file+ " - File is not an image")
+						self.sig_msg.emit("Skipping "+file_name+ " - File is not an image")
 			#generate the output xml with the information gathered during processing			
 			self.writeXmlFile()
 			ttl_time = round(time.time() - start_time, 3)
@@ -160,9 +167,12 @@ class AnalyzeService(QObject):
 				areas_of_interest = results[1]
 				if result is not None:
 					#save the image to the output directory and add the image/areas of interest to the output xml
-					output_file = self.output+"/"+file
+					output_file = full_path.replace(self.input, self.output)
+					path = Path(output_file)
+					if not os.path.exists(path.parents[0]):
+						os.makedirs(path.parents[0])
 					cv2.imwrite(output_file, result)
-					self.addImageToXml(file,areas_of_interest)
+					self.addImageToXml(output_file,areas_of_interest)
 					self.sig_msg.emit('Areas of interest identified in '+file)
 					self.images_with_aois += 1
 					if is_jpg:
@@ -188,20 +198,15 @@ class AnalyzeService(QObject):
 			
 	def setupOutputDir(self):
 		"""
-		setupOutputDir checks if the output directory exists.  If it does delete everything in it.
+		setupOutputDir creates the output directory
 		"""
 		try:
-			if(os.path.isdir(self.output)):
-				for the_file in os.listdir(self.output):
-					file_path = os.path.join(self.output, the_file)
-					try:
-						if os.path.isfile(file_path):
-							os.unlink(file_path)
-						#elif os.path.isdir(file_path): shutil.rmtree(file_path)
-					except Exception as e:
-						logging.exception(e)
-			else:
-				os.mkdir(self.output)
+			if(os.path.exists(self.output)):
+				try:
+					shutil.rmtree(self.output)
+				except Exception as e:
+					logging.exception(e)
+			os.makedirs(self.output)
 		except Exception as e:
 			logging.exception(e)
 
@@ -218,6 +223,8 @@ class AnalyzeService(QObject):
 			settings_xml.set("algorithm", self.algorithm)
 			settings_xml.set("num_processes", str(self.num_processes))
 			settings_xml.set("min_area", str(self.min_area))
+			settings_xml.set("hist_ref_path", str(self.hist_ref_path ))
+			settings_xml.set("kmeans_clusters", str(self.kmeans_clusters))
 			options_xml = ET.SubElement(settings_xml, "options")
 			for key, value in self.options.items():
 				option_xml = ET.SubElement(options_xml, "option")
@@ -227,15 +234,15 @@ class AnalyzeService(QObject):
 		except Exception as e:
 			logging.exception(e)
 
-	def addImageToXml(self, file, areas_of_interest):
+	def addImageToXml(self, full_path, areas_of_interest):
 		"""
 		addImageToXml adds an image to the xml document
 		
-		:String file: the name of the file
+		:String full_path: the full path to the output file
 		:List(Dictionary): the areas of interest for the image
 		"""
 		image = ET.SubElement(self.images_xml, 'image')
-		image.set('file_name',file)
+		image.set('path',full_path)
 		for area in areas_of_interest:
 			area_xml = ET.SubElement(image, 'areas_of_interest')
 			area_xml.set('center', str(area['center']))

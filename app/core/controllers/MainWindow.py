@@ -233,8 +233,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		viewResultsButtonClicked click handler for launching the image viewer once analysis has been completed
 		"""
 		output_folder = self.outputFolderLine.text()+"/ADIAT_Results/"
-		self.parseXml(output_folder+"ADIAT_Data.xml", True)
-		self.viewer = Viewer(output_folder,self.images)
+		
+		xmlLoader = XmlService(output_folder+"ADIAT_Data.xml")
+		images = xmlLoader.getImages()		
+		if len(images):
+			self.setViewResultsButton(True)
+			self.images = images
+		else:
+			self.setViewResultsButton(False)
+			
+		self.viewer = Viewer(self.images)
 		self.viewer.show()   	
 		
 	def addLogEntry(self, text):
@@ -312,43 +320,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		try:
 			file = QFileDialog.getOpenFileName(self, "Select File")
 			if file[0] != "":
-				self.parseXml(file[0],False)
+				image_count = self.getSettingsFromXml(file[0])
+				if image_count > 0:
+					self.setViewResultsButton(True)
 
 		except Exception as e:
 			logging.exception(e)
 	
-	def parseXml(self, full_path, images_only):
+	def getSettingsFromXml(self, full_path):
 		"""
-		parseXml populates the UI and image list with previously executed analysis
+		getSettingsFromXml populates the UI with previously executed analysis
 		
-		:String full_path: the path to the XML file.
-		:Boolean images_only: if true skip updating the UI elements
+		:String full_path: the path to the XML file
+		:return int: the number of images with areas of interest
 		"""
 		xmlLoader = XmlService(full_path)
-		settings, images = xmlLoader.parseFile()
-		if not images_only:
-			if 'output_dir' in settings:
-				self.outputFolderLine.setText(settings['output_dir'])
-			if 'input_dir' in settings:
-				self.inputFolderLine.setText(settings['input_dir'])
-			if 'identifier_color' in settings:
-				self.identifierColor = settings['identifier_color']
-				color = QColor(self.identifierColor[0],self.identifierColor[1],self.identifierColor[2])
-				self.identifierColorButton.setStyleSheet("background-color: "+color.name()+";")
-			if 'num_processes' in settings:
-				self.maxProcessesSpinBox.setValue(settings['num_processes'])
-			if 'min_area' in settings:
-				self.minAreaSpinBox.setValue(int(settings['min_area']))
-			if 'algorithm' in settings:
-				self.algorithmComboBox.setCurrentText(settings['algorithm'])
-				self.algorithmWidget.loadOptions(settings['options'])
-				
-		if len(images):
-			self.setViewResultsButton(True)
-			self.images = images
-		else:
-			self.setViewResultsButton(False)
-		
+		settings, image_count = xmlLoader.getSettings()	
+		if 'output_dir' in settings:
+			self.outputFolderLine.setText(settings['output_dir'])
+		if 'input_dir' in settings:
+			self.inputFolderLine.setText(settings['input_dir'])
+		if 'identifier_color' in settings:
+			self.identifierColor = settings['identifier_color']
+			color = QColor(self.identifierColor[0],self.identifierColor[1],self.identifierColor[2])
+			self.identifierColorButton.setStyleSheet("background-color: "+color.name()+";")
+		if 'num_processes' in settings:
+			self.maxProcessesSpinBox.setValue(settings['num_processes'])
+		if 'min_area' in settings:
+			self.minAreaSpinBox.setValue(int(settings['min_area']))
+		if 'hist_ref_path' in settings:
+			self.histogramCheckbox.setChecked(True)
+			self.histogramLine.setText(settings['hist_ref_path'])
+		if 'kmeans_clusters' in settings:
+			self.kMeansCheckbox.setChecked(True)
+			self.clustersSpinBox.setValue(settings['kmeans_clusters'])
+		if 'algorithm' in settings:
+			self.algorithmComboBox.setCurrentText(settings['algorithm'])
+			self.algorithmWidget.loadOptions(settings['options'])
+		return image_count
+			
 	def openPreferences(self):
 		"""
 		openPreferences action for the preferences menu item

@@ -14,24 +14,24 @@ from helpers.LocationInfo import LocationInfo
 
 class Viewer(QMainWindow, Ui_Viewer):
 	"""Controller for the Image Viewer(QMainWindow)."""
-	def __init__(self, output_dir, images):
+	def __init__(self, images):
 		"""
 		__init__ constructor to build the ADIAT Image Viewer
 		
-		:String output_dir: The directory containing the XML file from the previous analysis
 		:List(Dictionary) images: Images that will be displayed in the viewer
 		"""
 		QMainWindow.__init__(self)
 		self.setupUi(self)
-		self.output_dir = output_dir
 		
 		self.images = images
 		
 		for image in self.images[:]:
-			image_file = Path(self.output_dir+image['name'])
+			path = Path(image['path'])
+			image_file = path
+			image['name'] = path.name
 			if not image_file.is_file():
 				self.images.remove(image)
-			elif imghdr.what(self.output_dir+image['name']) is None:
+			elif imghdr.what(image['path']) is None:
 				self.images.remove(image)
 		
 		if len(self.images) == 0:
@@ -61,7 +61,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			self.mainImage.canZoom = True
 			self.mainImage.canPan = True
 			#load and set the image
-			img = QImage(self.output_dir+image['name'])
+			img = QImage(image['path'])
 			self.mainImage.setImage(img)
 			self.ImageLayout.replaceWidget(self.placeholderImage, self.mainImage)
 			
@@ -69,7 +69,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#create the areas of interest thumbnails
 			self.loadAreasofInterest(image)
 			#get the gps info from the image exif data and display it
-			gps_coords = LocationInfo.getGPS(self.output_dir+image['name'])
+			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
 				self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
 				
@@ -84,14 +84,14 @@ class Viewer(QMainWindow, Ui_Viewer):
 		image = self.images[self.current_image]
 		
 		#load and set the image
-		img = QImage(self.output_dir+image['name'])
+		img = QImage(image['path'])
 		self.mainImage.setImage(img)
 		self.fileNameLabel.setText(image['name'])
 		self.loadAreasofInterest(image)
 		self.mainImage.resetZoom()
 		#get the gps info from the image exif data and display it
 		self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
-		gps_coords = LocationInfo.getGPS(self.output_dir+image['name'])
+		gps_coords = LocationInfo.getGPS(image['path'])
 		if not gps_coords == {}:
 			self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
 			
@@ -107,7 +107,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 		self.aoiListWidget.clear()
 		
 		#convert the image to an array
-		img_arr = qimage2ndarray.imread(self.output_dir+image['name'])
+		img_arr = qimage2ndarray.imread(image['path'])
 		img_width = img_arr.shape[1] - 1
 		img_height = img_arr.shape[0] - 1
 		count = 0
@@ -199,7 +199,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 		kml_points = list()
 		for image in self.images:
 			#images that do not have gps info in their exif data will be skipped
-			gps_coords = LocationInfo.getGPS(self.output_dir+image['name'])
+			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
 				point = dict()
 				point["name"] = image['name']
