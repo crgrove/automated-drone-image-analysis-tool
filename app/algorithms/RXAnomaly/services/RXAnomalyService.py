@@ -20,7 +20,8 @@ class RXAnomalyService(AlgorithmService):
 		:Dictionary options: additional algorithm-specific options
 		"""
         super().__init__('RXAnomaly', identifier, options)
-        self.chi_threshold = options['threshold']
+        #self.chi_threshold = options['threshold']
+        self.chi_threshold = self.getThreshold(options['sensitivity'])
         self.min_area = min_area
 
     def processImage(self, img):
@@ -75,3 +76,14 @@ class RXAnomalyService(AlgorithmService):
                 return None, None
         except Exception as e:
             logging.exception(e)
+            
+    def getThreshold(self, sensitivity):
+        """
+		getThreshold get the chi2 threshold based on a sensitivity value
+		
+		:int sensitivity: sensitivity value to convert to chi2 threshold
+        :return float
+		"""
+        return 1 - float("."+("1".zfill(sensitivity+5)))
+        
+        

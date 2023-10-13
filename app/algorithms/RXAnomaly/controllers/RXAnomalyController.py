@@ -13,7 +13,7 @@ class RXAnomaly(QWidget, Ui_RXAnomaly, AlgorithmController):
 		QWidget.__init__(self)
 		AlgorithmController.__init__(self, 'RXAnomaly', 10)
 		self.setupUi(self)
-		self.thresholdSlider.valueChanged.connect(self.updateThreshold)
+		self.sensitivitySlider.valueChanged.connect(self.updateSensitivity)
 
 	def getOptions(self):
 		"""
@@ -22,19 +22,14 @@ class RXAnomaly(QWidget, Ui_RXAnomaly, AlgorithmController):
 		:return Dictionary: the option names and values
 		"""
 		options = dict()
-		options['threshold'] = float(self.thresholdValueLabel.text())
+		options['sensitivity'] = int(self.sensitivityValueLabel.text())
 		return options
 
-	def updateThreshold(self):
+	def updateSensitivity(self):
 		"""
-		updateThreshold click handler for the threshold slider
+		updateSensitivity click handler for the sensitivity slider
 		"""
-		if self.thresholdSlider.value() == 0:
-			self.thresholdValueLabel.setText('0')
-		elif self.thresholdSlider.value() == 1000:
-			self.thresholdValueLabel.setText('1')   
-		else:
-			self.thresholdValueLabel.setText("."+str(self.thresholdSlider.value()))
+		self.sensitivityValueLabel.setText(str(self.sensitivitySlider.value()))
 	
 	def validate(self):
 		"""
@@ -50,6 +45,6 @@ class RXAnomaly(QWidget, Ui_RXAnomaly, AlgorithmController):
 		
 		:Dictionary options: the options to use to set attributes
 		"""
-		if 'threshold' in options:
-			self.thresholdValueLabel.setText(str(options['threshold']))
-			self.thresholdSlider.setProperty("value", int(float(options['threshold'])*1000))
+		if 'sensitivity' in options:
+			self.sensitivityValueLabel.setText(str(options['sensitivity']))
+			self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
