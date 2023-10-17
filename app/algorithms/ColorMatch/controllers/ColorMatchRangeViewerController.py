@@ -92,7 +92,7 @@ class ColorMatchRangeViewer(QDialog, Ui_ColorMatchRangeViewer):
 		:numpy.ndarray img: numpy.ndarray representation of the image
 		:Boolean selected: determines which layout to add the widget to
 		"""
-		image = QtImageViewer()
+		image = QtImageViewer(self)
 		image.setMinimumSize(QSize(190, 190))
 		image.aspectRatioMode = Qt.KeepAspectRatio
 		height, width, channel = img.shape

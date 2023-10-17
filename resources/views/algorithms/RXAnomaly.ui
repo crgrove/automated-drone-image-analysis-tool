@@ -53,6 +53,9 @@
          <property name="tickPosition">
           <enum>QSlider::TicksBelow</enum>
          </property>
+         <property name="tickInterval">
+          <number>1</number>
+         </property>
         </widget>
        </item>
        <item>

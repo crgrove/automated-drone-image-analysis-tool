@@ -35,6 +35,7 @@ class Ui_RXAnomaly(object):
         self.sensitivitySlider.setSliderPosition(5)
         self.sensitivitySlider.setOrientation(QtCore.Qt.Horizontal)
         self.sensitivitySlider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        self.sensitivitySlider.setTickInterval(1)
         self.sensitivitySlider.setObjectName("sensitivitySlider")
         self.horizontalLayout_3.addWidget(self.sensitivitySlider)
         self.sensitivityValueLabel = QtWidgets.QLabel(RXAnomaly)

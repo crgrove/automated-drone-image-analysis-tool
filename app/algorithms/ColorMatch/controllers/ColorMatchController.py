@@ -19,7 +19,7 @@ class ColorMatch(QWidget, Ui_ColorMatch, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'ColorMatch', 20)
+		AlgorithmController.__init__(self, 'ColorMatch', 10)
 		self.setupUi(self)
 		self.selectedColor = None
 		self.viewRangeButton.hide()

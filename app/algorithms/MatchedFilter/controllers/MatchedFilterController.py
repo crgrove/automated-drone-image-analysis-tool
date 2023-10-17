@@ -86,4 +86,4 @@ class MatchedFilter(QWidget, Ui_MatchedFilter, AlgorithmController):
             self.selectedColor = QColor(selected_color[0],selected_color[1],selected_color[2])
         if 'match_filter_threshold' in options:
             self.thresholdValueLabel.setText(str(options['match_filter_threshold']))
-            self.thresholdSlider.setProperty("value", int(float(options['threshold'])*10))
+            self.thresholdSlider.setProperty("value", int(float(options['match_filter_threshold'])*10))

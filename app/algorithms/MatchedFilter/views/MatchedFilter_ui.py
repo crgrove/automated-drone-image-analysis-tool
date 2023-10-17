@@ -46,7 +46,7 @@ class Ui_MatchedFilter(object):
         self.thresholdSlider.setProperty("value", 3)
         self.thresholdSlider.setOrientation(QtCore.Qt.Horizontal)
         self.thresholdSlider.setTickPosition(QtWidgets.QSlider.TicksBelow)
-        self.thresholdSlider.setTickInterval(0)
+        self.thresholdSlider.setTickInterval(1)
         self.thresholdSlider.setObjectName("thresholdSlider")
         self.SilderLayout.addWidget(self.thresholdSlider)
         self.thresholdValueLabel = QtWidgets.QLabel(MatchedFilter)

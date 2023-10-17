@@ -197,10 +197,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			self.settings_service.setSetting('IdentifierColor', self.identifierColor)
 			
 			max_aois = self.settings_service.getSetting('MaxAOIs')
+			aoi_radius = self.settings_service.getSetting('AOIRadius')
 			
 			#Create instance of the analysis class with the selected algorithm
 			self.analyzeService = AnalyzeService(1,str(self.algorithmComboBox.currentText()), self.inputFolderLine.text(),self.outputFolderLine.text(), self.identifierColor, self.minAreaSpinBox.value(), 
-			    self.maxProcessesSpinBox.value(), max_aois, hist_ref_path, kmeans_clusters, options)
+			    self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options)
 
 			#This must be done in a separate thread so that it won't block the GUI updates to the log
 			thread = QThread()
@@ -233,17 +234,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		viewResultsButtonClicked click handler for launching the image viewer once analysis has been completed
 		"""
 		output_folder = self.outputFolderLine.text()+"/ADIAT_Results/"
-		
-		xmlLoader = XmlService(output_folder+"ADIAT_Data.xml")
-		images = xmlLoader.getImages()		
-		if len(images):
-			self.setViewResultsButton(True)
-			self.images = images
-		else:
-			self.setViewResultsButton(False)
+		file = pathlib.Path(output_folder+"ADIAT_Data.xml")
+		if file.is_file():
+			xmlLoader = XmlService(output_folder+"ADIAT_Data.xml")
+			images = xmlLoader.getImages()		
+			if len(images):
+				self.setViewResultsButton(True)
+				self.images = images
+			else:
+				self.setViewResultsButton(False)
 			
-		self.viewer = Viewer(self.images)
-		self.viewer.show()   	
+			self.viewer = Viewer(self.images)
+			self.viewer.show()
+		else:
+			self.showError("Could not parse XML file.  Check file paths in \"ADIAT_Data.xml\"")
 		
 	def addLogEntry(self, text):
 		"""
@@ -417,19 +421,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		setDefaults sets UI element default values based on persistent settings and sets default values for persistent settings if not previously set
 		"""		
-		minArea = self.settings_service.getSetting('MinObjectArea')
-		if isinstance(minArea, int):
-			self.minAreaSpinBox.setProperty("value", minArea)
+		min_area = self.settings_service.getSetting('MinObjectArea')
+		if isinstance(min_area, int):
+			self.minAreaSpinBox.setProperty("value", min_area)
 			
-		idColor = self.settings_service.getSetting('IdentifierColor')
-		if isinstance(idColor, tuple):
-			self.identifierColor = idColor
+		id_color = self.settings_service.getSetting('IdentifierColor')
+		if isinstance(id_color, tuple):
+			self.identifierColor = id_color
 			color = QColor(self.identifierColor[0],self.identifierColor[1],self.identifierColor[2])
 			self.identifierColorButton.setStyleSheet("background-color: "+color.name()+";")
 			
-		maxAOIs = self.settings_service.getSetting('MaxAOIs')
-		if not isinstance(maxAOIs, int):
+		max_aois = self.settings_service.getSetting('MaxAOIs')
+		if not isinstance(max_aois, int):
 			self.settings_service.setSetting('MaxAOIs', 100)
+	
+		aoi_radius = self.settings_service.getSetting('AOIRadius')
+		if not isinstance(aoi_radius, int):
+			self.settings_service.setSetting('AOIRadius', 15)
 			
 		theme = self.settings_service.getSetting('Theme')
 		if theme == None:

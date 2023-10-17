@@ -92,9 +92,10 @@ class QtImageViewer(QGraphicsView):
     # Emit index of selected ROI
     roiSelected = pyqtSignal(int)
 
-    def __init__(self, parent=None, center=None, thumbnail = False):
+    def __init__(self, window, parent=None, center=None, thumbnail = False):
         QGraphicsView.__init__(self, parent)
 
+        self.window = window
         # Image is displayed as a QPixmap in a QGraphicsScene attached to this QGraphicsView.
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
@@ -155,7 +156,9 @@ class QtImageViewer(QGraphicsView):
         self.thumbnail = thumbnail
         
 
-
+    def keyPressEvent(self, e):
+        self.window.keyPressEvent(e)
+        
     def hasImage(self):
         """ Returns whether the scene contains an image pixmap.
         """

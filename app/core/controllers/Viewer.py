@@ -1,11 +1,12 @@
 import logging
+from PyQt5 import QtGui
 import qimage2ndarray
 import piexif
 import imghdr
 from pathlib import Path
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QKeySequence, QIntValidator
 from PyQt5.QtCore import Qt, QRect, QSize
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QListWidgetItem, QListWidget, QFileDialog
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QListWidgetItem, QListWidget, QFileDialog, QAction
 
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
@@ -43,7 +44,16 @@ class Viewer(QMainWindow, Ui_Viewer):
 			self.previousImageButton.clicked.connect(self.previousImageButtonClicked)
 			self.nextImageButton.clicked.connect(self.nextImageButtonClicked)
 			self.KmlButton.clicked.connect(self.KmlButtonClicked)
-
+			self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
+			self.jumpToLine.editingFinished.connect(self.jumpToLineChanged)
+	
+	def keyPressEvent(self, e):
+		if e.key() == Qt.Key_Right:
+			self.nextImageButtonClicked()
+		if e.key() == Qt.Key_Left:
+			self.previousImageButtonClicked()
+			
+		
 	def loadInitialImage(self):
 		"""
 		loadInitialImage loads the image and areas of interest at index 0 from the images list
@@ -54,7 +64,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#remove the placeholder
 			self.placeholderImage.deleteLater()
 			#setup the image widget
-			self.mainImage = QtImageViewer(self.centralwidget)
+			self.mainImage = QtImageViewer(self, self.centralwidget)
 			self.mainImage.setMinimumSize(QSize(0, 650))
 			self.mainImage.setObjectName("mainImage")
 			self.mainImage.aspectRatioMode = Qt.KeepAspectRatio
@@ -72,7 +82,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
 				self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
-				
+			else:
+				self.statusbar.showMessage("")
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
 		except Exception as e:
 			logging.exception(e)
@@ -81,22 +92,25 @@ class Viewer(QMainWindow, Ui_Viewer):
 		"""
 		loadImage loads the image at the current_image index
 		"""
-		image = self.images[self.current_image]
+		try:
+			image = self.images[self.current_image]
 		
-		#load and set the image
-		img = QImage(image['path'])
-		self.mainImage.setImage(img)
-		self.fileNameLabel.setText(image['name'])
-		self.loadAreasofInterest(image)
-		self.mainImage.resetZoom()
-		#get the gps info from the image exif data and display it
-		self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
-		gps_coords = LocationInfo.getGPS(image['path'])
-		if not gps_coords == {}:
-			self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
-			
-		self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
-
+			#load and set the image
+			img = QImage(image['path'])
+			self.mainImage.setImage(img)
+			self.fileNameLabel.setText(image['name'])
+			self.loadAreasofInterest(image)
+			self.mainImage.resetZoom()
+			#get the gps info from the image exif data and display it
+			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
+			gps_coords = LocationInfo.getGPS(image['path'])
+			if not gps_coords == {}:
+				self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
+			else:
+				self.statusbar.showMessage("")	
+			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
+		except Exception as e:
+			logging.exception(e)
 	def loadAreasofInterest(self, image):
 		"""
 		loadAreasofInterest loads the list of thumbnails representing the areas of interest from the image
@@ -119,7 +133,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#create a cropped image based on the image array.
 			crop_arr = self.crop_image(img_arr, center[0]-radius, center[1] - radius, center[0]+radius, center[1]+radius)
 			#create the image widget
-			highlight = QtImageViewer(self.aoiListWidget, center, True)
+			highlight = QtImageViewer(self, self.aoiListWidget, center, True)
 			highlight.setObjectName("highlight"+str(count))
 			highlight.setMinimumSize(QSize(190, 190))
 			highlight.aspectRatioMode = Qt.KeepAspectRatio
@@ -161,6 +175,15 @@ class Viewer(QMainWindow, Ui_Viewer):
 		else:
 			self.current_image += 1
 		self.loadImage()
+	
+	def jumpToLineChanged(self):
+		"""
+		jumpToLineChanged change handler to jump to a particular image
+		"""
+		if not self.jumpToLine.text() == "":
+			self.current_image = int(self.jumpToLine.text())-1
+			self.loadImage()
+			self.jumpToLine.setText("")
 		
 	def resizeEvent(self, event):
 		"""
