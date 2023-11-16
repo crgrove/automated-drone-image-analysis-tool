@@ -15,11 +15,15 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_4">
+    <layout class="QHBoxLayout" name="ColorSelectionLayout">
      <item>
       <widget class="QPushButton" name="colorButton">
        <property name="text">
-        <string>Pick Color</string>
+        <string> Pick Color</string>
+       </property>
+       <property name="icon">
+        <iconset resource="ColorMatch.qrc">
+         <normaloff>:/icons/color.png</normaloff>:/icons/color.png</iconset>
        </property>
       </widget>
      </item>
@@ -37,9 +41,9 @@
       </spacer>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <layout class="QHBoxLayout" name="SpinBoxLayout">
        <item>
-        <widget class="QLabel" name="hSensitivityLabel">
+        <widget class="QLabel" name="rSensitivityLabel">
          <property name="text">
           <string>Red Range +/-</string>
          </property>
@@ -51,7 +55,7 @@
           <number>255</number>
          </property>
          <property name="value">
-          <number>75</number>
+          <number>50</number>
          </property>
         </widget>
        </item>
@@ -69,7 +73,7 @@
         </spacer>
        </item>
        <item>
-        <widget class="QLabel" name="sSensitivityLabel">
+        <widget class="QLabel" name="gSensitivityLabel">
          <property name="text">
           <string>Green Range +/-</string>
          </property>
@@ -81,7 +85,7 @@
           <number>255</number>
          </property>
          <property name="value">
-          <number>75</number>
+          <number>50</number>
          </property>
         </widget>
        </item>
@@ -99,7 +103,7 @@
         </spacer>
        </item>
        <item>
-        <widget class="QLabel" name="vSensitivityLabel">
+        <widget class="QLabel" name="bSensitivityLabel">
          <property name="text">
           <string>Blue Range +/-</string>
          </property>
@@ -111,7 +115,7 @@
           <number>255</number>
          </property>
          <property name="value">
-          <number>75</number>
+          <number>50</number>
          </property>
         </widget>
        </item>
@@ -120,7 +124,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_6">
+    <layout class="QHBoxLayout" name="ColorRangeLayout">
      <item>
       <widget class="QLabel" name="colorRangeLabel">
        <property name="text">
@@ -129,7 +133,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="min_color">
+      <widget class="QFrame" name="minColor">
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -139,7 +143,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="mid_color">
+      <widget class="QFrame" name="midColor">
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -149,12 +153,29 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="max_color">
+      <widget class="QFrame" name="maxColor">
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
        <property name="frameShadow">
         <enum>QFrame::Raised</enum>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="viewRangeButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>View Range</string>
+       </property>
+       <property name="icon">
+        <iconset resource="ColorMatch.qrc">
+         <normaloff>:/icons/eye.png</normaloff>:/icons/eye.png</iconset>
        </property>
       </widget>
      </item>
@@ -162,6 +183,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="ColorMatch.qrc"/>
+ </resources>
  <connections/>
 </ui>

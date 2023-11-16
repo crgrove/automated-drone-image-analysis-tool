@@ -3,36 +3,29 @@ import logging
 from PyQt5.QtGui import QFontDatabase, QFont, QIcon
 from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale
 from PyQt5.QtWidgets import QApplication
+from multiprocessing import freeze_support
 
-from .controllers.MainWindow import MainWindow
+from core.controllers.MainWindow import MainWindow
 
-from . import resources_rc  # noqa
+import resources_rc  # noqa
+import faulthandler
+import qdarktheme
 
-
+version = '1.2.3'
 def main():
     logging.basicConfig(level=logging.DEBUG)
     app = QApplication(sys.argv)
+    qdarktheme.setup_theme()
 
-    app.setWindowIcon(QIcon(':/icons/app.svg'))
+    app.setWindowIcon(QIcon('ADIAT.ico'))
 
-    fontDB = QFontDatabase()
-    fontDB.addApplicationFont(':/fonts/Roboto-Regular.ttf')
-    app.setFont(QFont('Roboto'))
-
-    f = QFile(':/style.qss')
-    f.open(QFile.ReadOnly | QFile.Text)
-    app.setStyleSheet(QTextStream(f).readAll())
-    f.close()
-
-    translator = QTranslator()
-    translator.load(':/translations/' + QLocale.system().name() + '.qm')
-    app.installTranslator(translator)
-
-    mw = MainWindow()
+    mw = MainWindow(qdarktheme, version)
     mw.show()
 
     sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
+    #faulthandler.enable()
+    freeze_support()
     main()

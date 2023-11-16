@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>894</width>
+    <width>897</width>
     <height>840</height>
    </rect>
   </property>
@@ -19,9 +19,19 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>Automated Drone Image Analysis Tool - Sponsored by TEXSAR</string>
+   <string>Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>../icons/ADIAT.ico</normaloff>../icons/ADIAT.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <layout class="QVBoxLayout" name="verticalLayout_3">
     <item>
      <widget class="QFrame" name="setupFrame">
@@ -40,24 +50,26 @@
          <property name="spacing">
           <number>6</number>
          </property>
-         <item row="1" column="0">
-          <widget class="QLabel" name="outputFolderLabel">
-           <property name="font">
-            <font>
-             <pointsize>10</pointsize>
-            </font>
-           </property>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="outputFolderButton">
            <property name="text">
-            <string>Output Folder:</string>
+            <string> Select</string>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
            </property>
           </widget>
          </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="inputFolderLine">
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="outputFolderLine">
            <property name="font">
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -73,120 +85,229 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="2">
-          <widget class="QPushButton" name="inputFolderButton">
-           <property name="text">
-            <string>Select</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLineEdit" name="outputFolderLine">
+         <item row="1" column="0">
+          <widget class="QLabel" name="outputFolderLabel">
            <property name="font">
             <font>
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="text">
+            <string>Output Folder:</string>
+           </property>
           </widget>
          </item>
-         <item row="1" column="2">
-          <widget class="QPushButton" name="outputFolderButton">
+         <item row="0" column="2">
+          <widget class="QPushButton" name="inputFolderButton">
            <property name="text">
-            <string>Select</string>
+            <string> Select</string>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="inputFolderLine">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="globalOptionsLayout">
-         <item>
-          <widget class="QLabel" name="areaLabel">
-           <property name="text">
-            <string>Min Object Area (px):</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSpinBox" name="minAreaSpinBox">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="value">
-            <number>3</number>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_3">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeType">
-            <enum>QSizePolicy::Preferred</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>48</width>
-             <height>43</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QLabel" name="objectColor">
-           <property name="text">
-            <string>Object Identifer Color:</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="identifierColorButton">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(0, 255, 0);</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_6">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeType">
-            <enum>QSizePolicy::Preferred</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QLabel" name="maxThreadsLabel">
-           <property name="text">
-            <string>Max Threads: </string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSpinBox" name="maxThreadsSpinBox">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="maximum">
-            <number>20</number>
-           </property>
-           <property name="value">
-            <number>5</number>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <widget class="QFrame" name="GlobalOptionsFrame">
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Raised</enum>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <layout class="QHBoxLayout" name="GeneralLayout">
+            <item>
+             <widget class="QLabel" name="minAreaLabel">
+              <property name="text">
+               <string>Min Object Area (px):</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="minAreaSpinBox">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="value">
+               <number>3</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="generalHorizontalSpacer1">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Preferred</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>48</width>
+                <height>43</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLabel" name="identifierColor">
+              <property name="text">
+               <string>Object Identifer Color:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="identifierColorButton">
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(0, 255, 0);</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="generalHorizontalSpacer2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Preferred</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLabel" name="maxProcessesLabel">
+              <property name="text">
+               <string>Max Processes: </string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="maxProcessesSpinBox">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>20</number>
+              </property>
+              <property name="value">
+               <number>5</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="HistogramLayout">
+            <item>
+             <widget class="QCheckBox" name="histogramCheckbox">
+              <property name="text">
+               <string>Normalize Histograms</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="HistogramImgWidget" native="true">
+              <layout class="QHBoxLayout" name="horizontalLayout_3">
+               <item>
+                <widget class="QLabel" name="histogramReferenceImageLabel">
+                 <property name="text">
+                  <string>Reference Image:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="histogramLine">
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="histogramButton">
+                 <property name="text">
+                  <string> Select</string>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="../resources.qrc">
+                   <normaloff>:/icons/image.png</normaloff>:/icons/image.png</iconset>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="KMeansLayout">
+            <item>
+             <widget class="QCheckBox" name="kMeansCheckbox">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Use K-Means Clustering</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="KMeansWidget" native="true">
+              <layout class="QHBoxLayout" name="horizontalLayout">
+               <item>
+                <widget class="QLabel" name="clustersLabel">
+                 <property name="text">
+                  <string>Number of Clusters (Colors)</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="clustersSpinBox">
+                 <property name="minimum">
+                  <number>2</number>
+                 </property>
+                 <property name="maximum">
+                  <number>20</number>
+                 </property>
+                 <property name="value">
+                  <number>10</number>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
        </item>
        <item>
         <widget class="Line" name="line">
@@ -198,7 +319,7 @@
        <item>
         <layout class="QHBoxLayout" name="algorithmSelectorlLayout">
          <item>
-          <widget class="QLabel" name="label">
+          <widget class="QLabel" name="algorithmLabel">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
              <horstretch>0</horstretch>
@@ -231,13 +352,18 @@
            </item>
            <item>
             <property name="text">
-             <string>ColorAnomaly</string>
+             <string>MatchedFilter</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>RXAnomaly</string>
             </property>
            </item>
           </widget>
          </item>
          <item>
-          <spacer name="horizontalSpacer_5">
+          <spacer name="algorithmHorizontalSpacer">
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
@@ -300,18 +426,57 @@
           <bold>true</bold>
          </font>
         </property>
+        <property name="layoutDirection">
+         <enum>Qt::RightToLeft</enum>
+        </property>
         <property name="autoFillBackground">
          <bool>false</bool>
         </property>
         <property name="styleSheet">
-         <string notr="true">background-color: rgb(85, 170, 0);
-color: rgb(255, 255, 255);</string>
+         <string notr="true">background-color: rgb(0, 136, 0);
+color: rgb(228, 231, 235);</string>
         </property>
         <property name="text">
-         <string>Start!</string>
+         <string>Start</string>
         </property>
         <property name="default">
          <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="cancelButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string> Cancel</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../resources.qrc">
+          <normaloff>:/icons/cancel.png</normaloff>:/icons/cancel.png</iconset>
         </property>
        </widget>
       </item>
@@ -346,7 +511,11 @@ color: rgb(255, 255, 255);</string>
          <string notr="true"/>
         </property>
         <property name="text">
-         <string>View Results</string>
+         <string> View Results</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../resources.qrc">
+          <normaloff>:/icons/search.png</normaloff>:/icons/search.png</iconset>
         </property>
         <property name="default">
          <bool>false</bool>
@@ -354,7 +523,7 @@ color: rgb(255, 255, 255);</string>
        </widget>
       </item>
       <item>
-       <spacer name="horizontalSpacer">
+       <spacer name="buttonsSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -373,8 +542,16 @@ color: rgb(255, 255, 255);</string>
     </item>
     <item>
      <widget class="QPlainTextEdit" name="outputWindow">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
       <property name="readOnly">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="centerOnScroll">
        <bool>true</bool>
@@ -389,8 +566,8 @@ color: rgb(255, 255, 255);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>894</width>
-     <height>21</height>
+     <width>897</width>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -398,6 +575,7 @@ color: rgb(255, 255, 255);</string>
      <string>File</string>
     </property>
     <addaction name="actionLoadFile"/>
+    <addaction name="actionPreferences"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
@@ -406,7 +584,14 @@ color: rgb(255, 255, 255);</string>
     <string>Open File</string>
    </property>
   </action>
+  <action name="actionPreferences">
+   <property name="text">
+    <string>Preferences</string>
+   </property>
+  </action>
  </widget>
- <resources/>
+ <resources>
+  <include location="../resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

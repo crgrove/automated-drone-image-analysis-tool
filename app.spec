@@ -2,10 +2,10 @@
 
 block_cipher = None
 
-a = Analysis(['bin/app'],
-             pathex=['.'],
+a = Analysis(['app\__main__.py'],
+             pathex=['app'],
              binaries=None,
-             datas=[],
+             datas=[('resources\\icons\\ADIAT.ico','.')],
              hiddenimports=[],
              hookspath=None,
              runtime_hooks=None,
@@ -22,7 +22,7 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           console=False,
-          icon='resources\\icons\\texsar.ico')
+          icon='resources\\icons\\ADIAT.ico')
 
 coll = COLLECT(exe,
                a.binaries,

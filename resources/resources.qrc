@@ -1,12 +1,17 @@
 <RCC>
-    <qresource prefix="/">
-        <file>style.qss</file>
-        <file>fonts/Roboto-Regular.ttf</file>
-        <file>translations/ca_ES.qm</file>
-        <file>translations/en_US.qm</file>
-        <file>translations/es_ES.qm</file>
-        <file>translations/fr_FR.qm</file>
-        <file>icons/texsar.icns</file>
-        <file>icons/texsar.ico</file>
-    </qresource>
+  <qresource prefix="/">
+    <file>icons/zoom_in.png</file>
+    <file>icons/zoom_out.png</file>
+    <file>icons/download.png</file>
+    <file>icons/next.png</file>
+    <file>icons/previous.png</file>
+    <file>icons/folder.png</file>
+    <file>icons/cancel.png</file>
+    <file>icons/start.png</file>
+    <file>icons/image.png</file>
+    <file>icons/search.png</file>
+    <file>style.qss</file>
+    <file>fonts/Roboto-Regular.ttf</file>
+    <file>icons/ADIAT.ico</file>
+  </qresource>
 </RCC>

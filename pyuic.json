@@ -1,25 +1,45 @@
 {
-    "files": [
-        [
-            "resources/resources.qrc",
-            "app"
-        ],
-        [
-            "resources/views/*.ui",
-            "app/views"
-        ],
-        [
-            "resources/views/algorithms/*.ui",
-            "app/algorithms/views"
-        ],
-        [
-            "resources/widgets/*.ui",
-            "app/widgets"
-        ]
+  "files": [
+    [
+      "resources/resources.qrc",
+      "app/core/views/"
     ],
+    [
+      "resources/views/*.ui",
+      "app/core/views/"
+    ],
+    [
+      "resources/views/algorithms/RXAnomaly.ui",
+      "app/algorithms/RXAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/ColorMatch.ui",
+      "app/algorithms/ColorMatch/views"
+    ],
+    [
+      "resources/views/algorithms/ColorMatchRangeViewer.ui",
+      "app/algorithms/ColorMatch/views"
+    ],
+    [
+      "resources/views/algorithms/MatchedFilter.ui",
+      "app/algorithms/MatchedFilter/views"
+    ],
+    [
+      "resources/views/algorithms/ColorMatch.qrc",
+      "app/algorithms/ColorMatch/views"
+    ],
+    [
+      "resources/views/algorithms/MatchedFilter.qrc",
+      "app/algorithms/MatchedFilter/views"
+    ],
+    [
+      "resources/views/components/*.ui",
+      "app/core/views/components/"
+    ]
+  ],
     "hooks": [],
     "pyrcc": "pyrcc5",
     "pyrcc_options": "",
     "pyuic": "pyuic5",
-    "pyuic_options": "--import-from app"
+    "pyuic_options": "--from-import"
 }
