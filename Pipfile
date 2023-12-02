@@ -13,10 +13,10 @@ spectral = "*"
 piexif = "*"
 simplekml = "*"
 scikit-image = "*"
+pyqtdarktheme = "*"
+pillow = "*"
 
 [dev-packages]
 pyqt-distutils = "*"
 qt5-tools = "*"
 PyInstaller = "*"
-e1839a8 = {path = ".",editable = true}
-v = {editable = true,version = "*"}
