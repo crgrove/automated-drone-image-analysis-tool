@@ -60,9 +60,7 @@ class AlgorithmService:
 					(x,y),radius = cv2.minEnclosingCircle(cnt)
 					center = (int(x),int(y))
 					radius = int(radius)
-					#if the area of the identified collection of pixels is >= the threshold we have set, go ahead and mark it.
-					if area > self.min_area:
-						cv2.circle(temp_mask, center, radius,(255), -1)
+					cv2.circle(temp_mask, center, radius,(255), -1)
 				if len(new_contours) == len(contours):
 					contours = new_contours
 					break

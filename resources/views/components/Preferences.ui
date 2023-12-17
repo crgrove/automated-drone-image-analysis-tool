@@ -129,6 +129,38 @@
         </layout>
        </widget>
       </item>
+      <item>
+       <widget class="QWidget" name="positionFormatWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <item>
+          <widget class="QLabel" name="positionFormatLabel">
+           <property name="text">
+            <string>Position Format:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="positionFormatComboBox">
+           <item>
+            <property name="text">
+             <string>Lat/Long - Decimal Degrees</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Lat/Long - Degrees, Minutes, Seconds</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>UTM</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

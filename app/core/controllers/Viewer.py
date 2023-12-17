@@ -15,17 +15,18 @@ from helpers.LocationInfo import LocationInfo
 
 class Viewer(QMainWindow, Ui_Viewer):
 	"""Controller for the Image Viewer(QMainWindow)."""
-	def __init__(self, images):
+	def __init__(self, images, position_format):
 		"""
 		__init__ constructor to build the ADIAT Image Viewer
 		
 		:List(Dictionary) images: Images that will be displayed in the viewer
+		:string position_format: The position format in which GPS coordinates will be displayed
 		"""
 		QMainWindow.__init__(self)
 		self.setupUi(self)
 		
 		self.images = images
-		
+		self.position_format = position_format
 		for image in self.images[:]:
 			path = Path(image['path'])
 			image_file = path
@@ -81,7 +82,10 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#get the gps info from the image exif data and display it
 			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
-				self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
+				#position = LocationInfo.convertDegreesToUtm(float(gps_coords['latitude']), float(gps_coords['longitude']))
+				position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
+				#self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
+				self.statusbar.showMessage("GPS Coordinates: " + position)
 			else:
 				self.statusbar.showMessage("")
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
@@ -105,7 +109,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
 			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
-				self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
+				position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
+				#self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
+				self.statusbar.showMessage("GPS Coordinates: " + position)
 			else:
 				self.statusbar.showMessage("")	
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
@@ -272,3 +278,21 @@ class Viewer(QMainWindow, Ui_Viewer):
 		msg.setWindowTitle("Error Loading Images")
 		msg.setStandardButtons(QMessageBox.Ok)
 		msg.exec_()
+	
+	def getPosition(self, latitude, longitude):
+		"""
+		getLocation takes in the latitude and longitude in degree, minute, second format and returns the position as a string in the selected coordinate format
+		
+		:string latitude: the latitude in degree, minute, second format
+		:string longitude: the longitude in degree, minute, second format
+		:return string: the location
+		"""
+		if self.position_format == 'Lat/Long - Decimal Degrees':
+			return "{lat}, {lng}".format(lat = latitude, lng = longitude)
+		elif self.position_format == 'Lat/Long - Degrees, Minutes, Seconds':
+			dms = LocationInfo.convertDecimalToDms(latitude, longitude)
+			return "{lat_deg}\N{DEGREE SIGN}{lat_min}'{lat_sec}\"{lat_ref} {lng_deg}\N{DEGREE SIGN}{lng_min}'{lng_sec}\"{lng_ref}".format(lat_deg = dms['latitude']['degrees'],lat_min = dms['latitude']['minutes'],lat_sec = dms['latitude']['seconds'],lat_ref = dms['latitude']['reference'],
+												   lng_deg = dms['longitude']['degrees'],lng_min = dms['longitude']['minutes'],lng_sec = dms['longitude']['seconds'],lng_ref= dms['longitude']['reference'])
+		elif self.position_format == 'UTM':
+			utm = LocationInfo.convertDegreesToUtm(latitude, longitude)
+			return "{zone}{letter} {easting} {northing}".format(zone=utm['zone_number'], letter=utm['zone_letter'], easting=utm['easting'], northing=utm['northing'])

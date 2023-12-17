@@ -13,9 +13,9 @@ import piexif
 import time
 import concurrent
 from pathlib import Path
+from helpers.ExifTransfer import ExifTransfer
 from core.services.HistogramNormalizationService import HistogramNormalizationService
 from core.services.KMeansClustersService import KMeansClustersService
-
 from concurrent.futures import ProcessPoolExecutor
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
@@ -76,7 +76,6 @@ class AnalyzeService(QObject):
 		try:
 			self.setupOutputDir();
 			self.setupOutputXml()
-			self.futures = [];
 			image_files = []
 			
 			start_time = time.time()
@@ -89,7 +88,7 @@ class AnalyzeService(QObject):
 			batch_size = 100
 			#loop through all of the files in the input directory and process them in multiple processes.  Breaking up into 100 file batches to limit the amount of time it takes to cancel.
 			while True and not self.cancelled:
-				with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
+				with ProcessPoolExecutor(max_workers=self.num_processes) as self.executor:
 					for i in range (position, position + batch_size):
 						if i >= len(image_files):
 							break;
@@ -101,9 +100,8 @@ class AnalyzeService(QObject):
 							continue
 						#skip if the file isn't an image
 						if imghdr.what(full_path) is not None:
-							future = executor.submit(AnalyzeService.processFile, self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
+							future = self.executor.submit(AnalyzeService.processFile, self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
 							future.add_done_callback(functools.partial(self.processComplete, file_name, full_path))
-							self.futures.append(future);
 						else:
 							self.sig_msg.emit("Skipping "+file_name+ " - File is not an image")
 				position = position + batch_size
@@ -136,6 +134,7 @@ class AnalyzeService(QObject):
 		:return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
 		"""
 		img = cv2.imread(full_path)
+		
 		
 		#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
 		histogram_service = None
@@ -191,7 +190,12 @@ class AnalyzeService(QObject):
 					self.images_with_aois.append({"path": output_file, "aois": areas_of_interest})
 					self.sig_msg.emit('Areas of interest identified in '+file)
 					if is_jpg:
-						piexif.transplant(full_path, output_file)
+						try:
+							piexif.transplant(full_path, output_file)
+						except  piexif._exceptions.InvalidImageDataError as e:
+							#piexif doesn't always work, but it's way faster than PIL.  If piexif fails try PIL
+							ExifTransfer.transfer_exif(full_path, output_file)
+							
 				else:
 					self.sig_msg.emit('No areas of interested identified in '+file)
 				if areas_of_interest is not None:
@@ -200,18 +204,15 @@ class AnalyzeService(QObject):
 						self.max_aois_limit_exceeded = True
 			except concurrent.futures.CancelledError as e:
 				logging.exception(e)
-			except  piexif._exceptions.InvalidImageDataError as e:
-				return
 				
 	@pyqtSlot()
 	def processCancel(self):
 		"""
 		processCancel cancels any asynchronous processes that have not completed
 		"""
-		for future in self.futures:
-			future.cancel()
 		self.cancelled = True
 		self.sig_msg.emit("--- Canceling Image Processing ---")	
+		self.executor.shutdown(wait = False, cancel_futures=True)
 			
 	def setupOutputDir(self):
 		"""
