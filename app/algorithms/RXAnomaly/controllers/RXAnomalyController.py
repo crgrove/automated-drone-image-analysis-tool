@@ -23,6 +23,7 @@ class RXAnomaly(QWidget, Ui_RXAnomaly, AlgorithmController):
 		"""
 		options = dict()
 		options['sensitivity'] = int(self.sensitivityValueLabel.text())
+		options['segments'] = int(self.segmentsComboBox.currentText())
 		return options
 
 	def updateSensitivity(self):
@@ -47,4 +48,7 @@ class RXAnomaly(QWidget, Ui_RXAnomaly, AlgorithmController):
 		"""
 		if 'sensitivity' in options:
 			self.sensitivityValueLabel.setText(str(options['sensitivity']))
+			self.sensitivityValueLabel.setText(str(options['sensitivity']))
 			self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
+		if 'segment' in options:
+			self.segmentsComboBox.setCurrentText(str(options['segment']))

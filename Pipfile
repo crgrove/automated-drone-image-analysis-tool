@@ -15,6 +15,7 @@ simplekml = "*"
 scikit-image = "*"
 pyqtdarktheme = "*"
 pillow = "*"
+utm = "*"
 
 [dev-packages]
 pyqt-distutils = "*"

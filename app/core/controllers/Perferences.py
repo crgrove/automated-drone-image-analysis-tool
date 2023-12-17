@@ -17,9 +17,11 @@ class Preferences(QDialog, Ui_Preferences):
 		self.maxAOIsSpinBox.setValue(self.parent.settings_service.getSetting('MaxAOIs'))
 		self.themeComboBox.setCurrentText(self.parent.settings_service.getSetting('Theme'))
 		self.AOIRadiusSpinBox.setValue(self.parent.settings_service.getSetting('AOIRadius'))
+		self.positionFormatComboBox.setCurrentText(self.parent.settings_service.getSetting('PositionFormat'))
 		self.maxAOIsSpinBox.valueChanged.connect(self.updateMaxAOIs)
 		self.AOIRadiusSpinBox.valueChanged.connect(self.updateAOIRadius)
 		self.themeComboBox.currentTextChanged.connect(self.updateTheme)
+		self.positionFormatComboBox.currentTextChanged.connect(self.updatePositionFormat)
 	
 	def updateMaxAOIs(self):
 		"""
@@ -38,3 +40,9 @@ class Preferences(QDialog, Ui_Preferences):
 		"""
 		self.parent.settings_service.setSetting('Theme', self.themeComboBox.currentText())
 		self.parent.updateTheme(self.themeComboBox.currentText())
+		
+	def updatePositionFormat(self):
+		"""
+		updatePositionFormat action method triggered on changes to position format combobox
+		"""
+		self.parent.settings_service.setSetting('PositionFormat', self.positionFormatComboBox.currentText())

@@ -243,8 +243,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 				self.images = images
 			else:
 				self.setViewResultsButton(False)
-			
-			self.viewer = Viewer(self.images)
+			position_format = self.settings_service.getSetting('PositionFormat')
+			self.viewer = Viewer(self.images, position_format)
 			self.viewer.show()
 		else:
 			self.showError("Could not parse XML file.  Check file paths in \"ADIAT_Data.xml\"")
@@ -438,6 +438,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		aoi_radius = self.settings_service.getSetting('AOIRadius')
 		if not isinstance(aoi_radius, int):
 			self.settings_service.setSetting('AOIRadius', 15)
+		
+		position_format = self.settings_service.getSetting('PositionFormat')
+		if not isinstance(position_format, str):
+			self.settings_service.setSetting('PositionFormat', 'Lat/Long - Decimal Degrees')
 			
 		theme = self.settings_service.getSetting('Theme')
 		if theme == None:

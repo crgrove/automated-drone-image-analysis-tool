@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 import piexif
 import imghdr
+import utm
+
 class LocationInfo:
 	"""Provides functions to retrieve and convert locational data"""
 	@staticmethod
@@ -10,7 +12,7 @@ class LocationInfo:
 		getGPS retrieves the gps EXIF data stored in an image file
         
         :String full_path: the path to the image file
-		:return Dictionary: contains the latitude and longitude values from the gps data
+		:return Dictionary: contains the decimal latitude and longitude values from the gps data
 		"""
 		is_jpg = imghdr.what(full_path) == 'jpg' or imghdr.what(full_path) == 'jpeg'
 		if not is_jpg:
@@ -36,7 +38,44 @@ class LocationInfo:
 				return {}
 		else:
 			return {}
-		return {'latitude': str(lat_value), 'longitude': str(lon_value)}
+		return {'latitude': round(lat_value,6), 'longitude': round(lon_value,6)}
+	
+	@staticmethod
+	def convertDegreesToUtm(lat, lng):
+		"""
+		convertDegreesToUtm takes decimal latitude and longitude values and converts to UTM coordiantes
+		:float lat: the decimal latitude position
+		:float longitude: the decimal latitude position
+		:return Dictionary: EASTING, NORTHING, ZONE_NUMBER, ZONE_LETTER values representing the position in UTM
+		"""
+		utm_pos = utm.from_latlon(lat, lng)
+		return {'easting': round(utm_pos[0],2), 'northing': round(utm_pos[1],2), 'zone_number': utm_pos[2], 'zone_letter': utm_pos[3]}
+	
+	@staticmethod
+	def convertDecimalToDms(lat, lng):
+		"""
+		convertDecimalToDms takes decimal latitude and longitude values and converts to degrees, minutes, seconds coordinates
+		:float lat: the decimal latitude position
+		:float longitude: the decimal latitude position
+		:return Dictionary: contains the degrees, minutes, seconds values for lat and lng as well as the reference values
+		"""
+		is_positive = lat >= 0
+		lat = abs(lat)
+		minutes,seconds = divmod(lat*3600,60)
+		degrees,minutes = divmod(minutes,60)
+		degrees = degrees
+		reference = 'N' if is_positive else 'S'
+		latitude = {'degrees': int(degrees), 'minutes': int(minutes), 'seconds': round(seconds,2), 'reference': reference}
+		
+		is_positive = lng >= 0
+		lng = abs(lng)
+		minutes,seconds = divmod(lng*3600,60)
+		degrees,minutes = divmod(minutes,60)
+		degrees = degrees
+		reference = 'E' if is_positive else 'W'
+		longitude = {'degrees': int(degrees), 'minutes': int(minutes), 'seconds': round(seconds,2), 'reference': reference}
+		
+		return{'latitude':latitude, 'longitude':longitude}
 	
 	@staticmethod
 	def __convert_to_degrees(value):
