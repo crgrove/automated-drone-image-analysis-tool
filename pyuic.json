@@ -17,8 +17,8 @@
       "app/algorithms/ColorMatch/views"
     ],
     [
-      "resources/views/algorithms/ColorMatchRangeViewer.ui",
-      "app/algorithms/ColorMatch/views"
+      "resources/views/algorithms/RangeViewer.ui",
+      "app/algorithms/Shared/views"
     ],
     [
       "resources/views/algorithms/MatchedFilter.ui",

@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import cv2
 
-from algorithms.Algorithm import AlgorithmService
+from algorithms.Algorithm import AlgorithmService, AnalysisResult
 
 class ColorMatchService(AlgorithmService):
     """Service that executes the Color Match algorithm"""
@@ -19,11 +19,13 @@ class ColorMatchService(AlgorithmService):
         self.min_rgb = options['color_range'][0]
         self.max_rgb = options['color_range'][1]
 
-    def processImage(self, img):
+    def processImage(self, img, file_name, full_path):
         """
 		processImage processes a single image using the Color Match algorithm
 		
 		:numpy.ndarray img: numpy.ndarray representing the subject image
+		:String file_name: the name of the file being analyzed
+		:String full_path: the path to the image being analyzed
         :return numpy.ndarray, List: numpy.ndarray representing the output image and a list of areas of interest
 		"""
         try:
@@ -39,8 +41,9 @@ class ColorMatchService(AlgorithmService):
             
             #make a list of the identified areas.
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            return self.circleAreasOfInterest(img, contours)
-        
+            augmented_image, areas_of_interest, base_contour_count =  self.circleAreasOfInterest(img, contours)
+            return AnalysisResult(file_name, full_path, augmented_image, areas_of_interest, base_contour_count)
+   
         except Exception as e:
             logging.exception(e)
-            return None, None
+            return AnalysisResult();

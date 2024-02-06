@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\automated-drone-image-analysis-tool\resources/views/algorithms/ColorMatchRangeViewer.ui'
+# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\automated-drone-image-analysis-tool\resources/views/algorithms/RangeViewer.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -11,14 +11,14 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class Ui_ColorMatchRangeViewer(object):
-    def setupUi(self, ColorMatchRangeViewer):
-        ColorMatchRangeViewer.setObjectName("ColorMatchRangeViewer")
-        ColorMatchRangeViewer.resize(1200, 700)
-        self.verticalLayout = QtWidgets.QVBoxLayout(ColorMatchRangeViewer)
+class Ui_ColorRangeViewer(object):
+    def setupUi(self, ColorRangeViewer):
+        ColorRangeViewer.setObjectName("ColorRangeViewer")
+        ColorRangeViewer.resize(1200, 700)
+        self.verticalLayout = QtWidgets.QVBoxLayout(ColorRangeViewer)
         self.verticalLayout.setSpacing(0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.selectedWidget = QtWidgets.QWidget(ColorMatchRangeViewer)
+        self.selectedWidget = QtWidgets.QWidget(ColorRangeViewer)
         self.selectedWidget.setObjectName("selectedWidget")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.selectedWidget)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
@@ -39,7 +39,7 @@ class Ui_ColorMatchRangeViewer(object):
         self.selectedLayout.setObjectName("selectedLayout")
         self.verticalLayout_2.addLayout(self.selectedLayout)
         self.verticalLayout.addWidget(self.selectedWidget)
-        self.widget = QtWidgets.QWidget(ColorMatchRangeViewer)
+        self.widget = QtWidgets.QWidget(ColorRangeViewer)
         self.widget.setObjectName("widget")
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.widget)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
@@ -61,11 +61,11 @@ class Ui_ColorMatchRangeViewer(object):
         self.verticalLayout_3.addLayout(self.unselectedLayout)
         self.verticalLayout.addWidget(self.widget)
 
-        self.retranslateUi(ColorMatchRangeViewer)
-        QtCore.QMetaObject.connectSlotsByName(ColorMatchRangeViewer)
+        self.retranslateUi(ColorRangeViewer)
+        QtCore.QMetaObject.connectSlotsByName(ColorRangeViewer)
 
-    def retranslateUi(self, ColorMatchRangeViewer):
+    def retranslateUi(self, ColorRangeViewer):
         _translate = QtCore.QCoreApplication.translate
-        ColorMatchRangeViewer.setWindowTitle(_translate("ColorMatchRangeViewer", "Color Range Viewer"))
-        self.selectedLabel.setText(_translate("ColorMatchRangeViewer", "Selected"))
-        self.label.setText(_translate("ColorMatchRangeViewer", "Unselected"))
+        ColorRangeViewer.setWindowTitle(_translate("ColorRangeViewer", "Color Range Viewer"))
+        self.selectedLabel.setText(_translate("ColorRangeViewer", "Selected"))
+        self.label.setText(_translate("ColorRangeViewer", "Unselected"))

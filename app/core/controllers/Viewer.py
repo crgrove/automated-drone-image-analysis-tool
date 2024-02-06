@@ -105,6 +105,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			self.fileNameLabel.setText(image['name'])
 			self.loadAreasofInterest(image)
 			self.mainImage.resetZoom()
+			self.mainImage.setFocus()
 			#get the gps info from the image exif data and display it
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
 			gps_coords = LocationInfo.getGPS(image['path'])

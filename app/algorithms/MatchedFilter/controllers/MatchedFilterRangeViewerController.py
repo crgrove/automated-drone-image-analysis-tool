@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+import spectral
+import pandas as pd 
 
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
 from core.views.components.QtImageViewer import QtImageViewer
@@ -8,18 +10,19 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import QDialog,QFrame
 
-class ColorMatchRangeViewer(QDialog, Ui_ColorRangeViewer):
+class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 	"""Controller for the Color Match Ranger Viewer Dialog"""
-	def __init__(self, min_rgb, max_rgb):
+	
+	def __init__(self,ref_rgb, threshold):
 		"""
 		__init__ constructor for the dialog
 		
-		:Tuple(int, int, int) min_rgb: The minimum color in the selected range
-		:Tuple(int, int, int) max_rgb: The maximum color in the selected range
+		:Tuple(int, int, int) ref_rgb: The reference color to be matched
+		:float threshold: The threshold a pixel score must meet to be flagged as a match
 		"""
 		QDialog.__init__(self)
 		self.setupUi(self)
-		palettes = self.generatePalettes(min_rgb, max_rgb)
+		palettes = self.generatePalettes(ref_rgb, threshold)
 		self.populateImage(palettes["selected"][2],True)
 		self.populateImage(palettes["selected"][1],True)
 		self.populateImage(palettes["selected"][0],True)
@@ -27,17 +30,14 @@ class ColorMatchRangeViewer(QDialog, Ui_ColorRangeViewer):
 		self.populateImage(palettes["unselected"][1],False)
 		self.populateImage(palettes["unselected"][0],False)
 			
-	def generatePalettes(self, min_rgb, max_rgb):
+	def generatePalettes(self, ref_rgb, threshold):
 		"""
 		generatePalettes generates numpy.ndarrays representing selected and unselected colors
 		
-		:Tuple(int, int, int) min_rgb: The minimum color in the selected range
-		:Tuple(int, int, int) max_rgb: The maximum color in the selected range
+		:Tuple(int, int, int) ref_rgb: The reference color to be matched
+		:float threshold: The threshold a pixel score must meet to be flagged as a match
 		:return Dictionary: numpy.ndarrays representing the selected and unselected color ranges 
 		"""
-		
-		cv_lower_limit = np.array([min_rgb[2], min_rgb[1], min_rgb[0]], dtype=np.uint8)
-		cv_upper_limit = np.array([max_rgb[2], max_rgb[1], max_rgb[0]], dtype=np.uint8)
 		
 		#How big do we want the palettes to be
 		multiplier = 2
@@ -52,13 +52,13 @@ class ColorMatchRangeViewer(QDialog, Ui_ColorRangeViewer):
 		low = self.generatePalette(x_range, y_range, multiplier, 64)
 		
 		#create the masks representing the selected and unselected colors
-		high_mask = cv2.inRange(high, cv_lower_limit, cv_upper_limit)
-		med_mask = cv2.inRange(med, cv_lower_limit, cv_upper_limit)
-		low_mask = cv2.inRange(low, cv_lower_limit, cv_upper_limit)
+		high_mask = self.generateMask(high, ref_rgb, threshold)
+		med_mask = self.generateMask(med, ref_rgb, threshold)
+		low_mask = self.generateMask(low, ref_rgb, threshold)
+		
 		inverse_high_mask = cv2.bitwise_not(high_mask)
 		inverse_med_mask = cv2.bitwise_not(med_mask)
 		inverse_low_mask = cv2.bitwise_not(low_mask)
-		
 		#apply the masks to the base palettes
 		selected_high = cv2.bitwise_and(high, high, mask = high_mask)
 		unselected_high = cv2.bitwise_and(high, high, mask = inverse_high_mask)
@@ -68,6 +68,18 @@ class ColorMatchRangeViewer(QDialog, Ui_ColorRangeViewer):
 		unselected_low = cv2.bitwise_and(low, low, mask = inverse_low_mask)
 		return{"selected": [selected_high, selected_med, selected_low], "unselected": [unselected_high, unselected_med, unselected_low]}
 
+	def generateMask(self, img, ref_rgb, threshold):
+		"""
+		generateMask generates numpy.ndarrays with a mask representing pixels that are a match for the reference color
+		
+		:numpy.ndarray img: numpy.ndarray representing the subject image
+		Tuple(int, int, int) ref_rgb: The reference color to be matched
+		:float threshold: The threshold a pixel score must meet to be flagged as a match
+		:return numpy.ndarray: numpy.ndarray representing the selected pixels
+		"""
+		scores = spectral.matched_filter(img, np.array([ref_rgb[2], ref_rgb[1], ref_rgb[0]], dtype=np.uint8))
+		mask =  np.uint8((255 * (scores > threshold)))
+		return mask
 	def generatePalette(self, x_range, y_range, multiplier, saturation):
 		"""
 		generatePalette generate numpy.ndarray representing the HSL palette at a given saturation

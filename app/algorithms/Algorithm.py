@@ -19,11 +19,13 @@ class AlgorithmService:
 		self.aoi_radius = aoi_radius
 		self.options = options
 
-	def processImage(self, image):
+	def processImage(self, image, file_name, full_path):
 		"""
 		processImage processes a single image file using the algorithm
 		
 		:numpy.ndarray image: the numpy.ndarray representation of an image
+		:String file_name: the name of the file being analyzed
+		:String full_path: the path to the image being analyzed
 		"""
 		raise NotImplementedError
 	
@@ -79,7 +81,7 @@ class AlgorithmService:
 			return image_copy, areas_of_interest, base_contour_count
 		else :
 			return None, None, None
-	
+		
 class AlgorithmController:
 	"""Base class for algorithm controllers"""
 	def __init__(self, name, default_process_count):
@@ -115,3 +117,18 @@ class AlgorithmController:
 		:Dictionary options: the options to use to set attributes
 		"""
 		raise NotImplementedError
+	
+class AnalysisResult:
+	"""Class for the object that will be returned by the processImage method """
+	file_name = None #type = string
+	full_path = None #type = string 
+	augmented_image = None #type = numpy.ndarray
+	areas_of_interest = None  #type = List
+	base_contour_count = None  # type = int
+	
+	def __init__(self, file_name=None, full_path=None, augmented_image=None, areas_of_interest=None, base_contour_count=None):
+		self.file_name = file_name
+		self.full_path=full_path
+		self.augmented_image = augmented_image
+		self.areas_of_interest = areas_of_interest
+		self.base_contour_count = base_contour_count

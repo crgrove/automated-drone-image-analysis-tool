@@ -100,6 +100,40 @@
      </item>
     </layout>
    </item>
+   <item>
+    <layout class="QHBoxLayout" name="RangeViewerLayout">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="viewRangeButton">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>View Range</string>
+       </property>
+       <property name="icon">
+        <iconset resource="MatchedFilter.qrc">
+         <normaloff>:/icons/eye.png</normaloff>:/icons/eye.png</iconset>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
   </layout>
  </widget>
  <resources>
