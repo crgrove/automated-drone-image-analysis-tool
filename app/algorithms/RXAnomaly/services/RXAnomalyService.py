@@ -6,7 +6,7 @@ import spectral
 import scipy
 from scipy.stats import chi2
 
-from algorithms.Algorithm import AlgorithmService
+from algorithms.Algorithm import AlgorithmService, AnalysisResult
 from helpers.ColorUtils import ColorUtils
 
 #Based on TX Spectrail Detection Algorithm seen here: http://cver.hrail.crasar.org/algorithm/
@@ -26,11 +26,13 @@ class RXAnomalyService(AlgorithmService):
         self.chi_threshold = self.getThreshold(options['sensitivity'])
         self.segments = options['segments']
 
-    def processImage(self, img):
+    def processImage(self, img, file_name, full_path):
         """
 		processImage processes a single image using the Color Match algorithm
 		
 		:numpy.ndarray img: numpy.ndarray representing the subject image
+		:String file_name: the name of the file being analyzed
+		:String full_path: the path to the image being analyzed
         :return numpy.ndarray, List: numpy.ndarray representing the output image and a list of areas of interest
 		"""
         try:
@@ -53,9 +55,11 @@ class RXAnomalyService(AlgorithmService):
             """
             #make a list of the identified areas.
             contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            return self.circleAreasOfInterest(img, contours)
+            augmented_image, areas_of_interest, base_contour_count =  self.circleAreasOfInterest(img, contours)
+            return AnalysisResult(file_name, full_path, augmented_image, areas_of_interest, base_contour_count)
         except Exception as e:
             logging.exception(e)
+            return AnalysisResult();
             
     def getThreshold(self, sensitivity):
         """

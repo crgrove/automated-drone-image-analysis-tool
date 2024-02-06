@@ -413,6 +413,7 @@ class QtImageViewer(QGraphicsView):
 
         scenePos = self.mapToScene(event.pos())
         if event.button() == Qt.MouseButton.LeftButton:
+            self.resetZoom()
             self.leftMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())
         elif event.button() == Qt.MouseButton.RightButton:
             self.rightMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())

@@ -93,17 +93,16 @@ class AnalyzeService(QObject):
 						if i >= len(image_files):
 							break;
 						full_path = image_files[i]
-						path = Path(full_path)
-						file_name = path.name
+						
 						#skip if it's a directory
 						if(os.path.isdir(image_files[position])):
 							continue
 						#skip if the file isn't an image
 						if imghdr.what(full_path) is not None:
-							future = self.executor.submit(AnalyzeService.processFile, self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
-							future.add_done_callback(functools.partial(self.processComplete, file_name, full_path))
+							future = self.executor.submit(AnalyzeService.processFile, i, self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
+							future.add_done_callback(self.processComplete)
 						else:
-							self.sig_msg.emit("Skipping "+file_name+ " - File is not an image")
+							self.sig_msg.emit("Skipping "+full_path+ " - File is not an image")
 				position = position + batch_size
 				if position >= len(image_files):
 					break
@@ -119,7 +118,7 @@ class AnalyzeService(QObject):
 			logging.exception(e)
 
 	@staticmethod
-	def processFile(algorithm, identifier_color, min_area, aoi_radius, options, full_path, hist_ref_path, kmeans_clusters):
+	def processFile(i, algorithm, identifier_color, min_area, aoi_radius, options, full_path, hist_ref_path, kmeans_clusters):
 		"""
 		processFile processes a single image using the selected algorithm and features
 		
@@ -134,7 +133,8 @@ class AnalyzeService(QObject):
 		:return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
 		"""
 		img = cv2.imread(full_path)
-		
+		path = Path(full_path)
+		file_name = path.name
 		
 		#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
 		histogram_service = None
@@ -154,52 +154,47 @@ class AnalyzeService(QObject):
 			
 		try:
 			#process the image using the algorithm
-			return instance.processImage(img)
+			return instance.processImage(img,file_name,full_path)
 		except Exception as e:
 			logging.exception(e)
 	
 	@pyqtSlot()			
-	def processComplete(self, file, full_path, future):
+	def processComplete(self, future):
 		"""
 		processComplete processes the analyzed image
-		
-		:String file: the filename of the image
-		:String full_path: the full path to the source image
+
 		:concurrent.futures._base.Future future: object representing the execution of the callable
 		"""
 		if future.done() and not future.cancelled() and not self.cancelled:
-			is_jpg = imghdr.what(full_path) == 'jpg' or imghdr.what(full_path) == 'jpeg'
+			result = future.result()
+			is_jpg = imghdr.what(result.full_path) == 'jpg' or imghdr.what(result.full_path) == 'jpeg'
 			#if the image is a jpg read the exif information
 			if is_jpg:
-				exif_dict = piexif.load(full_path)
+				exif_dict = piexif.load(result.full_path)
 				if not 'GPS' in exif_dict:
 					is_jpg = False
 			try:
-				#returned by processFile method
-				results = future.result()
-				result = results[0]
-				areas_of_interest = results[1]
-				base_areas_of_interest_count = results[2]
-				if result is not None:
+				#returned by processFile method		
+				if result.augmented_image is not None:
 					#save the image to the output directory and add the image/areas of interest to the output xml
-					output_file = full_path.replace(self.input, self.output)
+					output_file = result.full_path.replace(self.input, self.output)
 					path = Path(output_file)
 					if not os.path.exists(path.parents[0]):
 						os.makedirs(path.parents[0])
-					cv2.imwrite(output_file, result)
-					self.images_with_aois.append({"path": output_file, "aois": areas_of_interest})
-					self.sig_msg.emit('Areas of interest identified in '+file)
+					cv2.imwrite(output_file, result.augmented_image)
+					self.images_with_aois.append({"path": output_file, "aois": result.areas_of_interest})
+					self.sig_msg.emit('Areas of interest identified in '+result.file_name)
 					if is_jpg:
 						try:
-							piexif.transplant(full_path, output_file)
+							piexif.transplant(result.full_path, output_file)
 						except  piexif._exceptions.InvalidImageDataError as e:
 							#piexif doesn't always work, but it's way faster than PIL.  If piexif fails try PIL
-							ExifTransfer.transfer_exif(full_path, output_file)
+							ExifTransfer.transfer_exif(result.full_path, output_file)
 							
 				else:
-					self.sig_msg.emit('No areas of interested identified in '+file)
-				if areas_of_interest is not None:
-					if base_areas_of_interest_count > self.max_aois and not self.max_aois_limit_exceeded:
+					self.sig_msg.emit('No areas of interested identified in '+result.file_name)
+				if result.areas_of_interest is not None:
+					if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
 						self.sig_aois.emit()
 						self.max_aois_limit_exceeded = True
 			except concurrent.futures.CancelledError as e:
@@ -211,7 +206,7 @@ class AnalyzeService(QObject):
 		processCancel cancels any asynchronous processes that have not completed
 		"""
 		self.cancelled = True
-		self.sig_msg.emit("--- Canceling Image Processing ---")	
+		self.sig_msg.emit("--- Cancelling Image Processing ---")	
 		self.executor.shutdown(wait = False, cancel_futures=True)
 			
 	def setupOutputDir(self):
