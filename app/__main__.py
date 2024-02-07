@@ -13,7 +13,6 @@ import qdarktheme
 version = '1.2.5'
 def main():
 	if sys.platform == 'win32':
-		print("HERE")
 		home_path = os.path.expanduser("~")
 		app_path = home_path + '/AppData/Roaming/ADIAT/'
 		if(not os.path.exists(app_path)):
