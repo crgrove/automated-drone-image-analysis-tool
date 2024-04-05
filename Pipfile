@@ -15,6 +15,7 @@ simplekml = "*"
 scikit-image = "*"
 pyqtdarktheme = "*"
 pillow = "*"
+pandas = "*"
 utm = "*"
 
 [dev-packages]
