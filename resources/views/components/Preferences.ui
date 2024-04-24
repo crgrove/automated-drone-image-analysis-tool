@@ -161,6 +161,33 @@
         </layout>
        </widget>
       </item>
+      <item>
+       <widget class="QWidget" name="TemperatureWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <item>
+          <widget class="QLabel" name="temperatureLabel">
+           <property name="text">
+            <string>Temperature Unit:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="temperatureComboBox">
+           <item>
+            <property name="text">
+             <string>Fahrenheit</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Celsius</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

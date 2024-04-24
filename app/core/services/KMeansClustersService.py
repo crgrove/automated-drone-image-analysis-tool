@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import imghdr
-import logging
+from core.services.LoggerService import LoggerService
 
 class KMeansClustersService:
 	"""Service to generate an image with a limited number of colors"""
@@ -11,6 +11,7 @@ class KMeansClustersService:
 		
 		:Int clusters: the number of clusters(colors) for the K-Means Clusters algorithm to return
 		"""
+		self.logger = LoggerService()
 		self.num_clusters = clusters
 		
 	def generateClusters(self,src):
@@ -36,4 +37,4 @@ class KMeansClustersService:
 			res2 = res.reshape((src.shape))
 			return res2
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)

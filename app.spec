@@ -4,8 +4,8 @@ block_cipher = None
 
 a = Analysis(['app\__main__.py'],
              pathex=['app'],
-             binaries=None,
-             datas=[('resources\\icons\\ADIAT.ico','.')],
+             binaries=[('app\\dependencies\\exiftool.exe','dependencies'),('app\\dependencies\\dji_thermal_sdk_v1.4_20220929','dependencies\\dji_thermal_sdk_v1.4_20220929')],
+             datas=[('resources\\icons\\ADIAT.ico','.'),('ap\\algorithms.conf','.')],
              hiddenimports=[],
              hookspath=None,
              runtime_hooks=None,

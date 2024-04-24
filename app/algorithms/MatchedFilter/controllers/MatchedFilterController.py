@@ -1,14 +1,14 @@
-import logging
 from ast import literal_eval
 
 from algorithms.Algorithm import AlgorithmController
 from algorithms.MatchedFilter.views.MatchedFilter_ui import Ui_MatchedFilter
 from algorithms.MatchedFilter.controllers.MatchedFilterRangeViewerController import MatchedFilterRangeViewer
+from core.services.LoggerService import LoggerService
 
 from PyQt5.QtGui import  QColor
 from PyQt5.QtWidgets import QWidget, QColorDialog
 
-class MatchedFilter(QWidget, Ui_MatchedFilter, AlgorithmController):
+class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 	"""Controller for the Matched Filter algorithm widget"""
 
 	def __init__(self):
@@ -16,7 +16,8 @@ class MatchedFilter(QWidget, Ui_MatchedFilter, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'MatchedFilter', 10)
+		AlgorithmController.__init__(self, 'MatchedFilter', 10, False)
+		self.logger = LoggerService()
 		self.setupUi(self)
 		self.viewRangeButton.hide()
 		self.selectedColor = None
@@ -37,7 +38,7 @@ class MatchedFilter(QWidget, Ui_MatchedFilter, AlgorithmController):
 			if self.selectedColor.isValid():
 				self.updateColors();
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
 
 	def viewRangeButtonClicked(self):
 		"""

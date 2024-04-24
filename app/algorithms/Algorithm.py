@@ -1,9 +1,13 @@
+import platform
 import numpy as np
 import cv2
+import os
+from pathlib import Path
+from helpers.MetaDataHelper import MetaDataHelper
 
 class AlgorithmService:
 	"""Base class for algorithm services"""
-	def __init__(self, name, identifier_color, min_area, aoi_radius, options):
+	def __init__(self, name, identifier_color, min_area, aoi_radius, options, thermal = False):
 		"""
 		__init__ constructor
 		
@@ -12,20 +16,24 @@ class AlgorithmService:
 		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
 		:Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
 		:Dictionary options: additional algorithm-specific options
+		:Boolean thermal: is this a thermal image algorithm
 		"""
 		self.name = name
 		self.identifier_color = identifier_color
 		self.min_area = min_area
 		self.aoi_radius = aoi_radius
 		self.options = options
+		self.is_thermal = thermal
 
-	def processImage(self, image, file_name, full_path):
+	def processImage(self, img, full_path, input_dir, output_dir):
 		"""
 		processImage processes a single image file using the algorithm
 		
-		:numpy.ndarray image: the numpy.ndarray representation of an image
-		:String file_name: the name of the file being analyzed
+		:numpy.ndarray img: numpy.ndarray representing the subject image
 		:String full_path: the path to the image being analyzed
+		:String input_dir: the base input folder
+		:String output_dir: the base output folder
+		:return numpy.ndarray, List: numpy.ndarray representing the output image and a list of areas of interest
 		"""
 		raise NotImplementedError
 	
@@ -82,17 +90,31 @@ class AlgorithmService:
 		else :
 			return None, None, None
 		
+	def storeImage (self, input_file, output_file, augmented_image, temperature_data = None):
+		path = Path(output_file)
+		if not os.path.exists(path.parents[0]):
+			os.makedirs(path.parents[0])
+		cv2.imwrite(output_file, augmented_image)
+		if platform.system() == "Darwin":
+			MetaDataHelper.transferExifPiexif(input_file, output_file)
+		else:
+			MetaDataHelper.transferAll(input_file, output_file)
+			if temperature_data is not None:
+				MetaDataHelper.transferTemperatureData(temperature_data, output_file)
+		
 class AlgorithmController:
 	"""Base class for algorithm controllers"""
-	def __init__(self, name, default_process_count):
+	def __init__(self, name, default_process_count, thermal = False):
 		"""
 		__init__ constructor
 		
 		:String name: the name of the algorithm to be used for analysis
 		:Int default_process_count: the default number of processes to use for the algorithm
+		:Bool thermal: is this algorithm for thermal images
 		"""
 		self.name = name
 		self.default_process_count = default_process_count
+		self.is_thermal = thermal
 		
 	def getOptions(self):
 		"""
@@ -120,15 +142,15 @@ class AlgorithmController:
 	
 class AnalysisResult:
 	"""Class for the object that will be returned by the processImage method """
-	file_name = None #type = string
-	full_path = None #type = string 
+	input_path = None #type = string 
+	output_path = None #type = string 
 	augmented_image = None #type = numpy.ndarray
 	areas_of_interest = None  #type = List
 	base_contour_count = None  # type = int
 	
-	def __init__(self, file_name=None, full_path=None, augmented_image=None, areas_of_interest=None, base_contour_count=None):
-		self.file_name = file_name
-		self.full_path=full_path
+	def __init__(self, input_path=None, output_path=None, augmented_image=None, areas_of_interest=None, base_contour_count=None):
+		self.input_path=input_path
+		self.output_path=output_path
 		self.augmented_image = augmented_image
 		self.areas_of_interest = areas_of_interest
 		self.base_contour_count = base_contour_count

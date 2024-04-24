@@ -33,6 +33,10 @@
       "app/algorithms/MatchedFilter/views"
     ],
     [
+      "resources/views/algorithms/ThermalRange.ui",
+      "app/algorithms/ThermalRange/views"
+    ],
+    [
       "resources/views/components/*.ui",
       "app/core/views/components/"
     ]
