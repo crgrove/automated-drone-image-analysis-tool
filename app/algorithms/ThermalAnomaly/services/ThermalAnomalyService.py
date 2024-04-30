@@ -10,8 +10,8 @@ from helpers.thermalParser import Thermal
 from helpers.MetaDataHelper import MetaDataHelper
 
 
-class ThermalRangeService(AlgorithmService):
-	"""Service that executes the Thermal Range algorithm"""
+class ThermalAnomalyService(AlgorithmService):
+	"""Service that executes the Thermal Anomaly algorithm"""
 	def __init__(self, identifier, min_area, aoi_radius, options):
 		"""
 		__init__ constructor for the algorithm
@@ -23,8 +23,8 @@ class ThermalRangeService(AlgorithmService):
 		"""
 		self.logger = LoggerService()
 		super().__init__('MatchedFilter', identifier, min_area, aoi_radius, options, True)
-		self.min_temp = options['minTemp']
-		self.max_temp = options['maxTemp']
+		self.threshold = options['threshold']
+		self.direction = options['type']
 		self.color_map = options['colorMap']
 
 	def processImage(self, img, full_path, input_dir, output_dir):
@@ -42,7 +42,17 @@ class ThermalRangeService(AlgorithmService):
 			#calculate the match filter scores 
 			thermal = Thermal(dtype=np.float32)
 			temperature_c, thermal_img = thermal.parse(full_path, self.color_map )
-			mask =  np.uint8(1 * ((temperature_c > self.min_temp ) & (temperature_c < self.max_temp)))
+			mean = np.mean(temperature_c)
+			standard_deviation = np.std(temperature_c);
+			max_threshold = mean + (standard_deviation * self.threshold)
+			min_threshold = mean - (standard_deviation * self.threshold)
+			
+			if self.direction == 'Above or Below Mean':
+				mask =  np.uint8(1 * ((temperature_c > max_threshold ) + (temperature_c < min_threshold)))
+			elif self.direction == 'Above Mean':
+				mask =  np.uint8(1 * (temperature_c > max_threshold ))
+			else:
+				mask =  np.uint8(1 * (temperature_c < min_threshold))
 			#make a list of the identified areas.
 			contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)	
 			augmented_image, areas_of_interest, base_contour_count =  self.circleAreasOfInterest(thermal_img, contours)

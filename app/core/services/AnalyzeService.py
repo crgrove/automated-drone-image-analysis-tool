@@ -1,26 +1,24 @@
-import functools
-from itertools import count
 import operator
-
 import cv2
 import os
 import imghdr
 import shutil
 import xml.etree.ElementTree as ET
-from numpy import full
 import time
+
 from pathlib import Path
-from core.services.HistogramNormalizationService import HistogramNormalizationService
-from core.services.KMeansClustersService import KMeansClustersService
 from multiprocessing import Pool
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
-from core.services.LoggerService import LoggerService
 
+from core.services.LoggerService import LoggerService
+from core.services.HistogramNormalizationService import HistogramNormalizationService
+from core.services.KMeansClustersService import KMeansClustersService
 """****Import Algorithm Services****"""
 from algorithms.ColorMatch.services.ColorMatchService import ColorMatchService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
+from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 """****End Algorithm Import****"""
 
 class AnalyzeService(QObject):
@@ -124,7 +122,6 @@ class AnalyzeService(QObject):
 		:Bool thermal: is this a thermal image algorithm		
 		:return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
 		"""
-		
 		img = cv2.imread(full_path)
 		if not thermal:
 			#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService

@@ -13,10 +13,11 @@ spectral = "*"
 piexif = "*"
 simplekml = "*"
 scikit-image = "*"
-pyqtdarktheme = "^2"
+pyqtdarktheme = "*"
 pillow = "*"
 pandas = "*"
 utm = "*"
+PyExifTool = "*"
 
 [dev-packages]
 pyqt-distutils = "*"

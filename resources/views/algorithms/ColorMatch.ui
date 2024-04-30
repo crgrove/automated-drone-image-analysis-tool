@@ -18,6 +18,11 @@
     <layout class="QHBoxLayout" name="ColorSelectionLayout">
      <item>
       <widget class="QPushButton" name="colorButton">
+       <property name="font">
+        <font>
+         <pointsize>10</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string> Pick Color</string>
        </property>
@@ -44,6 +49,11 @@
       <layout class="QHBoxLayout" name="SpinBoxLayout">
        <item>
         <widget class="QLabel" name="rSensitivityLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Red Range +/-</string>
          </property>
@@ -51,6 +61,11 @@
        </item>
        <item>
         <widget class="QSpinBox" name="rRangeSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="maximum">
           <number>255</number>
          </property>
@@ -74,6 +89,11 @@
        </item>
        <item>
         <widget class="QLabel" name="gSensitivityLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Green Range +/-</string>
          </property>
@@ -81,6 +101,11 @@
        </item>
        <item>
         <widget class="QSpinBox" name="gRangeSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="maximum">
           <number>255</number>
          </property>
@@ -104,6 +129,11 @@
        </item>
        <item>
         <widget class="QLabel" name="bSensitivityLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Blue Range +/-</string>
          </property>
@@ -111,6 +141,11 @@
        </item>
        <item>
         <widget class="QSpinBox" name="bRangeSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="maximum">
           <number>255</number>
          </property>
@@ -127,6 +162,11 @@
     <layout class="QHBoxLayout" name="ColorRangeLayout">
      <item>
       <widget class="QLabel" name="colorRangeLabel">
+       <property name="font">
+        <font>
+         <pointsize>10</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>Color Range:</string>
        </property>
@@ -169,6 +209,11 @@
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>10</pointsize>
+        </font>
        </property>
        <property name="text">
         <string>View Range</string>

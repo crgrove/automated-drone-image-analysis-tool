@@ -134,6 +134,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#get the gps info from the image exif data and display it
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
 			gps_coords = LocationInfo.getGPS(image['path'])
+			self.position = None
 			if not gps_coords == {}:
 				self.position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
 				#self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])

@@ -48,7 +48,6 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
 		"""
 		if 'sensitivity' in options:
 			self.sensitivityValueLabel.setText(str(options['sensitivity']))
-			self.sensitivityValueLabel.setText(str(options['sensitivity']))
 			self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
 		if 'segment' in options:
 			self.segmentsComboBox.setCurrentText(str(options['segment']))

@@ -1,7 +1,6 @@
-import imghdr
-from multiprocessing.pool import ApplyResult
 import pathlib
-import os 
+import os
+import platform
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt, QFile, QThread, pyqtSlot
@@ -10,10 +9,11 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog
 from core.views.MainWindow_ui import Ui_MainWindow
 
 from helpers.ColorUtils import ColorUtils
-from core.services.LoggerService import LoggerService
 
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
+
+from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
 from core.services.SettingsService import SettingsService
 from core.services.XmlService import XmlService
@@ -24,6 +24,7 @@ from algorithms.ColorMatch.controllers.ColorMatchController import ColorMatchCon
 from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
+from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -70,10 +71,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		setupAlgorithmComboBox adds combobox entries for algorithm selector
 		"""
+		system = platform.system()
 		configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
 		self.algorithms = configService.getAlgorithms()
 		for algorithm in self.algorithms:
-			self.algorithmComboBox.addItem(algorithm['label'])
+			if system in algorithm['platforms']:
+				self.algorithmComboBox.addItem(algorithm['label'])
 			
 	def identifierButtonClicked(self):
 		"""

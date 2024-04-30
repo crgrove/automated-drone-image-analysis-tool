@@ -96,7 +96,7 @@ class dirp_rjpeg_version_t(Structure):
 	]
 
 
-class dirp_resolotion_t(Structure):
+class dirp_resolution_t(Structure):
 	"""
 	References:
 		* [DJI Thermal SDK](https://www.dji.com/cn/downloads/softwares/dji-thermal-sdk)
@@ -513,7 +513,7 @@ class Thermal:
 		self._dirp_get_rjpeg_version.restype = c_int32
 
 		self._dirp_get_rjpeg_resolution = self._dll_dirp.dirp_get_rjpeg_resolution
-		self._dirp_get_rjpeg_resolution.argtypes = [DIRP_HANDLE, POINTER(dirp_resolotion_t)]
+		self._dirp_get_rjpeg_resolution.argtypes = [DIRP_HANDLE, POINTER(dirp_resolution_t)]
 		self._dirp_get_rjpeg_resolution.restype = c_int32
 
 		# Get orignial/custom temperature measurement parameters.
@@ -544,7 +544,7 @@ class Thermal:
 		self._dirp_set_pseudo_color.restype = c_int32
 		
 		self._dirp_process = self._dll_dirp.dirp_process
-		#self._dirp_process.argtypes = [DIRP_HANDLE, POINTER(c_uint8), c_int32]
+		self._dirp_process.argtypes = [DIRP_HANDLE, POINTER(c_uint8), c_int32]
 		self._dirp_process.restype = c_int32
 
 	def parse(
@@ -847,12 +847,12 @@ class Thermal:
 
 		handle = DIRP_HANDLE()
 		rjpeg_version = dirp_rjpeg_version_t()
-		rjpeg_resolotion = dirp_resolotion_t()
+		rjpeg_resolution = dirp_resolution_t()
 
 		return_status = self._dirp_create_from_rjpeg(raw_c_uint8, raw_size, handle)
 		assert return_status == Thermal.DIRP_SUCCESS, 'dirp_create_from_rjpeg error {}:{}'.format(filepath_image, return_status)
 		assert self._dirp_get_rjpeg_version(handle, rjpeg_version) == Thermal.DIRP_SUCCESS
-		assert self._dirp_get_rjpeg_resolution(handle, rjpeg_resolotion) == Thermal.DIRP_SUCCESS
+		assert self._dirp_get_rjpeg_resolution(handle, rjpeg_resolution) == Thermal.DIRP_SUCCESS
 
 		if not m2ea_mode:
 			params = dirp_measurement_params_t()
@@ -923,24 +923,23 @@ class Thermal:
 
 		handle = DIRP_HANDLE()
 		rjpeg_version = dirp_rjpeg_version_t()
-		rjpeg_resolotion = dirp_resolotion_t()
+		rjpeg_resolution = dirp_resolution_t()
 
 		return_status = self._dirp_create_from_rjpeg(raw_c_uint8, raw_size, handle)
 		assert return_status == Thermal.DIRP_SUCCESS, 'dirp_create_from_rjpeg error {}:{}'.format(filepath_image, return_status)
 		assert self._dirp_get_rjpeg_version(handle, rjpeg_version) == Thermal.DIRP_SUCCESS
-		assert self._dirp_get_rjpeg_resolution(handle, rjpeg_resolotion) == Thermal.DIRP_SUCCESS
+		assert self._dirp_get_rjpeg_resolution(handle, rjpeg_resolution) == Thermal.DIRP_SUCCESS
 		
 		palette = c_int(color_map)
 		return_status = self._dirp_set_pseudo_color(handle, palette)
 		assert return_status == Thermal.DIRP_SUCCESS
 
-		size = rjpeg_resolotion.height * rjpeg_resolotion.width * 3 * CT.sizeof(c_uint8)
-		raw_image_buffer = CT.create_string_buffer(size)
-		return_status = self._dirp_process(handle,byref(raw_image_buffer), size)
-		assert return_status == Thermal.DIRP_SUCCESS
-		
-		data = np.frombuffer(raw_image_buffer, dtype=np.uint8)
-		img = np.reshape(data, (rjpeg_resolotion.height, rjpeg_resolotion.width, 3))
+		data = np.zeros(rjpeg_resolution.width  * rjpeg_resolution.height * 3, dtype=np.uint8)
+		data_ptr = data.ctypes.data_as(POINTER(c_uint8))
+		data_size = c_int32(rjpeg_resolution.height * rjpeg_resolution.width * 3 * sizeof(c_uint8))
+
+		assert self._dirp_process(handle, data_ptr, data_size) == Thermal.DIRP_SUCCESS
+		img = np.reshape(data, (rjpeg_resolution.height, rjpeg_resolution.width, 3))
 		
 		return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
@@ -966,8 +965,8 @@ class Thermal:
 		"""
 		color_maps = [
 				{
-					"name": "Plasma (Iron Red)",
-					"FLIR": cv2.COLORMAP_PLASMA,
+					"name": "Inferno (Iron Red)",
+					"FLIR": cv2.COLORMAP_INFERNO ,
 					"DJI": 2
 				},
 				{

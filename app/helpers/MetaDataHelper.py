@@ -50,8 +50,7 @@ class MetaDataHelper:
 		:String originFile: the path to the source file
 		:String destinationFile: the path to the destination file
 		"""
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		with exiftool.ExifTool(tool_path) as et:
+		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			et.execute("-tagsfromfile", originFile, "-exif", destinationFile, "-overwrite_original")
 	
 	@staticmethod      
@@ -62,8 +61,7 @@ class MetaDataHelper:
 		:String originFile: the path to the source file
 		:String destinationFile: the path to the destination file
 		"""
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		with exiftool.ExifTool(tool_path) as et:
+		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			et.execute("-tagsfromfile", originFile, "-xmp", destinationFile, "-overwrite_original")
 			
 	def transferAll(originFile, destinationFile):
@@ -73,9 +71,8 @@ class MetaDataHelper:
 		:String originFile: the path to the source file
 		:String destinationFile: the path to the destination file
 		"""
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		with exiftool.ExifTool(tool_path) as et:
-			et.execute("-tagsfromfile", originFile,  destinationFile, "-overwrite_original")
+		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+			et.execute("-tagsfromfile", originFile,  destinationFile, "-overwrite_original", "--thumbnailimage")
 	
 	@staticmethod     	
 	def transferTemperatureData(data, destinationFile):
@@ -85,9 +82,8 @@ class MetaDataHelper:
 		:numpy.ndarray data: the path to the source file
 		:String destinationFile: the path to the destination file
 		"""
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
 		json_data = json.dumps(data.tolist())
-		with exiftool.ExifToolHelper(executable=tool_path) as et:
+		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			  et.set_tags(
 				[destinationFile],
 				tags={"Notes": json_data},
@@ -95,8 +91,7 @@ class MetaDataHelper:
 		)
 	@staticmethod     
 	def getTemperatureData(file_path):
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		with exiftool.ExifToolHelper(executable=tool_path) as et:
+		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
 			data = json.loads(json_data)
 			temperature_c = np.asarray(data)

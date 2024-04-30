@@ -152,6 +152,11 @@
       </item>
       <item>
        <widget class="QLabel" name="jumpToLabel">
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Jump To:</string>
         </property>
@@ -250,7 +255,13 @@
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QStatusBar" name="statusbar">
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </widget>
   <action name="actionOpen">
    <property name="text">
     <string>Open</string>

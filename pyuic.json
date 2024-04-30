@@ -37,6 +37,10 @@
       "app/algorithms/ThermalRange/views"
     ],
     [
+      "resources/views/algorithms/ThermalAnomaly.ui",
+      "app/algorithms/ThermalAnomaly/views"
+    ],
+    [
       "resources/views/components/*.ui",
       "app/core/views/components/"
     ]

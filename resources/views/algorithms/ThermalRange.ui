@@ -22,7 +22,7 @@
         <widget class="QLabel" name="minTempLabel">
          <property name="font">
           <font>
-           <pointsize>8</pointsize>
+           <pointsize>10</pointsize>
           </font>
          </property>
          <property name="text">
@@ -32,6 +32,11 @@
        </item>
        <item>
         <widget class="QSpinBox" name="minTempSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="minimum">
           <number>-30</number>
          </property>
@@ -53,7 +58,7 @@
          </property>
          <property name="sizeHint" stdset="0">
           <size>
-           <width>40</width>
+           <width>20</width>
            <height>20</height>
           </size>
          </property>
@@ -61,6 +66,11 @@
        </item>
        <item>
         <widget class="QLabel" name="maxTempLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Maximum Temp (°C)</string>
          </property>
@@ -68,6 +78,11 @@
        </item>
        <item>
         <widget class="QSpinBox" name="maxTempSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="minimum">
           <number>-30</number>
          </property>
@@ -97,6 +112,11 @@
        </item>
        <item>
         <widget class="QLabel" name="colorMapLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Color Map: </string>
          </property>
@@ -104,9 +124,14 @@
        </item>
        <item>
         <widget class="QComboBox" name="colorMapComboBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <item>
           <property name="text">
-           <string>Plasma (Iron Red)</string>
+           <string>Inferno (Iron Red)</string>
           </property>
          </item>
          <item>
