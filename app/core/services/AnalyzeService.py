@@ -90,7 +90,7 @@ class AnalyzeService(QObject):
 				if imghdr.what(file) is not None:
 					self.pool.apply_async(AnalyzeService.processFile,(self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, file, self.input, self.output, self.hist_ref_path , self.kmeans_clusters, self.is_thermal),callback=self.processComplete)
 				else:
-					self.sig_msg.emit("Skipping "+file+ " - File is not an image")
+					self.sig_msg.emit("Skipping "+file+ " :: File is not an image")
 			self.pool.close()
 			self.pool.join()
 			#generate the output xml with the information gathered during processing			
@@ -102,7 +102,6 @@ class AnalyzeService(QObject):
 			self.sig_done.emit(self.__id, len(self.images_with_aois))
 			self.sig_msg.emit("Total Processing Time: "+str(ttl_time)+" seconds")
 		except Exception as e:
-			print(e)
 			self.logger.error(e)
 			
 	@staticmethod
@@ -157,7 +156,10 @@ class AnalyzeService(QObject):
 		if result.input_path is not None:
 			path = Path(result.input_path)
 			file_name = path.name
-		#returned by processFile method		
+		#returned by processFile method
+		if result.error_message is not None:
+			self.sig_msg.emit("Unable to process "+file_name+ " :: "+result.error_message)
+			return
 		if result.augmented_image is not None:
 			self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
 			self.sig_msg.emit('Areas of interest identified in '+file_name)

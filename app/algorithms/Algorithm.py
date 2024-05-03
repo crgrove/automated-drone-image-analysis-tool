@@ -147,10 +147,12 @@ class AnalysisResult:
 	augmented_image = None #type = numpy.ndarray
 	areas_of_interest = None  #type = List
 	base_contour_count = None  # type = int
+	error_message = None  # type = str
 	
-	def __init__(self, input_path=None, output_path=None, augmented_image=None, areas_of_interest=None, base_contour_count=None):
+	def __init__(self, input_path=None, output_path=None, augmented_image=None, areas_of_interest=None, base_contour_count=None, error_message = None):
 		self.input_path=input_path
 		self.output_path=output_path
 		self.augmented_image = augmented_image
 		self.areas_of_interest = areas_of_interest
 		self.base_contour_count = base_contour_count
+		self.error_message = error_message

@@ -50,5 +50,4 @@ class ColorMatchService(AlgorithmService):
 			return AnalysisResult(full_path, output_path, augmented_image, areas_of_interest, base_contour_count)
    
 		except Exception as e:
-			self.logger.error(e)
-			return AnalysisResult();
+			return AnalysisResult(full_path, error_message = str(e))
