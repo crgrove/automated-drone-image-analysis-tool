@@ -98,9 +98,11 @@ class AlgorithmService:
 		if platform.system() == "Darwin":
 			MetaDataHelper.transferExifPiexif(input_file, output_file)
 		else:
-			MetaDataHelper.transferAll(input_file, output_file)
 			if temperature_data is not None:
+				MetaDataHelper.transferAll(input_file, output_file)
 				MetaDataHelper.transferTemperatureData(temperature_data, output_file)
+			else:
+				MetaDataHelper.transferExifPiexif(input_file, output_file)
 		
 class AlgorithmController:
 	"""Base class for algorithm controllers"""

@@ -82,14 +82,17 @@ class AnalyzeService(QObject):
 			for subdir, dirs, files in os.walk(self.input):
 				for file in files:
 					image_files.append(os.path.join(subdir, file))
+			ttl_images = len(image_files)
 			self.sig_msg.emit("Processing "+str(len(image_files))+" files")
 			#loop through all of the files in the input directory and process them in multiple processes.
 			for file in image_files:
 				if(os.path.isdir(file)):
+					ttl_images -= 1
 					continue
 				if imghdr.what(file) is not None:
 					self.pool.apply_async(AnalyzeService.processFile,(self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, file, self.input, self.output, self.hist_ref_path , self.kmeans_clusters, self.is_thermal),callback=self.processComplete)
 				else:
+					ttl_images -= 1
 					self.sig_msg.emit("Skipping "+file+ " :: File is not an image")
 			self.pool.close()
 			self.pool.join()
@@ -101,6 +104,7 @@ class AnalyzeService(QObject):
 			ttl_time = round(time.time() - start_time, 3)
 			self.sig_done.emit(self.__id, len(self.images_with_aois))
 			self.sig_msg.emit("Total Processing Time: "+str(ttl_time)+" seconds")
+			self.sig_msg.emit("Total Images Proccessed: "+str(ttl_images))
 		except Exception as e:
 			self.logger.error(e)
 			
