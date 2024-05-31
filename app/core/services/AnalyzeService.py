@@ -141,7 +141,7 @@ class AnalyzeService(QObject):
 				
 		#Create an instance of the algorithm class
 		cls = globals()[algorithm['service']]
-		instance = cls(identifier_color, min_area, aoi_radius, options)
+		instance = cls(identifier_color, min_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
 			
 		try:
 			#process the image using the algorithm
@@ -164,15 +164,14 @@ class AnalyzeService(QObject):
 		if result.error_message is not None:
 			self.sig_msg.emit("Unable to process "+file_name+ " :: "+result.error_message)
 			return
-		if result.augmented_image is not None:
+		if result.areas_of_interest is not None:
 			self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
 			self.sig_msg.emit('Areas of interest identified in '+file_name)
-		else:
-			self.sig_msg.emit('No areas of interested identified in '+file_name)
-		if result.areas_of_interest is not None:
 			if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
 				self.sig_aois.emit()
 				self.max_aois_limit_exceeded = True
+		else:
+			self.sig_msg.emit('No areas of interested identified in '+file_name)
 				
 	@pyqtSlot()
 	def processCancel(self):

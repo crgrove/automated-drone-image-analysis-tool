@@ -67,58 +67,27 @@
         </widget>
        </item>
        <item>
-        <widget class="QSlider" name="anomalySlider">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="minimum">
-          <number>1</number>
-         </property>
+        <widget class="QSpinBox" name="anomalySpinBox">
          <property name="maximum">
-          <number>10</number>
-         </property>
-         <property name="singleStep">
-          <number>1</number>
+          <number>7</number>
          </property>
          <property name="value">
           <number>4</number>
          </property>
-         <property name="sliderPosition">
-          <number>4</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="tickPosition">
-          <enum>QSlider::TicksBelow</enum>
-         </property>
-         <property name="tickInterval">
-          <number>1</number>
-         </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="anomalyThresholdLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
          </property>
-         <property name="text">
-          <string>4</string>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
          </property>
-        </widget>
+        </spacer>
        </item>
        <item>
         <widget class="QLabel" name="colorMapLabel">
@@ -141,7 +110,7 @@
          </property>
          <item>
           <property name="text">
-           <string>Inferno (Iron Red)</string>
+           <string>White Hot</string>
           </property>
          </item>
          <item>
@@ -151,7 +120,7 @@
          </item>
          <item>
           <property name="text">
-           <string>White Hot</string>
+           <string>Inferno (Iron Red)</string>
           </property>
          </item>
          <item>

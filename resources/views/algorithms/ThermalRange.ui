@@ -87,7 +87,7 @@
           <number>-30</number>
          </property>
          <property name="maximum">
-          <number>50</number>
+          <number>93</number>
          </property>
          <property name="value">
           <number>40</number>
@@ -131,7 +131,7 @@
          </property>
          <item>
           <property name="text">
-           <string>Inferno (Iron Red)</string>
+           <string>White Hot</string>
           </property>
          </item>
          <item>
@@ -141,7 +141,7 @@
          </item>
          <item>
           <property name="text">
-           <string>White Hot</string>
+           <string>Inferno (Iron Red)</string>
           </property>
          </item>
          <item>

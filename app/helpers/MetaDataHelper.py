@@ -22,6 +22,7 @@ class MetaDataHelper:
 		"""
 		try:
 			 piexif.transplant(originFile, destinationFile)
+		
 		except  piexif._exceptions.InvalidImageDataError as e:
 			MetaDataHelper.transferExifPil(originFile, destinationFile)	
 		
@@ -89,6 +90,12 @@ class MetaDataHelper:
 				tags={"Notes": json_data},
 				params=["-P", "-overwrite_original"]
 		)
+
+	@staticmethod
+	def getRawTemperatureData(file_path):
+		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+			thermal_img_bytes = et.execute("-b", "-RawThermalImage", file_path, raw_bytes=True)	
+		return thermal_img_bytes
 	@staticmethod     
 	def getTemperatureData(file_path):
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
@@ -98,7 +105,16 @@ class MetaDataHelper:
 			return temperature_c
 	@staticmethod     
 	def getCameraManufacturer(file_path):
-		tool_path = path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		with exiftool.ExifToolHelper(executable=tool_path) as et:
+		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			camera_model = et.get_tags([file_path], tags=['Model'])[0]['EXIF:Model']
 			print(camera_model)
+
+	@staticmethod
+	def getMetaData(file_path):
+		"""
+		getMetaData returns a dictionary representation of the metadata from a file
+		:String full_path: the path to the image
+		:return Dict: Key value pairs of metadata.
+		"""
+		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+			return et.get_metadata([file_path])[0]

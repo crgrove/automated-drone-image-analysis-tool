@@ -2,9 +2,9 @@ import pathlib
 import os
 import platform
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtGui import QColor
-from PyQt5.QtCore import Qt, QFile, QThread, pyqtSlot
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QStyle
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import QThread, pyqtSlot, QSize
+from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy
 
 from core.views.MainWindow_ui import Ui_MainWindow
 
@@ -26,6 +26,8 @@ from algorithms.MatchedFilter.controllers.MatchedFilterController import Matched
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
+
+from core.views.components.GroupedComboBox import GroupedComboBox
 
 class MainWindow(QMainWindow, Ui_MainWindow):
 	"""Controller for the Main Window (QMainWindow)."""
@@ -74,10 +76,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		system = platform.system()
 		configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
 		self.algorithms = configService.getAlgorithms()
+		algorithm_list = dict()
 		for algorithm in self.algorithms:
 			if system in algorithm['platforms']:
-				self.algorithmComboBox.addItem(algorithm['label'])
-			
+				if algorithm['type'] not in algorithm_list:
+					algorithm_list[algorithm['type']] = []
+				algorithm_list[algorithm['type']].append(algorithm['label'])
+		self.replaceAlgorithmComboBox()
+		for key, list in algorithm_list.items():
+			self.algorithmComboBox.addGroup(key, list)
+		self.algorithmComboBox.setCurrentIndex(1)
+
+	def replaceAlgorithmComboBox(self):
+		"""
+		replaceAlgorithmComboBox replaces the standard QtComboBox with a version that allows grouping.
+		"""
+		self.tempAlgorithmComboBox.deleteLater()
+		self.algorithmComboBox = GroupedComboBox(self.setupFrame)
+		sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+		sizePolicy.setHorizontalStretch(0)
+		sizePolicy.setVerticalStretch(0)
+		sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
+		self.algorithmComboBox.setSizePolicy(sizePolicy)
+		self.algorithmComboBox.setMinimumSize(QSize(300, 0))
+		font = QFont()
+		font.setPointSize(10)
+		self.algorithmComboBox.setFont(font)
+		self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
+
 	def identifierButtonClicked(self):
 		"""
 		identifierButtonClicked click handler for the object identifier color button
@@ -222,7 +248,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			
 			#Create instance of the analysis class with the selected algorithm
 			self.analyzeService = AnalyzeService(1,self.activeAlgorithm, self.inputFolderLine.text(),self.outputFolderLine.text(), self.identifierColor, self.minAreaSpinBox.value(), 
-			    self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options)
+				self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options)
 
 			#This must be done in a separate thread so that it won't block the GUI updates to the log
 			thread = QThread()

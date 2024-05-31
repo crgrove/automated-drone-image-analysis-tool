@@ -15,7 +15,6 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 		AlgorithmController.__init__(self, 'ThermalAnomaly', 10, True)
 		self.settings_service  = SettingsService()
 		self.setupUi(self)
-		self.anomalySlider.valueChanged.connect(self.updateThreshold)
 
 	def getOptions(self):
 		"""
@@ -24,16 +23,10 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 		:return Dictionary: the option names and values
 		"""
 		options = dict()
-		options['threshold'] = int(self.anomalyThresholdLabel.text())
+		options['threshold'] = int(self.anomalySpinBox.value())
 		options['type'] = self.anomalyTypeComboBox.currentText()
 		options['colorMap'] = self.colorMapComboBox.currentText()
 		return options
-	
-	def updateThreshold(self):
-		"""
-		updateThreshold click handler for the sensitivity slider
-		"""
-		self.anomalyThresholdLabel.setText(str(self.anomalySlider.value()))
 			
 	def validate(self):
 		"""
@@ -51,6 +44,6 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 		"""
 		if 'threshold' in options:
 			self.anomalyThresholdLabel.setText(str(options['threshold']))
-			self.anomalySlider.setProperty("value", int(options['sensitivity']))	
+			self.maxTempSpinBox.setValue(int(options['sensitivity']))
 		self.anomalyTypeComboBox.setCurrentText(options['type'])
 		self.colorMapComboBox.setCurrentText(options['colorMap'])

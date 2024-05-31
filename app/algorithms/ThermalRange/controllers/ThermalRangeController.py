@@ -87,7 +87,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 		self.minTempSpinBox.setValue(95)
 		self.maxTempLabel.setText('Maximum Temp ('+u'\N{DEGREE SIGN}'+' F)') 
 		self.maxTempSpinBox.setMinimum(-20)
-		self.maxTempSpinBox.setMaximum(120)
+		self.maxTempSpinBox.setMaximum(200)
 		self.maxTempSpinBox.setValue(105)
 
 	def convertFahrenheitToCelsius(self, value):

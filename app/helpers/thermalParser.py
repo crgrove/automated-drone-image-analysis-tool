@@ -666,7 +666,7 @@ class Thermal:
 				Thermal.DJI_M3T,
 				Thermal.DJI_M30T,
 			]:
-				kwargs['m2ea_mode'] = True,
+				kwargs['m2ea_mode'] = True
 			try:
 				temps =  self.parse_dirp2(
 					filepath_image=filepath_image,

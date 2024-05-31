@@ -23,3 +23,6 @@ PyExifTool = "*"
 pyqt-distutils = "*"
 qt5-tools = "*"
 PyInstaller = "*"
+
+[requires]
+python_version = "3.11"

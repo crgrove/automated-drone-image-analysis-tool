@@ -428,7 +428,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QComboBox" name="algorithmComboBox">
+          <widget class="QComboBox" name="tempAlgorithmComboBox">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
              <horstretch>0</horstretch>

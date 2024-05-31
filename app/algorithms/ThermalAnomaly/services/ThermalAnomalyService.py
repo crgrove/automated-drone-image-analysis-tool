@@ -6,23 +6,24 @@ from algorithms.Algorithm import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 
 from helpers.ColorUtils import ColorUtils
-from helpers.thermalParser import Thermal
+from core.services.ThermalParserService import ThermalParserService
 from helpers.MetaDataHelper import MetaDataHelper
 
 
 class ThermalAnomalyService(AlgorithmService):
 	"""Service that executes the Thermal Anomaly algorithm"""
-	def __init__(self, identifier, min_area, aoi_radius, options):
+	def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
 		"""
 		__init__ constructor for the algorithm
 		
 		:Tuple(int,int,int) identifier: the RGB values for the color to be used to highlight areas of interest
 		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
 		:Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
+		:Boolean combine_aois: If true overlapping aois will be combined.
 		:Dictionary options: additional algorithm-specific options
 		"""
 		self.logger = LoggerService()
-		super().__init__('MatchedFilter', identifier, min_area, aoi_radius, options, True)
+		super().__init__('MatchedFilter', identifier, min_area, aoi_radius, combine_aois, options, True)
 		self.threshold = options['threshold']
 		self.direction = options['type']
 		self.color_map = options['colorMap']
@@ -40,8 +41,8 @@ class ThermalAnomalyService(AlgorithmService):
 		try:
 			#copy the image so we can compare back to the orginal
 			#calculate the match filter scores 
-			thermal = Thermal(dtype=np.float32)
-			temperature_c, thermal_img = thermal.parse(full_path, self.color_map )
+			thermal = ThermalParserService(dtype=np.float32)
+			temperature_c, thermal_img = thermal.parseFile(full_path, self.color_map )
 			mean = np.mean(temperature_c)
 			standard_deviation = np.std(temperature_c);
 			max_threshold = mean + (standard_deviation * self.threshold)
@@ -59,6 +60,6 @@ class ThermalAnomalyService(AlgorithmService):
 			output_path= full_path.replace(input_dir, output_dir)
 			if augmented_image is not None:
 				self.storeImage(full_path, output_path, augmented_image, temperature_c)   
-			return AnalysisResult(full_path, output_path, augmented_image, areas_of_interest, base_contour_count)
+			return AnalysisResult(full_path, output_path, areas_of_interest, base_contour_count)
 		except Exception as e:
 			return AnalysisResult(full_path, error_message = str(e))

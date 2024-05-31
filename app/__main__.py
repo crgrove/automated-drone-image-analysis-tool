@@ -7,7 +7,7 @@ from core.controllers.MainWindow import MainWindow
 import faulthandler
 import qdarktheme
 from os import path 
-version = '1.2.5'
+version = '1.2.6 Beta'
 def main():
 	app = QApplication(sys.argv)
 	qdarktheme.setup_theme()

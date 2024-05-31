@@ -83,7 +83,7 @@ class ColorMatchRangeViewer(QDialog, Ui_ColorRangeViewer):
 				h = round(x/multiplier,0)
 				l = round(y/multiplier,0)
 				img[x,y] = [h,l,saturation]
-		return cv2.cvtColor(img, cv2.COLOR_HLS2RGB)
+		return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 	
 	def populateImage(self, img, selected):
 		"""

@@ -6,17 +6,18 @@ from algorithms.Algorithm import AlgorithmService, AnalysisResult
 
 class ColorMatchService(AlgorithmService):
 	"""Service that executes the Color Match algorithm"""
-	def __init__(self, identifier, min_area, aoi_radius, options):
+	def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
 		"""
 		__init__ constructor for the algorithm
 		
 		:Tuple(int,int,int) identifier: the RGB values for the color to be used to highlight areas of interest
 		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
 		:Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
+		:Boolean combine_aois: If true overlapping aois will be combined.
 		:Dictionary options: additional algorithm-specific options
 		"""
 		self.logger = LoggerService()
-		super().__init__('ColorMatch', identifier, min_area, aoi_radius, options)
+		super().__init__('ColorMatch', identifier, min_area, aoi_radius, combine_aois, options)
 		self.min_rgb = options['color_range'][0]
 		self.max_rgb = options['color_range'][1]
 
@@ -47,7 +48,7 @@ class ColorMatchService(AlgorithmService):
 			output_path= full_path.replace(input_dir, output_dir)
 			if augmented_image is not None:
 				self.storeImage(full_path, output_path, augmented_image)   
-			return AnalysisResult(full_path, output_path, augmented_image, areas_of_interest, base_contour_count)
+			return AnalysisResult(full_path, output_path, areas_of_interest, base_contour_count)
    
 		except Exception as e:
 			return AnalysisResult(full_path, error_message = str(e))
