@@ -658,21 +658,42 @@ color: rgb(228, 231, 235);</string>
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>Menu</string>
     </property>
     <addaction name="actionLoadFile"/>
     <addaction name="actionPreferences"/>
+    <addaction name="actionVideoParser"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
   <action name="actionLoadFile">
    <property name="text">
-    <string>Open File</string>
+    <string>Load File</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
    </property>
   </action>
   <action name="actionPreferences">
    <property name="text">
     <string>Preferences</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionVideoParser">
+   <property name="text">
+    <string>Video Parser</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
    </property>
   </action>
  </widget>

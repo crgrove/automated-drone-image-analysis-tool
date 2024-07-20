@@ -23,13 +23,16 @@ class ThermalParserService:
 	'MAVIC2-ENTERPRISE-ADVANCED',
 	'ZH20N',
 	'M3T',
-	'M30T'
+	'M3TD',
+	'M30T',
+	'H30T'
 	]
 
 	AUTEL_MODELS = [
 	'XK729',
 	'XL709',
 	'XL801',
+	'XL811',
 	'MODELX'
 	]
 
@@ -121,7 +124,7 @@ class ThermalParserService:
 				kwargs['image_width'] = int(meta_fields['ImageWidth'])
 			if 'emissivity' in kwargs:
 				kwargs['emissivity'] /= 100
-			if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED','ZH20N','M3T','M30T']:
+			if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED','ZH20N','M3T','M30T', 'H30T', 'M3TD']:
 				kwargs['m2ea_mode'] = True
 			try:
 				parser = DjiThermalParserService(self.dtype)
@@ -132,7 +135,6 @@ class ThermalParserService:
 				img = parser.image(full_path,palette)
 				return temps, img
 			except Exception as e:
-				print(e)
 				raise Exception("Invalid image file")
 		elif platform == 'AUTEL':
 			kwargs = dict()
@@ -147,5 +149,4 @@ class ThermalParserService:
 				img = parser.image(temps, palette)
 				return temps, img
 			except Exception as e:
-				print(e)
 				raise Exception("Invalid image file")

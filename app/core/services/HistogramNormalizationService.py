@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import imghdr
 from skimage import exposure
 from core.services.LoggerService import LoggerService
@@ -13,7 +14,8 @@ class HistogramNormalizationService:
 		"""
 		self.logger = LoggerService()
 		if imghdr.what(hist_ref_path) is not None:
-			self.hist_ref_img = cv2.imread(hist_ref_path)
+			
+			self.hist_ref_img = cv2.imdecode(np.fromfile(hist_ref_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
 		
 	def matchHistograms(self,src):
 		"""

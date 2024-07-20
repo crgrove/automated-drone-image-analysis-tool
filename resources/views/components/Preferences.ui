@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>Preferences</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item alignment="Qt::AlignTop">
@@ -160,7 +160,7 @@
             </font>
            </property>
            <property name="text">
-            <string>Position Format:</string>
+            <string>Coordinate System:</string>
            </property>
           </widget>
          </item>

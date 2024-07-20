@@ -173,7 +173,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			highlight.setObjectName("highlight"+str(count))
 			highlight.setMinimumSize(QSize(190, 190))
 			highlight.aspectRatioMode = Qt.KeepAspectRatio
-			#convert the cropped  array back to an image.
+			#convert the cropped array back to an image.
 			img = qimage2ndarray.array2qimage(crop_arr)
 			highlight.setImage(img)
 			highlight.canZoom = False

@@ -1,16 +1,29 @@
+import platform
+
 # -*- mode: python -*-
 
 block_cipher = None
 
-a = Analysis(['app\__main__.py'],
-             pathex=['app'],
-             binaries=[('app\\dependencies\\exiftool.exe','dependencies'),('app\\dependencies\\dji_thermal_sdk_v1.4_20220929','dependencies\\dji_thermal_sdk_v1.4_20220929')],
-             datas=[('resources\\icons\\ADIAT.ico','.'),('app\\algorithms.conf','.')],
-             hiddenimports=[],
-             hookspath=None,
-             runtime_hooks=None,
-             excludes=None,
-             cipher=block_cipher)
+if platform.system() == 'Windows':
+    a = Analysis(['app/__main__.py'],
+                pathex=['app'],
+                binaries=[('app/external/exiftool.exe','external'),('app/external/dji_thermal_sdk_v1.5_20240507','external/dji_thermal_sdk_v1.5_20240507'), ('app/external/autel', 'external/autel')],
+                datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
+                hiddenimports=[],
+                hookspath=None,
+                runtime_hooks=None,
+                excludes=None,
+                cipher=block_cipher)
+elif platform.system() == 'Darwin':
+    a = Analysis(['app/__main__.py'],
+                    pathex=['app'],
+                    binaries=[('app/external/exiftool','external')],
+                    datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
+                    hiddenimports=[],
+                    hookspath=None,
+                    runtime_hooks=None,
+                    excludes=None,
+                    cipher=block_cipher)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
@@ -22,7 +35,7 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           console=False,
-          icon='resources\\icons\\ADIAT.ico')
+          icon='resources/icons/ADIAT.ico')
 
 coll = COLLECT(exe,
                a.binaries,
@@ -34,5 +47,5 @@ coll = COLLECT(exe,
 
 app = BUNDLE(coll,
              name='App.app',
-             icon='resources/icons/texsar.icns',
+             icon='resources/icons/ADIAT.ico',
              bundle_identifier=None)

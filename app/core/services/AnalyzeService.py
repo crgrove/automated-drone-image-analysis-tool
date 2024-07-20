@@ -1,20 +1,21 @@
 import operator
 import cv2
 import os
+import numpy as np
 import imghdr
 import shutil
 import xml.etree.ElementTree as ET
 import time
 
 from pathlib import Path
-from multiprocessing import Pool
+from multiprocessing import Pool, pool
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from core.services.LoggerService import LoggerService
 from core.services.HistogramNormalizationService import HistogramNormalizationService
 from core.services.KMeansClustersService import KMeansClustersService
 """****Import Algorithm Services****"""
-from algorithms.ColorMatch.services.ColorMatchService import ColorMatchService
+from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
@@ -74,14 +75,19 @@ class AnalyzeService(QObject):
 		processFiles iterates through all of the files in a directory and processes the image using the selected algorithm and features
 		"""
 		try:
-			self.setupOutputDir();
+			self.setupOutputDir()
 			self.setupOutputXml()
 			image_files = []
 			
 			start_time = time.time()
 			for subdir, dirs, files in os.walk(self.input):
 				for file in files:
-					image_files.append(os.path.join(subdir, file))
+					if self.is_thermal:
+						file_path = Path(file)
+						if file_path.suffix != 'irg':
+							image_files.append(os.path.join(subdir, file))
+					else:
+						image_files.append(os.path.join(subdir, file))
 			ttl_images = len(image_files)
 			self.sig_msg.emit("Processing "+str(len(image_files))+" files")
 			#loop through all of the files in the input directory and process them in multiple processes.
@@ -90,7 +96,10 @@ class AnalyzeService(QObject):
 					ttl_images -= 1
 					continue
 				if imghdr.what(file) is not None:
-					self.pool.apply_async(AnalyzeService.processFile,(self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, file, self.input, self.output, self.hist_ref_path , self.kmeans_clusters, self.is_thermal),callback=self.processComplete)
+					if self.pool._state == pool.RUN:
+						self.pool.apply_async(AnalyzeService.processFile,(self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, file, self.input, self.output, self.hist_ref_path , self.kmeans_clusters, self.is_thermal),callback=self.processComplete)
+					else:
+						break
 				else:
 					ttl_images -= 1
 					self.sig_msg.emit("Skipping "+file+ " :: File is not an image")
@@ -125,7 +134,7 @@ class AnalyzeService(QObject):
 		:Bool thermal: is this a thermal image algorithm		
 		:return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
 		"""
-		img = cv2.imread(full_path)
+		img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
 		if not thermal:
 			#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
 			histogram_service = None

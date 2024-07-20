@@ -211,26 +211,26 @@ class DjiThermalParserService:
 				params.emissivity = emissivity
 			if isinstance(reflected_apparent_temperature, (float, int)):
 				params.reflection = reflected_apparent_temperature
-				
+			
 			return_status = self._dirp_set_measurement_params(handle, params)
 			assert return_status == self.DIRP_SUCCESS, 'dirp_set_measurement_params error {}:{}'.format(filepath_image, return_status)
-
 		if self._dtype.__name__ == np.float32.__name__:
 			data = np.zeros(image_width * image_height, dtype=np.float32)
 			data_ptr = data.ctypes.data_as(POINTER(c_float))
 			data_size = c_int32(image_width * image_height * sizeof(c_float))
-			assert self._dirp_measure_ex(handle, data_ptr, data_size) == self.DIRP_SUCCESS
+			return_status = self._dirp_measure_ex(handle, data_ptr, data_size) 
+			assert return_status == self.DIRP_SUCCESS, '_dirp_measure_ex error {}:{}'.format(filepath_image, return_status)
 			temp = np.reshape(data, (image_height, image_width))
 		elif self._dtype.__name__ == np.int16.__name__:
 			data = np.zeros(image_width * image_height, dtype=np.int16)
 			data_ptr = data.ctypes.data_as(POINTER(c_int16))
 			data_size = c_int32(image_width * image_height * sizeof(c_int16))
-			assert self._dirp_measure(handle, data_ptr, data_size) == self.DIRP_SUCCESS
+			return_status = self._dirp_measure(handle, data_ptr, data_size)
+			assert return_status == self.DIRP_SUCCESS, '_dirp_measure error {}:{}'.format(filepath_image, return_status)
 			temp = np.reshape(data, (image_height, image_width)) / 10
 		else:
 			raise ValueError
-		assert self._dirp_destroy(handle) == self.DIRP_SUCCESS
-
+		#assert self._dirp_destroy(handle) == self.DIRP_SUCCESS
 		return np.array(temp, dtype=self._dtype)
 
 	def image(self, filepath_image: str, palette:int):
@@ -290,40 +290,40 @@ class DjiThermalParserService:
 			case _:
 				return 2
 	def get_default_filepaths(self) -> List[str]:
-		folder_plugin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'dependencies')
+		folder_plugin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'external')
 		system = platform.system()
 		architecture = platform.architecture()[0]
 		if system == "Windows":
 			if architecture == "32bit":
 				return [os.path.join(folder_plugin, v) for v in [
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libdirp.dll',
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libv_dirp.dll',
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libv_iirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libdirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libv_dirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libv_iirp.dll',
 					'exiftool.exe',
 				]]
 			elif architecture == "64bit":
 				return [os.path.join(folder_plugin, v) for v in [
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libdirp.dll',
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libv_dirp.dll',
-					'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libv_iirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libdirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libv_dirp.dll',
+					'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libv_iirp.dll',
 					'exiftool.exe',
 				]]
 		elif system == "Linux":
 			if architecture == "32bit":
 				return [
 					*[os.path.join(folder_plugin, v) for v in [
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libdirp.so',
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libv_dirp.so',
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x86/libv_iirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libdirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libv_dirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x86/libv_iirp.so',
 					]],
 					'exiftool'
 				]
 			elif architecture == "64bit":
 				return [
 					*[os.path.join(folder_plugin, v) for v in [
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libdirp.so',
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libv_dirp.so',
-						'dji_thermal_sdk_v1.4_20220929/windows/release_x64/libv_iirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libdirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libv_dirp.so',
+						'dji_thermal_sdk_v1.5_20240507/windows/release_x64/libv_iirp.so',
 					]],
 					'exiftool'
 				]

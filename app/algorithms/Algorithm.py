@@ -108,7 +108,8 @@ class AlgorithmService:
 		path = Path(output_file)
 		if not os.path.exists(path.parents[0]):
 			os.makedirs(path.parents[0])
-		cv2.imwrite(output_file, augmented_image)
+		cv2.imencode(".jpg",augmented_image)[1].tofile(output_file)
+		#cv2.imwrite(output_file, augmented_image)
 		if platform.system() == "Darwin":
 			MetaDataHelper.transferExifPiexif(input_file, output_file)
 		else:
@@ -117,7 +118,6 @@ class AlgorithmService:
 				MetaDataHelper.transferTemperatureData(temperature_data, output_file)
 			else:
 				MetaDataHelper.transferExifPiexif(input_file, output_file)
-		
 class AlgorithmController:
 	"""Base class for algorithm controllers"""
 	def __init__(self, name, default_process_count, thermal = False):

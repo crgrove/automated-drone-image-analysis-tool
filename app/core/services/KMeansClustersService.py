@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import imghdr
 from core.services.LoggerService import LoggerService
 
 class KMeansClustersService:

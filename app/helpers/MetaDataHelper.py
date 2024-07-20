@@ -10,8 +10,9 @@ class MetaDataHelper:
 	@staticmethod	
 	def getEXIFToolPath():
 		if platform.system() == 'Windows':
-			return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'dependencies/exiftool.exe'))
-		
+			return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool.exe'))
+		elif platform.system() == 'Darwin':
+			return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool'))
 	@staticmethod
 	def transferExifPiexif(originFile, destinationFile):
 		"""
@@ -21,10 +22,11 @@ class MetaDataHelper:
 		:String destinationFile: the path to the destination file
 		"""
 		try:
-			 piexif.transplant(originFile, destinationFile)
-		
+			piexif.transplant(originFile, destinationFile)
 		except  piexif._exceptions.InvalidImageDataError as e:
-			MetaDataHelper.transferExifPil(originFile, destinationFile)	
+			MetaDataHelper.transferExifPil(originFile, destinationFile)
+		except  ValueError as ve:
+			return
 		
 	@staticmethod
 	def transferExifPil(originFile, destinationFile):
@@ -90,25 +92,29 @@ class MetaDataHelper:
 				tags={"Notes": json_data},
 				params=["-P", "-overwrite_original"]
 		)
-
+			  
 	@staticmethod
 	def getRawTemperatureData(file_path):
+		"""
+		getRawTemperatureData returns a byte string representing the temperature data
+		:String full_path: the path to the image
+		:return str: the bytes representing the temperature values
+		"""
 		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			thermal_img_bytes = et.execute("-b", "-RawThermalImage", file_path, raw_bytes=True)	
 		return thermal_img_bytes
 	@staticmethod     
 	def getTemperatureData(file_path):
+		"""
+		getTemperatureData returns a numpy array of temeprature data from the notes field an image.
+		:String full_path: the path to the image
+		:return numpy.ndarray: array of temperature data
+		"""
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
 			data = json.loads(json_data)
 			temperature_c = np.asarray(data)
 			return temperature_c
-	@staticmethod     
-	def getCameraManufacturer(file_path):
-		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
-			camera_model = et.get_tags([file_path], tags=['Model'])[0]['EXIF:Model']
-			print(camera_model)
-
 	@staticmethod
 	def getMetaData(file_path):
 		"""
@@ -118,3 +124,13 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			return et.get_metadata([file_path])[0]
+		
+	@staticmethod
+	def setTags(file_path, tags):
+		"""
+		setTags updates file metadata with tags provided
+		:String full_path: the path to the image
+		:Dict tags: dictionary of tags and values to be set
+		"""
+		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+			et.set_tags([file_path],tags=tags, params=["-overwrite_original"])

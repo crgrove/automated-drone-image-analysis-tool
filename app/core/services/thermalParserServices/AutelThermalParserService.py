@@ -60,7 +60,6 @@ class AutelThermalImageParser:
 		temp = None
 		if ret == 0:
 			temp = np.reshape(data, (image_height, image_width))
-
 		return temp
 	
 	def image(self, temperatures: np.ndarray, palette:int):
@@ -104,4 +103,4 @@ class AutelThermalImageParser:
 				return 1
 			
 	def get_default_filepaths(self):
-		return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'dependencies/autel/AutelBridge.dll')
+		return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'external/autel/AutelBridge.dll')

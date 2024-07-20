@@ -157,13 +157,13 @@ class Ui_Preferences(object):
 
     def retranslateUi(self, Preferences):
         _translate = QtCore.QCoreApplication.translate
-        Preferences.setWindowTitle(_translate("Preferences", "Dialog"))
+        Preferences.setWindowTitle(_translate("Preferences", "Preferences"))
         self.label.setText(_translate("Preferences", "Theme:"))
         self.themeComboBox.setItemText(0, _translate("Preferences", "Light"))
         self.themeComboBox.setItemText(1, _translate("Preferences", "Dark"))
         self.maxAOIsLabel.setText(_translate("Preferences", "Max Areas of Interest: "))
         self.AOIRadiusLabel.setText(_translate("Preferences", "Area of Interest Circle Radius(px):"))
-        self.positionFormatLabel.setText(_translate("Preferences", "Position Format:"))
+        self.positionFormatLabel.setText(_translate("Preferences", "Coordinate System:"))
         self.positionFormatComboBox.setItemText(0, _translate("Preferences", "Lat/Long - Decimal Degrees"))
         self.positionFormatComboBox.setItemText(1, _translate("Preferences", "Lat/Long - Degrees, Minutes, Seconds"))
         self.positionFormatComboBox.setItemText(2, _translate("Preferences", "UTM"))

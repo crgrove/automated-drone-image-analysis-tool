@@ -1,13 +1,9 @@
 import numpy as np
 import cv2
-
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
 
 from core.services.LoggerService import LoggerService
 
-from helpers.ColorUtils import ColorUtils
-from helpers.thermalParser import Thermal
-from helpers.MetaDataHelper import MetaDataHelper
 from core.services.ThermalParserService import ThermalParserService
 
 class ThermalRangeService(AlgorithmService):

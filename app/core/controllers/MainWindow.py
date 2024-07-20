@@ -12,6 +12,7 @@ from helpers.ColorUtils import ColorUtils
 
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
+from core.controllers.VideoParser import VideoParser
 
 from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
@@ -20,7 +21,7 @@ from core.services.XmlService import XmlService
 from core.services.ConfigService import ConfigService
 
 """****Import Algorithm Controllers****"""
-from algorithms.ColorMatch.controllers.ColorMatchController import ColorMatchController
+from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
 from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.viewResultsButton.clicked.connect(self.viewResultsButtonClicked)
 		self.actionLoadFile.triggered.connect(self.loadFile)
 		self.actionPreferences.triggered.connect(self.openPreferences)
+		self.actionVideoParser.triggered.connect(self.openVideoParser)
 		self.algorithmComboBox.currentTextChanged.connect(self.algorithmComboBoxChanged)
 		self.algorithmComboBoxChanged()
 		self.histogramCheckbox.stateChanged.connect(self.histogramCheckboxChange)
@@ -219,7 +221,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 				return;
 		
 			#verify that the directories have been set.
-			if self.inputFolderLine.text() == "" or self.outputFolderLine == "" :
+			if self.inputFolderLine.text() == "" or self.outputFolderLine.text() == "" :
 				self.showError("Please set the input and output directories.")
 				return;
 		
@@ -429,7 +431,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		pref = Preferences(self)
 		pref.exec()
-		
+
+	def openVideoParser(self):
+		"""
+		openVideoParser action for the Video Parser menu item
+		Opens a dialog showing the video parser
+		"""
+		pref = VideoParser()
+		pref.exec()
+
+
 	def closeEvent(self, event):
 		"""
 		closeEvent closes all windows when the main window is closes.

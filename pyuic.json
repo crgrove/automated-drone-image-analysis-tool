@@ -13,8 +13,8 @@
       "app/algorithms/RXAnomaly/views"
     ],
     [
-      "resources/views/algorithms/ColorMatch.ui",
-      "app/algorithms/ColorMatch/views"
+      "resources/views/algorithms/ColorRange.ui",
+      "app/algorithms/ColorRange/views"
     ],
     [
       "resources/views/algorithms/RangeViewer.ui",
@@ -25,8 +25,8 @@
       "app/algorithms/MatchedFilter/views"
     ],
     [
-      "resources/views/algorithms/ColorMatch.qrc",
-      "app/algorithms/ColorMatch/views"
+      "resources/views/algorithms/ColorRange.qrc",
+      "app/algorithms/ColorRange/views"
     ],
     [
       "resources/views/algorithms/MatchedFilter.qrc",

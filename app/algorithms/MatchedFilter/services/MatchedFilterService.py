@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 import spectral
-
 from core.services.LoggerService import LoggerService
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
 
