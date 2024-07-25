@@ -11,7 +11,7 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'RXAnomaly', 10, False)
+		AlgorithmController.__init__(self, 'RXAnomaly', False)
 		self.setupUi(self)
 		self.sensitivitySlider.valueChanged.connect(self.updateSensitivity)
 

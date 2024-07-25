@@ -12,7 +12,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'ThermalRange', 10, True)
+		AlgorithmController.__init__(self, 'ThermalRange', True)
 		self.settings_service  = SettingsService()
 		self.setupUi(self)
 		if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':

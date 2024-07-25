@@ -120,16 +120,14 @@ class AlgorithmService:
 				MetaDataHelper.transferExifPiexif(input_file, output_file)
 class AlgorithmController:
 	"""Base class for algorithm controllers"""
-	def __init__(self, name, default_process_count, thermal = False):
+	def __init__(self, name, thermal = False):
 		"""
 		__init__ constructor
 		
 		:String name: the name of the algorithm to be used for analysis
-		:Int default_process_count: the default number of processes to use for the algorithm
 		:Bool thermal: is this algorithm for thermal images
 		"""
 		self.name = name
-		self.default_process_count = default_process_count
 		self.is_thermal = thermal
 		
 	def getOptions(self):

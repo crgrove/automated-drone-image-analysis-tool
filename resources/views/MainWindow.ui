@@ -647,7 +647,7 @@ color: rgb(228, 231, 235);</string>
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <widget class="QMenuBar" name="menuBar">
+  <widget class="QMenuBar" name="mainBar">
    <property name="geometry">
     <rect>
      <x>0</x>

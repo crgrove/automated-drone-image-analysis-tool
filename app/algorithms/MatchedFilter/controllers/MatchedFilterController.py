@@ -16,7 +16,7 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'MatchedFilter', 10, False)
+		AlgorithmController.__init__(self, 'MatchedFilter', False)
 		self.logger = LoggerService()
 		self.setupUi(self)
 		self.viewRangeButton.hide()

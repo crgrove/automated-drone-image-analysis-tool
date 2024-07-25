@@ -14,3 +14,4 @@ build*
 Pipfile.lock
 /.vs
 .idea/
+app/tests/data/

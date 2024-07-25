@@ -69,14 +69,14 @@ class VideoParserService(QObject):
 					data = re.split("(?:\r?\n)", entry)
 					if len(data) == 6:
 						time_data= data[1]
-						times = re.split("\s.*\s", data[1])
+						times = re.split(r"\s.*\s", data[1])
 						start_time = datetime.strptime(times[0], '%H:%M:%S,%f')
 						end_time = datetime.strptime(times[1], '%H:%M:%S,%f')
 
 						uav_data = re.findall(r'(?<=\[).+?(?=\])' , data[4])
 						uav_dict = {}
 						for uav_entry in uav_data:
-							split = re.split("\s*:\s*", uav_entry)
+							split = re.split(r"\s*:\s*", uav_entry)
 							uav_dict[split[0]] = split[1]
 
 						srt_list.append({"start": start_time, 
@@ -134,6 +134,6 @@ class VideoParserService(QObject):
 		"""
 		try:
 			if not os.path.exists(self.output_dir):
-				os.mkdirs(self.output_dir)
+				os.makedirs(self.output_dir)
 		except Exception as e:
 			self.logger.error(e)

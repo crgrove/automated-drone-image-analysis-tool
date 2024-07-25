@@ -58,7 +58,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.startButton.clicked.connect(self.startButtonClicked)
 		self.cancelButton.clicked.connect(self.cancelButtonClicked)
 		self.viewResultsButton.clicked.connect(self.viewResultsButtonClicked)
-		self.actionLoadFile.triggered.connect(self.loadFile)
+		self.actionLoadFile.triggered.connect(self.openLoadFile)
 		self.actionPreferences.triggered.connect(self.openPreferences)
 		self.actionVideoParser.triggered.connect(self.openVideoParser)
 		self.algorithmComboBox.currentTextChanged.connect(self.algorithmComboBoxChanged)
@@ -182,7 +182,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		cls = globals()[self.activeAlgorithm['controller']]
 		self.algorithmWidget = cls()
 		self.verticalLayout_2.addWidget(self.algorithmWidget)
-		self.maxProcessesSpinBox.setProperty("value", self.algorithmWidget.default_process_count)
 		if self.algorithmWidget.is_thermal:
 			self.AdvancedFeaturesWidget.hide()
 		else:
@@ -244,6 +243,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			#update the persistent settings for minimum object size and identifier color based on the current settings.
 			self.settings_service.setSetting('MinObjectArea', self.minAreaSpinBox.value())
 			self.settings_service.setSetting('IdentifierColor', self.identifierColor)
+			self.settings_service.setSetting('MaxProcesses', self.maxProcessesSpinBox.value())
 			
 			max_aois = self.settings_service.getSetting('MaxAOIs')
 			aoi_radius = self.settings_service.getSetting('AOIRadius')
@@ -367,25 +367,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		msg.setStandardButtons(QMessageBox.Ok)
 		msg.exec_()
 		
-	def loadFile(self):
+	def openLoadFile(self):
 		"""
-		loadFile action for the open file menu item
-		Opens a file dialog and on close processes the xml file from a previously completed analysis process
+		openLoadFile action for the open file menu item
 		"""
 		try:
 			file = QFileDialog.getOpenFileName(self, "Select File")
 			if file[0] != "":
-				image_count = self.getSettingsFromXml(file[0])
-				if image_count > 0:
-					self.setViewResultsButton(True)
-				if self.algorithmWidget.is_thermal:
-					self.AdvancedFeaturesWidget.hide()
-				else:
-					self.AdvancedFeaturesWidget.show()
-
+				self.processXmlFile(file[0])
 		except Exception as e:
 			self.logger.error(e)
-	
+	def processXmlFile(self, full_path):
+		"""
+		processXmlFile takes a file from the Load File dialog and processes it.
+
+		:String full_path: the path to the XML file
+		"""
+		try:
+			image_count = self.getSettingsFromXml(full_path)
+			if image_count > 0:
+				self.setViewResultsButton(True)
+			if self.algorithmWidget.is_thermal:
+				self.AdvancedFeaturesWidget.hide()
+			else:
+				self.AdvancedFeaturesWidget.show()
+		except Exception as e:
+			self.logger.error(e)
+
 	def getSettingsFromXml(self, full_path):
 		"""
 		getSettingsFromXml populates the UI with previously executed analysis
@@ -437,8 +445,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		openVideoParser action for the Video Parser menu item
 		Opens a dialog showing the video parser
 		"""
-		pref = VideoParser()
-		pref.exec()
+		parser = VideoParser()
+		parser.exec_()
 
 
 	def closeEvent(self, event):
@@ -494,7 +502,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		min_area = self.settings_service.getSetting('MinObjectArea')
 		if isinstance(min_area, int):
 			self.minAreaSpinBox.setProperty("value", min_area)
-			
+
+		max_processes = self.settings_service.getSetting('MaxProcesses')
+		if isinstance(max_processes, int):
+			self.maxProcessesSpinBox.setProperty("value", max_processes)
+
 		id_color = self.settings_service.getSetting('IdentifierColor')
 		if isinstance(id_color, tuple):
 			self.identifierColor = id_color

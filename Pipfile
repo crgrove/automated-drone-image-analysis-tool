@@ -24,6 +24,7 @@ imghdr = "*"
 pyqt-distutils = "*"
 qt5-tools = "*"
 PyInstaller = "*"
+pytest-qt = "*"
 
 [requires]
 python_version = "3.11"

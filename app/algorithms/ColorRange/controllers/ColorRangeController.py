@@ -18,7 +18,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'ColorRange', 10, False)
+		AlgorithmController.__init__(self, 'ColorRange', False)
 		self.logger = LoggerService()
 		self.setupUi(self)
 		self.selectedColor = None

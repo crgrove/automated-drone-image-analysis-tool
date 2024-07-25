@@ -280,7 +280,7 @@ class DjiThermalParserService:
 			case "Inferno (Iron Red)":
 				return 2
 			case "White Hot":
-				return 2
+				return 1
 			case "Black Hot":
 				return 9
 			case "Hot (Fulgurite)":

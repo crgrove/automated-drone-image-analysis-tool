@@ -12,7 +12,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 		__init__ constructor for the widget
 		"""
 		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'ThermalAnomaly', 10, True)
+		AlgorithmController.__init__(self, 'ThermalAnomaly', True)
 		self.settings_service  = SettingsService()
 		self.setupUi(self)
 
