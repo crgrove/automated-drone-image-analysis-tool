@@ -167,7 +167,7 @@ class Ui_MainWindow(object):
         font.setPointSize(10)
         self.clustersSpinBox.setFont(font)
         self.clustersSpinBox.setMinimum(2)
-        self.clustersSpinBox.setMaximum(20)
+        self.clustersSpinBox.setMaximum(100)
         self.clustersSpinBox.setProperty("value", 10)
         self.clustersSpinBox.setObjectName("clustersSpinBox")
         self.horizontalLayout.addWidget(self.clustersSpinBox)

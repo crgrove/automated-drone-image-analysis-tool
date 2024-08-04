@@ -280,7 +280,7 @@ class DjiThermalParserService:
 			case "Inferno (Iron Red)":
 				return 2
 			case "White Hot":
-				return 1
+				return 0
 			case "Black Hot":
 				return 9
 			case "Hot (Fulgurite)":
@@ -288,7 +288,7 @@ class DjiThermalParserService:
 			case "Jet (Rainbow2)":
 				return 7
 			case _:
-				return 2
+				return 0
 	def get_default_filepaths(self) -> List[str]:
 		folder_plugin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'external')
 		system = platform.system()

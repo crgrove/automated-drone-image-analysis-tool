@@ -55,6 +55,7 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			et.execute("-tagsfromfile", originFile, "-exif", destinationFile, "-overwrite_original")
+			et.terminate()
 	
 	@staticmethod      
 	def transferXmpExiftool(originFile, destinationFile):
@@ -66,6 +67,7 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			et.execute("-tagsfromfile", originFile, "-xmp", destinationFile, "-overwrite_original")
+			et.terminate()
 			
 	def transferAll(originFile, destinationFile):
 		"""
@@ -76,6 +78,7 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			et.execute("-tagsfromfile", originFile,  destinationFile, "-overwrite_original", "--thumbnailimage")
+			et.terminate()
 	
 	@staticmethod     	
 	def transferTemperatureData(data, destinationFile):
@@ -87,11 +90,12 @@ class MetaDataHelper:
 		"""
 		json_data = json.dumps(data.tolist())
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
-			  et.set_tags(
+			et.set_tags(
 				[destinationFile],
 				tags={"Notes": json_data},
 				params=["-P", "-overwrite_original"]
-		)
+			)
+			et.terminate()
 			  
 	@staticmethod
 	def getRawTemperatureData(file_path):
@@ -102,6 +106,7 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
 			thermal_img_bytes = et.execute("-b", "-RawThermalImage", file_path, raw_bytes=True)	
+			et.terminate()
 		return thermal_img_bytes
 	@staticmethod     
 	def getTemperatureData(file_path):
@@ -114,7 +119,8 @@ class MetaDataHelper:
 			json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
 			data = json.loads(json_data)
 			temperature_c = np.asarray(data)
-			return temperature_c
+			et.terminate()
+		return temperature_c
 	@staticmethod
 	def getMetaData(file_path):
 		"""
@@ -123,7 +129,9 @@ class MetaDataHelper:
 		:return Dict: Key value pairs of metadata.
 		"""
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
-			return et.get_metadata([file_path])[0]
+			metadata = et.get_metadata([file_path])[0]
+			et.terminate()
+		return metadata
 		
 	@staticmethod
 	def setTags(file_path, tags):
@@ -134,3 +142,4 @@ class MetaDataHelper:
 		"""
 		with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
 			et.set_tags([file_path],tags=tags, params=["-overwrite_original"])
+			et.terminate()

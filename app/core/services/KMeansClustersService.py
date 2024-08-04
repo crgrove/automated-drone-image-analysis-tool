@@ -27,8 +27,8 @@ class KMeansClustersService:
 			Z = np.float32(Z)
 
 			#define criteria, number of clusters(K) and apply kmeans()
-			criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 5, .75)
-			ret,label,center=cv2.kmeans(Z,self.num_clusters,None,criteria,5,cv2.KMEANS_RANDOM_CENTERS)
+			criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 3, .2)
+			ret,label,center=cv2.kmeans(Z,self.num_clusters,None,criteria,3,cv2.KMEANS_RANDOM_CENTERS)
 
 			#convert back into uint8
 			center = np.uint8(center)
