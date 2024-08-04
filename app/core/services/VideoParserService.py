@@ -109,9 +109,7 @@ class VideoParserService(QObject):
 						cv2.imwrite(output_file,image)
 						if item is not None:
 							if item["latitude"] is not None and item["longitude"] is not None:
-								latitude_ref = "N" if item["latitude"] >= 0 else 'S'
-								longitude_ref = "E" if item["longitude"] >= 0 else 'W'
-								MetaDataHelper.setTags(output_file, {"GPSLatitude": item["latitude"], "GPSLatitudeRef": latitude_ref, "GPSLongitude": item["longitude"], "GPSLongitudeRef": longitude_ref, "GPSAltitude": item["altitude"]})				
+								MetaDataHelper.addGPSData(output_file, item["latitude"], item["longitude"], item["altitude"])				
 						image_count += 1
 					time_marker += self.interval
 					if image_count%10 == 0:

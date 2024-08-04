@@ -18,7 +18,6 @@ pillow = "*"
 pandas = "*"
 utm = "*"
 PyExifTool = "*"
-imghdr = "*"
 
 [dev-packages]
 pyqt-distutils = "*"

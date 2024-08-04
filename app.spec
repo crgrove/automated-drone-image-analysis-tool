@@ -17,7 +17,6 @@ if platform.system() == 'Windows':
 elif platform.system() == 'Darwin':
     a = Analysis(['app/__main__.py'],
                     pathex=['app'],
-                    binaries=[('app/external/exiftool','external')],
                     datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
                     hiddenimports=[],
                     hookspath=None,
@@ -46,6 +45,6 @@ coll = COLLECT(exe,
                name='ADIAT')
 
 app = BUNDLE(coll,
-             name='App.app',
+             name='ADIAT.app',
              icon='resources/icons/ADIAT.ico',
              bundle_identifier=None)

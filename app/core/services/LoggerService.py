@@ -16,11 +16,13 @@ class LoggerService:
 			app_path = home_path + '/AppData/Roaming/ADIAT/'
 			if(not os.path.exists(app_path)):
 				os.makedirs(app_path)
-		else:
-			app_path = 'Library/Application Support/ADIAT/'
+		elif sys.platform =="darwin":
+			home_path = os.path.expanduser("~")
+			app_path = home_path + '/AppData/Roaming/ADIAT/'
 			if(not os.path.exists(app_path)):
 				os.makedirs(app_path)
-		log_path = app_path +'adiat_logs.txt'
+				
+		log_path = app_path+'adiat_logs.txt'
 		self.logger = logging.getLogger(__name__)
 		stdoutHandler = logging.StreamHandler(stream=sys.stdout)
 		fileHandler = logging.FileHandler(log_path)
