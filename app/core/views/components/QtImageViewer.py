@@ -143,7 +143,7 @@ class QtImageViewer(QGraphicsView):
         self._scenePosition = QPointF()
 
         # Track mouse position. e.g., For displaying coordinates in a UI.
-        # self.setMouseTracking(True)
+        self.setMouseTracking(True)
 
         # ROIs.
         self.ROIs = []
@@ -511,7 +511,6 @@ class QtImageViewer(QGraphicsView):
             # Invalid pixel position.
             imagePos = QPoint(-1, -1)
         self.mousePositionOnImageChanged.emit(imagePos)
-
         QGraphicsView.mouseMoveEvent(self, event)
 
     def enterEvent(self, event):

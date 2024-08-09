@@ -1,28 +1,25 @@
-import functools
-from itertools import count
 import operator
-
 import cv2
 import os
+import numpy as np
 import imghdr
 import shutil
 import xml.etree.ElementTree as ET
-import logging
-from numpy import full
-import piexif
 import time
-import concurrent
+
 from pathlib import Path
-from helpers.ExifTransfer import ExifTransfer
-from core.services.HistogramNormalizationService import HistogramNormalizationService
-from core.services.KMeansClustersService import KMeansClustersService
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool, pool
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
+from core.services.LoggerService import LoggerService
+from core.services.HistogramNormalizationService import HistogramNormalizationService
+from core.services.KMeansClustersService import KMeansClustersService
 """****Import Algorithm Services****"""
-from algorithms.ColorMatch.services.ColorMatchService import ColorMatchService
+from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
+from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
+from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 """****End Algorithm Import****"""
 
 class AnalyzeService(QObject):
@@ -32,12 +29,12 @@ class AnalyzeService(QObject):
 	sig_aois = pyqtSignal()
 	sig_done = pyqtSignal(int, int)
 
-	def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes, max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options):
+	def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes, max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options):
 		"""
 		__init__ constructor
 		
 		:Int id: numeric id
-		:String algorithm: the name of the algorithm to be used for analysis
+		:Dict algorithm: the algorithm to be used for analysis
 		:String input: the path to the input directory containing the images to be processed
 		:String output: the path to the output directory where images will be stored
 		:Tuple(int,int,int) identifier_color: the RGB values for the color to be used to highlight areas of interest
@@ -47,8 +44,10 @@ class AnalyzeService(QObject):
 		:Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
 		:String histogram_reference_path: the path to the histogram matching reference image
 		:Int kmeans_clusters: the number of clusters(colors) to maintain in the image
+		:Bool thermal: is this a thermal image algorithm
 		:Dictionary options: additional algorithm-specific options
 		"""
+		self.logger = LoggerService()
 		super().__init__()
 		self.algorithm = algorithm
 		self.input = input
@@ -66,7 +65,9 @@ class AnalyzeService(QObject):
 		self.__id = id
 		self.images_with_aois = []
 		self.cancelled = False
+		self.is_thermal = thermal
 	
+		self.pool = Pool(self.num_processes)
 	
 	@pyqtSlot()
 	def processFiles(self):
@@ -74,38 +75,36 @@ class AnalyzeService(QObject):
 		processFiles iterates through all of the files in a directory and processes the image using the selected algorithm and features
 		"""
 		try:
-			self.setupOutputDir();
+			self.setupOutputDir()
 			self.setupOutputXml()
 			image_files = []
 			
 			start_time = time.time()
 			for subdir, dirs, files in os.walk(self.input):
 				for file in files:
-					image_files.append(os.path.join(subdir, file))
+					if self.is_thermal:
+						file_path = Path(file)
+						if file_path.suffix != 'irg':
+							image_files.append(os.path.join(subdir, file))
+					else:
+						image_files.append(os.path.join(subdir, file))
+			ttl_images = len(image_files)
 			self.sig_msg.emit("Processing "+str(len(image_files))+" files")
-			
-			position = 0
-			batch_size = 100
-			#loop through all of the files in the input directory and process them in multiple processes.  Breaking up into 100 file batches to limit the amount of time it takes to cancel.
-			while True and not self.cancelled:
-				with ProcessPoolExecutor(max_workers=self.num_processes) as self.executor:
-					for i in range (position, position + batch_size):
-						if i >= len(image_files):
-							break;
-						full_path = image_files[i]
-						
-						#skip if it's a directory
-						if(os.path.isdir(image_files[position])):
-							continue
-						#skip if the file isn't an image
-						if imghdr.what(full_path) is not None:
-							future = self.executor.submit(AnalyzeService.processFile, i, self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, full_path, self.hist_ref_path , self.kmeans_clusters)
-							future.add_done_callback(self.processComplete)
-						else:
-							self.sig_msg.emit("Skipping "+full_path+ " - File is not an image")
-				position = position + batch_size
-				if position >= len(image_files):
-					break
+			#loop through all of the files in the input directory and process them in multiple processes.
+			for file in image_files:
+				if(os.path.isdir(file)):
+					ttl_images -= 1
+					continue
+				if imghdr.what(file) is not None:
+					if self.pool._state == pool.RUN:
+						self.pool.apply_async(AnalyzeService.processFile,(self.algorithm, self.identifier_color, self.min_area, self.aoi_radius, self.options, file, self.input, self.output, self.hist_ref_path , self.kmeans_clusters, self.is_thermal),callback=self.processComplete)
+					else:
+						break
+				else:
+					ttl_images -= 1
+					self.sig_msg.emit("Skipping "+file+ " :: File is not an image")
+			self.pool.close()
+			self.pool.join()
 			#generate the output xml with the information gathered during processing			
 			self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
 			for img in self.images_with_aois:
@@ -114,91 +113,74 @@ class AnalyzeService(QObject):
 			ttl_time = round(time.time() - start_time, 3)
 			self.sig_done.emit(self.__id, len(self.images_with_aois))
 			self.sig_msg.emit("Total Processing Time: "+str(ttl_time)+" seconds")
+			self.sig_msg.emit("Total Images Proccessed: "+str(ttl_images))
 		except Exception as e:
-			logging.exception(e)
-
+			self.logger.error(e)
+			
 	@staticmethod
-	def processFile(i, algorithm, identifier_color, min_area, aoi_radius, options, full_path, hist_ref_path, kmeans_clusters):
+	def processFile(algorithm, identifier_color, min_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters, thermal):
 		"""
 		processFile processes a single image using the selected algorithm and features
-		
-		:String algorithm: the name of the algorithm to be used
+		:Dict algorithm: the algorithm to be used
 		:Tuple(int,int,int) identifier_color: the RGB values for the color to be used to highlight areas of interest
 		:Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
 		:Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
 		:Dictionary options: additional algorithm-specific options
 		:String full_path: the path to the image being analyzed
+		:String input_dir: the path to the input directory containing the images to be processed
+		:String output_dir: the path to the output directory where images will be stored
 		:String hist_ref_path: the path to the histogram matching reference image
 		:Int kmeans_clusters: the number of clusters(colors) to maintain in the image
+		:Bool thermal: is this a thermal image algorithm		
 		:return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
 		"""
-		img = cv2.imread(full_path)
-		path = Path(full_path)
-		file_name = path.name
-		
-		#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
-		histogram_service = None
-		if hist_ref_path is not None:
-			histogram_service = HistogramNormalizationService(hist_ref_path)
-			img = histogram_service.matchHistograms(img)
+		img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+		if not thermal:
+			#if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
+			histogram_service = None
+			if hist_ref_path is not None:
+				histogram_service = HistogramNormalizationService(hist_ref_path)
+				img = histogram_service.matchHistograms(img)
 				
-		#if the kmeans clusters number is not empty, create an instance of the KMeansClustersService			
-		kmeans_service = None
-		if kmeans_clusters is not None:
-			kmeans_service = KMeansClustersService(kmeans_clusters)
-			img = kmeans_service.generateClusters(img)
+			#if the kmeans clusters number is not empty, create an instance of the KMeansClustersService			
+			kmeans_service = None
+			if kmeans_clusters is not None:
+				kmeans_service = KMeansClustersService(kmeans_clusters)
+				img = kmeans_service.generateClusters(img)
 				
 		#Create an instance of the algorithm class
-		cls = globals()[algorithm+"Service"]
-		instance = cls(identifier_color, min_area, aoi_radius, options)
+		cls = globals()[algorithm['service']]
+		instance = cls(identifier_color, min_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
 			
 		try:
 			#process the image using the algorithm
-			return instance.processImage(img,file_name,full_path)
+			return instance.processImage(img, full_path, input_dir, output_dir)
 		except Exception as e:
-			logging.exception(e)
+			logger = LoggerService()
+			logger.error(e)
 	
 	@pyqtSlot()			
-	def processComplete(self, future):
+	def processComplete(self, result):
 		"""
 		processComplete processes the analyzed image
 
 		:concurrent.futures._base.Future future: object representing the execution of the callable
 		"""
-		if future.done() and not future.cancelled() and not self.cancelled:
-			result = future.result()
-			is_jpg = imghdr.what(result.full_path) == 'jpg' or imghdr.what(result.full_path) == 'jpeg'
-			#if the image is a jpg read the exif information
-			if is_jpg:
-				exif_dict = piexif.load(result.full_path)
-				if not 'GPS' in exif_dict:
-					is_jpg = False
-			try:
-				#returned by processFile method		
-				if result.augmented_image is not None:
-					#save the image to the output directory and add the image/areas of interest to the output xml
-					output_file = result.full_path.replace(self.input, self.output)
-					path = Path(output_file)
-					if not os.path.exists(path.parents[0]):
-						os.makedirs(path.parents[0])
-					cv2.imwrite(output_file, result.augmented_image)
-					self.images_with_aois.append({"path": output_file, "aois": result.areas_of_interest})
-					self.sig_msg.emit('Areas of interest identified in '+result.file_name)
-					if is_jpg:
-						try:
-							piexif.transplant(result.full_path, output_file)
-						except  piexif._exceptions.InvalidImageDataError as e:
-							#piexif doesn't always work, but it's way faster than PIL.  If piexif fails try PIL
-							ExifTransfer.transfer_exif(result.full_path, output_file)
-							
-				else:
-					self.sig_msg.emit('No areas of interested identified in '+result.file_name)
-				if result.areas_of_interest is not None:
-					if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
-						self.sig_aois.emit()
-						self.max_aois_limit_exceeded = True
-			except concurrent.futures.CancelledError as e:
-				logging.exception(e)
+		if result.input_path is not None:
+			path = Path(result.input_path)
+			file_name = path.name
+		#returned by processFile method
+		if result.error_message is not None:
+			self.sig_msg.emit("Unable to process "+file_name+ " :: "+result.error_message)
+			return
+		if result.areas_of_interest is not None:
+			self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
+			self.sig_msg.emit('Areas of interest identified in '+file_name)
+			if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
+				self.sig_aois.emit()
+				self.max_aois_limit_exceeded = True
+		else:
+			self.sig_msg.emit('No areas of interested identified in '+file_name)
 				
 	@pyqtSlot()
 	def processCancel(self):
@@ -206,8 +188,8 @@ class AnalyzeService(QObject):
 		processCancel cancels any asynchronous processes that have not completed
 		"""
 		self.cancelled = True
-		self.sig_msg.emit("--- Cancelling Image Processing ---")	
-		self.executor.shutdown(wait = False, cancel_futures=True)
+		self.sig_msg.emit("--- Cancelling Image Processing ---")
+		self.pool.terminate()
 			
 	def setupOutputDir(self):
 		"""
@@ -218,10 +200,10 @@ class AnalyzeService(QObject):
 				try:
 					shutil.rmtree(self.output)
 				except Exception as e:
-					logging.exception(e)
+					self.logger.error(e)
 			os.makedirs(self.output)
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
 
 	def setupOutputXml(self):
 		"""
@@ -233,7 +215,8 @@ class AnalyzeService(QObject):
 			settings_xml.set("input_dir", self.input)
 			settings_xml.set("output_dir", self.output_dir)
 			settings_xml.set("identifier_color", self.identifier_color)
-			settings_xml.set("algorithm", self.algorithm)
+			settings_xml.set("algorithm", self.algorithm['name'])
+			settings_xml.set("thermal", str(self.is_thermal))
 			settings_xml.set("num_processes", str(self.num_processes))
 			settings_xml.set("min_area", str(self.min_area))
 			settings_xml.set("hist_ref_path", str(self.hist_ref_path ))
@@ -245,7 +228,7 @@ class AnalyzeService(QObject):
 				option_xml.set("value", str(value))
 			self.images_xml = ET.SubElement(self.xml, "images")
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
 
 	def addImageToXml(self, img):
 		"""

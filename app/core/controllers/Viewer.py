@@ -1,4 +1,3 @@
-import logging
 from PyQt5 import QtGui
 import qimage2ndarray
 import piexif
@@ -12,21 +11,33 @@ from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
 from core.services.KMLService import KMLService
 from helpers.LocationInfo import LocationInfo
+from core.services.LoggerService import LoggerService
+from helpers.MetaDataHelper import MetaDataHelper
 
 class Viewer(QMainWindow, Ui_Viewer):
 	"""Controller for the Image Viewer(QMainWindow)."""
-	def __init__(self, images, position_format):
+	def __init__(self, images, position_format, temperature_unit, thermal):
 		"""
 		__init__ constructor to build the ADIAT Image Viewer
 		
 		:List(Dictionary) images: Images that will be displayed in the viewer
 		:string position_format: The position format in which GPS coordinates will be displayed
+		:string temperature_unit: The unit in which temperature values be displayed
+		:boolean thermal: Were the images processed using a thermal image algorithm
 		"""
 		QMainWindow.__init__(self)
+		self.logger = LoggerService()
 		self.setupUi(self)
 		
 		self.images = images
 		self.position_format = position_format
+		self.position = None
+		self.temperature_data = None
+		if temperature_unit == 'Fahrenheit':
+			self.temperature_unit = 'F'
+		else:
+			self.temperature_unit = 'C'
+		self.is_thermal = thermal
 		for image in self.images[:]:
 			path = Path(image['path'])
 			image_file = path
@@ -83,14 +94,28 @@ class Viewer(QMainWindow, Ui_Viewer):
 			gps_coords = LocationInfo.getGPS(image['path'])
 			if not gps_coords == {}:
 				#position = LocationInfo.convertDegreesToUtm(float(gps_coords['latitude']), float(gps_coords['longitude']))
-				position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
+				self.position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
 				#self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
-				self.statusbar.showMessage("GPS Coordinates: " + position)
+				self.statusbar.showMessage("GPS Coordinates: " + self.position)
 			else:
 				self.statusbar.showMessage("")
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
+			if self.is_thermal:
+				self.temperature_data = self.loadThermalData(image['path'])
+			self.mainImage.mousePositionOnImageChanged.connect(self.mainImageMousePos)
+				
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
+			
+	def mainImageMousePos(self, pos):
+		if self.temperature_data is not None:
+			shape = self.temperature_data.shape
+			if(pos.y() >= 0 and pos.x() >= 0) and (pos.y() < shape[0] and pos.x() < shape[1]):
+				if self.position:
+					new_message = "GPS Coordinates: "+self.position+"    Temperature: "+str(round(self.temperature_data[pos.y()][pos.x()],2))+u'\N{DEGREE SIGN}'+" "+self.temperature_unit
+				else:
+					new_message = "Temperature: "+str(round(self.temperature_data[pos.y()][pos.x()],2))+u'\N{DEGREE SIGN}'+" "+self.temperature_unit
+				self.statusbar.showMessage(new_message)
 
 	def loadImage(self):
 		"""
@@ -109,15 +134,19 @@ class Viewer(QMainWindow, Ui_Viewer):
 			#get the gps info from the image exif data and display it
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
 			gps_coords = LocationInfo.getGPS(image['path'])
+			self.position = None
 			if not gps_coords == {}:
-				position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
+				self.position = self.getPosition(gps_coords['latitude'],gps_coords['longitude'])
 				#self.statusbar.showMessage("GPS Coordinates: "+gps_coords['latitude']+", "+gps_coords['longitude'])
-				self.statusbar.showMessage("GPS Coordinates: " + position)
+				self.statusbar.showMessage("GPS Coordinates: " + self.position)
 			else:
 				self.statusbar.showMessage("")	
 			self.indexLabel.setText("Image "+str(self.current_image + 1)+" of "+str(len(self.images)))
+			if self.is_thermal:
+				self.temperature_data = self.loadThermalData(image['path'])
+			self.mainImage.mousePositionOnImageChanged.connect(self.mainImageMousePos)
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
 	def loadAreasofInterest(self, image):
 		"""
 		loadAreasofInterest loads the list of thumbnails representing the areas of interest from the image
@@ -144,7 +173,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 			highlight.setObjectName("highlight"+str(count))
 			highlight.setMinimumSize(QSize(190, 190))
 			highlight.aspectRatioMode = Qt.KeepAspectRatio
-			#convert the cropped  array back to an image.
+			#convert the cropped array back to an image.
 			img = qimage2ndarray.array2qimage(crop_arr)
 			highlight.setImage(img)
 			highlight.canZoom = False
@@ -163,6 +192,13 @@ class Viewer(QMainWindow, Ui_Viewer):
 		else:
 			self.areaCountLabel.setText(str(count)+ " Areas of Interest")
 
+	def loadThermalData(self, path):
+		data = MetaDataHelper.getTemperatureData(path)
+		if self.temperature_unit == 'F':
+			return (data * 1.8000)+32
+		else:
+			return data
+			
 	def previousImageButtonClicked(self):
 		"""
 		previousImageButtonClicked click handler to navigate to the previous image in the images list

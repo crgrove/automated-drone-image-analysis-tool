@@ -1,11 +1,10 @@
-import logging
-import imghdr
 import pathlib
-
+import os
+import platform
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtGui import QColor
-from PyQt5.QtCore import Qt, QFile, QThread, pyqtSlot
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QStyle
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import QThread, pyqtSlot, QSize
+from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy
 
 from core.views.MainWindow_ui import Ui_MainWindow
 
@@ -13,15 +12,23 @@ from helpers.ColorUtils import ColorUtils
 
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
+from core.controllers.VideoParser import VideoParser
+
+from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
 from core.services.SettingsService import SettingsService
 from core.services.XmlService import XmlService
+from core.services.ConfigService import ConfigService
 
 """****Import Algorithm Controllers****"""
-from algorithms.ColorMatch.controllers.ColorMatchController import ColorMatch
-from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomaly
-from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilter
+from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
+from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
+from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
+from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
+from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
+
+from core.views.components.GroupedComboBox import GroupedComboBox
 
 class MainWindow(QMainWindow, Ui_MainWindow):
 	"""Controller for the Main Window (QMainWindow)."""
@@ -32,6 +39,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		:qdarktheme theme: instance of qdarktheme that allows us to toggle light/dark mode
 		:String version: the app version # to be included in the Main Window title bar
 		"""
+		self.logger = LoggerService()
 		QMainWindow.__init__(self)
 		self.theme = theme
 		self.setupUi(self)
@@ -42,7 +50,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.HistogramImgWidget.setVisible(False)
 		self.KMeansWidget.setVisible(False)
 		self.setWindowTitle("Automated Drone Image Analysis Tool  v"+version+" - Sponsored by TEXSAR")
-		
+		self.loadAlgorithms()
 		#Adding slots for GUI elements
 		self.identifierColorButton.clicked.connect(self.identifierButtonClicked)
 		self.inputFolderButton.clicked.connect(self.inputFolderButtonClicked)
@@ -50,17 +58,54 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		self.startButton.clicked.connect(self.startButtonClicked)
 		self.cancelButton.clicked.connect(self.cancelButtonClicked)
 		self.viewResultsButton.clicked.connect(self.viewResultsButtonClicked)
-		self.actionLoadFile.triggered.connect(self.loadFile)
+		self.actionLoadFile.triggered.connect(self.openLoadFile)
 		self.actionPreferences.triggered.connect(self.openPreferences)
+		self.actionVideoParser.triggered.connect(self.openVideoParser)
 		self.algorithmComboBox.currentTextChanged.connect(self.algorithmComboBoxChanged)
 		self.algorithmComboBoxChanged()
 		self.histogramCheckbox.stateChanged.connect(self.histogramCheckboxChange)
 		self.histogramButton.clicked.connect(self.histogramButtonClicked)
 		self.kMeansCheckbox.stateChanged.connect(self.kMeansCheckboxChange)
+		self.results_path = ''
 		
 		self.settings_service  = SettingsService()
 		self.setDefaults()
-		
+	
+	def loadAlgorithms(self):
+		"""
+		setupAlgorithmComboBox adds combobox entries for algorithm selector
+		"""
+		system = platform.system()
+		configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
+		self.algorithms = configService.getAlgorithms()
+		algorithm_list = dict()
+		for algorithm in self.algorithms:
+			if system in algorithm['platforms']:
+				if algorithm['type'] not in algorithm_list:
+					algorithm_list[algorithm['type']] = []
+				algorithm_list[algorithm['type']].append(algorithm['label'])
+		self.replaceAlgorithmComboBox()
+		for key, list in algorithm_list.items():
+			self.algorithmComboBox.addGroup(key, list)
+		self.algorithmComboBox.setCurrentIndex(1)
+
+	def replaceAlgorithmComboBox(self):
+		"""
+		replaceAlgorithmComboBox replaces the standard QtComboBox with a version that allows grouping.
+		"""
+		self.tempAlgorithmComboBox.deleteLater()
+		self.algorithmComboBox = GroupedComboBox(self.setupFrame)
+		sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+		sizePolicy.setHorizontalStretch(0)
+		sizePolicy.setVerticalStretch(0)
+		sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
+		self.algorithmComboBox.setSizePolicy(sizePolicy)
+		self.algorithmComboBox.setMinimumSize(QSize(300, 0))
+		font = QFont()
+		font.setPointSize(10)
+		self.algorithmComboBox.setFont(font)
+		self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
+
 	def identifierButtonClicked(self):
 		"""
 		identifierButtonClicked click handler for the object identifier color button
@@ -132,12 +177,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		if self.algorithmWidget is not None:
 			self.verticalLayout_2.removeWidget(self.algorithmWidget);
 			self.algorithmWidget.deleteLater()
+		self.activeAlgorithm = [x for x in self.algorithms if x['label']==self.algorithmComboBox.currentText()][0]
 		
-		self.algorithmName = str(self.algorithmComboBox.currentText())
-		cls = globals()[self.algorithmName]
+		cls = globals()[self.activeAlgorithm['controller']]
 		self.algorithmWidget = cls()
 		self.verticalLayout_2.addWidget(self.algorithmWidget)
-		self.maxProcessesSpinBox.setProperty("value", self.algorithmWidget.default_process_count)       
+		if self.algorithmWidget.is_thermal:
+			self.AdvancedFeaturesWidget.hide()
+		else:
+			self.AdvancedFeaturesWidget.show()
 
 	def histogramCheckboxChange(self):
 		"""
@@ -172,7 +220,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 				return;
 		
 			#verify that the directories have been set.
-			if self.inputFolderLine.text() == "" or self.outputFolderLine == "" :
+			if self.inputFolderLine.text() == "" or self.outputFolderLine.text() == "" :
 				self.showError("Please set the input and output directories.")
 				return;
 		
@@ -195,13 +243,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			#update the persistent settings for minimum object size and identifier color based on the current settings.
 			self.settings_service.setSetting('MinObjectArea', self.minAreaSpinBox.value())
 			self.settings_service.setSetting('IdentifierColor', self.identifierColor)
+			self.settings_service.setSetting('MaxProcesses', self.maxProcessesSpinBox.value())
 			
 			max_aois = self.settings_service.getSetting('MaxAOIs')
 			aoi_radius = self.settings_service.getSetting('AOIRadius')
 			
 			#Create instance of the analysis class with the selected algorithm
-			self.analyzeService = AnalyzeService(1,str(self.algorithmComboBox.currentText()), self.inputFolderLine.text(),self.outputFolderLine.text(), self.identifierColor, self.minAreaSpinBox.value(), 
-			    self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options)
+			self.analyzeService = AnalyzeService(1,self.activeAlgorithm, self.inputFolderLine.text(),self.outputFolderLine.text(), self.identifierColor, self.minAreaSpinBox.value(), 
+				self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options)
 
 			#This must be done in a separate thread so that it won't block the GUI updates to the log
 			thread = QThread()
@@ -216,11 +265,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			thread.started.connect(self.analyzeService.processFiles)
 			thread.start()
 			
-			self.last_output_path = self.outputFolderLine.text()
+			self.results_path = self.outputFolderLine.text()
 			
 			self.setCancelButton(True)
 		except Exception as e:
-			logging.exception(e)
+			self.logger.error(e)
 			
 	def cancelButtonClicked(self):
 		"""
@@ -233,18 +282,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		viewResultsButtonClicked click handler for launching the image viewer once analysis has been completed
 		"""
-		output_folder = self.outputFolderLine.text()+"/ADIAT_Results/"
+		output_folder = self.results_path+"/ADIAT_Results/"
 		file = pathlib.Path(output_folder+"ADIAT_Data.xml")
 		if file.is_file():
 			xmlLoader = XmlService(output_folder+"ADIAT_Data.xml")
-			images = xmlLoader.getImages()		
+			images = xmlLoader.getImages()	
+			settings, _ = xmlLoader.getSettings()
 			if len(images):
 				self.setViewResultsButton(True)
 				self.images = images
 			else:
 				self.setViewResultsButton(False)
 			position_format = self.settings_service.getSetting('PositionFormat')
-			self.viewer = Viewer(self.images, position_format)
+			temperature_unit = self.settings_service.getSetting('TemperatureUnit')
+			self.viewer = Viewer(self.images, position_format, temperature_unit, (settings['thermal'] == 'True'))
 			self.viewer.show()
 		else:
 			self.showError("Could not parse XML file.  Check file paths in \"ADIAT_Data.xml\"")
@@ -316,21 +367,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		msg.setStandardButtons(QMessageBox.Ok)
 		msg.exec_()
 		
-	def loadFile(self):
+	def openLoadFile(self):
 		"""
-		loadFile action for the open file menu item
-		Opens a file dialog and on close processes the xml file from a previously completed analysis process
+		openLoadFile action for the open file menu item
 		"""
 		try:
 			file = QFileDialog.getOpenFileName(self, "Select File")
 			if file[0] != "":
-				image_count = self.getSettingsFromXml(file[0])
-				if image_count > 0:
-					self.setViewResultsButton(True)
-
+				self.processXmlFile(file[0])
 		except Exception as e:
-			logging.exception(e)
-	
+			self.logger.error(e)
+	def processXmlFile(self, full_path):
+		"""
+		processXmlFile takes a file from the Load File dialog and processes it.
+
+		:String full_path: the path to the XML file
+		"""
+		try:
+			image_count = self.getSettingsFromXml(full_path)
+			if image_count > 0:
+				self.setViewResultsButton(True)
+			if self.algorithmWidget.is_thermal:
+				self.AdvancedFeaturesWidget.hide()
+			else:
+				self.AdvancedFeaturesWidget.show()
+		except Exception as e:
+			self.logger.error(e)
+
 	def getSettingsFromXml(self, full_path):
 		"""
 		getSettingsFromXml populates the UI with previously executed analysis
@@ -342,6 +405,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		settings, image_count = xmlLoader.getSettings()	
 		if 'output_dir' in settings:
 			self.outputFolderLine.setText(settings['output_dir'])
+			self.results_path = settings['output_dir']
 		if 'input_dir' in settings:
 			self.inputFolderLine.setText(settings['input_dir'])
 		if 'identifier_color' in settings:
@@ -359,8 +423,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 			self.kMeansCheckbox.setChecked(True)
 			self.clustersSpinBox.setValue(settings['kmeans_clusters'])
 		if 'algorithm' in settings:
-			self.algorithmComboBox.setCurrentText(settings['algorithm'])
+			self.activeAlgorithm = [x for x in self.algorithms if x['name']==settings['algorithm']][0]
+			self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
 			self.algorithmWidget.loadOptions(settings['options'])
+		if ('thermal') in settings:
+			self.algorithmWidget.is_thermal = (settings['thermal'] == 'True')
+		else:
+			self.algorithmWidget.is_thermal = False
 		return image_count
 			
 	def openPreferences(self):
@@ -370,7 +439,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		pref = Preferences(self)
 		pref.exec()
-		
+
+	def openVideoParser(self):
+		"""
+		openVideoParser action for the Video Parser menu item
+		Opens a dialog showing the video parser
+		"""
+		parser = VideoParser()
+		parser.exec_()
+
+
 	def closeEvent(self, event):
 		"""
 		closeEvent closes all windows when the main window is closes.
@@ -424,7 +502,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		min_area = self.settings_service.getSetting('MinObjectArea')
 		if isinstance(min_area, int):
 			self.minAreaSpinBox.setProperty("value", min_area)
-			
+
+		max_processes = self.settings_service.getSetting('MaxProcesses')
+		if isinstance(max_processes, int):
+			self.maxProcessesSpinBox.setProperty("value", max_processes)
+
 		id_color = self.settings_service.getSetting('IdentifierColor')
 		if isinstance(id_color, tuple):
 			self.identifierColor = id_color
@@ -442,6 +524,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		position_format = self.settings_service.getSetting('PositionFormat')
 		if not isinstance(position_format, str):
 			self.settings_service.setSetting('PositionFormat', 'Lat/Long - Decimal Degrees')
+	
+		temperature_unit = self.settings_service.getSetting('TemperatureUnit')
+		if not isinstance(temperature_unit, str):
+			self.settings_service.setSetting('TemperatureUnit', 'Fahrenheit')
 			
 		theme = self.settings_service.getSetting('Theme')
 		if theme == None:

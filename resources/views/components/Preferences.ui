@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>Preferences</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item alignment="Qt::AlignTop">
@@ -24,6 +24,11 @@
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_3">
          <item>
@@ -46,6 +51,11 @@
          </item>
          <item>
           <widget class="QComboBox" name="themeComboBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <item>
             <property name="text">
              <string>Light</string>
@@ -111,6 +121,11 @@
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
           <widget class="QLabel" name="AOIRadiusLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <property name="text">
             <string>Area of Interest Circle Radius(px):</string>
            </property>
@@ -118,6 +133,11 @@
          </item>
          <item>
           <widget class="QSpinBox" name="AOIRadiusSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <property name="maximum">
             <number>100</number>
            </property>
@@ -134,13 +154,23 @@
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <item>
           <widget class="QLabel" name="positionFormatLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <property name="text">
-            <string>Position Format:</string>
+            <string>Coordinate System:</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QComboBox" name="positionFormatComboBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <item>
             <property name="text">
              <string>Lat/Long - Decimal Degrees</string>
@@ -161,11 +191,53 @@
         </layout>
        </widget>
       </item>
+      <item>
+       <widget class="QWidget" name="TemperatureWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <item>
+          <widget class="QLabel" name="temperatureLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Temperature Unit:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="temperatureComboBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <item>
+            <property name="text">
+             <string>Fahrenheit</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Celsius</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
