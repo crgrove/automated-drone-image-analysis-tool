@@ -48,7 +48,7 @@ class LocationInfo:
 		:float longitude: the decimal latitude position
 		:return Dictionary: EASTING, NORTHING, ZONE_NUMBER, ZONE_LETTER values representing the position in UTM
 		"""
-		utm_pos = utm.from_latlon(lat, lng)
+		utm_pos = utm.from_latlon(lat, lng)	
 		return {'easting': round(utm_pos[0],2), 'northing': round(utm_pos[1],2), 'zone_number': utm_pos[2], 'zone_letter': utm_pos[3]}
 	
 	@staticmethod

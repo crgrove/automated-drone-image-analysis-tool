@@ -22,6 +22,7 @@ class Preferences(QDialog, Ui_Preferences):
 		self.AOIRadiusSpinBox.valueChanged.connect(self.updateAOIRadius)
 		self.themeComboBox.currentTextChanged.connect(self.updateTheme)
 		self.positionFormatComboBox.currentTextChanged.connect(self.updatePositionFormat)
+		self.temperatureComboBox.currentTextChanged.connect(self.updateTemperatureUnit)
 	
 	def updateMaxAOIs(self):
 		"""
@@ -46,3 +47,9 @@ class Preferences(QDialog, Ui_Preferences):
 		updatePositionFormat action method triggered on changes to position format combobox
 		"""
 		self.parent.settings_service.setSetting('PositionFormat', self.positionFormatComboBox.currentText())
+		
+	def updateTemperatureUnit(self):
+		"""
+		updateTemperatureUnit action method triggered on changes to temperature unit combobox
+		"""
+		self.parent.settings_service.setSetting('TemperatureUnit', self.temperatureComboBox.currentText())

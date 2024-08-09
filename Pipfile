@@ -17,8 +17,13 @@ pyqtdarktheme = "*"
 pillow = "*"
 pandas = "*"
 utm = "*"
+PyExifTool = "*"
 
 [dev-packages]
 pyqt-distutils = "*"
 qt5-tools = "*"
 PyInstaller = "*"
+pytest-qt = "*"
+
+[requires]
+python_version = "3.11"

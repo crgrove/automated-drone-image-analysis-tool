@@ -38,6 +38,11 @@
            <height>0</height>
           </size>
          </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
          <item>
           <property name="text">
            <string>1</string>
@@ -149,11 +154,6 @@
       </layout>
      </item>
     </layout>
-   </item>
-   <item>
-    <widget class="QWidget" name="segmentsWidget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout"/>
-    </widget>
    </item>
   </layout>
  </widget>

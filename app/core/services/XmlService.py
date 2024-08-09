@@ -42,6 +42,7 @@ class XmlService:
                 if settings_xml.get('kmeans_clusters') != "None":
                     settings['kmeans_clusters'] = int(settings_xml.get('kmeans_clusters'))
                 settings['algorithm'] = settings_xml.get('algorithm')
+                settings['thermal'] = settings_xml.get('thermal')
                 settings['options'] = dict()
                 options_xml = settings_xml.find('options')
                 for option in options_xml:

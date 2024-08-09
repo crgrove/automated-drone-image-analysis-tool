@@ -18,6 +18,11 @@
     <layout class="QHBoxLayout" name="ColorSelectionLayout">
      <item>
       <widget class="QPushButton" name="colorButton">
+       <property name="font">
+        <font>
+         <pointsize>10</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string> Pick Color</string>
        </property>
@@ -122,6 +127,11 @@
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>10</pointsize>
+        </font>
        </property>
        <property name="text">
         <string>View Range</string>
