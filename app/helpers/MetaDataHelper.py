@@ -162,28 +162,28 @@ class MetaDataHelper:
 
 	@staticmethod
 	def setGPSLocation(exif_dict, lat, lng, alt):
-		    # Convert decimal coordinates into degrees, minutes, seconds
-		    def to_deg(value, ref):
-		        if value < 0:
-		            value = -value
-		            ref = ref[1]
-		        else:
-		            ref = ref[0]
+			# Convert decimal coordinates into degrees, minutes, seconds
+			def to_deg(value, ref):
+				if value < 0:
+					value = -value
+					ref = ref[1]
+				else:
+					ref = ref[0]
 
-		        deg = int(value)
-		        min = int((value - deg) * 60)
-		        sec = int((value - deg - min / 60) * 3600 * 10000)
+				deg = int(value)
+				min = int((value - deg) * 60)
+				sec = int((value - deg - min / 60) * 3600 * 10000)
 
-		        return ((deg, 1), (min, 1), (sec, 10000)), ref
+				return ((deg, 1), (min, 1), (sec, 10000)), ref
 
-		    lat_deg, lat_ref = to_deg(lat, ["N", "S"])
-		    lng_deg, lng_ref = to_deg(lng, ["E", "W"])
+			lat_deg, lat_ref = to_deg(lat, ["N", "S"])
+			lng_deg, lng_ref = to_deg(lng, ["E", "W"])
 
-		    exif_dict["GPS"] = {
-		        piexif.GPSIFD.GPSLatitudeRef: lat_ref,
-		        piexif.GPSIFD.GPSLatitude: lat_deg,
-		        piexif.GPSIFD.GPSLongitudeRef: lng_ref,
-		        piexif.GPSIFD.GPSLongitude: lng_deg,
-		        piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
-		        piexif.GPSIFD.GPSAltitude: (abs(int(alt * 100)), 100),
-		    }
+			exif_dict["GPS"] = {
+				piexif.GPSIFD.GPSLatitudeRef: lat_ref,
+				piexif.GPSIFD.GPSLatitude: lat_deg,
+				piexif.GPSIFD.GPSLongitudeRef: lng_ref,
+				piexif.GPSIFD.GPSLongitude: lng_deg,
+				piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
+				piexif.GPSIFD.GPSAltitude: (abs(int(alt * 100)), 100),
+			}

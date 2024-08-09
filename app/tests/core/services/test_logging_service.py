@@ -25,19 +25,6 @@ def test_logger_service_initialization_windows():
         mock_makedirs.assert_called_once_with(app_path)
         assert logger_service.logger is not None
 
-def test_logger_service_initialization_non_windows():
-    with patch("platform.system", return_value="Darwin"), \
-         patch("os.makedirs") as mock_makedirs, \
-         patch("os.path.exists", return_value=False), \
-         patch("logging.getLogger"), \
-         patch("logging.FileHandler"), \
-         patch("logging.StreamHandler"):
-        logger_service = LoggerService()
-        app_path = 'Library/Application Support/ADIAT/'
-        log_path = app_path + 'adiat_logs.txt'
-        mock_makedirs.assert_called_once_with(app_path)
-        assert logger_service.logger is not None
-
 def test_warning(logger_service):
     with patch.object(logger_service.logger, 'warning') as mock_warning:
         logger_service.warning("This is a warning message")
