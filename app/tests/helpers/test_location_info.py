@@ -5,9 +5,11 @@ import utm
 from unittest.mock import patch, MagicMock
 from app.helpers.LocationInfo import LocationInfo  # Adjust the import according to your project structure
 
+
 @pytest.fixture
 def example_image_path():
     return "/path/to/example/image.jpg"
+
 
 @pytest.fixture
 def example_gps_data():
@@ -20,16 +22,19 @@ def example_gps_data():
         }
     }
 
+
 def test_getGPS_jpg(example_image_path, example_gps_data):
     with patch('imghdr.what', return_value='jpeg'), \
-         patch('piexif.load', return_value=example_gps_data):
+            patch('piexif.load', return_value=example_gps_data):
         result = LocationInfo.getGPS(example_image_path)
         assert result == {'latitude': 37.805556, 'longitude': -122.422222}
+
 
 def test_getGPS_non_jpg(example_image_path):
     with patch('imghdr.what', return_value='png'):
         result = LocationInfo.getGPS(example_image_path)
         assert result == {}
+
 
 def test_convertDegreesToUtm():
     lat, lng = 37.805556, -122.422222
@@ -46,6 +51,7 @@ def test_convertDegreesToUtm():
     assert result['zone_number'] == expected['zone_number']
     assert result['zone_letter'] == expected['zone_letter']
 
+
 def test_convertDecimalToDms():
     lat, lng = 37.805556, -122.422222
     result = LocationInfo.convertDecimalToDms(lat, lng)
@@ -54,6 +60,7 @@ def test_convertDecimalToDms():
         'longitude': {'degrees': 122, 'minutes': 25, 'seconds': 20.0, 'reference': 'W'}
     }
     assert result == expected
+
 
 def test__convert_to_degrees():
     value = [(37, 1), (48, 1), (20, 1)]

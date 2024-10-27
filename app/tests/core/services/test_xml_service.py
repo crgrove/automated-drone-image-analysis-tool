@@ -2,9 +2,11 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.core.services.XmlService import XmlService
 
+
 @pytest.fixture
 def xml_service():
     return XmlService('path/to/xml/file.xml')
+
 
 def test_get_settings(xml_service):
     mock_tree = MagicMock()
@@ -54,6 +56,7 @@ def test_get_settings(xml_service):
     }
     assert settings == expected_settings
     assert image_count == 5
+
 
 def test_get_images(xml_service):
     mock_tree = MagicMock()
