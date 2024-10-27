@@ -1,0 +1,5 @@
+pyqt-distutils
+qt5-tools
+PyInstaller
+pytest-qt
+flake8

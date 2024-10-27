@@ -15,3 +15,5 @@ Pipfile.lock
 /.vs
 .idea/
 app/tests/data/
+package-lock.json
+.venv/

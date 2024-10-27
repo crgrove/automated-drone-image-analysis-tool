@@ -74,6 +74,7 @@ class ThermalParserService:
 			(k.split(':')[1].strip(), v) for k, v in data.items() if ':' in k
 			])
 		camera_model, platform = self.getModelandPlatform(meta_fields)
+		assert camera_model != "Not Supported", "Camera Model is not supported"
 		if platform == 'FLIR':
 			kwargs = dict((name, float(meta_fields[key])) for name, key in [
 				('emissivity', 'Emissivity'),
@@ -110,6 +111,7 @@ class ThermalParserService:
 				print(e)
 				raise Exception("Invalid image file")
 		elif platform == 'DJI':
+			assert 'ThermalData' in meta_fields, "Image does not contain thermal data"
 			kwargs = dict()
 			for name, key in [
 				('object_distance', 'ObjectDistance'),
@@ -119,7 +121,7 @@ class ThermalParserService:
 			]:
 				if key in meta_fields:
 					kwargs[name] = float(meta_fields[key])
-			if camera_model != 'M30T':
+			if camera_model != 'M30T' and camera_model != 'M3T':
 				kwargs['image_height'] = int(meta_fields['ImageHeight'])
 				kwargs['image_width'] = int(meta_fields['ImageWidth'])
 			if 'emissivity' in kwargs:

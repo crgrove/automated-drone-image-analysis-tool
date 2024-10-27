@@ -1,0 +1,16 @@
+PyQt5
+opencv-python
+numpy
+qimage2ndarray
+scipy
+spectral
+piexif
+simplekml
+scikit-image
+pyqtdarktheme
+qtpy
+qtwidgets
+pillow
+pandas
+utm
+PyExifTool

@@ -6,6 +6,8 @@ import spectral
 import scipy
 from scipy.stats import chi2
 
+import traceback
+
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 from helpers.ColorUtils import ColorUtils
@@ -65,6 +67,7 @@ class RXAnomalyService(AlgorithmService):
 				self.storeImage(full_path, output_path, augmented_image)    
 			return AnalysisResult(full_path, output_path, areas_of_interest, base_contour_count)
 		except Exception as e:
+			print(traceback.format_exc())
 			return AnalysisResult(full_path, error_message = str(e))
 			
 	def getThreshold(self, sensitivity):

@@ -39,12 +39,12 @@ class MetaDataHelper:
 
 		# load old image and extract EXIF
 		image = Image.open(originFile)
-		exif = image.info['exif']
-
-		# load new image
-		image_new = Image.open(destinationFile)
-		image_new.save(destinationFile, 'JPEG', exif=exif)
-	
+		if 'exif' in image.info:
+			exif = image.info['exif']
+			# load new image
+			image_new = Image.open(destinationFile)
+			image_new.save(destinationFile, 'JPEG', exif=exif)
+		
 	@staticmethod
 	def transferExifExiftool(originFile, destinationFile):
 		"""

@@ -14,6 +14,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from core.services.LoggerService import LoggerService
 from core.services.HistogramNormalizationService import HistogramNormalizationService
 from core.services.KMeansClustersService import KMeansClustersService
+from core.services.XmlService import XmlService
 """****Import Algorithm Services****"""
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
@@ -48,6 +49,7 @@ class AnalyzeService(QObject):
 		:Dictionary options: additional algorithm-specific options
 		"""
 		self.logger = LoggerService()
+		self.xmlService = XmlService()
 		super().__init__()
 		self.algorithm = algorithm
 		self.input = input
@@ -76,7 +78,16 @@ class AnalyzeService(QObject):
 		"""
 		try:
 			self.setupOutputDir()
-			self.setupOutputXml()
+			self.xmlService.addSettingsToXml(input_dir = self.input, 
+								  output_dir = self.output_dir, 
+								  identifier_color = self.identifier_color, 
+								  algorithm = self.algorithm['name'], 
+								  thermal = self.is_thermal,
+								  num_processes = self.num_processes,
+								  min_area = self.min_area,
+								  hist_ref_path = self.hist_ref_path,
+								  kmeans_clusters = self.kmeans_clusters,
+								  options = self.options)
 			image_files = []
 			
 			start_time = time.time()
@@ -108,8 +119,9 @@ class AnalyzeService(QObject):
 			#generate the output xml with the information gathered during processing			
 			self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
 			for img in self.images_with_aois:
-				self.addImageToXml(img)
-			self.writeXmlFile()
+				self.xmlService.addImageToXml(img)
+			file_path = os.path.join(self.output, "ADIAT_Data.xml")
+			self.xmlService.saveXmlFile(file_path)
 			ttl_time = round(time.time() - start_time, 3)
 			self.sig_done.emit(self.__id, len(self.images_with_aois))
 			self.sig_msg.emit("Total Processing Time: "+str(ttl_time)+" seconds")
@@ -204,52 +216,3 @@ class AnalyzeService(QObject):
 			os.makedirs(self.output)
 		except Exception as e:
 			self.logger.error(e)
-
-	def setupOutputXml(self):
-		"""
-		setupOutputXml creates the xml document add adds information about the parameters set by the user
-		"""
-		try:
-			self.xml = ET.Element('data')
-			settings_xml = ET.SubElement(self.xml, "settings")
-			settings_xml.set("input_dir", self.input)
-			settings_xml.set("output_dir", self.output_dir)
-			settings_xml.set("identifier_color", self.identifier_color)
-			settings_xml.set("algorithm", self.algorithm['name'])
-			settings_xml.set("thermal", str(self.is_thermal))
-			settings_xml.set("num_processes", str(self.num_processes))
-			settings_xml.set("min_area", str(self.min_area))
-			settings_xml.set("hist_ref_path", str(self.hist_ref_path ))
-			settings_xml.set("kmeans_clusters", str(self.kmeans_clusters))
-			options_xml = ET.SubElement(settings_xml, "options")
-			for key, value in self.options.items():
-				option_xml = ET.SubElement(options_xml, "option")
-				option_xml.set("name", key)
-				option_xml.set("value", str(value))
-			self.images_xml = ET.SubElement(self.xml, "images")
-		except Exception as e:
-			self.logger.error(e)
-
-	def addImageToXml(self, img):
-		"""
-		addImageToXml adds an image to the xml document
-		
-		:Dictionary img: the full path to the output file and a list of areas of interest
-		"""
-		image = ET.SubElement(self.images_xml, 'image')
-		image.set('path',img["path"])
-		for area in img["aois"]:
-			area_xml = ET.SubElement(image, 'areas_of_interest')
-			area_xml.set('center', str(area['center']))
-			area_xml.set('radius', str(area['radius']))
-			area_xml.set('area', str(area['area']))
-
-
-	def writeXmlFile(self):
-		"""
-		writeXmlFile saves the xml document
-		"""
-		mydata = ET.ElementTree(self.xml)
-		file_path = os.path.join(self.output, "ADIAT_Data.xml")
-		with open(file_path, "wb") as fh:
-			mydata.write(fh)

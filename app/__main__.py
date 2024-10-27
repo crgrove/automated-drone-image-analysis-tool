@@ -8,7 +8,7 @@ from core.controllers.MainWindow import MainWindow
 import qdarktheme
 from core.services.LoggerService import LoggerService
 from os import path 
-version = '1.3.0'
+version = '1.4.0'
 def main():
 	app = QApplication(sys.argv)
 	qdarktheme.setup_theme()

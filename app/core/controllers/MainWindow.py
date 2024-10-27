@@ -3,7 +3,7 @@ import os
 import platform
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtGui import QColor, QFont
-from PyQt5.QtCore import QThread, pyqtSlot, QSize
+from PyQt5.QtCore import QThread, pyqtSlot, QSize, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy
 
 from core.views.MainWindow_ui import Ui_MainWindow
@@ -282,23 +282,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 		"""
 		viewResultsButtonClicked click handler for launching the image viewer once analysis has been completed
 		"""
+		QApplication.setOverrideCursor(Qt.WaitCursor)
 		output_folder = self.results_path+"/ADIAT_Results/"
 		file = pathlib.Path(output_folder+"ADIAT_Data.xml")
 		if file.is_file():
-			xmlLoader = XmlService(output_folder+"ADIAT_Data.xml")
-			images = xmlLoader.getImages()	
-			settings, _ = xmlLoader.getSettings()
-			if len(images):
-				self.setViewResultsButton(True)
-				self.images = images
-			else:
-				self.setViewResultsButton(False)
 			position_format = self.settings_service.getSetting('PositionFormat')
 			temperature_unit = self.settings_service.getSetting('TemperatureUnit')
-			self.viewer = Viewer(self.images, position_format, temperature_unit, (settings['thermal'] == 'True'))
+			self.viewer = Viewer(file, position_format, temperature_unit, False)
 			self.viewer.show()
 		else:
 			self.showError("Could not parse XML file.  Check file paths in \"ADIAT_Data.xml\"")
+		QApplication.restoreOverrideCursor()
 		
 	def addLogEntry(self, text):
 		"""
