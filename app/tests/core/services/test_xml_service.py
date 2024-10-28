@@ -4,8 +4,8 @@ from app.core.services.XmlService import XmlService
 
 
 @pytest.fixture
-def xml_service():
-    return XmlService('path/to/xml/file.xml')
+def xml_service(testData):
+    return XmlService(testData['Previous_Output'])
 
 
 def test_get_settings(xml_service):

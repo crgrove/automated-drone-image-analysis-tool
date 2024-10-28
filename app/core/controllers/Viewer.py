@@ -61,7 +61,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.setFocusPolicy(Qt.StrongFocus)
         self.hideImageToggle.setFocusPolicy(Qt.NoFocus)
         self.skipHidden.setFocusPolicy(Qt.NoFocus)
-
+    
+    def closeEvent(self, event):
+        """
+        Kill the thumbnail threads before closing.
+        """
+        for thread, analyze in self.__threads:
+            thread.quit()
+        
     def addHideImageToggle(self):
         self.hideImageToggle = Toggle()
         self.ButtonLayout.replaceWidget(self.hideImageCheckbox, self.hideImageToggle)

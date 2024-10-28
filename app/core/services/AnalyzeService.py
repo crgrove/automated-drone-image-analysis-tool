@@ -76,74 +76,83 @@ class AnalyzeService(QObject):
     @pyqtSlot()
     def processFiles(self):
         """
-        processFiles iterates through all of the files in a directory and processes the image using the selected algorithm and features
+        processFiles iterates through all of the files in a directory and processes the image using the selected algorithm and features.
         """
         try:
             self.setupOutputDir()
-            self.xmlService.addSettingsToXml(input_dir=self.input,
-                                             output_dir=self.output_dir,
-                                             identifier_color=self.identifier_color,
-                                             algorithm=self.algorithm['name'],
-                                             thermal=self.is_thermal,
-                                             num_processes=self.num_processes,
-                                             min_area=self.min_area,
-                                             hist_ref_path=self.hist_ref_path,
-                                             kmeans_clusters=self.kmeans_clusters,
-                                             options=self.options)
+            self.xmlService.addSettingsToXml(
+                input_dir=self.input,
+                output_dir=self.output_dir,
+                identifier_color=self.identifier_color,
+                algorithm=self.algorithm['name'],
+                thermal=self.is_thermal,
+                num_processes=self.num_processes,
+                min_area=self.min_area,
+                hist_ref_path=self.hist_ref_path,
+                kmeans_clusters=self.kmeans_clusters,
+                options=self.options
+            )
             image_files = []
 
             start_time = time.time()
             for subdir, dirs, files in os.walk(self.input):
                 for file in files:
-                    if self.is_thermal:
-                        file_path = Path(file)
-                        if file_path.suffix != 'irg':
-                            image_files.append(os.path.join(subdir, file))
-                    else:
+                    file_path = Path(file)
+                    if self.is_thermal and file_path.suffix != 'irg':
                         image_files.append(os.path.join(subdir, file))
+                    elif not self.is_thermal:
+                        image_files.append(os.path.join(subdir, file))
+
             ttl_images = len(image_files)
-            self.sig_msg.emit("Processing " + str(len(image_files)) + " files")
-            # loop through all of the files in the input directory and process them in multiple processes.
+            self.sig_msg.emit(f"Processing {ttl_images} files")
+
+            # Process each image using multiprocessing
             for file in image_files:
-                if (os.path.isdir(file)):
+                if os.path.isdir(file):
                     ttl_images -= 1
                     continue
-                if imghdr.what(file) is not None:
-                    if self.pool._state == pool.RUN:
-                        self.pool.apply_async(
-                            AnalyzeService.processFile,
-                            (self.algorithm,
-                             self.identifier_color,
-                             self.min_area,
-                             self.aoi_radius,
-                             self.options,
-                             file,
-                             self.input,
-                             self.output,
-                             self.hist_ref_path,
-                             self.kmeans_clusters,
-                             self.is_thermal),
-                            callback=self.processComplete)
-                    else:
-                        break
+
+                if imghdr.what(file) is not None and self.pool._state == pool.RUN:
+                    self.pool.apply_async(
+                        AnalyzeService.processFile,
+                        (
+                            self.algorithm,
+                            self.identifier_color,
+                            self.min_area,
+                            self.aoi_radius,
+                            self.options,
+                            file,
+                            self.input,
+                            self.output,
+                            self.hist_ref_path,
+                            self.kmeans_clusters,
+                            self.is_thermal
+                        ),
+                        callback=self.processComplete
+                    )
                 else:
                     ttl_images -= 1
-                    self.sig_msg.emit("Skipping " + file + " :: File is not an image")
+                    self.sig_msg.emit(f"Skipping {file} :: File is not an image")
+
+            # Close the pool and ensure all processes are done
             self.pool.close()
             self.pool.join()
-            # generate the output xml with the information gathered during processing
+
+            # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
             for img in self.images_with_aois:
                 self.xmlService.addImageToXml(img)
+
             file_path = os.path.join(self.output, "ADIAT_Data.xml")
             self.xmlService.saveXmlFile(file_path)
             ttl_time = round(time.time() - start_time, 3)
             self.sig_done.emit(self.__id, len(self.images_with_aois))
-            self.sig_msg.emit("Total Processing Time: " + str(ttl_time) + " seconds")
-            self.sig_msg.emit("Total Images Proccessed: " + str(ttl_images))
-        except Exception as e:
-            self.logger.error(e)
+            self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
+            self.sig_msg.emit(f"Total Images Processed: {ttl_images}")
 
+        except Exception as e:
+            self.logger.error(f"An error occurred during processing: {e}")
+        
     @staticmethod
     def processFile(algorithm, identifier_color, min_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters, thermal):
         """
