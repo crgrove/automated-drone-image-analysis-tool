@@ -84,19 +84,30 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 
     def generatePalette(self, x_range, y_range, multiplier, saturation):
         """
-        generatePalette generate numpy.ndarray representing the HSL palette at a given saturation
+        generatePalette generates numpy.ndarray representing the HSL palette at a given saturation.
 
-        :Int x_range: the height of the palette
-        :Int y_range: the width of the palette
-        :return numpy.ndarray: numpy.ndarray representing the HSL palette
+        :Int x_range: the height of the palette.
+        :Int y_range: the width of the palette.
+        :Int multiplier: corresponds to the size of the palette.
+        :Int saturation: the saturation value for the HSL palette.
+        :return numpy.ndarray: numpy.ndarray representing the HSL palette.
         """
         img = np.zeros((x_range, y_range, 3), np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+
+        # Normalize the ranges to fit within 0-255 for HLS values.
+        height_scale = 255 / max(x_range / multiplier, 1)
+        length_scale = 255 / max(y_range / multiplier, 1)
+
         for x in range(0, x_range):
             for y in range(0, y_range):
-                height = round(x / multiplier, 0)
-                length = round(y / multiplier, 0)
+                height = round((x / multiplier) * height_scale, 0)
+                length = round((y / multiplier) * length_scale, 0)
+                # Ensure height and length are clamped to 0-255.
+                height = min(max(height, 0), 255)
+                length = min(max(length, 0), 255)
                 img[x, y] = [height, length, saturation]
+
         return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 
     def populateImage(self, img, selected):

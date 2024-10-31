@@ -17,18 +17,18 @@ Features
 Getting started
 ---------------
 
-First of all make sure you have pipenv installed and then initialize a
-working development environment like this
+First create and activate a vitual environment working development environment
+    Create Environment::
+    python -m venv <environment name>
+    Activate Environment (Windows):: <environment name>\Scripts\activate
+    Activate Environment (Mac/Linux):: source <environment name>/bin/activate
 
-    pipenv install --dev
+From the activated environment, install all dependencies::
 
-Once all dependencies are installed, you should enter the environment shell like
-this::
+    pip install -r requirements.txt
+    pip install -r requirement-dev.txt
 
-    pipenv shell
-
-Once done, you can run the application
-like this::
+Once done, you can run the application like this::
 
     python app
 

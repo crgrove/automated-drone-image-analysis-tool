@@ -72,20 +72,20 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
 
     def generatePalette(self, x_range, y_range, multiplier, saturation):
         """
-        generatePalette generate numpy.ndarray representing the HSL palette at a given saturation
+        generatePalette generates numpy.ndarray representing the HSL palette at a given saturation
 
         :Int x_range: the height of the palette
         :Int y_range: the width of the palette
-        :Int multiplier: cooresponds to the size of the palette
-        :Int multiplier: cooresponds to the size of the palette
+        :Int multiplier: corresponds to the size of the palette
+        :Int saturation: the saturation level for the palette
         :return numpy.ndarray: numpy.ndarray representing the HSL palette
         """
         img = np.zeros((x_range, y_range, 3), np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
-        for x in range(0, x_range):
-            for y in range(0, y_range):
-                height = round(x / multiplier, 0)
-                length = round(y / multiplier, 0)
+        for x in range(x_range):
+            for y in range(y_range):
+                height = min(max(round(x / multiplier, 0), 0), 255)
+                length = min(max(round(y / multiplier, 0), 0), 255)
                 img[x, y] = [height, length, saturation]
         return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 

@@ -4,7 +4,7 @@ from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale
 from PyQt5.QtWidgets import QApplication
 from multiprocessing import freeze_support
 from core.controllers.MainWindow import MainWindow
-import faulthandler
+#import faulthandler
 import qdarktheme
 from core.services.LoggerService import LoggerService
 from os import path
@@ -22,6 +22,6 @@ def main():
 
 
 if __name__ == "__main__":
-    faulthandler.enable()
+    #faulthandler.enable()
     freeze_support()
     main()

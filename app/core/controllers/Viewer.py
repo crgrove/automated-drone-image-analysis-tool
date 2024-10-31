@@ -29,6 +29,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         QMainWindow.__init__(self)
         self.__threads = []
+        self.mainImage = None
         self.logger = LoggerService()
         self.setupUi(self)
         self.addHideImageToggle()
@@ -95,7 +96,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 valid_images.append(image)
         self.images = valid_images
 
-        if len(self.images) == 0 or (self.hidden_image_count == len(self.images) and not self.show_hidden):
+        if len(self.images) == 0:
             self.showNoImagesMessage()
         else:
             self.loadInitialImage()
@@ -212,12 +213,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         Seperate from the standard loader because it needs to replace the placeholder widget
         """
         try:
-            for i in range(0, len(self.images) - 1):
+            self.current_image = None
+            for i in range(0, len(self.images)):
                 if not self.show_hidden and self.images[i]['hidden']:
                     continue
                 self.current_image = i
                 break
-
+            #If all the images are hidden load the first one anyway
+            if self.current_image is None:
+                self.current_image = 0
+                
             image = self.images[self.current_image]
             # remove the placeholder
             self.placeholderImage.deleteLater()
@@ -393,7 +398,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def showNoImagesMessage(self):
         self.mainImage = None
-        self.showError("No images available.")
+        self.showError("No active images available.")
 
     def hideImageChange(self, state):
         """
