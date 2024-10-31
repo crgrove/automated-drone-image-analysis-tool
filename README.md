@@ -18,10 +18,18 @@ Getting started
 ---------------
 
 First create and activate a vitual environment working development environment
-    Create Environment::
+
+Create Environment::
+    
     python -m venv <environment name>
-    Activate Environment (Windows):: <environment name>\Scripts\activate
-    Activate Environment (Mac/Linux):: source <environment name>/bin/activate
+    
+Activate Environment (Windows)::
+    
+    <environment name>\Scripts\activate
+    
+Activate Environment (Mac/Linux)::
+
+    source <environment name>/bin/activate
 
 From the activated environment, install all dependencies::
 
