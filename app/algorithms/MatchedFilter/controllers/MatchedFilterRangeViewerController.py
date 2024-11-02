@@ -12,14 +12,15 @@ from PyQt5.QtWidgets import QDialog, QFrame
 
 
 class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
-    """Controller for the Color Match Ranger Viewer Dialog"""
+    """Controller for the Color Match Range Viewer Dialog."""
 
     def __init__(self, ref_rgb, threshold):
         """
-        __init__ constructor for the dialog
+        Initializes the MatchedFilterRangeViewer dialog.
 
-        :Tuple(int, int, int) ref_rgb: The reference color to be matched
-        :float threshold: The threshold a pixel score must meet to be flagged as a match
+        Args:
+            ref_rgb (tuple[int, int, int]): The reference color to be matched.
+            threshold (float): The threshold a pixel score must meet to be flagged as a match.
         """
         QDialog.__init__(self)
         self.setupUi(self)
@@ -33,26 +34,23 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 
     def generatePalettes(self, ref_rgb, threshold):
         """
-        generatePalettes generates numpy.ndarrays representing selected and unselected colors
+        Generates color palettes as numpy arrays representing selected and unselected colors.
 
-        :Tuple(int, int, int) ref_rgb: The reference color to be matched
-        :float threshold: The threshold a pixel score must meet to be flagged as a match
-        :return Dictionary: numpy.ndarrays representing the selected and unselected color ranges
+        Args:
+            ref_rgb (tuple[int, int, int]): The reference color to be matched.
+            threshold (float): The threshold a pixel score must meet to be flagged as a match.
+
+        Returns:
+            dict: A dictionary with numpy arrays for selected and unselected color ranges.
         """
-
-        # How big do we want the palettes to be
         multiplier = 2
-        # 180 Hue values
         x_range = 180 * multiplier
-        # 256 Light values
         y_range = 256 * multiplier
 
-        # generate the base palettes
         high = self.generatePalette(x_range, y_range, multiplier, 255)
         med = self.generatePalette(x_range, y_range, multiplier, 128)
         low = self.generatePalette(x_range, y_range, multiplier, 64)
 
-        # create the masks representing the selected and unselected colors
         high_mask = self.generateMask(high, ref_rgb, threshold)
         med_mask = self.generateMask(med, ref_rgb, threshold)
         low_mask = self.generateMask(low, ref_rgb, threshold)
@@ -60,23 +58,28 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         inverse_high_mask = cv2.bitwise_not(high_mask)
         inverse_med_mask = cv2.bitwise_not(med_mask)
         inverse_low_mask = cv2.bitwise_not(low_mask)
-        # apply the masks to the base palettes
+
         selected_high = cv2.bitwise_and(high, high, mask=high_mask)
         unselected_high = cv2.bitwise_and(high, high, mask=inverse_high_mask)
         selected_med = cv2.bitwise_and(med, med, mask=med_mask)
         unselected_med = cv2.bitwise_and(med, med, mask=inverse_med_mask)
         selected_low = cv2.bitwise_and(low, low, mask=low_mask)
         unselected_low = cv2.bitwise_and(low, low, mask=inverse_low_mask)
-        return {"selected": [selected_high, selected_med, selected_low], "unselected": [unselected_high, unselected_med, unselected_low]}
+
+        return {"selected": [selected_high, selected_med, selected_low],
+                "unselected": [unselected_high, unselected_med, unselected_low]}
 
     def generateMask(self, img, ref_rgb, threshold):
         """
-        generateMask generates numpy.ndarrays with a mask representing pixels that are a match for the reference color
+        Generates a mask for pixels that match the reference color within the specified threshold.
 
-        :numpy.ndarray img: numpy.ndarray representing the subject image
-        Tuple(int, int, int) ref_rgb: The reference color to be matched
-        :float threshold: The threshold a pixel score must meet to be flagged as a match
-        :return numpy.ndarray: numpy.ndarray representing the selected pixels
+        Args:
+            img (numpy.ndarray): The image to be processed.
+            ref_rgb (tuple[int, int, int]): The reference color to be matched.
+            threshold (float): The threshold a pixel score must meet to be flagged as a match.
+
+        Returns:
+            numpy.ndarray: A mask representing pixels that match the reference color.
         """
         scores = spectral.matched_filter(img, np.array([ref_rgb[2], ref_rgb[1], ref_rgb[0]], dtype=np.uint8))
         mask = np.uint8((255 * (scores > threshold)))
@@ -84,26 +87,27 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 
     def generatePalette(self, x_range, y_range, multiplier, saturation):
         """
-        generatePalette generates numpy.ndarray representing the HSL palette at a given saturation.
+        Generates an HSL palette with a specified saturation level.
 
-        :Int x_range: the height of the palette.
-        :Int y_range: the width of the palette.
-        :Int multiplier: corresponds to the size of the palette.
-        :Int saturation: the saturation value for the HSL palette.
-        :return numpy.ndarray: numpy.ndarray representing the HSL palette.
+        Args:
+            x_range (int): The height of the palette.
+            y_range (int): The width of the palette.
+            multiplier (int): Determines the size of the palette.
+            saturation (int): The saturation value for the HSL palette.
+
+        Returns:
+            numpy.ndarray: An HSL palette with the given saturation.
         """
         img = np.zeros((x_range, y_range, 3), np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
 
-        # Normalize the ranges to fit within 0-255 for HLS values.
         height_scale = 255 / max(x_range / multiplier, 1)
         length_scale = 255 / max(y_range / multiplier, 1)
 
-        for x in range(0, x_range):
-            for y in range(0, y_range):
+        for x in range(x_range):
+            for y in range(y_range):
                 height = round((x / multiplier) * height_scale, 0)
                 length = round((y / multiplier) * length_scale, 0)
-                # Ensure height and length are clamped to 0-255.
                 height = min(max(height, 0), 255)
                 length = min(max(length, 0), 255)
                 img[x, y] = [height, length, saturation]
@@ -112,10 +116,11 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 
     def populateImage(self, img, selected):
         """
-        populateImage generates a QtImageViewer and adds it to an existing layout
+        Adds an image to the layout as a QtImageViewer widget.
 
-        :numpy.ndarray img: numpy.ndarray representation of the image
-        :Boolean selected: determines which layout to add the widget to
+        Args:
+            img (numpy.ndarray): The image to display.
+            selected (bool): Determines if the image should be added to the selected or unselected layout.
         """
         image = QtImageViewer(self)
         image.setMinimumSize(QSize(190, 190))

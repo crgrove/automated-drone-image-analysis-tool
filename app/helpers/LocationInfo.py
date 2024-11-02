@@ -6,14 +6,18 @@ import utm
 
 
 class LocationInfo:
-    """Provides functions to retrieve and convert locational data"""
+    """Provides functions to retrieve and convert locational data."""
+
     @staticmethod
     def getGPS(full_path):
         """
-        getGPS retrieves the gps EXIF data stored in an image file
+        Retrieve the GPS EXIF data stored in an image file.
 
-:String full_path: the path to the image file
-        :return Dictionary: contains the decimal latitude and longitude values from the gps data
+        Args:
+            full_path (str): The path to the image file.
+
+        Returns:
+            dict: Contains the decimal latitude and longitude values from the GPS data.
         """
         is_jpg = imghdr.what(full_path) == 'jpg' or imghdr.what(full_path) == 'jpeg'
         if not is_jpg:
@@ -44,46 +48,71 @@ class LocationInfo:
     @staticmethod
     def convertDegreesToUtm(lat, lng):
         """
-        convertDegreesToUtm takes decimal latitude and longitude values and converts to UTM coordiantes
-        :float lat: the decimal latitude position
-        :float longitude: the decimal latitude position
-        :return Dictionary: EASTING, NORTHING, ZONE_NUMBER, ZONE_LETTER values representing the position in UTM
+        Convert decimal latitude and longitude values to UTM coordinates.
+
+        Args:
+            lat (float): The decimal latitude position.
+            lng (float): The decimal longitude position.
+
+        Returns:
+            dict: Contains EASTING, NORTHING, ZONE_NUMBER, and ZONE_LETTER values representing the position in UTM.
         """
         utm_pos = utm.from_latlon(lat, lng)
-        return {'easting': round(utm_pos[0], 2), 'northing': round(utm_pos[1], 2), 'zone_number': utm_pos[2], 'zone_letter': utm_pos[3]}
+        return {
+            'easting': round(utm_pos[0], 2),
+            'northing': round(utm_pos[1], 2),
+            'zone_number': utm_pos[2],
+            'zone_letter': utm_pos[3]
+        }
 
     @staticmethod
     def convertDecimalToDms(lat, lng):
         """
-        convertDecimalToDms takes decimal latitude and longitude values and converts to degrees, minutes, seconds coordinates
-        :float lat: the decimal latitude position
-        :float longitude: the decimal latitude position
-        :return Dictionary: contains the degrees, minutes, seconds values for lat and lng as well as the reference values
+        Convert decimal latitude and longitude values to degrees, minutes, seconds coordinates.
+
+        Args:
+            lat (float): The decimal latitude position.
+            lng (float): The decimal longitude position.
+
+        Returns:
+            dict: Contains the degrees, minutes, and seconds values for latitude and longitude, including reference values.
         """
         is_positive = lat >= 0
         lat = abs(lat)
         minutes, seconds = divmod(lat * 3600, 60)
         degrees, minutes = divmod(minutes, 60)
-        degrees = degrees
         reference = 'N' if is_positive else 'S'
-        latitude = {'degrees': int(degrees), 'minutes': int(minutes), 'seconds': round(seconds, 2), 'reference': reference}
+        latitude = {
+            'degrees': int(degrees),
+            'minutes': int(minutes),
+            'seconds': round(seconds, 2),
+            'reference': reference
+        }
 
         is_positive = lng >= 0
         lng = abs(lng)
         minutes, seconds = divmod(lng * 3600, 60)
         degrees, minutes = divmod(minutes, 60)
-        degrees = degrees
         reference = 'E' if is_positive else 'W'
-        longitude = {'degrees': int(degrees), 'minutes': int(minutes), 'seconds': round(seconds, 2), 'reference': reference}
+        longitude = {
+            'degrees': int(degrees),
+            'minutes': int(minutes),
+            'seconds': round(seconds, 2),
+            'reference': reference
+        }
 
         return {'latitude': latitude, 'longitude': longitude}
 
     @staticmethod
     def __convert_to_degrees(value):
         """
-        __convert_to_degrees Helper function to convert the GPS coordinates stored in the EXIF to degress in float format
-        :exifread.utils.Ratio value: the input value from the EXIF data
-        :return float: decimal representation of the latitude or longitude
+        Convert GPS coordinates stored in EXIF to degrees in float format.
+
+        Args:
+            value (exifread.utils.Ratio): The input value from the EXIF data.
+
+        Returns:
+            float: Decimal representation of the latitude or longitude.
         """
         d = float(value[0][0]) / float(value[0][1])
         m = float(value[1][0]) / float(value[1][1])

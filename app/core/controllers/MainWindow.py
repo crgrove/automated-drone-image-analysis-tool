@@ -34,10 +34,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def __init__(self, theme, version):
         """
-        __init__ constructor to build the ADIAT Main Window
+        Initializes the ADIAT Main Window.
 
-        :qdarktheme theme: instance of qdarktheme that allows us to toggle light/dark mode
-        :String version: the app version # to be included in the Main Window title bar
+        Args:
+            theme (qdarktheme): Instance of qdarktheme to toggle light/dark mode.
+            version (str): App version to display in the main window title bar.
         """
         self.logger = LoggerService()
         QMainWindow.__init__(self)
@@ -49,9 +50,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.identifierColor = (0, 255, 0)
         self.HistogramImgWidget.setVisible(False)
         self.KMeansWidget.setVisible(False)
-        self.setWindowTitle("Automated Drone Image Analysis Tool  v" + version + " - Sponsored by TEXSAR")
+        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
         self.loadAlgorithms()
-        # Adding slots for GUI elements
+
+        # Setting up GUI element connections
         self.identifierColorButton.clicked.connect(self.identifierButtonClicked)
         self.inputFolderButton.clicked.connect(self.inputFolderButtonClicked)
         self.outputFolderButton.clicked.connect(self.outputFolderButtonClicked)
@@ -66,38 +68,37 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.histogramCheckbox.stateChanged.connect(self.histogramCheckboxChange)
         self.histogramButton.clicked.connect(self.histogramButtonClicked)
         self.kMeansCheckbox.stateChanged.connect(self.kMeansCheckboxChange)
-        self.results_path = ''
 
+        self.results_path = ''
         self.settings_service = SettingsService()
         self.setDefaults()
 
     def loadAlgorithms(self):
         """
-        setupAlgorithmComboBox adds combobox entries for algorithm selector
+        Loads and categorizes algorithms for selection in the algorithm combobox.
         """
         system = platform.system()
         configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
         self.algorithms = configService.getAlgorithms()
-        algorithm_list = dict()
+        algorithm_list = {}
         for algorithm in self.algorithms:
             if system in algorithm['platforms']:
                 if algorithm['type'] not in algorithm_list:
                     algorithm_list[algorithm['type']] = []
                 algorithm_list[algorithm['type']].append(algorithm['label'])
+
         self.replaceAlgorithmComboBox()
-        for key, list in algorithm_list.items():
-            self.algorithmComboBox.addGroup(key, list)
+        for key, algos in algorithm_list.items():
+            self.algorithmComboBox.addGroup(key, algos)
         self.algorithmComboBox.setCurrentIndex(1)
 
     def replaceAlgorithmComboBox(self):
         """
-        replaceAlgorithmComboBox replaces the standard QtComboBox with a version that allows grouping.
+        Replaces the standard combobox with a grouped version to allow algorithm grouping.
         """
         self.tempAlgorithmComboBox.deleteLater()
         self.algorithmComboBox = GroupedComboBox(self.setupFrame)
         sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
         self.algorithmComboBox.setSizePolicy(sizePolicy)
         self.algorithmComboBox.setMinimumSize(QSize(300, 0))
@@ -108,8 +109,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def identifierButtonClicked(self):
         """
-        identifierButtonClicked click handler for the object identifier color button
-        Opens a color selector dialog
+        Opens a color selector dialog for setting the object identifier color.
         """
         color = QColorDialog().getColor()
         if color.isValid():
@@ -118,128 +118,83 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def inputFolderButtonClicked(self):
         """
-        inputFolderButtonClicked click handler for the input folder button
-        Opens a file/directory dialog
+        Opens a directory dialog to select an input folder for analysis.
         """
-        if self.inputFolderLine.text() != "":
-            dir = self.inputFolderLine.text()
-        else:
-            dir = self.settings_service.getSetting('InputFolder')
-        if not isinstance(dir, str):
-            dir = ""
+        dir = self.inputFolderLine.text() or self.settings_service.getSetting('InputFolder')
+        dir = dir if isinstance(dir, str) else ""
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
-        # if a directory is selected, populate the input folder textbox with the path and update the persistent settings with the latest path.
-        if directory != "":
+        if directory:
             self.inputFolderLine.setText(directory)
-            path = pathlib.Path(directory)
-            self.settings_service.setSetting('InputFolder', path.parent.__str__())
+            self.settings_service.setSetting('InputFolder', pathlib.Path(directory).parent.__str__())
 
     def outputFolderButtonClicked(self):
         """
-        outputFolderButtonClicked click handler for the output folder button
-        Opens a file/directory dialog
+        Opens a directory dialog to select an output folder for analysis results.
         """
-        if self.outputFolderLine.text() != "":
-            dir = self.outputFolderLine.text()
-        else:
-            dir = self.settings_service.getSetting('OutputFolder')
-        if not isinstance(dir, str):
-            dir = ""
+        dir = self.outputFolderLine.text() or self.settings_service.getSetting('OutputFolder')
+        dir = dir if isinstance(dir, str) else ""
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
-
-        # if a directory is selected, populate the input folder textbox with the path and update the persistent settings with the latest path.
-        if directory != "":
+        if directory:
             self.outputFolderLine.setText(directory)
-            path = pathlib.Path(directory)
-            self.settings_service.setSetting('OutputFolder', path.parent.__str__())
+            self.settings_service.setSetting('OutputFolder', pathlib.Path(directory).parent.__str__())
 
     def histogramButtonClicked(self):
         """
-        histogramButtonClicked click handler for the histogram reference image loaded
-        Opens a file dialog
+        Opens a file dialog to select a reference image for histogram-based analysis.
         """
-        # default the directory to the input folder directory if populated.
-        if self.inputFolderLine.text() != "":
-            dir = self.inputFolderLine.text()
-        else:
-            dir = self.settings_service.getSetting('InputFolder')
-
-        filename, ok = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
+        dir = self.inputFolderLine.text() or self.settings_service.getSetting('InputFolder')
+        filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
         if filename:
             self.histogramLine.setText(filename)
 
     def algorithmComboBoxChanged(self):
         """
-        algorithmComboBoxChanged action method for updates to the algorithm combobox
-        On change loads the QWidget associated with the selected algorithm and sets the max processes spinbox to the default value for the new algorithm
+        Loads the selected algorithm's widget and sets UI elements based on the algorithm's requirements.
         """
-        if self.algorithmWidget is not None:
+        if self.algorithmWidget:
             self.verticalLayout_2.removeWidget(self.algorithmWidget)
             self.algorithmWidget.deleteLater()
-        self.activeAlgorithm = [x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText()][0]
 
+        self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
         cls = globals()[self.activeAlgorithm['controller']]
         self.algorithmWidget = cls()
         self.verticalLayout_2.addWidget(self.algorithmWidget)
-        if self.algorithmWidget.is_thermal:
-            self.AdvancedFeaturesWidget.hide()
-        else:
-            self.AdvancedFeaturesWidget.show()
+        self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
 
     def histogramCheckboxChange(self):
         """
-        histogramCheckboxChange action method triggered on changes to the histogram checkbox
-        When checked the reference image selector is displayed
+        Shows or hides the histogram reference image selector based on checkbox state.
         """
-        if self.histogramCheckbox.isChecked():
-            self.HistogramImgWidget.setVisible(True)
-        else:
-            self.HistogramImgWidget.setVisible(False)
+        self.HistogramImgWidget.setVisible(self.histogramCheckbox.isChecked())
 
     def kMeansCheckboxChange(self):
         """
-        kMeansCheckboxChange action method triggered on changes to the kMeans Clustering checkbox
-        When checked the number of clusters spinbox is displayed
+        Shows or hides the number of clusters spinbox for kMeans Clustering based on checkbox state.
         """
-        if self.kMeansCheckbox.isChecked():
-            self.KMeansWidget.setVisible(True)
-        else:
-            self.KMeansWidget.setVisible(False)
+        self.KMeansWidget.setVisible(self.kMeansCheckbox.isChecked())
 
     def startButtonClicked(self):
         """
-        startButtonClicked click handler for triggering the image analysis process
+        Starts the image analysis process.
         """
         try:
-            # ensure the algorithm-specific requirements are met.
             alg_validation = self.algorithmWidget.validate()
-
-            if alg_validation is not None:
+            if alg_validation:
                 self.showError(alg_validation)
                 return
 
-            # verify that the directories have been set.
-            if self.inputFolderLine.text() == "" or self.outputFolderLine.text() == "":
+            if not (self.inputFolderLine.text() and self.outputFolderLine.text()):
                 self.showError("Please set the input and output directories.")
                 return
 
             self.setStartButton(False)
             self.setViewResultsButton(False)
-
             self.addLogEntry("--- Starting image processing ---")
 
-            # get the algorithm-specific optins
             options = self.algorithmWidget.getOptions()
+            hist_ref_path = self.histogramLine.text() if self.histogramCheckbox.isChecked() else None
+            kmeans_clusters = self.clustersSpinBox.value() if self.kMeansCheckbox.isChecked() else None
 
-            hist_ref_path = None
-            if self.histogramCheckbox.isChecked() and self.histogramLine.text() != "":
-                hist_ref_path = self.histogramLine.text()
-
-            kmeans_clusters = None
-            if self.kMeansCheckbox.isChecked():
-                kmeans_clusters = self.clustersSpinBox.value()
-
-            # update the persistent settings for minimum object size and identifier color based on the current settings.
             self.settings_service.setSetting('MinObjectArea', self.minAreaSpinBox.value())
             self.settings_service.setSetting('IdentifierColor', self.identifierColor)
             self.settings_service.setSetting('MaxProcesses', self.maxProcessesSpinBox.value())
@@ -247,17 +202,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             max_aois = self.settings_service.getSetting('MaxAOIs')
             aoi_radius = self.settings_service.getSetting('AOIRadius')
 
-            # Create instance of the analysis class with the selected algorithm
-            self.analyzeService = AnalyzeService(1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(), self.identifierColor,
-                                                 self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(), max_aois, aoi_radius, hist_ref_path,
-                                                 kmeans_clusters, self.algorithmWidget.is_thermal, options)
+            self.analyzeService = AnalyzeService(
+                1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
+                self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options
+            )
 
-            # This must be done in a separate thread so that it won't block the GUI updates to the log
             thread = QThread()
             self.__threads.append((thread, self.analyzeService))
             self.analyzeService.moveToThread(thread)
 
-            # Connecting the slots messages back from the analysis thread
             self.analyzeService.sig_msg.connect(self.onWorkerMsg)
             self.analyzeService.sig_aois.connect(self.showAOIsLimitWarning)
             self.analyzeService.sig_done.connect(self.onWorkerDone)
@@ -266,78 +220,77 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             thread.start()
 
             self.results_path = self.outputFolderLine.text()
-
             self.setCancelButton(True)
         except Exception as e:
             self.logger.error(e)
 
     def cancelButtonClicked(self):
         """
-        cancelButtonClicked click handler that cancelled in progress analysis
+        Cancels the in-progress analysis.
         """
         self.analyzeService.processCancel()
         self.setCancelButton(False)
 
     def viewResultsButtonClicked(self):
         """
-        viewResultsButtonClicked click handler for launching the image viewer once analysis has been completed
+        Launches the image viewer to display analysis results.
         """
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        output_folder = self.results_path + "/ADIAT_Results/"
-        file = pathlib.Path(output_folder + "ADIAT_Data.xml")
+        output_folder = os.path.join(self.results_path, "ADIAT_Results")
+        file = pathlib.Path(output_folder, "ADIAT_Data.xml")
         if file.is_file():
             position_format = self.settings_service.getSetting('PositionFormat')
             temperature_unit = self.settings_service.getSetting('TemperatureUnit')
             self.viewer = Viewer(file, position_format, temperature_unit, False)
             self.viewer.show()
         else:
-            self.showError("Could not parse XML file.  Check file paths in \"ADIAT_Data.xml\"")
+            self.showError("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
         QApplication.restoreOverrideCursor()
 
     def addLogEntry(self, text):
         """
-        addLogEntry adds a new line of text to the output window
+        Adds a log entry to the output window.
 
-        :String text: the text to add to the output window
+        Args:
+            text (str): The text to add to the output window.
         """
         self.outputWindow.appendPlainText(text)
 
     @pyqtSlot()
     def showAOIsLimitWarning(self):
         """
-        showAOIsLimitWarning opens a message box showing a warning that the maximum number of areas of interest has been exceed
-        Gives the user the options to continue or cancel the current analysis
+        Displays a warning that the maximum number of areas of interest has been exceeded.
         """
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Question)
-        msg.setText("Area of Interest Limit (" + str(self.settings_service.getSetting('MaxAOIs')) +
-                    ") exceeded.  Would you like to proceed with the current execution?")
+        msg.setText(f"Area of Interest Limit ({self.settings_service.getSetting('MaxAOIs')}) exceeded. Continue?")
         msg.setWindowTitle("Area of Interest Limit Exceeded")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        result = msg.exec_()
-        if result == QMessageBox.No:
+        if msg.exec_() == QMessageBox.No:
             self.cancelButtonClicked()
 
     @pyqtSlot(str)
     def onWorkerMsg(self, text):
         """
-        onWorkerMsg calls the addLogEntry method to add a new line to the output window
+        Logs a message from the worker thread.
 
-        :String text: the text to add to the output window
+        Args:
+            text (str): The message text.
         """
         self.addLogEntry(text)
 
     @pyqtSlot(int, int)
     def onWorkerDone(self, id, images_with_aois):
         """
-        onWorkerDone  Oncompletion of the analysis process adds a log entry with information specific to the results and updates button states
+        Finalizes the UI upon completion of the analysis process.
 
-        :Int id: the id of the calling object
-        :Int images_with_aois: the number of images that include areas of interest
+        Args:
+            id (int): ID of the calling object.
+            images_with_aois (int): Count of images with areas of interest.
         """
         self.addLogEntry("--- Image Processing Completed ---")
         if images_with_aois > 0:
-            self.addLogEntry(str(images_with_aois) + " images with areas of interest identified")
+            self.addLogEntry(f"{images_with_aois} images with areas of interest identified")
             self.setViewResultsButton(True)
         else:
             self.addLogEntry("No areas of interest identified")
@@ -345,15 +298,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.setStartButton(True)
         self.setCancelButton(False)
-
         for thread, analyze in self.__threads:
             thread.quit()
 
     def showError(self, text):
         """
-        showError open a message box showing an error with the provided text
+        Displays an error message.
 
-        :String text: the text to be included are the error message
+        Args:
+            text (str): The error message text.
         """
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
@@ -364,38 +317,39 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def openLoadFile(self):
         """
-        openLoadFile action for the open file menu item
+        Opens a file dialog to select a file to load.
         """
         try:
-            file = QFileDialog.getOpenFileName(self, "Select File")
-            if file[0] != "":
-                self.processXmlFile(file[0])
+            file, _ = QFileDialog.getOpenFileName(self, "Select File")
+            if file:
+                self.processXmlFile(file)
         except Exception as e:
             self.logger.error(e)
 
     def processXmlFile(self, full_path):
         """
-        processXmlFile takes a file from the Load File dialog and processes it.
+        Processes an XML file selected in the Load File dialog.
 
-        :String full_path: the path to the XML file
+        Args:
+            full_path (str): Path to the XML file.
         """
         try:
             image_count = self.getSettingsFromXml(full_path)
             if image_count > 0:
                 self.setViewResultsButton(True)
-            if self.algorithmWidget.is_thermal:
-                self.AdvancedFeaturesWidget.hide()
-            else:
-                self.AdvancedFeaturesWidget.show()
+            self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
         except Exception as e:
             self.logger.error(e)
 
     def getSettingsFromXml(self, full_path):
         """
-        getSettingsFromXml populates the UI with previously executed analysis
+        Populates the UI with data from a previously executed analysis.
 
-        :String full_path: the path to the XML file
-        :return int: the number of images with areas of interest
+        Args:
+            full_path (str): Path to the XML file.
+
+        Returns:
+            int: Number of images with areas of interest.
         """
         xmlLoader = XmlService(full_path)
         settings, image_count = xmlLoader.getSettings()
@@ -406,7 +360,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.inputFolderLine.setText(settings['input_dir'])
         if 'identifier_color' in settings:
             self.identifierColor = settings['identifier_color']
-            color = QColor(self.identifierColor[0], self.identifierColor[1], self.identifierColor[2])
+            color = QColor(*self.identifierColor)
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
         if 'num_processes' in settings:
             self.maxProcessesSpinBox.setValue(settings['num_processes'])
@@ -419,46 +373,43 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.kMeansCheckbox.setChecked(True)
             self.clustersSpinBox.setValue(settings['kmeans_clusters'])
         if 'algorithm' in settings:
-            self.activeAlgorithm = [x for x in self.algorithms if x['name'] == settings['algorithm']][0]
+            self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
             self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
             self.algorithmWidget.loadOptions(settings['options'])
-        if ('thermal') in settings:
+        if 'thermal' in settings:
             self.algorithmWidget.is_thermal = (settings['thermal'] == 'True')
-        else:
-            self.algorithmWidget.is_thermal = False
         return image_count
 
     def openPreferences(self):
         """
-        openPreferences action for the preferences menu item
-        Opens a dialog showing the application preferences
+        Opens the Preferences dialog.
         """
         pref = Preferences(self)
         pref.exec()
 
     def openVideoParser(self):
         """
-        openVideoParser action for the Video Parser menu item
-        Opens a dialog showing the video parser
+        Opens the Video Parser dialog.
         """
         parser = VideoParser()
         parser.exec_()
 
     def closeEvent(self, event):
         """
-        closeEvent closes all windows when the main window is closes.
+        Closes all top-level windows when the main window is closed.
         """
         for window in QApplication.topLevelWidgets():
             window.close()
 
     def setStartButton(self, enabled):
         """
-        setStartButton updates the start button based on the enabled parameter
+        Enables or disables the start button.
 
-        :Boolean enabled: True to enable and False to disable the button
+        Args:
+            enabled (bool): True to enable, False to disable.
         """
         if enabled:
-            self.startButton.setStyleSheet("background-color: rgb(0, 136, 0);\n""color: rgb(228, 231, 235);")
+            self.startButton.setStyleSheet("background-color: rgb(0, 136, 0); color: rgb(228, 231, 235);")
             self.startButton.setEnabled(True)
         else:
             self.startButton.setStyleSheet("")
@@ -466,12 +417,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def setCancelButton(self, enabled):
         """
-        setCancelButton updates the cancel button based on the enabled parameter
+        Enables or disables the cancel button.
 
-        :Boolean enabled: True to enable and False to disable the button
+        Args:
+            enabled (bool): True to enable, False to disable.
         """
         if enabled:
-            self.cancelButton.setStyleSheet("background-color: rgb(136, 0, 0);\n""color: rgb(228, 231, 235);")
+            self.cancelButton.setStyleSheet("background-color: rgb(136, 0, 0); color: rgb(228, 231, 235);")
             self.cancelButton.setEnabled(True)
         else:
             self.cancelButton.setStyleSheet("")
@@ -479,12 +431,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def setViewResultsButton(self, enabled):
         """
-        setViewResultsButton updates the view results button based on the enabled parameter
+        Enables or disables the view results button.
 
-        :Boolean enabled: True to enable and False to disable the button
+        Args:
+            enabled (bool): True to enable, False to disable.
         """
         if enabled:
-            self.viewResultsButton.setStyleSheet("background-color: rgb(0, 0, 136);\n""color: rgb(228, 231, 235);")
+            self.viewResultsButton.setStyleSheet("background-color: rgb(0, 0, 136); color: rgb(228, 231, 235);")
             self.viewResultsButton.setEnabled(True)
         else:
             self.viewResultsButton.setStyleSheet("")
@@ -492,20 +445,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def setDefaults(self):
         """
-        setDefaults sets UI element default values based on persistent settings and sets default values for persistent settings if not previously set
+        Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
         """
         min_area = self.settings_service.getSetting('MinObjectArea')
         if isinstance(min_area, int):
-            self.minAreaSpinBox.setProperty("value", min_area)
+            self.minAreaSpinBox.setValue(min_area)
 
         max_processes = self.settings_service.getSetting('MaxProcesses')
         if isinstance(max_processes, int):
-            self.maxProcessesSpinBox.setProperty("value", max_processes)
+            self.maxProcessesSpinBox.setValue(max_processes)
 
         id_color = self.settings_service.getSetting('IdentifierColor')
         if isinstance(id_color, tuple):
             self.identifierColor = id_color
-            color = QColor(self.identifierColor[0], self.identifierColor[1], self.identifierColor[2])
+            color = QColor(*self.identifierColor)
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
 
         max_aois = self.settings_service.getSetting('MaxAOIs')
@@ -532,11 +485,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def updateTheme(self, theme):
         """
-        updateTheme updates the application theme based on the theme parameter
+        Updates the application theme.
 
-        :String theme: Light or Dark
+        Args:
+            theme (str): 'Light' or 'Dark'
         """
-        if theme == 'Light':
-            self.theme.setup_theme("light")
-        else:
-            self.theme.setup_theme("dark")
+        self.theme.setup_theme("light" if theme == 'Light' else "dark")

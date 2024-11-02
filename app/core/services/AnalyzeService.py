@@ -15,17 +15,16 @@ from core.services.LoggerService import LoggerService
 from core.services.HistogramNormalizationService import HistogramNormalizationService
 from core.services.KMeansClustersService import KMeansClustersService
 from core.services.XmlService import XmlService
-"""****Import Algorithm Services****"""
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
 from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
-"""****End Algorithm Import****"""
 
 
 class AnalyzeService(QObject):
-    """Service to process images using a selected algorithm"""
+    """Service to process images using a selected algorithm."""
+
     # Signals to send info back to the GUI
     sig_msg = pyqtSignal(str)
     sig_aois = pyqtSignal()
@@ -34,21 +33,22 @@ class AnalyzeService(QObject):
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
                  max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options):
         """
-        __init__ constructor
+        Initialize the AnalyzeService with parameters for processing images.
 
-        :Int id: numeric id
-        :Dict algorithm: the algorithm to be used for analysis
-        :String input: the path to the input directory containing the images to be processed
-        :String output: the path to the output directory where images will be stored
-        :Tuple(int,int,int) identifier_color: the RGB values for the color to be used to highlight areas of interest
-        :Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
-        :Int num_processes: the number of concurrent processes to be used to process images
-        :Int max_aois: the threshold for a maximum number of areas of interest in a single image before a warning is produced
-        :Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
-        :String histogram_reference_path: the path to the histogram matching reference image
-        :Int kmeans_clusters: the number of clusters(colors) to maintain in the image
-        :Bool thermal: is this a thermal image algorithm
-        :Dictionary options: additional algorithm-specific options
+        Args:
+            id (int): Numeric ID.
+            algorithm (dict): Dictionary specifying the algorithm for analysis.
+            input (str): Path to the input directory containing images.
+            output (str): Path to the output directory where processed images will be stored.
+            identifier_color (tuple[int, int, int]): RGB values to highlight areas of interest.
+            min_area (int): Minimum size in pixels for an object to be considered an area of interest.
+            num_processes (int): Number of concurrent processes for image processing.
+            max_aois (int): Maximum areas of interest threshold in a single image before issuing a warning.
+            aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
+            histogram_reference_path (str): Path to the histogram reference image.
+            kmeans_clusters (int): Number of clusters (colors) to retain in the image.
+            thermal (bool): Whether this is a thermal image algorithm.
+            options (dict): Additional algorithm-specific options.
         """
         self.logger = LoggerService()
         self.xmlService = XmlService()
@@ -70,13 +70,12 @@ class AnalyzeService(QObject):
         self.images_with_aois = []
         self.cancelled = False
         self.is_thermal = thermal
-
         self.pool = Pool(self.num_processes)
 
     @pyqtSlot()
     def processFiles(self):
         """
-        processFiles iterates through all of the files in a directory and processes the image using the selected algorithm and features.
+        Process all files in the input directory using the selected algorithm and settings.
         """
         try:
             self.setupOutputDir()
@@ -152,44 +151,47 @@ class AnalyzeService(QObject):
 
         except Exception as e:
             self.logger.error(f"An error occurred during processing: {e}")
-        
+
     @staticmethod
     def processFile(algorithm, identifier_color, min_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters, thermal):
         """
-        processFile processes a single image using the selected algorithm and features
-        :Dict algorithm: the algorithm to be used
-        :Tuple(int,int,int) identifier_color: the RGB values for the color to be used to highlight areas of interest
-        :Int min_area: the size in pixels that an object must meet or exceed to qualify as an area of interest
-        :Int aoi_radius: radius to be added to the min enclosing circle around an area of interest.
-        :Dictionary options: additional algorithm-specific options
-        :String full_path: the path to the image being analyzed
-        :String input_dir: the path to the input directory containing the images to be processed
-        :String output_dir: the path to the output directory where images will be stored
-        :String hist_ref_path: the path to the histogram matching reference image
-        :Int kmeans_clusters: the number of clusters(colors) to maintain in the image
-        :Bool thermal: is this a thermal image algorithm
-        :return numpy.ndarray, List: the numpy.ndarray representation of the image augmented with areas of interest circled and a list of the areas of interest
+        Process a single image using the selected algorithm and settings.
+
+        Args:
+            algorithm (dict): Dictionary specifying the algorithm for analysis.
+            identifier_color (tuple[int, int, int]): RGB values for highlighting areas of interest.
+            min_area (int): Minimum size in pixels for an object to be considered an area of interest.
+            aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
+            options (dict): Additional algorithm-specific options.
+            full_path (str): Path to the image file being analyzed.
+            input_dir (str): Path to the input directory containing images.
+            output_dir (str): Path to the output directory for processed images.
+            hist_ref_path (str): Path to the histogram reference image.
+            kmeans_clusters (int): Number of clusters (colors) to retain in the image.
+            thermal (bool): Whether this is a thermal image algorithm.
+
+        Returns:
+            tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         if not thermal:
-            # if the histogram reference image path is not empty, create an instance of the HistogramNormalizationService
+            # Apply histogram normalization if a reference image is provided
             histogram_service = None
             if hist_ref_path is not None:
                 histogram_service = HistogramNormalizationService(hist_ref_path)
                 img = histogram_service.matchHistograms(img)
 
-            # if the kmeans clusters number is not empty, create an instance of the KMeansClustersService
+            # Apply k-means clustering if specified
             kmeans_service = None
             if kmeans_clusters is not None:
                 kmeans_service = KMeansClustersService(kmeans_clusters)
                 img = kmeans_service.generateClusters(img)
 
-        # Create an instance of the algorithm class
+        # Instantiate the algorithm class and process the image
         cls = globals()[algorithm['service']]
         instance = cls(identifier_color, min_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
 
         try:
-            # process the image using the algorithm
             return instance.processImage(img, full_path, input_dir, output_dir)
         except Exception as e:
             logger = LoggerService()
@@ -198,17 +200,19 @@ class AnalyzeService(QObject):
     @pyqtSlot()
     def processComplete(self, result):
         """
-        processComplete processes the analyzed image
+        Handle completion of an image processing task.
 
-        :concurrent.futures._base.Future future: object representing the execution of the callable
+        Args:
+            result: Result object from the processFile method containing processed image data.
         """
         if result.input_path is not None:
             path = Path(result.input_path)
             file_name = path.name
-        # returned by processFile method
+        # Handle errors in processing
         if result.error_message is not None:
             self.sig_msg.emit("Unable to process " + file_name + " :: " + result.error_message)
             return
+        # Add successfully processed image to results
         if result.areas_of_interest is not None:
             self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
             self.sig_msg.emit('Areas of interest identified in ' + file_name)
@@ -216,12 +220,12 @@ class AnalyzeService(QObject):
                 self.sig_aois.emit()
                 self.max_aois_limit_exceeded = True
         else:
-            self.sig_msg.emit('No areas of interested identified in ' + file_name)
+            self.sig_msg.emit('No areas of interest identified in ' + file_name)
 
     @pyqtSlot()
     def processCancel(self):
         """
-        processCancel cancels any asynchronous processes that have not completed
+        Cancel any ongoing asynchronous processes.
         """
         self.cancelled = True
         self.sig_msg.emit("--- Cancelling Image Processing ---")
@@ -229,14 +233,11 @@ class AnalyzeService(QObject):
 
     def setupOutputDir(self):
         """
-        setupOutputDir creates the output directory
+        Create the output directory for storing processed images.
         """
         try:
-            if (os.path.exists(self.output)):
-                try:
-                    shutil.rmtree(self.output)
-                except Exception as e:
-                    self.logger.error(e)
+            if os.path.exists(self.output):
+                shutil.rmtree(self.output)
             os.makedirs(self.output)
         except Exception as e:
             self.logger.error(e)

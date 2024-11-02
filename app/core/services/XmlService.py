@@ -5,13 +5,14 @@ from core.services.LoggerService import LoggerService
 
 
 class XmlService:
-    """Service used to parse an ADIAT XML file"""
+    """Service for parsing and modifying an ADIAT XML file."""
 
     def __init__(self, path=None):
         """
-        __init__ constructor for the service
+        Initialize the XmlService with an optional XML file path.
 
-        :String path: path to the XML file.
+        Args:
+            path (str, optional): Path to the XML file.
         """
         self.logger = LoggerService()
         if path is not None:
@@ -21,14 +22,15 @@ class XmlService:
 
     def getSettings(self):
         """
-        getSettings parses an ADIAT XML file returning the settings and image count
+        Parse the XML file to retrieve settings and the count of images with areas of interest.
 
-        :return List(Dictionary), Int: the settings from when the analysis was run and the number of images containing areas of interest
+        Returns:
+            tuple: A dictionary containing settings from the analysis and an integer for the number of images with areas of interest.
         """
-
         root = self.xml.getroot()
         settings_xml = root.find('settings')
-        settings = dict()
+        settings = {}
+        image_count = 0
         if settings_xml is not None:
             settings['output_dir'] = settings_xml.get('output_dir')
             settings['input_dir'] = settings_xml.get('input_dir')
@@ -44,7 +46,7 @@ class XmlService:
                 settings['kmeans_clusters'] = int(settings_xml.get('kmeans_clusters'))
             settings['algorithm'] = settings_xml.get('algorithm')
             settings['thermal'] = settings_xml.get('thermal')
-            settings['options'] = dict()
+            settings['options'] = {}
             options_xml = settings_xml.find('options')
             for option in options_xml:
                 settings['options'][option.get('name')] = option.get('value')
@@ -55,28 +57,28 @@ class XmlService:
 
     def getImages(self):
         """
-        getImages parses an ADIAT XML file returning the images
+        Parse the XML file to retrieve images with areas of interest.
 
-        :return List(Dictionary): the images containing areas of interest from when the analysis was run
+        Returns:
+            list[dict]: A list of dictionaries containing image details and areas of interest from the analysis.
         """
         root = self.xml.getroot()
         images = []
         images_xml = root.find('images')
         if images_xml is not None:
             for image_xml in images_xml:
-                image = dict()
-                image['xml'] = image_xml
-                image['path'] = image_xml.get('path')
-                if image_xml.get('hidden'):
-                    image['hidden'] = (image_xml.get('hidden') == "True")
-                else:
-                    image['hidden'] = False
+                image = {
+                    'xml': image_xml,
+                    'path': image_xml.get('path'),
+                    'hidden': image_xml.get('hidden') == "True" if image_xml.get('hidden') else False
+                }
                 areas_of_interest = []
                 for area_of_interest_xml in image_xml:
-                    area_of_interest = dict()
-                    area_of_interest['area'] = float(area_of_interest_xml.get('area'))
-                    area_of_interest['center'] = literal_eval(area_of_interest_xml.get('center'))
-                    area_of_interest['radius'] = int(area_of_interest_xml.get('radius'))
+                    area_of_interest = {
+                        'area': float(area_of_interest_xml.get('area')),
+                        'center': literal_eval(area_of_interest_xml.get('center')),
+                        'radius': int(area_of_interest_xml.get('radius'))
+                    }
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -84,7 +86,10 @@ class XmlService:
 
     def addSettingsToXml(self, **kwargs):
         """
-        addSettingsToXml adds information about the parameters set by the user to the xml document
+        Add user-defined settings to the XML document.
+
+        Args:
+            **kwargs: Key-value pairs representing settings and their values.
         """
         try:
             settings_xml = self.xml.find("settings")
@@ -104,9 +109,10 @@ class XmlService:
 
     def addImageToXml(self, img):
         """
-        addImageToXml adds an image to the xml document
+        Add an image entry to the XML document.
 
-        :Dictionary img: the full path to the output file and a list of areas of interest
+        Args:
+            img (dict): Dictionary with image path and areas of interest.
         """
         images_xml = self.xml.find("images")
         if images_xml is None:
@@ -122,15 +128,15 @@ class XmlService:
 
     def saveXmlFile(self, path):
         """
-        saveXmlFile saves the XML document to the specified path
+        Save the XML document to the specified path.
+
+        Args:
+            path (str): The full path where the XML file will be saved.
         """
-        # Check if self.xml is an Element, not an ElementTree
         if isinstance(self.xml, ET.Element):
-            # Wrap the root element with ElementTree
             mydata = ET.ElementTree(self.xml)
         else:
-            mydata = self.xml  # If already ElementTree, use it as-is
+            mydata = self.xml
 
-        # Save the XML to the file
         with open(path, "wb") as fh:
             mydata.write(fh)

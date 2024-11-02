@@ -6,11 +6,11 @@ from PyQt5.QtWidgets import QWidget
 
 
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
-    """Controller for the Thermal Anomaly algorithm widget"""
+    """Controller for the Thermal Anomaly algorithm widget."""
 
     def __init__(self):
         """
-        __init__ constructor for the widget
+        Initializes the ThermalAnomalyController widget and sets up the UI.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, 'ThermalAnomaly', True)
@@ -19,9 +19,11 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 
     def getOptions(self):
         """
-        getOptions populates options based on user-selected values
+        Populates options based on user-selected values.
 
-        :return Dictionary: the option names and values
+        Returns:
+            dict: A dictionary containing the selected option values, including
+            'threshold', 'type', and 'colorMap'.
         """
         options = dict()
         options['threshold'] = int(self.anomalySpinBox.value())
@@ -31,17 +33,20 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 
     def validate(self):
         """
-        validate validates that the required values have been provided
+        Validates that the required values have been provided.
 
-        :return String: error message
+        Returns:
+            str: An error message if validation fails, otherwise None.
         """
         return None
 
     def loadOptions(self, options):
         """
-        loadOptions sets UI elements based on options
+        Sets UI elements based on the provided options.
 
-        :Dictionary options: the options to use to set attributes
+        Args:
+            options (dict): The options to use to set UI attributes, including
+            'threshold', 'type', and 'colorMap'.
         """
         if 'threshold' in options:
             self.anomalyThresholdLabel.setText(str(options['threshold']))

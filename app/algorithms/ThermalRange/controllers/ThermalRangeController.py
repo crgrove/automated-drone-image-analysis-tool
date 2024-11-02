@@ -6,11 +6,14 @@ from PyQt5.QtWidgets import QWidget
 
 
 class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
-    """Controller for the Thermal Range algorithm widget"""
+    """Controller for the Thermal Range algorithm widget."""
 
     def __init__(self):
         """
-        __init__ constructor for the widget
+        Initializes the ThermalRangeController widget and sets up the UI.
+
+        If the temperature unit is set to Fahrenheit in the settings, converts
+        the temperature ranges to Fahrenheit.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, 'ThermalRange', True)
@@ -23,9 +26,11 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
     def getOptions(self):
         """
-        getOptions populates options based on user-selected values
+        Populates options based on user-selected values.
 
-        :return Dictionary: the option names and values
+        Returns:
+            dict: A dictionary containing option names and values, including
+            'minTemp', 'maxTemp', and 'colorMap'.
         """
         options = dict()
         if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':
@@ -40,31 +45,40 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
     def updateMinTemp(self):
         """
-        updateMinTemp change handler for the minTemp slider
+        Handles changes to the minimum temperature slider.
+
+        Ensures that the minimum temperature does not exceed the maximum
+        temperature by adjusting the maximum temperature if necessary.
         """
         if self.minTempSpinBox.value() > self.maxTempSpinBox.value():
             self.maxTempSpinBox.setValue(self.minTempSpinBox.value())
 
     def updateMaxTemp(self):
         """
-        updateMaxTemp change handler for the maxTemp slider
+        Handles changes to the maximum temperature slider.
+
+        Ensures that the maximum temperature does not fall below the minimum
+        temperature by adjusting the minimum temperature if necessary.
         """
         if self.minTempSpinBox.value() > self.maxTempSpinBox.value():
             self.minTempSpinBox.setValue(self.maxTempSpinBox.value())
 
     def validate(self):
         """
-        validate validates that the required values have been provided
+        Validates that the required values have been provided.
 
-        :return String: error message
+        Returns:
+            str: An error message if validation fails, otherwise None.
         """
         return None
 
     def loadOptions(self, options):
         """
-        loadOptions sets UI elements based on options
+        Sets UI elements based on the provided options.
 
-        :Dictionary options: the options to use to set attributes
+        Args:
+            options (dict): The options to use to set UI attributes, including
+            'minTemp', 'maxTemp', and 'colorMap'.
         """
         if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':
             if 'minTemp' in options:
@@ -80,7 +94,11 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
     def convertTemperatureRanges(self):
         """
-        convertTemperatureRanges modifies the temperate range controls to accept Fahrenheit instead of Celsius
+        Modifies the temperature range controls to accept Fahrenheit values
+        instead of Celsius.
+
+        Sets the minimum and maximum values for temperature spin boxes
+        accordingly and adjusts the displayed unit labels.
         """
         self.minTempLabel.setText('Minimum Temp (' + u'\N{DEGREE SIGN}' + ' F)')
         self.minTempSpinBox.setMinimum(-20)
@@ -93,18 +111,24 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
     def convertFahrenheitToCelsius(self, value):
         """
-        convertFahrenheitToCelsius converts a Fahrenheit value to Celsius
+        Converts a Fahrenheit value to Celsius.
 
-        :int value: the value to be converted
-        :return float: the converted value
+        Args:
+            value (int): The Fahrenheit value to convert.
+
+        Returns:
+            float: The converted Celsius value.
         """
         return (value - 32) / 1.8000
 
     def convertCelsiusToFahrenheit(self, value):
         """
-        convertCelsiusToFahrenheit converts a Celsius value to Fahrenheit
+        Converts a Celsius value to Fahrenheit.
 
-        :int value: the value to be converted
-        :return float: the converted value
+        Args:
+            value (int): The Celsius value to convert.
+
+        Returns:
+            float: The converted Fahrenheit value.
         """
         return (value * 1.8000) + 32

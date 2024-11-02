@@ -10,11 +10,14 @@ from PyQt5.QtWidgets import QWidget, QColorDialog
 
 
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
-    """Controller for the Matched Filter algorithm widget"""
+    """Controller for the Matched Filter algorithm widget."""
 
     def __init__(self):
         """
-        __init__ constructor for the widget
+        Initializes the MatchedFilterController widget and sets up the UI.
+
+        Connects UI elements like threshold slider and color selection button
+        to their respective event handlers.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, 'MatchedFilter', False)
@@ -28,8 +31,10 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def colorButtonClicked(self):
         """
-        colorButtonClicked click handler for the base color selector
-        Opens a color picker dialog
+        Handles the color selection button click.
+
+        Opens a color picker dialog to allow the user to select a color.
+        Updates the selected color if a valid color is chosen.
         """
         try:
             if self.selectedColor is not None:
@@ -43,20 +48,21 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def viewRangeButtonClicked(self):
         """
-        viewRangeButtonClicked click handler for the view range button
-        Opens the View Range dialog
+        Handles the view range button click.
+
+        Opens the View Range dialog, displaying the selected color and
+        threshold value.
         """
         rangeDialog = MatchedFilterRangeViewer(
             (self.selectedColor.red(),
              self.selectedColor.green(),
              self.selectedColor.blue()),
-            float(
-                self.thresholdValueLabel.text()))
+            float(self.thresholdValueLabel.text()))
         rangeDialog.exec()
 
     def updateColors(self):
         """
-        updateColors updates the color of the selected color box
+        Updates the color of the selected color box and shows the view range button.
         """
         if self.selectedColor is not None:
             self.colorSample.setStyleSheet("background-color: " + self.selectedColor.name())
@@ -64,7 +70,9 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def updateThreshold(self):
         """
-        updateThreshold click handler for the threshold slider
+        Handles the threshold slider value change event.
+
+        Updates the threshold value label based on the current slider position.
         """
         if self.thresholdSlider.value() == .1:
             self.thresholdValueLabel.setText('.1')
@@ -75,9 +83,10 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def getOptions(self):
         """
-        getOptions populates options based on user-selected values
+        Populates options based on user-selected values.
 
-        :return Dictionary: the option names and values
+        Returns:
+            dict: A dictionary containing selected options, including 'selected_color' and 'match_filter_threshold'.
         """
         options = dict()
         options['selected_color'] = (self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue())
@@ -86,9 +95,10 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def validate(self):
         """
-        validate validates that the required values have been provided
+        Validates that the required values have been provided.
 
-        :return String: error message
+        Returns:
+            str: An error message if validation fails, otherwise None.
         """
         if self.selectedColor is None:
             return "Please select a search color."
@@ -96,9 +106,10 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
     def loadOptions(self, options):
         """
-        loadOptions sets UI elements based on options
+        Sets UI elements based on the provided options.
 
-        :Dictionary options: the options to use to set attributes
+        Args:
+            options (dict): The options to use to set UI attributes, including 'selected_color' and 'match_filter_threshold'.
         """
         if 'selected_color' in options:
             selected_color = literal_eval(options['selected_color'])

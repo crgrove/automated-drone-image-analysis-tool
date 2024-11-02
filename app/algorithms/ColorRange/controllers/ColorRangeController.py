@@ -12,11 +12,13 @@ from core.services.LoggerService import LoggerService
 
 
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
-    """Controller for the Color Range algorithm widget"""
+    """Controller for the Color Range algorithm widget."""
 
     def __init__(self):
         """
-        __init__ constructor for the widget
+        Initializes the ColorRangeController widget and sets up the UI.
+
+        Connects UI elements like color selection button and range spin boxes to their respective event handlers.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, 'ColorRange', False)
@@ -33,8 +35,10 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
     def colorButtonClicked(self):
         """
-        colorButtonClicked click handler for the base color selector
-        Opens a color picker dialog
+        Handles the color selection button click.
+
+        Opens a color picker dialog to allow the user to select a color. Updates
+        the selected color if a valid color is chosen.
         """
         try:
             if self.selectedColor is not None:
@@ -48,20 +52,25 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
     def viewRangeButtonClicked(self):
         """
-        viewRangeButtonClicked click handler for the view range button
-        Opens the View Range dialog
+        Handles the view range button click.
+
+        Opens the View Range dialog, displaying the selected color range.
         """
         rangeDialog = ColorRangeRangeViewer(self.lowerColor, self.upperColor)
         rangeDialog.exec()
 
     def updateColors(self):
         """
-        updateColors gets the min and max rgb colors relative to the base color and updates the colors of the color range boxes
+        Updates the color range boxes based on the base color and range spin box values.
+
+        Retrieves the minimum and maximum RGB colors relative to the base color and updates
+        the displayed color boxes accordingly.
         """
         if self.selectedColor is not None:
             rgb = [self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue()]
-            self.lowerColor, self.upperColor = ColorUtils.getColorRange(rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value())
-            # Convert the RGB tuples to hex for CSS
+            self.lowerColor, self.upperColor = ColorUtils.getColorRange(
+                rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value()
+            )
             hex_lower = '#%02x%02x%02x' % self.lowerColor
             hex_upper = '#%02x%02x%02x' % self.upperColor
             self.minColor.setStyleSheet("background-color: " + hex_lower)
@@ -71,9 +80,10 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
     def getOptions(self):
         """
-        getOptions populates options based on user-selected values
+        Populates options based on user-selected values.
 
-        :return Dictionary: the option names and values
+        Returns:
+            dict: A dictionary containing selected options, including 'color_range', 'selected_color', and 'range_values'.
         """
         options = dict()
         options['color_range'] = [self.lowerColor, self.upperColor]
@@ -83,9 +93,10 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
     def validate(self):
         """
-        validate validates that the required values have been provided
+        Validates that the required values have been provided.
 
-        :return String: error message
+        Returns:
+            str: An error message if validation fails, otherwise None.
         """
         if self.selectedColor is None:
             return "Please select a search color."
@@ -93,9 +104,10 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
     def loadOptions(self, options):
         """
-        loadOptions sets UI elements based on options
+        Sets UI elements based on the provided options.
 
-        :Dictionary options: the options to use to set attributes
+        Args:
+            options (dict): The options to use to set UI attributes, including 'range_values' and 'selected_color'.
         """
         if 'range_values' in options and 'selected_color' in options:
             ranges = literal_eval(options['range_values'])
