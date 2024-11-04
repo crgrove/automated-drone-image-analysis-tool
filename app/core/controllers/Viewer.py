@@ -49,7 +49,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self.skipHiddenClicked)
-        self.thumbnail_limit = 20
+        self.thumbnail_limit = 30
         self.thumbnail_loader = None
         self.visible_thumbnails_range = (0, 0)
         self.loadImages()
@@ -180,7 +180,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         visible_start_index = int((current_scroll_value / max_scroll_value) * total_images)
         visible_start_index = max(0, visible_start_index - int(self.thumbnail_limit))
-        visible_end_index = min(visible_start_index + self.thumbnail_limit + 5, total_images)
+        visible_end_index = min(visible_start_index + self.thumbnail_limit + 10, total_images)
 
         if (int(visible_start_index), int(visible_end_index)) != self.visible_thumbnails_range:
             self.loadThumbnailsInRange(visible_start_index, visible_end_index)
