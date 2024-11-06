@@ -123,7 +123,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             layout.addWidget(button)
             layout.setAlignment(Qt.AlignCenter)
             frame.setLayout(layout)
-            frame.adjustSize()
+            frame.setFixedSize(QSize(122, 78))
             frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
             overlay = QLabel(frame)
             overlay.setFixedSize(frame.width(), frame.height())
