@@ -209,7 +209,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.active_thumbnail:
             self.active_thumbnail.setStyleSheet("border: 1px solid grey;")
 
-        frame.setStyleSheet("QFrame { border: 2px solid blue; }")
+        frame.setStyleSheet("QFrame { border: 1px solid blue; }")
         self.active_thumbnail = frame
 
     def loadInitialImage(self):
