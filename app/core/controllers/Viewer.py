@@ -133,6 +133,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             button.setProperty('overlay', overlay)
             self.thumbnailLayout.addWidget(frame)
             image['thumbnail'] = button
+        # self.scrollAreaWidgetContents.setMinimumHeight(96)
+        # self.thumbnailScrollArea.setMinimumHeight(116)
 
     def loadThumbnailsInRange(self, start_index, end_index):
         """Loads thumbnails in the specified range asynchronously.
