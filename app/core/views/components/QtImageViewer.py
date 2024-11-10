@@ -92,7 +92,7 @@ class QtImageViewer(QGraphicsView):
     # Emit index of selected ROI
     roiSelected = pyqtSignal(int)
 
-    def __init__(self, window, parent=None, center=None, thumbnail = False):
+    def __init__(self, window, parent=None, center=None, thumbnail=False):
         QGraphicsView.__init__(self, parent)
 
         self.window = window
@@ -134,7 +134,7 @@ class QtImageViewer(QGraphicsView):
         # Flags for active zooming/panning.
         self._isZooming = False
         self._isPanning = False
-        
+
         self.canZoom = True
         self.canPan = True
 
@@ -152,13 +152,12 @@ class QtImageViewer(QGraphicsView):
         # self.drawROI = None
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.center=center
+        self.center = center
         self.thumbnail = thumbnail
-        
 
     def keyPressEvent(self, e):
         self.window.keyPressEvent(e)
-        
+
     def hasImage(self):
         """ Returns whether the scene contains an image pixmap.
         """
@@ -246,7 +245,7 @@ class QtImageViewer(QGraphicsView):
         if len(self.zoomStack):
             self.fitInView(self.zoomStack[-1], self.aspectRatioMode)  # Show zoomed rect.
         else:
-            if self.thumbnail == True:
+            if self.thumbnail is True:
                 self.fitInView(self.sceneRect(), self.aspectRatioMode)  # Show entire image.
 
     def clearZoom(self):
@@ -421,8 +420,8 @@ class QtImageViewer(QGraphicsView):
         QGraphicsView.mouseDoubleClickEvent(self, event)
 
     def wheelEvent(self, event):
-        if self.thumbnail == True:
-            return    
+        if self.thumbnail is True:
+            return
         if self.wheelZoomFactor is not None:
             if self.wheelZoomFactor == 1:
                 return
@@ -466,28 +465,28 @@ class QtImageViewer(QGraphicsView):
         if self.hasImage():
             self.clearZoom()
             if len(self.zoomStack) == 0:
-                    self.zoomStack.append(self.sceneRect())
+                self.zoomStack.append(self.sceneRect())
             elif len(self.zoomStack) > 1:
                 del self.zoomStack[:-1]
             zoomRect = self.zoomStack[-1]
-            center = QPoint(center[0],center[1])
+            center = QPoint(center[0], center[1])
             zoomRect.setWidth(zoomRect.width() / scale)
             zoomRect.setHeight(zoomRect.height() / scale)
             zoomRect.moveCenter(center)
             self.zoomStack[-1] = zoomRect.intersected(self.sceneRect())
             self.updateViewer()
-            #self.setTransform(QTransform())
-            #pos = QPoint(center[0],center[1])
-            #self.centerOn(pos)
-            #self.scale(scale, scale)
-            
+            # self.setTransform(QTransform())
+            # pos = QPoint(center[0],center[1])
+            # self.centerOn(pos)
+            # self.scale(scale, scale)
+
     def resetZoom(self):
         self.clearZoom()
         self.fitInView(self.sceneRect(), self.aspectRatioMode)
-        
+
     def showEvent(self, event):
         self.resetZoom()
-        
+
     def mouseMoveEvent(self, event):
         # Emit updated view during panning.
         if self._isPanning:

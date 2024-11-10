@@ -1,27 +1,33 @@
 from PyQt5 import QtCore
-class SettingsService:
-	"""Provides the ability to get and set persistent settings"""
 
-	def __init__(self):
-		"""
-		__init__ constructor for the settings service
-		"""
-		self.settings = QtCore.QSettings('ADIAT')
-		
-	def setSetting(self, name, value):
-		"""
-		setSetting sets a given setting in QSettings
-		
-		:String name: the name of the setting
-		:String value: the value of the setting
-		"""
-		self.settings.setValue(name, value)
-	
-	def getSetting(self,name):
-		"""
-		getSetting retrieves a given setting from QSettings
-		
-		:String name: the name of the setting
-		:return String: the value of the setting
-		"""
-		return self.settings.value(name)
+
+class SettingsService:
+    """Service to manage persistent application settings."""
+
+    def __init__(self):
+        """
+        Initialize the SettingsService with a QSettings instance.
+        """
+        self.settings = QtCore.QSettings('ADIAT')
+
+    def setSetting(self, name, value):
+        """
+        Set a specified setting in QSettings.
+
+        Args:
+            name (str): The name of the setting.
+            value (str): The value to be set for the setting.
+        """
+        self.settings.setValue(name, value)
+
+    def getSetting(self, name):
+        """
+        Retrieve the value of a specified setting from QSettings.
+
+        Args:
+            name (str): The name of the setting to retrieve.
+
+        Returns:
+            str: The value of the setting, or an empty string if the setting does not exist.
+        """
+        return self.settings.value(name)

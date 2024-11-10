@@ -3,51 +3,59 @@ from algorithms.RXAnomaly.views.RXAnomaly_ui import Ui_RXAnomaly
 
 from PyQt5.QtWidgets import QWidget
 
+
 class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
-	"""Controller for the RX Anomaly algorithm widget"""
+    """Controller for the RX Anomaly algorithm widget."""
 
-	def __init__(self):
-		"""
-		__init__ constructor for the widget
-		"""
-		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'RXAnomaly', False)
-		self.setupUi(self)
-		self.sensitivitySlider.valueChanged.connect(self.updateSensitivity)
+    def __init__(self):
+        """
+        Initializes the RXAnomalyController widget and sets up the UI.
 
-	def getOptions(self):
-		"""
-		getOptions populates options based on user-selected values
-		
-		:return Dictionary: the option names and values
-		"""
-		options = dict()
-		options['sensitivity'] = int(self.sensitivityValueLabel.text())
-		options['segments'] = int(self.segmentsComboBox.currentText())
-		return options
+        Connects the sensitivity slider to the updateSensitivity handler.
+        """
+        QWidget.__init__(self)
+        AlgorithmController.__init__(self, 'RXAnomaly', False)
+        self.setupUi(self)
+        self.sensitivitySlider.valueChanged.connect(self.updateSensitivity)
 
-	def updateSensitivity(self):
-		"""
-		updateSensitivity click handler for the sensitivity slider
-		"""
-		self.sensitivityValueLabel.setText(str(self.sensitivitySlider.value()))
-	
-	def validate(self):
-		"""
-		validate validates that the required values have been provided
-		
-		:return String: error message
-		"""
-		return None;
+    def getOptions(self):
+        """
+        Populates options based on user-selected values.
 
-	def loadOptions(self, options):
-		"""
-		loadOptions sets UI elements based on options
-		
-		:Dictionary options: the options to use to set attributes
-		"""
-		if 'sensitivity' in options:
-			self.sensitivityValueLabel.setText(str(options['sensitivity']))
-			self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
-		if 'segment' in options:
-			self.segmentsComboBox.setCurrentText(str(options['segment']))
+        Returns:
+            dict: A dictionary containing the selected option values, including 'sensitivity' and 'segments'.
+        """
+        options = dict()
+        options['sensitivity'] = int(self.sensitivityValueLabel.text())
+        options['segments'] = int(self.segmentsComboBox.currentText())
+        return options
+
+    def updateSensitivity(self):
+        """
+        Handles changes to the sensitivity slider.
+
+        Updates the sensitivity value label based on the current slider position.
+        """
+        self.sensitivityValueLabel.setText(str(self.sensitivitySlider.value()))
+
+    def validate(self):
+        """
+        Validates that the required values have been provided.
+
+        Returns:
+            str: An error message if validation fails, otherwise None.
+        """
+        return None
+
+    def loadOptions(self, options):
+        """
+        Sets UI elements based on the provided options.
+
+        Args:
+            options (dict): The options to use to set UI attributes, including 'sensitivity' and 'segments'.
+        """
+        if 'sensitivity' in options:
+            self.sensitivityValueLabel.setText(str(options['sensitivity']))
+            self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
+        if 'segments' in options:
+            self.segmentsComboBox.setCurrentText(str(options['segments']))

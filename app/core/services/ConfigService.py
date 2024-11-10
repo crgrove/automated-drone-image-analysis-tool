@@ -3,16 +3,25 @@ from ast import literal_eval
 import xml.etree.ElementTree as ET
 import json
 
+
 class ConfigService:
-    """Service used to parse an ADIAT Algorithm config file"""
+    """Service for parsing an ADIAT Algorithm configuration file."""
+
     def __init__(self, path):
         """
-		__init__ constructor for the service
-        
-        :String path: path to the config file.
-		"""
+        Initialize the ConfigService with a configuration file path.
+
+        Args:
+            path (str): Path to the configuration file in JSON format.
+        """
         with open(path) as f:
             self.config = json.load(f)
-            
+
     def getAlgorithms(self):
+        """
+        Retrieve the list of algorithms from the configuration.
+
+        Returns:
+            list: A list of algorithms specified in the configuration file.
+        """
         return self.config['algorithms']

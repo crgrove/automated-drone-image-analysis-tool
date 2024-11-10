@@ -4,46 +4,52 @@ from core.services.SettingsService import SettingsService
 
 from PyQt5.QtWidgets import QWidget
 
+
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
-	"""Controller for the Thermal Anomaly algorithm widget"""
+    """Controller for the Thermal Anomaly algorithm widget."""
 
-	def __init__(self):
-		"""
-		__init__ constructor for the widget
-		"""
-		QWidget.__init__(self)
-		AlgorithmController.__init__(self, 'ThermalAnomaly', True)
-		self.settings_service  = SettingsService()
-		self.setupUi(self)
+    def __init__(self):
+        """
+        Initializes the ThermalAnomalyController widget and sets up the UI.
+        """
+        QWidget.__init__(self)
+        AlgorithmController.__init__(self, 'ThermalAnomaly', True)
+        self.settings_service = SettingsService()
+        self.setupUi(self)
 
-	def getOptions(self):
-		"""
-		getOptions populates options based on user-selected values
-		
-		:return Dictionary: the option names and values
-		"""
-		options = dict()
-		options['threshold'] = int(self.anomalySpinBox.value())
-		options['type'] = self.anomalyTypeComboBox.currentText()
-		options['colorMap'] = self.colorMapComboBox.currentText()
-		return options
-			
-	def validate(self):
-		"""
-		validate validates that the required values have been provided
-		
-		:return String: error message
-		"""
-		return None;
+    def getOptions(self):
+        """
+        Populates options based on user-selected values.
 
-	def loadOptions(self, options):
-		"""
-		loadOptions sets UI elements based on options
-		
-		:Dictionary options: the options to use to set attributes
-		"""
-		if 'threshold' in options:
-			self.anomalyThresholdLabel.setText(str(options['threshold']))
-			self.maxTempSpinBox.setValue(int(options['sensitivity']))
-		self.anomalyTypeComboBox.setCurrentText(options['type'])
-		self.colorMapComboBox.setCurrentText(options['colorMap'])
+        Returns:
+            dict: A dictionary containing the selected option values, including
+            'threshold', 'type', and 'colorMap'.
+        """
+        options = dict()
+        options['threshold'] = int(self.anomalySpinBox.value())
+        options['type'] = self.anomalyTypeComboBox.currentText()
+        options['colorMap'] = self.colorMapComboBox.currentText()
+        return options
+
+    def validate(self):
+        """
+        Validates that the required values have been provided.
+
+        Returns:
+            str: An error message if validation fails, otherwise None.
+        """
+        return None
+
+    def loadOptions(self, options):
+        """
+        Sets UI elements based on the provided options.
+
+        Args:
+            options (dict): The options to use to set UI attributes, including
+            'threshold', 'type', and 'colorMap'.
+        """
+        if 'threshold' in options:
+            self.anomalyThresholdLabel.setText(str(options['threshold']))
+            self.maxTempSpinBox.setValue(int(options['sensitivity']))
+        self.anomalyTypeComboBox.setCurrentText(options['type'])
+        self.colorMapComboBox.setCurrentText(options['colorMap'])

@@ -1,7 +1,7 @@
 Automated Drone Image Analysis Tool
 =============================
 
-The Automated Drone Image Analysis Tool (ADIAT) provides a platform through which algorithms can be used to programmatically identify areas of interest in a set of image  The primary use case for this tool is to aid in the analysis of images taken by UAVs during Search and Rescue Operations.
+The Automated Drone Image Analysis Tool (ADIAT) provides a platform through with algorithm can be used to programmatically identify areas of interest in a set of image  The primary use case for this tool is to aid in the analysis of images taken by UAVs during Search and Rescue Operations.
 
 This tool was developed by Texas Search and Rescue (TEXSAR) as an open source project for the SAR community.
 
@@ -17,18 +17,25 @@ Features
 Getting started
 ---------------
 
-First of all make sure you have pipenv installed and then initialize a
-working development environment like this
+First create and activate a vitual environment working development environment
+Create Environment::
+    
+    python -m venv <environment name>
+    
+Activate Environment (Windows)::
+    
+    <environment name>\Scripts\activate
+    
+Activate Environment (Mac/Linux)::
 
-    pipenv install --dev
+    source <environment name>/bin/activate
 
-Once all dependencies are installed, you should enter the environment shell like
-this::
+From the activated environment, install all dependencies::
 
-    pipenv shell
+    pip install -r requirements.txt
+    pip install -r requirement-dev.txt
 
-Once done, you can run the application
-like this::
+Once done, you can run the application like this::
 
     python app
 
@@ -56,4 +63,4 @@ be generated like this
  User Contributions
 --------------------
 
-If you are interesting in contributing to this project by either enhancing an existing capability or adding new features/algorithms please reach out to charlie.grove@texsar.org
+If you are interesting in contributing to this project by either enhancing an existing capability or adding new features/algorithms please reach out to us at charlie.grove@texsar.org
