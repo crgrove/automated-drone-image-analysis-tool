@@ -15,19 +15,20 @@ from helpers.ColorUtils import ColorUtils
 class RXAnomalyService(AlgorithmService):
     """Service that executes the RX Anomaly algorithm for detecting anomalies in spectral images."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the RXAnomalyService with specific parameters for anomaly detection.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'sensitivity' and 'segments'.
         """
         self.logger = LoggerService()
-        super().__init__('RXAnomaly', identifier, min_area, aoi_radius, combine_aois, options)
+        super().__init__('RXAnomaly', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.chi_threshold = self.getThreshold(options['sensitivity'])
         self.segments = options['segments']
 

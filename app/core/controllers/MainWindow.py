@@ -196,6 +196,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             kmeans_clusters = self.clustersSpinBox.value() if self.kMeansCheckbox.isChecked() else None
 
             self.settings_service.setSetting('MinObjectArea', self.minAreaSpinBox.value())
+            self.settings_service.setSetting('MaxObjectArea', self.maxAreaSpinBox.value())
             self.settings_service.setSetting('IdentifierColor', self.identifierColor)
             self.settings_service.setSetting('MaxProcesses', self.maxProcessesSpinBox.value())
 
@@ -205,7 +206,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
-                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options,
+                self.maxAreaSpinBox.value()
             )
 
             thread = QThread()
@@ -366,6 +368,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxProcessesSpinBox.setValue(settings['num_processes'])
         if 'min_area' in settings:
             self.minAreaSpinBox.setValue(int(settings['min_area']))
+        if 'max_area' in settings:
+            self.maxAreaSpinBox.setValue(int(settings['max_area']))
         if 'hist_ref_path' in settings:
             self.histogramCheckbox.setChecked(True)
             self.histogramLine.setText(settings['hist_ref_path'])
@@ -450,6 +454,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         min_area = self.settings_service.getSetting('MinObjectArea')
         if isinstance(min_area, int):
             self.minAreaSpinBox.setValue(min_area)
+
+        max_area = self.settings_service.getSetting('MaxObjectArea')
+        if isinstance(max_area, int):
+            self.maxAreaSpinBox.setValue(max_area)
 
         max_processes = self.settings_service.getSetting('MaxProcesses')
         if isinstance(max_processes, int):

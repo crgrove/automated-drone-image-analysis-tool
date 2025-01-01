@@ -8,19 +8,20 @@ from algorithms.Algorithm import AlgorithmService, AnalysisResult
 class MatchedFilterService(AlgorithmService):
     """Service that executes the Matched Filter algorithm to detect and highlight areas matching a specific color."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the MatchedFilterService with specific parameters for the matched filter algorithm.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'selected_color' and 'match_filter_threshold'.
         """
         self.logger = LoggerService()
-        super().__init__('MatchedFilter', identifier, min_area, aoi_radius, combine_aois, options)
+        super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.match_color = options['selected_color']
         self.threshold = options['match_filter_threshold']
 

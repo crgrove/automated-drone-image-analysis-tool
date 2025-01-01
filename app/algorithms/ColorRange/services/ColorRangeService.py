@@ -8,19 +8,20 @@ from algorithms.Algorithm import AlgorithmService, AnalysisResult
 class ColorRangeService(AlgorithmService):
     """Service that executes the Color Range algorithm to detect and highlight areas within a specific RGB color range."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the ColorRangeService with specific parameters for processing color ranges.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'color_range' (min and max RGB values).
         """
         self.logger = LoggerService()
-        super().__init__('ColorRange', identifier, min_area, aoi_radius, combine_aois, options)
+        super().__init__('ColorRange', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.min_rgb = options['color_range'][0]
         self.max_rgb = options['color_range'][1]
 
