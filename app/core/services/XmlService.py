@@ -40,6 +40,8 @@ class XmlService:
                 settings['identifier_color'] = literal_eval(settings_xml.get('identifier_color'))
             if settings_xml.get('min_area') is not None:
                 settings['min_area'] = int(settings_xml.get('min_area'))
+            if settings_xml.get('max_area') is not None:
+                settings['max_area'] = int(settings_xml.get('max_area'))
             if settings_xml.get('hist_ref_path') != "None":
                 settings['hist_ref_path'] = settings_xml.get('hist_ref_path')
             if settings_xml.get('kmeans_clusters') != "None":

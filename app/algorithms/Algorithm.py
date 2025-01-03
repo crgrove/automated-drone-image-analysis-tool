@@ -9,7 +9,7 @@ from helpers.MetaDataHelper import MetaDataHelper
 class AlgorithmService:
     """Base class for algorithm services that provides methods for processing images."""
 
-    def __init__(self, name, identifier_color, min_area, aoi_radius, combine_aois, options, is_thermal=False):
+    def __init__(self, name, identifier_color, min_area, max_area, aoi_radius, combine_aois, options, is_thermal=False):
         """
         Initializes the AlgorithmService with the necessary parameters.
 
@@ -17,6 +17,7 @@ class AlgorithmService:
             name (str): The name of the algorithm to be used for analysis.
             identifier_color (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options.
@@ -25,6 +26,7 @@ class AlgorithmService:
         self.name = name
         self.identifier_color = identifier_color
         self.min_area = min_area
+        self.max_area = max_area
         self.aoi_radius = aoi_radius
         self.combine_aois = combine_aois
         self.options = options
@@ -73,7 +75,7 @@ class AlgorithmService:
                 center = (int(x), int(y))
                 radius = int(radius) + self.aoi_radius
 
-                if area >= self.min_area:
+                if area >= self.min_area and area <= self.max_area:
                     found = True
                     cv2.circle(temp_mask, center, radius, (255), -1)
                     base_contour_count += 1
