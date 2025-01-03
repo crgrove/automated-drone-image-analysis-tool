@@ -486,7 +486,8 @@ class Viewer(QMainWindow, Ui_Viewer):
     def KmlButtonClicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
         fileName, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
-        self.generateKml(fileName)
+        if fileName:  # Only proceed if a filename was selected
+            self.generateKml(fileName)
 
     def generateKml(self, output_path):
         """Generates a KML file from images' GPS data and saves it.
