@@ -6,7 +6,6 @@ from core.services.LoggerService import LoggerService
 
 class XmlService:
     """Service for parsing and modifying an ADIAT XML file."""
-
     def __init__(self, path=None):
         """
         Initialize the XmlService with an optional XML file path.
@@ -14,6 +13,7 @@ class XmlService:
         Args:
             path (str, optional): Path to the XML file.
         """
+        self.xml_path = path
         self.logger = LoggerService()
         if path is not None:
             self.xml = ET.parse(path)
@@ -69,9 +69,13 @@ class XmlService:
         images_xml = root.find('images')
         if images_xml is not None:
             for image_xml in images_xml:
+                path = image_xml.get('path')
+                if not os.path.isabs(path):
+                    dir = os.path.dirname(self.xml_path)
+                    path = dir+"/"+path
                 image = {
                     'xml': image_xml,
-                    'path': image_xml.get('path'),
+                    'path': path,
                     'hidden': image_xml.get('hidden') == "True" if image_xml.get('hidden') else False
                 }
                 areas_of_interest = []

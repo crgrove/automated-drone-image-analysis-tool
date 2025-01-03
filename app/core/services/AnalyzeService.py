@@ -42,6 +42,7 @@ class AnalyzeService(QObject):
             output (str): Path to the output directory where processed images will be stored.
             identifier_color (tuple[int, int, int]): RGB values to highlight areas of interest.
             min_area (int): Minimum size in pixels for an object to be considered an area of interest.
+            max_area (int): Maximum area in pixels for an object to be considered an area of interest.
             num_processes (int): Number of concurrent processes for image processing.
             max_aois (int): Maximum areas of interest threshold in a single image before issuing a warning.
             aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
@@ -157,7 +158,8 @@ class AnalyzeService(QObject):
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod
-    def processFile(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters, thermal):
+    def processFile(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
+                    thermal):
         """
         Process a single image using the selected algorithm and settings.
 
@@ -179,6 +181,8 @@ class AnalyzeService(QObject):
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        img = cv2.resize(img, (4000, 3000))
+
         if not thermal:
             # Apply histogram normalization if a reference image is provided
             histogram_service = None

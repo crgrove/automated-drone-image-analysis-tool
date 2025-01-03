@@ -70,7 +70,7 @@ class ThermalAnomalyService(AlgorithmService):
             if augmented_image is not None:
                 self.storeImage(full_path, output_path, augmented_image, temperature_c)
 
-            return AnalysisResult(full_path, output_path, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # Log and return an error if processing fails.

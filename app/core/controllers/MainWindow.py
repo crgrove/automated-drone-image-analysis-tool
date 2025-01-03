@@ -65,6 +65,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionVideoParser.triggered.connect(self.openVideoParser)
         self.algorithmComboBox.currentTextChanged.connect(self.algorithmComboBoxChanged)
         self.algorithmComboBoxChanged()
+        self.minAreaSpinBox.valueChanged.connect(self.minAreaSpinBoxChange)
+        self.maxAreaSpinBox.valueChanged.connect(self.maxAreaSpinBoxChange)
         self.histogramCheckbox.stateChanged.connect(self.histogramCheckboxChange)
         self.histogramButton.clicked.connect(self.histogramButtonClicked)
         self.kMeansCheckbox.stateChanged.connect(self.kMeansCheckboxChange)
@@ -76,7 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Store previous valid values
         self._previous_min_area = self.minAreaSpinBox.value()
         self._previous_max_area = self.maxAreaSpinBox.value()
-        
+
         # Connect spinbox signals
         self.minAreaSpinBox.editingFinished.connect(self.minAreaEditingFinished)
         self.maxAreaSpinBox.editingFinished.connect(self.maxAreaEditingFinished)
@@ -174,6 +176,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Shows or hides the histogram reference image selector based on checkbox state.
         """
         self.HistogramImgWidget.setVisible(self.histogramCheckbox.isChecked())
+
+    def minAreaSpinBoxChange(self):
+        """
+        Verifies that the min area spinbox value is still smaller than the max spinbox value and, if not, updates the max spinbox value
+        """
+        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value():
+            self.maxAreaSpinBox.setValue(self.minAreaSpinBox.value()+1)
+
+    def maxAreaSpinBoxChange(self):
+        """
+        Verifies that the max area spinbox value is still larger than the min spinbox value and, if not, updates the min spinbox value
+        """
+        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value():
+            self.minAreaSpinBox.setValue(self.maxAreaSpinBox.value()-1)
 
     def kMeansCheckboxChange(self):
         """
@@ -533,7 +549,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def showAreaValidationError(self, message):
         """
         Displays an error message for area validation.
-        
+
         Args:
             message (str): The error message to display.
         """

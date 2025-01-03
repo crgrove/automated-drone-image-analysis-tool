@@ -2,6 +2,7 @@ import platform
 import numpy as np
 import cv2
 import os
+import math
 from pathlib import Path
 from helpers.MetaDataHelper import MetaDataHelper
 
@@ -139,6 +140,93 @@ class AlgorithmService:
             else:
                 MetaDataHelper.transferExifPiexif(input_file, output_file)
 
+    def splitImage(self, img, segments):
+        """
+        Divides a single image into multiple segments based on the specified number of segments.
+
+        Args:
+            img (numpy.ndarray): The image to be divided into segments.
+            segments (int): The number of segments to split the image into.
+
+        Returns:
+            list: A list of lists containing numpy.ndarrays representing the segments of the original image.
+        """
+        h, w, channels = img.shape
+        pieces = []
+        if segments == 2:
+            w_size = math.ceil(w / 2)
+            pieces.append([img[:, :w_size], img[:, w - w_size:]])
+        elif segments == 4:
+            w_size = math.ceil(w / 2)
+            h_size = math.ceil(h / 2)
+            pieces.extend([
+                [img[:h_size, :w_size], img[:h_size, w - w_size:]],
+                [img[h_size:, :w_size], img[h_size:, w - w_size:]]
+            ])
+        elif segments == 6:
+            w_size = math.ceil(w / 3)
+            h_size = math.ceil(h / 2)
+            pieces.extend([
+                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:]],
+                [img[h_size:, :w_size], img[h_size:, w_size:w_size * 2], img[h_size:, w_size * 2:]]
+            ])
+        elif segments == 9:
+            w_size = math.ceil(w / 3)
+            h_size = math.ceil(h / 3)
+            pieces.extend([
+                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:]],
+                [img[h_size:h_size * 2, :w_size], img[h_size:h_size * 2, w_size:w_size * 2], img[h_size:h_size * 2, w_size * 2:]],
+                [img[h_size * 2:, :w_size], img[h_size * 2:, w_size:w_size * 2], img[h_size * 2:, w_size * 2:]]
+            ])
+        elif segments == 16:
+            w_size = math.ceil(w / 4)
+            h_size = math.ceil(h / 4)
+            pieces.extend([
+                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:w_size * 3], img[:h_size, w_size * 3:]],
+                [img[h_size:h_size * 2, :w_size], img[h_size:h_size * 2, w_size:w_size * 2], img[h_size:h_size * 2, w_size * 2:w_size * 3],
+                 img[h_size:h_size * 2, w_size * 3:]],
+                [img[h_size * 2:h_size * 3, :w_size], img[h_size * 2:h_size * 3, w_size:w_size * 2], img[h_size * 2:h_size * 3, w_size * 2:w_size * 3],
+                 img[h_size * 2:h_size * 3, w_size * 3:]],
+                [img[h_size * 3:, :w_size], img[h_size * 3:, w_size:w_size * 2], img[h_size * 3:, w_size * 2:w_size * 3], img[h_size * 3:, w_size * 3:]]
+            ])
+        elif segments == 25:
+            w_size = math.ceil(w / 5)
+            h_size = math.ceil(h / 5)
+            pieces.extend([
+                [img[:h_size, i * w_size:(i + 1) * w_size] for i in range(5)],
+                [img[h_size:h_size * 2, i * w_size:(i + 1) * w_size] for i in range(5)],
+                [img[h_size * 2:h_size * 3, i * w_size:(i + 1) * w_size] for i in range(5)],
+                [img[h_size * 3:h_size * 4, i * w_size:(i + 1) * w_size] for i in range(5)],
+                [img[h_size * 4:, i * w_size:(i + 1) * w_size] for i in range(5)]
+            ])
+        elif segments == 36:
+            w_size = math.ceil(w / 6)
+            h_size = math.ceil(h / 6)
+            pieces.extend([
+                [img[:h_size, i * w_size:(i + 1) * w_size] for i in range(6)],
+                [img[h_size:h_size * 2, i * w_size:(i + 1) * w_size] for i in range(6)],
+                [img[h_size * 2:h_size * 3, i * w_size:(i + 1) * w_size] for i in range(6)],
+                [img[h_size * 3:h_size * 4, i * w_size:(i + 1) * w_size] for i in range(6)],
+                [img[h_size * 4:h_size * 5, i * w_size:(i + 1) * w_size] for i in range(6)],
+                [img[h_size * 5:, i * w_size:(i + 1) * w_size] for i in range(6)]
+            ])
+        else:
+            pieces.append([img])
+        return pieces
+
+    def glueImage(self, pieces):
+        """
+        Combines the segments of an image into a single image.
+
+        Args:
+            pieces (list): A list of lists containing numpy.ndarrays representing the segments of the image.
+
+        Returns:
+            numpy.ndarray: The combined image.
+        """
+        rows = [cv2.hconcat(row) for row in pieces]
+        return cv2.vconcat(rows)
+
 
 class AlgorithmController:
     """Base class for algorithm controllers that manages algorithm options and validation."""
@@ -185,19 +273,28 @@ class AlgorithmController:
 class AnalysisResult:
     """Class representing the result of an image processing operation."""
 
-    def __init__(self, input_path=None, output_path=None, areas_of_interest=None, base_contour_count=None, error_message=None):
+    def __init__(self, input_path=None, output_path=None, output_dir=None, areas_of_interest=None, base_contour_count=None, error_message=None):
         """
         Initializes an AnalysisResult with the given parameters.
 
         Args:
             input_path (str, optional): Path to the input image. Defaults to None.
             output_path (str, optional): Path to the output image. Defaults to None.
+            output_dir (str, optional): Path to the output directory. Defaults to None.
             areas_of_interest (list, optional): List of detected areas of interest. Defaults to None.
             base_contour_count (int, optional): Count of base contours. Defaults to None.
             error_message (str, optional): Error message if processing failed. Defaults to None.
         """
         self.input_path = input_path
-        self.output_path = output_path
+        # Turn the output path into a relative path.
+        if output_path is not None:
+            if os.path.isabs(output_path):
+                self.output_path = output_path.replace(output_dir, '')
+                self.output_path = self.output_path[1:]
+            else:
+                self.output_path = output_path
+        else:
+            self.output_path = output_path
         self.areas_of_interest = areas_of_interest
         self.base_contour_count = base_contour_count
         self.error_message = error_message

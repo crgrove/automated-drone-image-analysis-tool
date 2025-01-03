@@ -73,6 +73,16 @@
            <string>16</string>
           </property>
          </item>
+         <item>
+          <property name="text">
+           <string>25</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>36</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item>

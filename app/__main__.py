@@ -9,7 +9,7 @@ import qdarktheme
 from core.services.LoggerService import LoggerService
 from os import path
 
-version = '1.4.0'
+version = '1.4.1'
 
 
 def main():

@@ -1,5 +1,6 @@
 import qimage2ndarray
 import imghdr
+import math
 from pathlib import Path
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
@@ -50,6 +51,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self.skipHiddenClicked)
         self.thumbnail_limit = 30
+        self.thumbnail_size = (122, 78)
         self.thumbnail_loader = None
         self.visible_thumbnails_range = (0, 0)
         self.loadImages()
@@ -123,7 +125,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             layout.addWidget(button)
             layout.setAlignment(Qt.AlignCenter)
             frame.setLayout(layout)
-            frame.setFixedSize(QSize(122, 78))
+            frame.setFixedSize(QSize(*self.thumbnail_size))
             frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
             overlay = QLabel(frame)
             overlay.setFixedSize(frame.width(), frame.height())
@@ -179,11 +181,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         max_scroll_value = scrollbar.maximum()
         current_scroll_value = scrollbar.value()
         total_images = len(self.images)
+        visible_thumbnails = math.ceil(self.width()/self.thumbnail_size[0])
 
-        visible_start_index = int((current_scroll_value / max_scroll_value) * total_images)
-        visible_start_index = max(0, visible_start_index - int(self.thumbnail_limit))
-        visible_end_index = min(visible_start_index + self.thumbnail_limit + 10, total_images)
-
+        current_index = math.ceil((current_scroll_value / max_scroll_value) * total_images)
+        visible_start_index = max(0, current_index - int(self.thumbnail_limit))
+        visible_end_index = min(current_index + visible_thumbnails + 4, total_images)
         if (int(visible_start_index), int(visible_end_index)) != self.visible_thumbnails_range:
             self.loadThumbnailsInRange(visible_start_index, visible_end_index)
             self.visible_thumbnails_range = (int(visible_start_index), int(visible_end_index))
@@ -198,6 +200,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Ensures the active thumbnail is visible in the scroll area."""
         if self.active_thumbnail:
             self.thumbnailScrollArea.ensureWidgetVisible(self.active_thumbnail)
+            self.onThumbnailScroll()
 
     def setActiveThumbnail(self, button):
         """Sets the specified thumbnail as active.
@@ -310,6 +313,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         count = 0
         self.highlights = []
         for area_of_interest in image['areas_of_interest']:
+            # Create container widget for thumbnail and label
             container = QWidget()
             layout = QVBoxLayout(container)
             layout.setSpacing(2)
@@ -318,10 +322,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             center = area_of_interest['center']
             radius = area_of_interest['radius'] + 10
             crop_arr = self.crop_image(img_arr, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
-           
+
+            # Create the image viewer
             highlight = QtImageViewer(self, container, center, True)
             highlight.setObjectName(f"highlight{count}")
-            highlight.setMinimumSize(QSize(190, 170))  # Reduced height to make room for label
+            highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
             highlight.aspectRatioMode = Qt.KeepAspectRatio
             img = qimage2ndarray.array2qimage(crop_arr)
             highlight.setImage(img)
@@ -345,11 +350,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             layout.addWidget(highlight)
             layout.addWidget(coord_label)
 
+            # Create list item
             listItem = QListWidgetItem()
-            listItem.setSizeHint(QSize(190, 200)) # Increased height to accommodate label
+            listItem.setSizeHint(QSize(190, 210))  # Increased height to accommodate label
             self.aoiListWidget.addItem(listItem)
             self.aoiListWidget.setItemWidget(listItem, container)
-            
+            self.aoiListWidget.setSpacing(5)
             self.highlights.append(highlight)
             highlight.leftMouseButtonPressed.connect(self.areaOfInterestClick)
             count += 1
@@ -418,7 +424,6 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def showNoImagesMessage(self):
         """Displays an error message when there are no available images."""
-        self.mainImage = None
         self.showError("No active images available.")
 
     def hideImageChange(self, state):
@@ -444,6 +449,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                     self.hidden_image_count -= 1
             image['hidden'] = state
             self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
+            if state:
+                self.nextImageButtonClicked()
         else:
             self.logger.error("Image XML element is None, cannot update 'hidden' attribute.")
 
