@@ -8,19 +8,20 @@ from core.services.ThermalParserService import ThermalParserService
 class ThermalRangeService(AlgorithmService):
     """Service that executes the Thermal Range algorithm to detect and highlight areas of interest in thermal images."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the ThermalRangeService with specific parameters for processing thermal images.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'minTemp', 'maxTemp', and 'colorMap'.
         """
         self.logger = LoggerService()
-        super().__init__('MatchedFilter', identifier, min_area, aoi_radius, combine_aois, options, True)
+        super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.min_temp = options['minTemp']
         self.max_temp = options['maxTemp']
         self.color_map = options['colorMap']

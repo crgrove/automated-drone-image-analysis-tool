@@ -11,19 +11,20 @@ from helpers.MetaDataHelper import MetaDataHelper
 class ThermalAnomalyService(AlgorithmService):
     """Service that executes the Thermal Anomaly algorithm to detect and highlight temperature anomalies in thermal images."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the ThermalAnomalyService with specific parameters for detecting thermal anomalies.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'threshold', 'type', and 'colorMap'.
         """
         self.logger = LoggerService()
-        super().__init__('MatchedFilter', identifier, min_area, aoi_radius, combine_aois, options, True)
+        super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.threshold = options['threshold']
         self.direction = options['type']
         self.color_map = options['colorMap']

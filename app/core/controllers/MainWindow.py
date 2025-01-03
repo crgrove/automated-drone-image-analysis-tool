@@ -73,6 +73,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.settings_service = SettingsService()
         self.setDefaults()
 
+        # Store previous valid values
+        self._previous_min_area = self.minAreaSpinBox.value()
+        self._previous_max_area = self.maxAreaSpinBox.value()
+        
+        # Connect spinbox signals
+        self.minAreaSpinBox.editingFinished.connect(self.minAreaEditingFinished)
+        self.maxAreaSpinBox.editingFinished.connect(self.maxAreaEditingFinished)
+
     def loadAlgorithms(self):
         """
         Loads and categorizes algorithms for selection in the algorithm combobox.
@@ -196,6 +204,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             kmeans_clusters = self.clustersSpinBox.value() if self.kMeansCheckbox.isChecked() else None
 
             self.settings_service.setSetting('MinObjectArea', self.minAreaSpinBox.value())
+            self.settings_service.setSetting('MaxObjectArea', self.maxAreaSpinBox.value())
             self.settings_service.setSetting('IdentifierColor', self.identifierColor)
             self.settings_service.setSetting('MaxProcesses', self.maxProcessesSpinBox.value())
 
@@ -205,7 +214,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
-                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options,
+                self.maxAreaSpinBox.value()
             )
 
             thread = QThread()
@@ -366,6 +376,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxProcessesSpinBox.setValue(settings['num_processes'])
         if 'min_area' in settings:
             self.minAreaSpinBox.setValue(int(settings['min_area']))
+        if 'max_area' in settings:
+            self.maxAreaSpinBox.setValue(int(settings['max_area']))
         if 'hist_ref_path' in settings:
             self.histogramCheckbox.setChecked(True)
             self.histogramLine.setText(settings['hist_ref_path'])
@@ -451,6 +463,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if isinstance(min_area, int):
             self.minAreaSpinBox.setValue(min_area)
 
+        max_area = self.settings_service.getSetting('MaxObjectArea')
+        if isinstance(max_area, int):
+            self.maxAreaSpinBox.setValue(max_area)
+
         max_processes = self.settings_service.getSetting('MaxProcesses')
         if isinstance(max_processes, int):
             self.maxProcessesSpinBox.setValue(max_processes)
@@ -491,3 +507,39 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             theme (str): 'Light' or 'Dark'
         """
         self.theme.setup_theme("light" if theme == 'Light' else "dark")
+
+    def minAreaEditingFinished(self):
+        """
+        Validates the minimum area value after manual entry is complete.
+        """
+        new_value = self.minAreaSpinBox.value()
+        if new_value >= self.maxAreaSpinBox.value():
+            self.minAreaSpinBox.setValue(self._previous_min_area)
+            self.showAreaValidationError("The min object area (px) value must be less than the max object area (px) value")
+        else:
+            self._previous_min_area = new_value
+
+    def maxAreaEditingFinished(self):
+        """
+        Validates the maximum area value after manual entry is complete.
+        """
+        new_value = self.maxAreaSpinBox.value()
+        if new_value <= self.minAreaSpinBox.value():
+            self.maxAreaSpinBox.setValue(self._previous_max_area)
+            self.showAreaValidationError("The max object area (px) value must be greater than the min object area (px) value")
+        else:
+            self._previous_max_area = new_value
+
+    def showAreaValidationError(self, message):
+        """
+        Displays an error message for area validation.
+        
+        Args:
+            message (str): The error message to display.
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(message)
+        msg.setWindowTitle("Invalid Value")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()

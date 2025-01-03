@@ -3,7 +3,7 @@ import imghdr
 from pathlib import Path
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QPushButton, QFrame, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QPushButton, QFrame, QVBoxLayout, QLabel, QWidget
 from qtwidgets import Toggle
 
 from core.views.Viewer_ui import Ui_Viewer
@@ -310,22 +310,46 @@ class Viewer(QMainWindow, Ui_Viewer):
         count = 0
         self.highlights = []
         for area_of_interest in image['areas_of_interest']:
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            layout.setSpacing(2)
+            layout.setContentsMargins(0, 0, 0, 0)
+
             center = area_of_interest['center']
             radius = area_of_interest['radius'] + 10
             crop_arr = self.crop_image(img_arr, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
-            highlight = QtImageViewer(self, self.aoiListWidget, center, True)
+           
+            highlight = QtImageViewer(self, container, center, True)
             highlight.setObjectName(f"highlight{count}")
-            highlight.setMinimumSize(QSize(190, 190))
+            highlight.setMinimumSize(QSize(190, 170))  # Reduced height to make room for label
             highlight.aspectRatioMode = Qt.KeepAspectRatio
             img = qimage2ndarray.array2qimage(crop_arr)
             highlight.setImage(img)
             highlight.canZoom = False
             highlight.canPan = False
 
+            # Create coordinate label
+            coord_label = QLabel(f"X: {center[0]}, Y: {center[1]}")
+            coord_label.setAlignment(Qt.AlignCenter)
+            coord_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(0, 0, 0, 150);
+                    color: white;
+                    padding: 2px;
+                    font-size: 10pt;
+                    border-radius: 2px;
+                }
+            """)
+
+            # Add widgets to layout
+            layout.addWidget(highlight)
+            layout.addWidget(coord_label)
+
             listItem = QListWidgetItem()
-            listItem.setSizeHint(QSize(190, 190))
+            listItem.setSizeHint(QSize(190, 200)) # Increased height to accommodate label
             self.aoiListWidget.addItem(listItem)
-            self.aoiListWidget.setItemWidget(listItem, highlight)
+            self.aoiListWidget.setItemWidget(listItem, container)
+            
             self.highlights.append(highlight)
             highlight.leftMouseButtonPressed.connect(self.areaOfInterestClick)
             count += 1
