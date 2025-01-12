@@ -14,3 +14,4 @@ pillow
 pandas
 utm
 PyExifTool
+reportlab

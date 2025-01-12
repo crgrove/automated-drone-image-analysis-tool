@@ -14,6 +14,7 @@ from core.services.XmlService import XmlService
 from helpers.LocationInfo import LocationInfo
 from core.services.LoggerService import LoggerService
 from helpers.MetaDataHelper import MetaDataHelper
+from core.services.PdfGeneratorService import PdfGeneratorService
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -61,6 +62,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.setFocusPolicy(Qt.StrongFocus)
         self.hideImageToggle.setFocusPolicy(Qt.NoFocus)
         self.skipHidden.setFocusPolicy(Qt.NoFocus)
+
+        # Connect PDF button
+        self.PdfButton.clicked.connect(self.PdfButtonClicked)
 
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
@@ -563,6 +567,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         elif self.position_format == 'UTM':
             utm = LocationInfo.convertDegreesToUtm(latitude, longitude)
             return f"{utm['zone_number']}{utm['zone_letter']} {utm['easting']} {utm['northing']}"
+
+    def PdfButtonClicked(self):
+        """Handles clicks on the Generate PDF button."""
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF files (*.pdf)")
+        if fileName:
+            try:
+                pdf_generator = PdfGeneratorService(self)
+                pdf_generator.generate_report(fileName)
+            except Exception as e:
+                self.logger.error(f"Error generating PDF file: {str(e)}")
+                self.showError(f"Failed to generate PDF file: {str(e)}")
 
 
 class ThumbnailLoader(QThread):
