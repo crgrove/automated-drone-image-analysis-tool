@@ -2,19 +2,22 @@ import qimage2ndarray
 import imghdr
 import math
 from pathlib import Path
-from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon
+from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QPushButton, QFrame, QVBoxLayout, QLabel, QWidget
+from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QPushButton, QFrame, QVBoxLayout, QLabel, QWidget
 from qtwidgets import Toggle
 
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
+
+from core.services.LoggerService import LoggerService
 from core.services.KMLService import KMLService
 from core.services.XmlService import XmlService
-from helpers.LocationInfo import LocationInfo
-from core.services.LoggerService import LoggerService
-from helpers.MetaDataHelper import MetaDataHelper
 from core.services.PdfGeneratorService import PdfGeneratorService
+from core.services.ZipBundleService import ZipBundleService
+
+from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -34,14 +37,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.mainImage = None
         self.logger = LoggerService()
         self.setupUi(self)
-        self.addHideImageToggle()
+        self._add_hideImageToggle()
         self.xml_path = xml_path
         self.xmlService = XmlService(xml_path)
-        self.images = self.xmlService.getImages()
+        self.images = self.xmlService.get_images()
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden") is True)
         self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
-        settings, _ = self.xmlService.getSettings()
+        settings, _ = self.xmlService.get_settings()
         self.is_thermal = (settings['thermal'] == 'True')
         self.position_format = position_format
         self.position = None
@@ -50,33 +53,37 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
-        self.skipHidden.clicked.connect(self.skipHiddenClicked)
+        self.skipHidden.clicked.connect(self._skip_hidden_clicked)
         self.thumbnail_limit = 30
         self.thumbnail_size = (122, 78)
         self.thumbnail_loader = None
         self.visible_thumbnails_range = (0, 0)
-        self.loadImages()
-        self.initializeThumbnails()
-        self.loadThumbnailsInRange(0, self.thumbnail_limit)
+        self._load_images()
+        self._initialize_thumbnails()
+        self._load_thumbnails_in_range(0, self.thumbnail_limit)
         self.showMaximized()
         self.setFocusPolicy(Qt.StrongFocus)
         self.hideImageToggle.setFocusPolicy(Qt.NoFocus)
         self.skipHidden.setFocusPolicy(Qt.NoFocus)
-
-        # Connect PDF button
-        self.PdfButton.clicked.connect(self.PdfButtonClicked)
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid blue;
+            }
+        """) 
 
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
         for thread, analyze in self.__threads:
             thread.quit()
 
-    def addHideImageToggle(self):
+    def _add_hideImageToggle(self):
         """Replaces the hide image checkbox with a toggle button."""
         self.hideImageToggle = Toggle()
         self.ButtonLayout.replaceWidget(self.hideImageCheckbox, self.hideImageToggle)
         self.hideImageCheckbox.deleteLater()
-        self.hideImageToggle.clicked.connect(self.hideImageChange)
+        self.hideImageToggle.clicked.connect(self._hide_image_change)
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation and hiding images.
@@ -85,15 +92,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             e (QKeyEvent): Key event containing the key pressed.
         """
         if e.key() == Qt.Key_Right:
-            self.nextImageButtonClicked()
+            self._nextImageButton_clicked()
         if e.key() == Qt.Key_Left:
-            self.previousImageButtonClicked()
+            self._previousImageButton_clicked()
         if e.key() == Qt.Key_Down or e.key() == Qt.Key_P:
-            self.hideImageChange(True)
+            self._hide_image_change(True)
         if e.key() == Qt.Key_Up or e.key() == Qt.Key_U:
-            self.hideImageChange(False)
+            self._hide_image_change(False)
 
-    def loadImages(self):
+    def _load_images(self):
         """Loads and validates images from the XML file."""
         valid_images = []
         for index, image in enumerate(self.images[:]):
@@ -104,17 +111,19 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.images = valid_images
 
         if len(self.images) == 0:
-            self.showNoImagesMessage()
+            self._show_no_images_message()
         else:
-            self.loadInitialImage()
-            self.previousImageButton.clicked.connect(self.previousImageButtonClicked)
-            self.nextImageButton.clicked.connect(self.nextImageButtonClicked)
-            self.KmlButton.clicked.connect(self.KmlButtonClicked)
+            self._load_initial_image()
+            self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
+            self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
+            self.kmlButton.clicked.connect(self._kmlButton_clicked)
+            self.pdfButton.clicked.connect(self._pdfButton_clicked)
+            self.zipButton.clicked.connect(self._zipButton_clicked)
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
-            self.jumpToLine.editingFinished.connect(self.jumpToLineChanged)
-            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.onThumbnailScroll)
+            self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
+            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
 
-    def initializeThumbnails(self):
+    def _initialize_thumbnails(self):
         """Initializes the layout for thumbnails with default styling."""
         self.thumbnailLayout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.thumbnailLayout.setSpacing(5)
@@ -124,7 +133,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             button.setFixedSize(QSize(100, 56))
             button.setProperty('imageIndex', index)
             button.setProperty('frame', frame)
-            button.clicked.connect(self.onThumbnailClicked)
+            button.clicked.connect(self._on_thumbnail_clicked)
             layout = QVBoxLayout(frame)
             layout.addWidget(button)
             layout.setAlignment(Qt.AlignCenter)
@@ -142,7 +151,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # self.scrollAreaWidgetContents.setMinimumHeight(96)
         # self.thumbnailScrollArea.setMinimumHeight(116)
 
-    def loadThumbnailsInRange(self, start_index, end_index):
+    def _load_thumbnails_in_range(self, start_index, end_index):
         """Loads thumbnails in the specified range asynchronously.
 
         Args:
@@ -153,12 +162,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         thread = QThread()
         self.__threads.append((thread, self.thumbnail_loader))
         self.thumbnail_loader.moveToThread(thread)
-        self.thumbnail_loader.thumbnailLoaded.connect(self.onThumbnailLoaded)
-        self.thumbnail_loader.finished.connect(self.onThumbnailLoadFinished)
+        self.thumbnail_loader.thumbnail_loaded.connect(self._on_thumbnail_loaded)
+        self.thumbnail_loader.finished.connect(self._on_thumbnail_load_finished)
         thread.started.connect(self.thumbnail_loader.run)
         thread.start()
 
-    def onThumbnailLoaded(self, index, icon):
+    def _on_thumbnail_loaded(self, index, icon):
         """Updates the thumbnail icon and overlay for the loaded thumbnail.
 
         Args:
@@ -174,39 +183,41 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         self.loaded_thumbnails.append(index)
 
-    def onThumbnailLoadFinished(self):
+    def _on_thumbnail_load_finished(self):
         """Stops and quits all thumbnail threads after loading is complete."""
         for thread, analyze in self.__threads:
             thread.quit()
 
-    def onThumbnailScroll(self):
+    def _on_thumbnail_scroll(self):
         """Loads thumbnails in the visible range when the user scrolls."""
         scrollbar = self.thumbnailScrollArea.horizontalScrollBar()
         max_scroll_value = scrollbar.maximum()
         current_scroll_value = scrollbar.value()
         total_images = len(self.images)
         visible_thumbnails = math.ceil(self.width()/self.thumbnail_size[0])
-
-        current_index = math.ceil((current_scroll_value / max_scroll_value) * total_images)
+        if max_scroll_value == 0:
+            current_index = 0
+        else:
+            current_index = math.ceil((current_scroll_value / max_scroll_value) * total_images)
         visible_start_index = max(0, current_index - int(self.thumbnail_limit))
         visible_end_index = min(current_index + visible_thumbnails + 4, total_images)
         if (int(visible_start_index), int(visible_end_index)) != self.visible_thumbnails_range:
-            self.loadThumbnailsInRange(visible_start_index, visible_end_index)
+            self._load_thumbnails_in_range(visible_start_index, visible_end_index)
             self.visible_thumbnails_range = (int(visible_start_index), int(visible_end_index))
 
-    def onThumbnailClicked(self):
+    def _on_thumbnail_clicked(self):
         """Loads the image associated with the clicked thumbnail."""
         button = self.sender()
         self.current_image = button.property('imageIndex')
-        self.loadImage()
+        self._load_image()
 
-    def scrollThumbnailIntoView(self):
+    def _scroll_thumbnail_int_view(self):
         """Ensures the active thumbnail is visible in the scroll area."""
         if self.active_thumbnail:
             self.thumbnailScrollArea.ensureWidgetVisible(self.active_thumbnail)
-            self.onThumbnailScroll()
+            self._on_thumbnail_scroll()
 
-    def setActiveThumbnail(self, button):
+    def _set_active_thumbnail(self, button):
         """Sets the specified thumbnail as active.
 
         Args:
@@ -219,7 +230,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         frame.setStyleSheet("QFrame { border: 1px solid blue; }")
         self.active_thumbnail = frame
 
-    def loadInitialImage(self):
+    def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:
             self.current_image = None
@@ -244,24 +255,24 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.mainImage.setImage(img)
             self.ImageLayout.replaceWidget(self.placeholderImage, self.mainImage)
             self.fileNameLabel.setText(image['name'])
-            self.loadAreasofInterest(image)
+            self._load_areas_of_interest(image)
 
-            gps_coords = LocationInfo.getGPS(image['path'])
+            gps_coords = LocationInfo.get_gps(image['path'])
             if gps_coords:
-                self.position = self.getPosition(gps_coords['latitude'], gps_coords['longitude'])
+                self.position = self.get_position(gps_coords['latitude'], gps_coords['longitude'])
                 self.statusbar.showMessage("GPS Coordinates: " + self.position)
             else:
                 self.statusbar.showMessage("")
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
 
             if self.is_thermal:
-                self.temperature_data = self.loadThermalData(image['path'])
-            self.mainImage.mousePositionOnImageChanged.connect(self.mainImageMousePos)
+                self.temperature_data = self._load_thermal_data(image['path'])
+            self.mainImage.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
             self.hideImageToggle.setChecked(image['hidden'])
         except Exception as e:
             self.logger.error(e)
 
-    def mainImageMousePos(self, pos):
+    def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or GPS coordinates at the mouse position.
 
         Args:
@@ -278,35 +289,35 @@ class Viewer(QMainWindow, Ui_Viewer):
                     new_message = f"Temperature: {temp_display}"
                 self.statusbar.showMessage(new_message)
 
-    def loadImage(self):
+    def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
         try:
             image = self.images[self.current_image]
-            self.setActiveThumbnail(image['thumbnail'])
+            self._set_active_thumbnail(image['thumbnail'])
             img = QImage(image['path'])
             self.mainImage.setImage(img)
             self.fileNameLabel.setText(image['name'])
-            self.loadAreasofInterest(image)
+            self._load_areas_of_interest(image)
             self.mainImage.resetZoom()
             self.mainImage.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
 
-            gps_coords = LocationInfo.getGPS(image['path'])
+            gps_coords = LocationInfo.get_gps(image['path'])
             self.position = None
             if gps_coords:
-                self.position = self.getPosition(gps_coords['latitude'], gps_coords['longitude'])
+                self.position = self.get_position(gps_coords['latitude'], gps_coords['longitude'])
                 self.statusbar.showMessage("GPS Coordinates: " + self.position)
             else:
                 self.statusbar.showMessage("")
 
             if self.is_thermal:
-                self.temperature_data = self.loadThermalData(image['path'])
-            self.mainImage.mousePositionOnImageChanged.connect(self.mainImageMousePos)
+                self.temperature_data = self._load_thermal_data(image['path'])
+            self.mainImage.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
         except Exception as e:
             self.logger.error(e)
 
-    def loadAreasofInterest(self, image):
+    def _load_areas_of_interest(self, image):
         """Loads areas of interest thumbnails for a given image.
 
         Args:
@@ -361,12 +372,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.aoiListWidget.setItemWidget(listItem, container)
             self.aoiListWidget.setSpacing(5)
             self.highlights.append(highlight)
-            highlight.leftMouseButtonPressed.connect(self.areaOfInterestClick)
+            highlight.leftMouseButtonPressed.connect(self._area_of_interest_click)
             count += 1
 
         self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
 
-    def loadThermalData(self, path):
+    def _load_thermal_data(self, path):
         """Loads and converts thermal data based on the selected temperature unit.
 
         Args:
@@ -375,10 +386,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         Returns:
             np.ndarray: Temperature data array in the selected unit.
         """
-        data = MetaDataHelper.getTemperatureData(path)
+        data = MetaDataHelper.get_temperature_data(path)
         return (data * 1.8) + 32 if self.temperature_unit == 'F' else data
 
-    def previousImageButtonClicked(self):
+    def _previousImageButton_clicked(self):
         """Navigates to the previous image in the list, skipping hidden images if applicable."""
         found = False
         for i in range(self.current_image - 1, -1, -1):
@@ -397,12 +408,12 @@ class Viewer(QMainWindow, Ui_Viewer):
                 break
 
         if found:
-            self.loadImage()
-            self.scrollThumbnailIntoView()
+            self._load_image()
+            self._scroll_thumbnail_int_view()
         else:
-            self.showNoImagesMessage()
+            self._show_no_images_message()
 
-    def nextImageButtonClicked(self):
+    def _nextImageButton_clicked(self):
         """Navigates to the next image in the list, skipping hidden images if applicable."""
         found = False
         for i in range(self.current_image + 1, len(self.images)):
@@ -421,16 +432,16 @@ class Viewer(QMainWindow, Ui_Viewer):
                 break
 
         if found:
-            self.loadImage()
-            self.scrollThumbnailIntoView()
+            self._load_image()
+            self._scroll_thumbnail_int_view()
         else:
-            self.showNoImagesMessage()
+            self._show_no_images_message()
 
-    def showNoImagesMessage(self):
+    def _show_no_images_message(self):
         """Displays an error message when there are no available images."""
-        self.showError("No active images available.")
+        self._show_error("No active images available.")
 
-    def hideImageChange(self, state):
+    def _hide_image_change(self, state):
         """Toggles visibility of the current image and updates XML.
 
         Args:
@@ -441,7 +452,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         image_element = image['xml']
         if image_element is not None:
             image_element.set('hidden', "True" if state else "False")
-            self.xmlService.saveXmlFile(self.xml_path)
+            self.xmlService.save_xml_file(self.xml_path)
             overlay = image['thumbnail'].property('overlay')
             if state:
                 overlay.setStyleSheet("background-color: rgba(128, 128, 128, 150);")
@@ -454,11 +465,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             image['hidden'] = state
             self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
             if state:
-                self.nextImageButtonClicked()
+                self._nextImageButton_clicked()
         else:
             self.logger.error("Image XML element is None, cannot update 'hidden' attribute.")
 
-    def skipHiddenClicked(self, state):
+    def _skip_hidden_clicked(self, state):
         """Updates visibility setting for hidden images based on skipHidden checkbox.
 
         Args:
@@ -466,12 +477,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         self.show_hidden = not state
 
-    def jumpToLineChanged(self):
+    def _jumpToLine_changed(self):
         """Jumps to the specified image index when changed in the jump line input."""
         if self.jumpToLine.text() != "":
             self.current_image = int(self.jumpToLine.text()) - 1
-            self.loadImage()
-            self.scrollThumbnailIntoView()
+            self._load_image()
+            self._scroll_thumbnail_int_view()
             self.jumpToLine.setText("")
 
     def resizeEvent(self, event):
@@ -482,9 +493,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         super().resizeEvent(event)
         if self.mainImage is not None:
-            self.loadImage()
+            self._load_image()
 
-    def areaOfInterestClick(self, x, y, img):
+    def _area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.
 
         Args:
@@ -494,13 +505,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         self.mainImage.zoomToArea(img.center, 6)
 
-    def KmlButtonClicked(self):
+    def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
         fileName, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
         if fileName:  # Only proceed if a filename was selected
-            self.generateKml(fileName)
+            self.generate_kml(fileName)
 
-    def generateKml(self, output_path):
+    def generate_kml(self, output_path):
         """Generates a KML file from images' GPS data and saves it.
 
         Args:
@@ -511,12 +522,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         for image in self.images:
             if image['hidden']:
                 continue
-            gps_coords = LocationInfo.getGPS(image['path'])
+            gps_coords = LocationInfo.get_gps(image['path'])
             if gps_coords:
                 point = {"name": image['name'], "long": gps_coords['longitude'], "lat": gps_coords['latitude']}
                 kml_points.append(point)
-        kml.addPoints(kml_points)
-        kml.saveKml(output_path)
+        kml.add_points(kml_points)
+        kml.save_kml(output_path)
 
     def crop_image(self, img_arr, startx, starty, endx, endy):
         """Crops a portion of an image array.
@@ -535,7 +546,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         ex, ey = min(img_arr.shape[1] - 1, endx), min(img_arr.shape[0] - 1, endy)
         return img_arr[sy:ey, sx:ex]
 
-    def showError(self, text):
+    def _show_error(self, text):
         """Displays an error message box.
 
         Args:
@@ -548,7 +559,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
-    def getPosition(self, latitude, longitude):
+    def get_position(self, latitude, longitude):
         """Converts latitude and longitude to a formatted position string.
 
         Args:
@@ -561,29 +572,112 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.position_format == 'Lat/Long - Decimal Degrees':
             return f"{latitude}, {longitude}"
         elif self.position_format == 'Lat/Long - Degrees, Minutes, Seconds':
-            dms = LocationInfo.convertDecimalToDms(latitude, longitude)
+            dms = LocationInfo.convert_decimal_to_dms(latitude, longitude)
             return f"{dms['latitude']['degrees']}°{dms['latitude']['minutes']}'{dms['latitude']['seconds']}\"{dms['latitude']['reference']} " \
                    f"{dms['longitude']['degrees']}°{dms['longitude']['minutes']}'{dms['longitude']['seconds']}\"{dms['longitude']['reference']}"
         elif self.position_format == 'UTM':
-            utm = LocationInfo.convertDegreesToUtm(latitude, longitude)
+            utm = LocationInfo.convert_degrees_to_utm(latitude, longitude)
             return f"{utm['zone_number']}{utm['zone_letter']} {utm['easting']} {utm['northing']}"
 
-    def PdfButtonClicked(self):
+    def _pdfButton_clicked(self):
         """Handles clicks on the Generate PDF button."""
         fileName, _ = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF files (*.pdf)")
         if fileName:
             try:
                 pdf_generator = PdfGeneratorService(self)
-                pdf_generator.generate_report(fileName)
+
+                # Create and show the loading dialog
+                self.loading_dialog = LoadingDialog(self)
+                self.pdf_thread = PdfGenerationThread(pdf_generator, fileName)
+
+                # Connect signals
+                self.pdf_thread.finished.connect(self._on_pdf_generation_finished)
+                self.pdf_thread.canceled.connect(self._on_pdf_generation_cancelled)
+                self.pdf_thread.errorOccurred.connect(self._on_pdf_generation_error) 
+
+                self.pdf_thread.start()
+
+                # Show the loading dialog and handle cancellation
+                if self.loading_dialog.exec_() == QDialog.Rejected:
+                    self.pdf_thread.cancel()
+
             except Exception as e:
                 self.logger.error(f"Error generating PDF file: {str(e)}")
-                self.showError(f"Failed to generate PDF file: {str(e)}")
+                self._show_error(f"Failed to generate PDF file: {str(e)}")
+    
+    def _on_pdf_generation_finished(self):
+        """Handles successful completion of PDF generation."""
+        self.loading_dialog.accept()
+        QMessageBox.information(self, "Success", "PDF report generated successfully!")
+
+    def _on_pdf_generation_cancelled(self):
+        """Handles cancellation of PDF generation."""
+        if self.pdf_thread and self.pdf_thread.isRunning():
+            self.pdf_thread.terminate()  # Forcefully terminate the thread
+            self.pdf_thread.wait()      # Wait for the thread to terminate completely
+        # Close the loading dialog
+        if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
+            self.loading_dialog.reject()  # Close the dialog
+    
+    def _on_pdf_generation_error(self, error_message):
+        """Handles errors during PDF generation."""
+        if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
+            self.loading_dialog.reject()  # Close the loading dialog
+        self._show_error(f"PDF generation failed: {error_message}")
+
+    def _zipButton_clicked(self):
+            """Handles clicks on the Generate Zip Bundle."""
+            fileName, _ = QFileDialog.getSaveFileName(self, "Save Zip File", "", "Zip files (*.zip)")
+            if fileName:
+                try:
+                    file_paths = [img['path'] for img in self.images if not img.get('hidden', False)]
+                    zip_generator = ZipBundleService()
+                    zip_generator.generate_zip_file(file_paths, fileName)
+                except Exception as e:
+                    self.logger.error(f"Error generating Zip file: {str(e)}")
+                    self._show_error(f"Failed to generate Zip file: {str(e)}")
+
+
+class LoadingDialog(QDialog):
+    """Custom dialog for showing a loading spinner and message."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Generating Report")
+        self.setModal(True)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setFixedSize(300, 200)
+
+        # Layout and widgets
+        layout = QVBoxLayout()
+
+        # Add spinning loader
+        self.spinner_label = QLabel(self)
+        self.spinner_label.setAlignment(Qt.AlignCenter)
+        self.spinner_movie = QMovie(":/icons/loading.gif")  # Path to your GIF in the resource file
+        self.spinner_movie.setScaledSize(QSize(50, 50))  # Adjust the size if needed
+        self.spinner_label.setMovie(self.spinner_movie)
+        self.spinner_movie.start()  # Start the animation
+
+        # Add message label
+        self.message_label = QLabel("Report generation in progress...")
+        self.message_label.setAlignment(Qt.AlignCenter)
+
+        # Add cancel button
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+
+        # Add widgets to layout
+        layout.addWidget(self.spinner_label)
+        layout.addWidget(self.message_label)
+        layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
+
+        self.setLayout(layout)
 
 
 class ThumbnailLoader(QThread):
     """Threaded loader for generating and displaying image thumbnails."""
 
-    thumbnailLoaded = pyqtSignal(int, QIcon)
+    thumbnail_loaded = pyqtSignal(int, QIcon)
 
     def __init__(self, images, start_index, end_index, existing_thumbnails, parent=None):
         """Initializes the thumbnail loader.
@@ -610,4 +704,46 @@ class ThumbnailLoader(QThread):
                 reader.setScaledSize(QSize(100, 56))
                 pixmap = QPixmap.fromImage(reader.read())
                 icon = QIcon(pixmap)
-                self.thumbnailLoaded.emit(index, icon)
+                self.thumbnail_loaded.emit(index, icon)
+
+class PdfGenerationThread(QThread):
+    """Thread for generating the PDF report."""
+    finished = pyqtSignal()
+    canceled = pyqtSignal()
+    errorOccurred = pyqtSignal(str)
+
+    def __init__(self, pdf_generator, output_path):
+        """Initializes the PdfGenerationThread.
+
+        Args:
+            pdf_generator (PdfGeneratorService): The PDF generator instance responsible for creating the report.
+            output_path (str): The file path where the generated PDF will be saved.
+        """
+        super().__init__()
+        self.pdf_generator = pdf_generator
+        self.output_path = output_path
+        self._is_canceled = False
+
+    def run(self):
+        """Executes the PDF generation process.
+
+        If the process is not canceled, it generates the PDF report and emits
+        the `finished` signal upon successful completion.
+        """
+        try:
+            if not self._is_canceled:
+                error_message = self.pdf_generator.generate_report(self.output_path)
+                if error_message:
+                    self.errorOccurred.emit(error_message)  # Emit error if there's an error message
+                else:
+                    self.finished.emit()  # Emit finished if successful
+        except Exception as e:
+            self.errorOccurred.emit(str(e))  # Emit error if an exception occurs
+
+    def cancel(self):
+        """Cancels the PDF generation process.
+
+        Sets the `_is_canceled` flag to True and emits the `canceled` signal.
+        """
+        self._is_canceled = True
+        self.canceled.emit()

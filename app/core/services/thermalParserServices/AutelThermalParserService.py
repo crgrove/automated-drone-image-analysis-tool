@@ -47,7 +47,7 @@ class AutelThermalImageParser:
             dtype (type, optional): Data type for temperature arrays. Defaults to np.float32.
         """
         self._dtype = dtype
-        self._filepath_dll = self.get_default_filepaths()
+        self._filepath_dll = self._get_default_filepaths()
         self.ir_temp_parse = CDLL(self._filepath_dll)
 
         # Define the function prototypes for the DLL
@@ -90,7 +90,7 @@ class AutelThermalImageParser:
         Returns:
             np.ndarray: Color-mapped thermal image.
         """
-        color_map = self.getColorMap(palette)
+        color_map = self._get_color_map(palette)
         normed = cv2.normalize(temperatures, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
         grey = cv2.cvtColor(normed, cv2.COLOR_GRAY2BGR)
 
@@ -102,7 +102,7 @@ class AutelThermalImageParser:
             colorized_img = cv2.applyColorMap(grey, color_map)
         return colorized_img
 
-    def getColorMap(self, palette: str):
+    def _get_color_map(self, palette: str):
         """
         Get the OpenCV color map for the specified palette.
 
@@ -126,7 +126,7 @@ class AutelThermalImageParser:
             case _:
                 return 1
 
-    def get_default_filepaths(self):
+    def _get_default_filepaths(self):
         """
         Get the default file path for the Autel DLL.
 

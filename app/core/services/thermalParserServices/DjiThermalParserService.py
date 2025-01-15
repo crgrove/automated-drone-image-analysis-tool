@@ -75,7 +75,7 @@ class DjiThermalParserService:
             self._filepath_dirp_sub,
             self._filepath_iirp,
             self._filepath_exiftool,
-        ) = self.get_default_filepaths()
+        ) = self._get_default_filepaths()
 
         self._dll_dirp = CDLL(self._filepath_dirp)
         self._dll_dirp_sub = CDLL(self._filepath_dirp_sub)
@@ -205,7 +205,7 @@ class DjiThermalParserService:
         Returns:
             np.ndarray: Color-mapped thermal image.
         """
-        color_map = self.getColorMap(palette)
+        color_map = self._get_color_map(palette)
         with open(filepath_image, 'rb') as file:
             raw = file.read()
             raw_size = c_int32(len(raw))
@@ -232,7 +232,7 @@ class DjiThermalParserService:
 
         return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    def getColorMap(self, palette: str):
+    def _get_color_map(self, palette: str):
         """
         Map a generic palette name to a platform-specific color map value.
 
@@ -256,7 +256,7 @@ class DjiThermalParserService:
             case _:
                 return 0
 
-    def get_default_filepaths(self) -> List[str]:
+    def _get_default_filepaths(self) -> List[str]:
         """
         Get the default file paths for required libraries based on platform and architecture.
 

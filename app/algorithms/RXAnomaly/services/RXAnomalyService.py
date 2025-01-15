@@ -28,10 +28,10 @@ class RXAnomalyService(AlgorithmService):
         """
         self.logger = LoggerService()
         super().__init__('RXAnomaly', identifier, min_area, max_area, aoi_radius, combine_aois, options)
-        self.chi_threshold = self.getThreshold(options['sensitivity'])
+        self.chi_threshold = self.get_threshold(options['sensitivity'])
         self.segments = options['segments']
 
-    def processImage(self, img, full_path, input_dir, output_dir):
+    def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single image using the RX Anomaly algorithm.
 
@@ -45,7 +45,7 @@ class RXAnomalyService(AlgorithmService):
             AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
         """
         try:
-            masks = pieces = self.splitImage(img, self.segments)
+            masks = pieces = self.split_image(img, self.segments)
             for x in range(len(pieces)):
                 for y in range(len(pieces[x])):
                     """
@@ -75,23 +75,23 @@ class RXAnomalyService(AlgorithmService):
                     # Create a binary mask of anomalous pixels based on RX scores
                     masks[x][y] = np.uint8((rx_scores > chi_values)) * 255
                     histogram = None
-            combined_mask = self.glueImage(masks)
+            combined_mask = self.glue_image(masks)
 
             # Find contours of the identified areas and circle areas of interest.
             contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circleAreasOfInterest(img, contours)
+            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
             # Generate the output path and store the processed image.
             output_path = full_path.replace(input_dir, output_dir)
             if augmented_image is not None:
-                self.storeImage(full_path, output_path, augmented_image)
+                self.store_image(full_path, output_path, augmented_image)
 
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             return AnalysisResult(full_path, error_message=str(e))
 
-    def getThreshold(self, sensitivity):
+    def get_threshold(self, sensitivity):
         """
         Calculates the chi-squared threshold based on a sensitivity value.
 

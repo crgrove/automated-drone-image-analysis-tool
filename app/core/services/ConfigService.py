@@ -17,7 +17,7 @@ class ConfigService:
         with open(path) as f:
             self.config = json.load(f)
 
-    def getAlgorithms(self):
+    def get_algorithms(self):
         """
         Retrieve the list of algorithms from the configuration.
 

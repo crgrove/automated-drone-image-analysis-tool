@@ -20,7 +20,7 @@ class XmlService:
         else:
             self.xml = ET.Element('data')
 
-    def getSettings(self):
+    def get_settings(self):
         """
         Parse the XML file to retrieve settings and the count of images with areas of interest.
 
@@ -57,7 +57,7 @@ class XmlService:
                 image_count = len(images_xml)
         return settings, image_count
 
-    def getImages(self):
+    def get_images(self):
         """
         Parse the XML file to retrieve images with areas of interest.
 
@@ -90,7 +90,7 @@ class XmlService:
                 images.append(image)
         return images
 
-    def addSettingsToXml(self, **kwargs):
+    def add_settings_to_xml(self, **kwargs):
         """
         Add user-defined settings to the XML document.
 
@@ -113,7 +113,7 @@ class XmlService:
         except Exception as e:
             self.logger.error(e)
 
-    def addImageToXml(self, img):
+    def add_image_to_xml(self, img):
         """
         Add an image entry to the XML document.
 
@@ -132,7 +132,7 @@ class XmlService:
             area_xml.set('radius', str(area['radius']))
             area_xml.set('area', str(area['area']))
 
-    def saveXmlFile(self, path):
+    def save_xml_file(self, path):
         """
         Save the XML document to the specified path.
 

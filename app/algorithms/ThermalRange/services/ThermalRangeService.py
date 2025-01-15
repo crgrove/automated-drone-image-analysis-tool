@@ -26,7 +26,7 @@ class ThermalRangeService(AlgorithmService):
         self.max_temp = options['maxTemp']
         self.color_map = options['colorMap']
 
-    def processImage(self, img, full_path, input_dir, output_dir):
+    def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single thermal image using the Thermal Range algorithm, identifying and highlighting areas
         of interest based on temperature thresholds.
@@ -43,19 +43,19 @@ class ThermalRangeService(AlgorithmService):
         try:
             # Create an instance of ThermalParserService and parse the thermal image.
             thermal = ThermalParserService(dtype=np.float32)
-            temperature_c, thermal_img = thermal.parseFile(full_path, self.color_map)
+            temperature_c, thermal_img = thermal.parse_file(full_path, self.color_map)
 
             # Create a mask to identify areas within the specified temperature range.
             mask = np.uint8(1 * ((temperature_c > self.min_temp) & (temperature_c < self.max_temp)))
 
             # Find contours of the identified areas and circle areas of interest.
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circleAreasOfInterest(thermal_img, contours)
+            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(thermal_img, contours)
 
             # Generate the output path and store the processed image.
             output_path = full_path.replace(input_dir, output_dir)
             if augmented_image is not None:
-                self.storeImage(full_path, output_path, augmented_image, temperature_c)
+                self.store_image(full_path, output_path, augmented_image, temperature_c)
 
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 

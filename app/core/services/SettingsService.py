@@ -10,7 +10,7 @@ class SettingsService:
         """
         self.settings = QtCore.QSettings('ADIAT')
 
-    def setSetting(self, name, value):
+    def set_setting(self, name, value):
         """
         Set a specified setting in QSettings.
 
@@ -20,7 +20,7 @@ class SettingsService:
         """
         self.settings.setValue(name, value)
 
-    def getSetting(self, name):
+    def get_setting(self, name):
         """
         Retrieve the value of a specified setting from QSettings.
 

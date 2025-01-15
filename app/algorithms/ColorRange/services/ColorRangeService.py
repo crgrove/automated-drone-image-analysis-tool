@@ -25,7 +25,7 @@ class ColorRangeService(AlgorithmService):
         self.min_rgb = options['color_range'][0]
         self.max_rgb = options['color_range'][1]
 
-    def processImage(self, img, full_path, input_dir, output_dir):
+    def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single image to identify areas within a specific RGB color range.
 
@@ -48,12 +48,12 @@ class ColorRangeService(AlgorithmService):
 
             # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circleAreasOfInterest(img, contours)
+            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
             # Generate the output path and store the processed image
             output_path = full_path.replace(input_dir, output_dir)
             if augmented_image is not None:
-                self.storeImage(full_path, output_path, augmented_image)
+                self.store_image(full_path, output_path, augmented_image)
 
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 

@@ -33,7 +33,7 @@ class AlgorithmService:
         self.options = options
         self.is_thermal = is_thermal
 
-    def processImage(self, img, full_path, input_dir, output_dir):
+    def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single image file using the algorithm.
 
@@ -50,7 +50,7 @@ class AlgorithmService:
         """
         raise NotImplementedError
 
-    def circleAreasOfInterest(self, img, contours):
+    def circle_areas_of_interest(self, img, contours):
         """
         Augments the input image with circles around areas of interest based on contours.
 
@@ -117,7 +117,7 @@ class AlgorithmService:
         else:
             return None, None, None
 
-    def storeImage(self, input_file, output_file, augmented_image, temperature_data=None):
+    def store_image(self, input_file, output_file, augmented_image, temperature_data=None):
         """
         Stores the processed image to the specified output file and transfers metadata.
 
@@ -132,15 +132,15 @@ class AlgorithmService:
             os.makedirs(path.parents[0])
         cv2.imencode(".jpg", augmented_image)[1].tofile(output_file)
         if platform.system() == "Darwin":
-            MetaDataHelper.transferExifPiexif(input_file, output_file)
+            MetaDataHelper.transfer_exif_piexif(input_file, output_file)
         else:
             if temperature_data is not None:
-                MetaDataHelper.transferAll(input_file, output_file)
-                MetaDataHelper.transferTemperatureData(temperature_data, output_file)
+                MetaDataHelper.transfer_all(input_file, output_file)
+                MetaDataHelper.transfer_temperature_data(temperature_data, output_file)
             else:
-                MetaDataHelper.transferExifPiexif(input_file, output_file)
+                MetaDataHelper.transfer_exif_piexif(input_file, output_file)
 
-    def splitImage(self, img, segments):
+    def split_image(self, img, segments):
         """
         Divides a single image into multiple segments based on the specified number of segments.
 
@@ -214,7 +214,7 @@ class AlgorithmService:
             pieces.append([img])
         return pieces
 
-    def glueImage(self, pieces):
+    def glue_image(self, pieces):
         """
         Combines the segments of an image into a single image.
 
@@ -242,7 +242,7 @@ class AlgorithmController:
         self.name = name
         self.is_thermal = thermal
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates and returns options based on user-selected values.
 
@@ -260,7 +260,7 @@ class AlgorithmController:
         """
         raise NotImplementedError
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on provided options.
 

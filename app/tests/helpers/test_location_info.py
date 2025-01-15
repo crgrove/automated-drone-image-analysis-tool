@@ -23,22 +23,22 @@ def example_gps_data():
     }
 
 
-def test_getGPS_jpg(example_image_path, example_gps_data):
+def test_get_gps_jpg(example_image_path, example_gps_data):
     with patch('imghdr.what', return_value='jpeg'), \
             patch('piexif.load', return_value=example_gps_data):
-        result = LocationInfo.getGPS(example_image_path)
+        result = LocationInfo.get_gps(example_image_path)
         assert result == {'latitude': 37.805556, 'longitude': -122.422222}
 
 
-def test_getGPS_non_jpg(example_image_path):
+def test_get_gps_non_jpg(example_image_path):
     with patch('imghdr.what', return_value='png'):
-        result = LocationInfo.getGPS(example_image_path)
+        result = LocationInfo.get_gps(example_image_path)
         assert result == {}
 
 
-def test_convertDegreesToUtm():
+def test_convert_degrees_to_utm():
     lat, lng = 37.805556, -122.422222
-    result = LocationInfo.convertDegreesToUtm(lat, lng)
+    result = LocationInfo.convert_degrees_to_utm(lat, lng)
     utm_coordinates = utm.from_latlon(lat, lng)
     expected = {
         'easting': utm_coordinates[0],
@@ -52,9 +52,9 @@ def test_convertDegreesToUtm():
     assert result['zone_letter'] == expected['zone_letter']
 
 
-def test_convertDecimalToDms():
+def test_convert_decimal_to_dms():
     lat, lng = 37.805556, -122.422222
-    result = LocationInfo.convertDecimalToDms(lat, lng)
+    result = LocationInfo.convert_decimal_to_dms(lat, lng)
     expected = {
         'latitude': {'degrees': 37, 'minutes': 48, 'seconds': 20.0, 'reference': 'N'},
         'longitude': {'degrees': 122, 'minutes': 25, 'seconds': 20.0, 'reference': 'W'}

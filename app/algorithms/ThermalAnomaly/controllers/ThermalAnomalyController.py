@@ -17,7 +17,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
         self.settings_service = SettingsService()
         self.setupUi(self)
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates options based on user-selected values.
 
@@ -40,7 +40,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
         """
         return None
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on the provided options.
 

@@ -9,7 +9,7 @@ class LocationInfo:
     """Provides functions to retrieve and convert locational data."""
 
     @staticmethod
-    def getGPS(full_path):
+    def get_gps(full_path):
         """
         Retrieve the GPS EXIF data stored in an image file.
 
@@ -30,13 +30,13 @@ class LocationInfo:
             longitude = exif_dict['GPS'][piexif.GPSIFD.GPSLongitude]
             longitude_ref = exif_dict['GPS'][piexif.GPSIFD.GPSLongitudeRef].decode('utf-8')
             if latitude:
-                lat_value = LocationInfo.__convert_to_degrees(latitude)
+                lat_value = LocationInfo._convert_to_degrees(latitude)
                 if latitude_ref != 'N':
                     lat_value = -lat_value
             else:
                 return {}
             if longitude:
-                lon_value = LocationInfo.__convert_to_degrees(longitude)
+                lon_value = LocationInfo._convert_to_degrees(longitude)
                 if longitude_ref != 'E':
                     lon_value = -lon_value
             else:
@@ -46,7 +46,7 @@ class LocationInfo:
         return {'latitude': round(lat_value, 6), 'longitude': round(lon_value, 6)}
 
     @staticmethod
-    def convertDegreesToUtm(lat, lng):
+    def convert_degrees_to_utm(lat, lng):
         """
         Convert decimal latitude and longitude values to UTM coordinates.
 
@@ -66,7 +66,7 @@ class LocationInfo:
         }
 
     @staticmethod
-    def convertDecimalToDms(lat, lng):
+    def convert_decimal_to_dms(lat, lng):
         """
         Convert decimal latitude and longitude values to degrees, minutes, seconds coordinates.
 
@@ -104,7 +104,7 @@ class LocationInfo:
         return {'latitude': latitude, 'longitude': longitude}
 
     @staticmethod
-    def __convert_to_degrees(value):
+    def _convert_to_degrees(value):
         """
         Convert GPS coordinates stored in EXIF to degrees in float format.
 

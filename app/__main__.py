@@ -1,12 +1,10 @@
 import sys
-from PyQt5.QtGui import QFontDatabase, QFont, QIcon
-from PyQt5.QtCore import QFile, QTextStream, QTranslator, QLocale
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 from multiprocessing import freeze_support
 from core.controllers.MainWindow import MainWindow
 # import faulthandler
 import qdarktheme
-from core.services.LoggerService import LoggerService
 from os import path
 
 version = '1.4.1'

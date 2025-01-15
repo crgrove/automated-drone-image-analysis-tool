@@ -40,7 +40,7 @@ def test_get_settings(xml_service):
     }.get(tag)
 
     with patch('xml.etree.ElementTree.parse', return_value=mock_tree):
-        settings, image_count = xml_service.getSettings()
+        settings, image_count = xml_service.get_settings()
 
     expected_settings = {
         'output_dir': 'output/dir',
@@ -80,7 +80,7 @@ def test_get_images(xml_service):
     mock_root.find.return_value = mock_images
 
     with patch('xml.etree.ElementTree.parse', return_value=mock_tree):
-        images = xml_service.getImages()
+        images = xml_service.get_images()
 
     expected_images = [{
         'path': 'image/path',

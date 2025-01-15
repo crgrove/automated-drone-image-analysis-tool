@@ -10,7 +10,7 @@ class KMLService:
         """
         self.kml = simplekml.Kml()
 
-    def addPoints(self, points):
+    def add_points(self, points):
         """
         Add a list of points to the KML document.
 
@@ -21,7 +21,7 @@ class KMLService:
         for point in points:
             self.kml.newpoint(name=point["name"], coords=[(point["long"], point["lat"])])
 
-    def saveKml(self, path):
+    def save_kml(self, path):
         """
         Save the KML document to the specified file path.
 

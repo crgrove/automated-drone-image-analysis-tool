@@ -22,15 +22,15 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         """
         QDialog.__init__(self)
         self.setupUi(self)
-        palettes = self.generatePalettes(min_rgb, max_rgb)
-        self.populateImage(palettes["selected"][2], True)
-        self.populateImage(palettes["selected"][1], True)
-        self.populateImage(palettes["selected"][0], True)
-        self.populateImage(palettes["unselected"][2], False)
-        self.populateImage(palettes["unselected"][1], False)
-        self.populateImage(palettes["unselected"][0], False)
+        palettes = self.generate_palettes(min_rgb, max_rgb)
+        self.populate_image(palettes["selected"][2], True)
+        self.populate_image(palettes["selected"][1], True)
+        self.populate_image(palettes["selected"][0], True)
+        self.populate_image(palettes["unselected"][2], False)
+        self.populate_image(palettes["unselected"][1], False)
+        self.populate_image(palettes["unselected"][0], False)
 
-    def generatePalettes(self, min_rgb, max_rgb):
+    def generate_palettes(self, min_rgb, max_rgb):
         """
         Generates color palettes as numpy arrays representing selected and unselected colors.
 
@@ -48,9 +48,9 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         x_range = 180 * multiplier
         y_range = 256 * multiplier
 
-        high = self.generatePalette(x_range, y_range, multiplier, 255)
-        med = self.generatePalette(x_range, y_range, multiplier, 128)
-        low = self.generatePalette(x_range, y_range, multiplier, 64)
+        high = self.generate_palette(x_range, y_range, multiplier, 255)
+        med = self.generate_palette(x_range, y_range, multiplier, 128)
+        low = self.generate_palette(x_range, y_range, multiplier, 64)
 
         high_mask = cv2.inRange(high, cv_lower_limit, cv_upper_limit)
         med_mask = cv2.inRange(med, cv_lower_limit, cv_upper_limit)
@@ -70,7 +70,7 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         return {"selected": [selected_high, selected_med, selected_low],
                 "unselected": [unselected_high, unselected_med, unselected_low]}
 
-    def generatePalette(self, x_range, y_range, multiplier, saturation):
+    def generate_palette(self, x_range, y_range, multiplier, saturation):
         """
         Generates an HSL palette with a specified saturation level.
 
@@ -92,7 +92,7 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
                 img[x, y] = [height, length, saturation]
         return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 
-    def populateImage(self, img, selected):
+    def populate_image(self, img, selected):
         """
         Adds an image to the layout as a QtImageViewer widget.
 

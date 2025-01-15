@@ -60,7 +60,7 @@ class FlirThermalParserService:
         Returns:
             np.ndarray: Array of temperature values in °C.
         """
-        thermal_img_bytes = MetaDataHelper.getRawTemperatureData(filepath_image)
+        thermal_img_bytes = MetaDataHelper.get_raw_temperature_data(filepath_image)
         thermal_img_stream = BytesIO(thermal_img_bytes)
         thermal_img = Image.open(thermal_img_stream)
         img_format = thermal_img.format
@@ -117,7 +117,7 @@ class FlirThermalParserService:
         Returns:
             np.ndarray: Color-mapped thermal image.
         """
-        color_map = self.getColorMap(palette)
+        color_map = self._get_color_map(palette)
         normed = cv2.normalize(temperatures, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
         grey = cv2.cvtColor(normed, cv2.COLOR_GRAY2BGR)
 
@@ -130,7 +130,7 @@ class FlirThermalParserService:
 
         return colorized_img
 
-    def getColorMap(self, palette: str):
+    def _get_color_map(self, palette: str):
         """
         Map a generic palette name to an OpenCV color map code.
 

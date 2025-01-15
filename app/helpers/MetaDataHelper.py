@@ -11,7 +11,7 @@ class MetaDataHelper:
     """Helper class for managing EXIF and metadata of image files."""
 
     @staticmethod
-    def getEXIFToolPath():
+    def _get_exif_tool_path():
         """
         Return the path to the Exiftool based on the system platform.
 
@@ -24,7 +24,7 @@ class MetaDataHelper:
             return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool'))
 
     @staticmethod
-    def transferExifPiexif(originFile, destinationFile):
+    def transfer_exif_piexif(originFile, destinationFile):
         """
         Copy the EXIF information from one image file to another using piexif.
 
@@ -35,12 +35,12 @@ class MetaDataHelper:
         try:
             piexif.transplant(originFile, destinationFile)
         except piexif._exceptions.InvalidImageDataError:
-            MetaDataHelper.transferExifPil(originFile, destinationFile)
+            MetaDataHelper.transfer_exif_pil(originFile, destinationFile)
         except ValueError:
             return
 
     @staticmethod
-    def transferExifPil(originFile, destinationFile):
+    def transfer_exif_pil(originFile, destinationFile):
         """
         Copy the EXIF information from one image file to another using PIL.
 
@@ -55,7 +55,7 @@ class MetaDataHelper:
             image_new.save(destinationFile, 'JPEG', exif=exif)
 
     @staticmethod
-    def transferExifExiftool(originFile, destinationFile):
+    def transfer_exif_exiftool(originFile, destinationFile):
         """
         Copy the EXIF information from one image file to another using Exiftool.
 
@@ -63,12 +63,12 @@ class MetaDataHelper:
             originFile (str): Path to the source file.
             destinationFile (str): Path to the destination file.
         """
-        with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", originFile, "-exif", destinationFile, "-overwrite_original")
             et.terminate()
 
     @staticmethod
-    def transferXmpExiftool(originFile, destinationFile):
+    def transfer_xmp_exiftool(originFile, destinationFile):
         """
         Copy the XMP information from one image file to another using Exiftool.
 
@@ -76,12 +76,12 @@ class MetaDataHelper:
             originFile (str): Path to the source file.
             destinationFile (str): Path to the destination file.
         """
-        with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", originFile, "-xmp", destinationFile, "-overwrite_original")
             et.terminate()
 
     @staticmethod
-    def transferAll(originFile, destinationFile):
+    def transfer_all(originFile, destinationFile):
         """
         Copy the EXIF and XMP information from one image file to another using Exiftool.
 
@@ -89,12 +89,12 @@ class MetaDataHelper:
             originFile (str): Path to the source file.
             destinationFile (str): Path to the destination file.
         """
-        with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", originFile, destinationFile, "-overwrite_original", "--thumbnailimage")
             et.terminate()
 
     @staticmethod
-    def transferTemperatureData(data, destinationFile):
+    def transfer_temperature_data(data, destinationFile):
         """
         Copy temperature data from an image to the Notes field on another image.
 
@@ -103,7 +103,7 @@ class MetaDataHelper:
             destinationFile (str): Path to the destination file.
         """
         json_data = json.dumps(data.tolist())
-        with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             et.set_tags(
                 [destinationFile],
                 tags={"Notes": json_data},
@@ -112,7 +112,7 @@ class MetaDataHelper:
             et.terminate()
 
     @staticmethod
-    def getRawTemperatureData(file_path):
+    def get_raw_temperature_data(file_path):
         """
         Retrieve raw temperature data as bytes from an image.
 
@@ -122,13 +122,13 @@ class MetaDataHelper:
         Returns:
             bytes: Bytes representing temperature data.
         """
-        with exiftool.ExifTool(MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             thermal_img_bytes = et.execute("-b", "-RawThermalImage", file_path, raw_bytes=True)
             et.terminate()
         return thermal_img_bytes
 
     @staticmethod
-    def getTemperatureData(file_path):
+    def get_temperature_data(file_path):
         """
         Retrieve temperature data as a numpy array from the Notes field of an image.
 
@@ -138,7 +138,7 @@ class MetaDataHelper:
         Returns:
             numpy.ndarray: Array of temperature data.
         """
-        with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
             data = json.loads(json_data)
             temperature_c = np.asarray(data)
@@ -146,7 +146,7 @@ class MetaDataHelper:
         return temperature_c
 
     @staticmethod
-    def getMetaData(file_path):
+    def get_meta_data(file_path):
         """
         Retrieve metadata from an image file.
 
@@ -156,13 +156,13 @@ class MetaDataHelper:
         Returns:
             dict: Key-value pairs of metadata.
         """
-        with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             metadata = et.get_metadata([file_path])[0]
             et.terminate()
         return metadata
 
     @staticmethod
-    def setTags(file_path, tags):
+    def set_tags(file_path, tags):
         """
         Update metadata with provided tags.
 
@@ -170,12 +170,12 @@ class MetaDataHelper:
             file_path (str): Path to the image.
             tags (dict): Dictionary of tags and values to be set.
         """
-        with exiftool.ExifToolHelper(executable=MetaDataHelper.getEXIFToolPath()) as et:
+        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             et.set_tags([file_path], tags=tags, params=["-overwrite_original"])
             et.terminate()
 
     @staticmethod
-    def addGPSData(file_path, lat, lng, alt):
+    def add_gps_data(file_path, lat, lng, alt):
         """
         Add GPS data to an image file.
 
@@ -190,12 +190,12 @@ class MetaDataHelper:
         if "exif" in img.info:
             exif_dict = piexif.load(img.info["exif"])
 
-        MetaDataHelper.setGPSLocation(exif_dict, lat, lng, alt)
+        MetaDataHelper._set_gps_location(exif_dict, lat, lng, alt)
         exif_bytes = piexif.dump(exif_dict)
         img.save(file_path, "jpeg", exif=exif_bytes)
 
     @staticmethod
-    def setGPSLocation(exif_dict, lat, lng, alt):
+    def _set_gps_location(exif_dict, lat, lng, alt):
         """
         Convert lat/lng to degrees, minutes, and seconds format and store in EXIF GPS fields.
 

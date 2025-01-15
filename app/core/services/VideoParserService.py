@@ -40,7 +40,7 @@ class VideoParserService(QObject):
         self.cancelled = False
 
     @pyqtSlot()
-    def processVideo(self):
+    def process_video(self):
         """
         Convert video frames to still images and attach metadata from an SRT file if provided.
 
@@ -87,7 +87,7 @@ class VideoParserService(QObject):
             else:
                 self.sig_msg.emit("SRT File Not Provided")
 
-            self.setupOutputDir()
+            self._setup_output_dir()
             time_marker = 0
             image_count = 0
             base_name = os.path.basename(self.video_path)
@@ -104,7 +104,7 @@ class VideoParserService(QObject):
                     output_file = f"{self.output_dir}/{base_name}_{time_marker}s.jpg"
                     cv2.imwrite(output_file, image)
                     if item and item["latitude"] and item["longitude"]:
-                        MetaDataHelper.addGPSData(output_file, item["latitude"], item["longitude"], item["altitude"])
+                        MetaDataHelper.add_gps_data(output_file, item["latitude"], item["longitude"], item["altitude"])
                     image_count += 1
                 time_marker += self.interval
                 if image_count % 10 == 0:
@@ -114,14 +114,14 @@ class VideoParserService(QObject):
             self.logger.error(e)
 
     @pyqtSlot()
-    def processCancel(self):
+    def process_cancel(self):
         """
         Cancel the video processing operation.
         """
         self.cancelled = True
         self.sig_msg.emit("--- Cancelling Video Processing ---")
 
-    def setupOutputDir(self):
+    def _setup_output_dir(self):
         """
         Create the output directory for storing captured images.
         """

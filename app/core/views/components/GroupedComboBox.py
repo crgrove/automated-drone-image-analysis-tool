@@ -16,7 +16,7 @@ class GroupedComboBox(QComboBox):
         super(GroupedComboBox, self).__init__(parent)
         self.setModel(QStandardItemModel(self))
 
-    def addGroup(self, groupName, items):
+    def add_group(self, groupName, items):
         """
         Add a group of items under a non-selectable group header.
 

@@ -2,40 +2,74 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
+from reportlab.platypus import Paragraph, Spacer, Image, Table, TableStyle, PageBreak
 from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
-import tempfile
+
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import QBuffer
+
 import os
-import qimage2ndarray
-from PyQt5.QtCore import Qt
-from helpers.LocationInfo import LocationInfo
 import cv2
+from io import BytesIO
+from datetime import datetime
+import re
+
+from helpers.LocationInfo import LocationInfo
 from helpers.ColorUtils import ColorUtils
+from core.services.LoggerService import LoggerService
 
 class PDFDocTemplate(BaseDocTemplate):
     """Custom document template with TOC support."""
-    
+
     def __init__(self, filename, **kwargs):
+        """
+        Initialize a custom document template.
+
+        Args:
+            filename (str): The file path for the generated PDF document.
+            **kwargs: Additional arguments for the BaseDocTemplate class.
+        """
+        self.logger = LoggerService()
+
         self.allowSplitting = 0
         BaseDocTemplate.__init__(self, filename, **kwargs)
-        template = PageTemplate('normal', [Frame(2.5*cm, 2.5*cm, 15*cm, 25*cm, id='F1')])
+        
+        # Letter dimensions in cm
+        page_width, page_height = letter  # (21.59 cm, 27.94 cm)
+        min_margin = 0.635 * cm
+
+        # Frame dimensions
+        frame_width = page_width - (2 * min_margin)  # Minimize left and right margins
+        frame_height = page_height - (2 * min_margin)  # Optional: Minimize top and bottom margins
+        x_margin = min_margin  # Left margin
+        y_margin = min_margin  # Bottom margin
+
+        template = PageTemplate('normal', [Frame(x_margin, y_margin, frame_width, frame_height, id='F1')])
         self.addPageTemplates(template)
 
     def afterFlowable(self, flowable):
-        """Registers TOC entries."""
+        """
+        Register entries for the Table of Contents.
+
+        Args:
+            flowable (Flowable): A flowable object, such as a Paragraph.
+        """
         if flowable.__class__.__name__ == 'Paragraph':
             text = flowable.getPlainText()
+            label = re.sub(r'\(.*?\)', '', text)
             style = flowable.style.name
-            if style == 'Heading1':
-                key = f'h1-{text}'
-                self.canv.bookmarkPage(key)
-                self.notify('TOCEntry', (0, text, self.page, key))
-            elif style == 'Heading2':
+
+            if style == 'Heading2':
                 key = f'h2-{text}'
                 self.canv.bookmarkPage(key)
-                self.notify('TOCEntry', (1, text, self.page, key))
+                self.notify('TOCEntry', (0, label, self.page, key))
+            elif style == 'Heading3':
+                # Include image names in TOC, exclude GPS data
+                key = f'h3-{text}'
+                self.canv.bookmarkPage(key)
+                self.notify('TOCEntry', (1, label, self.page, key))
 
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
@@ -43,19 +77,21 @@ class PdfGeneratorService:
     def __init__(self, viewer):
         """
         Initialize the PDF generator service.
-        
+
         Args:
-            viewer: Reference to the viewer instance for accessing necessary data and methods
+            viewer: Reference to the viewer instance for accessing necessary data and methods.
         """
         self.viewer = viewer
-        self.temp_files = []
+        self.story = []
+        self.doc = None
+        self._initialize_styles()
 
     def generate_report(self, output_path):
         """
         Generate a PDF report of the analysis results.
-        
+
         Args:
-            output_path (str): The file path where the PDF should be saved
+            output_path (str): The file path where the PDF should be saved.
         """
         try:
             output_dir = os.path.dirname(output_path)
@@ -68,84 +104,85 @@ class PdfGeneratorService:
             for img in self.viewer.images:
                 if not os.path.exists(img['path']):
                     raise FileNotFoundError(f"Image not found: {img['path']}")
-            
-            doc = PDFDocTemplate(output_path, pagesize=letter)
-            styles = getSampleStyleSheet()
-            story = []
 
-            # Define heading styles
-            h1 = ParagraphStyle(
-                name='Heading1',
-                parent=styles['Heading1'],
-                fontSize=24,
-                spaceAfter=30
-            )
-            
-            h2 = ParagraphStyle(
-                name='Heading2',
-                parent=styles['Heading2'],
-                fontSize=18,
-                spaceAfter=20
-            )
+            self.doc = PDFDocTemplate(output_path, pagesize=letter)
 
-            # Add title and TOC
-            story.append(Paragraph("Analysis Report", h1))
+            # Add title with date/time and placeholder logo
+            current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Load the logo using QPixmap
+            logo_pixmap = QPixmap(":/ADIAT_Full.png")  # Use resource file path
+
+            # Save the QPixmap to a QBuffer
+            buffer = QBuffer()
+            buffer.open(QBuffer.ReadWrite)
+            logo_pixmap.save(buffer, "PNG")  # Save the pixmap as PNG in the buffer
+            logo_bytes = buffer.data()  # Get the binary data from the buffer
+
+            # Convert the QBuffer data to BytesIO for ReportLab
+            logo_io = BytesIO(logo_bytes)
+            logo = Image(logo_io, width=2 * inch, height=2 * inch)
+            logo.hAlign = 'CENTER'
+            self.story.append(logo)
+            self.story.append(Spacer(1, 12))
+
+            self.story.append(Paragraph(f"ADIAT Analysis Report {current_datetime}", self.h1))
+
+            # Add TOC
             toc = self._create_toc()
-            story.append(toc)
-            story.append(PageBreak())
+            self.story.append(toc)
+            self.story.append(PageBreak())
 
             # Add algorithm settings section
-            self._add_algorithm_settings(story, styles, h1)
-            story.append(Spacer(1, 20))
-
-            # Add total areas of interest
-            total_aoi = sum(len(img['areas_of_interest']) for img in self.viewer.images)
-            story.append(Paragraph(f"Total Areas of Interest: {total_aoi}", h1))
-            story.append(PageBreak())
+            self._add_algorithm_settings()
+            self.story.append(Spacer(1, 20))
 
             # Add image details
-            self._add_image_details(story, h1, h2, styles, doc)
+            self._add_image_details()
 
             # Build the PDF
-            doc.multiBuild(story)
-
-            # Clean up temporary files
-            self._cleanup_temp_files()
+            self.doc.multiBuild(self.story)
 
         except Exception as e:
-            self.viewer.logger.error(f"PDF generation failed: {str(e)}")
-            self._cleanup_temp_files()
+            print("In generator exception")
+            self.logger.error(f"PDF generation failed: {str(e)}")
             raise
 
     def _create_toc(self):
-        """Create and configure the table of contents."""
+        """
+        Create and configure the Table of Contents (TOC).
+
+        Returns:
+            TableOfContents: A configured Table of Contents object.
+        """
         toc = TableOfContents()
         toc.levelStyles = [
             ParagraphStyle(
-                fontSize=14, 
-                name='TOCHeading1',
-                leftIndent=20, 
-                firstLineIndent=-20, 
-                spaceBefore=5, 
+                fontSize=14,
+                name='TOCHeading2',
+                leftIndent=10,  # Ensure no indentation for Heading2
+                firstLineIndent=-20,
+                spaceBefore=5,
                 leading=16
             ),
             ParagraphStyle(
-                fontSize=12, 
-                name='TOCHeading2',
-                leftIndent=40, 
-                firstLineIndent=-20, 
-                spaceBefore=0, 
-                leading=12
-            )
+                fontSize=12,  # Reduced size for Heading3 (image titles)
+                name='TOCHeading3',
+                leftIndent=20,
+                firstLineIndent=0,
+                spaceBefore=0,
+                leading=14
+            ),
         ]
         return toc
 
-    def _add_algorithm_settings(self, story, styles, h1):
-        """Add algorithm settings section to the report."""
-        # Algorithm Information
-        story.append(Paragraph("Algorithm Settings", h1))
-        settings, algorithm = self.viewer.xmlService.getSettings()
-        story.append(Paragraph(f"Algorithm: {algorithm}", styles['Normal']))
+    def _add_algorithm_settings(self):
+        """
+        Add the algorithm settings section to the report.
+        """
+        self.story.append(Paragraph("Algorithm Settings", self.h2))
+        settings, algorithm = self.viewer.xmlService.get_settings()
+        self.story.append(Paragraph(f"Algorithm: {algorithm}", self.styles['Normal']))
 
         # Process settings with color squares
         for key, value in settings.items():
@@ -154,9 +191,9 @@ class PdfGeneratorService:
             if rgb_value and len(rgb_value) == 3:
                 r, g, b = rgb_value
                 color_hex = f"#{r:02x}{g:02x}{b:02x}"
-                story.append(Paragraph(
+                self.story.append(Paragraph(
                     f"{key}: {value} <font color='{color_hex}'>■</font>",
-                    styles['Normal']
+                    self.styles['Normal']
                 ))
             elif isinstance(value, dict):
                 nested_values = []
@@ -168,118 +205,168 @@ class PdfGeneratorService:
                         nested_values.append(f"{k}: {v} <font color='{color_hex}'>■</font>")
                     else:
                         nested_values.append(f"{k}: {v}")
-                story.append(Paragraph(f"{key}: {{{', '.join(nested_values)}}}", styles['Normal']))
+                self.story.append(Paragraph(f"{key}: {{{', '.join(nested_values)}}}", self.styles['Normal']))
             else:
-                story.append(Paragraph(f"{key}: {value}", styles['Normal']))
+                self.story.append(Paragraph(f"{key}: {value}", self.styles['Normal']))
 
-        story.append(Spacer(1, 20))
+        self.story.append(PageBreak())
 
-    def _add_image_details(self, story, h1, h2, styles, doc):
-        """Add image details section to the report."""
-        for img in self.viewer.images:
-            # Skip hidden images if show_hidden is False
-            if not self.viewer.show_hidden and img.get('hidden', False):
+    def _add_image_details(self):
+        """
+        Add details about images to the report.
+        """
+        visible_images = [img for img in self.viewer.images if not img.get('hidden', False)]
+        self.story.append(Paragraph(f"Images ({len(visible_images)})", self.h2))
+        for img in visible_images:
+            if img.get('hidden', True):
                 continue
 
-            if len(img['areas_of_interest']) > 0:
-                # Image Header
-                story.append(Paragraph(f"Image: {img['name']}", h1))
-                
-                # GPS Coordinates
-                gps_coords = LocationInfo.getGPS(img['path'])
-                if gps_coords:
-                    position = self.viewer.getPosition(gps_coords['latitude'], gps_coords['longitude'])
-                    story.append(Paragraph(f"GPS Coordinates: {position}", styles['Normal']))
-                story.append(Spacer(1, 20))
+            gps_coords = LocationInfo.get_gps(img['path'])
+            if gps_coords:
+                position = self.viewer.get_position(gps_coords['latitude'], gps_coords['longitude'])
+                self.story.append(Paragraph(f"{img['name']} (Location: {position})", self.h3))
+            else:
+                self.story.append(Paragraph(f"{img['name']}", self.h3))
 
-                # Add full image
-                self._add_full_image(story, img, doc)
-                story.append(Spacer(1, 20))
+            self.story.append(Spacer(1, 5))
+            self._add_full_image(img)
+            self.story.append(Spacer(1, 10))
+            self._add_areas_of_interest(img)
+            self.story.append(PageBreak())
 
-                # Add areas of interest
-                self._add_areas_of_interest(story, img, h2)
-                story.append(PageBreak())
+    def _add_full_image(self, img):
+        """
+        Add a resized full image to the report.
 
-    def _add_full_image(self, story, img, doc):
+        Args:
+            img (dict): The image data including path and metadata.
+        """
         try:
-            """Add full image to the report."""
-            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            self.temp_files.append(temp_file.name)
-            temp_file.close()
-
-            # Save full image
-            img_arr = qimage2ndarray.imread(img['path'])
-            if img_arr is None:
-                self.viewer.logger.error(f"Failed to load image: {img['path']}")
+            image = cv2.imread(img['path'])
+            if image is None:
+                self.logger.error(f"Failed to load image: {img['path']}")
                 return
-            qimg = qimage2ndarray.array2qimage(img_arr)
-            scaled_img = qimg.scaled(1500, 1500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            scaled_img.save(temp_file.name)
 
-            # Add to PDF with proper sizing
-            img_obj = Image(temp_file.name)
-            available_width = doc.width
-            available_height = doc.height * 0.5
-            img_width = img_obj.imageWidth
-            img_height = img_obj.imageHeight
-            
-            if img_width == 0 or img_height == 0:
-                self.viewer.logger.error(f"Invalid image dimensions for {img['path']}")
-                return
-            scale = min(available_width / max(img_width, 1), available_height / max(img_height, 1))
-            img_obj.drawWidth = img_width * scale
-            img_obj.drawHeight = img_height * scale
-            story.append(img_obj)
+            # Get the original dimensions
+            original_height, original_width = image.shape[:2]
+
+            # Define the maximum width
+            max_width = 400
+
+            # Check if the width needs resizing
+            if original_width > max_width:
+                scaling_factor = max_width / original_width
+                new_width = max_width
+                new_height = int(original_height * scaling_factor)
+                resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            else:
+                resized_image = image
+
+            _, buffer = cv2.imencode('.jpg', resized_image)
+            image_bytes = BytesIO(buffer)
+
+            img_obj = Image(image_bytes, hAlign="CENTER")
+            self.story.append(img_obj)
         except Exception as e:
-            self.viewer.logger.error(f"Error processing image {img['path']}: {str(e)}")
+            self.logger.error(f"Error processing image {img['path']}: {str(e)}")
 
-    def _add_areas_of_interest(self, story, img, h2):
-        """Add areas of interest to the report."""
+    def _add_areas_of_interest(self, img):
+        """
+        Add areas of interest to the report.
+
+        Args:
+            img (dict): The image data including areas of interest.
+        """
+        self.story.append(Paragraph("Areas of Interest", self.h4))
         visible_aois = [aoi for aoi in img['areas_of_interest'] if not aoi.get('hidden', False)]
-        for i, aoi in enumerate(visible_aois, 1):
-            story.append(Paragraph(f"Area of Interest #{i}", h2))
-            story.append(Paragraph(
-                f"Pixel Coordinates: ({aoi['center'][0]}, {aoi['center'][1]})", 
-                ParagraphStyle('Normal')
-            ))
+        data = []
+        num_columns = 4
+        num_rows = (len(visible_aois) + num_columns - 1) // num_columns
 
-            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            self.temp_files.append(temp_file.name)
-            temp_file.close()
+        for i in range(num_rows):
+            row = []
+            for j in range(num_columns):
+                aoi_index = i * num_columns + j
+                if aoi_index < len(visible_aois):
+                    aoi = visible_aois[aoi_index]
+                    try:
+                        img_arr = cv2.imread(img['path'])
+                        if img_arr is None:
+                            self.logger.error(f"Failed to load image for AOI: {img['path']}")
+                            continue
 
-            # Generate AOI thumbnail
-            try:
-                img_arr = qimage2ndarray.imread(img['path'])
-                if img_arr is None:
-                    self.viewer.logger.error(f"Failed to load image for AOI: {img['path']}")
-                    continue
-                    
-                # Calculate crop coordinates
-                x, y = aoi['center']
-                size = 100  # Size of the crop area
-                startx = max(0, x - size)
-                starty = max(0, y - size)
-                endx = min(img_arr.shape[1], x + size)
-                endy = min(img_arr.shape[0], y + size)
-                
-                # Crop and save thumbnail
-                cropped = img_arr[starty:endy, startx:endx]
-                # Convert from BGR to RGB before saving
-                cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                cv2.imwrite(temp_file.name, cropped_rgb)
-                
-                img_obj = Image(temp_file.name, width=3*inch, height=3*inch)
-                story.append(img_obj)
-                story.append(Spacer(1, 20))
-            except Exception as e:
-                self.viewer.logger.error(f"Error creating AOI thumbnail: {str(e)}")
+                        x, y = aoi['center']
+                        radius = aoi['radius'] + 10
 
-    def _cleanup_temp_files(self):
-        """Clean up temporary files created during PDF generation."""
-        for temp_file in self.temp_files:
-            try:
-                os.unlink(temp_file)
-            except Exception as e:
-                self.viewer.logger.error(f"Failed to delete temporary file {temp_file}: {str(e)}")
-                # pass  # Log error if needed
-        self.temp_files = []
+                        sx, sy = max(0, x - radius), max(0, y - radius)
+                        ex, ey = min(img_arr.shape[1] - 1, x + radius), min(img_arr.shape[0] - 1, y + radius)
+
+                        cropped = img_arr[sy:ey, sx:ex]
+
+                        thumbnail_size = (120, 120)
+                        cropped_resized = cv2.resize(cropped, thumbnail_size, interpolation=cv2.INTER_AREA)
+                        _, buffer = cv2.imencode('.jpg', cropped_resized)
+                        image_bytes = BytesIO(buffer)
+
+                        img_obj = Image(image_bytes)
+                        img_obj.hAlign = 'CENTER'
+
+                        coord_paragraph = Paragraph(f"X:{x}, Y:{y}", ParagraphStyle('Normal', alignment=1))
+                        container = Table([[img_obj], [coord_paragraph]], colWidths=[1.5 * inch])
+                        container.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')
+                        ]))
+                        row.append(container)
+                    except Exception as e:
+                        self.logger.error(f"Error creating AOI thumbnail: {str(e)}")
+                else:
+                    row.append(None)
+
+            data.append(row)
+
+        table = Table(data, colWidths=[2 * inch] * num_columns, spaceBefore=20, hAlign='LEFT')
+        table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 20)
+        ]))
+        self.story.append(table)
+
+    def _initialize_styles(self):
+        """Initialize paragraph styles for the document."""
+        self.styles = getSampleStyleSheet()
+        self.h1 = ParagraphStyle(
+            name='Heading1',
+            parent=self.styles['Heading1'],
+            fontSize=20,
+            spaceAfter=50,
+            alignment=1  # Center align
+        )
+        self.h2 = ParagraphStyle(
+            name='Heading2',
+            parent=self.styles['Heading2'],
+            fontSize=18,
+            spaceAfter=20
+        )
+        self.h3 = ParagraphStyle(
+            name='Heading3',
+            parent=self.styles['Heading3'],
+            fontSize=14,
+            leftIndent=0,
+            fontName="Helvetica",
+            alignment=0
+        )
+        self.h4 = ParagraphStyle(
+            name='Heading4',
+            parent=self.styles['Heading4'],
+            fontSize=12,
+            leftIndent=0,
+            fontName="Helvetica",
+            alignment=0,
+            spaceAfter=0
+        )

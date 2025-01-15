@@ -1,6 +1,11 @@
 <RCC>
   <qresource prefix="/">
+    <file>ADIAT_Full.png</file>
+    <file>icons/loading.gif</file>
+    <file>icons/map.png</file>
     <file>icons/zoom_in.png</file>
+    <file>icons/pdf.png</file>
+    <file>icons/zip.png</file>
     <file>icons/zoom_out.png</file>
     <file>icons/download.png</file>
     <file>icons/next.png</file>

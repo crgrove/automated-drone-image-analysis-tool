@@ -14,14 +14,14 @@ def test_settings_service_initialization():
         mock_qsettings.assert_called_once_with('ADIAT')
 
 
-def test_setSetting(settings_service):
+def test_set_setting(settings_service):
     with patch.object(settings_service.settings, 'setValue') as mock_set_value:
-        settings_service.setSetting('test_key', 'test_value')
+        settings_service.set_setting('test_key', 'test_value')
         mock_set_value.assert_called_once_with('test_key', 'test_value')
 
 
-def test_getSetting(settings_service):
+def test_get_setting(settings_service):
     with patch.object(settings_service.settings, 'value', return_value='test_value') as mock_get_value:
-        value = settings_service.getSetting('test_key')
+        value = settings_service.get_setting('test_key')
         mock_get_value.assert_called_once_with('test_key')
         assert value == 'test_value'

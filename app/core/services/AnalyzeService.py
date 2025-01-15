@@ -18,6 +18,7 @@ from core.services.XmlService import XmlService
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
+#from algorithms.MRMap.services.MRMapService import MRMapService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
 from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 
@@ -76,13 +77,13 @@ class AnalyzeService(QObject):
         self.pool = Pool(self.num_processes)
 
     @pyqtSlot()
-    def processFiles(self):
+    def process_files(self):
         """
         Process all files in the input directory using the selected algorithm and settings.
         """
         try:
-            self.setupOutputDir()
-            self.xmlService.addSettingsToXml(
+            self._setup_output_dir()
+            self.xmlService.add_settings_to_xml(
                 input_dir=self.input,
                 output_dir=self.output_dir,
                 identifier_color=self.identifier_color,
@@ -117,7 +118,7 @@ class AnalyzeService(QObject):
 
                 if imghdr.what(file) is not None and self.pool._state == pool.RUN:
                     self.pool.apply_async(
-                        AnalyzeService.processFile,
+                        AnalyzeService.process_file,
                         (
                             self.algorithm,
                             self.identifier_color,
@@ -132,7 +133,7 @@ class AnalyzeService(QObject):
                             self.kmeans_clusters,
                             self.is_thermal
                         ),
-                        callback=self.processComplete
+                        callback=self._process_complete
                     )
                 else:
                     ttl_images -= 1
@@ -145,10 +146,10 @@ class AnalyzeService(QObject):
             # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
             for img in self.images_with_aois:
-                self.xmlService.addImageToXml(img)
+                self.xmlService.add_image_to_xml(img)
 
             file_path = os.path.join(self.output, "ADIAT_Data.xml")
-            self.xmlService.saveXmlFile(file_path)
+            self.xmlService.save_xml_file(file_path)
             ttl_time = round(time.time() - start_time, 3)
             self.sig_done.emit(self.__id, len(self.images_with_aois))
             self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
@@ -158,7 +159,7 @@ class AnalyzeService(QObject):
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod
-    def processFile(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
+    def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
                     thermal):
         """
         Process a single image using the selected algorithm and settings.
@@ -181,38 +182,38 @@ class AnalyzeService(QObject):
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        img = cv2.resize(img, (4000, 3000))
+        #img = cv2.resize(img, (4000, 3000))
 
         if not thermal:
             # Apply histogram normalization if a reference image is provided
             histogram_service = None
             if hist_ref_path is not None:
                 histogram_service = HistogramNormalizationService(hist_ref_path)
-                img = histogram_service.matchHistograms(img)
+                img = histogram_service.match_histograms(img)
 
             # Apply k-means clustering if specified
             kmeans_service = None
             if kmeans_clusters is not None:
                 kmeans_service = KMeansClustersService(kmeans_clusters)
-                img = kmeans_service.generateClusters(img)
+                img = kmeans_service.generate_clusters(img)
 
         # Instantiate the algorithm class and process the image
         cls = globals()[algorithm['service']]
         instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
 
         try:
-            return instance.processImage(img, full_path, input_dir, output_dir)
+            return instance.process_image(img, full_path, input_dir, output_dir)
         except Exception as e:
             logger = LoggerService()
             logger.error(e)
 
     @pyqtSlot()
-    def processComplete(self, result):
+    def _process_complete(self, result):
         """
         Handle completion of an image processing task.
 
         Args:
-            result: Result object from the processFile method containing processed image data.
+            result: Result object from the process_file method containing processed image data.
         """
         if result.input_path is not None:
             path = Path(result.input_path)
@@ -232,7 +233,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit('No areas of interest identified in ' + file_name)
 
     @pyqtSlot()
-    def processCancel(self):
+    def process_cancel(self):
         """
         Cancel any ongoing asynchronous processes.
         """
@@ -240,7 +241,7 @@ class AnalyzeService(QObject):
         self.sig_msg.emit("--- Cancelling Image Processing ---")
         self.pool.terminate()
 
-    def setupOutputDir(self):
+    def _setup_output_dir(self):
         """
         Create the output directory for storing processed images.
         """

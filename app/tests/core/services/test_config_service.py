@@ -19,7 +19,7 @@ def test_config_service_initialization():
         assert config_service.config == mock_config_data
 
 
-def test_getAlgorithms():
+def test_get_algorithms():
     mock_config_data = {
         "algorithms": [
             {"name": "Algorithm1", "params": {"param1": "value1"}},

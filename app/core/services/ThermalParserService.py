@@ -47,7 +47,7 @@ class ThermalParserService:
         """
         self.dtype = dtype
 
-    def getModelandPlatform(self, meta_fields):
+    def _get_model_and_platform(self, meta_fields):
         """
         Determine the camera model and platform based on metadata.
 
@@ -67,7 +67,7 @@ class ThermalParserService:
         else:
             return 'Not Supported', 'None'
 
-    def parseFile(self, full_path: str, palette: str = "White Hot"):
+    def parse_file(self, full_path: str, palette: str = "White Hot"):
         """
         Process a thermal image file and return the temperature data and visual representation.
 
@@ -81,9 +81,9 @@ class ThermalParserService:
         Raises:
             Exception: If the image file is invalid or the camera model is not supported.
         """
-        data = MetaDataHelper.getMetaData(full_path)
+        data = MetaDataHelper.get_meta_data(full_path)
         meta_fields = {k.split(':')[1].strip(): v for k, v in data.items() if ':' in k}
-        camera_model, platform = self.getModelandPlatform(meta_fields)
+        camera_model, platform = self._get_model_and_platform(meta_fields)
         assert camera_model != "Not Supported", "Camera Model is not supported"
 
         if platform == 'FLIR':

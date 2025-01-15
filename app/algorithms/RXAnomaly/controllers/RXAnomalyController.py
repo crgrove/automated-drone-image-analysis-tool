@@ -11,14 +11,14 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         """
         Initializes the RXAnomalyController widget and sets up the UI.
 
-        Connects the sensitivity slider to the updateSensitivity handler.
+        Connects the sensitivity slider to the update_sensitivity handler.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, 'RXAnomaly', False)
         self.setupUi(self)
-        self.sensitivitySlider.valueChanged.connect(self.updateSensitivity)
+        self.sensitivitySlider.valueChanged.connect(self.update_sensitivity)
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates options based on user-selected values.
 
@@ -30,7 +30,7 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         options['segments'] = int(self.segmentsComboBox.currentText())
         return options
 
-    def updateSensitivity(self):
+    def update_sensitivity(self):
         """
         Handles changes to the sensitivity slider.
 
@@ -47,7 +47,7 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         """
         return None
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on the provided options.
 

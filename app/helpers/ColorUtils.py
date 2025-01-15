@@ -6,7 +6,7 @@ class ColorUtils:
     """Provides functions to aid in the manipulation of colors."""
 
     @staticmethod
-    def getColorRange(rgb, r_range, g_range, b_range):
+    def get_color_range(rgb, r_range, g_range, b_range):
         """
         Calculate a color range based on a base RGB color and specified ranges for each color channel.
 
