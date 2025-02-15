@@ -24,7 +24,7 @@ from core.services.ConfigService import ConfigService
 from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
 from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
-from algorithms.MRMap.controllers.MRMapController import MRMapController
+# REMOVE #from algorithms.MRMap.controllers.MRMapController import MRMapController
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
