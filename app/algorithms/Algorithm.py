@@ -130,7 +130,13 @@ class AlgorithmService:
         path = Path(output_file)
         if not os.path.exists(path.parents[0]):
             os.makedirs(path.parents[0])
+        
+        # Save the image first
         cv2.imencode(".jpg", augmented_image)[1].tofile(output_file)
+        
+        # Get XMP data from input file
+        xmp_data = MetaDataHelper.get_xmp_data(input_file)
+        
         if platform.system() == "Darwin":
             MetaDataHelper.transfer_exif_piexif(input_file, output_file)
         else:
@@ -139,6 +145,10 @@ class AlgorithmService:
                 MetaDataHelper.transfer_temperature_data(temperature_data, output_file)
             else:
                 MetaDataHelper.transfer_exif_piexif(input_file, output_file)
+        
+        # Add XMP data if it exists in the input file
+        if xmp_data:
+            MetaDataHelper.set_xmp_data(output_file, xmp_data)
 
     def split_image(self, img, segments):
         """

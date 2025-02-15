@@ -229,3 +229,69 @@ class MetaDataHelper:
             piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
             piexif.GPSIFD.GPSAltitude: (abs(int(alt * 100)), 100),
         }
+
+    @staticmethod
+    def get_xmp_data(file_path):
+        """
+        Extract XMP data from an image file if present.
+        
+        Args:
+            file_path (str): Path to the image file.
+            
+        Returns:
+            str: XMP data if found, None otherwise.
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                
+            # Look for XMP header and footer
+            start_tag = b'<?xpacket begin'
+            end_tag = b'<?xpacket end'
+            
+            start_idx = data.find(start_tag)
+            if start_idx == -1:
+                return None
+                
+            end_idx = data.find(end_tag, start_idx)
+            if end_idx == -1:
+                return None
+                
+            # Include the end tag in the extracted data
+            xmp_data = data[start_idx:end_idx + len(end_tag)]
+            return xmp_data.decode('utf-8')
+        except Exception:
+            return None
+
+    @staticmethod
+    def set_xmp_data(file_path, xmp_data):
+        """
+        Add XMP data to an image file.
+        
+        Args:
+            file_path (str): Path to the image file.
+            xmp_data (str): XMP data to insert.
+        """
+        if not xmp_data:
+            return
+            
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                
+            # Find the SOI and APP1 markers
+            soi_marker = b'\xFF\xD8'
+            app1_marker = b'\xFF\xE1'
+            
+            if not data.startswith(soi_marker):
+                return
+                
+            # Insert XMP data after SOI marker
+            xmp_length = len(xmp_data.encode('utf-8')) + 2  # +2 for length bytes
+            app1_header = app1_marker + xmp_length.to_bytes(2, 'big')
+            new_data = soi_marker + app1_header + xmp_data.encode('utf-8') + data[2:]
+            
+            with open(file_path, 'wb') as f:
+                f.write(new_data)
+        except Exception:
+            return
