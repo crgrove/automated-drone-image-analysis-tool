@@ -330,6 +330,7 @@ class MetaDataHelper:
             # Verify the result
             with open(file_path, 'rb') as f:
                 result = f.read(12)
+                if result[6:10] not in (b'JFIF', b'Exif'):
                     print(f"Warning: Output file missing JFIF/Exif marker. Bytes 6-10: {result[6:10]}")
             
         except Exception as e:
