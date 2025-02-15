@@ -6,7 +6,7 @@ from scipy.stats import chi2
 import traceback
 
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
-# REMOVE #from algorithms.MRMap.services.MRMapService import MRHistogram
+from algorithms.MRMap.services.MRMapService import MRHistogram
 from core.services.LoggerService import LoggerService
 from helpers.ColorUtils import ColorUtils
 
