@@ -229,3 +229,110 @@ class MetaDataHelper:
             piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
             piexif.GPSIFD.GPSAltitude: (abs(int(alt * 100)), 100),
         }
+
+    @staticmethod
+    def get_xmp_data(file_path):
+        """
+        Extract XMP data from an image file if present.
+        
+        Args:
+            file_path (str): Path to the image file.
+            
+        Returns:
+            str: XMP data if found, None otherwise.
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                
+            # Look for XMP header and footer
+            start_tag = b'<?xpacket begin'
+            end_tag = b'<?xpacket end'
+            
+            start_idx = data.find(start_tag)
+            if start_idx == -1:
+                return None
+                
+            end_idx = data.find(end_tag, start_idx)
+            if end_idx == -1:
+                return None
+                
+            # Find the closing '>' for the end tag
+            end_close_idx = data.find(b'>', end_idx) + 1
+            if end_close_idx == 0:  # if '>' not found
+                return None
+                
+            # Include complete end tag in the extracted data
+            xmp_data = data[start_idx:end_close_idx]
+            return xmp_data.decode('utf-8')
+        except Exception:
+            return None
+
+    @staticmethod
+    def set_xmp_data(file_path, xmp_data):
+        """
+        Add XMP data to an image file while preserving JPEG format.
+        
+        Args:
+            file_path (str): Path to the image file.
+            xmp_data (str): XMP data to insert.
+        """
+        if not xmp_data:
+            return
+            
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+                
+            # Find the SOI marker
+            soi_marker = b'\xFF\xD8'
+            if not data.startswith(soi_marker):
+                print(f"Invalid JPEG: Missing SOI marker. First bytes: {data[:2].hex()}")
+                return
+            
+            # Look for APP1 marker after SOI
+            app1_marker = b'\xFF\xE1'
+            
+            # Convert XMP data to bytes, preserving original packet structure
+            xmp_bytes = xmp_data.encode('utf-8')
+            
+            # Create APP1 segment with proper JPEG structure
+            segment_length = len(xmp_bytes) + 2  # +2 for length bytes
+            app1_header = app1_marker + segment_length.to_bytes(2, 'big')
+            
+            # We need to preserve the JFIF/Exif marker that should be in the first APP0/APP1 segment
+            # Find the first APP0 (0xFFE0) or APP1 (0xFFE1) marker
+            app0_marker = b'\xFF\xE0'
+            marker_pos = data.find(app0_marker, 2)
+            if marker_pos == -1:
+                marker_pos = data.find(app1_marker, 2)
+            
+            if marker_pos != -1:
+                # Get the length of this segment (2 bytes after marker)
+                segment_size = int.from_bytes(data[marker_pos+2:marker_pos+4], 'big')
+                # Include this segment in our output
+                original_app_segment = data[marker_pos:marker_pos+2+segment_size]
+                
+                # Construct new file data:
+                # SOI + original APP segment + our XMP APP1 segment + rest of file
+                new_data = (soi_marker + 
+                           original_app_segment +
+                           app1_header + xmp_bytes + 
+                           data[marker_pos+2+segment_size:])
+            else:
+                print(f"Warning: No JFIF/Exif marker found in original file")
+                new_data = soi_marker + app1_header + xmp_bytes + data[2:]
+            
+            # Write the new file
+            with open(file_path, 'wb') as f:
+                f.write(new_data)
+            
+            # Verify the result
+            with open(file_path, 'rb') as f:
+                result = f.read(12)
+                if result[6:10] not in (b'JFIF', b'Exif'):
+                    print(f"Warning: Output file missing JFIF/Exif marker. Bytes 6-10: {result[6:10]}")
+            
+        except Exception as e:
+            print(f"Error in set_xmp_data: {str(e)}")
+            return
