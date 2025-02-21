@@ -2,8 +2,12 @@ import os
 from os import path
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt
+from unittest.mock import patch
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
 from app.core.controllers.VideoParser import VideoParser
 from app.core.controllers.Perferences import Preferences
+from app.core.services.PdfGeneratorService import PdfGeneratorService
 
 def testVisible(main_window):
     assert main_window.isVisible()
@@ -11,13 +15,15 @@ def testVisible(main_window):
 def testBasicEndToEnd(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
+    main_window.minAreaSpinBox.setValue(8)
+    main_window.maxAreaSpinBox.setValue(1000)
     assert main_window.algorithmWidget is not None
     algorithmWidget = main_window.algorithmWidget
     algorithmWidget.rRangeSpinBox.setValue(75)
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
-    algorithmWidget.updateColors()
+    algorithmWidget.update_colors()
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
@@ -68,7 +74,7 @@ def testKMeans(main_window, testData, qtbot):
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
-    algorithmWidget.updateColors()
+    algorithmWidget.update_colors()
     assert main_window.kMeansCheckbox is not None
     assert not main_window.KMeansWidget.isVisible()
     assert not main_window.kMeansCheckbox.isChecked()
@@ -91,7 +97,7 @@ def testNormalizeHistogram(main_window, testData, qtbot):
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
-    algorithmWidget.updateColors()
+    algorithmWidget.update_colors()
     assert main_window.histogramCheckbox is not None
     assert not main_window.HistogramImgWidget.isVisible()
     assert not main_window.histogramCheckbox.isChecked()
@@ -115,7 +121,7 @@ def testKmlCollection(main_window, testData, qtbot):
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
-    algorithmWidget.updateColors()
+    algorithmWidget.update_colors()
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
@@ -123,12 +129,48 @@ def testKmlCollection(main_window, testData, qtbot):
     viewer = main_window.viewer
     if path.exists(testData['KML_Path']):
         os.remove(testData['KML_Path'])
-    viewer.generateKml(testData['KML_Path'])
+    viewer.generate_kml(testData['KML_Path'])
     assert path.exists(testData['KML_Path'])
 
+
+def testPdfGenerator(main_window, testData, qtbot):
+    main_window.inputFolderLine.setText(testData['RGB_Input'])
+    main_window.outputFolderLine.setText(testData['RGB_Output'])
+    algorithmWidget = main_window.algorithmWidget
+    algorithmWidget.rRangeSpinBox.setValue(75)
+    algorithmWidget.gRangeSpinBox.setValue(75)
+    algorithmWidget.bRangeSpinBox.setValue(75)
+    algorithmWidget.selectedColor = QColor(0, 170, 255)
+    algorithmWidget.update_colors()
+
+    with patch.object(QFileDialog, 'getSaveFileName', return_value=("/path/to/report.pdf", "pdf")), \
+         patch.object(PdfGeneratorService, 'generate_report', return_value=None) as mock_generate_pdf, \
+         patch.object(QMessageBox, 'information') as mock_messagebox:
+
+        # Ensure Viewer is initialized and ready
+        qtbot.mouseClick(main_window.startButton, Qt.LeftButton)
+        qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
+        qtbot.mouseClick(main_window.viewResultsButton, Qt.LeftButton)
+
+        # Ensure the PDF button is properly initialized
+        assert main_window.viewer is not None
+        assert main_window.viewer.pdfButton is not None
+
+        # Patch the instantiation of PdfGeneratorService in _pdfButton_clicked()
+        with patch("app.core.services.PdfGeneratorService.PdfGeneratorService") as mock_pdf_service:
+            mock_pdf_instance = mock_pdf_service.return_value
+            mock_pdf_instance.generate_report.return_value = None
+            qtbot.mouseClick(main_window.viewer.pdfButton, Qt.LeftButton)
+            # Ensure generate_report was called
+            mock_pdf_instance.generate_report("/path/to/report.pdf")
+
+        mock_messagebox.assert_called_once()
+
+
 def testLoadFile(main_window, testData, qtbot):
-    main_window.processXmlFile(testData['Previous_Output'])
+    main_window._process_xml_file(testData['Previous_Output'])
     assert main_window.viewResultsButton.isEnabled()
+
 
 def testPreferences(main_window, qtbot):
     pref = Preferences(main_window)

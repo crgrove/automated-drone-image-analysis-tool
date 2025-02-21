@@ -31,7 +31,7 @@ def test_get_algorithms():
 
     with patch("builtins.open", mock_open(read_data=json.dumps(mock_config_data))):
         config_service = ConfigService(mock_path)
-        algorithms = config_service.getAlgorithms()
+        algorithms = config_service.get_algorithms()
         assert algorithms == mock_config_data["algorithms"]
         assert len(algorithms) == 2
         assert algorithms[0]["name"] == "Algorithm1"

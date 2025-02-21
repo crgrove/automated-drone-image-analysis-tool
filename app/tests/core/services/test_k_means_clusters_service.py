@@ -25,7 +25,7 @@ def test_generateClusters(mock_source_image):
     mock_centers = np.random.randint(0, 256, (num_clusters, 3), dtype=np.uint8)
 
     with patch("cv2.kmeans", return_value=(None, mock_labels, mock_centers)):
-        result = service.generateClusters(mock_source_image)
+        result = service.generate_clusters(mock_source_image)
 
         assert result.shape == mock_source_image.shape
         assert result.dtype == np.uint8

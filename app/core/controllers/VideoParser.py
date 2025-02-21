@@ -88,7 +88,7 @@ class VideoParser(QDialog, Ui_VideoParser):
             self.parserService.sig_done.connect(self._on_worker_done)
 
             # Start the processing thread
-            thread.started.connect(self.parserService.processVideo)
+            thread.started.connect(self.parserService.process_video)
             thread.start()
             self.running = True
             self._set_cancel_button(True)
@@ -213,4 +213,3 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg.setWindowTitle("Error Starting Processing")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
-

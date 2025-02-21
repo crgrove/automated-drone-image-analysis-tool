@@ -1,93 +1,98 @@
 import pytest
-from unittest.mock import patch, MagicMock
-from app.core.services.XmlService import XmlService
+import os
+import xml.etree.ElementTree as ET
+from core.services.XmlService import XmlService
 
 
 @pytest.fixture
-def xml_service(testData):
-    return XmlService(testData['Previous_Output'])
+def sample_xml(tmp_path):
+    xml_content = """
+    <data>
+        <settings output_dir="/output" input_dir="/input" num_processes="4" identifier_color="(255, 0, 0)" min_area="10" max_area="200" hist_ref_path="None"
+        kmeans_clusters="None" algorithm="some_algorithm" thermal="True">
+            <options>
+                <option name="option1" value="value1"/>
+                <option name="option2" value="value2"/>
+            </options>
+        </settings>
+        <images>
+            <image path="image1.jpg" hidden="False">
+                <areas_of_interest center="(50,50)" radius="10" area="150"/>
+            </image>
+            <image path="image2.jpg">
+                <areas_of_interest center="(100,100)" radius="20" area="300"/>
+            </image>
+        </images>
+    </data>
+    """.strip()
+    xml_path = tmp_path / "test.xml"
+    with open(xml_path, "w") as f:
+        f.write(xml_content)
+    return xml_path
 
 
-def test_get_settings(xml_service):
-    mock_tree = MagicMock()
-    mock_root = MagicMock()
+def test_initialization(sample_xml):
+    service = XmlService(sample_xml)
+    assert service.xml_path == sample_xml
+    assert isinstance(service.xml, ET.ElementTree)
 
-    # Mocking the XML structure
-    mock_tree.getroot.return_value = mock_root
-    mock_settings = MagicMock()
-    mock_settings.get.side_effect = lambda key: {
-        'output_dir': 'output/dir',
-        'input_dir': 'input/dir',
-        'num_threads': '4',
-        'identifier_color': '(255, 0, 0)',
-        'min_area': '10',
-        'hist_ref_path': 'hist/ref/path',
-        'kmeans_clusters': '3',
-        'algorithm': 'algorithm_name',
-        'thermal': 'True',
-    }.get(key, 'None')
-    mock_options = MagicMock()
-    mock_option = MagicMock()
-    mock_option.get.side_effect = lambda key: {
-        'name': 'option_name',
-        'value': 'option_value',
-    }.get(key)
-    mock_options.__iter__.return_value = [mock_option]
-    mock_settings.find.return_value = mock_options
-    mock_root.find.side_effect = lambda tag: {
-        'settings': mock_settings,
-        'images': [MagicMock()] * 5  # Simulate 5 image elements
-    }.get(tag)
 
-    with patch('xml.etree.ElementTree.parse', return_value=mock_tree):
-        settings, image_count = xml_service.get_settings()
+def test_get_settings(sample_xml):
+    service = XmlService(sample_xml)
+    settings, image_count = service.get_settings()
+    assert settings["output_dir"] == "/output"
+    assert settings["input_dir"] == "/input"
+    assert settings["num_processes"] == 4
+    assert settings["identifier_color"] == (255, 0, 0)
+    assert settings["min_area"] == 10
+    assert settings["max_area"] == 200
+    assert settings["algorithm"] == "some_algorithm"
+    assert settings["thermal"] == "True"
+    assert settings["options"]["option1"] == "value1"
+    assert settings["options"]["option2"] == "value2"
+    assert image_count == 2
 
-    expected_settings = {
-        'output_dir': 'output/dir',
-        'input_dir': 'input/dir',
-        'num_threads': 4,
-        'identifier_color': (255, 0, 0),
-        'min_area': 10,
-        'hist_ref_path': 'hist/ref/path',
-        'kmeans_clusters': 3,
-        'algorithm': 'algorithm_name',
-        'thermal': 'True',
-        'options': {'option_name': 'option_value'}
+
+def test_get_images(sample_xml):
+    service = XmlService(sample_xml)
+    images = service.get_images()
+    assert len(images) == 2
+    assert images[0]["path"].endswith("image1.jpg")
+    assert images[0]["hidden"] is False
+    assert images[0]["areas_of_interest"][0]["area"] == 150.0
+    assert images[0]["areas_of_interest"][0]["center"] == (50, 50)
+    assert images[0]["areas_of_interest"][0]["radius"] == 10
+
+
+def test_add_settings_to_xml():
+    service = XmlService()
+    service.add_settings_to_xml(output_dir="/new_output", num_processes=8)
+
+    settings, _ = service.get_settings()
+    assert "output_dir" in settings
+    assert settings["output_dir"] == "/new_output"
+    assert settings["num_processes"] == 8
+    assert settings["min_area"] == 0  # Ensure defaults are set correctly
+
+
+def test_add_image_to_xml():
+    service = XmlService()
+    new_image = {
+        "path": "new_image.jpg",
+        "aois": [
+            {"center": (25, 25), "radius": 5, "area": 50}
+        ]
     }
-    assert settings == expected_settings
-    assert image_count == 5
+    service.add_image_to_xml(new_image)
+
+    images = service.get_images()
+    assert len(images) == 1
+    assert images[0]["path"] == "new_image.jpg"  # Should now work correctly
+    assert images[0]["areas_of_interest"][0]["center"] == (25, 25)
 
 
-def test_get_images(xml_service):
-    mock_tree = MagicMock()
-    mock_root = MagicMock()
-
-    # Mocking the XML structure
-    mock_tree.getroot.return_value = mock_root
-    mock_image = MagicMock()
-    mock_image.get.side_effect = lambda key: {
-        'path': 'image/path',
-    }.get(key)
-    mock_area_of_interest = MagicMock()
-    mock_area_of_interest.get.side_effect = lambda key: {
-        'area': '50.5',
-        'center': '(100, 200)',
-        'radius': '15',
-    }.get(key)
-    mock_image.__iter__.return_value = [mock_area_of_interest]
-    mock_images = MagicMock()
-    mock_images.__iter__.return_value = [mock_image]
-    mock_root.find.return_value = mock_images
-
-    with patch('xml.etree.ElementTree.parse', return_value=mock_tree):
-        images = xml_service.get_images()
-
-    expected_images = [{
-        'path': 'image/path',
-        'areas_of_interest': [{
-            'area': 50.5,
-            'center': (100, 200),
-            'radius': 15
-        }]
-    }]
-    assert images == expected_images
+def test_save_xml_file(tmp_path):
+    service = XmlService()
+    path = tmp_path / "output.xml"
+    service.save_xml_file(path)
+    assert os.path.exists(path)

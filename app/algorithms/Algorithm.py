@@ -72,11 +72,10 @@ class AlgorithmService:
             base_contour_count = 0
             for cnt in contours:
                 area = cv2.contourArea(cnt)
-                (x, y), radius = cv2.minEnclosingCircle(cnt)
-                center = (int(x), int(y))
-                radius = int(radius) + self.aoi_radius
-
-                if area >= self.min_area and area <= self.max_area:
+                if area >= self.min_area and (self.max_area == 0 or area <= self.max_area):
+                    (x, y), radius = cv2.minEnclosingCircle(cnt)
+                    center = (int(x), int(y))
+                    radius = int(radius) + self.aoi_radius
                     found = True
                     cv2.circle(temp_mask, center, radius, (255), -1)
                     base_contour_count += 1
@@ -113,6 +112,7 @@ class AlgorithmService:
                         img, center, radius,
                         (self.identifier_color[2], self.identifier_color[1], self.identifier_color[0]), 2
                     )
+            areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
             return image_copy, areas_of_interest, base_contour_count
         else:
             return None, None, None
@@ -130,98 +130,64 @@ class AlgorithmService:
         path = Path(output_file)
         if not os.path.exists(path.parents[0]):
             os.makedirs(path.parents[0])
-        
+
         # Save the image first
         cv2.imencode(".jpg", augmented_image)[1].tofile(output_file)
-        
+
         # Get XMP data from input file
-        xmp_data = MetaDataHelper.get_xmp_data(input_file)
-        
+        xmp_data = MetaDataHelper.extract_xmp(input_file)
+
         if platform.system() == "Darwin":
-            MetaDataHelper.transfer_exif_piexif(input_file, output_file)
+            MetaDataHelper.transfer_exif_xmp(input_file, output_file)
         else:
             if temperature_data is not None:
-                MetaDataHelper.transfer_all(input_file, output_file)
+                MetaDataHelper.transfer_all_exiftool(input_file, output_file)
                 MetaDataHelper.transfer_temperature_data(temperature_data, output_file)
             else:
-                MetaDataHelper.transfer_exif_piexif(input_file, output_file)
-        
+                MetaDataHelper.transfer_exif(input_file, output_file)
+
         # Add XMP data if it exists in the input file
         if xmp_data:
-            MetaDataHelper.set_xmp_data(output_file, xmp_data)
+            MetaDataHelper.embed_xmp(xmp_data, output_file)
 
-    def split_image(self, img, segments):
+    def split_image(self, img, segments, overlap=0):
         """
-        Divides a single image into multiple segments based on the specified number of segments.
+        Splits an image into a grid of segments with optional overlap.
 
         Args:
-            img (numpy.ndarray): The image to be divided into segments.
-            segments (int): The number of segments to split the image into.
+            img (numpy.ndarray): The image to be divided.
+            segments (int): Number of segments in the grid.
+            overlap (int or float): Overlap between segments in pixels or as a percentage (0-1).
 
         Returns:
-            list: A list of lists containing numpy.ndarrays representing the segments of the original image.
+            list: A 2D list of numpy.ndarrays representing the segments.
         """
-        h, w, channels = img.shape
+        rows, cols = self._get_rows_cols_from_segments(segments)
+        if len(img.shape) == 2:  # Grayscale image
+            h, w = img.shape
+        elif len(img.shape) == 3:  # Color image
+            h, w, _ = img.shape
+        row_height = math.ceil(h / rows)
+        col_width = math.ceil(w / cols)
+
+        # Calculate overlap in pixels
+        overlap_h = int(row_height * overlap) if overlap < 1 else int(overlap)
+        overlap_w = int(col_width * overlap) if overlap < 1 else int(overlap)
+
         pieces = []
-        if segments == 2:
-            w_size = math.ceil(w / 2)
-            pieces.append([img[:, :w_size], img[:, w - w_size:]])
-        elif segments == 4:
-            w_size = math.ceil(w / 2)
-            h_size = math.ceil(h / 2)
-            pieces.extend([
-                [img[:h_size, :w_size], img[:h_size, w - w_size:]],
-                [img[h_size:, :w_size], img[h_size:, w - w_size:]]
-            ])
-        elif segments == 6:
-            w_size = math.ceil(w / 3)
-            h_size = math.ceil(h / 2)
-            pieces.extend([
-                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:]],
-                [img[h_size:, :w_size], img[h_size:, w_size:w_size * 2], img[h_size:, w_size * 2:]]
-            ])
-        elif segments == 9:
-            w_size = math.ceil(w / 3)
-            h_size = math.ceil(h / 3)
-            pieces.extend([
-                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:]],
-                [img[h_size:h_size * 2, :w_size], img[h_size:h_size * 2, w_size:w_size * 2], img[h_size:h_size * 2, w_size * 2:]],
-                [img[h_size * 2:, :w_size], img[h_size * 2:, w_size:w_size * 2], img[h_size * 2:, w_size * 2:]]
-            ])
-        elif segments == 16:
-            w_size = math.ceil(w / 4)
-            h_size = math.ceil(h / 4)
-            pieces.extend([
-                [img[:h_size, :w_size], img[:h_size, w_size:w_size * 2], img[:h_size, w_size * 2:w_size * 3], img[:h_size, w_size * 3:]],
-                [img[h_size:h_size * 2, :w_size], img[h_size:h_size * 2, w_size:w_size * 2], img[h_size:h_size * 2, w_size * 2:w_size * 3],
-                 img[h_size:h_size * 2, w_size * 3:]],
-                [img[h_size * 2:h_size * 3, :w_size], img[h_size * 2:h_size * 3, w_size:w_size * 2], img[h_size * 2:h_size * 3, w_size * 2:w_size * 3],
-                 img[h_size * 2:h_size * 3, w_size * 3:]],
-                [img[h_size * 3:, :w_size], img[h_size * 3:, w_size:w_size * 2], img[h_size * 3:, w_size * 2:w_size * 3], img[h_size * 3:, w_size * 3:]]
-            ])
-        elif segments == 25:
-            w_size = math.ceil(w / 5)
-            h_size = math.ceil(h / 5)
-            pieces.extend([
-                [img[:h_size, i * w_size:(i + 1) * w_size] for i in range(5)],
-                [img[h_size:h_size * 2, i * w_size:(i + 1) * w_size] for i in range(5)],
-                [img[h_size * 2:h_size * 3, i * w_size:(i + 1) * w_size] for i in range(5)],
-                [img[h_size * 3:h_size * 4, i * w_size:(i + 1) * w_size] for i in range(5)],
-                [img[h_size * 4:, i * w_size:(i + 1) * w_size] for i in range(5)]
-            ])
-        elif segments == 36:
-            w_size = math.ceil(w / 6)
-            h_size = math.ceil(h / 6)
-            pieces.extend([
-                [img[:h_size, i * w_size:(i + 1) * w_size] for i in range(6)],
-                [img[h_size:h_size * 2, i * w_size:(i + 1) * w_size] for i in range(6)],
-                [img[h_size * 2:h_size * 3, i * w_size:(i + 1) * w_size] for i in range(6)],
-                [img[h_size * 3:h_size * 4, i * w_size:(i + 1) * w_size] for i in range(6)],
-                [img[h_size * 4:h_size * 5, i * w_size:(i + 1) * w_size] for i in range(6)],
-                [img[h_size * 5:, i * w_size:(i + 1) * w_size] for i in range(6)]
-            ])
-        else:
-            pieces.append([img])
+        for i in range(rows):
+            row_pieces = []
+            for j in range(cols):
+                # Calculate slice boundaries with overlap
+                y_start = max(i * row_height - overlap_h, 0)
+                y_end = min((i + 1) * row_height + overlap_h, h)
+                x_start = max(j * col_width - overlap_w, 0)
+                x_end = min((j + 1) * col_width + overlap_w, w)
+
+                # Extract segment
+                row_pieces.append(img[y_start:y_end, x_start:x_end])
+            pieces.append(row_pieces)
+
         return pieces
 
     def glue_image(self, pieces):
@@ -236,6 +202,23 @@ class AlgorithmService:
         """
         rows = [cv2.hconcat(row) for row in pieces]
         return cv2.vconcat(rows)
+
+    def _get_rows_cols_from_segments(self, segments):
+        """
+        Get the number of rows and columns for a number of segments
+
+        Args:
+            segments (int): The number of segments in which to divide the image.
+
+        Returns:
+            int, int: The number of rows and columns.
+        """
+        if segments == 2:
+            return 1, 2
+        elif segments == 6:
+            return 2, 3
+        else:
+            return int(segments ** .5), int(segments ** .5)
 
 
 class AlgorithmController:

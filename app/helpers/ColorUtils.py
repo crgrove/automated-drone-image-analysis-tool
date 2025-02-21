@@ -32,10 +32,10 @@ class ColorUtils:
     @staticmethod
     def parse_rgb_string(value):
         """Parse RGB values from string like '(0, 85, 255)' or similar formats.
-        
+
         Args:
             value (str): String containing RGB values.
-            
+
         Returns:
             tuple: RGB values as (r,g,b) tuple, or None if parsing fails.
         """
@@ -47,6 +47,6 @@ class ColorUtils:
                 parts = [int(x.strip()) for x in clean_str.split(',')]
                 if len(parts) == 3:
                     return tuple(parts)
-            except:
-                pass
+            except Exception:
+                return None
         return None

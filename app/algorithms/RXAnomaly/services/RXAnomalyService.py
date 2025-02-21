@@ -6,9 +6,7 @@ from scipy.stats import chi2
 import traceback
 
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
-from algorithms.MRMap.services.MRMapService import MRHistogram
 from core.services.LoggerService import LoggerService
-from helpers.ColorUtils import ColorUtils
 
 
 class RXAnomalyService(AlgorithmService):
@@ -48,33 +46,9 @@ class RXAnomalyService(AlgorithmService):
             masks = pieces = self.split_image(img, self.segments)
             for x in range(len(pieces)):
                 for y in range(len(pieces[x])):
-                    """
                     rx_values = spectral.rx(pieces[x][y])
                     chi_values = chi2.ppf(self.chi_threshold, pieces[x][y].shape[-1])
                     masks[x][y] = np.uint8((1 * (rx_values > chi_values)))
-                    """
-                    histogram = MRHistogram(pieces[x][y])
-                    pixels = np.array(pieces[x][y])
-                    width, height = pieces[x][y].shape[:2]
-
-                    # Quantize pixels
-                    r_quantized = histogram.mapping[pixels[:, :, 0]]
-                    g_quantized = histogram.mapping[pixels[:, :, 1]]
-                    b_quantized = histogram.mapping[pixels[:, :, 2]]
-                    quantized_pixels = np.stack((r_quantized, g_quantized, b_quantized), axis=-1)
-                    reshaped_quantized_pixels = quantized_pixels.reshape((-1, 3))
-                    # Reshape back to the original shape for display
-
-                    # Calculate RX anomaly scores for quantized values
-                    rx_scores = spectral.rx(reshaped_quantized_pixels, cov=np.cov(reshaped_quantized_pixels, rowvar=False))
-                    rx_scores = rx_scores.reshape((width, height))
-
-                    # Calculate chi-squared threshold for comparison
-                    chi_values = chi2.ppf(self.chi_threshold, 3)  # 3 degrees of freedom for RGB
-
-                    # Create a binary mask of anomalous pixels based on RX scores
-                    masks[x][y] = np.uint8((rx_scores > chi_values)) * 255
-                    histogram = None
             combined_mask = self.glue_image(masks)
 
             # Find contours of the identified areas and circle areas of interest.
@@ -89,6 +63,7 @@ class RXAnomalyService(AlgorithmService):
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
+            # print(traceback.format_exc())
             return AnalysisResult(full_path, error_message=str(e))
 
     def get_threshold(self, sensitivity):

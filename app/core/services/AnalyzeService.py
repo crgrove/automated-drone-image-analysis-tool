@@ -18,7 +18,7 @@ from core.services.XmlService import XmlService
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
-#from algorithms.MRMap.services.MRMapService import MRMapService
+from algorithms.MRMap.services.MRMapService import MRMapService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
 from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 
@@ -29,7 +29,7 @@ class AnalyzeService(QObject):
     # Signals to send info back to the GUI
     sig_msg = pyqtSignal(str)
     sig_aois = pyqtSignal()
-    sig_done = pyqtSignal(int, int)
+    sig_done = pyqtSignal(int, int, str)
 
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
                  max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options, max_area):
@@ -151,7 +151,7 @@ class AnalyzeService(QObject):
             file_path = os.path.join(self.output, "ADIAT_Data.xml")
             self.xmlService.save_xml_file(file_path)
             ttl_time = round(time.time() - start_time, 3)
-            self.sig_done.emit(self.__id, len(self.images_with_aois))
+            self.sig_done.emit(self.__id, len(self.images_with_aois), file_path)
             self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
             self.sig_msg.emit(f"Total Images Processed: {ttl_images}")
 
@@ -160,7 +160,7 @@ class AnalyzeService(QObject):
 
     @staticmethod
     def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
-                    thermal):
+                     thermal):
         """
         Process a single image using the selected algorithm and settings.
 
@@ -182,7 +182,7 @@ class AnalyzeService(QObject):
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        #img = cv2.resize(img, (4000, 3000))
+        # img = cv2.resize(img, (4000, 3000))
 
         if not thermal:
             # Apply histogram normalization if a reference image is provided

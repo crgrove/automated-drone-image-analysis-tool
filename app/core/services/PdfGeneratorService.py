@@ -20,6 +20,9 @@ from helpers.LocationInfo import LocationInfo
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
 
+import traceback
+
+
 class PDFDocTemplate(BaseDocTemplate):
     """Custom document template with TOC support."""
 
@@ -31,11 +34,9 @@ class PDFDocTemplate(BaseDocTemplate):
             filename (str): The file path for the generated PDF document.
             **kwargs: Additional arguments for the BaseDocTemplate class.
         """
-        self.logger = LoggerService()
-
         self.allowSplitting = 0
         BaseDocTemplate.__init__(self, filename, **kwargs)
-        
+
         # Letter dimensions in cm
         page_width, page_height = letter  # (21.59 cm, 27.94 cm)
         min_margin = 0.635 * cm
@@ -71,6 +72,7 @@ class PDFDocTemplate(BaseDocTemplate):
                 self.canv.bookmarkPage(key)
                 self.notify('TOCEntry', (1, label, self.page, key))
 
+
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
 
@@ -81,6 +83,8 @@ class PdfGeneratorService:
         Args:
             viewer: Reference to the viewer instance for accessing necessary data and methods.
         """
+
+        self.logger = LoggerService()
         self.viewer = viewer
         self.story = []
         self.doc = None
@@ -144,7 +148,7 @@ class PdfGeneratorService:
             self.doc.multiBuild(self.story)
 
         except Exception as e:
-            print("In generator exception")
+            # print(traceback.format_exc())
             self.logger.error(f"PDF generation failed: {str(e)}")
             raise
 
@@ -182,12 +186,11 @@ class PdfGeneratorService:
         """
         self.story.append(Paragraph("Algorithm Settings", self.h2))
         settings, algorithm = self.viewer.xmlService.get_settings()
-        self.story.append(Paragraph(f"Algorithm: {algorithm}", self.styles['Normal']))
+        # self.story.append(Paragraph(f"Algorithm: {algorithm}", self.styles['Normal']))
 
         # Process settings with color squares
         for key, value in settings.items():
             rgb_value = value if isinstance(value, tuple) else ColorUtils.parse_rgb_string(str(value))
-
             if rgb_value and len(rgb_value) == 3:
                 r, g, b = rgb_value
                 color_hex = f"#{r:02x}{g:02x}{b:02x}"

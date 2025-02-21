@@ -1,6 +1,7 @@
 import zipfile
 import os
 
+
 class ZipBundleService:
     """Service to generate a KML file with points representing locations where images with areas of interest were taken."""
 
@@ -9,7 +10,7 @@ class ZipBundleService:
         Initialize the KMLService, creating a new KML document.
         """
 
-    def generate_zip_file(self,file_paths, output_path):
+    def generate_zip_file(self, file_paths, output_path):
         with zipfile.ZipFile(output_path, 'w') as zipf:
             for img_path in file_paths:
                 # Check if the file exists before adding

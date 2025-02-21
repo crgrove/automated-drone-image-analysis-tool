@@ -28,6 +28,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.themeComboBox.setCurrentText(self.parent.settings_service.get_setting('Theme'))
         self.AOIRadiusSpinBox.setValue(self.parent.settings_service.get_setting('AOIRadius'))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
+        self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
+        self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
 
     def _connect_signals(self):
         """Connects UI signals to the appropriate update methods."""
@@ -36,6 +38,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.themeComboBox.currentTextChanged.connect(self._update_theme)
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
+        self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
 
     def _update_max_aois(self):
         """Updates the maximum areas of interest setting based on the spinbox value."""
@@ -58,3 +61,7 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_temperature_unit(self):
         """Updates the temperature unit setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('TemperatureUnit', self.temperatureComboBox.currentText())
+
+    def _update_distance_unit(self):
+        """Updates the distance unit setting based on the selected combobox value."""
+        self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())

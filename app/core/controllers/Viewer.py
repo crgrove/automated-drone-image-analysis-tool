@@ -1,7 +1,10 @@
 import qimage2ndarray
 import imghdr
 import math
+import traceback
 from pathlib import Path
+from collections import UserDict, OrderedDict
+
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QPushButton, QFrame, QVBoxLayout, QLabel, QWidget
@@ -23,13 +26,14 @@ from helpers.MetaDataHelper import MetaDataHelper
 class Viewer(QMainWindow, Ui_Viewer):
     """Controller for the Image Viewer (QMainWindow)."""
 
-    def __init__(self, xml_path, position_format, temperature_unit, show_hidden):
+    def __init__(self, xml_path, position_format, temperature_unit, distance_unit, show_hidden):
         """Initializes the ADIAT Image Viewer.
 
         Args:
             xml_path (str): Path to XML file containing results data.
             position_format (str): The format in which GPS coordinates will be displayed.
             temperature_unit (str): The unit in which temperature values will be displayed.
+            distance_unit (str): The unit in which distance values will be displayed.
             show_hidden (bool): Whether or not to show hidden images by default.
         """
         super().__init__()
@@ -51,6 +55,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.temperature_data = None
         self.active_thumbnail = None
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
+        self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
@@ -58,6 +63,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.thumbnail_size = (122, 78)
         self.thumbnail_loader = None
         self.visible_thumbnails_range = (0, 0)
+        self.messages = StatusDict(callback=self._message_listener, key_order=["GPS Coordinates", "Relative Altitude", "Temperature"])
         self._load_images()
         self._initialize_thumbnails()
         self._load_thumbnails_in_range(0, self.thumbnail_limit)
@@ -71,7 +77,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 color: black;
                 border: 1px solid blue;
             }
-        """) 
+        """)
 
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
@@ -243,6 +249,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             if self.current_image is None:
                 self.current_image = 0
 
+            self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Temperature'] = None
             image = self.images[self.current_image]
             self.placeholderImage.deleteLater()
             self.mainImage = QtImageViewer(self, self.centralwidget)
@@ -258,11 +265,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._load_areas_of_interest(image)
 
             gps_coords = LocationInfo.get_gps(image['path'])
+            xmp_data = MetaDataHelper.get_xmp_data(image['path'], True)
+            self.messages['Relative Altitude'] = self._find_relative_altitude(xmp_data)
             if gps_coords:
                 self.position = self.get_position(gps_coords['latitude'], gps_coords['longitude'])
-                self.statusbar.showMessage("GPS Coordinates: " + self.position)
-            else:
-                self.statusbar.showMessage("")
+                self.messages['GPS Coordinates'] = self.position
+
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
 
             if self.is_thermal:
@@ -270,6 +278,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.mainImage.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
             self.hideImageToggle.setChecked(image['hidden'])
         except Exception as e:
+            # print(traceback.format_exc())
             self.logger.error(e)
 
     def _mainImage_mouse_pos(self, pos):
@@ -283,15 +292,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             if (0 <= pos.y() < shape[0]) and (0 <= pos.x() < shape[1]):
                 temp_value = str(round(self.temperature_data[pos.y()][pos.x()], 2))
                 temp_display = f"{temp_value}° {self.temperature_unit}"
-                if self.position:
-                    new_message = f"GPS Coordinates: {self.position}    Temperature: {temp_display}"
-                else:
-                    new_message = f"Temperature: {temp_display}"
-                self.statusbar.showMessage(new_message)
+                self.messages["Temperature"] = temp_display
 
     def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
         try:
+            self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Temperature'] = None
             image = self.images[self.current_image]
             self._set_active_thumbnail(image['thumbnail'])
             img = QImage(image['path'])
@@ -304,12 +310,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
 
             gps_coords = LocationInfo.get_gps(image['path'])
+            xmp_data = MetaDataHelper.get_xmp_data(image['path'], True)
+            self.messages['Relative Altitude'] = self._find_relative_altitude(xmp_data)
+
             self.position = None
             if gps_coords:
                 self.position = self.get_position(gps_coords['latitude'], gps_coords['longitude'])
-                self.statusbar.showMessage("GPS Coordinates: " + self.position)
-            else:
-                self.statusbar.showMessage("")
+                self.messages['GPS Coordinates'] = self.position
 
             if self.is_thermal:
                 self.temperature_data = self._load_thermal_data(image['path'])
@@ -593,7 +600,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # Connect signals
                 self.pdf_thread.finished.connect(self._on_pdf_generation_finished)
                 self.pdf_thread.canceled.connect(self._on_pdf_generation_cancelled)
-                self.pdf_thread.errorOccurred.connect(self._on_pdf_generation_error) 
+                self.pdf_thread.errorOccurred.connect(self._on_pdf_generation_error)
 
                 self.pdf_thread.start()
 
@@ -604,7 +611,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             except Exception as e:
                 self.logger.error(f"Error generating PDF file: {str(e)}")
                 self._show_error(f"Failed to generate PDF file: {str(e)}")
-    
+
     def _on_pdf_generation_finished(self):
         """Handles successful completion of PDF generation."""
         self.loading_dialog.accept()
@@ -618,7 +625,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Close the loading dialog
         if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
             self.loading_dialog.reject()  # Close the dialog
-    
+
     def _on_pdf_generation_error(self, error_message):
         """Handles errors during PDF generation."""
         if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
@@ -626,16 +633,44 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._show_error(f"PDF generation failed: {error_message}")
 
     def _zipButton_clicked(self):
-            """Handles clicks on the Generate Zip Bundle."""
-            fileName, _ = QFileDialog.getSaveFileName(self, "Save Zip File", "", "Zip files (*.zip)")
-            if fileName:
+        """Handles clicks on the Generate Zip Bundle."""
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save Zip File", "", "Zip files (*.zip)")
+        if fileName:
+            try:
+                file_paths = [img['path'] for img in self.images if not img.get('hidden', False)]
+                zip_generator = ZipBundleService()
+                zip_generator.generate_zip_file(file_paths, fileName)
+            except Exception as e:
+                self.logger.error(f"Error generating Zip file: {str(e)}")
+                self._show_error(f"Failed to generate Zip file: {str(e)}")
+
+    def _message_listener(self, key, value):
+        """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
+        status_text = " | ".join([f"{k}: {v}" for k, v in self.messages.items() if v is not None])
+        self.statusbar.showMessage(status_text)
+
+    def _find_relative_altitude(self, data):
+        """
+        Find the key-value pair where the key contains 'RelativeAltitude'.
+
+        Args:
+            data (dict): The dictionary to search.
+
+        Returns:
+            tuple: The key-value pair if found, otherwise None.
+        """
+        METERS_TO_FEET = 3.28084
+        if data is None:
+            return None
+        for key, value in data.items():
+            if "RelativeAltitude" in key:
                 try:
-                    file_paths = [img['path'] for img in self.images if not img.get('hidden', False)]
-                    zip_generator = ZipBundleService()
-                    zip_generator.generate_zip_file(file_paths, fileName)
-                except Exception as e:
-                    self.logger.error(f"Error generating Zip file: {str(e)}")
-                    self._show_error(f"Failed to generate Zip file: {str(e)}")
+                    altitude_meters = float(value)  # Convert to float
+                    altitude = round(altitude_meters * METERS_TO_FEET, 2) if self.distance_unit == 'ft' else altitude_meters
+                    return f"{altitude} {self.distance_unit}"
+                except ValueError:
+                    return None  # Handle cases where conversion fails
+        return None
 
 
 class LoadingDialog(QDialog):
@@ -706,6 +741,7 @@ class ThumbnailLoader(QThread):
                 icon = QIcon(pixmap)
                 self.thumbnail_loaded.emit(index, icon)
 
+
 class PdfGenerationThread(QThread):
     """Thread for generating the PDF report."""
     finished = pyqtSignal()
@@ -747,3 +783,43 @@ class PdfGenerationThread(QThread):
         """
         self._is_canceled = True
         self.canceled.emit()
+
+
+class StatusDict(UserDict):
+    def __init__(self, *args, callback=None, key_order=None, **kwargs):
+        self.data = OrderedDict()  # Maintain explicit ordering
+        super().__init__(*args, **kwargs)
+        self.callback = callback
+        self.key_order = key_order or []  # Store explicit ordering
+
+    def __setitem__(self, key, value):
+        if key in self.data:
+            del self.data[key]  # Remove existing entry to reinsert in correct order
+        self.data[key] = value  # Insert the key-value pair
+
+        self._enforce_order()  # Ensure keys are in correct order
+
+        if self.callback:
+            self.callback(key, value)
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        if self.callback:
+            self.callback(f"Deleted {key}")
+
+    def set_order(self, key_order):
+        """Sets the explicit order of keys in the dictionary."""
+        self.key_order = key_order
+        self._enforce_order()  # Apply the new order immediately
+
+    def _enforce_order(self):
+        """Reorders the dictionary based on self.key_order."""
+        new_data = OrderedDict()
+        for key in self.key_order:
+            if key in self.data:
+                new_data[key] = self.data[key]
+        self.data = new_data  # Replace existing dict with the ordered one
+
+    def items(self):
+        """Returns items in the explicitly set order."""
+        return [(key, self.data[key]) for key in self.key_order if key in self.data]

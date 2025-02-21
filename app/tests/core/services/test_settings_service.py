@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from PyQt5 import QtCore
+from PyQt5.QtCore import QSettings
 from app.core.services.SettingsService import SettingsService  # Adjust the import according to your project structure
 
 
@@ -10,8 +11,10 @@ def settings_service():
 
 
 def test_settings_service_initialization():
-    with patch.object(QtCore, 'QSettings') as mock_qsettings:
-        mock_qsettings.assert_called_once_with('ADIAT')
+    with patch.object(QSettings, '__init__', return_value=None) as mock_qsettings:
+        service = SettingsService()  # Instantiate the service
+        assert service is not None
+        mock_qsettings.assert_called_once_with('ADIAT')  # Ensure QSettings was initialized
 
 
 def test_set_setting(settings_service):
@@ -21,7 +24,10 @@ def test_set_setting(settings_service):
 
 
 def test_get_setting(settings_service):
-    with patch.object(settings_service.settings, 'value', return_value='test_value') as mock_get_value:
+    mock_qsettings = MagicMock()
+    mock_qsettings.value.return_value = 'test_value'
+
+    with patch.object(settings_service, 'settings', mock_qsettings):
         value = settings_service.get_setting('test_key')
-        mock_get_value.assert_called_once_with('test_key')
+        mock_qsettings.value.assert_called_once_with('test_key')
         assert value == 'test_value'

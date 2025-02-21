@@ -27,7 +27,8 @@ class ThermalParserService:
         'M3T',
         'M3TD',
         'M30T',
-        'H30T'
+        'H30T',
+        'M4T'
     ]
 
     AUTEL_MODELS = [
@@ -81,7 +82,7 @@ class ThermalParserService:
         Raises:
             Exception: If the image file is invalid or the camera model is not supported.
         """
-        data = MetaDataHelper.get_meta_data(full_path)
+        data = MetaDataHelper.get_meta_data_exiftool(full_path)
         meta_fields = {k.split(':')[1].strip(): v for k, v in data.items() if ':' in k}
         camera_model, platform = self._get_model_and_platform(meta_fields)
         assert camera_model != "Not Supported", "Camera Model is not supported"
@@ -118,7 +119,6 @@ class ThermalParserService:
                 img = parser.image(temps, palette)
                 return temps, img
             except Exception as e:
-                print(e)
                 raise Exception("Invalid image file")
 
         elif platform == 'DJI':
@@ -135,7 +135,7 @@ class ThermalParserService:
                 kwargs['image_width'] = int(meta_fields['ImageWidth'])
             if 'emissivity' in kwargs:
                 kwargs['emissivity'] /= 100
-            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD']:
+            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD', 'M4T']:
                 kwargs['m2ea_mode'] = True
 
             try:

@@ -3,6 +3,7 @@ import cv2
 import piexif
 import imghdr
 import utm
+from helpers.MetaDataHelper import MetaDataHelper
 
 
 class LocationInfo:
@@ -23,7 +24,7 @@ class LocationInfo:
         if not is_jpg:
             return {}
 
-        exif_dict = piexif.load(full_path)
+        exif_dict = MetaDataHelper.get_exif_data_piexif(full_path)
         if not exif_dict['GPS'] == {}:
             latitude = exif_dict['GPS'][piexif.GPSIFD.GPSLatitude]
             latitude_ref = exif_dict['GPS'][piexif.GPSIFD.GPSLatitudeRef].decode('utf-8')

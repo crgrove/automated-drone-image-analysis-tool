@@ -114,6 +114,7 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         if 'selected_color' in options:
             selected_color = literal_eval(options['selected_color'])
             self.selectedColor = QColor(selected_color[0], selected_color[1], selected_color[2])
+            self.colorSample.setStyleSheet("background-color: " + self.selectedColor.name())
             self.viewRangeButton.show()
         if 'match_filter_threshold' in options:
             self.thresholdValueLabel.setText(str(options['match_filter_threshold']))

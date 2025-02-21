@@ -5,6 +5,10 @@ import piexif
 import json
 import numpy as np
 import platform
+import traceback
+import re
+import struct
+import xml.etree.ElementTree as ET
 
 
 class MetaDataHelper:
@@ -24,88 +28,105 @@ class MetaDataHelper:
             return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool'))
 
     @staticmethod
-    def transfer_exif_piexif(originFile, destinationFile):
+    def _transfer_exif_piexif(origin_file, destination_file):
         """
         Copy the EXIF information from one image file to another using piexif.
 
         Args:
-            originFile (str): Path to the source file.
-            destinationFile (str): Path to the destination file.
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
         """
         try:
-            piexif.transplant(originFile, destinationFile)
+            piexif.transplant(origin_file, destination_file)
         except piexif._exceptions.InvalidImageDataError:
-            MetaDataHelper.transfer_exif_pil(originFile, destinationFile)
+            MetaDataHelper._transfer_exif_pil(origin_file, destination_file)
         except ValueError:
             return
 
     @staticmethod
-    def transfer_exif_pil(originFile, destinationFile):
+    def _transfer_exif_pil(origin_file, destination_file):
         """
         Copy the EXIF information from one image file to another using PIL.
 
         Args:
-            originFile (str): Path to the source file.
-            destinationFile (str): Path to the destination file.
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
         """
-        image = Image.open(originFile)
+        image = Image.open(origin_file)
         if 'exif' in image.info:
             exif = image.info['exif']
-            image_new = Image.open(destinationFile)
-            image_new.save(destinationFile, 'JPEG', exif=exif)
+            image_new = Image.open(destination_file)
+            image_new.save(destination_file, 'JPEG', exif=exif)
 
     @staticmethod
-    def transfer_exif_exiftool(originFile, destinationFile):
+    def transfer_exif_exiftool(origin_file, destination_file):
         """
         Copy the EXIF information from one image file to another using Exiftool.
 
         Args:
-            originFile (str): Path to the source file.
-            destinationFile (str): Path to the destination file.
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
-            et.execute("-tagsfromfile", originFile, "-exif", destinationFile, "-overwrite_original")
+            et.execute("-tagsfromfile", origin_file, "-exif", destination_file, "-overwrite_original")
             et.terminate()
 
     @staticmethod
-    def transfer_xmp_exiftool(originFile, destinationFile):
+    def transfer_xmp_exiftool(origin_file, destination_file):
         """
         Copy the XMP information from one image file to another using Exiftool.
 
         Args:
-            originFile (str): Path to the source file.
-            destinationFile (str): Path to the destination file.
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
-            et.execute("-tagsfromfile", originFile, "-xmp", destinationFile, "-overwrite_original")
+            et.execute("-tagsfromfile", origin_file, "-xmp", destination_file, "-overwrite_original")
             et.terminate()
 
     @staticmethod
-    def transfer_all(originFile, destinationFile):
+    def transfer_exif(origin_file, destination_file):
+        """
+        Copy the EXIF information from one image file to another.
+
+        Args:
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
+        """
+        try:
+            MetaDataHelper._transfer_exif_piexif(origin_file, destination_file)
+        except piexif._exceptions.InvalidImageDataError:
+            MetaDataHelper._transfer_exif_pil(origin_file, destination_file)
+
+        except ValueError:
+            return
+
+    @staticmethod
+    def transfer_all_exiftool(origin_file, destination_file):
         """
         Copy the EXIF and XMP information from one image file to another using Exiftool.
 
         Args:
-            originFile (str): Path to the source file.
-            destinationFile (str): Path to the destination file.
+            origin_file (str): Path to the source file.
+            destination_file (str): Path to the destination file.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
-            et.execute("-tagsfromfile", originFile, destinationFile, "-overwrite_original", "--thumbnailimage")
+            et.execute("-tagsfromfile", origin_file, destination_file, "-overwrite_original", "--thumbnailimage")
             et.terminate()
 
     @staticmethod
-    def transfer_temperature_data(data, destinationFile):
+    def transfer_temperature_data(data, destination_file):
         """
         Copy temperature data from an image to the Notes field on another image.
 
         Args:
             data (numpy.ndarray): Temperature data array.
-            destinationFile (str): Path to the destination file.
+            destination_file (str): Path to the destination file.
         """
         json_data = json.dumps(data.tolist())
         with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             et.set_tags(
-                [destinationFile],
+                [destination_file],
                 tags={"Notes": json_data},
                 params=["-P", "-overwrite_original"]
             )
@@ -146,7 +167,7 @@ class MetaDataHelper:
         return temperature_c
 
     @staticmethod
-    def get_meta_data(file_path):
+    def get_meta_data_exiftool(file_path):
         """
         Retrieve metadata from an image file.
 
@@ -162,7 +183,20 @@ class MetaDataHelper:
         return metadata
 
     @staticmethod
-    def set_tags(file_path, tags):
+    def get_exif_data_piexif(file_path):
+        """
+        Retrieve EXIF metadata from an image file.
+
+        Args:
+            file_path (str): Path to the image.
+
+        Returns:
+            dict: Key-value pairs of EXIF data.
+        """
+        return piexif.load(file_path)
+
+    @staticmethod
+    def set_tags_exiftool(file_path, tags):
         """
         Update metadata with provided tags.
 
@@ -175,7 +209,7 @@ class MetaDataHelper:
             et.terminate()
 
     @staticmethod
-    def add_gps_data(file_path, lat, lng, alt):
+    def add_gps_data(file_path, lat, lng, alt, rel_alt=0):
         """
         Add GPS data to an image file.
 
@@ -183,7 +217,8 @@ class MetaDataHelper:
             file_path (str): Path to the image.
             lat (float): Decimal latitude.
             lng (float): Decimal longitude.
-            alt (float): Altitude in meters.
+            alt (float): Absolute Altitude in meters.
+            rel_alt (float): Relative altitude in meters.
         """
         img = Image.open(file_path)
         exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "Interop": {}, "1st": {}, "thumbnail": None}
@@ -231,108 +266,164 @@ class MetaDataHelper:
         }
 
     @staticmethod
-    def get_xmp_data(file_path):
+    def get_xmp_data(file_path, parse=False):
         """
         Extract XMP data from an image file if present.
-        
+
         Args:
             file_path (str): Path to the image file.
-            
+            parse (boolean): Should the xmp data be parsed and returned as a dictionary
+
         Returns:
             str: XMP data if found, None otherwise.
         """
         try:
             with open(file_path, 'rb') as f:
                 data = f.read()
-                
+
             # Look for XMP header and footer
             start_tag = b'<?xpacket begin'
             end_tag = b'<?xpacket end'
-            
+
             start_idx = data.find(start_tag)
             if start_idx == -1:
                 return None
-                
+
             end_idx = data.find(end_tag, start_idx)
             if end_idx == -1:
                 return None
-                
+
             # Find the closing '>' for the end tag
             end_close_idx = data.find(b'>', end_idx) + 1
             if end_close_idx == 0:  # if '>' not found
                 return None
-                
+
             # Include complete end tag in the extracted data
             xmp_data = data[start_idx:end_close_idx]
-            return xmp_data.decode('utf-8')
+            xmp_decode = xmp_data.decode('utf-8')
+
+            if parse:
+                return MetaDataHelper._parse_xmp_xml(xmp_decode)
+            else:
+                return xmp_decode
         except Exception:
             return None
 
     @staticmethod
-    def set_xmp_data(file_path, xmp_data):
-        """
-        Add XMP data to an image file while preserving JPEG format.
-        
+    def extract_xmp(image_path):
+        """Extracts only the XMP metadata from a JPEG file without modifying EXIF data.
+
+        This function scans the `APP1` segments of a JPEG file to locate and 
+        extract XMP metadata.
+
         Args:
-            file_path (str): Path to the image file.
-            xmp_data (str): XMP data to insert.
+            image_path (str): Path to the image file.
+
+        Returns:
+            bytes: The raw XMP metadata in binary format, or None if no XMP is found.
         """
-        if not xmp_data:
-            return
-            
-        try:
-            with open(file_path, 'rb') as f:
-                data = f.read()
-                
-            # Find the SOI marker
-            soi_marker = b'\xFF\xD8'
-            if not data.startswith(soi_marker):
-                print(f"Invalid JPEG: Missing SOI marker. First bytes: {data[:2].hex()}")
-                return
-            
-            # Look for APP1 marker after SOI
-            app1_marker = b'\xFF\xE1'
-            
-            # Convert XMP data to bytes, preserving original packet structure
-            xmp_bytes = xmp_data.encode('utf-8')
-            
-            # Create APP1 segment with proper JPEG structure
-            segment_length = len(xmp_bytes) + 2  # +2 for length bytes
-            app1_header = app1_marker + segment_length.to_bytes(2, 'big')
-            
-            # We need to preserve the JFIF/Exif marker that should be in the first APP0/APP1 segment
-            # Find the first APP0 (0xFFE0) or APP1 (0xFFE1) marker
-            app0_marker = b'\xFF\xE0'
-            marker_pos = data.find(app0_marker, 2)
-            if marker_pos == -1:
-                marker_pos = data.find(app1_marker, 2)
-            
-            if marker_pos != -1:
-                # Get the length of this segment (2 bytes after marker)
-                segment_size = int.from_bytes(data[marker_pos+2:marker_pos+4], 'big')
-                # Include this segment in our output
-                original_app_segment = data[marker_pos:marker_pos+2+segment_size]
-                
-                # Construct new file data:
-                # SOI + original APP segment + our XMP APP1 segment + rest of file
-                new_data = (soi_marker + 
-                           original_app_segment +
-                           app1_header + xmp_bytes + 
-                           data[marker_pos+2+segment_size:])
-            else:
-                print(f"Warning: No JFIF/Exif marker found in original file")
-                new_data = soi_marker + app1_header + xmp_bytes + data[2:]
-            
-            # Write the new file
-            with open(file_path, 'wb') as f:
-                f.write(new_data)
-            
-            # Verify the result
-            with open(file_path, 'rb') as f:
-                result = f.read(12)
-                if result[6:10] not in (b'JFIF', b'Exif'):
-                    print(f"Warning: Output file missing JFIF/Exif marker. Bytes 6-10: {result[6:10]}")
-            
-        except Exception as e:
-            print(f"Error in set_xmp_data: {str(e)}")
-            return
+        with open(image_path, "rb") as img_file:
+            img_data = img_file.read()
+
+        app1_positions = [m.start() for m in re.finditer(b"\xFF\xE1", img_data)]
+        if not app1_positions:
+            return None
+
+        for app1_start in app1_positions:
+            segment_length = struct.unpack(">H", img_data[app1_start + 2:app1_start + 4])[0]
+            app1_end = app1_start + 2 + segment_length
+
+            if app1_end > len(img_data) or app1_end < app1_start:
+                continue  # Skip corrupt segments
+
+            xmp_marker = b"http://ns.adobe.com/xap/1.0/"
+            if xmp_marker in img_data[app1_start:app1_end]:
+                return img_data[app1_start:app1_end]
+
+        return None
+
+    @staticmethod
+    def embed_xmp(xmp_segment, destination_file):
+        """Embeds XMP metadata into a JPEG file while ensuring format integrity.
+
+        This function inserts the XMP metadata at the correct location in the 
+        JPEG file, preserving EXIF and ensuring `imghdr.what()` still recognizes it.
+
+        Args:
+            xmp_segment (bytes): The XMP metadata segment to embed.
+            destination_file (str): Path to the image file where XMP will be inserted.
+
+        Returns:
+            bool: True if successful, False if the operation failed.
+        """
+        if xmp_segment is None:
+            return False
+
+        with open(destination_file, "rb") as img_file:
+            img_data = img_file.read()
+
+        exif_marker = img_data.find(b"\xFF\xE1")
+        if exif_marker != -1:
+            segment_length = struct.unpack(">H", img_data[exif_marker + 2:exif_marker + 4])[0]
+            insert_pos = exif_marker + 2 + segment_length
+        else:
+            insert_pos = 2  # Default: insert after SOI marker (FFD8)
+
+        xmp_header = b"http://ns.adobe.com/xap/1.0/\x00"
+        xmp_bytes = xmp_segment[len(b"\xFF\xE1") + 2:]
+
+        new_xmp_block = (
+            b"\xFF\xE1"
+            + struct.pack(">H", len(xmp_header) + len(xmp_bytes) + 2)
+            + xmp_header
+            + xmp_bytes
+        )
+
+        new_data = img_data[:insert_pos] + new_xmp_block + img_data[insert_pos:]
+
+        with open(destination_file, "wb") as f:
+            f.write(new_data)
+
+    @staticmethod
+    def _parse_xmp_xml(xmp_xml):
+        """Parses XMP metadata from XML format into a dictionary.
+
+        This function recursively extracts all nested XMP metadata entries,
+        including namespace-prefixed attributes.
+
+        Args:
+            xmp_xml (str): The raw XML string containing XMP metadata.
+
+        Returns:
+            dict: A dictionary with nested XMP metadata entries as key-value pairs.
+        """
+        root = ET.fromstring(xmp_xml)
+        xmp_dict = {}
+
+        def parse_element(element, parent_key=""):
+            """Recursively processes XML elements into a dictionary.
+
+            Args:
+                element (xml.etree.ElementTree.Element): The XML element to parse.
+                parent_key (str, optional): Prefix for nested keys to maintain hierarchy.
+
+            Returns:
+                None
+            """
+            for child in element:
+                tag = child.tag.split("}", 1)[1] if "}" in child.tag else child.tag
+                key = f"{parent_key}:{tag}" if parent_key else tag
+
+                if child.attrib:
+                    for attr, value in child.attrib.items():
+                        attr_key = f"{key}:{attr}"
+                        xmp_dict[attr_key] = value
+
+                if child.text and child.text.strip():
+                    xmp_dict[key] = child.text.strip()
+
+                if list(child):
+                    parse_element(child, key)
+
+        parse_element(root)
+        return xmp_dict

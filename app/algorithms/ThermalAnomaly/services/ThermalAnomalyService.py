@@ -26,6 +26,7 @@ class ThermalAnomalyService(AlgorithmService):
         self.logger = LoggerService()
         super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.threshold = options['threshold']
+        self.segments = options['segments']
         self.direction = options['type']
         self.color_map = options['colorMap']
 
@@ -46,23 +47,26 @@ class ThermalAnomalyService(AlgorithmService):
             # Parse the thermal image and retrieve temperature data.
             thermal = ThermalParserService(dtype=np.float32)
             temperature_c, thermal_img = thermal.parse_file(full_path, self.color_map)
+            masks = temperature_c_pieces = self.split_image(temperature_c, self.segments)
+            for x in range(len(temperature_c_pieces)):
+                for y in range(len(temperature_c_pieces[x])):
+                    # Calculate thresholds for anomaly detection based on mean and standard deviation.
+                    mean = np.mean(temperature_c_pieces[x][y])
+                    standard_deviation = np.std(temperature_c_pieces[x][y])
+                    max_threshold = mean + (standard_deviation * self.threshold)
+                    min_threshold = mean - (standard_deviation * self.threshold)
 
-            # Calculate thresholds for anomaly detection based on mean and standard deviation.
-            mean = np.mean(temperature_c)
-            standard_deviation = np.std(temperature_c)
-            max_threshold = mean + (standard_deviation * self.threshold)
-            min_threshold = mean - (standard_deviation * self.threshold)
+                    # Create a mask based on the specified anomaly direction.
+                    if self.direction == 'Above or Below Mean':
+                        masks[x][y] = np.uint8(1 * ((temperature_c_pieces[x][y] > max_threshold) + (temperature_c_pieces[x][y] < min_threshold)))
+                    elif self.direction == 'Above Mean':
+                        masks[x][y] = np.uint8(1 * (temperature_c_pieces[x][y] > max_threshold))
+                    else:
+                        masks[x][y] = np.uint8(1 * (temperature_c_pieces[x][y] < min_threshold))
 
-            # Create a mask based on the specified anomaly direction.
-            if self.direction == 'Above or Below Mean':
-                mask = np.uint8(1 * ((temperature_c > max_threshold) + (temperature_c < min_threshold)))
-            elif self.direction == 'Above Mean':
-                mask = np.uint8(1 * (temperature_c > max_threshold))
-            else:
-                mask = np.uint8(1 * (temperature_c < min_threshold))
-
+            combined_mask = self.glue_image(masks)
             # Find contours of the identified areas and circle areas of interest.
-            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            contours, hierarchy = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(thermal_img, contours)
 
             # Generate the output path and store the processed image.

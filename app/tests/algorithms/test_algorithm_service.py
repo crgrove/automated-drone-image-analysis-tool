@@ -17,7 +17,8 @@ def algorithm_service():
     return TestAlgorithmService(
         name='TestAlgorithm',
         identifier_color=(255, 0, 0),
-        min_area=100,
+        min_area=10,
+        max_area=1000,
         aoi_radius=5,
         combine_aois=True,
         options={'option1': 'value1'},
@@ -29,11 +30,11 @@ def algorithm_service():
 @patch('os.path.exists', return_value=False)
 @patch('cv2.imencode', return_value=(True, MagicMock()))
 @patch('platform.system', return_value='Windows')
-@patch('app.helpers.MetaDataHelper.MetaDataHelper.transfer_exif_piexif')
+@patch('app.helpers.MetaDataHelper.MetaDataHelper._transfer_exif_piexif')
 @patch('pathlib.Path.parents', new_callable=MagicMock)
 @patch('builtins.open', new_callable=mock_open)
 @patch('PIL.Image.open', return_value=MagicMock())
-def test_store_image(mock_image_open, mock_open, mock_path_parents, mock_transfer_exif_piexif,
+def test_store_image(mock_image_open, mock_open, mock_path_parents, mock__transfer_exif_piexif,
                      mock_platform, mock_imencode, mock_exists, mock_makedirs, algorithm_service):
     mock_input_file = 'input/file/path.jpg'
     mock_output_file = 'output/file/path.jpg'

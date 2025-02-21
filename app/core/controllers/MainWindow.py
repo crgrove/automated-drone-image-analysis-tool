@@ -80,10 +80,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._previous_min_area = self.minAreaSpinBox.value()
         self._previous_max_area = self.maxAreaSpinBox.value()
 
-        # Connect spinbox signals
-        self.minAreaSpinBox.editingFinished.connect(self._min_area_editing_finished)
-        self.maxAreaSpinBox.editingFinished.connect(self._max_area_editing_finished)
-
     def _load_algorithms(self):
         """
         Loads and categorizes algorithms for selection in the algorithm combobox.
@@ -182,14 +178,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         Verifies that the min area spinbox value is still smaller than the max spinbox value and, if not, updates the max spinbox value
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value():
+        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
             self.maxAreaSpinBox.setValue(self.minAreaSpinBox.value()+1)
 
     def _maxAreaSpinBox_change(self):
         """
         Verifies that the max area spinbox value is still larger than the min spinbox value and, if not, updates the min spinbox value
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value():
+        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
             self.minAreaSpinBox.setValue(self.maxAreaSpinBox.value()-1)
 
     def _kMeansCheckbox_change(self):
@@ -246,7 +242,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             thread.started.connect(self.analyzeService.process_files)
             thread.start()
 
-            self.results_path = self.outputFolderLine.text()
             self._set_CancelButton(True)
         except Exception as e:
             self.logger.error(e)
@@ -263,12 +258,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Launches the image viewer to display analysis results.
         """
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        output_folder = os.path.join(self.results_path, "ADIAT_Results")
-        file = pathlib.Path(output_folder, "ADIAT_Data.xml")
+        file = pathlib.Path(self.results_path)
         if file.is_file():
             position_format = self.settings_service.get_setting('PositionFormat')
             temperature_unit = self.settings_service.get_setting('TemperatureUnit')
-            self.viewer = Viewer(file, position_format, temperature_unit, False)
+            distance_unit = self.settings_service.get_setting('DistanceUnit')
+            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False)
             self.viewer.show()
         else:
             self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
@@ -306,8 +301,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self._add_log_entry(text)
 
-    @pyqtSlot(int, int)
-    def _on_worker_done(self, id, images_with_aois):
+    @pyqtSlot(int, int, str)
+    def _on_worker_done(self, id, images_with_aois, xml_path):
         """
         Finalizes the UI upon completion of the analysis process.
 
@@ -323,6 +318,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._add_log_entry("No areas of interest identified")
             self._set_ViewResultsButton(False)
 
+        self.results_path = xml_path
         self._set_StartButton(True)
         self._set_CancelButton(False)
         for thread, analyze in self.__threads:
@@ -338,7 +334,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(text)
-        msg.setWindowTitle("Error Starting Processing")
+        msg.setWindowTitle("Error")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
@@ -382,7 +378,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         settings, image_count = xmlLoader.get_settings()
         if 'output_dir' in settings:
             self.outputFolderLine.setText(settings['output_dir'])
-            self.results_path = settings['output_dir']
+            self.results_path = full_path
         if 'input_dir' in settings:
             self.inputFolderLine.setText(settings['input_dir'])
         if 'identifier_color' in settings:
@@ -510,6 +506,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not isinstance(temperature_unit, str):
             self.settings_service.set_setting('TemperatureUnit', 'Fahrenheit')
 
+        distance_unit = self.settings_service.get_setting('DistanceUnit')
+        if not isinstance(distance_unit, str):
+            self.settings_service.set_setting('DistanceUnit', 'Meters')
+
         theme = self.settings_service.get_setting('Theme')
         if theme is None:
             self.settings_service.set_setting('Theme', 'Dark')
@@ -524,28 +524,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             theme (str): 'Light' or 'Dark'
         """
         self.theme.setup_theme("light" if theme == 'Light' else "dark")
-
-    def _min_area_editing_finished(self):
-        """
-        Validates the minimum area value after manual entry is complete.
-        """
-        new_value = self.minAreaSpinBox.value()
-        if new_value >= self.maxAreaSpinBox.value():
-            self.minAreaSpinBox.setValue(self._previous_min_area)
-            self._show_area_validation_error("The min object area (px) value must be less than the max object area (px) value")
-        else:
-            self._previous_min_area = new_value
-
-    def _max_area_editing_finished(self):
-        """
-        Validates the maximum area value after manual entry is complete.
-        """
-        new_value = self.maxAreaSpinBox.value()
-        if new_value <= self.minAreaSpinBox.value():
-            self.maxAreaSpinBox.setValue(self._previous_max_area)
-            self._show_area_validation_error("The max object area (px) value must be greater than the min object area (px) value")
-        else:
-            self._previous_max_area = new_value
 
     def _show_area_validation_error(self, message):
         """

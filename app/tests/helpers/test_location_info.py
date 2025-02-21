@@ -8,7 +8,7 @@ from app.helpers.LocationInfo import LocationInfo  # Adjust the import according
 
 @pytest.fixture
 def example_image_path():
-    return "/path/to/example/image.jpg"
+    return "app/tests/data/rgb/input/DJI_0082.JPG"
 
 
 @pytest.fixture
@@ -64,5 +64,5 @@ def test_convert_decimal_to_dms():
 
 def test__convert_to_degrees():
     value = [(37, 1), (48, 1), (20, 1)]
-    result = LocationInfo._LocationInfo__convert_to_degrees(value)
+    result = LocationInfo._convert_to_degrees(value)
     assert result == pytest.approx(37.805556, rel=1e-6)
