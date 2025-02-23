@@ -138,7 +138,7 @@ class AlgorithmService:
         xmp_data = MetaDataHelper.extract_xmp(input_file)
 
         if platform.system() == "Darwin":
-            MetaDataHelper.transfer_exif_xmp(input_file, output_file)
+            MetaDataHelper.transfer_exif(input_file, output_file)
         else:
             if temperature_data is not None:
                 MetaDataHelper.transfer_all_exiftool(input_file, output_file)

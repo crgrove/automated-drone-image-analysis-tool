@@ -52,38 +52,43 @@ class VideoParserService(QObject):
 
             fps = cap.get(cv2.CAP_PROP_FPS)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = round(frame_count / fps)
-            est_capture = math.floor(duration / self.interval) + 1
-            self.sig_msg.emit("Video length: %i seconds. %i images will be captured" % (duration, est_capture))
 
-            # Ensure the file provided is a video file.
-            if not cap.isOpened() or fps == 0:
-                self.sig_msg.emit("SRT File Not Provided")
+            if not cap.isOpened() or fps == 0 or frame_count == 0:
+                self.sig_msg.emit("Error: Invalid video file or unreadable format.")
                 self.sig_done.emit(self.__id, 0)
                 return
 
+            duration = round(frame_count / fps)
+            est_capture = math.floor(duration / self.interval) + 1
+            self.sig_msg.emit(f"Video length: {duration} seconds. Estimated {est_capture} images will be captured.")
+
+            # Parse SRT file if provided
             srt_list = []
             if self.srt_path:
                 self.sig_msg.emit("Parsing SRT File")
-                srt_data = Path(self.srt_path).read_text()
-                srt_entries = re.split("(?:\r?\n){2,}", srt_data)
-                for entry in srt_entries:
-                    data = re.split("(?:\r?\n)", entry)
-                    if len(data) == 6:
-                        times = re.split(r"\s.*\s", data[1])
-                        start_time = datetime.strptime(times[0], '%H:%M:%S,%f')
-                        end_time = datetime.strptime(times[1], '%H:%M:%S,%f')
+                try:
+                    srt_data = Path(self.srt_path).read_text()
+                    srt_entries = re.split("(?:\r?\n){2,}", srt_data)
+                    for entry in srt_entries:
+                        data = re.split("(?:\r?\n)", entry)
+                        if len(data) == 6:
+                            times = re.split(r"\s.*\s", data[1])
+                            start_time = datetime.strptime(times[0], '%H:%M:%S,%f')
+                            end_time = datetime.strptime(times[1], '%H:%M:%S,%f')
 
-                        uav_data = re.findall(r'(?<=\[).+?(?=\])', data[4])
-                        uav_dict = {split[0]: split[1] for entry in uav_data for split in [re.split(r"\s*:\s*", entry)]}
+                            uav_data = re.findall(r'(?<=\[).+?(?=\])', data[4])
+                            uav_dict = {split[0]: split[1] for entry in uav_data for split in [re.split(r"\s*:\s*", entry)]}
 
-                        srt_list.append({
-                            "start": start_time,
-                            "end": end_time,
-                            "latitude": float(uav_dict.get('latitude')) if 'latitude' in uav_dict else None,
-                            "longitude": float(uav_dict.get('longitude')) if 'longitude' in uav_dict else None,
-                            "altitude": float(uav_dict.get('altitude', 0))
-                        })
+                            srt_list.append({
+                                "start": start_time,
+                                "end": end_time,
+                                "latitude": float(uav_dict.get('latitude')) if 'latitude' in uav_dict else None,
+                                "longitude": float(uav_dict.get('longitude')) if 'longitude' in uav_dict else None,
+                                "altitude": float(uav_dict.get('altitude', 0))
+                            })
+                except Exception as e:
+                    self.sig_msg.emit(f"Error parsing SRT file: {str(e)}")
+                    return
             else:
                 self.sig_msg.emit("SRT File Not Provided")
 
@@ -91,28 +96,47 @@ class VideoParserService(QObject):
             time_marker = 0
             image_count = 0
             base_name = os.path.basename(self.video_path)
+
             self.sig_msg.emit("Capturing images")
-            success = True
-            while success and not self.cancelled:
+            
+            while not self.cancelled:
                 frame_id = int(fps * time_marker)
+
+                # Ensure we don't go beyond the total frames
+                if frame_id >= frame_count:
+                    self.sig_msg.emit("Reached end of video.")
+                    break
+
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
                 time = datetime(1900, 1, 1) + timedelta(milliseconds=cap.get(cv2.CAP_PROP_POS_MSEC))
 
+                # Find corresponding SRT metadata
                 item = next((item for item in srt_list if item["start"] <= time <= item["end"]), None)
+
                 success, image = cap.read()
-                if success:
-                    output_file = f"{self.output_dir}/{base_name}_{time_marker}s.jpg"
-                    cv2.imwrite(output_file, image)
-                    if item and item["latitude"] and item["longitude"]:
-                        MetaDataHelper.add_gps_data(output_file, item["latitude"], item["longitude"], item["altitude"])
-                    image_count += 1
+                if not success:
+                    self.sig_msg.emit(f"Frame capture failed at frame {frame_id}, stopping.")
+                    break
+
+                output_file = f"{self.output_dir}/{base_name}_{time_marker}s.jpg"
+                cv2.imwrite(output_file, image)
+
+                if item and item["latitude"] and item["longitude"]:
+                    MetaDataHelper.add_gps_data(output_file, item["latitude"], item["longitude"], item["altitude"])
+
+                image_count += 1
                 time_marker += self.interval
+
                 if image_count % 10 == 0:
                     self.sig_msg.emit(f"{image_count} images captured")
-            self.sig_done.emit(self.__id, image_count)
-        except Exception as e:
-            self.logger.error(e)
 
+            cap.release()  # Ensure proper cleanup
+            self.sig_done.emit(self.__id, image_count)
+
+        except Exception as e:
+            self.logger.error(f"Error in process_video: {str(e)}")
+            self.sig_msg.emit(f"Processing error: {str(e)}")
+            self.sig_done.emit(self.__id, 0)
     @pyqtSlot()
     def process_cancel(self):
         """
