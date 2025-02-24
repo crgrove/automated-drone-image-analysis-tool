@@ -19,42 +19,49 @@ class Preferences(QDialog, Ui_Preferences):
         super().__init__()
         self.parent = parent
         self.setupUi(self)
-        self._loadSettings()
-        self._connectSignals()
+        self._load_settings()
+        self._connect_signals()
 
-    def _loadSettings(self):
+    def _load_settings(self):
         """Loads the settings from SettingsService and updates the UI accordingly."""
-        self.maxAOIsSpinBox.setValue(self.parent.settings_service.getSetting('MaxAOIs'))
-        self.themeComboBox.setCurrentText(self.parent.settings_service.getSetting('Theme'))
-        self.AOIRadiusSpinBox.setValue(self.parent.settings_service.getSetting('AOIRadius'))
-        self.positionFormatComboBox.setCurrentText(self.parent.settings_service.getSetting('PositionFormat'))
+        self.maxAOIsSpinBox.setValue(self.parent.settings_service.get_setting('MaxAOIs'))
+        self.themeComboBox.setCurrentText(self.parent.settings_service.get_setting('Theme'))
+        self.AOIRadiusSpinBox.setValue(self.parent.settings_service.get_setting('AOIRadius'))
+        self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
+        self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
+        self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
 
-    def _connectSignals(self):
+    def _connect_signals(self):
         """Connects UI signals to the appropriate update methods."""
-        self.maxAOIsSpinBox.valueChanged.connect(self.updateMaxAOIs)
-        self.AOIRadiusSpinBox.valueChanged.connect(self.updateAOIRadius)
-        self.themeComboBox.currentTextChanged.connect(self.updateTheme)
-        self.positionFormatComboBox.currentTextChanged.connect(self.updatePositionFormat)
-        self.temperatureComboBox.currentTextChanged.connect(self.updateTemperatureUnit)
+        self.maxAOIsSpinBox.valueChanged.connect(self._update_max_aois)
+        self.AOIRadiusSpinBox.valueChanged.connect(self._update_aoi_radius)
+        self.themeComboBox.currentTextChanged.connect(self._update_theme)
+        self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
+        self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
+        self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
 
-    def updateMaxAOIs(self):
+    def _update_max_aois(self):
         """Updates the maximum areas of interest setting based on the spinbox value."""
-        self.parent.settings_service.setSetting('MaxAOIs', self.maxAOIsSpinBox.value())
+        self.parent.settings_service.set_setting('MaxAOIs', self.maxAOIsSpinBox.value())
 
-    def updateAOIRadius(self):
+    def _update_aoi_radius(self):
         """Updates the area of interest radius setting based on the spinbox value."""
-        self.parent.settings_service.setSetting('AOIRadius', self.AOIRadiusSpinBox.value())
+        self.parent.settings_service.set_setting('AOIRadius', self.AOIRadiusSpinBox.value())
 
-    def updateTheme(self):
+    def _update_theme(self):
         """Updates the theme setting based on the selected combobox value and applies it."""
         theme = self.themeComboBox.currentText()
-        self.parent.settings_service.setSetting('Theme', theme)
-        self.parent.updateTheme(theme)
+        self.parent.settings_service.set_setting('Theme', theme)
+        self.parent.update_theme(theme)
 
-    def updatePositionFormat(self):
+    def _update_position_format(self):
         """Updates the position format setting based on the selected combobox value."""
-        self.parent.settings_service.setSetting('PositionFormat', self.positionFormatComboBox.currentText())
+        self.parent.settings_service.set_setting('PositionFormat', self.positionFormatComboBox.currentText())
 
-    def updateTemperatureUnit(self):
+    def _update_temperature_unit(self):
         """Updates the temperature unit setting based on the selected combobox value."""
-        self.parent.settings_service.setSetting('TemperatureUnit', self.temperatureComboBox.currentText())
+        self.parent.settings_service.set_setting('TemperatureUnit', self.temperatureComboBox.currentText())
+
+    def _update_distance_unit(self):
+        """Updates the distance unit setting based on the selected combobox value."""
+        self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())

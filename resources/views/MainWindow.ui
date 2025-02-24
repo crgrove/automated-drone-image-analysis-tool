@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>897</width>
-    <height>840</height>
+    <height>835</height>
    </rect>
   </property>
   <property name="font">
@@ -165,8 +165,49 @@
               <property name="minimum">
                <number>1</number>
               </property>
+              <property name="maximum">
+               <number>999</number>
+              </property>
               <property name="value">
-               <number>8</number>
+               <number>10</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="maxAreaLabel">
+              <property name="font">
+               <font>
+                <pointsize>10</pointsize>
+                <weight>50</weight>
+                <bold>false</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>Max Object Area (px):</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="maxAreaSpinBox">
+              <property name="font">
+               <font>
+                <pointsize>10</pointsize>
+               </font>
+              </property>
+              <property name="specialValueText">
+               <string>None</string>
+              </property>
+              <property name="minimum">
+               <number>0</number>
+              </property>
+              <property name="maximum">
+               <number>1999</number>
+              </property>
+              <property name="singleStep">
+               <number>1</number>
+              </property>
+              <property name="value">
+               <number>0</number>
               </property>
              </widget>
             </item>

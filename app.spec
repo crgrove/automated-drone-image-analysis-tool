@@ -7,7 +7,7 @@ block_cipher = None
 if platform.system() == 'Windows':
     a = Analysis(['app/__main__.py'],
                 pathex=['app'],
-                binaries=[('LICENSE','.'), ('app/external/exiftool.exe','external'),('app/external/dji_thermal_sdk_v1.5_20240507','external/dji_thermal_sdk_v1.5_20240507'), ('app/external/autel', 'external/autel')],
+                binaries=[('LICENSE','.'), ('app/external/exiftool.exe','external'),('app/external/dji_thermal_sdk_v1.7_20241205','external/dji_thermal_sdk_v1.7_20241205'), ('app/external/autel', 'external/autel')],
                 datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
                 hiddenimports=[],
                 hookspath=None,

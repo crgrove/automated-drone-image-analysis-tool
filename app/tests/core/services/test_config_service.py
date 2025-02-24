@@ -19,7 +19,7 @@ def test_config_service_initialization():
         assert config_service.config == mock_config_data
 
 
-def test_getAlgorithms():
+def test_get_algorithms():
     mock_config_data = {
         "algorithms": [
             {"name": "Algorithm1", "params": {"param1": "value1"}},
@@ -31,7 +31,7 @@ def test_getAlgorithms():
 
     with patch("builtins.open", mock_open(read_data=json.dumps(mock_config_data))):
         config_service = ConfigService(mock_path)
-        algorithms = config_service.getAlgorithms()
+        algorithms = config_service.get_algorithms()
         assert algorithms == mock_config_data["algorithms"]
         assert len(algorithms) == 2
         assert algorithms[0]["name"] == "Algorithm1"

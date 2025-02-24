@@ -21,13 +21,13 @@ class VideoParser(QDialog, Ui_VideoParser):
         self.__threads = []
         self.running = False
         self.logger = LoggerService()
-        self.videoSelectButton.clicked.connect(self.videoSelectButtonClicked)
-        self.srtSelectButton.clicked.connect(self.srtSelectButtonClicked)
-        self.outputSelectButton.clicked.connect(self.outputSelectButtonClicked)
-        self.startButton.clicked.connect(self.startButtonClicked)
-        self.cancelButton.clicked.connect(self.cancelButtonClicked)
+        self.videoSelectButton.clicked.connect(self._videoSelectButton_clicked)
+        self.srtSelectButton.clicked.connect(self._srtSelectButton_clicked)
+        self.outputSelectButton.clicked.connect(self._outputSelectButton_clicked)
+        self.startButton.clicked.connect(self._startButton_clicked)
+        self.cancelButton.clicked.connect(self._cancelButton_clicked)
 
-    def videoSelectButtonClicked(self):
+    def _videoSelectButton_clicked(self):
         """Handles the video file selection button click.
 
         Opens a file dialog for the user to select a video file, then
@@ -37,7 +37,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         if filename:
             self.videoSelectLine.setText(filename)
 
-    def srtSelectButtonClicked(self):
+    def _srtSelectButton_clicked(self):
         """Handles the subtitle (SRT) file selection button click.
 
         Opens a file dialog for the user to select an SRT file, then
@@ -47,7 +47,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         if filename:
             self.srtSelectLine.setText(filename)
 
-    def outputSelectButtonClicked(self):
+    def _outputSelectButton_clicked(self):
         """Handles the output directory selection button click.
 
         Opens a directory selection dialog for the user to choose an
@@ -59,7 +59,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         if directory:
             self.outputLine.setText(directory)
 
-    def startButtonClicked(self):
+    def _startButton_clicked(self):
         """Handles the start button click to begin video parsing.
 
         Verifies that the necessary input fields are filled, disables the start
@@ -69,11 +69,11 @@ class VideoParser(QDialog, Ui_VideoParser):
         try:
             # Verify that the video file and output directory are set
             if not self.videoSelectLine.text() or not self.outputLine.text():
-                self.showError("Please set the video file and output directory.")
+                self._show_error("Please set the video file and output directory.")
                 return
 
-            self.setStartButton(False)
-            self.addLogEntry("--- Starting video processing ---")
+            self._set_start_button(False)
+            self._add_log_entry("--- Starting video processing ---")
 
             # Initialize the video parser service and move it to a separate thread
             self.parserService = VideoParserService(
@@ -84,31 +84,31 @@ class VideoParser(QDialog, Ui_VideoParser):
             self.parserService.moveToThread(thread)
 
             # Connect signals from the parser service
-            self.parserService.sig_msg.connect(self.onWorkerMsg)
-            self.parserService.sig_done.connect(self.onWorkerDone)
+            self.parserService.sig_msg.connect(self._on_worker_msg)
+            self.parserService.sig_done.connect(self._on_worker_done)
 
             # Start the processing thread
-            thread.started.connect(self.parserService.processVideo)
+            thread.started.connect(self.parserService.process_video)
             thread.start()
             self.running = True
-            self.setCancelButton(True)
+            self._set_cancel_button(True)
         except Exception as e:
             self.logger.error(e)
             self.running = False
-            self.setStartButton(True)
-            self.setCancelButton(False)
+            self._set_start_button(True)
+            self._set_cancel_button(False)
             for thread, process in self.__threads:
                 thread.quit()
 
-    def cancelButtonClicked(self):
+    def _cancelButton_clicked(self):
         """Handles the cancel button click to terminate video parsing.
 
         Signals the `VideoParserService` to cancel the process and disables
         the cancel button.
         """
-        self.parserService.processCancel()
+        self.parserService.process_cancel()
         self.running = False
-        self.setCancelButton(False)
+        self._set_cancel_button(False)
 
     def closeEvent(self, event):
         """Overrides the close event to handle in-progress video processing.
@@ -126,7 +126,7 @@ class VideoParser(QDialog, Ui_VideoParser):
             )
 
             if reply == QMessageBox.Yes:
-                self.parserService.processCancel()
+                self.parserService.process_cancel()
                 for thread, process in self.__threads:
                     thread.quit()
                 event.accept()
@@ -136,7 +136,7 @@ class VideoParser(QDialog, Ui_VideoParser):
             event.accept()
 
     @pyqtSlot(str)
-    def onWorkerMsg(self, text):
+    def _on_worker_msg(self, text):
         """Slot to handle log messages from the worker thread.
 
         Adds a new entry to the output log.
@@ -144,10 +144,10 @@ class VideoParser(QDialog, Ui_VideoParser):
         Args:
             text (str): The message text to log.
         """
-        self.addLogEntry(text)
+        self._add_log_entry(text)
 
     @pyqtSlot(int, int)
-    def onWorkerDone(self, id, image_count):
+    def _on_worker_done(self, id, image_count):
         """Slot to handle the completion signal from the worker thread.
 
         Logs the completion of the video processing, updates the button states,
@@ -157,16 +157,16 @@ class VideoParser(QDialog, Ui_VideoParser):
             id (int): The identifier for the worker thread.
             image_count (int): The total number of images created.
         """
-        self.addLogEntry("--- Video Processing Completed ---")
-        self.addLogEntry(f"{image_count} images created")
+        self._add_log_entry("--- Video Processing Completed ---")
+        self._add_log_entry(f"{image_count} images created")
         self.running = False
-        self.setStartButton(True)
-        self.setCancelButton(False)
+        self._set_start_button(True)
+        self._set_cancel_button(False)
 
         for thread, process in self.__threads:
             thread.quit()
 
-    def addLogEntry(self, text):
+    def _add_log_entry(self, text):
         """Adds a new line of text to the output window log.
 
         Args:
@@ -174,7 +174,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         """
         self.outputWindow.appendPlainText(text)
 
-    def setStartButton(self, enabled):
+    def _set_start_button(self, enabled):
         """Sets the start button state based on the `enabled` parameter.
 
         Args:
@@ -187,7 +187,7 @@ class VideoParser(QDialog, Ui_VideoParser):
             self.startButton.setStyleSheet("")
             self.startButton.setEnabled(False)
 
-    def setCancelButton(self, enabled):
+    def _set_cancel_button(self, enabled):
         """Sets the cancel button state based on the `enabled` parameter.
 
         Args:
@@ -199,3 +199,17 @@ class VideoParser(QDialog, Ui_VideoParser):
         else:
             self.cancelButton.setStyleSheet("")
             self.cancelButton.setEnabled(False)
+
+    def _show_error(self, text):
+        """
+        Displays an error message.
+
+        Args:
+            text (str): The error message text.
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText(text)
+        msg.setWindowTitle("Error Starting Processing")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()

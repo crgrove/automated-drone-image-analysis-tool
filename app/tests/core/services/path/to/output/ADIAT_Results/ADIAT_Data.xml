@@ -1,1 +1,0 @@
-<data><settings input_dir="path/to/input" output_dir="path/to/output" identifier_color="(255, 0, 0)" algorithm="ColorRange" thermal="False" num_processes="2" min_area="100" hist_ref_path="path/to/histogram_reference" kmeans_clusters="3"><options><option name="option1" value="value1" /></options></settings><images /></data>

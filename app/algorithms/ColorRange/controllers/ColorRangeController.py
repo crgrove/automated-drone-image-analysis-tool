@@ -26,14 +26,14 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         self.setupUi(self)
         self.selectedColor = None
         self.viewRangeButton.hide()
-        self.colorButton.clicked.connect(self.colorButtonClicked)
-        self.viewRangeButton.clicked.connect(self.viewRangeButtonClicked)
+        self.colorButton.clicked.connect(self.color_button_clicked)
+        self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
 
-        self.rRangeSpinBox.valueChanged.connect(self.updateColors)
-        self.gRangeSpinBox.valueChanged.connect(self.updateColors)
-        self.bRangeSpinBox.valueChanged.connect(self.updateColors)
+        self.rRangeSpinBox.valueChanged.connect(self.update_colors)
+        self.gRangeSpinBox.valueChanged.connect(self.update_colors)
+        self.bRangeSpinBox.valueChanged.connect(self.update_colors)
 
-    def colorButtonClicked(self):
+    def color_button_clicked(self):
         """
         Handles the color selection button click.
 
@@ -46,11 +46,11 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             else:
                 self.selectedColor = QColorDialog().getColor()
             if self.selectedColor.isValid():
-                self.updateColors()
+                self.update_colors()
         except Exception as e:
             self.logger.error(e)
 
-    def viewRangeButtonClicked(self):
+    def view_range_button_clicked(self):
         """
         Handles the view range button click.
 
@@ -59,7 +59,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         rangeDialog = ColorRangeRangeViewer(self.lowerColor, self.upperColor)
         rangeDialog.exec()
 
-    def updateColors(self):
+    def update_colors(self):
         """
         Updates the color range boxes based on the base color and range spin box values.
 
@@ -68,7 +68,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         """
         if self.selectedColor is not None:
             rgb = [self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue()]
-            self.lowerColor, self.upperColor = ColorUtils.getColorRange(
+            self.lowerColor, self.upperColor = ColorUtils.get_color_range(
                 rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value()
             )
             hex_lower = '#%02x%02x%02x' % self.lowerColor
@@ -78,7 +78,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             self.maxColor.setStyleSheet("background-color: " + hex_upper)
             self.viewRangeButton.show()
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates options based on user-selected values.
 
@@ -102,7 +102,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             return "Please select a search color."
         return None
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on the provided options.
 
@@ -116,4 +116,4 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             self.bRangeSpinBox.setValue(ranges[2])
             selected_color = literal_eval(options['selected_color'])
             self.selectedColor = QColor(selected_color[0], selected_color[1], selected_color[2])
-            self.updateColors()
+            self.update_colors()

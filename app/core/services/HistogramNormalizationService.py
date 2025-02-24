@@ -24,7 +24,7 @@ class HistogramNormalizationService:
         else:
             raise Exception("The reference image path is not a valid image file.")
 
-    def matchHistograms(self, src):
+    def match_histograms(self, src):
         """
         Match the histogram of a source image to that of the reference image.
 

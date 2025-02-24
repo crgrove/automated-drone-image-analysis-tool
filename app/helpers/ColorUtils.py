@@ -6,7 +6,7 @@ class ColorUtils:
     """Provides functions to aid in the manipulation of colors."""
 
     @staticmethod
-    def getColorRange(rgb, r_range, g_range, b_range):
+    def get_color_range(rgb, r_range, g_range, b_range):
         """
         Calculate a color range based on a base RGB color and specified ranges for each color channel.
 
@@ -28,3 +28,25 @@ class ColorUtils:
         lower_b = max(rgb[2] - b_range, 0)
 
         return (lower_r, lower_g, lower_b), (upper_r, upper_g, upper_b)
+
+    @staticmethod
+    def parse_rgb_string(value):
+        """Parse RGB values from string like '(0, 85, 255)' or similar formats.
+
+        Args:
+            value (str): String containing RGB values.
+
+        Returns:
+            tuple: RGB values as (r,g,b) tuple, or None if parsing fails.
+        """
+        if isinstance(value, str):
+            # Remove parentheses, brackets, etc.
+            clean_str = value.strip('()[]{}')
+            try:
+                # Split on commas and convert to integers
+                parts = [int(x.strip()) for x in clean_str.split(',')]
+                if len(parts) == 3:
+                    return tuple(parts)
+            except Exception:
+                return None
+        return None

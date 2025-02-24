@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
+    <width>416</width>
     <height>300</height>
    </rect>
   </property>
@@ -221,6 +221,38 @@
            <item>
             <property name="text">
              <string>Celsius</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="distanceWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_7">
+         <item>
+          <widget class="QLabel" name="distanceLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Distance Unit:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="distanceComboBox">
+           <item>
+            <property name="text">
+             <string>Meters</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Feet</string>
             </property>
            </item>
           </widget>

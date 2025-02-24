@@ -19,12 +19,12 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         AlgorithmController.__init__(self, 'ThermalRange', True)
         self.settings_service = SettingsService()
         self.setupUi(self)
-        if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':
-            self.convertTemperatureRanges()
-        self.minTempSpinBox.editingFinished.connect(self.updateMinTemp)
-        self.maxTempSpinBox.editingFinished.connect(self.updateMaxTemp)
+        if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
+            self.convert_temperature_ranges()
+        self.minTempSpinBox.editingFinished.connect(self.update_min_temp)
+        self.maxTempSpinBox.editingFinished.connect(self.update_max_temp)
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates options based on user-selected values.
 
@@ -33,9 +33,9 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
             'minTemp', 'maxTemp', and 'colorMap'.
         """
         options = dict()
-        if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':
-            options['minTemp'] = self.convertFahrenheitToCelsius(int(self.minTempSpinBox.value()))
-            options['maxTemp'] = self.convertFahrenheitToCelsius(int(self.maxTempSpinBox.value()))
+        if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
+            options['minTemp'] = self.convert_fahrenheit_to_celsius(int(self.minTempSpinBox.value()))
+            options['maxTemp'] = self.convert_fahrenheit_to_celsius(int(self.maxTempSpinBox.value()))
         else:
             options['minTemp'] = int(self.minTempSpinBox.value())
             options['maxTemp'] = int(self.maxTempSpinBox.value())
@@ -43,7 +43,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         options['colorMap'] = self.colorMapComboBox.currentText()
         return options
 
-    def updateMinTemp(self):
+    def update_min_temp(self):
         """
         Handles changes to the minimum temperature slider.
 
@@ -53,7 +53,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         if self.minTempSpinBox.value() > self.maxTempSpinBox.value():
             self.maxTempSpinBox.setValue(self.minTempSpinBox.value())
 
-    def updateMaxTemp(self):
+    def update_max_temp(self):
         """
         Handles changes to the maximum temperature slider.
 
@@ -72,7 +72,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         """
         return None
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on the provided options.
 
@@ -80,11 +80,11 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
             options (dict): The options to use to set UI attributes, including
             'minTemp', 'maxTemp', and 'colorMap'.
         """
-        if self.settings_service.getSetting('TemperatureUnit') == 'Fahrenheit':
+        if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
             if 'minTemp' in options:
-                self.minTempSpinBox.setValue(int(self.convertCelsiusToFahrenheit(float(options['minTemp']))))
+                self.minTempSpinBox.setValue(int(self.convert_celsius_to_fahrenheit(float(options['minTemp']))))
             if 'maxTemp' in options:
-                self.maxTempSpinBox.setValue(int(self.convertCelsiusToFahrenheit(float(options['maxTemp']))))
+                self.maxTempSpinBox.setValue(int(self.convert_celsius_to_fahrenheit(float(options['maxTemp']))))
         else:
             if 'minTemp' in options:
                 self.minTempSpinBox.setValue(int(float(options['minTemp'])))
@@ -92,7 +92,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
                 self.maxTempSpinBox.setValue(int(float(options['maxTemp'])))
         self.colorMapComboBox.setCurrentText(options['colorMap'])
 
-    def convertTemperatureRanges(self):
+    def convert_temperature_ranges(self):
         """
         Modifies the temperature range controls to accept Fahrenheit values
         instead of Celsius.
@@ -109,7 +109,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         self.maxTempSpinBox.setMaximum(200)
         self.maxTempSpinBox.setValue(105)
 
-    def convertFahrenheitToCelsius(self, value):
+    def convert_fahrenheit_to_celsius(self, value):
         """
         Converts a Fahrenheit value to Celsius.
 
@@ -121,7 +121,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         """
         return (value - 32) / 1.8000
 
-    def convertCelsiusToFahrenheit(self, value):
+    def convert_celsius_to_fahrenheit(self, value):
         """
         Converts a Celsius value to Fahrenheit.
 

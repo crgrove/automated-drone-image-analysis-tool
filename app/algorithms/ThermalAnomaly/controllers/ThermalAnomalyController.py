@@ -17,7 +17,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
         self.settings_service = SettingsService()
         self.setupUi(self)
 
-    def getOptions(self):
+    def get_options(self):
         """
         Populates options based on user-selected values.
 
@@ -27,6 +27,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
         """
         options = dict()
         options['threshold'] = int(self.anomalySpinBox.value())
+        options['segments'] = int(self.segmentsComboBox.currentText())
         options['type'] = self.anomalyTypeComboBox.currentText()
         options['colorMap'] = self.colorMapComboBox.currentText()
         return options
@@ -40,7 +41,7 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
         """
         return None
 
-    def loadOptions(self, options):
+    def load_options(self, options):
         """
         Sets UI elements based on the provided options.
 
@@ -49,7 +50,8 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
             'threshold', 'type', and 'colorMap'.
         """
         if 'threshold' in options:
-            self.anomalyThresholdLabel.setText(str(options['threshold']))
-            self.maxTempSpinBox.setValue(int(options['sensitivity']))
+            self.anomalySpinBox.setValue(int(options['threshold']))
+        if 'segments' in options:
+            self.segmentsComboBox.setCurrentText(str(options['segments']))
         self.anomalyTypeComboBox.setCurrentText(options['type'])
         self.colorMapComboBox.setCurrentText(options['colorMap'])

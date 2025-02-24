@@ -14,7 +14,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
-    algorithmWidget.updateColors()
+    algorithmWidget.update_colors()
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()

@@ -13,6 +13,10 @@
       "app/algorithms/RXAnomaly/views"
     ],
     [
+      "resources/views/algorithms/MRMap.ui",
+      "app/algorithms/MRMap/views"
+    ],
+    [
       "resources/views/algorithms/ColorRange.ui",
       "app/algorithms/ColorRange/views"
     ],

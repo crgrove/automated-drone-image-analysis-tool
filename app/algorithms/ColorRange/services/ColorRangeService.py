@@ -8,23 +8,24 @@ from algorithms.Algorithm import AlgorithmService, AnalysisResult
 class ColorRangeService(AlgorithmService):
     """Service that executes the Color Range algorithm to detect and highlight areas within a specific RGB color range."""
 
-    def __init__(self, identifier, min_area, aoi_radius, combine_aois, options):
+    def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
         Initializes the ColorRangeService with specific parameters for processing color ranges.
 
         Args:
             identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
             min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
             options (dict): Additional algorithm-specific options, including 'color_range' (min and max RGB values).
         """
         self.logger = LoggerService()
-        super().__init__('ColorRange', identifier, min_area, aoi_radius, combine_aois, options)
+        super().__init__('ColorRange', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.min_rgb = options['color_range'][0]
         self.max_rgb = options['color_range'][1]
 
-    def processImage(self, img, full_path, input_dir, output_dir):
+    def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single image to identify areas within a specific RGB color range.
 
@@ -47,14 +48,14 @@ class ColorRangeService(AlgorithmService):
 
             # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circleAreasOfInterest(img, contours)
+            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
             # Generate the output path and store the processed image
             output_path = full_path.replace(input_dir, output_dir)
             if augmented_image is not None:
-                self.storeImage(full_path, output_path, augmented_image)
+                self.store_image(full_path, output_path, augmented_image)
 
-            return AnalysisResult(full_path, output_path, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # Log and return an error if processing fails

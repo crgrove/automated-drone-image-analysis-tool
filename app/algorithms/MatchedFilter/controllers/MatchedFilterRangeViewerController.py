@@ -24,15 +24,15 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         """
         QDialog.__init__(self)
         self.setupUi(self)
-        palettes = self.generatePalettes(ref_rgb, threshold)
-        self.populateImage(palettes["selected"][2], True)
-        self.populateImage(palettes["selected"][1], True)
-        self.populateImage(palettes["selected"][0], True)
-        self.populateImage(palettes["unselected"][2], False)
-        self.populateImage(palettes["unselected"][1], False)
-        self.populateImage(palettes["unselected"][0], False)
+        palettes = self.generate_palettes(ref_rgb, threshold)
+        self.populate_image(palettes["selected"][2], True)
+        self.populate_image(palettes["selected"][1], True)
+        self.populate_image(palettes["selected"][0], True)
+        self.populate_image(palettes["unselected"][2], False)
+        self.populate_image(palettes["unselected"][1], False)
+        self.populate_image(palettes["unselected"][0], False)
 
-    def generatePalettes(self, ref_rgb, threshold):
+    def generate_palettes(self, ref_rgb, threshold):
         """
         Generates color palettes as numpy arrays representing selected and unselected colors.
 
@@ -47,13 +47,13 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         x_range = 180 * multiplier
         y_range = 256 * multiplier
 
-        high = self.generatePalette(x_range, y_range, multiplier, 255)
-        med = self.generatePalette(x_range, y_range, multiplier, 128)
-        low = self.generatePalette(x_range, y_range, multiplier, 64)
+        high = self.generate_palette(x_range, y_range, multiplier, 255)
+        med = self.generate_palette(x_range, y_range, multiplier, 128)
+        low = self.generate_palette(x_range, y_range, multiplier, 64)
 
-        high_mask = self.generateMask(high, ref_rgb, threshold)
-        med_mask = self.generateMask(med, ref_rgb, threshold)
-        low_mask = self.generateMask(low, ref_rgb, threshold)
+        high_mask = self.generate_mask(high, ref_rgb, threshold)
+        med_mask = self.generate_mask(med, ref_rgb, threshold)
+        low_mask = self.generate_mask(low, ref_rgb, threshold)
 
         inverse_high_mask = cv2.bitwise_not(high_mask)
         inverse_med_mask = cv2.bitwise_not(med_mask)
@@ -69,7 +69,7 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         return {"selected": [selected_high, selected_med, selected_low],
                 "unselected": [unselected_high, unselected_med, unselected_low]}
 
-    def generateMask(self, img, ref_rgb, threshold):
+    def generate_mask(self, img, ref_rgb, threshold):
         """
         Generates a mask for pixels that match the reference color within the specified threshold.
 
@@ -85,7 +85,7 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         mask = np.uint8((255 * (scores > threshold)))
         return mask
 
-    def generatePalette(self, x_range, y_range, multiplier, saturation):
+    def generate_palette(self, x_range, y_range, multiplier, saturation):
         """
         Generates an HSL palette with a specified saturation level.
 
@@ -114,7 +114,7 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
 
         return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 
-    def populateImage(self, img, selected):
+    def populate_image(self, img, selected):
         """
         Adds an image to the layout as a QtImageViewer widget.
 

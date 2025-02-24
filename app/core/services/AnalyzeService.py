@@ -18,6 +18,7 @@ from core.services.XmlService import XmlService
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
+from algorithms.MRMap.services.MRMapService import MRMapService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
 from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 
@@ -28,10 +29,10 @@ class AnalyzeService(QObject):
     # Signals to send info back to the GUI
     sig_msg = pyqtSignal(str)
     sig_aois = pyqtSignal()
-    sig_done = pyqtSignal(int, int)
+    sig_done = pyqtSignal(int, int, str)
 
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
-                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options):
+                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options, max_area):
         """
         Initialize the AnalyzeService with parameters for processing images.
 
@@ -42,6 +43,7 @@ class AnalyzeService(QObject):
             output (str): Path to the output directory where processed images will be stored.
             identifier_color (tuple[int, int, int]): RGB values to highlight areas of interest.
             min_area (int): Minimum size in pixels for an object to be considered an area of interest.
+            max_area (int): Maximum area in pixels for an object to be considered an area of interest.
             num_processes (int): Number of concurrent processes for image processing.
             max_aois (int): Maximum areas of interest threshold in a single image before issuing a warning.
             aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
@@ -49,6 +51,7 @@ class AnalyzeService(QObject):
             kmeans_clusters (int): Number of clusters (colors) to retain in the image.
             thermal (bool): Whether this is a thermal image algorithm.
             options (dict): Additional algorithm-specific options.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
         """
         self.logger = LoggerService()
         self.xmlService = XmlService()
@@ -60,6 +63,7 @@ class AnalyzeService(QObject):
         self.identifier_color = identifier_color
         self.options = options
         self.min_area = min_area
+        self.max_area = max_area
         self.aoi_radius = aoi_radius
         self.num_processes = num_processes
         self.max_aois = max_aois
@@ -73,13 +77,13 @@ class AnalyzeService(QObject):
         self.pool = Pool(self.num_processes)
 
     @pyqtSlot()
-    def processFiles(self):
+    def process_files(self):
         """
         Process all files in the input directory using the selected algorithm and settings.
         """
         try:
-            self.setupOutputDir()
-            self.xmlService.addSettingsToXml(
+            self._setup_output_dir()
+            self.xmlService.add_settings_to_xml(
                 input_dir=self.input,
                 output_dir=self.output_dir,
                 identifier_color=self.identifier_color,
@@ -87,6 +91,7 @@ class AnalyzeService(QObject):
                 thermal=self.is_thermal,
                 num_processes=self.num_processes,
                 min_area=self.min_area,
+                max_area=self.max_area,
                 hist_ref_path=self.hist_ref_path,
                 kmeans_clusters=self.kmeans_clusters,
                 options=self.options
@@ -113,11 +118,12 @@ class AnalyzeService(QObject):
 
                 if imghdr.what(file) is not None and self.pool._state == pool.RUN:
                     self.pool.apply_async(
-                        AnalyzeService.processFile,
+                        AnalyzeService.process_file,
                         (
                             self.algorithm,
                             self.identifier_color,
                             self.min_area,
+                            self.max_area,
                             self.aoi_radius,
                             self.options,
                             file,
@@ -127,7 +133,7 @@ class AnalyzeService(QObject):
                             self.kmeans_clusters,
                             self.is_thermal
                         ),
-                        callback=self.processComplete
+                        callback=self._process_complete
                     )
                 else:
                     ttl_images -= 1
@@ -140,12 +146,12 @@ class AnalyzeService(QObject):
             # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
             for img in self.images_with_aois:
-                self.xmlService.addImageToXml(img)
+                self.xmlService.add_image_to_xml(img)
 
             file_path = os.path.join(self.output, "ADIAT_Data.xml")
-            self.xmlService.saveXmlFile(file_path)
+            self.xmlService.save_xml_file(file_path)
             ttl_time = round(time.time() - start_time, 3)
-            self.sig_done.emit(self.__id, len(self.images_with_aois))
+            self.sig_done.emit(self.__id, len(self.images_with_aois), file_path)
             self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
             self.sig_msg.emit(f"Total Images Processed: {ttl_images}")
 
@@ -153,7 +159,8 @@ class AnalyzeService(QObject):
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod
-    def processFile(algorithm, identifier_color, min_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters, thermal):
+    def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
+                     thermal):
         """
         Process a single image using the selected algorithm and settings.
 
@@ -161,6 +168,7 @@ class AnalyzeService(QObject):
             algorithm (dict): Dictionary specifying the algorithm for analysis.
             identifier_color (tuple[int, int, int]): RGB values for highlighting areas of interest.
             min_area (int): Minimum size in pixels for an object to be considered an area of interest.
+            max_area (int): Maximum size in pixels for an object to be considered an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
             options (dict): Additional algorithm-specific options.
             full_path (str): Path to the image file being analyzed.
@@ -174,36 +182,38 @@ class AnalyzeService(QObject):
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        # img = cv2.resize(img, (4000, 3000))
+
         if not thermal:
             # Apply histogram normalization if a reference image is provided
             histogram_service = None
             if hist_ref_path is not None:
                 histogram_service = HistogramNormalizationService(hist_ref_path)
-                img = histogram_service.matchHistograms(img)
+                img = histogram_service.match_histograms(img)
 
             # Apply k-means clustering if specified
             kmeans_service = None
             if kmeans_clusters is not None:
                 kmeans_service = KMeansClustersService(kmeans_clusters)
-                img = kmeans_service.generateClusters(img)
+                img = kmeans_service.generate_clusters(img)
 
         # Instantiate the algorithm class and process the image
         cls = globals()[algorithm['service']]
-        instance = cls(identifier_color, min_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
+        instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
 
         try:
-            return instance.processImage(img, full_path, input_dir, output_dir)
+            return instance.process_image(img, full_path, input_dir, output_dir)
         except Exception as e:
             logger = LoggerService()
             logger.error(e)
 
     @pyqtSlot()
-    def processComplete(self, result):
+    def _process_complete(self, result):
         """
         Handle completion of an image processing task.
 
         Args:
-            result: Result object from the processFile method containing processed image data.
+            result: Result object from the process_file method containing processed image data.
         """
         if result.input_path is not None:
             path = Path(result.input_path)
@@ -223,7 +233,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit('No areas of interest identified in ' + file_name)
 
     @pyqtSlot()
-    def processCancel(self):
+    def process_cancel(self):
         """
         Cancel any ongoing asynchronous processes.
         """
@@ -231,7 +241,7 @@ class AnalyzeService(QObject):
         self.sig_msg.emit("--- Cancelling Image Processing ---")
         self.pool.terminate()
 
-    def setupOutputDir(self):
+    def _setup_output_dir(self):
         """
         Create the output directory for storing processed images.
         """
