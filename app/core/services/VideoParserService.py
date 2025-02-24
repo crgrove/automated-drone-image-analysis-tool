@@ -98,7 +98,7 @@ class VideoParserService(QObject):
             base_name = os.path.basename(self.video_path)
 
             self.sig_msg.emit("Capturing images")
-            
+
             while not self.cancelled:
                 frame_id = int(fps * time_marker)
 
@@ -137,6 +137,7 @@ class VideoParserService(QObject):
             self.logger.error(f"Error in process_video: {str(e)}")
             self.sig_msg.emit(f"Processing error: {str(e)}")
             self.sig_done.emit(self.__id, 0)
+
     @pyqtSlot()
     def process_cancel(self):
         """

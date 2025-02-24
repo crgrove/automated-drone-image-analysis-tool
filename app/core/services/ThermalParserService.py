@@ -130,7 +130,7 @@ class ThermalParserService:
                 ('reflected_apparent_temperature', 'Reflection'),
             ] if key in meta_fields}
 
-            if camera_model not in ['M30T', 'M3T']:
+            if camera_model not in ['M30T', 'M3T', 'M4T']:
                 kwargs['image_height'] = int(meta_fields['ImageHeight'])
                 kwargs['image_width'] = int(meta_fields['ImageWidth'])
             if 'emissivity' in kwargs:

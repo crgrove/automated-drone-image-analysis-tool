@@ -313,7 +313,7 @@ class MetaDataHelper:
     def extract_xmp(image_path):
         """Extracts only the XMP metadata from a JPEG file without modifying EXIF data.
 
-        This function scans the `APP1` segments of a JPEG file to locate and 
+        This function scans the `APP1` segments of a JPEG file to locate and
         extract XMP metadata.
 
         Args:
@@ -346,7 +346,7 @@ class MetaDataHelper:
     def embed_xmp(xmp_segment, destination_file):
         """Embeds XMP metadata into a JPEG file while ensuring format integrity.
 
-        This function inserts the XMP metadata at the correct location in the 
+        This function inserts the XMP metadata at the correct location in the
         JPEG file, preserving EXIF and ensuring `imghdr.what()` still recognizes it.
 
         Args:
