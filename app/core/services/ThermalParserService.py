@@ -29,6 +29,7 @@ class ThermalParserService:
         'M30T',
         'H30T',
         'M4T'
+        'M4TD'
     ]
 
     AUTEL_MODELS = [
@@ -118,7 +119,7 @@ class ThermalParserService:
                 temps = parser.temperatures(filepath_image=full_path, **kwargs)
                 img = parser.image(temps, palette)
                 return temps, img
-            except Exception as e:
+            except Exception:
                 raise Exception("Invalid image file")
 
         elif platform == 'DJI':
@@ -135,7 +136,7 @@ class ThermalParserService:
                 kwargs['image_width'] = int(meta_fields['ImageWidth'])
             if 'emissivity' in kwargs:
                 kwargs['emissivity'] /= 100
-            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD', 'M4T']:
+            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD', 'M4T', 'M4TD']:
                 kwargs['m2ea_mode'] = True
 
             try:

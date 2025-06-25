@@ -127,7 +127,7 @@ class XmlService:
                     for option_key, option_value in value.items():
                         option_xml = ET.SubElement(options_xml, "option")
                         option_xml.set("name", option_key)
-                        option_xml.set("value", str(option_value))
+                        option_xml.set("value", str(option_value) if option_value else "")
                 else:
                     settings_xml.set(key, str(value))
         except Exception as e:

@@ -14,14 +14,17 @@ from core.services.LoggerService import LoggerService
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
     """Controller for the Color Range algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the ColorRangeController widget and sets up the UI.
 
         Connects UI elements like color selection button and range spin boxes to their respective event handlers.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ColorRange', False)
+        AlgorithmController.__init__(self, config)
         self.logger = LoggerService()
         self.setupUi(self)
         self.selectedColor = None

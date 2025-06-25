@@ -5,22 +5,49 @@ import piexif
 import json
 import numpy as np
 import platform
-import traceback
 import re
 import struct
 import xml.etree.ElementTree as ET
+import pandas as pd
 
 
 class MetaDataHelper:
-    """Helper class for managing EXIF and metadata of image files."""
+    """Helper class for managing EXIF, XMP, and thermal metadata of image files."""
+
+    _drones_df = None
+    _xmp_df = None
+
+    @classmethod
+    def get_drone_sensor_info(cls):
+        """
+        Loads and caches drone metadata lookup table.
+
+        Returns:
+            pandas.DataFrame: A DataFrame containing drone specifications.
+        """
+        if cls._drones_df is None:
+            cls._drones_df = cls.load_drone_info_pickle()
+        return cls._drones_df
+
+    @classmethod
+    def get_xmp_mapping(cls):
+        """
+        Loads and caches XMP attribute mapping table.
+
+        Returns:
+            pandas.DataFrame: A DataFrame mapping logical attributes to XMP keys.
+        """
+        if cls._xmp_df is None:
+            cls._xmp_df = cls.load_xmp_mapping_pickle()
+        return cls._xmp_df
 
     @staticmethod
     def _get_exif_tool_path():
         """
-        Return the path to the Exiftool based on the system platform.
+        Returns the absolute path to the ExifTool binary for the current platform.
 
         Returns:
-            str: Absolute path to Exiftool executable.
+            str: Path to ExifTool executable.
         """
         if platform.system() == 'Windows':
             return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool.exe'))
@@ -30,11 +57,11 @@ class MetaDataHelper:
     @staticmethod
     def _transfer_exif_piexif(origin_file, destination_file):
         """
-        Copy the EXIF information from one image file to another using piexif.
+        Transfers EXIF metadata using piexif.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         try:
             piexif.transplant(origin_file, destination_file)
@@ -46,11 +73,11 @@ class MetaDataHelper:
     @staticmethod
     def _transfer_exif_pil(origin_file, destination_file):
         """
-        Copy the EXIF information from one image file to another using PIL.
+        Transfers EXIF metadata using PIL as a fallback.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         image = Image.open(origin_file)
         if 'exif' in image.info:
@@ -61,11 +88,11 @@ class MetaDataHelper:
     @staticmethod
     def transfer_exif_exiftool(origin_file, destination_file):
         """
-        Copy the EXIF information from one image file to another using Exiftool.
+        Transfers EXIF metadata using ExifTool.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", origin_file, "-exif", destination_file, "-overwrite_original")
@@ -74,11 +101,11 @@ class MetaDataHelper:
     @staticmethod
     def transfer_xmp_exiftool(origin_file, destination_file):
         """
-        Copy the XMP information from one image file to another using Exiftool.
+        Transfers XMP metadata using ExifTool.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", origin_file, "-xmp", destination_file, "-overwrite_original")
@@ -87,28 +114,27 @@ class MetaDataHelper:
     @staticmethod
     def transfer_exif(origin_file, destination_file):
         """
-        Copy the EXIF information from one image file to another.
+        Attempts to transfer EXIF metadata using piexif and falls back to PIL.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         try:
             MetaDataHelper._transfer_exif_piexif(origin_file, destination_file)
         except piexif._exceptions.InvalidImageDataError:
             MetaDataHelper._transfer_exif_pil(origin_file, destination_file)
-
         except ValueError:
             return
 
     @staticmethod
     def transfer_all_exiftool(origin_file, destination_file):
         """
-        Copy the EXIF and XMP information from one image file to another using Exiftool.
+        Transfers both EXIF and XMP metadata using ExifTool.
 
         Args:
-            origin_file (str): Path to the source file.
-            destination_file (str): Path to the destination file.
+            origin_file (str): Source image path.
+            destination_file (str): Destination image path.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             et.execute("-tagsfromfile", origin_file, destination_file, "-overwrite_original", "--thumbnailimage")
@@ -117,31 +143,27 @@ class MetaDataHelper:
     @staticmethod
     def transfer_temperature_data(data, destination_file):
         """
-        Copy temperature data from an image to the Notes field on another image.
+        Stores temperature data in the XMP Notes field as JSON.
 
         Args:
-            data (numpy.ndarray): Temperature data array.
-            destination_file (str): Path to the destination file.
+            data (numpy.ndarray): Temperature matrix.
+            destination_file (str): Destination image path.
         """
         json_data = json.dumps(data.tolist())
         with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
-            et.set_tags(
-                [destination_file],
-                tags={"Notes": json_data},
-                params=["-P", "-overwrite_original"]
-            )
+            et.set_tags([destination_file], tags={"Notes": json_data}, params=["-P", "-overwrite_original"])
             et.terminate()
 
     @staticmethod
     def get_raw_temperature_data(file_path):
         """
-        Retrieve raw temperature data as bytes from an image.
+        Retrieves raw byte content of embedded thermal image.
 
         Args:
-            file_path (str): Path to the image.
+            file_path (str): Image path.
 
         Returns:
-            bytes: Bytes representing temperature data.
+            bytes: Byte data of raw thermal image.
         """
         with exiftool.ExifTool(MetaDataHelper._get_exif_tool_path()) as et:
             thermal_img_bytes = et.execute("-b", "-RawThermalImage", file_path, raw_bytes=True)
@@ -151,13 +173,13 @@ class MetaDataHelper:
     @staticmethod
     def get_temperature_data(file_path):
         """
-        Retrieve temperature data as a numpy array from the Notes field of an image.
+        Extracts temperature data from the XMP Notes field.
 
         Args:
             file_path (str): Path to the image.
 
         Returns:
-            numpy.ndarray: Array of temperature data.
+            numpy.ndarray: Temperature matrix.
         """
         with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
@@ -169,13 +191,13 @@ class MetaDataHelper:
     @staticmethod
     def get_meta_data_exiftool(file_path):
         """
-        Retrieve metadata from an image file.
+        Reads all metadata from an image using ExifTool.
 
         Args:
-            file_path (str): Path to the image.
+            file_path (str): Image path.
 
         Returns:
-            dict: Key-value pairs of metadata.
+            dict: Metadata dictionary.
         """
         with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             metadata = et.get_metadata([file_path])[0]
@@ -185,24 +207,24 @@ class MetaDataHelper:
     @staticmethod
     def get_exif_data_piexif(file_path):
         """
-        Retrieve EXIF metadata from an image file.
+        Extracts EXIF metadata using piexif.
 
         Args:
-            file_path (str): Path to the image.
+            file_path (str): Image path.
 
         Returns:
-            dict: Key-value pairs of EXIF data.
+            dict: EXIF tag data.
         """
         return piexif.load(file_path)
 
     @staticmethod
     def set_tags_exiftool(file_path, tags):
         """
-        Update metadata with provided tags.
+        Sets EXIF/XMP tags using ExifTool.
 
         Args:
-            file_path (str): Path to the image.
-            tags (dict): Dictionary of tags and values to be set.
+            file_path (str): Path to image.
+            tags (dict): Dictionary of tag:value to apply.
         """
         with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
             et.set_tags([file_path], tags=tags, params=["-overwrite_original"])
@@ -211,14 +233,14 @@ class MetaDataHelper:
     @staticmethod
     def add_gps_data(file_path, lat, lng, alt, rel_alt=0):
         """
-        Add GPS data to an image file.
+        Adds GPS metadata to an image.
 
         Args:
-            file_path (str): Path to the image.
-            lat (float): Decimal latitude.
-            lng (float): Decimal longitude.
-            alt (float): Absolute Altitude in meters.
-            rel_alt (float): Relative altitude in meters.
+            file_path (str): Image path.
+            lat (float): Latitude in decimal degrees.
+            lng (float): Longitude in decimal degrees.
+            alt (float): Altitude in meters.
+            rel_alt (float, optional): Relative altitude. Defaults to 0.
         """
         img = Image.open(file_path)
         exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "Interop": {}, "1st": {}, "thumbnail": None}
@@ -232,13 +254,13 @@ class MetaDataHelper:
     @staticmethod
     def _set_gps_location(exif_dict, lat, lng, alt):
         """
-        Convert lat/lng to degrees, minutes, and seconds format and store in EXIF GPS fields.
+        Converts and embeds GPS coordinates into EXIF GPS tags.
 
         Args:
-            exif_dict (dict): EXIF data.
-            lat (float): Decimal latitude.
-            lng (float): Decimal longitude.
-            alt (float): Altitude in meters.
+            exif_dict (dict): Mutable EXIF dictionary.
+            lat (float): Latitude.
+            lng (float): Longitude.
+            alt (float): Altitude.
         """
         def to_deg(value, ref):
             if value < 0:
@@ -250,7 +272,6 @@ class MetaDataHelper:
             deg = int(value)
             min = int((value - deg) * 60)
             sec = int((value - deg - min / 60) * 3600 * 10000)
-
             return ((deg, 1), (min, 1), (sec, 10000)), ref
 
         lat_deg, lat_ref = to_deg(lat, ["N", "S"])
@@ -268,20 +289,19 @@ class MetaDataHelper:
     @staticmethod
     def get_xmp_data(file_path, parse=False):
         """
-        Extract XMP data from an image file if present.
+        Retrieves XMP metadata as raw XML or parsed dict.
 
         Args:
-            file_path (str): Path to the image file.
-            parse (boolean): Should the xmp data be parsed and returned as a dictionary
+            file_path (str): Path to image file.
+            parse (bool): Whether to parse XML into dict.
 
         Returns:
-            str: XMP data if found, None otherwise.
+            str or dict or None: Raw XML string or parsed dictionary, or None if XMP not found.
         """
         try:
             with open(file_path, 'rb') as f:
                 data = f.read()
 
-            # Look for XMP header and footer
             start_tag = b'<?xpacket begin'
             end_tag = b'<?xpacket end'
 
@@ -293,34 +313,27 @@ class MetaDataHelper:
             if end_idx == -1:
                 return None
 
-            # Find the closing '>' for the end tag
             end_close_idx = data.find(b'>', end_idx) + 1
-            if end_close_idx == 0:  # if '>' not found
+            if end_close_idx == 0:
                 return None
 
-            # Include complete end tag in the extracted data
             xmp_data = data[start_idx:end_close_idx]
             xmp_decode = xmp_data.decode('utf-8')
 
-            if parse:
-                return MetaDataHelper._parse_xmp_xml(xmp_decode)
-            else:
-                return xmp_decode
+            return MetaDataHelper._parse_xmp_xml(xmp_decode) if parse else xmp_decode
         except Exception:
             return None
 
     @staticmethod
     def extract_xmp(image_path):
-        """Extracts only the XMP metadata from a JPEG file without modifying EXIF data.
-
-        This function scans the `APP1` segments of a JPEG file to locate and
-        extract XMP metadata.
+        """
+        Extracts raw XMP block from a JPEG.
 
         Args:
-            image_path (str): Path to the image file.
+            image_path (str): Path to image.
 
         Returns:
-            bytes: The raw XMP metadata in binary format, or None if no XMP is found.
+            bytes or None: XMP segment if found, otherwise None.
         """
         with open(image_path, "rb") as img_file:
             img_data = img_file.read()
@@ -334,7 +347,7 @@ class MetaDataHelper:
             app1_end = app1_start + 2 + segment_length
 
             if app1_end > len(img_data) or app1_end < app1_start:
-                continue  # Skip corrupt segments
+                continue
 
             xmp_marker = b"http://ns.adobe.com/xap/1.0/"
             if xmp_marker in img_data[app1_start:app1_end]:
@@ -343,18 +356,50 @@ class MetaDataHelper:
         return None
 
     @staticmethod
-    def embed_xmp(xmp_segment, destination_file):
-        """Embeds XMP metadata into a JPEG file while ensuring format integrity.
-
-        This function inserts the XMP metadata at the correct location in the
-        JPEG file, preserving EXIF and ensuring `imghdr.what()` still recognizes it.
+    def get_drone_make(exif_data):
+        """
+        Extracts the drone make from EXIF.
 
         Args:
-            xmp_segment (bytes): The XMP metadata segment to embed.
-            destination_file (str): Path to the image file where XMP will be inserted.
+            exif_data (dict): Parsed EXIF data.
 
         Returns:
-            bool: True if successful, False if the operation failed.
+            str or None: Drone make string.
+        """
+        make = exif_data["0th"].get(piexif.ImageIFD.Make)
+        return make.decode('utf-8').strip().rstrip("\x00") if make else None
+
+    @staticmethod
+    def get_xmp_attribute(attribute, make, xmp_data):
+        """
+        Looks up and retrieves a specific XMP field based on attribute mapping.
+
+        Args:
+            attribute (str): Logical attribute name (e.g., "Flight Yaw").
+            make (str): Drone manufacturer (e.g., "DJI").
+            xmp_data (dict): Parsed XMP dictionary.
+
+        Returns:
+            str or None: Attribute value, if available.
+        """
+        xmp_df = MetaDataHelper.get_xmp_mapping()
+        try:
+            key = xmp_df.loc[xmp_df['Attribute'] == attribute, make].iloc[0]
+            return xmp_data[key]
+        except (KeyError, IndexError):
+            return None
+
+    @staticmethod
+    def embed_xmp(xmp_segment, destination_file):
+        """
+        Embeds a raw XMP segment into a JPEG file.
+
+        Args:
+            xmp_segment (bytes): Full XMP APP1 segment.
+            destination_file (str): Path to target JPEG.
+
+        Returns:
+            bool: True if successful, False otherwise.
         """
         if xmp_segment is None:
             return False
@@ -363,11 +408,10 @@ class MetaDataHelper:
             img_data = img_file.read()
 
         exif_marker = img_data.find(b"\xFF\xE1")
+        insert_pos = 2  # default
         if exif_marker != -1:
             segment_length = struct.unpack(">H", img_data[exif_marker + 2:exif_marker + 4])[0]
             insert_pos = exif_marker + 2 + segment_length
-        else:
-            insert_pos = 2  # Default: insert after SOI marker (FFD8)
 
         xmp_header = b"http://ns.adobe.com/xap/1.0/\x00"
         xmp_bytes = xmp_segment[len(b"\xFF\xE1") + 2:]
@@ -380,43 +424,59 @@ class MetaDataHelper:
         )
 
         new_data = img_data[:insert_pos] + new_xmp_block + img_data[insert_pos:]
-
         with open(destination_file, "wb") as f:
             f.write(new_data)
 
+        return True
+
     @staticmethod
-    def _parse_xmp_xml(xmp_xml):
-        """Parses XMP metadata from XML format into a dictionary.
-
-        This function recursively extracts all nested XMP metadata entries,
-        including namespace-prefixed attributes.
-
-        Args:
-            xmp_xml (str): The raw XML string containing XMP metadata.
+    def load_drone_info_pickle():
+        """
+        Loads drone metadata from 'drones.pkl'.
 
         Returns:
-            dict: A dictionary with nested XMP metadata entries as key-value pairs.
+            pandas.DataFrame: Drone info table.
+        """
+        return pd.read_pickle(path.abspath(path.join(path.dirname(path.dirname(__file__)), 'drones.pkl')))
+
+    @staticmethod
+    def load_xmp_mapping_pickle():
+        """
+        Loads attribute-key mapping from 'xmp.pkl'.
+
+        Returns:
+            pandas.DataFrame: Attribute-to-XMP-key map.
+        """
+        return pd.read_pickle(path.abspath(path.join(path.dirname(path.dirname(__file__)), 'xmp.pkl')))
+
+    @staticmethod
+    def _parse_xmp_xml(xmp_xml):
+        """
+        Parses XMP XML into a flat dictionary.
+
+        Args:
+            xmp_xml (str): Raw XMP XML string.
+
+        Returns:
+            dict: Flattened key-value pairs from XMP.
         """
         root = ET.fromstring(xmp_xml)
         xmp_dict = {}
 
+        def clean_key(key):
+            key = re.sub(r'^RDF:Description:?', '', key)
+            key = re.sub(r'\{.*?\}', '', key)
+            return key.lstrip(':')
+
         def parse_element(element, parent_key=""):
-            """Recursively processes XML elements into a dictionary.
-
-            Args:
-                element (xml.etree.ElementTree.Element): The XML element to parse.
-                parent_key (str, optional): Prefix for nested keys to maintain hierarchy.
-
-            Returns:
-                None
-            """
             for child in element:
                 tag = child.tag.split("}", 1)[1] if "}" in child.tag else child.tag
                 key = f"{parent_key}:{tag}" if parent_key else tag
+                key = clean_key(key)
 
                 if child.attrib:
                     for attr, value in child.attrib.items():
-                        attr_key = f"{key}:{attr}"
+                        attr_key = clean_key(f"{key}:{attr}")
                         xmp_dict[attr_key] = value
 
                 if child.text and child.text.strip():

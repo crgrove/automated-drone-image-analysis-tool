@@ -27,8 +27,11 @@
         <string> Pick Color</string>
        </property>
        <property name="icon">
-        <iconset resource="ColorRange.qrc">
+        <iconset resource="../../resources.qrc">
          <normaloff>:/icons/color.png</normaloff>:/icons/color.png</iconset>
+       </property>
+       <property name="iconName" stdset="0">
+        <string>color.png</string>
        </property>
       </widget>
      </item>
@@ -174,6 +177,9 @@
      </item>
      <item>
       <widget class="QFrame" name="minColor">
+       <property name="whatsThis">
+        <string/>
+       </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -219,8 +225,11 @@
         <string>View Range</string>
        </property>
        <property name="icon">
-        <iconset resource="ColorRange.qrc">
+        <iconset resource="../../resources.qrc">
          <normaloff>:/icons/eye.png</normaloff>:/icons/eye.png</iconset>
+       </property>
+       <property name="iconName" stdset="0">
+        <string>eye.png</string>
        </property>
       </widget>
      </item>
@@ -229,7 +238,7 @@
   </layout>
  </widget>
  <resources>
-  <include location="ColorRange.qrc"/>
+  <include location="../../resources.qrc"/>
  </resources>
  <connections/>
 </ui>

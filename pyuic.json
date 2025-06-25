@@ -1,8 +1,16 @@
 {
   "files": [
     [
-      "resources/resources.qrc",
+      "resources/*.qrc",
       "app/core/views/"
+    ],
+    [
+      "resources/*.qrc",
+      "app/algorithms/ColorRange/views"
+    ],
+    [
+      "resources/*.qrc",
+      "app/algorithms/MatchedFilter/views"
     ],
     [
       "resources/views/*.ui",
@@ -26,14 +34,6 @@
     ],
     [
       "resources/views/algorithms/MatchedFilter.ui",
-      "app/algorithms/MatchedFilter/views"
-    ],
-    [
-      "resources/views/algorithms/ColorRange.qrc",
-      "app/algorithms/ColorRange/views"
-    ],
-    [
-      "resources/views/algorithms/MatchedFilter.qrc",
       "app/algorithms/MatchedFilter/views"
     ],
     [

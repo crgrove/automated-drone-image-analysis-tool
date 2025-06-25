@@ -8,12 +8,15 @@ from PyQt5.QtWidgets import QWidget
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
     """Controller for the Thermal Anomaly algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the ThermalAnomalyController widget and sets up the UI.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ThermalAnomaly', True)
+        AlgorithmController.__init__(self, config)
         self.settings_service = SettingsService()
         self.setupUi(self)
 

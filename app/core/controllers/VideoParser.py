@@ -1,6 +1,8 @@
 from core.views.VideoParser_ui import Ui_VideoParser
 from PyQt5.QtCore import QThread, pyqtSlot
-from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton
+from PyQt5.QtGui import QIcon
+
 
 from core.services.LoggerService import LoggerService
 from core.services.VideoParserService import VideoParserService
@@ -14,7 +16,7 @@ class VideoParser(QDialog, Ui_VideoParser):
     the UI based on process events.
     """
 
-    def __init__(self):
+    def __init__(self, theme):
         """Initializes the VideoParser dialog."""
         QDialog.__init__(self)
         self.setupUi(self)
@@ -26,6 +28,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         self.outputSelectButton.clicked.connect(self._outputSelectButton_clicked)
         self.startButton.clicked.connect(self._startButton_clicked)
         self.cancelButton.clicked.connect(self._cancelButton_clicked)
+        self._reapply_icons(theme)
 
     def _videoSelectButton_clicked(self):
         """Handles the video file selection button click.
@@ -213,3 +216,12 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg.setWindowTitle("Error Starting Processing")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
+
+    def _reapply_icons(self, theme):
+        # decide which sub‑folder of your resources to use:
+        for btn in self.findChildren(QAbstractButton):
+            name = btn.property("iconName")
+            if name:
+                # set the icon from the correct prefix
+                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
+                btn.repaint()

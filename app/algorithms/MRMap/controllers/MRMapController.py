@@ -7,14 +7,17 @@ from PyQt5.QtWidgets import QWidget
 class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
     """Controller for the RX Anomaly algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the MRMapController widget and sets up the UI.
 
         Connects the threshold slider to the updatethreshold handler.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'MRMap', False)
+        AlgorithmController.__init__(self, config)
         self.setupUi(self)
         self.thresholdSlider.valueChanged.connect(self.updatethreshold)
 

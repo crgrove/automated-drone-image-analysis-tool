@@ -89,6 +89,7 @@ class Ui_ColorRange(object):
         self.colorRangeLabel.setObjectName("colorRangeLabel")
         self.ColorRangeLayout.addWidget(self.colorRangeLabel)
         self.minColor = QtWidgets.QFrame(ColorRange)
+        self.minColor.setWhatsThis("")
         self.minColor.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.minColor.setFrameShadow(QtWidgets.QFrame.Raised)
         self.minColor.setObjectName("minColor")
@@ -126,9 +127,11 @@ class Ui_ColorRange(object):
         _translate = QtCore.QCoreApplication.translate
         ColorRange.setWindowTitle(_translate("ColorRange", "Form"))
         self.colorButton.setText(_translate("ColorRange", " Pick Color"))
+        self.colorButton.setProperty("iconName", _translate("ColorRange", "color.png"))
         self.rSensitivityLabel.setText(_translate("ColorRange", "Red Range +/-"))
         self.gSensitivityLabel.setText(_translate("ColorRange", "Green Range +/-"))
         self.bSensitivityLabel.setText(_translate("ColorRange", "Blue Range +/-"))
         self.colorRangeLabel.setText(_translate("ColorRange", "Color Range:"))
         self.viewRangeButton.setText(_translate("ColorRange", "View Range"))
-from . import ColorRange_rc
+        self.viewRangeButton.setProperty("iconName", _translate("ColorRange", "eye.png"))
+from . import resources_rc

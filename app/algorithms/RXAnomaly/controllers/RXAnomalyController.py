@@ -7,14 +7,17 @@ from PyQt5.QtWidgets import QWidget
 class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
     """Controller for the RX Anomaly algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the RXAnomalyController widget and sets up the UI.
 
         Connects the sensitivity slider to the update_sensitivity handler.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'RXAnomaly', False)
+        AlgorithmController.__init__(self, config)
         self.setupUi(self)
         self.sensitivitySlider.valueChanged.connect(self.update_sensitivity)
 

@@ -2,13 +2,10 @@ from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
 import os
 import platform
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QIcon
 from PyQt5.QtCore import QThread, pyqtSlot, QSize, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy
-
+from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy, QAbstractButton
 from core.views.MainWindow_ui import Ui_MainWindow
-
-from helpers.ColorUtils import ColorUtils
 
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
@@ -44,6 +41,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.logger = LoggerService()
         QMainWindow.__init__(self)
         self.theme = theme
+
         self.setupUi(self)
         self.__threads = []
         self.images = None
@@ -53,6 +51,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.KMeansWidget.setVisible(False)
         self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
         self._load_algorithms()
+
+        self.results_path = ''
+        self.settings_service = SettingsService()
+        self._set_defaults()
 
         # Setting up GUI element connections
         self.identifierColorButton.clicked.connect(self._identifierButton_clicked)
@@ -71,10 +73,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
         self.histogramButton.clicked.connect(self._histogramButton_clicked)
         self.kMeansCheckbox.stateChanged.connect(self._kMeansCheckbox_change)
-
-        self.results_path = ''
-        self.settings_service = SettingsService()
-        self._set_defaults()
 
         # Store previous valid values
         self._previous_min_area = self.minAreaSpinBox.value()
@@ -164,9 +162,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
         cls = globals()[self.activeAlgorithm['controller']]
-        self.algorithmWidget = cls()
+        self.algorithmWidget = cls(self.activeAlgorithm)
         self.verticalLayout_2.addWidget(self.algorithmWidget)
         self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
+        self._reapply_icons(self.settings_service.get_setting('Theme'))
 
     def _histogramCheckbox_change(self):
         """
@@ -227,7 +226,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
-                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options,
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options,
                 self.maxAreaSpinBox.value()
             )
 
@@ -263,7 +262,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             position_format = self.settings_service.get_setting('PositionFormat')
             temperature_unit = self.settings_service.get_setting('TemperatureUnit')
             distance_unit = self.settings_service.get_setting('DistanceUnit')
-            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False)
+            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False, self.settings_service.get_setting('Theme'))
             self.viewer.show()
         else:
             self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
@@ -392,11 +391,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if 'max_area' in settings:
             self.maxAreaSpinBox.setValue(int(settings['max_area']))
         if 'hist_ref_path' in settings:
-            self.histogramCheckbox.setChecked(True)
-            self.histogramLine.setText(settings['hist_ref_path'])
+            if settings['hist_ref_path'] != "":
+                self.histogramCheckbox.setChecked(True)
+                self.histogramLine.setText(settings['hist_ref_path'])
         if 'kmeans_clusters' in settings:
-            self.kMeansCheckbox.setChecked(True)
-            self.clustersSpinBox.setValue(settings['kmeans_clusters'])
+            if settings['kmeans_clusters'] != 0:
+                self.kMeansCheckbox.setChecked(True)
+                self.clustersSpinBox.setValue(settings['kmeans_clusters'])
         if 'algorithm' in settings:
             self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
             self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
@@ -416,7 +417,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         Opens the Video Parser dialog.
         """
-        parser = VideoParser()
+        parser = VideoParser(self.settings_service.get_setting('Theme'))
         parser.exec_()
 
     def closeEvent(self, event):
@@ -523,7 +524,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             theme (str): 'Light' or 'Dark'
         """
-        self.theme.setup_theme("light" if theme == 'Light' else "dark")
+        if theme == 'Light':
+            self.theme.setup_theme("light")
+            self._reapply_icons("light")
+        else:
+            self.theme.setup_theme("dark")
+            self._reapply_icons("dark")
 
     def _show_area_validation_error(self, message):
         """
@@ -538,3 +544,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setWindowTitle("Invalid Value")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
+
+    def _reapply_icons(self, theme):
+        # decide which sub‑folder of your resources to use:
+        for btn in self.findChildren(QAbstractButton):
+            name = btn.property("iconName")
+            if name:
+                # set the icon from the correct prefix
+                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
+                btn.repaint()

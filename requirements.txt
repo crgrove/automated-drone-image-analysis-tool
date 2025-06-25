@@ -7,7 +7,7 @@ spectral
 piexif
 simplekml
 scikit-image
-pyqtdarktheme
+pyqtdarktheme-fork
 qtpy
 qtwidgets
 pillow

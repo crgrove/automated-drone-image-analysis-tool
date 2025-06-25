@@ -2,7 +2,7 @@ import operator
 import cv2
 import os
 import numpy as np
-import imghdr
+from PIL import Image, UnidentifiedImageError
 import shutil
 import xml.etree.ElementTree as ET
 import time
@@ -32,7 +32,7 @@ class AnalyzeService(QObject):
     sig_done = pyqtSignal(int, int, str)
 
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
-                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, thermal, options, max_area):
+                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options, max_area):
         """
         Initialize the AnalyzeService with parameters for processing images.
 
@@ -49,7 +49,6 @@ class AnalyzeService(QObject):
             aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
             histogram_reference_path (str): Path to the histogram reference image.
             kmeans_clusters (int): Number of clusters (colors) to retain in the image.
-            thermal (bool): Whether this is a thermal image algorithm.
             options (dict): Additional algorithm-specific options.
             max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
         """
@@ -73,7 +72,7 @@ class AnalyzeService(QObject):
         self.__id = id
         self.images_with_aois = []
         self.cancelled = False
-        self.is_thermal = thermal
+        self.is_thermal = (self.algorithm['type'] == 'Thermal')
         self.pool = Pool(self.num_processes)
 
     @pyqtSlot()
@@ -115,29 +114,36 @@ class AnalyzeService(QObject):
                 if os.path.isdir(file):
                     ttl_images -= 1
                     continue
+                if self.pool._state == pool.RUN:
+                    try:
+                        with Image.open(file) as img:
+                            img.verify()  # Check if it's a valid image
+                        is_valid_image = True
+                    except (UnidentifiedImageError, OSError):
+                        is_valid_image = False
 
-                if imghdr.what(file) is not None and self.pool._state == pool.RUN:
-                    self.pool.apply_async(
-                        AnalyzeService.process_file,
-                        (
-                            self.algorithm,
-                            self.identifier_color,
-                            self.min_area,
-                            self.max_area,
-                            self.aoi_radius,
-                            self.options,
-                            file,
-                            self.input,
-                            self.output,
-                            self.hist_ref_path,
-                            self.kmeans_clusters,
-                            self.is_thermal
-                        ),
-                        callback=self._process_complete
-                    )
-                else:
-                    ttl_images -= 1
-                    self.sig_msg.emit(f"Skipping {file} :: File is not an image")
+                    if is_valid_image and self.pool._state == pool.RUN:
+                        self.pool.apply_async(
+                            AnalyzeService.process_file,
+                            (
+                                self.algorithm,
+                                self.identifier_color,
+                                self.min_area,
+                                self.max_area,
+                                self.aoi_radius,
+                                self.options,
+                                file,
+                                self.input,
+                                self.output,
+                                self.hist_ref_path,
+                                self.kmeans_clusters,
+                                self.is_thermal
+                            ),
+                            callback=self._process_complete
+                        )
+                    else:
+                        ttl_images -= 1
+                        self.sig_msg.emit(f"Skipping {file} :: File is not an image")
 
             # Close the pool and ensure all processes are done
             self.pool.close()
@@ -199,9 +205,8 @@ class AnalyzeService(QObject):
 
         # Instantiate the algorithm class and process the image
         cls = globals()[algorithm['service']]
-        instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
-
         try:
+            instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
             return instance.process_image(img, full_path, input_dir, output_dir)
         except Exception as e:
             logger = LoggerService()

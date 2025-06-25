@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import imghdr
+from PIL import Image, UnidentifiedImageError
 from skimage import exposure
 from core.services.LoggerService import LoggerService
 
@@ -19,8 +19,13 @@ class HistogramNormalizationService:
             Exception: If the file at hist_ref_path is not a valid image.
         """
         self.logger = LoggerService()
-        if imghdr.what(hist_ref_path) is not None:
+        try:
+            with Image.open(hist_ref_path) as img:
+                img.verify()  # Verifies it's a valid image
+            # If no exception, proceed with OpenCV decoding
             self.hist_ref_img = cv2.imdecode(np.fromfile(hist_ref_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        except (UnidentifiedImageError, OSError):
+            self.hist_ref_img = None  # Or handle the error as needed
         else:
             raise Exception("The reference image path is not a valid image file.")
 

@@ -12,15 +12,18 @@ from PyQt5.QtWidgets import QWidget, QColorDialog
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
     """Controller for the Matched Filter algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the MatchedFilterController widget and sets up the UI.
 
         Connects UI elements like threshold slider and color selection button
         to their respective event handlers.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'MatchedFilter', False)
+        AlgorithmController.__init__(self, config)
         self.logger = LoggerService()
         self.setupUi(self)
         self.viewRangeButton.hide()
