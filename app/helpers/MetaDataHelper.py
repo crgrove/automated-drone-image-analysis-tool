@@ -8,38 +8,11 @@ import platform
 import re
 import struct
 import xml.etree.ElementTree as ET
-import pandas as pd
 
+from helpers.PickleHelper import PickleHelper
 
 class MetaDataHelper:
     """Helper class for managing EXIF, XMP, and thermal metadata of image files."""
-
-    _drones_df = None
-    _xmp_df = None
-
-    @classmethod
-    def get_drone_sensor_info(cls):
-        """
-        Loads and caches drone metadata lookup table.
-
-        Returns:
-            pandas.DataFrame: A DataFrame containing drone specifications.
-        """
-        if cls._drones_df is None:
-            cls._drones_df = cls.load_drone_info_pickle()
-        return cls._drones_df
-
-    @classmethod
-    def get_xmp_mapping(cls):
-        """
-        Loads and caches XMP attribute mapping table.
-
-        Returns:
-            pandas.DataFrame: A DataFrame mapping logical attributes to XMP keys.
-        """
-        if cls._xmp_df is None:
-            cls._xmp_df = cls.load_xmp_mapping_pickle()
-        return cls._xmp_df
 
     @staticmethod
     def _get_exif_tool_path():
@@ -382,7 +355,7 @@ class MetaDataHelper:
         Returns:
             str or None: Attribute value, if available.
         """
-        xmp_df = MetaDataHelper.get_xmp_mapping()
+        xmp_df = PickleHelper.get_xmp_mapping()
         try:
             key = xmp_df.loc[xmp_df['Attribute'] == attribute, make].iloc[0]
             return xmp_data[key]
@@ -428,26 +401,6 @@ class MetaDataHelper:
             f.write(new_data)
 
         return True
-
-    @staticmethod
-    def load_drone_info_pickle():
-        """
-        Loads drone metadata from 'drones.pkl'.
-
-        Returns:
-            pandas.DataFrame: Drone info table.
-        """
-        return pd.read_pickle(path.abspath(path.join(path.dirname(path.dirname(__file__)), 'drones.pkl')))
-
-    @staticmethod
-    def load_xmp_mapping_pickle():
-        """
-        Loads attribute-key mapping from 'xmp.pkl'.
-
-        Returns:
-            pandas.DataFrame: Attribute-to-XMP-key map.
-        """
-        return pd.read_pickle(path.abspath(path.join(path.dirname(path.dirname(__file__)), 'xmp.pkl')))
 
     @staticmethod
     def _parse_xmp_xml(xmp_xml):

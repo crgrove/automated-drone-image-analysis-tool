@@ -4,6 +4,7 @@ import pandas as pd
 from core.services.GSDService import GSDService
 
 from helpers.MetaDataHelper import MetaDataHelper
+from helpers.PickleHelper import PickleHelper
 from helpers.LocationInfo import LocationInfo
 
 
@@ -166,7 +167,7 @@ class ImageService:
             pandas.DataFrame or None: A filtered DataFrame containing camera specifications
             that match the current image's metadata, or None if the model or drone make is not found.
         """
-        drones_df = MetaDataHelper.get_drone_sensor_info()
+        drones_df = PickleHelper.get_drone_sensor_info()
 
         model = self.exif_data["0th"].get(piexif.ImageIFD.Model)
         if model:

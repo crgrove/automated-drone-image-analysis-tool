@@ -7,6 +7,8 @@ from PyQt5.QtCore import QThread, pyqtSlot, QSize, Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy, QAbstractButton
 from core.views.MainWindow_ui import Ui_MainWindow
 
+from helpers.PickleHelper import PickleHelper
+
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
 from core.controllers.VideoParser import VideoParser
@@ -54,7 +56,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.results_path = ''
         self.settings_service = SettingsService()
-        self._set_defaults()
+        self._set_defaults(version)
 
         # Setting up GUI element connections
         self.identifierColorButton.clicked.connect(self._identifierButton_clicked)
@@ -469,7 +471,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.viewResultsButton.setStyleSheet("")
             self.viewResultsButton.setEnabled(False)
 
-    def _set_defaults(self):
+    def _set_defaults(self, version):
         """
         Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
         """
@@ -517,6 +519,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             theme = 'Dark'
         self.update_theme(theme)
 
+        try:
+            current_version = self.settings_service.get_setting('app_version')
+            if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
+                self.settings_service.set_setting('app_version', version)
+                PickleHelper.copy_pickle('drones.pkl')
+                PickleHelper.copy_pickle('xmp.pkl')
+            else:
+                current_version_int = PickleHelper.version_to_int(current_version)
+                new_version_int = PickleHelper.version_to_int(version)
+                if new_version_int > current_version_int:
+                    self.settings_service.set_setting('app_version', version)
+                    PickleHelper.copy_pickle('drones.pkl')
+                    PickleHelper.copy_pickle('xmp.pkl')
+        except Exception as e:
+            self.logger.error(e)
+
     def update_theme(self, theme):
         """
         Updates the application theme.
@@ -553,3 +571,4 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # set the icon from the correct prefix
                 btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
                 btn.repaint()
+    
