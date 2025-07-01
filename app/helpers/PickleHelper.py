@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import sys
 import shutil
-import platform
+
 
 class PickleHelper:
 
@@ -39,7 +39,7 @@ class PickleHelper:
             return {'Version': cls._drones_df['version'], 'Date': cls._drones_df['date']}
         else:
             return None
-    
+
     @classmethod
     def get_xmp_mapping(cls):
         """
@@ -75,7 +75,7 @@ class PickleHelper:
         if not os.path.isfile(source):
             raise FileNotFoundError(f"Source pickle file does not exist: {source}")
         shutil.copy(source, destination)
-        PickleHelper.force_reload_drone_info()
+        PickleHelper.force_reload()
 
     @staticmethod
     def load_drone_info_pickle():
@@ -104,7 +104,7 @@ class PickleHelper:
             return pd.read_pickle(file_path)
         except FileNotFoundError:
             return None  # or pd.DataFrame() if you prefer an empty table
-    
+
     @staticmethod
     def version_to_int(version_str):
         """Convert a version string to an integer for easy comparison.
@@ -175,7 +175,7 @@ class PickleHelper:
         if not os.path.exists(app_path):
             os.makedirs(app_path)
         return app_path
-    
+
     @classmethod
     def force_reload(cls):
         """Forces reloading of the drone metadata pickle on next access."""

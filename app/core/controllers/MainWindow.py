@@ -24,6 +24,8 @@ from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeCon
 from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
 from algorithms.MRMap.controllers.MRMapController import MRMapController
+from algorithms.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
+from algorithms.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
@@ -571,4 +573,3 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # set the icon from the correct prefix
                 btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
                 btn.repaint()
-    

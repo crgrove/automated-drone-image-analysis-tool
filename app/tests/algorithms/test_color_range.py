@@ -6,7 +6,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
     assert main_window.algorithmWidget is not None
-    main_window.algorithmComboBox.setCurrentText('Color Range')
+    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget
@@ -32,7 +32,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -41,7 +41,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -50,7 +50,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0

@@ -71,7 +71,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         """
         if self.selectedColor is not None:
             rgb = [self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue()]
-            self.lowerColor, self.upperColor = ColorUtils.get_color_range(
+            self.lowerColor, self.upperColor = ColorUtils.get_rgb_color_range(
                 rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value()
             )
             hex_lower = '#%02x%02x%02x' % self.lowerColor

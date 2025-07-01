@@ -41,7 +41,7 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -50,7 +50,7 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -59,7 +59,7 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0

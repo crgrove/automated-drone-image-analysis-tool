@@ -19,6 +19,8 @@ from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
 from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
 from algorithms.MRMap.services.MRMapService import MRMapService
+from algorithms.AIPersonDetector.services.AIPersonDetectorService import AIPersonDetectorService
+from algorithms.HSVColorRange.services.HSVColorRangeService import HSVColorRangeService
 from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
 from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 

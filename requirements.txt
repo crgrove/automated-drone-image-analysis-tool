@@ -2,7 +2,7 @@ PyQt5
 opencv-python
 numpy
 qimage2ndarray
-scipy
+scipy==1.15.3
 spectral
 piexif
 simplekml
@@ -12,6 +12,8 @@ qtpy
 qtwidgets
 pillow
 pandas
+pyarrow==20.0.0
 utm
 PyExifTool
 reportlab
+onnxruntime-gpu==1.20.1

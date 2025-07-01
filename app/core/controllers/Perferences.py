@@ -6,6 +6,7 @@ from core.views.components.Preferences_ui import Ui_Preferences
 from core.services.SettingsService import SettingsService
 from helpers.PickleHelper import PickleHelper
 
+
 class Preferences(QDialog, Ui_Preferences):
     """Controller for the Preferences dialog box.
 
@@ -34,7 +35,7 @@ class Preferences(QDialog, Ui_Preferences):
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
-        self.dronSensorVersionLabel.setText (f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
+        self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
     def _connect_signals(self):
         """Connects UI signals to the appropriate update methods."""
@@ -45,7 +46,6 @@ class Preferences(QDialog, Ui_Preferences):
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
-        
 
     def _update_max_aois(self):
         """Updates the maximum areas of interest setting based on the spinbox value."""
@@ -93,5 +93,4 @@ class Preferences(QDialog, Ui_Preferences):
         shutil.copy(filename, dest_file)
         PickleHelper.force_reload()
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
-        self.dronSensorVersionLabel.setText (f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
-
+        self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")

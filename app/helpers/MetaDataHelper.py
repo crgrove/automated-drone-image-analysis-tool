@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 from helpers.PickleHelper import PickleHelper
 
+
 class MetaDataHelper:
     """Helper class for managing EXIF, XMP, and thermal metadata of image files."""
 

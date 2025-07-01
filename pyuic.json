@@ -13,6 +13,10 @@
       "app/algorithms/MatchedFilter/views"
     ],
     [
+      "resources/*.qrc",
+      "app/algorithms/HSVColorRange/views"
+    ],
+    [
       "resources/views/*.ui",
       "app/core/views/"
     ],
@@ -29,12 +33,20 @@
       "app/algorithms/ColorRange/views"
     ],
     [
+      "resources/views/algorithms/HSVColorRange.ui",
+      "app/algorithms/HSVColorRange/views"
+    ],
+    [
       "resources/views/algorithms/RangeViewer.ui",
       "app/algorithms/Shared/views"
     ],
     [
       "resources/views/algorithms/MatchedFilter.ui",
       "app/algorithms/MatchedFilter/views"
+    ],
+    [
+      "resources/views/algorithms/AIPersonDetector.ui",
+      "app/algorithms/AIPersonDetector/views"
     ],
     [
       "resources/views/algorithms/ThermalRange.ui",
