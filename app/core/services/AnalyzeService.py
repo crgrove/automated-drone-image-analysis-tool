@@ -165,7 +165,7 @@ class AnalyzeService(QObject):
             ttl_time = round(time.time() - start_time, 3)
             self.sig_done.emit(self.__id, len(self.images_with_aois), file_path)
             self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
-            self.sig_msg.emit(f"Total Images Processed: {ttl_images}")
+            self.sig_msg.emit(f"Total Images Processed: {self.ttl_images}")
 
         except Exception as e:
             self.logger.error(f"An error occurred during processing: {e}")

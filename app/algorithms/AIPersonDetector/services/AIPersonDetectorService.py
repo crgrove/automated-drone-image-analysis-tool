@@ -192,28 +192,30 @@ class AIPersonDetectorService(AlgorithmService):
 
         Returns:
             onnxruntime.InferenceSession: Loaded ONNX model session.
-
-        Raises:
-            Exception: If both CUDA and CPU session creation fails.
         """
         so = ort.SessionOptions()
         so.intra_op_num_threads = 1
+
+        providers_cuda_first = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        providers_cpu_only = ["CPUExecutionProvider"]
+
+        # First try CUDA
         try:
-            # Try to create session with GPU (CUDA)
+            self.logger.info("Attempting to load ONNX model with CUDAExecutionProvider...")
             return ort.InferenceSession(
                 self.model_path,
                 sess_options=so,
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+                providers=providers_cuda_first
             )
         except Exception as e:
-            self.logger.warning(f"Failed to load CUDAExecutionProvider: {e}\nFalling back to CPUExecutionProvider.")
+            self.logger.warning(f"CUDAExecutionProvider failed: {e}")
+            self.logger.info("Falling back to CPUExecutionProvider...")
             try:
-                # Fallback to CPU only
                 return ort.InferenceSession(
                     self.model_path,
                     sess_options=so,
-                    providers=["CPUExecutionProvider"]
+                    providers=providers_cpu_only
                 )
             except Exception as cpu_e:
-                self.logger.error(f"Failed to load CPUExecutionProvider as well: {cpu_e}")
-                raise cpu_e  # Escalate since both failed
+                self.logger.error(f"Failed to load model even with CPUExecutionProvider: {cpu_e}")
+                raise RuntimeError("ONNX model could not be loaded with any provider.")

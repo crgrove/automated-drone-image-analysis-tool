@@ -2,6 +2,7 @@ import os
 import subprocess
 import onnxruntime as ort
 import sys
+import re
 from algorithms.Algorithm import AlgorithmController
 from algorithms.AIPersonDetector.views.AIPersonDetector_ui import Ui_AIPersonDetector
 from core.services.LoggerService import LoggerService
@@ -104,8 +105,8 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         msg = (
             "<div style='font-size:10pt'><b>ONNX Runtime GPU Requirements:</b><br><ol>"
             "<li>Have a CUDA-enable NVIDA graphics card</li>"
-            "<li>CUDA Toolkit is installed and in PATH</li>"
-            "<li>cuDNN is installed (C:\\Program Files\\NVIDIA\\CUDNN)</li>"
+            "<li>CUDA Toolkit version 12 or great is installed and in PATH</li>"
+            "<li>cuDNN version 9 or great is installed (C:\\Program Files\\NVIDIA\\CUDNN)</li>"
             "<li>cuDNN directory is in your system PATH</li>"
             "<li>ONNX Runtime has CUDAExecutionProvider available</li></ol></div>"
             ""
@@ -118,7 +119,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
     def _check_onnxruntime_gpu_env(self):
         """
         Check the runtime environment for ONNX GPU support:
-        - CUDA Toolkit installation
+        - CUDA Toolkit installation (version >= 12.0)
         - cuDNN installation
         - cuDNN path configuration
         - ONNX Runtime CUDAExecutionProvider availability
@@ -127,6 +128,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
             dict: A dictionary summarizing each check and an overall result.
                 {
                     "cuda_installed": bool,
+                    "cuda_version_sufficient": bool,
                     "cudnn_installed": bool,
                     "cudnn_in_path": bool,
                     "ort_cuda_provider_available": bool,
@@ -135,6 +137,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         """
         results = {
             "cuda_installed": False,
+            "cuda_version_sufficient": False,
             "cudnn_installed": False,
             "cudnn_in_path": False,
             "ort_cuda_provider_available": False,
@@ -142,16 +145,22 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
 
         # Check CUDA
         try:
-            subprocess.check_output(['nvcc', '--version'], encoding='utf-8')
+            output = subprocess.check_output(['nvcc', '--version'], encoding='utf-8')
             results["cuda_installed"] = True
+
+            # Parse version from output
+            match = re.search(r"release (\d+)\.(\d+)", output)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                results["cuda_version_sufficient"] = major >= 12
         except Exception:
             results["cuda_installed"] = False
+            results["cuda_version_sufficient"] = False
 
         # Check cuDNN (just check if directory exists)
         cuda_path = os.environ.get('CUDA_PATH') or os.environ.get('CUDA_HOME')
         cudnn_installed = False
 
-        # Also check the default directory (Windows)
         if os.name == 'nt':
             default_cudnn_dir = r"C:\Program Files\NVIDIA\CUDNN"
             if os.path.isdir(default_cudnn_dir):
@@ -169,9 +178,12 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         providers = ort.get_available_providers()
         results["ort_cuda_provider_available"] = 'CUDAExecutionProvider' in providers
 
+        # Overall check includes version requirement
         results["overall"] = (
-            results["ort_cuda_provider_available"]
+            results["cuda_installed"]
+            and results["cuda_version_sufficient"]
             and results["cudnn_in_path"]
-            and results["cuda_installed"]
+            and results["ort_cuda_provider_available"]
         )
         return results
+
