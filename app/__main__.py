@@ -7,7 +7,7 @@ from core.controllers.MainWindow import MainWindow
 import qdarktheme
 from os import path
 
-version = '1.6.0 Beta'
+version = '1.6.0'
 
 
 def main():

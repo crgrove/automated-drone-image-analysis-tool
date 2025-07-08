@@ -17,7 +17,7 @@ if platform.system() == 'Windows':
                     ('app/algorithms.conf','.'),
                     ('app/drones.pkl', '.'),
                     ('app/xmp.pkl', '.'),
-                    ('app/algorithms/AIPersonDetector/services/model_s.onnx', '.')
+                    ('app/algorithms/AIPersonDetector/services/model_s.onnx', 'ai_models')
                     ],
 
                 hiddenimports=[],
@@ -29,11 +29,15 @@ elif platform.system() == 'Darwin':
     a = Analysis(['app/__main__.py'],
                     pathex=['app'],
                     binaries=[
-                        ('LICENSE','.'),
-                        ('app/drones.pkl', '.'),
-                        ('app/xmp.pkl', '.')
+                        ('LICENSE','.')
                     ],
-                    datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
+                    datas=[
+                        ('resources/icons/ADIAT.ico','.'),
+                        ('app/algorithms.conf','.'),
+                        ('app/drones.pkl', '.'),
+                        ('app/xmp.pkl', '.'),
+                        ('app/algorithms/AIPersonDetector/services/model_s.onnx', 'ai_models')
+                        ],
                     hiddenimports=[],
                     hookspath=None,
                     runtime_hooks=None,

@@ -15,24 +15,59 @@ MODEL_IMG_SIZE = 640
 
 
 class AIPersonDetectorService(AlgorithmService):
+    """
+    Service class for detecting people in images using an ONNX object detection model.
+    Processes large images using a sliding window approach, aggregates detections, 
+    and identifies areas of interest.
+
+    Args:
+        identifier (str): Unique identifier for the analysis run.
+        min_area (int): Minimum area for detected objects of interest.
+        max_area (int): Maximum area for detected objects of interest.
+        aoi_radius (int): Radius for defining areas of interest.
+        combine_aois (bool): Whether to combine overlapping AOIs.
+        options (dict): Algorithm-specific options, must include 'person_detector_confidence'.
+    """
+
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
+        """
+        Initialize the AIPersonDetectorService.
+
+        Args:
+            identifier (str): Unique identifier for the analysis run.
+            min_area (int): Minimum area for detected objects of interest.
+            max_area (int): Maximum area for detected objects of interest.
+            aoi_radius (int): Radius for defining areas of interest.
+            combine_aois (bool): Whether to combine overlapping AOIs.
+            options (dict): Algorithm-specific options, must include 'person_detector_confidence'.
+        """
         self.logger = LoggerService()
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.confidence = options['person_detector_confidence'] / 100
 
         if getattr(sys, 'frozen', False):
             # Frozen (PyInstaller)
-            self.model_path = os.path.join(sys._MEIPASS, 'model_s.onnx')
+            self.model_path = os.path.join(sys._MEIPASS, 'ai_models' / 'model_s.onnx')
         else:
             # Not frozen (dev)
             self.model_path = path.abspath(path.join(path.dirname(__file__), 'model_s.onnx'))
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        so = ort.SessionOptions()
-        so.intra_op_num_threads = 1
-        session = ort.InferenceSession(self.model_path, sess_options=so, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+        """
+        Process a single image to detect people, aggregate results, and identify areas of interest.
 
+        Args:
+            img (np.ndarray): Input image (BGR format).
+            full_path (str): Full path to the input image.
+            input_dir (str): Base input directory.
+            output_dir (str): Base output directory.
+
+        Returns:
+            AnalysisResult: Result object with details of the analysis.
+        """
+        session = self._create_onnx_session()
         input_name = session.get_inputs()[0].name
+        
         try:
             img_pre_processed = self._preprocess_whole_image(img)
             h, w = img.shape[:2]
@@ -74,23 +109,51 @@ class AIPersonDetectorService(AlgorithmService):
 
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")
-            print(e)
             return AnalysisResult(full_path, error_message=str(e))
 
     def _preprocess_whole_image(self, img):
-        # Convert BGR to RGB and normalize just once
+        """
+        Convert BGR image to RGB and normalize to [0, 1] float32.
+
+        Args:
+            img (np.ndarray): Input image in BGR format.
+
+        Returns:
+            np.ndarray: Normalized RGB image as float32.
+        """
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img_norm = img_rgb.astype(np.float32) / 255.0
         return img_norm
 
     def _preprocess_slice(self, slice_img, out_size=640):
-        # Only resize and transpose per-slice
+        """
+        Resize and format image slice for ONNX model input.
+
+        Args:
+            slice_img (np.ndarray): Image slice (float32, RGB).
+            out_size (int, optional): Size for model input. Defaults to 640.
+
+        Returns:
+            np.ndarray: Model-ready input tensor (1, 3, out_size, out_size).
+        """
         img_resized = cv2.resize(slice_img, (out_size, out_size))
         img_transposed = np.transpose(img_resized, (2, 0, 1))
         img_input = np.expand_dims(img_transposed, axis=0)
         return img_input
 
     def _postprocess(self, outputs, slice_rect, crop_w, crop_h):
+        """
+        Convert model outputs to bounding boxes in full image coordinates.
+
+        Args:
+            outputs (list): Raw model outputs.
+            slice_rect (tuple): Top-left (x, y) of the slice in original image.
+            crop_w (int): Width of slice.
+            crop_h (int): Height of slice.
+
+        Returns:
+            list[tuple]: Bounding boxes as (x1, y1, x2, y2, confidence, class).
+        """
         preds = outputs[0][0]
         bboxes = []
         for pred in preds:
@@ -107,7 +170,50 @@ class AIPersonDetectorService(AlgorithmService):
         return bboxes
 
     def _draw_boxes(self, img, bboxes):
+        """
+        Draw bounding boxes on an image for visualization.
+
+        Args:
+            img (np.ndarray): Original image (BGR or RGB).
+            bboxes (list[tuple]): List of (x1, y1, x2, y2, confidence, class).
+
+        Returns:
+            np.ndarray: Image with boxes drawn.
+        """
         for (x1, y1, x2, y2, conf, cls) in bboxes:
             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(img, f'{conf:.2f}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return img
+
+    def _create_onnx_session(self):
+        """
+        Create an ONNX Runtime inference session.
+        Tries to use CUDAExecutionProvider; falls back to CPUExecutionProvider if CUDA fails.
+
+        Returns:
+            onnxruntime.InferenceSession: Loaded ONNX model session.
+
+        Raises:
+            Exception: If both CUDA and CPU session creation fails.
+        """
+        so = ort.SessionOptions()
+        so.intra_op_num_threads = 1
+        try:
+            # Try to create session with GPU (CUDA)
+            return ort.InferenceSession(
+                self.model_path,
+                sess_options=so,
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to load CUDAExecutionProvider: {e}\nFalling back to CPUExecutionProvider.")
+            try:
+                # Fallback to CPU only
+                return ort.InferenceSession(
+                    self.model_path,
+                    sess_options=so,
+                    providers=["CPUExecutionProvider"]
+                )
+            except Exception as cpu_e:
+                self.logger.error(f"Failed to load CPUExecutionProvider as well: {cpu_e}")
+                raise cpu_e  # Escalate since both failed

@@ -95,6 +95,8 @@ class ImageService:
 
         if camera_info is None:
             return None
+        if camera_info.empty:
+            return None
 
         sensor_w = float(camera_info['sensor_w'].iloc[0])
         sensor_h = float(camera_info['sensor_h'].iloc[0])

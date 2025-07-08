@@ -86,9 +86,11 @@ class PickleHelper:
             pandas.DataFrame: Drone info table.
         """
         file_path = os.path.join(PickleHelper._get_destination_path(), 'drones.pkl')
-        try:
+        if not os.path.isfile(file_path):
+            PickleHelper.copy_pickle('drones.pkl')
+        if os.path.isfile(file_path):
             return pd.read_pickle(file_path)
-        except FileNotFoundError:
+        else:
             return None  # or pd.DataFrame() if you prefer an empty table
 
     @staticmethod
@@ -100,11 +102,13 @@ class PickleHelper:
             pandas.DataFrame: Attribute-to-XMP-key map.
         """
         file_path = os.path.join(PickleHelper._get_destination_path(), 'xmp.pkl')
-        try:
+        if not os.path.isfile(file_path):
+            PickleHelper.copy_pickle('xmp.pkl')
+        if os.path.isfile(file_path):
             return pd.read_pickle(file_path)
-        except FileNotFoundError:
+        else:
             return None  # or pd.DataFrame() if you prefer an empty table
-
+        
     @staticmethod
     def version_to_int(version_str):
         """Convert a version string to an integer for easy comparison.

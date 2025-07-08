@@ -99,6 +99,7 @@ class AnalyzeService(QObject):
             )
             image_files = []
 
+
             start_time = time.time()
             for subdir, dirs, files in os.walk(self.input):
                 for file in files:
@@ -108,13 +109,16 @@ class AnalyzeService(QObject):
                     elif not self.is_thermal:
                         image_files.append(os.path.join(subdir, file))
 
-            ttl_images = len(image_files)
-            self.sig_msg.emit(f"Processing {ttl_images} files")
+            self.ttl_images = len(image_files)
+            self.sig_msg.emit(f"Processing {self.ttl_images} files")
+
+            self._completed_images = 0
+            self._last_progress_percent = 0
 
             # Process each image using multiprocessing
             for file in image_files:
                 if os.path.isdir(file):
-                    ttl_images -= 1
+                    self.ttl_images -= 1
                     continue
                 if self.pool._state == pool.RUN:
                     try:
@@ -144,7 +148,7 @@ class AnalyzeService(QObject):
                             callback=self._process_complete
                         )
                     else:
-                        ttl_images -= 1
+                        self.ttl_images -= 1
                         self.sig_msg.emit(f"Skipping {file} :: File is not an image")
 
             # Close the pool and ensure all processes are done
@@ -238,6 +242,12 @@ class AnalyzeService(QObject):
                 self.max_aois_limit_exceeded = True
         else:
             self.sig_msg.emit('No areas of interest identified in ' + file_name)
+        
+        self._completed_images += 1
+        percent_complete = int(100 * self._completed_images / self.ttl_images)
+        if percent_complete >= self._last_progress_percent + 10:
+            self.sig_msg.emit(f"Processing Progress: {percent_complete}% complete")
+            self._last_progress_percent = percent_complete - (percent_complete % 10)
 
     @pyqtSlot()
     def process_cancel(self):

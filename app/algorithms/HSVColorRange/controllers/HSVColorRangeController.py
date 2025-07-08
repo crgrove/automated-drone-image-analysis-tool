@@ -111,12 +111,9 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
 
         if 'hue_threshold' in options:
             self.hueSpinBox.setValue(int(options['hue_threshold']))
-            self.hueValueLabel.setText(str(options['hue_threshold']))
 
         if 'saturation_threshold' in options:
             self.saturationSpinBox.setValue(int(options['saturation_threshold']))
-            self.saturationValueLabel.setText(str(options['saturation_threshold']))
 
         if 'value_threshold' in options:
             self.valueSpinBox.setValue(int(options['value_threshold']))
-            self.valueValueLabel.setText(str(options['value_threshold']))

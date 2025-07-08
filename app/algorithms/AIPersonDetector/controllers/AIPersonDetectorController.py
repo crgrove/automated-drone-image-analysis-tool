@@ -11,34 +11,69 @@ from PyQt5.QtCore import Qt
 
 
 class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmController):
-    """Controller for the Matched Filter algorithm widget."""
+    """
+    Controller class for the AI Person Detector algorithm widget.
+    Handles UI updates, configuration, and environment checks for GPU support.
+    """
 
     def __init__(self, config):
+        """
+        Initialize the controller and connect UI events.
+
+        Args:
+            config (dict): Configuration options for the algorithm controller.
+        """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
         self.logger = LoggerService()
         self.setupUi(self)
         self.confidenceSlider.valueChanged.connect(self.update_confidence)
-        self.GPULabel.linkActivated.connect(self.show_gpu_requirements_popup)  # connect popup handler
+        self.GPULabel.linkActivated.connect(self.show_gpu_requirements_popup)
         self._update_gpu_label()
 
     def update_confidence(self):
+        """
+        Update the label displaying the current confidence threshold
+        when the slider value changes.
+        """
         self.confidenceValueLabel.setText(str(self.confidenceSlider.value()))
 
     def get_options(self):
+        """
+        Retrieve current user-selected options from the UI.
+
+        Returns:
+            dict: A dictionary containing the 'person_detector_confidence' option.
+        """
         options = dict()
         options['person_detector_confidence'] = float(self.confidenceValueLabel.text())
         return options
 
     def validate(self):
+        """
+        Validate the current configuration.
+
+        Returns:
+            None: Always returns None (stub for future validation).
+        """
         return None
 
     def load_options(self, options):
+        """
+        Load provided options into the UI.
+
+        Args:
+            options (dict): Dictionary of options (expects 'person_detector_confidence').
+        """
         if 'person_detector_confidence' in options:
             self.confidenceValueLabel.setText(str(options['person_detector_confidence']))
             self.confidenceSlider.setProperty("value", int(options['person_detector_confidence']))
 
     def _update_gpu_label(self):
+        """
+        Update the GPU status label to indicate whether GPU acceleration is available.
+        Adds a requirements link for more info.
+        """
         requirements_link = (
             '<a href="gpu_reqs" style="text-decoration: underline; color: #0066cc;">'
             'Requirements</a>'
@@ -60,7 +95,12 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
             )
 
     def show_gpu_requirements_popup(self, link):
-        # Show a popup with requirements when the requirements link is clicked
+        """
+        Show a popup dialog with details on ONNX Runtime GPU requirements.
+
+        Args:
+            link (str): The link identifier (unused, required for signal compatibility).
+        """
         msg = (
             "<div style='font-size:10pt'><b>ONNX Runtime GPU Requirements:</b><br><ol>"
             "<li>Have a CUDA-enable NVIDA graphics card</li>"
@@ -76,6 +116,23 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         QMessageBox.information(self, "ONNX Runtime GPU Requirements", msg)
 
     def _check_onnxruntime_gpu_env(self):
+        """
+        Check the runtime environment for ONNX GPU support:
+        - CUDA Toolkit installation
+        - cuDNN installation
+        - cuDNN path configuration
+        - ONNX Runtime CUDAExecutionProvider availability
+
+        Returns:
+            dict: A dictionary summarizing each check and an overall result.
+                {
+                    "cuda_installed": bool,
+                    "cudnn_installed": bool,
+                    "cudnn_in_path": bool,
+                    "ort_cuda_provider_available": bool,
+                    "overall": bool
+                }
+        """
         results = {
             "cuda_installed": False,
             "cudnn_installed": False,
@@ -92,7 +149,6 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
 
         # Check cuDNN (just check if directory exists)
         cuda_path = os.environ.get('CUDA_PATH') or os.environ.get('CUDA_HOME')
-        print(cuda_path)
         cudnn_installed = False
 
         # Also check the default directory (Windows)

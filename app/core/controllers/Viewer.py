@@ -7,7 +7,7 @@ from pathlib import Path
 from collections import UserDict, OrderedDict
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent
-from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
+from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
 from qtwidgets import Toggle
 
@@ -289,7 +289,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             self.placeholderImage.deleteLater()
             self.main_image = QtImageViewer(self, self.centralwidget)
-            self.main_image.setMinimumSize(QSize(0, 650))
+            self.main_image.setMinimumSize(QSize(0, 0))
             self.main_image.setObjectName("mainImage")
             self.main_image.aspectRatioMode = Qt.KeepAspectRatio
             self.main_image.canZoom = True
@@ -305,9 +305,10 @@ class Viewer(QMainWindow, Ui_Viewer):
     def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
         try:
-            # (original logic before main_image.resetZoom() remains unchanged)
+            # Clear previous status
             self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Drone Orientation'] = None
             self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
+
             image = self.images[self.current_image]
             if 'thumbnail' in image:
                 self._set_active_thumbnail(image['thumbnail'])
@@ -325,11 +326,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             if altitude:
                 self.messages['Relative Altitude'] = f"{altitude} {self.distance_unit}"
             direction = image_service.get_drone_orientation()
-            if direction:
+            if direction is not None:
                 self.messages['Drone Orientation'] = f"{direction}°"
+            else:
+                self.messages['Drone Orientation'] = None
             avg_gsd = image_service.get_average_gsd()
-            if avg_gsd:
+            if avg_gsd is not None:
                 self.messages['Estimated Average GSD'] = f"{avg_gsd}cm/px"
+            else:
+                self.messages['Estimated Average GSD'] = None
             position = image_service.get_position(self.position_format)
             if position:
                 self.messages['GPS Coordinates'] = position
@@ -338,12 +343,25 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
             self.main_image.zoomChanged.connect(self._update_scale_bar)
             self._update_scale_bar(self.main_image.getZoom())
+
             # move HUD to this viewport (in case of re‑parenting quirks)
             self._build_overlay()
             self._rotate_north_icon(direction)
+
+            # HUD overlay visibility logic:
+            # Show if either direction or avg_gsd is available; hide if both are missing
+            if hasattr(self, "_hud"):
+                if (direction is None) and (avg_gsd is None):
+                    self._hud.hide()
+                else:
+                    if self.showOverlayToggle.isChecked():
+                        self._hud.show()
+                    else:
+                        self._hud.hide()
             self._place_overlay()
         except Exception as e:
             self.logger.error(e)
+
 
     def _load_areas_of_interest(self, image):
         """Loads areas of interest thumbnails for a given image.
@@ -750,10 +768,17 @@ class Viewer(QMainWindow, Ui_Viewer):
             bar_px = self.scaleBar._bar_px                          # fixed 120 px
             real_cm = bar_px * zoomed_gsd                            # cm represented by bar
 
-            if real_cm >= 100:
-                label = f"{real_cm / 100:.1f} m"
+            if self.distance_unit == 'ft':
+                real_in = real_cm / 2.54
+                if real_in >= 12:
+                    label = f"{real_in / 12:.2f} ft"
+                else:
+                    label = f"{real_in:.1f} in"
             else:
-                label = f"{real_cm:.0f} cm"
+                if real_cm >= 100:
+                    label = f"{real_cm / 100:.1f} m"
+                else:
+                    label = f"{real_cm:.0f} cm"
 
             # -------- show --------
             self.scaleBar.setLabel(label)

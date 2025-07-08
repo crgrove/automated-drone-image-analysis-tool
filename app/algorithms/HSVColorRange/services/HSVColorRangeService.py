@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 
+from helpers.ColorUtils import ColorUtils
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 
@@ -30,52 +31,19 @@ class HSVColorRangeService(AlgorithmService):
             # Convert the image from BGR to HSV color space
             hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-            # Target HSV values
-            target_h, target_s, target_v = [int(x) for x in self.target_color_hsv]
+            # Use the staticmethod to get HSV bounds
+            hsv_ranges = ColorUtils.get_hsv_color_range(
+                self.target_color_hsv, hue_threshold, saturation_threshold, value_threshold
+            )
 
-            # Calculate S/V ranges
-            lower_s = max(0, target_s - saturation_threshold)
-            upper_s = min(255, target_s + saturation_threshold)
-            lower_v = max(0, target_v - value_threshold)
-            upper_v = min(255, target_v + value_threshold)
-
-            # Calculate hue range and handle wraparound (OpenCV: H ∈ [0,179])
-            if hue_threshold >= 90:
-                # Select all hues
-                lower_bound = np.array([0, lower_s, lower_v])
-                upper_bound = np.array([179, upper_s, upper_v])
-                mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
-            else:
-                lower_h = target_h - hue_threshold
-                upper_h = target_h + hue_threshold
-
-                if lower_h < 0:
-                    # Wraps around, e.g., H=5, threshold=10
-                    lower_bound1 = np.array([180 + lower_h, lower_s, lower_v])
-                    upper_bound1 = np.array([179, upper_s, upper_v])
-                    mask1 = cv2.inRange(hsv_image, lower_bound1, upper_bound1)
-
-                    lower_bound2 = np.array([0, lower_s, lower_v])
-                    upper_bound2 = np.array([upper_h, upper_s, upper_v])
-                    mask2 = cv2.inRange(hsv_image, lower_bound2, upper_bound2)
-
-                    mask = cv2.bitwise_or(mask1, mask2)
-                elif upper_h > 179:
-                    # Wraps around, e.g., H=175, threshold=10
-                    lower_bound1 = np.array([lower_h, lower_s, lower_v])
-                    upper_bound1 = np.array([179, upper_s, upper_v])
-                    mask1 = cv2.inRange(hsv_image, lower_bound1, upper_bound1)
-
-                    lower_bound2 = np.array([0, lower_s, lower_v])
-                    upper_bound2 = np.array([upper_h - 180, upper_s, upper_v])
-                    mask2 = cv2.inRange(hsv_image, lower_bound2, upper_bound2)
-
-                    mask = cv2.bitwise_or(mask1, mask2)
+            # Create mask(s) and combine if necessary
+            mask = None
+            for lower_bound, upper_bound in hsv_ranges:
+                this_mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
+                if mask is None:
+                    mask = this_mask
                 else:
-                    # No wraparound
-                    lower_bound = np.array([lower_h, lower_s, lower_v])
-                    upper_bound = np.array([upper_h, upper_s, upper_v])
-                    mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
+                    mask = cv2.bitwise_or(mask, this_mask)
 
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
@@ -87,6 +55,5 @@ class HSVColorRangeService(AlgorithmService):
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
-            print(e)
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))

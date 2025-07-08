@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\automated-drone-image-analysis-tool\resources/views\Viewer.ui'
+# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views\Viewer.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -132,7 +132,7 @@ class Ui_Viewer(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.placeholderImage.sizePolicy().hasHeightForWidth())
         self.placeholderImage.setSizePolicy(sizePolicy)
-        self.placeholderImage.setMinimumSize(QtCore.QSize(0, 650))
+        self.placeholderImage.setMinimumSize(QtCore.QSize(0, 0))
         font = QtGui.QFont()
         font.setPointSize(9)
         self.placeholderImage.setFont(font)

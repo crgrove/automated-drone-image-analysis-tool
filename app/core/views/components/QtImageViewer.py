@@ -33,8 +33,8 @@ try:
 except ImportError:
     qimage2ndarray = None
 
-__author__ = "Marcel Goldschen‑Ohm <marcel.goldschen@gmail.com>"
-__version__ = "2.1.0 (custom‑zoomChanged)"
+__author__ = "Marcel Goldschen-Ohm <marcel.goldschen@gmail.com>"
+__version__ = "2.1.0 (custom-zoomChanged)"
 
 
 # --------------------------------------------------------------------------- #
@@ -314,37 +314,41 @@ class QtImageViewer(QGraphicsView):
 
     # -------------------------- wheel zoom ------------------------------ #
     def wheelEvent(self, ev):
-        if self.thumbnail or self.wheelZoomFactor in (None, 1):
+        if self.thumbnail or self.wheelZoomFactor in (None, 1) or not self.hasImage():
             return super().wheelEvent(ev)
 
         zoom_in = ev.angleDelta().y() > 0
+        cursor_pos = ev.pos()
+        scene_pos = self.mapToScene(cursor_pos)
+
+        # Adjust zoom rect based on cursor position
         if zoom_in:
-            if not self.zoomStack:
-                self.zoomStack.append(self.sceneRect())
-            elif len(self.zoomStack) > 1:
-                self.zoomStack[:] = self.zoomStack[-1:]
-            zr = self.zoomStack[-1]
-            c = zr.center()
-            zr.setWidth(zr.width() / self.wheelZoomFactor)
-            zr.setHeight(zr.height() / self.wheelZoomFactor)
-            zr.moveCenter(c)
-            self.zoomStack[-1] = zr.intersected(self.sceneRect())
+            factor = self.wheelZoomFactor
         else:
-            if not self.zoomStack:
-                self.resetZoom()
-                return
-            if len(self.zoomStack) > 1:
-                self.zoomStack[:] = self.zoomStack[-1:]
-            zr = self.zoomStack[-1]
-            c = zr.center()
-            zr.setWidth(zr.width() * self.wheelZoomFactor)
-            zr.setHeight(zr.height() * self.wheelZoomFactor)
-            zr.moveCenter(c)
-            zr = zr.intersected(self.sceneRect())
-            if zr == self.sceneRect():
-                self.zoomStack.clear()
-            else:
-                self.zoomStack[-1] = zr
+            factor = 1 / self.wheelZoomFactor
+
+        if not self.zoomStack:
+            self.zoomStack.append(self.sceneRect())
+        elif len(self.zoomStack) > 1:
+            self.zoomStack[:] = self.zoomStack[-1:]
+
+        zr = self.zoomStack[-1]
+        cursor_ratio_x = (scene_pos.x() - zr.left()) / zr.width()
+        cursor_ratio_y = (scene_pos.y() - zr.top()) / zr.height()
+
+        new_width = zr.width() / factor
+        new_height = zr.height() / factor
+
+        new_left = scene_pos.x() - cursor_ratio_x * new_width
+        new_top = scene_pos.y() - cursor_ratio_y * new_height
+
+        new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(self.sceneRect())
+
+        if not new_zr.isValid() or new_zr == self.sceneRect():
+            self.zoomStack.clear()
+            self.fitInView(self.sceneRect(), self.aspectRatioMode)
+        else:
+            self.zoomStack[-1] = new_zr
 
         self.updateViewer()
         self.viewChanged.emit()
