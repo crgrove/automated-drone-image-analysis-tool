@@ -91,6 +91,9 @@ class ImageService:
         if not self._is_autel():
             tilt_angle = 90 - tilt_angle
 
+        if tilt_angle > 60:
+            return None
+
         camera_info = self._get_camera_info()
 
         if camera_info is None:
@@ -181,7 +184,7 @@ class ImageService:
         image_width = self.exif_data["Exif"].get(piexif.ExifIFD.PixelXDimension)
 
         iso = self.exif_data["Exif"].get(piexif.ExifIFD.ISOSpeedRatings)
-        if image_source and self.drone_make == 'DJI':
+        if image_source is not None and self.drone_make == 'DJI':
             def image_width_matches(row):
                 # Skip width check if no width is specified in the row
                 if pd.isna(row['Image Width']) or not str(row['Image Width']).strip():
@@ -199,7 +202,7 @@ class ImageService:
             matching_rows = matching_rows[matching_rows.apply(image_width_matches, axis=1)]
 
             return matching_rows
-        elif self._is_autel:
+        elif self._is_autel():
             if iso == 0:
                 return drones_df[
                     (drones_df['Model (Exif)'] == model) &

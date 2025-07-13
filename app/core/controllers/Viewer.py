@@ -362,7 +362,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         except Exception as e:
             self.logger.error(e)
 
-
     def _load_areas_of_interest(self, image):
         """Loads areas of interest thumbnails for a given image.
 
@@ -445,7 +444,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._load_image()
             self._scroll_thumbnail_int_view()
         else:
-            self._show_no_images_message()
+            self._show_additional_images_message()
 
     def _nextImageButton_clicked(self):
         """Navigates to the next image in the list, skipping hidden images if applicable."""
@@ -469,11 +468,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._load_image()
             self._scroll_thumbnail_int_view()
         else:
-            self._show_no_images_message()
+            self._show_additional_images_message()
 
     def _show_no_images_message(self):
         """Displays an error message when there are no available images."""
         self._show_error("No active images available.")
+
+    def _show_additional_images_message(self):
+        """Displays an error message when there are no available images."""
+        self._show_error("No other images available.")
 
     def _hide_image_change(self, state):
         """Toggles visibility of the current image and updates XML.

@@ -10,6 +10,7 @@ def testColorRangeE2E(main_window, testData, qtbot):
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget
+    main_window.minAreaSpinBox.setValue(10)
     algorithmWidget.rRangeSpinBox.setValue(75)
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)

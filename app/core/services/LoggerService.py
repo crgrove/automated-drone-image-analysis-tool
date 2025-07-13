@@ -46,7 +46,7 @@ class LoggerService:
         Args:
             message (str): The info message to log.
         """
-        print(message)
+        # print(message)
         self.logger.info(message)
 
     def warning(self, message):
@@ -65,5 +65,5 @@ class LoggerService:
         Args:
             message (str): The error message to log.
         """
-        print(traceback.format_exc())
+        # print(traceback.format_exc())
         self.logger.error(message)

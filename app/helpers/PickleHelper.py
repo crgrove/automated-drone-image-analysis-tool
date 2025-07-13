@@ -108,7 +108,7 @@ class PickleHelper:
             return pd.read_pickle(file_path)
         else:
             return None  # or pd.DataFrame() if you prefer an empty table
-        
+
     @staticmethod
     def version_to_int(version_str):
         """Convert a version string to an integer for easy comparison.

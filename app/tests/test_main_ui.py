@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from app.core.controllers.VideoParser import VideoParser
 from app.core.controllers.Perferences import Preferences
 from app.core.services.PdfGeneratorService import PdfGeneratorService
+from app.core.services.KMLGeneratorService import KMLGeneratorService
 
 def testVisible(main_window):
     assert main_window.isVisible()
@@ -113,24 +114,37 @@ def testNormalizeHistogram(main_window, testData, qtbot):
     assert not main_window.cancelButton.isEnabled()
 
 def testKmlCollection(main_window, testData, qtbot):
+    # Prepare the main window as in your other tests
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
-    assert main_window.algorithmWidget is not None
     algorithmWidget = main_window.algorithmWidget
     algorithmWidget.rRangeSpinBox.setValue(75)
     algorithmWidget.gRangeSpinBox.setValue(75)
     algorithmWidget.bRangeSpinBox.setValue(75)
     algorithmWidget.selectedColor = QColor(0, 170, 255)
     algorithmWidget.update_colors()
+
+    # Run the analysis and wait for results
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
     assert main_window.viewer is not None
     viewer = main_window.viewer
-    if path.exists(testData['KML_Path']):
-        os.remove(testData['KML_Path'])
-    viewer.generate_kml(testData['KML_Path'])
-    assert path.exists(testData['KML_Path'])
+
+    # Remove any existing KML file
+    kml_path = testData['KML_Path']
+    if path.exists(kml_path):
+        os.remove(kml_path)
+
+    kml_service = KMLGeneratorService()
+    kml_service.generate_kml_export([img for img in viewer.images if not img.get("hidden", False)], kml_path)
+
+
+    # Verify KML was written
+    assert path.exists(kml_path)
+
+    # Clean up
+    os.remove(kml_path)
 
 
 def testPdfGenerator(main_window, testData, qtbot):
@@ -184,7 +198,7 @@ def testPreferences(main_window, qtbot):
 
 
 def testVideoParser(testData, qtbot):
-    parser = VideoParser()
+    parser = VideoParser('Dark')
     parser.show()
     assert parser is not None
     parser.videoSelectLine.setText(testData['Video_Path'])

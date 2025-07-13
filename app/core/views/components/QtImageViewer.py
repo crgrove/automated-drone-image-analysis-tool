@@ -318,37 +318,40 @@ class QtImageViewer(QGraphicsView):
             return super().wheelEvent(ev)
 
         zoom_in = ev.angleDelta().y() > 0
-        cursor_pos = ev.pos()
-        scene_pos = self.mapToScene(cursor_pos)
+        cursor_scene_pos = self.mapToScene(ev.pos())
+        factor = self.wheelZoomFactor if zoom_in else 1 / self.wheelZoomFactor
 
-        # Adjust zoom rect based on cursor position
-        if zoom_in:
-            factor = self.wheelZoomFactor
-        else:
-            factor = 1 / self.wheelZoomFactor
-
+        # Initialize zoom stack if empty
         if not self.zoomStack:
             self.zoomStack.append(self.sceneRect())
-        elif len(self.zoomStack) > 1:
-            self.zoomStack[:] = self.zoomStack[-1:]
 
-        zr = self.zoomStack[-1]
-        cursor_ratio_x = (scene_pos.x() - zr.left()) / zr.width()
-        cursor_ratio_y = (scene_pos.y() - zr.top()) / zr.height()
+        current_zr = self.zoomStack[-1]
 
-        new_width = zr.width() / factor
-        new_height = zr.height() / factor
+        # Compute new zoom rect centered around cursor position
+        cursor_ratio_x = (cursor_scene_pos.x() - current_zr.left()) / current_zr.width()
+        cursor_ratio_y = (cursor_scene_pos.y() - current_zr.top()) / current_zr.height()
 
-        new_left = scene_pos.x() - cursor_ratio_x * new_width
-        new_top = scene_pos.y() - cursor_ratio_y * new_height
+        new_width = current_zr.width() / factor
+        new_height = current_zr.height() / factor
+
+        new_left = cursor_scene_pos.x() - cursor_ratio_x * new_width
+        new_top = cursor_scene_pos.y() - cursor_ratio_y * new_height
 
         new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(self.sceneRect())
 
-        if not new_zr.isValid() or new_zr == self.sceneRect():
-            self.zoomStack.clear()
-            self.fitInView(self.sceneRect(), self.aspectRatioMode)
-        else:
+        # Prevent zooming out beyond original view
+        min_zoom_rect = self.sceneRect()
+        if not zoom_in and (new_zr == min_zoom_rect or new_zr.contains(min_zoom_rect)):
+            self.resetZoom()
+            ev.accept()
+            return
+
+        # Apply zoom
+        if new_zr.isValid() and new_zr != min_zoom_rect:
             self.zoomStack[-1] = new_zr
+        else:
+            self.zoomStack.clear()
+            self.resetZoom()
 
         self.updateViewer()
         self.viewChanged.emit()

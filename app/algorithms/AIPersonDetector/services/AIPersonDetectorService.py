@@ -17,7 +17,7 @@ MODEL_IMG_SIZE = 640
 class AIPersonDetectorService(AlgorithmService):
     """
     Service class for detecting people in images using an ONNX object detection model.
-    Processes large images using a sliding window approach, aggregates detections, 
+    Processes large images using a sliding window approach, aggregates detections,
     and identifies areas of interest.
 
     Args:
@@ -47,10 +47,10 @@ class AIPersonDetectorService(AlgorithmService):
 
         if getattr(sys, 'frozen', False):
             # Frozen (PyInstaller)
-            self.model_path = os.path.join(sys._MEIPASS, 'ai_models' / 'model_s.onnx')
+            self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model.onnx')
         else:
             # Not frozen (dev)
-            self.model_path = path.abspath(path.join(path.dirname(__file__), 'model_s.onnx'))
+            self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model.onnx'))
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -67,7 +67,7 @@ class AIPersonDetectorService(AlgorithmService):
         """
         session = self._create_onnx_session()
         input_name = session.get_inputs()[0].name
-        
+
         try:
             img_pre_processed = self._preprocess_whole_image(img)
             h, w = img.shape[:2]

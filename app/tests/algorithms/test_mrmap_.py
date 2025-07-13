@@ -6,7 +6,7 @@ def testMrMapE2E(main_window, testData, qtbot):
     main_window.outputFolderLine.setText(testData['RGB_Output'])
     main_window.minAreaSpinBox.setValue(200)
     assert main_window.algorithmWidget is not None
-    main_window.algorithmComboBox.setCurrentText('MRMap')
+    main_window.algorithmComboBox.setCurrentText('MRMap Algorithm')
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget

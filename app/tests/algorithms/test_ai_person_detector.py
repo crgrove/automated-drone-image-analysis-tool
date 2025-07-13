@@ -10,7 +10,9 @@ def testAIPersonDetectorE2E(main_window, testData, qtbot):
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget
-    algorithmWidget.confidenceSlider.setValue(60)
+    algorithmWidget.confidenceSlider.setValue(40)
+    main_window.minAreaSpinBox.setValue(100)
+    main_window.maxAreaSpinBox.setValue(0)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
@@ -18,7 +20,7 @@ def testAIPersonDetectorE2E(main_window, testData, qtbot):
     assert not main_window.startButton.isEnabled()
     assert main_window.cancelButton.isEnabled()
     assert not main_window.startButton.isEnabled()
-    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=60000)
+    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert main_window.viewResultsButton.isEnabled()

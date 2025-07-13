@@ -17,7 +17,7 @@ if platform.system() == 'Windows':
                     ('app/algorithms.conf','.'),
                     ('app/drones.pkl', '.'),
                     ('app/xmp.pkl', '.'),
-                    ('app/algorithms/AIPersonDetector/services/model_s.onnx', 'ai_models')
+                    ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
                     ],
 
                 hiddenimports=[],
@@ -36,7 +36,7 @@ elif platform.system() == 'Darwin':
                         ('app/algorithms.conf','.'),
                         ('app/drones.pkl', '.'),
                         ('app/xmp.pkl', '.'),
-                        ('app/algorithms/AIPersonDetector/services/model_s.onnx', 'ai_models')
+                        ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
                         ],
                     hiddenimports=[],
                     hookspath=None,

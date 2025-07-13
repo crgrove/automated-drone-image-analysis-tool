@@ -97,8 +97,8 @@ class AnalyzeService(QObject):
                 kmeans_clusters=self.kmeans_clusters,
                 options=self.options
             )
-            image_files = []
 
+            image_files = []
 
             start_time = time.time()
             for subdir, dirs, files in os.walk(self.input):
@@ -195,23 +195,22 @@ class AnalyzeService(QObject):
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         # img = cv2.resize(img, (4000, 3000))
-
-        if not thermal:
-            # Apply histogram normalization if a reference image is provided
-            histogram_service = None
-            if hist_ref_path is not None:
-                histogram_service = HistogramNormalizationService(hist_ref_path)
-                img = histogram_service.match_histograms(img)
-
-            # Apply k-means clustering if specified
-            kmeans_service = None
-            if kmeans_clusters is not None:
-                kmeans_service = KMeansClustersService(kmeans_clusters)
-                img = kmeans_service.generate_clusters(img)
-
-        # Instantiate the algorithm class and process the image
-        cls = globals()[algorithm['service']]
         try:
+            if not thermal:
+                # Apply histogram normalization if a reference image is provided
+                histogram_service = None
+                if hist_ref_path is not None:
+                    histogram_service = HistogramNormalizationService(hist_ref_path)
+                    img = histogram_service.match_histograms(img)
+
+                # Apply k-means clustering if specified
+                kmeans_service = None
+                if kmeans_clusters is not None:
+                    kmeans_service = KMeansClustersService(kmeans_clusters)
+                    img = kmeans_service.generate_clusters(img)
+
+            # Instantiate the algorithm class and process the image
+            cls = globals()[algorithm['service']]
             instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
             return instance.process_image(img, full_path, input_dir, output_dir)
         except Exception as e:
@@ -242,7 +241,7 @@ class AnalyzeService(QObject):
                 self.max_aois_limit_exceeded = True
         else:
             self.sig_msg.emit('No areas of interest identified in ' + file_name)
-        
+
         self._completed_images += 1
         percent_complete = int(100 * self._completed_images / self.ttl_images)
         if percent_complete >= self._last_progress_percent + 10:

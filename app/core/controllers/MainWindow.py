@@ -520,20 +520,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.settings_service.set_setting('Theme', 'Dark')
             theme = 'Dark'
         self.update_theme(theme)
-
         try:
             current_version = self.settings_service.get_setting('app_version')
             if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
                 self.settings_service.set_setting('app_version', version)
                 PickleHelper.copy_pickle('drones.pkl')
-                PickleHelper.copy_pickle('xmp.pkl')
             else:
                 current_version_int = PickleHelper.version_to_int(current_version)
                 new_version_int = PickleHelper.version_to_int(version)
                 if new_version_int > current_version_int:
                     self.settings_service.set_setting('app_version', version)
                     PickleHelper.copy_pickle('drones.pkl')
-                    PickleHelper.copy_pickle('xmp.pkl')
+            if PickleHelper.get_xmp_mapping() is None:
+                PickleHelper.copy_pickle('xmp.pkl')
         except Exception as e:
             self.logger.error(e)
 

@@ -68,7 +68,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         """
         if 'person_detector_confidence' in options:
             self.confidenceValueLabel.setText(str(options['person_detector_confidence']))
-            self.confidenceSlider.setProperty("value", int(options['person_detector_confidence']))
+            self.confidenceSlider.setProperty("value", int(float(options['person_detector_confidence'])))
 
     def _update_gpu_label(self):
         """
@@ -151,7 +151,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
             # Parse version from output
             match = re.search(r"release (\d+)\.(\d+)", output)
             if match:
-                major, minor = int(match.group(1)), int(match.group(2))
+                major, _ = int(match.group(1)), int(match.group(2))
                 results["cuda_version_sufficient"] = major >= 12
         except Exception:
             results["cuda_installed"] = False
@@ -186,4 +186,3 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
             and results["ort_cuda_provider_available"]
         )
         return results
-
