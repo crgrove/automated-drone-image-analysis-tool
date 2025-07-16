@@ -7,7 +7,7 @@ from core.controllers.MainWindow import MainWindow
 import qdarktheme
 from os import path
 
-version = '1.5.0'
+version = '1.6.0'
 
 
 def main():
@@ -22,7 +22,6 @@ def main():
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
     mw = MainWindow(qdarktheme, version)
     mw.show()
-
     sys.exit(app.exec_())
 
 

@@ -6,6 +6,8 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot):
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
     assert main_window.algorithmWidget is not None
     main_window.algorithmComboBox.setCurrentText('Temperature Anomaly')
+    main_window.minAreaSpinBox.setValue(10)
+    main_window.maxAreaSpinBox.setValue(0)
     assert main_window.algorithmWidget is not None
     assert not main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget
@@ -29,7 +31,7 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -37,7 +39,7 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0
@@ -45,7 +47,7 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot):
     assert viewer.fileNameLabel.text() is not None
     assert viewer.images is not None
     assert len(viewer.images) != 0
-    assert viewer.mainImage is not None
+    assert viewer.main_image is not None
     assert viewer.aoiListWidget is not None
     assert len(viewer.aoiListWidget) != 0
     assert len(viewer.aoiListWidget) != 0

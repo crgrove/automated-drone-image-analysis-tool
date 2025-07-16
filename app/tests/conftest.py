@@ -33,7 +33,7 @@ def app():
 
 @pytest.fixture(scope='function')
 def main_window(qtbot):
-    version = "TEST"
+    version = "Version 1.6"
     qdarktheme.setup_theme()
     mw = MainWindow(qdarktheme, version)
     mw.show()

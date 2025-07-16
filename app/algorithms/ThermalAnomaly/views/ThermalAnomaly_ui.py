@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\automated-drone-image-analysis-tool\resources/views/algorithms/ThermalAnomaly.ui'
+# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views/algorithms/ThermalAnomaly.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #

@@ -1,22 +1,68 @@
 <RCC>
   <qresource prefix="/">
-    <file>ADIAT_Full.png</file>
-    <file>icons/loading.gif</file>
-    <file>icons/map.png</file>
-    <file>icons/zoom_in.png</file>
-    <file>icons/pdf.png</file>
-    <file>icons/zip.png</file>
-    <file>icons/zoom_out.png</file>
-    <file>icons/download.png</file>
-    <file>icons/next.png</file>
-    <file>icons/previous.png</file>
-    <file>icons/folder.png</file>
-    <file>icons/cancel.png</file>
-    <file>icons/start.png</file>
-    <file>icons/image.png</file>
-    <file>icons/search.png</file>
-    <file>style.qss</file>
-    <file>fonts/Roboto-Regular.ttf</file>
-    <file>icons/ADIAT.ico</file>
+    <file alias="ADIAT_Full.png">ADIAT_Full.png</file>
+    <file alias="style.qss">style.qss</file>
+    <file alias="Roboto-Regular.ttf">fonts/Roboto-Regular.ttf</file>
+    <file alias="ADIAT.ico">icons/ADIAT.ico</file>
+  </qresource>
+
+  <qresource prefix="/icons">
+    <file alias="cancel.png">icons/dark_theme/cancel.png</file>
+    <file alias="color.png">icons/dark_theme/color.png</file>
+    <file alias="download.png">icons/dark_theme/download.png</file>
+    <file alias="eye.png">icons/dark_theme/eye.png</file>
+    <file alias="folder.png">icons/dark_theme/folder.png</file>
+    <file alias="image.png">icons/dark_theme/image.png</file>
+    <file alias="loading.gif">icons/dark_theme/loading.gif</file>
+    <file alias="map.png">icons/dark_theme/map.png</file>
+    <file alias="next.png">icons/dark_theme/next.png</file>
+    <file alias="north.png">icons/dark_theme/north.png</file>
+    <file alias="pdf.png">icons/dark_theme/pdf.png</file>
+    <file alias="previous.png">icons/dark_theme/previous.png</file>
+    <file alias="search.png">icons/dark_theme/search.png</file>
+    <file alias="start.png">icons/dark_theme/start.png</file>
+    <file alias="zip.png">icons/dark_theme/zip.png</file>
+    <file alias="zoom_in.png">icons/dark_theme/zoom_in.png</file>
+    <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
+  </qresource>
+  
+  <qresource prefix="/icons/dark">
+    <file alias="cancel.png">icons/dark_theme/cancel.png</file>
+    <file alias="color.png">icons/dark_theme/color.png</file>
+    <file alias="download.png">icons/dark_theme/download.png</file>
+    <file alias="eye.png">icons/dark_theme/eye.png</file>
+    <file alias="folder.png">icons/dark_theme/folder.png</file>
+    <file alias="image.png">icons/dark_theme/image.png</file>
+    <file alias="loading.gif">icons/dark_theme/loading.gif</file>
+    <file alias="map.png">icons/dark_theme/map.png</file>
+    <file alias="next.png">icons/dark_theme/next.png</file>
+    <file alias="north.png">icons/dark_theme/north.png</file>
+    <file alias="pdf.png">icons/dark_theme/pdf.png</file>
+    <file alias="previous.png">icons/dark_theme/previous.png</file>
+    <file alias="search.png">icons/dark_theme/search.png</file>
+    <file alias="start.png">icons/dark_theme/start.png</file>
+    <file alias="zip.png">icons/dark_theme/zip.png</file>
+    <file alias="zoom_in.png">icons/dark_theme/zoom_in.png</file>
+    <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
+  </qresource>
+
+  <qresource prefix="/icons/light">
+    <file alias="cancel.png">icons/light_theme/cancel.png</file>
+    <file alias="color.png">icons/light_theme/color.png</file>
+    <file alias="download.png">icons/light_theme/download.png</file>
+    <file alias="eye.png">icons/light_theme/eye.png</file>
+    <file alias="folder.png">icons/light_theme/folder.png</file>
+    <file alias="image.png">icons/light_theme/image.png</file>
+    <file alias="loading.gif">icons/light_theme/loading.gif</file>
+    <file alias="map.png">icons/light_theme/map.png</file>
+    <file alias="next.png">icons/light_theme/next.png</file>
+    <file alias="north.png">icons/light_theme/north.png</file>
+    <file alias="pdf.png">icons/light_theme/pdf.png</file>
+    <file alias="previous.png">icons/light_theme/previous.png</file>
+    <file alias="search.png">icons/light_theme/search.png</file>
+    <file alias="start.png">icons/light_theme/start.png</file>
+    <file alias="zip.png">icons/light_theme/zip.png</file>
+    <file alias="zoom_in.png">icons/light_theme/zoom_in.png</file>
+    <file alias="zoom_out.png">icons/light_theme/zoom_out.png</file>
   </qresource>
 </RCC>

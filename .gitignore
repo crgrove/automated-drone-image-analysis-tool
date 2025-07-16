@@ -18,3 +18,4 @@ Pipfile.lock
 app/tests/data/
 package-lock.json
 .venv/
+.vscode/

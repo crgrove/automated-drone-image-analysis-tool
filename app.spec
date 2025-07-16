@@ -1,5 +1,4 @@
 import platform
-
 # -*- mode: python -*-
 
 block_cipher = None
@@ -7,8 +6,20 @@ block_cipher = None
 if platform.system() == 'Windows':
     a = Analysis(['app/__main__.py'],
                 pathex=['app'],
-                binaries=[('LICENSE','.'), ('app/external/exiftool.exe','external'),('app/external/dji_thermal_sdk_v1.7_20241205','external/dji_thermal_sdk_v1.7_20241205'), ('app/external/autel', 'external/autel')],
-                datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
+                binaries=[
+                    ('LICENSE','.'),
+                    ('app/external/exiftool.exe','external'),
+                    ('app/external/dji_thermal_sdk_v1.7_20241205','external/dji_thermal_sdk_v1.7_20241205'),
+                    ('app/external/autel', 'external/autel')
+                ],
+                datas=[
+                    ('resources/icons/ADIAT.ico','.'),
+                    ('app/algorithms.conf','.'),
+                    ('app/drones.pkl', '.'),
+                    ('app/xmp.pkl', '.'),
+                    ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
+                    ],
+
                 hiddenimports=[],
                 hookspath=None,
                 runtime_hooks=None,
@@ -17,8 +28,16 @@ if platform.system() == 'Windows':
 elif platform.system() == 'Darwin':
     a = Analysis(['app/__main__.py'],
                     pathex=['app'],
-                    binaries=[('LICENSE','.')],
-                    datas=[('resources/icons/ADIAT.ico','.'),('app/algorithms.conf','.')],
+                    binaries=[
+                        ('LICENSE','.')
+                    ],
+                    datas=[
+                        ('resources/icons/ADIAT.ico','.'),
+                        ('app/algorithms.conf','.'),
+                        ('app/drones.pkl', '.'),
+                        ('app/xmp.pkl', '.'),
+                        ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
+                        ],
                     hiddenimports=[],
                     hookspath=None,
                     runtime_hooks=None,

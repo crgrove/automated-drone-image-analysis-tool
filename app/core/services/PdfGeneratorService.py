@@ -19,6 +19,8 @@ import re
 from helpers.LocationInfo import LocationInfo
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
+from core.services.ImageService import ImageService
+from helpers.MetaDataHelper import MetaDataHelper
 
 import traceback
 
@@ -59,16 +61,20 @@ class PDFDocTemplate(BaseDocTemplate):
         """
         if flowable.__class__.__name__ == 'Paragraph':
             text = flowable.getPlainText()
-            label = re.sub(r'\(.*?\)', '', text)
+            # Use the original text for display, preserving parens
+            label = text
             style = flowable.style.name
 
+            # Sanitize the key to use only alphanumerics, underscore and hyphen.
+            # This will remove parentheses and other punctuation that may break ReportLab's parser.
+            sanitized_key = re.sub(r"[^\w\-]", "", text).strip()
+
             if style == 'Heading2':
-                key = f'h2-{text}'
+                key = f"h2-{sanitized_key}"
                 self.canv.bookmarkPage(key)
                 self.notify('TOCEntry', (0, label, self.page, key))
             elif style == 'Heading3':
-                # Include image names in TOC, exclude GPS data
-                key = f'h3-{text}'
+                key = f"h3-{sanitized_key}"
                 self.canv.bookmarkPage(key)
                 self.notify('TOCEntry', (1, label, self.page, key))
 
@@ -185,7 +191,7 @@ class PdfGeneratorService:
         Add the algorithm settings section to the report.
         """
         self.story.append(Paragraph("Algorithm Settings", self.h2))
-        settings, algorithm = self.viewer.xmlService.get_settings()
+        settings, algorithm = self.viewer.xml_service.get_settings()
         # self.story.append(Paragraph(f"Algorithm: {algorithm}", self.styles['Normal']))
 
         # Process settings with color squares
@@ -221,15 +227,21 @@ class PdfGeneratorService:
         visible_images = [img for img in self.viewer.images if not img.get('hidden', False)]
         self.story.append(Paragraph(f"Images ({len(visible_images)})", self.h2))
         for img in visible_images:
+            image_service = ImageService(img['path'])
             if img.get('hidden', True):
                 continue
 
-            gps_coords = LocationInfo.get_gps(img['path'])
+            gps_coords = LocationInfo.get_gps(full_path=img['path'])
+            info = {}
             if gps_coords:
-                position = self.viewer.get_position(gps_coords['latitude'], gps_coords['longitude'])
-                self.story.append(Paragraph(f"{img['name']} (Location: {position})", self.h3))
-            else:
-                self.story.append(Paragraph(f"{img['name']}", self.h3))
+                position = image_service.get_position(self.viewer.position_format)
+                info['Location'] = position
+            info['AGL'] = f"{image_service.get_relative_altitude(self.viewer.distance_unit)}{self.viewer.distance_unit}"
+            info['Drone Orientation'] = f"{image_service.get_drone_orientation()}°"
+            info['Estimated Average GSD'] = f"{image_service.get_average_gsd()}cm/px"
+            info_str = " | ".join(f"{key}: {value}" for key, value in info.items())
+            self.story.append(Paragraph(img['name'], self.h3))
+            self.story.append(Paragraph(info_str))
 
             self.story.append(Spacer(1, 5))
             self._add_full_image(img)

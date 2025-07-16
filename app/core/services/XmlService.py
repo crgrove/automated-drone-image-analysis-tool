@@ -43,14 +43,13 @@ class XmlService:
             def safe_eval(value, default=(0, 0, 0)):
                 """Helper function to safely evaluate a tuple, handling 'None' values."""
                 return literal_eval(value) if value and value != "None" else default
-
             settings['output_dir'] = settings_xml.get('output_dir', "")
             settings['input_dir'] = settings_xml.get('input_dir', "")
             settings['num_processes'] = safe_int(settings_xml.get('num_processes'), 1)
             settings['identifier_color'] = safe_eval(settings_xml.get('identifier_color'), (0, 0, 0))
-            settings['min_area'] = safe_int(settings_xml.get('min_area'), 0)
-            settings['max_area'] = safe_int(settings_xml.get('max_area'), 100)
-            settings['hist_ref_path'] = settings_xml.get('hist_ref_path', None) if settings_xml.get('hist_ref_path') != "None" else None
+            settings['min_area'] = safe_int(settings_xml.get('min_area'), 10)
+            settings['max_area'] = safe_int(settings_xml.get('max_area'), 0)
+            settings['hist_ref_path'] = settings_xml.get('hist_ref_path', "") if settings_xml.get('hist_ref_path') != "None" else ""
             settings['kmeans_clusters'] = safe_int(settings_xml.get('kmeans_clusters'), 0)
             settings['algorithm'] = settings_xml.get('algorithm', "default")
             settings['thermal'] = settings_xml.get('thermal', "False")
@@ -120,6 +119,7 @@ class XmlService:
                 settings_xml = ET.SubElement(root, "settings")
 
             for key, value in kwargs.items():
+
                 if key == "options":
                     options_xml = settings_xml.find("options")
                     if options_xml is None:
@@ -127,9 +127,10 @@ class XmlService:
                     for option_key, option_value in value.items():
                         option_xml = ET.SubElement(options_xml, "option")
                         option_xml.set("name", option_key)
-                        option_xml.set("value", str(option_value))
+                        option_xml.set("value", str(option_value) if option_value else "")
                 else:
-                    settings_xml.set(key, str(value))
+                    val = str(value) if value else ""
+                    settings_xml.set(key, val)
         except Exception as e:
             self.logger.error(e)
 

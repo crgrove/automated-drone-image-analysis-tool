@@ -71,13 +71,17 @@ class AlgorithmService:
             temp_mask = np.zeros(img.shape[:2], dtype=np.uint8)
             base_contour_count = 0
             for cnt in contours:
-                area = cv2.contourArea(cnt)
+                # Compute pixel-based area
+                mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+                area = cv2.countNonZero(mask)
+
                 if area >= self.min_area and (self.max_area == 0 or area <= self.max_area):
                     (x, y), radius = cv2.minEnclosingCircle(cnt)
                     center = (int(x), int(y))
                     radius = int(radius) + self.aoi_radius
                     found = True
-                    cv2.circle(temp_mask, center, radius, (255), -1)
+                    cv2.circle(temp_mask, center, radius, 255, -1)
                     base_contour_count += 1
                     if not self.combine_aois:
                         item = {'center': center, 'radius': radius, 'area': area}
@@ -92,17 +96,20 @@ class AlgorithmService:
                 while True:
                     new_contours, hierarchy = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
                     for cnt in new_contours:
-                        area = cv2.contourArea(cnt)
                         (x, y), radius = cv2.minEnclosingCircle(cnt)
                         center = (int(x), int(y))
                         radius = int(radius)
-                        cv2.circle(temp_mask, center, radius, (255), -1)
+                        cv2.circle(temp_mask, center, radius, 255, -1)
                     if len(new_contours) == len(contours):
                         contours = new_contours
                         break
                     contours = new_contours
                 for cnt in contours:
-                    area = cv2.contourArea(cnt)
+                    # Compute pixel-based area
+                    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                    cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+                    area = cv2.countNonZero(mask)
+
                     (x, y), radius = cv2.minEnclosingCircle(cnt)
                     center = (int(x), int(y))
                     radius = int(radius)
@@ -112,6 +119,7 @@ class AlgorithmService:
                         img, center, radius,
                         (self.identifier_color[2], self.identifier_color[1], self.identifier_color[0]), 2
                     )
+
             areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
             return image_copy, areas_of_interest, base_contour_count
         else:
@@ -224,16 +232,15 @@ class AlgorithmService:
 class AlgorithmController:
     """Base class for algorithm controllers that manages algorithm options and validation."""
 
-    def __init__(self, name, thermal=False):
+    def __init__(self, config):
         """
         Initializes the AlgorithmController with the given name and thermal flag.
 
         Args:
-            name (str): Name of the algorithm.
-            thermal (bool, optional): Indicates if the algorithm is for thermal images. Defaults to False.
+            config (dict): Algorithm config information.
         """
-        self.name = name
-        self.is_thermal = thermal
+        self.name = config['name']
+        self.is_thermal = (config['type'] == 'Thermal')
 
     def get_options(self):
         """

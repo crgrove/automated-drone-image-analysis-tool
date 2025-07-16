@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\automated-drone-image-analysis-tool\resources/views/components\Preferences.ui'
+# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views/components\Preferences.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Preferences(object):
     def setupUi(self, Preferences):
         Preferences.setObjectName("Preferences")
-        Preferences.resize(416, 300)
+        Preferences.resize(416, 382)
         self.verticalLayout = QtWidgets.QVBoxLayout(Preferences)
         self.verticalLayout.setObjectName("verticalLayout")
         self.mainWidget = QtWidgets.QWidget(Preferences)
@@ -156,6 +156,33 @@ class Ui_Preferences(object):
         self.distanceComboBox.addItem("")
         self.horizontalLayout_7.addWidget(self.distanceComboBox)
         self.verticalLayout_2.addWidget(self.distanceWidget)
+        self.droneSensorLabelsWidget = QtWidgets.QHBoxLayout()
+        self.droneSensorLabelsWidget.setContentsMargins(9, 9, 9, 9)
+        self.droneSensorLabelsWidget.setObjectName("droneSensorLabelsWidget")
+        self.droneSensorLabel = QtWidgets.QLabel(self.mainWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.droneSensorLabel.setFont(font)
+        self.droneSensorLabel.setObjectName("droneSensorLabel")
+        self.droneSensorLabelsWidget.addWidget(self.droneSensorLabel)
+        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.droneSensorLabelsWidget.addItem(spacerItem)
+        self.dronSensorVersionLabel = QtWidgets.QLabel(self.mainWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.dronSensorVersionLabel.setFont(font)
+        self.dronSensorVersionLabel.setObjectName("dronSensorVersionLabel")
+        self.droneSensorLabelsWidget.addWidget(self.dronSensorVersionLabel)
+        spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        self.droneSensorLabelsWidget.addItem(spacerItem1)
+        self.droneSensorButton = QtWidgets.QPushButton(self.mainWidget)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.droneSensorButton.setFont(font)
+        self.droneSensorButton.setAutoDefault(False)
+        self.droneSensorButton.setObjectName("droneSensorButton")
+        self.droneSensorLabelsWidget.addWidget(self.droneSensorButton)
+        self.verticalLayout_2.addLayout(self.droneSensorLabelsWidget)
         self.verticalLayout.addWidget(self.mainWidget, 0, QtCore.Qt.AlignTop)
         self.buttonBox = QtWidgets.QDialogButtonBox(Preferences)
         font = QtGui.QFont()
@@ -167,8 +194,8 @@ class Ui_Preferences(object):
         self.verticalLayout.addWidget(self.buttonBox)
 
         self.retranslateUi(Preferences)
-        self.buttonBox.accepted.connect(Preferences.accept) # type: ignore
         self.buttonBox.rejected.connect(Preferences.reject) # type: ignore
+        self.buttonBox.accepted.connect(Preferences.accept) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(Preferences)
 
     def retranslateUi(self, Preferences):
@@ -189,3 +216,6 @@ class Ui_Preferences(object):
         self.distanceLabel.setText(_translate("Preferences", "Distance Unit:"))
         self.distanceComboBox.setItemText(0, _translate("Preferences", "Meters"))
         self.distanceComboBox.setItemText(1, _translate("Preferences", "Feet"))
+        self.droneSensorLabel.setText(_translate("Preferences", "Drone Sensor File Version:"))
+        self.dronSensorVersionLabel.setText(_translate("Preferences", "TextLabel"))
+        self.droneSensorButton.setText(_translate("Preferences", "Replace"))

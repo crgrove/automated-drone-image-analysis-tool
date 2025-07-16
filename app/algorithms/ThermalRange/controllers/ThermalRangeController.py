@@ -8,15 +8,18 @@ from PyQt5.QtWidgets import QWidget
 class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
     """Controller for the Thermal Range algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the ThermalRangeController widget and sets up the UI.
 
         If the temperature unit is set to Fahrenheit in the settings, converts
         the temperature ranges to Fahrenheit.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ThermalRange', True)
+        AlgorithmController.__init__(self, config)
         self.settings_service = SettingsService()
         self.setupUi(self)
         if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
