@@ -339,7 +339,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             if position:
                 self.messages['GPS Coordinates'] = position
             if self.is_thermal:
-                self.temperature_data = image_service.get_thermal_data()
+                self.temperature_data = image_service.get_thermal_data(self.temperature_unit)
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
             self.main_image.zoomChanged.connect(self._update_scale_bar)
             self._update_scale_bar(self.main_image.getZoom())

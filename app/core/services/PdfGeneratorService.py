@@ -236,9 +236,9 @@ class PdfGeneratorService:
             if gps_coords:
                 position = image_service.get_position(self.viewer.position_format)
                 info['Location'] = position
-            info['AGL'] = image_service.get_relative_altitude(self.viewer.distance_unit)
-            info['Drone Orientation'] = image_service.get_drone_orientation()
-            info['Estimated Average GSD'] = image_service.get_average_gsd()
+            info['AGL'] = f"{image_service.get_relative_altitude(self.viewer.distance_unit)}{self.viewer.distance_unit}"
+            info['Drone Orientation'] = f"{image_service.get_drone_orientation()}°"
+            info['Estimated Average GSD'] = f"{image_service.get_average_gsd()}cm/px"
             info_str = " | ".join(f"{key}: {value}" for key, value in info.items())
             self.story.append(Paragraph(img['name'], self.h3))
             self.story.append(Paragraph(info_str))

@@ -47,8 +47,8 @@ class XmlService:
             settings['input_dir'] = settings_xml.get('input_dir', "")
             settings['num_processes'] = safe_int(settings_xml.get('num_processes'), 1)
             settings['identifier_color'] = safe_eval(settings_xml.get('identifier_color'), (0, 0, 0))
-            settings['min_area'] = safe_int(settings_xml.get('min_area'), 0)
-            settings['max_area'] = safe_int(settings_xml.get('max_area'), 100)
+            settings['min_area'] = safe_int(settings_xml.get('min_area'), 10)
+            settings['max_area'] = safe_int(settings_xml.get('max_area'), 0)
             settings['hist_ref_path'] = settings_xml.get('hist_ref_path', "") if settings_xml.get('hist_ref_path') != "None" else ""
             settings['kmeans_clusters'] = safe_int(settings_xml.get('kmeans_clusters'), 0)
             settings['algorithm'] = settings_xml.get('algorithm', "default")

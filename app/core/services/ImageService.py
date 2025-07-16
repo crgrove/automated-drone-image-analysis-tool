@@ -141,7 +141,7 @@ class ImageService:
             utm = LocationInfo.convert_degrees_to_utm(gps_coords['latitude'], gps_coords['longitude'])
             return f"{utm['zone_number']}{utm['zone_letter']} {utm['easting']} {utm['northing']}"
 
-    def get_thermal_data(self):
+    def get_thermal_data(self, unit):
         """
         Loads thermal data from the image.
 
@@ -149,7 +149,7 @@ class ImageService:
             np.ndarray: Array of thermal values in Celsius or Fahrenheit.
         """
         data = MetaDataHelper.get_temperature_data(self.path)
-        return (data * 1.8) + 32 if getattr(self, 'temperature_unit', 'C') == 'F' else data
+        return (data * 1.8) + 32 if unit == 'F' else data
 
     def _is_autel(self):
         """
