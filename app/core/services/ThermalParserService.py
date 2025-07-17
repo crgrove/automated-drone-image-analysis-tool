@@ -28,7 +28,7 @@ class ThermalParserService:
         'M3TD',
         'M30T',
         'H30T',
-        'M4T'
+        'M4T',
         'M4TD'
     ]
 
