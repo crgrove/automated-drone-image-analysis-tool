@@ -13,6 +13,7 @@ from qtwidgets import Toggle
 
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
+from core.controllers.ImageAdjustmentDialog import ImageAdjustmentDialog
 
 from core.services.LoggerService import LoggerService
 from core.services.KMLGeneratorService import KMLGeneratorService
@@ -125,7 +126,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
 
     def keyPressEvent(self, e):
-        """Handles key press events for navigation and hiding images.
+        """Handles key press events for navigation, hiding images, and adjustments.
 
         Args:
             e (QKeyEvent): Key event containing the key pressed.
@@ -138,6 +139,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._hide_image_change(True)
         if e.key() == Qt.Key_Up or e.key() == Qt.Key_U:
             self._hide_image_change(False)
+        if e.key() == Qt.Key_H and e.modifiers() == Qt.ControlModifier:
+            self._open_image_adjustment_dialog()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -517,6 +520,46 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self._hud.show()
             else:
                 self._hud.hide()
+
+    def _open_image_adjustment_dialog(self):
+        """Opens the image adjustment dialog for the current image."""
+        if self.main_image is None:
+            return
+        
+        # Get current pixmap from the image viewer
+        current_pixmap = self.main_image.pixmap()
+        if current_pixmap is None:
+            return
+        
+        # Store original pixmap for restoration if cancelled
+        self._original_pixmap = current_pixmap
+        
+        # Create and show the adjustment dialog
+        dialog = ImageAdjustmentDialog(self, current_pixmap)
+        
+        # Connect the real-time adjustment signal
+        dialog.imageAdjusted.connect(self._on_image_adjusted)
+        
+        # Show dialog
+        result = dialog.exec_()
+        
+        # If user clicked Apply or OK, keep the adjustments
+        if result == QDialog.Accepted:
+            adjusted_pixmap = dialog.get_adjusted_pixmap()
+            if adjusted_pixmap:
+                self.main_image.setImage(adjusted_pixmap)
+        # If user clicked Close/Cancel, restore original image
+        else:
+            self.main_image.setImage(self._original_pixmap)
+
+    def _on_image_adjusted(self, adjusted_pixmap):
+        """Handle real-time image adjustments from the dialog.
+        
+        Args:
+            adjusted_pixmap (QPixmap): The adjusted image pixmap.
+        """
+        if self.main_image and adjusted_pixmap:
+            self.main_image.setImage(adjusted_pixmap)
 
     def _skip_hidden_clicked(self, state):
         """Updates visibility setting for hidden images based on skipHidden checkbox.
