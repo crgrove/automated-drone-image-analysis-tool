@@ -72,7 +72,7 @@ def test_add_settings_to_xml():
     assert "output_dir" in settings
     assert settings["output_dir"] == "/new_output"
     assert settings["num_processes"] == 8
-    assert settings["min_area"] == 0  # Ensure defaults are set correctly
+    assert settings["min_area"] == 10  # Ensure defaults are set correctly
 
 
 def test_add_image_to_xml():

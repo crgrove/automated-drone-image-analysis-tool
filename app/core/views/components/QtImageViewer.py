@@ -321,40 +321,44 @@ class QtImageViewer(QGraphicsView):
         cursor_scene_pos = self.mapToScene(ev.pos())
         factor = self.wheelZoomFactor if zoom_in else 1 / self.wheelZoomFactor
 
-        # Initialize zoom stack if empty
+        # Ensure zoom stack is initialized
         if not self.zoomStack:
             self.zoomStack.append(self.sceneRect())
 
         current_zr = self.zoomStack[-1]
 
-        # Compute new zoom rect centered around cursor position
+        # Safeguard against excessively small zoom rects
+        MIN_ZOOM_RECT_SIZE = 1.0  # Prevent extremely small rectangles
+
         cursor_ratio_x = (cursor_scene_pos.x() - current_zr.left()) / current_zr.width()
         cursor_ratio_y = (cursor_scene_pos.y() - current_zr.top()) / current_zr.height()
 
         new_width = current_zr.width() / factor
         new_height = current_zr.height() / factor
 
+        # Clamp new dimensions to prevent extremely small sizes
+        new_width = max(new_width, MIN_ZOOM_RECT_SIZE)
+        new_height = max(new_height, MIN_ZOOM_RECT_SIZE)
+
         new_left = cursor_scene_pos.x() - cursor_ratio_x * new_width
         new_top = cursor_scene_pos.y() - cursor_ratio_y * new_height
 
         new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(self.sceneRect())
 
-        # Prevent zooming out beyond original view
-        min_zoom_rect = self.sceneRect()
-        if not zoom_in and (new_zr == min_zoom_rect or new_zr.contains(min_zoom_rect)):
+        # Check if zoom-out reaches original view
+        if not zoom_in and (new_zr == self.sceneRect() or new_zr.contains(self.sceneRect())):
             self.resetZoom()
             ev.accept()
             return
 
-        # Apply zoom
-        if new_zr.isValid() and new_zr != min_zoom_rect:
+        # Ensure zoom rect is valid
+        if new_zr.isValid():
             self.zoomStack[-1] = new_zr
+            self.updateViewer()
+            self.viewChanged.emit()
         else:
-            self.zoomStack.clear()
             self.resetZoom()
 
-        self.updateViewer()
-        self.viewChanged.emit()
         ev.accept()
 
     # -------------------------------------------------------------------- #

@@ -8,6 +8,7 @@ import onnxruntime as ort
 from core.services.LoggerService import LoggerService
 from algorithms.Algorithm import AlgorithmService, AnalysisResult
 from helpers.SlidingWindowSlicer import SlidingWindowSlicer
+from helpers.CudaCheck import CudaCheck
 
 SLICE_SIZE = 1280
 OVERLAP = 0.2
@@ -198,10 +199,15 @@ class AIPersonDetectorService(AlgorithmService):
 
         providers_cuda_first = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         providers_cpu_only = ["CPUExecutionProvider"]
-
+        results = CudaCheck.check_onnxruntime_gpu_env()
+        if not results["overall"]:
+            return ort.InferenceSession(
+                    self.model_path,
+                    sess_options=so,
+                    providers=providers_cpu_only
+                )
         # First try CUDA
         try:
-            self.logger.info("Attempting to load ONNX model with CUDAExecutionProvider...")
             return ort.InferenceSession(
                 self.model_path,
                 sess_options=so,
@@ -209,7 +215,6 @@ class AIPersonDetectorService(AlgorithmService):
             )
         except Exception as e:
             self.logger.warning(f"CUDAExecutionProvider failed: {e}")
-            self.logger.info("Falling back to CPUExecutionProvider...")
             try:
                 return ort.InferenceSession(
                     self.model_path,

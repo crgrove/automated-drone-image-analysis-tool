@@ -19,3 +19,4 @@ app/tests/data/
 package-lock.json
 .venv/
 .vscode/
+app/algorithms/AIPersonDetector/services/ai_person_model_bak.onnx

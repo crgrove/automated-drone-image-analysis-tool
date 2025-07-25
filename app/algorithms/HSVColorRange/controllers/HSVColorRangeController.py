@@ -37,12 +37,14 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         Opens a color picker dialog to allow the user to select a color.
         Updates the selected color if a valid color is chosen.
         """
+        
         try:
             if self.selectedColor is not None:
-                self.selectedColor = QColorDialog().getColor(self.selectedColor)
+                color = QColorDialog.getColor(self.selectedColor)
             else:
-                self.selectedColor = QColorDialog().getColor()
-            if self.selectedColor.isValid():
+                color = QColorDialog.getColor()
+            if color.isValid():
+                self.selectedColor = color
                 self.update_colors()
         except Exception as e:
             self.logger.error(e)

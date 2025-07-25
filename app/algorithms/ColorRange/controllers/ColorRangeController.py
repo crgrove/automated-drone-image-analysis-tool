@@ -45,10 +45,11 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         """
         try:
             if self.selectedColor is not None:
-                self.selectedColor = QColorDialog().getColor(self.selectedColor)
+                color = QColorDialog.getColor(self.selectedColor)
             else:
-                self.selectedColor = QColorDialog().getColor()
-            if self.selectedColor.isValid():
+                color = QColorDialog.getColor()
+            if color.isValid():
+                self.selectedColor = color
                 self.update_colors()
         except Exception as e:
             self.logger.error(e)
