@@ -31,12 +31,12 @@ class Ui_ImageAdjustmentDialog(object):
         self.titleLabel.setObjectName("titleLabel")
         self.verticalLayout.addWidget(self.titleLabel)
         
-        # Create adjustment controls
-        self._create_slider_group("Exposure", "exposureSlider", "exposureLabel", "exposureValue", -100, 100, 0)
-        self._create_slider_group("Highlights", "highlightsSlider", "highlightsLabel", "highlightsValue", -100, 100, 0)
-        self._create_slider_group("Shadows", "shadowsSlider", "shadowsLabel", "shadowsValue", -100, 100, 0)
-        self._create_slider_group("Clarity", "claritySlider", "clarityLabel", "clarityValue", -100, 100, 0)
-        self._create_slider_group("Radius", "radiusSlider", "radiusLabel", "radiusValue", 1, 50, 10)
+        # Create adjustment controls with expanded ranges for more pronounced effects
+        self._create_slider_group("Exposure", "exposureSlider", "exposureLabel", "exposureValue", -200, 200, 0)
+        self._create_slider_group("Highlights", "highlightsSlider", "highlightsLabel", "highlightsValue", -200, 200, 0)
+        self._create_slider_group("Shadows", "shadowsSlider", "shadowsLabel", "shadowsValue", -200, 200, 0)
+        self._create_slider_group("Clarity", "claritySlider", "clarityLabel", "clarityValue", -200, 200, 0)
+        self._create_slider_group("Radius", "radiusSlider", "radiusLabel", "radiusValue", 1, 100, 10)
         
         # Spacer
         spacerItem = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)

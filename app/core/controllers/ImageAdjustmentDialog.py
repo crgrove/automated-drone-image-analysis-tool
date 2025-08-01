@@ -7,7 +7,7 @@ with real-time preview similar to Paint.NET functionality.
 
 import numpy as np
 import cv2
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QDialog
 
@@ -38,6 +38,13 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         self.original_pixmap = original_pixmap
         self.original_image = None
         self.adjusted_image = None
+        
+        # Performance optimization: debounce timer for real-time updates
+        self.update_timer = QTimer()
+        self.update_timer.setSingleShot(True)
+        self.update_timer.timeout.connect(self._apply_real_time_adjustments)
+        self.debounce_delay = 150  # milliseconds - set to 0 to disable debouncing
+        self.enable_debouncing = True  # Set to False for immediate updates (lower performance)
         
         # Convert QPixmap to numpy array for processing
         if original_pixmap:
@@ -105,31 +112,40 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         """Handle exposure slider changes."""
         self.adjustments['exposure'] = value
         self.exposureValue.setText(str(value))
-        self._apply_real_time_adjustments()
+        self._schedule_update()
     
     def _on_highlights_changed(self, value):
         """Handle highlights slider changes."""
         self.adjustments['highlights'] = value
         self.highlightsValue.setText(str(value))
-        self._apply_real_time_adjustments()
+        self._schedule_update()
     
     def _on_shadows_changed(self, value):
         """Handle shadows slider changes."""
         self.adjustments['shadows'] = value
         self.shadowsValue.setText(str(value))
-        self._apply_real_time_adjustments()
+        self._schedule_update()
     
     def _on_clarity_changed(self, value):
         """Handle clarity slider changes."""
         self.adjustments['clarity'] = value
         self.clarityValue.setText(str(value))
-        self._apply_real_time_adjustments()
+        self._schedule_update()
     
     def _on_radius_changed(self, value):
         """Handle radius slider changes."""
         self.adjustments['radius'] = value
         self.radiusValue.setText(str(value))
-        self._apply_real_time_adjustments()
+        self._schedule_update()
+    
+    def _schedule_update(self):
+        """Schedule a debounced update to improve performance."""
+        if self.enable_debouncing and self.debounce_delay > 0:
+            self.update_timer.stop()
+            self.update_timer.start(self.debounce_delay)
+        else:
+            # Apply updates immediately if debouncing is disabled
+            self._apply_real_time_adjustments()
     
     def _apply_real_time_adjustments(self):
         """Apply adjustments in real-time and emit signal."""
@@ -139,9 +155,10 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         # Start with original image
         adjusted = self.original_image.astype(np.float32)
         
-        # Apply exposure adjustment (affects entire image)
+        # Apply exposure adjustment (affects entire image) - optimized for expanded range
         if self.adjustments['exposure'] != 0:
-            exposure_factor = 2 ** (self.adjustments['exposure'] / 50.0)
+            # Scale exposure factor calculation for expanded range
+            exposure_factor = 2 ** (self.adjustments['exposure'] / 100.0)
             adjusted = adjusted * exposure_factor
         
         # Apply highlights and shadows adjustments with radius consideration
@@ -164,8 +181,9 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
     def _apply_highlights_shadows(self, image):
         """Apply highlights and shadows adjustments with radius consideration."""
         radius = max(1, int(self.adjustments['radius']))
-        highlights_adj = self.adjustments['highlights'] / 100.0
-        shadows_adj = self.adjustments['shadows'] / 100.0
+        # Scale adjustment factors for expanded range
+        highlights_adj = self.adjustments['highlights'] / 200.0
+        shadows_adj = self.adjustments['shadows'] / 200.0
         
         # Convert to grayscale for luminance mask
         gray = cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_RGB2GRAY)
@@ -198,7 +216,8 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
     
     def _apply_clarity(self, image):
         """Apply clarity adjustment (unsharp mask effect)."""
-        clarity_strength = self.adjustments['clarity'] / 100.0
+        # Scale clarity strength for expanded range
+        clarity_strength = self.adjustments['clarity'] / 200.0
         
         if abs(clarity_strength) < 0.01:
             return image
@@ -226,7 +245,7 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
     
     def _reset_adjustments(self):
         """Reset all adjustments to default values."""
-        # Reset sliders
+        # Reset sliders to default values
         self.exposureSlider.setValue(0)
         self.highlightsSlider.setValue(0)
         self.shadowsSlider.setValue(0)
