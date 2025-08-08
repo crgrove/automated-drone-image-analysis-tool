@@ -901,12 +901,12 @@ class StreamControlWidget(QWidget):
         
         url_layout = QHBoxLayout()
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("rtmp://localhost:8888/live/drone")
-        self.url_input.setText("rtmp://localhost:8888/live/drone")  # Default
+        self.url_input.setPlaceholderText("Click to browse for video file...")
+        self.url_input.setText("")  # Default empty for file selection
         url_layout.addWidget(self.url_input, 1)
         
         self.browse_button = QPushButton("Browse...")
-        self.browse_button.setVisible(False)  # Hidden by default
+        self.browse_button.setVisible(True)  # Visible by default since File is default
         self.browse_button.setToolTip("Browse for video file")
         url_layout.addWidget(self.browse_button)
         
@@ -915,7 +915,7 @@ class StreamControlWidget(QWidget):
         # Stream type
         connection_layout.addWidget(QLabel("Stream Type:"), 1, 0)
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["RTMP", "HLS", "File", "HDMI Capture"])
+        self.type_combo.addItems(["File", "HDMI Capture"])
         connection_layout.addWidget(self.type_combo, 1, 1)
         
         # Connection buttons
@@ -965,14 +965,6 @@ class StreamControlWidget(QWidget):
         if stream_type == "HDMI Capture":
             self.url_input.setPlaceholderText("Device index (0, 1, 2, etc.)")
             self.url_input.setText("0")
-            self.browse_button.setVisible(False)
-        elif stream_type == "RTMP":
-            self.url_input.setPlaceholderText("rtmp://server:port/stream")
-            self.url_input.setText("rtmp://localhost:8888/live/drone")
-            self.browse_button.setVisible(False)
-        elif stream_type == "HLS":
-            self.url_input.setPlaceholderText("http://server/playlist.m3u8")
-            self.url_input.setText("http://example.com/stream/playlist.m3u8")
             self.browse_button.setVisible(False)
         elif stream_type == "File":
             self.url_input.setPlaceholderText("Click to browse for video file...")
