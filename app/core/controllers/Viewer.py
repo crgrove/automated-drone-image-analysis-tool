@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from collections import UserDict, OrderedDict
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect, QTimer
 from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
 from qtwidgets import Toggle
@@ -48,7 +48,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.logger = LoggerService()
         self.setupUi(self)
         self._add_Toggles()
-
         # ---------------- settings / data ----------------
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
@@ -92,12 +91,24 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_thumbnails_in_range(0, self.thumbnail_limit)
 
         # UI tweaks
-        self.showMaximized()
         self.setFocusPolicy(Qt.StrongFocus)
         self.hideImageToggle.setFocusPolicy(Qt.NoFocus)
         self.skipHidden.setFocusPolicy(Qt.NoFocus)
         self.setStyleSheet("QToolTip {background-color: lightblue; color:black; border:1px solid blue;}")
 
+        self.showMaximized()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not hasattr(self, '_initialized_once'):
+            QTimer.singleShot(50, self._initial_fit_image)  # Slightly longer delay
+            self._initialized_once = True
+
+    def _initial_fit_image(self):
+        if self.main_image is not None:
+            self.main_image.resetZoom()
+            self._place_overlay()
+            
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
         for thread, loader in self.__threads:
@@ -150,8 +161,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             image['name'] = path.name
             if path.is_file():
                 try:
-                    with Image.open(image['path']) as img:
-                        img.verify()  # Checks if image is valid
                     valid_images.append(image)
                 except (UnidentifiedImageError, OSError):
                     pass  # Not a valid image
@@ -585,7 +594,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         super().resizeEvent(event)
         if self.main_image is not None:
-            self._load_image()
+            if event.oldSize() != event.size():
+                self.main_image.updateViewer()
+                self._place_overlay()
 
     def _area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.
@@ -872,16 +883,31 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Anchor HUD to bottom‑right corner *of the image*, not viewport."""
         if not hasattr(self, "_hud"):
             return
+
+        self._hud.adjustSize()  # Make sure widget/layout is up to date
+        self._hud.updateGeometry()
         vp = self.main_image.viewport()
+        margin = 12
+
         # bottom‑right of the image (sceneRect) in viewport coords
         br_scene = self.main_image.sceneRect().bottomRight()
         br_view = self.main_image.mapFromScene(br_scene)
-        margin = 12
-        x = br_view.x() - self._hud.width() - margin
-        y = br_view.y() - self._hud.height() - margin
-        # clamp into viewport just in case
-        x = max(margin, min(x, vp.width() - self._hud.width() - margin))
-        y = max(margin, min(y, vp.height() - self._hud.height() - margin))
+
+        hud_w, hud_h = self._hud.width(), self._hud.height()
+        vp_w, vp_h = vp.width(), vp.height()
+
+        # Calculate target position (anchored to image bottom-right)
+        x = br_view.x() - hud_w - margin
+        y = br_view.y() - hud_h - margin
+
+        # Clamp into viewport
+        x = max(margin, min(x, vp_w - hud_w - margin))
+        y = max(margin, min(y, vp_h - hud_h - margin))
+
+        # Fallback if overlay is bigger than viewport
+        if hud_w + 2 * margin > vp_w or hud_h + 2 * margin > vp_h:
+            x, y = margin, margin
+
         self._hud.move(x, y)
         self._hud.raise_()
 

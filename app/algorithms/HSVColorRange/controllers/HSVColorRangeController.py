@@ -62,6 +62,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
 
         Opens the new HSV color range dialog for advanced color selection.
         """
+        
         try:
             # Prepare initial values
             initial_hsv = (0, 1, 1)  # Default red

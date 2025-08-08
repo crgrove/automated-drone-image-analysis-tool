@@ -49,14 +49,15 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             custom_colors_service = get_custom_colors_service()
             
             if self.selectedColor is not None:
-                self.selectedColor = QColorDialog().getColor(self.selectedColor)
+                color = QColorDialog.getColor(self.selectedColor)
             else:
-                self.selectedColor = QColorDialog().getColor()
+                color = QColorDialog.getColor()
             
             # Sync custom colors after dialog closes
             custom_colors_service.sync_with_dialog()
             
-            if self.selectedColor.isValid():
+            if color.isValid():
+                self.selectedColor = color
                 self.update_colors()
         except Exception as e:
             self.logger.error(e)
