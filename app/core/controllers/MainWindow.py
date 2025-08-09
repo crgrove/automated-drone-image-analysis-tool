@@ -1,3 +1,7 @@
+# Set environment variable to avoid numpy._core issues - MUST be first
+import os
+os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
 from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
 import os
@@ -12,6 +16,8 @@ from helpers.PickleHelper import PickleHelper
 from core.controllers.Viewer import Viewer
 from core.controllers.Perferences import Preferences
 from core.controllers.VideoParser import VideoParser
+from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
+from core.controllers.RTMPAnomalyDetectionViewer import RTMPAnomalyDetectionViewer
 
 from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
@@ -70,6 +76,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionLoadFile.triggered.connect(self._open_load_file)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
+        
+        # Add RTMP Color Detection functionality
+        self.rtmp_viewer = None
+        if hasattr(self, 'actionRTMPDetection'):
+            self.actionRTMPDetection.triggered.connect(self._open_rtmp_detection)
+            
+        # Add RTMP Anomaly Detection functionality
+        self.rtmp_anomaly_viewer = None
+        if hasattr(self, 'actionRTMPAnomalyDetection'):
+            self.actionRTMPAnomalyDetection.triggered.connect(self._open_rtmp_anomaly_detection)
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
         self.minAreaSpinBox.valueChanged.connect(self._minAreaSpinBox_change)
@@ -423,6 +439,40 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         parser = VideoParser(self.settings_service.get_setting('Theme'))
         parser.exec_()
+        
+    def _open_rtmp_detection(self):
+        """
+        Opens the Real-Time RTMP Color Detection viewer.
+        """
+        try:
+            if self.rtmp_viewer is None or not self.rtmp_viewer.isVisible():
+                self.rtmp_viewer = RTMPColorDetectionViewer(self)
+                self.rtmp_viewer.show()
+                self.logger.info("RTMP Color Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_viewer.raise_()
+                self.rtmp_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Color Detection viewer:\n{str(e)}")
+
+    def _open_rtmp_anomaly_detection(self):
+        """
+        Opens the Real-Time RTMP Anomaly Detection viewer.
+        """
+        try:
+            if self.rtmp_anomaly_viewer is None or not self.rtmp_anomaly_viewer.isVisible():
+                self.rtmp_anomaly_viewer = RTMPAnomalyDetectionViewer(self)
+                self.rtmp_anomaly_viewer.show()
+                self.logger.info("RTMP Anomaly Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_anomaly_viewer.raise_()
+                self.rtmp_anomaly_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP anomaly viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Anomaly Detection viewer:\n{str(e)}")
 
     def closeEvent(self, event):
         """

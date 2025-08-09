@@ -1,3 +1,7 @@
+# Set environment variable to avoid numpy._core issues - MUST be first
+import os
+os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
 import qimage2ndarray
 from PIL import Image, UnidentifiedImageError
 
