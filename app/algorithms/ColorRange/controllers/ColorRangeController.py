@@ -1,6 +1,6 @@
 from ast import literal_eval
 
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ColorRange.views.ColorRange_ui import Ui_ColorRange
 from algorithms.ColorRange.controllers.ColorRangeRangeViewerController import ColorRangeRangeViewer
 

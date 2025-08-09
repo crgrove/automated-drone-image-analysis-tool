@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import re
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.AIPersonDetector.views.AIPersonDetector_ui import Ui_AIPersonDetector
 from core.services.LoggerService import LoggerService
 from helpers.CudaCheck import CudaCheck
@@ -30,6 +30,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         self.setupUi(self)
         self.confidenceSlider.valueChanged.connect(self.update_confidence)
         self.GPULabel.linkActivated.connect(self.show_gpu_requirements_popup)
+        self.cpu_only = False
         self._update_gpu_label()
 
     def update_confidence(self):
@@ -48,6 +49,7 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         """
         options = dict()
         options['person_detector_confidence'] = float(self.confidenceValueLabel.text())
+        options['cpu_only'] = self.cpu_only
         return options
 
     def validate(self):
@@ -90,10 +92,12 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
             self.GPULabel.setText(
                 f'<span style="color:green;">&#x2714; GPU Available</span> &nbsp; {requirements_link}'
             )
+            self.cpu_only = False
         else:
             self.GPULabel.setText(
                 f'<span style="color:red;">&#x274C; GPU Not Available</span> &nbsp; {requirements_link}'
             )
+            self.cpu_only = True
 
     def show_gpu_requirements_popup(self, link):
         """

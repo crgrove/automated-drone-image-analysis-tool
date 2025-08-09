@@ -1,6 +1,6 @@
 import qimage2ndarray
 from PIL import Image, UnidentifiedImageError
-
+import traceback
 import math
 import numpy as np
 from pathlib import Path
@@ -55,8 +55,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
         self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
-        settings, _ = self.xml_service.get_settings()
-        self.is_thermal = (settings['thermal'] == 'True')
+        self.settings, _ = self.xml_service.get_settings()
+        self.is_thermal = (self.settings['thermal'] == 'True')
         self.position_format = position_format
         self.temperature_data = None
         self.active_thumbnail = None
@@ -324,16 +324,19 @@ class Viewer(QMainWindow, Ui_Viewer):
             image = self.images[self.current_image]
             if 'thumbnail' in image:
                 self._set_active_thumbnail(image['thumbnail'])
-            img = QImage(image['path'])
+            image_service = ImageService(image['path'])
+
+            augmented_image, areas_of_interest = image_service.circle_areas_of_interest(self.settings['identifier_color'], self.settings['aoi_radius'], True)
+            img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
-            self._load_areas_of_interest(image)
+            self._load_areas_of_interest(augmented_image, areas_of_interest)
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
 
-            image_service = ImageService(image['path'])
+
             altitude = image_service.get_relative_altitude(self.distance_unit)
             if altitude:
                 self.messages['Relative Altitude'] = f"{altitude} {self.distance_unit}"
@@ -372,19 +375,19 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self._hud.hide()
             self._place_overlay()
         except Exception as e:
+            print(traceback.format_exc())
             self.logger.error(e)
 
-    def _load_areas_of_interest(self, image):
+    def _load_areas_of_interest(self, augmented_image, areas_of_interest):
         """Loads areas of interest thumbnails for a given image.
 
         Args:
             image (dict): Information about the image to load areas of interest for.
         """
         self.aoiListWidget.clear()
-        img_arr = qimage2ndarray.imread(image['path'])
         count = 0
         self.highlights = []
-        for area_of_interest in image['areas_of_interest']:
+        for area_of_interest in areas_of_interest:
             # Create container widget for thumbnail and label
             container = QWidget()
             layout = QVBoxLayout(container)
@@ -393,7 +396,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             center = area_of_interest['center']
             radius = area_of_interest['radius'] + 10
-            crop_arr = self.crop_image(img_arr, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
+            crop_arr = self.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
 
             # Create the image viewer
             highlight = QtImageViewer(self, container, center, True)

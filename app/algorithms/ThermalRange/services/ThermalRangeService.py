@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 from core.services.ThermalParserService import ThermalParserService
 
@@ -50,15 +50,13 @@ class ThermalRangeService(AlgorithmService):
 
             # Find contours of the identified areas and circle areas of interest.
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(thermal_img, contours)
-
-            # Generate the output path and store the processed image.
+            
+            areas_of_interest = self.identify_areas_of_interest(thermal_img, contours)
             output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image, temperature_c)
+            if areas_of_interest:
+                self.store_image(full_path, output_path, areas_of_interest, temperature_c)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
-
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
         except Exception as e:
             # Log and return an error if processing fails.
             self.logger.error(f"Error processing image {full_path}: {e}")

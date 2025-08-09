@@ -4,7 +4,7 @@ import cv2
 import math
 import traceback
 
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 from collections import deque
 
@@ -62,14 +62,13 @@ class MRMapService(AlgorithmService):
 
             contours = self._getMRMapsContours(pixel_anom)
 
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
-
-            # Generate the output path and store the processed image.
+            areas_of_interest = self.identify_areas_of_interest(img, contours)
             output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            if areas_of_interest:
+                self.store_image(full_path, output_path, areas_of_interest)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
+
 
         except Exception as e:
             # print(traceback.format_exc())

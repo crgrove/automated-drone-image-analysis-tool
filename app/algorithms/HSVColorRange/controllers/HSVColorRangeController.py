@@ -1,6 +1,6 @@
 from ast import literal_eval
 
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.HSVColorRange.views.HSVColorRange_ui import Ui_HSVColorRange
 from algorithms.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
 from algorithms.HSVColorRange.views.color_range_dialog import ColorRangeDialog

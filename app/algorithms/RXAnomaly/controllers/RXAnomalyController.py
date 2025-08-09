@@ -1,4 +1,4 @@
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.RXAnomaly.views.RXAnomaly_ui import Ui_RXAnomaly
 
 from PyQt5.QtWidgets import QWidget
