@@ -1,3 +1,7 @@
+# Set environment variable to avoid numpy._core issues - MUST be first
+import os
+os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
 import sys
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication

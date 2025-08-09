@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QWidget, QColorDialog
 
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
+from core.services.CustomColorsService import get_custom_colors_service
 
 
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
@@ -44,10 +45,17 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         the selected color if a valid color is chosen.
         """
         try:
+            # Ensure custom colors are loaded
+            custom_colors_service = get_custom_colors_service()
+            
             if self.selectedColor is not None:
                 color = QColorDialog.getColor(self.selectedColor)
             else:
                 color = QColorDialog.getColor()
+            
+            # Sync custom colors after dialog closes
+            custom_colors_service.sync_with_dialog()
+            
             if color.isValid():
                 self.selectedColor = color
                 self.update_colors()
