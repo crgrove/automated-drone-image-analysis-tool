@@ -23,7 +23,7 @@ class ImageService:
             path (str): The file path to the image.
         """
         self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
-        self.xmp_data = MetaDataHelper.get_xmp_data(path, True)
+        self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
         img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
@@ -149,13 +149,27 @@ class ImageService:
 
     def get_thermal_data(self, unit):
         """
-        Loads thermal data from the image.
-
-        Returns:
-            np.ndarray: Array of thermal values in Celsius or Fahrenheit.
+        Loads thermal data from XMP. Returns a NumPy array in C or F.
         """
-        data = self.xmp_data.get('TemperatureData', [])
-        return (data * 1.8) + 32 if unit == 'F' else data
+        raw = self.xmp_data.get('TemperatureData', None)
+        if raw is None:
+            return None  # or: return np.empty((0,), dtype=np.float32)
+
+        # If it's a JSON string, decode it
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                # Malformed JSON or unexpected type
+                return None
+
+        # Ensure NumPy array for numeric ops
+        data = np.asarray(raw, dtype=np.float32)
+
+        if unit == 'F':
+            data = data * 1.8 + 32.0
+
+        return data
 
     def _is_autel(self):
         """

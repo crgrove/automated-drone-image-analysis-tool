@@ -233,6 +233,64 @@ class MetaDataHelper:
         }
 
     @staticmethod
+    def get_xmp_data_merged(file_path: str) -> dict:
+        import struct, xml.etree.ElementTree as ET
+        _XMP_STD_HDR = b"http://ns.adobe.com/xap/1.0/\x00"
+        _XMP_EXT_HDR = b"http://ns.adobe.com/xmp/extension/\x00"
+
+        def parse_base(data: bytes):
+            s = data.find(b'<?xpacket begin')
+            if s == -1: return None, {}
+            e = data.find(b'<?xpacket end', s)
+            if e == -1: return None, {}
+            e = data.find(b'>', e) + 1
+            if e <= 0: return None, {}
+            xml = data[s:e].decode('utf-8', 'ignore')
+            d = MetaDataHelper._parse_xmp_xml(xml)
+            return d.get('HasExtendedXMP'), d  # our parser strips ns → key becomes 'HasExtendedXMP'
+
+        def collect_ext(data: bytes, guid: str):
+            if not guid: return None
+            chunks, total = [], None
+            i = 2
+            while i + 4 <= len(data) and data[i] == 0xFF and data[i+1] != 0xDA:
+                marker = data[i:i+2]
+                L = struct.unpack(">H", data[i+2:i+4])[0]
+                seg_end = i + 2 + L
+                if marker == b"\xFF\xE1":
+                    payload = data[i+4:seg_end]
+                    if payload.startswith(_XMP_EXT_HDR):
+                        g = payload[len(_XMP_EXT_HDR):len(_XMP_EXT_HDR)+32].decode('ascii', 'ignore')
+                        if g == guid:
+                            tlen = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+32:len(_XMP_EXT_HDR)+36])[0]
+                            off  = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+36:len(_XMP_EXT_HDR)+40])[0]
+                            chunk = payload[len(_XMP_EXT_HDR)+40:]
+                            total = tlen if total is None else total
+                            chunks.append((off, bytes(chunk)))
+                i = seg_end
+            if not chunks or total is None: return None
+            buf = bytearray(total)
+            for off, ch in sorted(chunks, key=lambda x: x[0]):
+                buf[off:off+len(ch)] = ch
+            return bytes(buf)
+
+        with open(file_path, 'rb') as f:
+            data = f.read()
+
+        guid, base = parse_base(data)
+        if not guid:
+            return base
+        ext_xml = collect_ext(data, guid)
+        if not ext_xml:
+            return base
+        try:
+            ext_dict = MetaDataHelper._parse_xmp_xml(ext_xml.decode('utf-8', 'ignore'))
+        except Exception:
+            ext_dict = {}
+        merged = dict(base); merged.update(ext_dict)
+        return merged
+
+    @staticmethod
     def get_xmp_data(file_path, parse=False):
         """
         Retrieves XMP metadata as raw XML or parsed dict.
