@@ -161,8 +161,14 @@ class RTMPStreamService(QThread):
                 except ValueError:
                     self.logger.error(f"Invalid device index: {self.config.url}")
                     return False
+            elif self.config.stream_type == StreamType.RTMP:
+                # Handle RTMP streams with FFMPEG backend for better compatibility
+                self.logger.info(f"Connecting to RTMP stream: {self.config.url}")
+                self._cap = cv2.VideoCapture(self.config.url, cv2.CAP_FFMPEG)
+                # Set buffer size for low latency
+                self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
             else:
-                # Handle network streams and files
+                # Handle HLS streams and files
                 self._cap = cv2.VideoCapture(self.config.url)
             
             if not self._cap.isOpened():
@@ -241,7 +247,7 @@ class RTMPStreamService(QThread):
         consecutive_errors = 0
         max_consecutive_errors = 5
         
-        while not self._should_stop and self._cap and self._cap.isOpened():
+        while not self._should_stop and self._connected and self._cap and self._cap.isOpened():
             try:
                 current_time = time.time()
                 
@@ -365,6 +371,7 @@ class RTMPStreamService(QThread):
         """Stop the stream processing."""
         self.logger.info("Stopping RTMP stream service")
         self._should_stop = True
+        self._connected = False  # Immediately mark as disconnected to break loops
     
     def play_pause(self):
         """Toggle play/pause state for video files."""
@@ -549,29 +556,51 @@ class StreamManager(QObject):
     def disconnect_stream(self):
         """Disconnect from current stream."""
         if self._service:
+            # Stop the service first
+            self._service.stop()
+            
+            # Immediately quit the thread's event loop
+            self._service.quit()
+            
+            # Give the thread time to finish
+            if not self._service.wait(3000):  # Wait up to 3 seconds
+                self.logger.warning("Stream service didn't stop gracefully, terminating...")
+                self._service.terminate()
+                if not self._service.wait(1000):
+                    self.logger.error("Stream service still running after terminate")
+            
+            # Now disconnect signals after the thread has stopped
             try:
-                # Disconnect signals first to prevent timer issues
-                self._service.frameReady.disconnect()
-                self._service.connectionStatusChanged.disconnect()
-                self._service.streamStatsChanged.disconnect()
-                self._service.videoPositionChanged.disconnect()
-                self._service.errorOccurred.disconnect()
+                # Disconnect signals after stopping to ensure we get final status updates
+                try:
+                    self._service.frameReady.disconnect()
+                except TypeError:
+                    pass  # Already disconnected
+                try:
+                    self._service.connectionStatusChanged.disconnect()
+                except TypeError:
+                    pass
+                try:
+                    self._service.streamStatsChanged.disconnect()
+                except TypeError:
+                    pass
+                try:
+                    self._service.videoPositionChanged.disconnect()
+                except TypeError:
+                    pass
+                try:
+                    self._service.errorOccurred.disconnect()
+                except TypeError:
+                    pass
             except Exception as e:
                 self.logger.debug(f"Error disconnecting signals: {e}")
             
-            # Stop the service
-            self._service.stop()
-            
-            # Give the thread more time to finish naturally
-            if not self._service.wait(5000):  # Wait up to 5 seconds
-                self.logger.warning("Stream service didn't stop gracefully, forcing quit...")
-                self._service.quit()  # Use quit() instead of terminate() for cleaner shutdown
-                if not self._service.wait(2000):  # Wait another 2 seconds
-                    self.logger.error("Stream service still running, terminating...")
-                    self._service.terminate()
-                    self._service.wait(1000)
-            
+            # Delete the service to ensure proper cleanup
+            self._service.deleteLater()
             self._service = None
+            
+        # Always emit disconnection status to ensure UI updates
+        self.connectionChanged.emit(False, "Disconnected")
             
     def is_connected(self) -> bool:
         """Check if currently connected to a stream."""
