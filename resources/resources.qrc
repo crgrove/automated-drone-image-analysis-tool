@@ -19,6 +19,7 @@
     <file alias="north.png">icons/dark_theme/north.png</file>
     <file alias="pdf.png">icons/dark_theme/pdf.png</file>
     <file alias="previous.png">icons/dark_theme/previous.png</file>
+    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="search.png">icons/dark_theme/search.png</file>
     <file alias="start.png">icons/dark_theme/start.png</file>
     <file alias="zip.png">icons/dark_theme/zip.png</file>
@@ -39,6 +40,7 @@
     <file alias="north.png">icons/dark_theme/north.png</file>
     <file alias="pdf.png">icons/dark_theme/pdf.png</file>
     <file alias="previous.png">icons/dark_theme/previous.png</file>
+    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="search.png">icons/dark_theme/search.png</file>
     <file alias="start.png">icons/dark_theme/start.png</file>
     <file alias="zip.png">icons/dark_theme/zip.png</file>
@@ -59,6 +61,7 @@
     <file alias="north.png">icons/light_theme/north.png</file>
     <file alias="pdf.png">icons/light_theme/pdf.png</file>
     <file alias="previous.png">icons/light_theme/previous.png</file>
+    <file alias="ruler.png">icons/light_theme/ruler.png</file>
     <file alias="search.png">icons/light_theme/search.png</file>
     <file alias="start.png">icons/light_theme/start.png</file>
     <file alias="zip.png">icons/light_theme/zip.png</file>
