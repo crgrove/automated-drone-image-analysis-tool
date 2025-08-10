@@ -50,6 +50,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.__threads = []
         self.main_image = None
         self.logger = LoggerService()
+        self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
         self._add_Toggles()
         # ---------------- settings / data ----------------
@@ -77,14 +78,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.visible_thumbnails_range = (0, 0)
 
         # compass asset
-        self.original_north_pix = QPixmap(f":/icons/{theme.lower()}/north.png")
+        self.original_north_pix = QPixmap(f":/icons/{self.theme.lower()}/north.png")
 
         # status‑bar helper
         self.messages = StatusDict(callback=self._message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Drone Orientation", "Estimated Average GSD",
                                               "Temperature"])
-        self._reapply_icons(theme)
+        self._reapply_icons(self.theme)
 
         # scale bar (re‑parented later into HUD overlay)
         self.scaleBar = ScaleBarWidget()
@@ -139,6 +140,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         layout.insertWidget(layout.indexOf(self.showOverlayToggle) + 1, self.showOverlayLabel)
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
+        
+        # Add measure button to toolbar
+        self._add_measure_button(self.theme)
+        
+        # Session variable to store GSD value
+        self.current_gsd = None
+        self.measure_dialog = None
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
@@ -156,6 +164,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._hide_image_change(False)
         if e.key() == Qt.Key_H and e.modifiers() == Qt.ControlModifier:
             self._open_image_adjustment_dialog()
+        if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
+            self._open_measure_dialog()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -870,6 +880,61 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.northIcon = self._compassLbl  # redirect for _rotate_north_icon
         # keep overlay positioned when user pans / zooms
         self.main_image.viewChanged.connect(self._place_overlay)
+
+    def _add_measure_button(self, theme):
+        """Adds a measure button to the toolbar.
+        
+        Args:
+            theme (str): The current active theme.
+        """
+        # Find the location after showOverlayLabel in the layout
+        layout = self.TitleWidget.layout()
+        overlay_label_index = layout.indexOf(self.showOverlayLabel)
+        
+        # Create measure button
+        from PyQt5.QtWidgets import QToolButton
+        from PyQt5.QtGui import QIcon
+        self.measureButton = QToolButton(self.TitleWidget)
+        # Use the new ruler icon
+        self.measureButton.setIcon(QIcon(f":/icons/{theme.lower()}/ruler.png"))
+        self.measureButton.setIconSize(QSize(25, 25))
+        self.measureButton.setObjectName("measureButton")
+        self.measureButton.setToolTip("Measure Distance (Ctrl+M)")
+        self.measureButton.clicked.connect(self._open_measure_dialog)
+        
+        # Add spacer and button after the overlay label
+        layout.insertSpacing(overlay_label_index + 1, 10)
+        layout.insertWidget(overlay_label_index + 2, self.measureButton)
+    
+    def _open_measure_dialog(self):
+        """Opens the measure dialog for distance measurement."""
+        if self.main_image is None or not self.main_image.hasImage():
+            return
+        
+        # Import here to avoid circular imports
+        from core.controllers.MeasureDialog import MeasureDialog
+        
+        # Try to get GSD from current image if we don't have a stored value
+        if self.current_gsd is None:
+            gsd_text = self.messages.get("Estimated Average GSD")  # e.g. '3.2cm/px'
+            if gsd_text:
+                try:
+                    self.current_gsd = float(gsd_text.replace("cm/px", "").strip())
+                except:
+                    pass
+        
+        if self.measure_dialog is None or not self.measure_dialog.isVisible():
+            self.measure_dialog = MeasureDialog(self, self.main_image, self.current_gsd, self.distance_unit)
+            self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
+            self.measure_dialog.show()
+    
+    def _on_gsd_changed(self, gsd_value):
+        """Updates the stored GSD value.
+        
+        Args:
+            gsd_value (float): The new GSD value in cm/px.
+        """
+        self.current_gsd = gsd_value
 
     def _reapply_icons(self, theme):
         """
