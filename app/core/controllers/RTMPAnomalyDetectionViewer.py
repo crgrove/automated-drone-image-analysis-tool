@@ -458,7 +458,7 @@ class StreamControlWidget(QWidget):
         # Stream type
         connection_layout.addWidget(QLabel("Stream Type:"), 1, 0)
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["File", "HDMI Capture"])
+        self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
         connection_layout.addWidget(self.type_combo, 1, 1)
         
         # Connection buttons
@@ -513,6 +513,10 @@ class StreamControlWidget(QWidget):
             self.url_input.setPlaceholderText("Click to browse for video file...")
             self.url_input.setText("")
             self.browse_button.setVisible(True)
+        elif stream_type == "RTMP Stream":
+            self.url_input.setPlaceholderText("rtmp://server:port/app/stream or http://user:pass@host:port/stream")
+            self.url_input.setText("")
+            self.browse_button.setVisible(False)
         
     def request_connect(self):
         """Request stream connection."""
@@ -732,6 +736,8 @@ class RTMPAnomalyDetectionViewer(QMainWindow):
                 stream_type = StreamType.FILE
             elif stream_type_str.lower() == 'hdmi capture':
                 stream_type = StreamType.HDMI_CAPTURE
+            elif stream_type_str.lower() == 'rtmp stream':
+                stream_type = StreamType.RTMP
                 
             success = self.stream_manager.connect_to_stream(url, stream_type)
             if success:
