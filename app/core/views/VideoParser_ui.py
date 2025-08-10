@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views\VideoParser.ui'
+# Form implementation generated from reading ui file 'C:\Users\John\Downloads\ADIAT_Dev2\automated-drone-image-analysis-tool\resources/views\VideoParser.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #

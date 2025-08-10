@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views\MainWindow.ui'
+# Form implementation generated from reading ui file 'C:\Users\John\Downloads\ADIAT_Dev2\automated-drone-image-analysis-tool\resources/views\MainWindow.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -372,9 +372,21 @@ class Ui_MainWindow(object):
         font.setPointSize(10)
         self.actionVideoParser.setFont(font)
         self.actionVideoParser.setObjectName("actionVideoParser")
+        self.actionRTMPDetection = QtWidgets.QAction(MainWindow)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.actionRTMPDetection.setFont(font)
+        self.actionRTMPDetection.setObjectName("actionRTMPDetection")
+        self.actionRTMPAnomalyDetection = QtWidgets.QAction(MainWindow)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.actionRTMPAnomalyDetection.setFont(font)
+        self.actionRTMPAnomalyDetection.setObjectName("actionRTMPAnomalyDetection")
         self.menuFile.addAction(self.actionLoadFile)
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
+        self.menuFile.addAction(self.actionRTMPDetection)
+        self.menuFile.addAction(self.actionRTMPAnomalyDetection)
         self.mainBar.addAction(self.menuFile.menuAction())
 
         self.retranslateUi(MainWindow)
@@ -410,4 +422,6 @@ class Ui_MainWindow(object):
         self.actionLoadFile.setText(_translate("MainWindow", "Load File"))
         self.actionPreferences.setText(_translate("MainWindow", "Preferences"))
         self.actionVideoParser.setText(_translate("MainWindow", "Video Parser"))
+        self.actionRTMPDetection.setText(_translate("MainWindow", "Real-Time Color Detection"))
+        self.actionRTMPAnomalyDetection.setText(_translate("MainWindow", "Real-Time Anomaly Detection"))
 from . import resources_rc
