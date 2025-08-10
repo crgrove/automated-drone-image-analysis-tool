@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 from helpers.ColorUtils import ColorUtils
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 
 
@@ -103,13 +103,14 @@ class HSVColorRangeService(AlgorithmService):
                         mask = cv2.bitwise_or(mask, this_mask)
 
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
-
+            
+            areas_of_interest = self.identify_areas_of_interest(img, contours)
             output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            if areas_of_interest:
+                self.store_image(full_path, output_path, areas_of_interest)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
+
 
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")

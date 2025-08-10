@@ -61,10 +61,30 @@ class CudaCheck:
         # Check cuDNN in PATH
         env_var = 'PATH' if os.name == 'nt' else 'LD_LIBRARY_PATH'
         search_path = os.environ.get(env_var, '')
-        cudnn_dir = os.path.join(cuda_path, 'bin' if os.name == 'nt' else 'lib64') if cuda_path else ''
-        results["cudnn_in_path"] = cudnn_dir in search_path if cudnn_dir else False
+        cudnn_dir = ""
+        if cuda_path:
+            try:
+                # Find first matching v9+ folder
+                for v_folder in os.listdir(default_cudnn_dir):
+                    if re.match(r"v(\d+)", v_folder, re.IGNORECASE):
+                        major_version = int(re.match(r"v(\d+)", v_folder, re.IGNORECASE).group(1))
+                        if major_version >= 9:
+                            v_path = os.path.join(default_cudnn_dir, v_folder)
+                            sub_dir = 'bin' if os.name == 'nt' else 'lib64'
 
-        # Check ONNX Runtime GPU provider
+                            # Find CUDA version subfolder >= 12
+                            bin_path = os.path.join(v_path, sub_dir)
+                            if os.path.isdir(bin_path):
+                                for cuda_ver in os.listdir(bin_path):
+                                    if re.match(r"^(\d+)", cuda_ver):
+                                        if int(re.match(r"^(\d+)", cuda_ver).group(1)) >= 12:
+                                            cudnn_dir = os.path.join(bin_path, cuda_ver)
+                                            raise StopIteration
+            except StopIteration:
+                pass
+
+        results["cudnn_in_path"] = cudnn_dir in search_path if cudnn_dir else False
+                # Check ONNX Runtime GPU provider
         providers = ort.get_available_providers()
         results["ort_cuda_provider_available"] = 'CUDAExecutionProvider' in providers
 

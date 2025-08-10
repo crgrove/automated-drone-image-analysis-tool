@@ -6,7 +6,7 @@ from os import path
 import onnxruntime as ort
 
 from core.services.LoggerService import LoggerService
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from helpers.SlidingWindowSlicer import SlidingWindowSlicer
 from helpers.CudaCheck import CudaCheck
 
@@ -45,7 +45,7 @@ class AIPersonDetectorService(AlgorithmService):
         self.logger = LoggerService()
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.confidence = options['person_detector_confidence'] / 100
-
+        self.cpu_only = options['cpu_only']
         if getattr(sys, 'frozen', False):
             # Frozen (PyInstaller)
             self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model.onnx')
@@ -100,13 +100,13 @@ class AIPersonDetectorService(AlgorithmService):
                     cv2.rectangle(mask, (x_min, y_min), (x_max, y_max), color=255, thickness=-1)
 
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
+            areas_of_interest = self.identify_areas_of_interest(img, contours)
             output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            if areas_of_interest:
+                self.store_image(full_path, output_path, areas_of_interest)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
 
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")
@@ -199,14 +199,14 @@ class AIPersonDetectorService(AlgorithmService):
 
         providers_cuda_first = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         providers_cpu_only = ["CPUExecutionProvider"]
-        results = CudaCheck.check_onnxruntime_gpu_env()
-        if not results["overall"]:
+
+        if self.cpu_only:
             return ort.InferenceSession(
                     self.model_path,
                     sess_options=so,
                     providers=providers_cpu_only
                 )
-        # First try CUDA
+        
         try:
             return ort.InferenceSession(
                 self.model_path,

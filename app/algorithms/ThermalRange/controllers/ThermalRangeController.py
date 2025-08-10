@@ -1,4 +1,4 @@
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ThermalRange.views.ThermalRange_ui import Ui_ThermalRange
 from core.services.SettingsService import SettingsService
 

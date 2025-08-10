@@ -1,4 +1,4 @@
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.MRMap.views.MRMap_ui import Ui_MRMap
 
 from PyQt5.QtWidgets import QWidget

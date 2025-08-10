@@ -6,6 +6,7 @@ from PIL import Image, UnidentifiedImageError
 import shutil
 import xml.etree.ElementTree as ET
 import time
+import traceback
 
 from pathlib import Path
 from multiprocessing import Pool, pool
@@ -88,6 +89,7 @@ class AnalyzeService(QObject):
                 input_dir=self.input,
                 output_dir=self.output_dir,
                 identifier_color=self.identifier_color,
+                aoi_radius = self.aoi_radius,
                 algorithm=self.algorithm['name'],
                 thermal=self.is_thermal,
                 num_processes=self.num_processes,
@@ -168,6 +170,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit(f"Total Images Processed: {self.ttl_images}")
 
         except Exception as e:
+            print(traceback.format_exc())
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod
@@ -233,10 +236,10 @@ class AnalyzeService(QObject):
             self.sig_msg.emit("Unable to process " + file_name + " :: " + result.error_message)
             return
         # Add successfully processed image to results
-        if result.areas_of_interest is not None:
-            self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
+        if result.areas_of_interest:
+            self.images_with_aois.append({"path": result.output_path})
             self.sig_msg.emit('Areas of interest identified in ' + file_name)
-            if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
+            if len(result.areas_of_interest) > self.max_aois and not self.max_aois_limit_exceeded:
                 self.sig_aois.emit()
                 self.max_aois_limit_exceeded = True
         else:

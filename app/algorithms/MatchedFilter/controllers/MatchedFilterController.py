@@ -1,6 +1,6 @@
 from ast import literal_eval
 
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.MatchedFilter.views.MatchedFilter_ui import Ui_MatchedFilter
 from algorithms.MatchedFilter.controllers.MatchedFilterRangeViewerController import MatchedFilterRangeViewer
 from core.services.LoggerService import LoggerService

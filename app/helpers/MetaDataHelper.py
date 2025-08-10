@@ -2,14 +2,17 @@ from PIL import Image
 from os import path
 import exiftool
 import piexif
-import json
-import numpy as np
+import hashlib
 import platform
 import re
 import struct
 import xml.etree.ElementTree as ET
 
 from helpers.PickleHelper import PickleHelper
+
+# Constant headers
+_XMP_STD_HDR = b"http://ns.adobe.com/xap/1.0/\x00"
+_XMP_EXT_HDR = b"http://ns.adobe.com/xmp/extension/\x00"
 
 
 class MetaDataHelper:
@@ -115,20 +118,6 @@ class MetaDataHelper:
             et.terminate()
 
     @staticmethod
-    def transfer_temperature_data(data, destination_file):
-        """
-        Stores temperature data in the XMP Notes field as JSON.
-
-        Args:
-            data (numpy.ndarray): Temperature matrix.
-            destination_file (str): Destination image path.
-        """
-        json_data = json.dumps(data.tolist())
-        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
-            et.set_tags([destination_file], tags={"Notes": json_data}, params=["-P", "-overwrite_original"])
-            et.terminate()
-
-    @staticmethod
     def get_raw_temperature_data(file_path):
         """
         Retrieves raw byte content of embedded thermal image.
@@ -144,23 +133,6 @@ class MetaDataHelper:
             et.terminate()
         return thermal_img_bytes
 
-    @staticmethod
-    def get_temperature_data(file_path):
-        """
-        Extracts temperature data from the XMP Notes field.
-
-        Args:
-            file_path (str): Path to the image.
-
-        Returns:
-            numpy.ndarray: Temperature matrix.
-        """
-        with exiftool.ExifToolHelper(executable=MetaDataHelper._get_exif_tool_path()) as et:
-            json_data = et.get_tags([file_path], tags=['Notes'])[0]['XMP:Notes']
-            data = json.loads(json_data)
-            temperature_c = np.asarray(data)
-            et.terminate()
-        return temperature_c
 
     @staticmethod
     def get_meta_data_exiftool(file_path):
@@ -344,7 +316,7 @@ class MetaDataHelper:
         return make.decode('utf-8').strip().rstrip("\x00") if make else None
 
     @staticmethod
-    def get_xmp_attribute(attribute, make, xmp_data):
+    def get_drone_xmp_attribute(attribute, make, xmp_data):
         """
         Looks up and retrieves a specific XMP field based on attribute mapping.
 
@@ -364,44 +336,131 @@ class MetaDataHelper:
             return None
 
     @staticmethod
-    def embed_xmp(xmp_segment, destination_file):
+    def add_xmp_field(destination_file: str, namespace_uri: str, tag_name: str, value_str: str, threshold: int = 48000):
         """
-        Embeds a raw XMP segment into a JPEG file.
-
-        Args:
-            xmp_segment (bytes): Full XMP APP1 segment.
-            destination_file (str): Path to target JPEG.
-
-        Returns:
-            bool: True if successful, False otherwise.
+        Store a tag either in the base XMP or the Extended XMP if it exceeds threshold.
+        - threshold default (~48KB) leaves headroom for headers.
         """
+        # 1) Build/parse the current base XMP
+        xmp_segment = MetaDataHelper.extract_xmp(destination_file)
+        def minimal_packet():
+            return (
+                '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+                '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+                '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+                '<rdf:Description/>'
+                '</rdf:RDF>'
+                '</x:xmpmeta>'
+                '<?xpacket end="w"?>'
+            ).encode("utf-8")
+
         if xmp_segment is None:
-            return False
+            base_xml = minimal_packet()
+        else:
+            # Strip APP1 and std header to get XML
+            if xmp_segment.startswith(b"\xFF\xE1"):
+                seg_len = struct.unpack(">H", xmp_segment[2:4])[0]
+                payload = xmp_segment[4:4 + seg_len - 2]
+            else:
+                payload = xmp_segment
+            if payload.startswith(_XMP_STD_HDR):
+                xml_bytes = payload[len(_XMP_STD_HDR):]
+            else:
+                # try to find <?xpacket
+                idx = payload.find(b"<?xpacket")
+                xml_bytes = payload[idx:] if idx != -1 else payload
+            try:
+                ET.fromstring(xml_bytes.decode("utf-8"))
+                base_xml = xml_bytes
+            except Exception:
+                base_xml = minimal_packet()
 
-        with open(destination_file, "rb") as img_file:
-            img_data = img_file.read()
+        root = ET.fromstring(base_xml)
+        rdf_ns = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}"
+        desc = root.find(f".//{rdf_ns}Description")
+        if desc is None:
+            rdf = root.find(f".//{rdf_ns}RDF")
+            if rdf is None:
+                rdf = ET.SubElement(root, f"{rdf_ns}RDF")
+            desc = ET.SubElement(rdf, f"{rdf_ns}Description")
 
-        exif_marker = img_data.find(b"\xFF\xE1")
-        insert_pos = 2  # default
-        if exif_marker != -1:
-            segment_length = struct.unpack(">H", img_data[exif_marker + 2:exif_marker + 4])[0]
-            insert_pos = exif_marker + 2 + segment_length
+        # Register namespaces
+        ET.register_namespace("custom", namespace_uri)
+        ET.register_namespace("xmpNote", "http://ns.adobe.com/xmp/note/")
 
-        xmp_header = b"http://ns.adobe.com/xap/1.0/\x00"
-        xmp_bytes = xmp_segment[len(b"\xFF\xE1") + 2:]
+        value_bytes = value_str.encode("utf-8")
 
-        new_xmp_block = (
-            b"\xFF\xE1"
-            + struct.pack(">H", len(xmp_header) + len(xmp_bytes) + 2)
-            + xmp_header
-            + xmp_bytes
-        )
+        if len(value_bytes) <= threshold:
+            # Small: store directly in base packet
+            desc.set(f"{{{namespace_uri}}}{tag_name}", value_str)
+            base_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=False)
+            # Ensure xpacket wrapper (so your get_xmp_data finder works)
+            if b"<?xpacket" not in base_bytes:
+                base_bytes = b'<?xpacket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>' + base_bytes + b'<?xpacket end="w"?>'
+            MetaDataHelper.embed_xmp_xml(base_bytes, destination_file)
+            return
 
-        new_data = img_data[:insert_pos] + new_xmp_block + img_data[insert_pos:]
+        # Large: move the actual property into extended packet
+        # 1) Ensure base packet declares GUID pointer
+        #    (Do NOT store the large property in base)
+        # Build a minimal extended <rdf:Description> carrying our tag.
+        ext_root = ET.Element("x:xmpmeta")
+        ext_root.set("xmlns:x", "adobe:ns:meta/")
+        rdf = ET.SubElement(ext_root, "rdf:RDF")
+        rdf.set("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+        ext_desc = ET.SubElement(rdf, "rdf:Description")
+        ext_desc.set(f"{{{namespace_uri}}}{tag_name}", value_str)
+        ET.register_namespace("custom", namespace_uri)
+        ext_xml = ET.tostring(ext_root, encoding="utf-8", xml_declaration=False)
+
+        guid =MetaDataHelper._make_guid(ext_xml)
+
+        # Add GUID pointer to base packet
+        desc.set("{http://ns.adobe.com/xmp/note/}HasExtendedXMP", guid)
+        base_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=False)
+        if b"<?xpacket" not in base_bytes:
+            base_bytes = b'<?xpacket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>' + base_bytes + b'<?xpacket end="w"?>'
+        MetaDataHelper.embed_xmp_xml(base_bytes, destination_file)
+
+        # 2) Write the extended packet (chunked APP1)
+        MetaDataHelper.embed_extended_xmp(ext_xml, destination_file, guid)
+        
+    @staticmethod
+    def embed_extended_xmp(extended_xml_bytes: bytes, destination_file: str, guid: str):
+        """
+        Write the Extended XMP packet split across multiple APP1 segments.
+        Each APP1 payload layout:
+        EXT_HDR + GUID(32 ASCII) + total_len(4 BE) + chunk_offset(4 BE) + chunk
+        """
+        with open(destination_file, "rb") as f:
+            data = f.read()
+
+        total = len(extended_xml_bytes)
+        # Compute max chunk per segment
+        overhead = len(_XMP_EXT_HDR) + 32 + 4 + 4  # header + GUID + total_len + offset
+        max_payload = 65535 - 2 - overhead  # 2 bytes for segment length field
+        if max_payload <= 0:
+            raise ValueError("Computed negative chunk capacity; header too large?")
+
+        out = bytearray(data)
+        offset = 0
+        while offset < total:
+            chunk = extended_xml_bytes[offset: offset + max_payload]
+            payload = bytearray()
+            payload += _XMP_EXT_HDR
+            payload += guid.encode("ascii")              # 32 ASCII hex
+            payload += struct.pack(">I", total)          # total length
+            payload += struct.pack(">I", offset)         # this chunk offset
+            payload += chunk
+
+            # Insert each extended segment before SOS (append multiple)
+            # We don't "replace" by header because there can be many; appending is fine.
+            out = MetaDataHelper._insert_or_replace_app1_segment(bytes(out), bytes(payload), match_header=None)
+            offset += len(chunk)
+
         with open(destination_file, "wb") as f:
-            f.write(new_data)
+            f.write(out)
 
-        return True
 
     @staticmethod
     def _parse_xmp_xml(xmp_xml):
@@ -441,3 +500,54 @@ class MetaDataHelper:
 
         parse_element(root)
         return xmp_dict
+
+    def _make_guid(data_bytes: bytes) -> str:
+        # Spec uses a 128-bit GUID. MD5 of the extended packet is common practice.
+        return hashlib.md5(data_bytes).hexdigest().upper()  # 32 ASCII hex chars
+
+    @staticmethod
+    def _insert_or_replace_app1_segment(data: bytes, payload: bytes, match_header: bytes = None) -> bytes:
+        """
+        Insert (or replace if match_header is found) an APP1 segment in a JPEG.
+        payload is the bytes AFTER the 2-byte length (i.e., the APP1 data excluding marker+len).
+        """
+        out = bytearray()
+        out += data[:2]  # SOI
+        i = 2
+        replaced = False
+
+        while i + 4 <= len(data) and data[i] == 0xFF and data[i+1] != 0xDA:
+            marker = data[i:i+2]
+            seg_len = struct.unpack(">H", data[i+2:i+4])[0]
+            seg_start = i
+            seg_end = i + 2 + seg_len
+            seg_payload = data[i+4:seg_end]
+
+            if marker == b"\xFF\xE1" and match_header and seg_payload.startswith(match_header):
+                # replace matching APP1
+                out += b"\xFF\xE1" + struct.pack(">H", len(payload) + 2) + payload
+                i = seg_end
+                replaced = True
+                continue
+
+            out += data[seg_start:seg_end]
+            i = seg_end
+
+        if not replaced:
+            # insert before SOS (i)
+            out += b"\xFF\xE1" + struct.pack(">H", len(payload) + 2) + payload
+
+        out += data[i:]
+        return bytes(out)
+
+    @staticmethod
+    def embed_xmp_xml(base_xmp_xml_bytes: bytes, destination_file: str):
+        """
+        Replace/insert the standard XMP APP1 segment (single packet).
+        """
+        std_payload = _XMP_STD_HDR + base_xmp_xml_bytes
+        with open(destination_file, "rb") as f:
+            data = f.read()
+        new_data = MetaDataHelper._insert_or_replace_app1_segment(data, std_payload, match_header=_XMP_STD_HDR)
+        with open(destination_file, "wb") as f:
+            f.write(new_data)

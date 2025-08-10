@@ -1,6 +1,10 @@
 
 import piexif
 import pandas as pd
+import cv2
+import numpy as np
+import json
+
 from core.services.GSDService import GSDService
 
 from helpers.MetaDataHelper import MetaDataHelper
@@ -22,6 +26,8 @@ class ImageService:
         self.xmp_data = MetaDataHelper.get_xmp_data(path, True)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
+        img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def get_relative_altitude(self, distance_unit):
         """
@@ -37,7 +43,7 @@ class ImageService:
         if self.xmp_data is None or self.drone_make is None:
             return None
 
-        altitude_meters = MetaDataHelper.get_xmp_attribute('AGL', self.drone_make, self.xmp_data)
+        altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)
 
         if altitude_meters:
             try:
@@ -57,7 +63,7 @@ class ImageService:
         if self.xmp_data is None or self.drone_make is None:
             return None
 
-        yaw = MetaDataHelper.get_xmp_attribute('Flight Yaw', self.drone_make, self.xmp_data)
+        yaw = MetaDataHelper.get_drone_xmp_attribute('Flight Yaw', self.drone_make, self.xmp_data)
         if yaw is None:
             return None
 
@@ -83,10 +89,10 @@ class ImageService:
         focal_length = self.exif_data["Exif"].get(piexif.ExifIFD.FocalLength)
         focal_length = focal_length[0] / focal_length[1]
 
-        altitude_meters = MetaDataHelper.get_xmp_attribute('AGL', self.drone_make, self.xmp_data)
+        altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)
         altitude_meters = float(altitude_meters) if altitude_meters else 100
 
-        tilt_angle = MetaDataHelper.get_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
+        tilt_angle = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
         tilt_angle = abs(float(tilt_angle)) if tilt_angle else 0
         if not self._is_autel():
             tilt_angle = 90 - tilt_angle
@@ -148,7 +154,7 @@ class ImageService:
         Returns:
             np.ndarray: Array of thermal values in Celsius or Fahrenheit.
         """
-        data = MetaDataHelper.get_temperature_data(self.path)
+        data = self.xmp_data.get('TemperatureData', [])
         return (data * 1.8) + 32 if unit == 'F' else data
 
     def _is_autel(self):
@@ -180,7 +186,7 @@ class ImageService:
         if not model or not self.drone_make:
             return None
 
-        image_source = MetaDataHelper.get_xmp_attribute('ImageSource', self.drone_make, self.xmp_data)
+        image_source = MetaDataHelper.get_drone_xmp_attribute('ImageSource', self.drone_make, self.xmp_data)
         image_width = self.exif_data["Exif"].get(piexif.ExifIFD.PixelXDimension)
 
         iso = self.exif_data["Exif"].get(piexif.ExifIFD.ISOSpeedRatings)
@@ -217,3 +223,123 @@ class ImageService:
             return drones_df[
                 (drones_df['Model (Exif)'] == model)
             ]
+        
+
+    def circle_areas_of_interest(self, identifier_color, aoi_radius, combine_aois):
+        """
+        Augments the image with circles around areas of interest.
+
+        Returns:
+            (augmented_image: np.ndarray, areas_of_interest: list[dict])
+        """
+        image_copy = self.img_array.copy()
+
+        # 1) Get AOIs from XMP and JSON-decode if needed
+        raw = self.xmp_data.get('AreasOfInterest', [])
+        if isinstance(raw, str):
+            try:
+                contours_or_items = json.loads(raw)
+            except Exception:
+                contours_or_items = []
+        else:
+            contours_or_items = raw or []
+
+        if not contours_or_items:
+            return image_copy, []
+
+        # 2) Split into two categories:
+        #    - ready-made items with {'center','radius'} (no contour needed)
+        #    - raw shapes (contours/pixels) needing minEnclosingCircle
+        ready_items = []
+        raw_contours = []
+
+        for entry in contours_or_items:
+            if isinstance(entry, dict) and 'center' in entry and 'radius' in entry:
+                # normalize types
+                c = entry['center']
+                center = (int(c[0]), int(c[1]))
+                radius = int(entry['radius'])
+                area = int(entry.get('area', 0))
+                ready_items.append({'center': center, 'radius': radius, 'area': area})
+            else:
+                # try to interpret as a contour/pixel list -> (N,1,2) int32
+                try:
+                    arr = np.asarray(entry, dtype=np.int32)
+                    if arr.ndim == 2 and arr.shape[1] == 2:
+                        arr = arr.reshape(-1, 1, 2)
+                    elif arr.ndim == 3 and arr.shape[1] == 1 and arr.shape[2] == 2:
+                        pass
+                    else:
+                        continue  # skip malformed
+                    raw_contours.append(arr)
+                except Exception:
+                    continue
+
+        areas_of_interest = []
+        temp_mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
+
+        # 3) Draw circles for ready-made items
+        for it in ready_items:
+            center = it['center']
+            radius = it['radius'] + int(aoi_radius)
+            # union into mask
+            cv2.circle(temp_mask, center, radius, 255, -1)
+            if not combine_aois:
+                areas_of_interest.append({'center': center, 'radius': radius, 'area': int(it.get('area', 0))})
+                cv2.circle(image_copy, center, radius,
+                        (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
+
+        # 4) Circles for raw contours
+        for cnt in raw_contours:
+            # area by filling contour
+            mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
+            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+            area = int(cv2.countNonZero(mask))
+
+            (x, y), r = cv2.minEnclosingCircle(cnt)
+            center = (int(x), int(y))
+            radius = int(r) + int(aoi_radius)
+
+            cv2.circle(temp_mask, center, radius, 255, -1)
+
+            if not combine_aois:
+                areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+                cv2.circle(image_copy, center, radius,
+                        (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
+
+        # Early return if we’re not combining
+        if not combine_aois:
+            areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
+            return image_copy, areas_of_interest
+
+        # 5) Combine overlapping circles by iterating union mask until stable
+        prev_count = -1
+        while True:
+            new_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            if len(new_contours) == prev_count:
+                break
+            prev_count = len(new_contours)
+            for cnt in new_contours:
+                (x, y), r = cv2.minEnclosingCircle(cnt)
+                center = (int(x), int(y))
+                radius = int(r)
+                cv2.circle(temp_mask, center, radius, 255, -1)
+
+        # 6) Final AOIs from combined mask
+        combined_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        areas_of_interest = []
+        for cnt in combined_contours:
+            mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
+            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+            area = int(cv2.countNonZero(mask))
+
+            (x, y), r = cv2.minEnclosingCircle(cnt)
+            center = (int(x), int(y))
+            radius = int(r)
+
+            areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+            cv2.circle(image_copy, center, radius,
+                    (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
+
+        areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
+        return image_copy, areas_of_interest
