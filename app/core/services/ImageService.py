@@ -239,7 +239,7 @@ class ImageService:
             ]
         
 
-    def circle_areas_of_interest(self, identifier_color, aoi_radius, combine_aois):
+    def circle_areas_of_interest(self, identifier_color, areas_of_interest):
         """
         Augments the image with circles around areas of interest.
 
@@ -248,112 +248,18 @@ class ImageService:
         """
         image_copy = self.img_array.copy()
 
-        # 1) Get AOIs from XMP and JSON-decode if needed
-        raw = self.xmp_data.get('AreasOfInterest', [])
-        if isinstance(raw, str):
-            try:
-                contours_or_items = json.loads(raw)
-            except Exception:
-                contours_or_items = []
-        else:
-            contours_or_items = raw or []
+        # Expect identifier_color as RGB; OpenCV uses BGR
+        bgr = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
 
-        if not contours_or_items:
-            return image_copy, []
+        for aoi in areas_of_interest or []:
+            if "center" not in aoi or "radius" not in aoi:
+                continue
+            cx, cy = aoi["center"]
+            r = int(aoi["radius"])
+            if r <= 0:
+                continue
+            # Ensure ints for OpenCV
+            center = (int(cx), int(cy))
+            cv2.circle(image_copy, center, r, bgr, thickness=2)
 
-        # 2) Split into two categories:
-        #    - ready-made items with {'center','radius'} (no contour needed)
-        #    - raw shapes (contours/pixels) needing minEnclosingCircle
-        ready_items = []
-        raw_contours = []
-
-        for entry in contours_or_items:
-            if isinstance(entry, dict) and 'center' in entry and 'radius' in entry:
-                # normalize types
-                c = entry['center']
-                center = (int(c[0]), int(c[1]))
-                radius = int(entry['radius'])
-                area = int(entry.get('area', 0))
-                ready_items.append({'center': center, 'radius': radius, 'area': area})
-            else:
-                # try to interpret as a contour/pixel list -> (N,1,2) int32
-                try:
-                    arr = np.asarray(entry, dtype=np.int32)
-                    if arr.ndim == 2 and arr.shape[1] == 2:
-                        arr = arr.reshape(-1, 1, 2)
-                    elif arr.ndim == 3 and arr.shape[1] == 1 and arr.shape[2] == 2:
-                        pass
-                    else:
-                        continue  # skip malformed
-                    raw_contours.append(arr)
-                except Exception:
-                    continue
-
-        areas_of_interest = []
-        temp_mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
-
-        # 3) Draw circles for ready-made items
-        for it in ready_items:
-            center = it['center']
-            radius = it['radius'] + int(aoi_radius)
-            # union into mask
-            cv2.circle(temp_mask, center, radius, 255, -1)
-            if not combine_aois:
-                areas_of_interest.append({'center': center, 'radius': radius, 'area': int(it.get('area', 0))})
-                cv2.circle(image_copy, center, radius,
-                        (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
-
-        # 4) Circles for raw contours
-        for cnt in raw_contours:
-            # area by filling contour
-            mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
-            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
-            area = int(cv2.countNonZero(mask))
-
-            (x, y), r = cv2.minEnclosingCircle(cnt)
-            center = (int(x), int(y))
-            radius = int(r) + int(aoi_radius)
-
-            cv2.circle(temp_mask, center, radius, 255, -1)
-
-            if not combine_aois:
-                areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
-                cv2.circle(image_copy, center, radius,
-                        (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
-
-        # Early return if we’re not combining
-        if not combine_aois:
-            areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
-            return image_copy, areas_of_interest
-
-        # 5) Combine overlapping circles by iterating union mask until stable
-        prev_count = -1
-        while True:
-            new_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            if len(new_contours) == prev_count:
-                break
-            prev_count = len(new_contours)
-            for cnt in new_contours:
-                (x, y), r = cv2.minEnclosingCircle(cnt)
-                center = (int(x), int(y))
-                radius = int(r)
-                cv2.circle(temp_mask, center, radius, 255, -1)
-
-        # 6) Final AOIs from combined mask
-        combined_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        areas_of_interest = []
-        for cnt in combined_contours:
-            mask = np.zeros(image_copy.shape[:2], dtype=np.uint8)
-            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
-            area = int(cv2.countNonZero(mask))
-
-            (x, y), r = cv2.minEnclosingCircle(cnt)
-            center = (int(x), int(y))
-            radius = int(r)
-
-            areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
-            cv2.circle(image_copy, center, radius,
-                    (identifier_color[2], identifier_color[1], identifier_color[0]), 2)
-
-        areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
-        return image_copy, areas_of_interest
+        return image_copy

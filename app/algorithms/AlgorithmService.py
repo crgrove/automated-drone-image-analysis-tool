@@ -51,43 +51,85 @@ class AlgorithmService:
         """
         raise NotImplementedError
 
-    def identify_areas_of_interest(self, img, contours):
+    def collect_pixels_of_interest(self, mask):
+        coords = np.argwhere(mask > 0)
+        return coords[:, [1, 0]] 
+
+    def identify_areas_of_interest(self, img_shape, contours):
+        """
+        Calculates areas of interest from contours without modifying the input image.
+
+        Args:
+            img_shape (tuple): Shape of the image (H, W, [C]).
+            contours (list): List of contours.
+
+        Returns:
+            tuple: (areas_of_interest, base_contour_count)
+                - areas_of_interest (list): Final list of AOIs after optional combining.
+                - base_contour_count (int): Count of original valid contours before combining.
+        """
+        if len(contours) == 0:
+            return None, None
+
+        height, width = img_shape[:2]
         areas_of_interest = []
+        temp_mask = np.zeros((height, width), dtype=np.uint8)
+        base_contour_count = 0
 
+        # First pass: filter contours and optionally mark them for combining
         for cnt in contours:
-            # Get bounding box to limit rasterization
-            x, y, w, h = cv2.boundingRect(cnt)
-            roi_mask = np.zeros((h, w), dtype=np.uint8)
+            mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+            area = cv2.countNonZero(mask)
 
-            # Shift contour to ROI coords
-            cnt_roi = cnt - np.array([[[x, y]]], dtype=cnt.dtype)
-
-            # Fill contour in ROI
-            cv2.drawContours(roi_mask, [cnt_roi], -1, 255, thickness=-1)
-            # Get all pixel coordinates in ROI
-            pts = cv2.findNonZero(roi_mask)
-            if pts is None:
-                continue
-
-            # Convert to image coordinates
-            pts = pts.reshape(-1, 2)
-            pts[:, 0] += x
-            pts[:, 1] += y
-
-            area = pts.shape[0]  # pixel-accurate area
             if area >= self.min_area and (self.max_area == 0 or area <= self.max_area):
-                areas_of_interest.append(pts)  # keep as NumPy array for speed
+                (x, y), radius = cv2.minEnclosingCircle(cnt)
+                center = (int(x), int(y))
+                radius = int(radius) + self.aoi_radius
+                base_contour_count += 1
 
-        return areas_of_interest
+                # Add to mask for later combining
+                cv2.circle(temp_mask, center, radius, 255, -1)
 
-    def store_image(self, input_file, output_file, areas_of_interest, temperature_data=None):
+                if not self.combine_aois:
+                    areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+
+        # Second pass: combine AOIs if needed
+        if self.combine_aois:
+            while True:
+                new_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+                for cnt in new_contours:
+                    (x, y), radius = cv2.minEnclosingCircle(cnt)
+                    center = (int(x), int(y))
+                    radius = int(radius)
+                    cv2.circle(temp_mask, center, radius, 255, -1)
+                if len(new_contours) == len(contours):
+                    contours = new_contours
+                    break
+                contours = new_contours
+
+            for cnt in contours:
+                mask = np.zeros((height, width), dtype=np.uint8)
+                cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+                area = cv2.countNonZero(mask)
+                (x, y), radius = cv2.minEnclosingCircle(cnt)
+                center = (int(x), int(y))
+                radius = int(radius)
+                areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+
+        # Sort for consistent ordering
+        areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
+
+        return areas_of_interest, base_contour_count
+
+    def store_image(self, input_file, output_file, pixels_of_interest, temperature_data=None):
         """
         Duplicates the input image to the output location and stores AOIs and temperature data in XMP.
 
         Args:
             input_file (str): Path to the input image file.
             output_file (str): Path to save the output image.
-            areas_of_interest (list or np.ndarray): List/array of AOI pixel coordinates.
+            pixels_of_interest (list or np.ndarray): List/array of pixel coordinates.
             temperature_data (np.ndarray or list, optional): Temperature matrix to store.
         """
         path = Path(output_file)
@@ -95,26 +137,16 @@ class AlgorithmService:
 
         # Step 1: Duplicate file with all metadata intact
         shutil.copy2(input_file, output_file)
-
-        # Step 2: Store AOIs in a custom namespace
-        aoi_json = json.dumps(
-            areas_of_interest,
-            default=lambda x: x.tolist() if hasattr(x, 'tolist') else x
-        )
         
         MetaDataHelper.add_xmp_field(
             output_file,
-            namespace_uri="http://example.com/aoi/1.0/",
-            tag_name="AreasOfInterest",
-            value_str=json.dumps(areas_of_interest, default=lambda x: x.tolist() if hasattr(x, "tolist") else x)
+            namespace_uri="http://example.com/poi/1.0/",
+            tag_name="PixelsOfInterest",
+            value_str=json.dumps(pixels_of_interest, default=lambda x: x.tolist() if hasattr(x, "tolist") else x)
         )
 
         # Step 3: Store temperature data in a separate custom namespace (if provided)
         if temperature_data is not None:
-            temp_json = json.dumps(
-                temperature_data,
-                default=lambda x: x.tolist() if hasattr(x, 'tolist') else x
-            )
             MetaDataHelper.add_xmp_field(
                 output_file,
                 namespace_uri="http://example.com/thermal/1.0/",
@@ -195,7 +227,7 @@ class AlgorithmService:
 class AnalysisResult:
     """Class representing the result of an image processing operation."""
 
-    def __init__(self, input_path=None, output_path=None, output_dir=None, areas_of_interest=[], error_message=None):
+    def __init__(self, input_path=None, output_path=None, output_dir=None, areas_of_interest=None, base_contour_count=None, error_message=None):
         """
         Initializes an AnalysisResult with the given parameters.
 
@@ -203,7 +235,8 @@ class AnalysisResult:
             input_path (str, optional): Path to the input image. Defaults to None.
             output_path (str, optional): Path to the output image. Defaults to None.
             output_dir (str, optional): Path to the output directory. Defaults to None.
-            areas_of_interest (list, optional): List of detected areas of interest. Defaults to [].
+            areas_of_interest (list, optional): List of detected areas of interest. Defaults to None.
+            base_contour_count (int, optional): Count of base contours. Defaults to None.
             error_message (str, optional): Error message if processing failed. Defaults to None.
         """
         self.input_path = input_path
@@ -217,4 +250,5 @@ class AnalysisResult:
         else:
             self.output_path = output_path
         self.areas_of_interest = areas_of_interest
+        self.base_contour_count = base_contour_count
         self.error_message = error_message

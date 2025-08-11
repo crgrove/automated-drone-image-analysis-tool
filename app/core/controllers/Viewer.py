@@ -340,11 +340,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self._set_active_thumbnail(image['thumbnail'])
             image_service = ImageService(image['path'])
 
-            augmented_image, areas_of_interest = image_service.circle_areas_of_interest(self.settings['identifier_color'], self.settings['aoi_radius'], True)
+            augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
-            self._load_areas_of_interest(augmented_image, areas_of_interest)
+            self._load_areas_of_interest(augmented_image, image['areas_of_interest'])
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])

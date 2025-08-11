@@ -237,9 +237,9 @@ class AnalyzeService(QObject):
             return
         # Add successfully processed image to results
         if result.areas_of_interest:
-            self.images_with_aois.append({"path": result.output_path})
+            self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
             self.sig_msg.emit('Areas of interest identified in ' + file_name)
-            if len(result.areas_of_interest) > self.max_aois and not self.max_aois_limit_exceeded:
+            if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
                 self.sig_aois.emit()
                 self.max_aois_limit_exceeded = True
         else:

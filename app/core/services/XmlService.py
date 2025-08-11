@@ -150,6 +150,12 @@ class XmlService:
         image = ET.SubElement(images_xml, 'image')
         image.set('path', img["path"])
         image.set('hidden', "False")
+        
+        for area in img["aois"]:
+            area_xml = ET.SubElement(image, 'areas_of_interest')
+            area_xml.set('center', str(area['center']))
+            area_xml.set('radius', str(area['radius']))
+            area_xml.set('area', str(area['area']))
 
     def save_xml_file(self, path):
         """
