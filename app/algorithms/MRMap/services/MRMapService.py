@@ -60,15 +60,20 @@ class MRMapService(AlgorithmService):
             # Identify anomalous pixels
             pixel_anom = (0 < bin_counts) & (bin_counts < self.threshold)
 
-            contours = self._getMRMapsContours(pixel_anom)
+            mask, contours = self._getMRMapsContours(pixel_anom)
 
-            areas_of_interest = self.identify_areas_of_interest(img, contours)
+            pixels_of_interest = self.collect_pixels_of_interest(mask)
+
+            # Identify contours in the masked image
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
+            
             if areas_of_interest:
-                self.store_image(full_path, output_path, areas_of_interest)
+                self.store_image(full_path, output_path, pixels_of_interest)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
-
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # print(traceback.format_exc())
@@ -104,7 +109,7 @@ class MRMapService(AlgorithmService):
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-        return contours
+        return mask, contours
 
     def _find_connected_pixels(self, pixel_anom, visited, start_x, start_y, width, height):
         queue = deque([(start_x, start_y)])

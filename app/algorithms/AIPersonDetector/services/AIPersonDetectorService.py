@@ -94,19 +94,23 @@ class AIPersonDetectorService(AlgorithmService):
 
             # --- MASK LOGIC ---
             mask = np.zeros(img.shape[:2], dtype=np.uint8)
+
             for bbox in merged_bboxes:
                 x_min, y_min, x_max, y_max, conf, cls = bbox
                 if conf >= self.confidence:
-                    cv2.rectangle(mask, (x_min, y_min), (x_max, y_max), color=255, thickness=-1)
-
+                    # Fill the bounding box area with white (255)
+                    mask[y_min:y_max, x_min:x_max] = 255
+            
+            pixels_of_interest = self.collect_pixels_of_interest(mask)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-            areas_of_interest = self.identify_areas_of_interest(img, contours)
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
+            
             if areas_of_interest:
-                self.store_image(full_path, output_path, areas_of_interest)
+                self.store_image(full_path, output_path, pixels_of_interest)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")
