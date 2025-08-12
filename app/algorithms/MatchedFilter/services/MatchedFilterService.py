@@ -43,13 +43,16 @@ class MatchedFilterService(AlgorithmService):
             scores = spectral.matched_filter(img, np.array([self.match_color[2], self.match_color[1], self.match_color[0]], dtype=np.uint8))
             mask = np.uint8((1 * (scores > self.threshold)))
 
-            # Find contours of the identified areas and circle areas of interest.
+            pixels_of_interest = self.collect_pixels_of_interest(mask)
+
+            # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            
-            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img, contours)
+
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
+            
             if areas_of_interest:
-                self.store_image(full_path, output_path, areas_of_interest)
+                self.store_image(full_path, output_path, pixels_of_interest)
 
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 

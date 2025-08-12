@@ -101,14 +101,19 @@ class HSVColorRangeService(AlgorithmService):
                         mask = this_mask
                     else:
                         mask = cv2.bitwise_or(mask, this_mask)
+                        
+            pixels_of_interest = self.collect_pixels_of_interest(mask)
 
+            # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img, contours)
             output_path = full_path.replace(input_dir, output_dir)
+            
             if areas_of_interest:
-                self.store_image(full_path, output_path, areas_of_interest)
+                self.store_image(full_path, output_path, pixels_of_interest)
 
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
             return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
 
 
