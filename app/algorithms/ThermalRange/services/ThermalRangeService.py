@@ -51,12 +51,12 @@ class ThermalRangeService(AlgorithmService):
             # Find contours of the identified areas and circle areas of interest.
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             
-            areas_of_interest = self.identify_areas_of_interest(thermal_img, contours)
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(thermal_img, contours)
             output_path = full_path.replace(input_dir, output_dir)
             if areas_of_interest:
                 self.store_image(full_path, output_path, areas_of_interest, temperature_c)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest)
+            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
         except Exception as e:
             # Log and return an error if processing fails.
             self.logger.error(f"Error processing image {full_path}: {e}")

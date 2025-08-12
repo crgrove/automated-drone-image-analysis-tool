@@ -9,9 +9,9 @@ import math
 import numpy as np
 from pathlib import Path
 from collections import UserDict, OrderedDict
-from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect, QTimer
-from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox
+from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect, QTimer, QUrl
+from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox, QMenu, QAction
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
 from qtwidgets import Toggle
 
@@ -25,6 +25,8 @@ from core.services.XmlService import XmlService
 from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
+from helpers.LocationInfo import LocationInfo
+from urllib.parse import quote_plus
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -86,6 +88,19 @@ class Viewer(QMainWindow, Ui_Viewer):
                                               "Drone Orientation", "Estimated Average GSD",
                                               "Temperature"])
         self._reapply_icons(self.theme)
+
+        # toast (non intrusive) over statusbar
+        self._toastLabel = QLabel(self.statusbar)
+        self._toastLabel.setVisible(False)
+        self._toastLabel.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._toastTimer = QTimer(self)
+        self._toastTimer.setSingleShot(True)
+        self._toastTimer.timeout.connect(lambda: self._toastLabel.setVisible(False))
+
+        # context menu on statusbar for coordinates
+        self.current_decimal_coords = None
+        self.statusbar.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.statusbar.customContextMenuRequested.connect(self._on_statusbar_context_menu)
 
         # scale bar (re‑parented later into HUD overlay)
         self.scaleBar = ScaleBarWidget()
@@ -367,6 +382,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             position = image_service.get_position(self.position_format)
             if position:
                 self.messages['GPS Coordinates'] = position
+            # also keep decimal coords for sharing/opening links
+            try:
+                gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
+                if gps and 'latitude' in gps and 'longitude' in gps:
+                    self.current_decimal_coords = (gps['latitude'], gps['longitude'])
+                else:
+                    self.current_decimal_coords = None
+            except Exception:
+                self.current_decimal_coords = None
             if self.is_thermal:
                 self.temperature_data = image_service.get_thermal_data(self.temperature_unit)
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
@@ -724,6 +748,127 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
         status_text = " | ".join([f"{k}: {v}" for k, v in self.messages.items() if v is not None])
         self.statusbar.showMessage(status_text)
+
+    # ---------- statusbar context menu ----------
+    def _on_statusbar_context_menu(self, pos):
+        # Only show menu if we have coordinates
+        coord_text = None
+        if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
+            coord_text = self.messages.data.get('GPS Coordinates')
+        if not coord_text:
+            return
+
+        menu = QMenu(self)
+        # Match status bar font/theme
+        menu.setFont(self.statusbar.font())
+
+        act_copy = QAction("Copy coordinates", self)
+        act_copy.triggered.connect(lambda: self._copy_coords_to_clipboard(coord_text))
+        menu.addAction(act_copy)
+
+        act_maps = QAction("Open in Google Maps", self)
+        act_maps.triggered.connect(self._open_in_maps)
+        menu.addAction(act_maps)
+
+        act_wa = QAction("Send via WhatsApp", self)
+        act_wa.triggered.connect(self._share_whatsapp)
+        menu.addAction(act_wa)
+
+        act_tg = QAction("Send via Telegram", self)
+        act_tg.triggered.connect(self._share_telegram)
+        menu.addAction(act_tg)
+
+        global_pos = self.statusbar.mapToGlobal(pos)
+        menu.exec_(global_pos)
+        # Restore status text if Qt cleared it while the menu was open
+        self._refresh_statusbar_message()
+
+    def _copy_coords_to_clipboard(self, coord_text=None):
+        from PyQt5.QtWidgets import QApplication
+        if coord_text is None:
+            if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
+                coord_text = self.messages.data.get('GPS Coordinates')
+        if not coord_text:
+            return
+        QApplication.clipboard().setText(str(coord_text))
+        self._show_toast("Coordinates copied", 3000, color="#00C853")
+        self._refresh_statusbar_message()
+
+    def _open_in_maps(self):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        lat, lon = lat_lon
+        url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
+        QDesktopServices.openUrl(url)
+        self._refresh_statusbar_message()
+
+    def _share_whatsapp(self):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        lat, lon = lat_lon
+        maps = f"https://www.google.com/maps?q={lat},{lon}"
+        text = f"Coordinate: {lat}, {lon} — {maps}"
+        wa_url = f"https://wa.me/?text={quote_plus(text)}"
+        QDesktopServices.openUrl(QUrl(wa_url))
+        self._refresh_statusbar_message()
+
+    def _share_telegram(self):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+        lat, lon = lat_lon
+        maps = f"https://www.google.com/maps?q={lat},{lon}"
+        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}') }"
+        QDesktopServices.openUrl(QUrl(tg_url))
+        self._refresh_statusbar_message()
+
+    def _get_decimals_or_parse(self):
+        # Prefer decimal coords captured from EXIF
+        if getattr(self, 'current_decimal_coords', None):
+            return self.current_decimal_coords
+        # fallback to parsing statusbar string if in decimal format
+        coord_text = None
+        if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
+            coord_text = self.messages.data.get('GPS Coordinates')
+        if coord_text and "," in str(coord_text):
+            try:
+                lat_s, lon_s = str(coord_text).split(",", 1)
+                return float(lat_s.strip()), float(lon_s.strip())
+            except Exception:
+                return None
+        return None
+
+    def _show_toast(self, text: str, msec: int = 3000, color: str = "#00C853"):
+        try:
+            self._toastLabel.setText(text)
+            self._toastLabel.setStyleSheet(
+                f"QLabel{{background-color:{color}; color:white; border-radius:6px; padding:6px 10px; font-weight:bold;}}"
+            )
+            self._toastLabel.adjustSize()
+            sb_w = self.statusbar.width()
+            sb_h = self.statusbar.height()
+            tw = self._toastLabel.width()
+            th = self._toastLabel.height()
+            x = max(4, (sb_w - tw) // 2)
+            y = max(2, (sb_h - th) // 2)
+            self._toastLabel.move(x, y)
+            self._toastLabel.raise_()
+            self._toastLabel.setVisible(True)
+            self._toastTimer.start(max(1, msec))
+        except Exception:
+            pass
+
+    def _refresh_statusbar_message(self):
+        try:
+            status_text = " | ".join([f"{k}: {v}" for k, v in self.messages.items() if v is not None])
+            self.statusbar.showMessage(status_text)
+        except Exception:
+            pass
 
     def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or GPS coordinates at the mouse position.
