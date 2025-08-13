@@ -239,7 +239,12 @@ class AnalyzeService(QObject):
         if result.areas_of_interest:
             self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
             self.sig_msg.emit('Areas of interest identified in ' + file_name)
-            if result.base_contour_count > self.max_aois and not self.max_aois_limit_exceeded:
+            # Guard against None and ensure integers for comparison
+            if (result.base_contour_count is not None
+                    and isinstance(result.base_contour_count, (int, np.integer))
+                    and isinstance(self.max_aois, (int, np.integer))
+                    and result.base_contour_count > int(self.max_aois)
+                    and not self.max_aois_limit_exceeded):
                 self.sig_aois.emit()
                 self.max_aois_limit_exceeded = True
         else:

@@ -55,12 +55,12 @@ class AlgorithmService:
         coords = np.argwhere(mask > 0)
         return coords[:, [1, 0]] 
 
-    def identify_areas_of_interest(self, img_shape, contours):
+    def identify_areas_of_interest(self, img_or_shape, contours):
         """
         Calculates areas of interest from contours without modifying the input image.
 
         Args:
-            img_shape (tuple): Shape of the image (H, W, [C]).
+            img_or_shape (numpy.ndarray | tuple | list): The image array or its shape (H, W, [C]).
             contours (list): List of contours.
 
         Returns:
@@ -71,7 +71,16 @@ class AlgorithmService:
         if len(contours) == 0:
             return None, None
 
-        height, width = img_shape[:2]
+        # Robustly derive height and width whether we received an image or a shape tuple
+        try:
+            if hasattr(img_or_shape, 'shape'):
+                height, width = int(img_or_shape.shape[0]), int(img_or_shape.shape[1])
+            else:
+                height, width = int(img_or_shape[0]), int(img_or_shape[1])
+        except Exception:
+            # Fallback: try tuple conversion then slice
+            h_w = tuple(img_or_shape)[:2]
+            height, width = int(h_w[0]), int(h_w[1])
         areas_of_interest = []
         temp_mask = np.zeros((height, width), dtype=np.uint8)
         base_contour_count = 0
