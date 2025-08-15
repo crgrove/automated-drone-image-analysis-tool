@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect,
 from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox, QMenu, QAction
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
 from qtwidgets import Toggle
+import tempfile
 
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
@@ -770,6 +771,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         act_maps.triggered.connect(self._open_in_maps)
         menu.addAction(act_maps)
 
+        act_earth = QAction("View in Google Earth", self)
+        act_earth.triggered.connect(self._open_in_earth)
+        menu.addAction(act_earth)
+
         act_wa = QAction("Send via WhatsApp", self)
         act_wa.triggered.connect(self._share_whatsapp)
         menu.addAction(act_wa)
@@ -802,6 +807,67 @@ class Viewer(QMainWindow, Ui_Viewer):
         lat, lon = lat_lon
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
         QDesktopServices.openUrl(url)
+        self._refresh_statusbar_message()
+
+    def _open_in_earth(self):
+        lat_lon = self._get_decimals_or_parse()
+        if not lat_lon:
+            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            return
+
+        lat, lon = lat_lon
+        image_path = self.images[self.current_image]['path']
+        image_service = ImageService(image_path)
+        yaw, pitch = image_service.get_gimbal_orientation()
+        altitude = image_service.get_asl_altitude('m')
+        hfov = image_service.get_camera_hfov()
+
+        if yaw is None:
+            yaw = 0.0
+        if pitch is None:
+            pitch = -90.0
+        if altitude is None:
+            altitude = 100.0
+        if hfov is None:
+            hfov = 60.0
+
+        #theta = 90 + pitch
+        #slant = altitude / math.cos(math.radians(theta))
+        #ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
+        #ge_fov = 60.0
+        #range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
+        range_val = 50
+        tilt = max(0, min(180, 90 + pitch))
+        #cam_alt = range_val * math.cos(math.radians(tilt))
+
+        kml = (
+            "<?xml version='1.0' encoding='UTF-8'?>\n"
+            "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
+            "  <Document>\n"
+            "    <name>ADIAT View</name>\n"
+            "    <open>1</open>\n"
+            "    <LookAt>\n"
+            f"      <longitude>{lon}</longitude>\n"
+            f"      <latitude>{lat}</latitude>\n"
+            f"      <altitude>{altitude}</altitude>\n"
+            f"      <heading>{yaw}</heading>\n"
+            f"      <tilt>{tilt}</tilt>\n"
+            "      <altitudeMode>absolute</altitudeMode>\n"
+            f"      <range>{range_val}</range>\n"
+            "    </LookAt>\n"
+            "    <Placemark>\n"
+            "      <name>Photo Location</name>\n"
+            f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
+            "    </Placemark>\n"
+            "  </Document>\n"
+            "</kml>\n"
+        )
+
+        fd, kml_path = tempfile.mkstemp(suffix='.kml')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(kml)
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
         self._refresh_statusbar_message()
 
     def _share_whatsapp(self):

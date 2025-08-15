@@ -4,6 +4,7 @@ import pandas as pd
 import cv2
 import numpy as np
 import json
+import math
 
 from core.services.GSDService import GSDService
 
@@ -53,6 +54,42 @@ class ImageService:
                 return None
         return None
 
+    def get_asl_altitude(self, distance_unit):
+        """Retrieve the drone's altitude above sea level from EXIF data.
+
+        Args:
+            distance_unit (str): Unit to return altitude in ("ft" or "m").
+
+        Returns:
+            float or None: Altitude in the requested unit, or None if unavailable.
+        """
+        METERS_TO_FEET = 3.28084
+
+        if self.exif_data is None:
+            return None
+
+        gps_ifd = self.exif_data.get("GPS")
+        if not gps_ifd:
+            return None
+
+        altitude = gps_ifd.get(piexif.GPSIFD.GPSAltitude)
+        if altitude is None:
+            return None
+
+        try:
+            if isinstance(altitude, tuple):
+                altitude = altitude[0] / altitude[1]
+            else:
+                altitude = float(altitude)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+        ref = gps_ifd.get(piexif.GPSIFD.GPSAltitudeRef, 0)
+        if ref == 1:
+            altitude = -altitude
+
+        return round(altitude * METERS_TO_FEET, 2) if distance_unit == 'ft' else altitude
+
     def get_drone_orientation(self):
         """
         Retrieves the yaw orientation of the drone (0–360 degrees).
@@ -69,6 +106,46 @@ class ImageService:
 
         yaw = float(yaw)
         return 360 + yaw if yaw < 0 else yaw
+
+    def get_gimbal_orientation(self):
+        """Retrieve gimbal yaw and pitch from XMP metadata.
+
+        Returns:
+            tuple: (yaw, pitch) in degrees or (None, None) if unavailable.
+        """
+        if self.xmp_data is None or self.drone_make is None:
+            return None, None
+
+        yaw = MetaDataHelper.get_drone_xmp_attribute('Gimbal Yaw', self.drone_make, self.xmp_data)
+        pitch = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
+        try:
+            yaw = float(yaw)
+            pitch = float(pitch)
+        except (TypeError, ValueError):
+            return None, None
+
+        if yaw < 0:
+            yaw += 360
+        return yaw, pitch
+
+    def get_camera_hfov(self):
+        """Compute the camera's horizontal field of view in degrees.
+
+        Returns:
+            float or None: Horizontal FOV in degrees, or None if data missing.
+        """
+        camera_info = self._get_camera_info()
+        if camera_info is None or camera_info.empty:
+            return None
+
+        focal_length = self.exif_data["Exif"].get(piexif.ExifIFD.FocalLength)
+        if focal_length is None:
+            return None
+        focal_length = focal_length[0] / focal_length[1]
+
+        sensor_w = float(camera_info['sensor_w'].iloc[0])
+        hfov = 2 * math.atan(sensor_w / (2 * focal_length))
+        return math.degrees(hfov)
 
     def get_average_gsd(self):
         """
