@@ -831,13 +831,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hfov is None:
             hfov = 60.0
 
-        theta = 90 + pitch
-        slant = altitude / math.cos(math.radians(theta))
-        ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
-        ge_fov = 60.0
-        range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
+        #theta = 90 + pitch
+        #slant = altitude / math.cos(math.radians(theta))
+        #ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
+        #ge_fov = 60.0
+        #range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
+        range_val = 50
         tilt = max(0, min(180, 90 + pitch))
-        cam_alt = range_val * math.cos(math.radians(tilt))
+        #cam_alt = range_val * math.cos(math.radians(tilt))
 
         kml = (
             "<?xml version='1.0' encoding='UTF-8'?>\n"
@@ -845,14 +846,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             "  <Document>\n"
             "    <name>ADIAT View</name>\n"
             "    <open>1</open>\n"
-            "    <Camera>\n"
+            "    <LookAt>\n"
             f"      <longitude>{lon}</longitude>\n"
             f"      <latitude>{lat}</latitude>\n"
-            f"      <altitude>{cam_alt}</altitude>\n"
+            f"      <altitude>{altitude}</altitude>\n"
             f"      <heading>{yaw}</heading>\n"
             f"      <tilt>{tilt}</tilt>\n"
-            "      <altitudeMode>relativeToGround</altitudeMode>\n"
-            "    </Camera>\n"
+            "      <altitudeMode>absolute</altitudeMode>\n"
+            f"      <range>{range_val}</range>\n"
+            "    </LookAt>\n"
             "    <Placemark>\n"
             "      <name>Photo Location</name>\n"
             f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
