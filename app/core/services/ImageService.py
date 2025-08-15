@@ -54,6 +54,42 @@ class ImageService:
                 return None
         return None
 
+    def get_asl_altitude(self, distance_unit):
+        """Retrieve the drone's altitude above sea level from EXIF data.
+
+        Args:
+            distance_unit (str): Unit to return altitude in ("ft" or "m").
+
+        Returns:
+            float or None: Altitude in the requested unit, or None if unavailable.
+        """
+        METERS_TO_FEET = 3.28084
+
+        if self.exif_data is None:
+            return None
+
+        gps_ifd = self.exif_data.get("GPS")
+        if not gps_ifd:
+            return None
+
+        altitude = gps_ifd.get(piexif.GPSIFD.GPSAltitude)
+        if altitude is None:
+            return None
+
+        try:
+            if isinstance(altitude, tuple):
+                altitude = altitude[0] / altitude[1]
+            else:
+                altitude = float(altitude)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+        ref = gps_ifd.get(piexif.GPSIFD.GPSAltitudeRef, 0)
+        if ref == 1:
+            altitude = -altitude
+
+        return round(altitude * METERS_TO_FEET, 2) if distance_unit == 'ft' else altitude
+
     def get_drone_orientation(self):
         """
         Retrieves the yaw orientation of the drone (0–360 degrees).

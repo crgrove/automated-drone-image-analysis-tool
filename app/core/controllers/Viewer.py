@@ -819,7 +819,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         image_path = self.images[self.current_image]['path']
         image_service = ImageService(image_path)
         yaw, pitch = image_service.get_gimbal_orientation()
-        altitude = image_service.get_relative_altitude('m')
+        altitude = image_service.get_asl_altitude('m')
         hfov = image_service.get_camera_hfov()
 
         if yaw is None:
