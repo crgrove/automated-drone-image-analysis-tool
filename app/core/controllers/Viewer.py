@@ -841,21 +841,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         kml = (
             "<?xml version='1.0' encoding='UTF-8'?>\n"
             "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
-            "  <LookAt>\n"
-            f"    <longitude>{lon}</longitude>\n"
-            f"    <latitude>{lat}</latitude>\n"
-            f"    <heading>{yaw}</heading>\n"
-            f"    <tilt>{tilt}</tilt>\n"
-            f"    <range>{range_val}</range>\n"
-            "  </LookAt>\n"
+            "  <Document>\n"
+            "    <Placemark>\n"
+            "      <name>ADIAT View</name>\n"
+            "      <LookAt>\n"
+            f"        <longitude>{lon}</longitude>\n"
+            f"        <latitude>{lat}</latitude>\n"
+            f"        <heading>{yaw}</heading>\n"
+            f"        <tilt>{tilt}</tilt>\n"
+            f"        <range>{range_val}</range>\n"
+            "      </LookAt>\n"
+            f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
+            "    </Placemark>\n"
+            "  </Document>\n"
             "</kml>\n"
         )
 
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.kml')
-        with open(tmp.name, 'w', encoding='utf-8') as f:
+        fd, kml_path = tempfile.mkstemp(suffix='.kml')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(kml)
 
-        QDesktopServices.openUrl(QUrl.fromLocalFile(tmp.name))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
         self._refresh_statusbar_message()
 
     def _share_whatsapp(self):
