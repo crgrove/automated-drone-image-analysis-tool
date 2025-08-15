@@ -836,21 +836,25 @@ class Viewer(QMainWindow, Ui_Viewer):
         ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
         ge_fov = 60.0
         range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
-        tilt = max(0, min(90, 90 + pitch))
+        tilt = max(0, min(180, 90 + pitch))
+        cam_alt = range_val * math.cos(math.radians(tilt))
 
         kml = (
             "<?xml version='1.0' encoding='UTF-8'?>\n"
             "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
             "  <Document>\n"
+            "    <name>ADIAT View</name>\n"
+            "    <open>1</open>\n"
+            "    <Camera>\n"
+            f"      <longitude>{lon}</longitude>\n"
+            f"      <latitude>{lat}</latitude>\n"
+            f"      <altitude>{cam_alt}</altitude>\n"
+            f"      <heading>{yaw}</heading>\n"
+            f"      <tilt>{tilt}</tilt>\n"
+            "      <altitudeMode>relativeToGround</altitudeMode>\n"
+            "    </Camera>\n"
             "    <Placemark>\n"
-            "      <name>ADIAT View</name>\n"
-            "      <LookAt>\n"
-            f"        <longitude>{lon}</longitude>\n"
-            f"        <latitude>{lat}</latitude>\n"
-            f"        <heading>{yaw}</heading>\n"
-            f"        <tilt>{tilt}</tilt>\n"
-            f"        <range>{range_val}</range>\n"
-            "      </LookAt>\n"
+            "      <name>Photo Location</name>\n"
             f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
             "    </Placemark>\n"
             "  </Document>\n"
