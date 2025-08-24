@@ -7,6 +7,7 @@ from PIL import Image, UnidentifiedImageError
 import traceback
 import math
 import numpy as np
+import json
 from pathlib import Path
 from collections import UserDict, OrderedDict
 from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
@@ -27,6 +28,7 @@ from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 from urllib.parse import quote_plus
 
 
@@ -157,6 +159,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
         
+        # Add highlight pixels of interest toggle
+        self.highlightPixelsToggle = Toggle()
+        layout.insertWidget(layout.indexOf(self.showOverlayLabel) + 1, self.highlightPixelsToggle)
+        self.highlightPixelsLabel = QLabel("Highlight Pixels of Interest")
+        self.highlightPixelsLabel.setFont(font)
+        layout.insertWidget(layout.indexOf(self.highlightPixelsToggle) + 1, self.highlightPixelsLabel)
+        self.highlightPixelsToggle.setChecked(False)
+        self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
+        self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (Ctrl+I)")
+        
         # Add measure button to toolbar
         self._add_measure_button(self.theme)
         
@@ -182,6 +194,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._open_image_adjustment_dialog()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
             self._open_measure_dialog()
+        if e.key() == Qt.Key_I and e.modifiers() == Qt.ControlModifier:
+            self._highlight_pixels_change(not self.highlightPixelsToggle.isChecked())
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -357,6 +371,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             image_service = ImageService(image['path'])
 
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+            
+            # Highlight pixels of interest if toggle is enabled
+            if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
+                augmented_image = image_service.highlight_pixels_of_interest(augmented_image)
+            
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
@@ -571,6 +590,15 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self._hud.show()
             else:
                 self._hud.hide()
+
+    def _highlight_pixels_change(self, state):
+        """Toggles highlighting of pixels of interest.
+
+        Args:
+            state (bool): True if pixels should be highlighted, False otherwise.
+        """
+        if hasattr(self, 'main_image') and self.main_image is not None:
+            self._load_image()  # Reload image to apply/remove highlighting
 
     def _open_image_adjustment_dialog(self):
         """Opens the image adjustment dialog for the current image."""
