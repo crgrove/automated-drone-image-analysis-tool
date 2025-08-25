@@ -3,6 +3,15 @@ ImageAdjustmentDialog.py - Real-time image adjustment dialog for ADIAT
 
 Provides exposure, highlights, shadows, clarity, and radius adjustments
 with real-time preview similar to Paint.NET functionality.
+
+Features:
+- Real-time updates while dragging sliders (sliderMoved signal)
+- Fallback updates when sliders are released (valueChanged signal)
+- Direct integer value entry via textbox inputs for precise control
+- Input validation with range checking and automatic reversion
+- Bidirectional synchronization between sliders and input fields
+- Configurable debouncing for performance vs. responsiveness
+- Use set_immediate_updates(True) for instant updates without delay
 """
 
 import numpy as np
@@ -43,8 +52,12 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         self.update_timer = QTimer()
         self.update_timer.setSingleShot(True)
         self.update_timer.timeout.connect(self._apply_real_time_adjustments)
-        self.debounce_delay = 150  # milliseconds - set to 0 to disable debouncing
+        self.debounce_delay = 50  # milliseconds - reduced for more responsive updates
         self.enable_debouncing = True  # Set to False for immediate updates (lower performance)
+        
+        # Performance monitoring
+        self.update_count = 0
+        self.last_update_time = 0
         
         # Convert QPixmap to numpy array for processing
         if original_pixmap:
@@ -65,11 +78,26 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
     def _connect_signals(self):
         """Connect slider and button signals."""
         # Slider connections for real-time updates
+        # Use sliderMoved for real-time updates while dragging
+        self.exposureSlider.sliderMoved.connect(self._on_exposure_changed)
+        self.highlightsSlider.sliderMoved.connect(self._on_highlights_changed)
+        self.shadowsSlider.sliderMoved.connect(self._on_shadows_changed)
+        self.claritySlider.sliderMoved.connect(self._on_clarity_changed)
+        self.radiusSlider.sliderMoved.connect(self._on_radius_changed)
+        
+        # Also connect valueChanged for when slider is released or clicked
         self.exposureSlider.valueChanged.connect(self._on_exposure_changed)
         self.highlightsSlider.valueChanged.connect(self._on_highlights_changed)
         self.shadowsSlider.valueChanged.connect(self._on_shadows_changed)
         self.claritySlider.valueChanged.connect(self._on_clarity_changed)
         self.radiusSlider.valueChanged.connect(self._on_radius_changed)
+        
+        # Input field connections for direct value entry
+        self.exposureValueInput.textChanged.connect(self._on_exposure_input_changed)
+        self.highlightsValueInput.textChanged.connect(self._on_highlights_input_changed)
+        self.shadowsValueInput.textChanged.connect(self._on_shadows_input_changed)
+        self.clarityValueInput.textChanged.connect(self._on_clarity_input_changed)
+        self.radiusValueInput.textChanged.connect(self._on_radius_input_changed)
         
         # Button connections
         self.resetButton.clicked.connect(self._reset_adjustments)
@@ -111,41 +139,158 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
     def _on_exposure_changed(self, value):
         """Handle exposure slider changes."""
         self.adjustments['exposure'] = value
-        self.exposureValue.setText(str(value))
+        # Synchronize input field with slider
+        if self.exposureValueInput.text() != str(value):
+            self.exposureValueInput.setText(str(value))
         self._schedule_update()
     
     def _on_highlights_changed(self, value):
         """Handle highlights slider changes."""
         self.adjustments['highlights'] = value
-        self.highlightsValue.setText(str(value))
+        # Synchronize input field with slider
+        if self.highlightsValueInput.text() != str(value):
+            self.highlightsValueInput.setText(str(value))
         self._schedule_update()
     
     def _on_shadows_changed(self, value):
         """Handle shadows slider changes."""
         self.adjustments['shadows'] = value
-        self.shadowsValue.setText(str(value))
+        # Synchronize input field with slider
+        if self.shadowsValueInput.text() != str(value):
+            self.shadowsValueInput.setText(str(value))
         self._schedule_update()
     
     def _on_clarity_changed(self, value):
         """Handle clarity slider changes."""
         self.adjustments['clarity'] = value
-        self.clarityValue.setText(str(value))
+        # Synchronize input field with slider
+        if self.clarityValueInput.text() != str(value):
+            self.clarityValueInput.setText(str(value))
         self._schedule_update()
     
     def _on_radius_changed(self, value):
         """Handle radius slider changes."""
         self.adjustments['radius'] = value
-        self.radiusValue.setText(str(value))
+        # Synchronize input field with slider
+        if self.radiusValueInput.text() != str(value):
+            self.radiusValueInput.setText(str(value))
         self._schedule_update()
+    
+    def _on_exposure_input_changed(self, text):
+        """Handle exposure input field changes."""
+        try:
+            value = int(text)
+            # Validate range (-200 to 200)
+            if -200 <= value <= 200:
+                self.adjustments['exposure'] = value
+                # Synchronize slider with input field
+                if self.exposureSlider.value() != value:
+                    self.exposureSlider.setValue(value)
+                self._schedule_update()
+            else:
+                # Out of range, revert to current slider value
+                self.exposureValueInput.setText(str(self.exposureSlider.value()))
+        except ValueError:
+            # Invalid input, revert to current slider value
+            self.exposureValueInput.setText(str(self.exposureSlider.value()))
+    
+    def _on_highlights_input_changed(self, text):
+        """Handle highlights input field changes."""
+        try:
+            value = int(text)
+            # Validate range (-200 to 200)
+            if -200 <= value <= 200:
+                self.adjustments['highlights'] = value
+                # Synchronize slider with input field
+                if self.highlightsSlider.value() != value:
+                    self.highlightsSlider.setValue(value)
+                self._schedule_update()
+            else:
+                # Out of range, revert to current slider value
+                self.highlightsValueInput.setText(str(self.highlightsSlider.value()))
+        except ValueError:
+            # Invalid input, revert to current slider value
+            self.highlightsValueInput.setText(str(self.highlightsSlider.value()))
+    
+    def _on_shadows_input_changed(self, text):
+        """Handle shadows input field changes."""
+        try:
+            value = int(text)
+            # Validate range (-200 to 200)
+            if -200 <= value <= 200:
+                self.adjustments['shadows'] = value
+                # Synchronize slider with input field
+                if self.shadowsSlider.value() != value:
+                    self.shadowsSlider.setValue(value)
+                self._schedule_update()
+            else:
+                # Out of range, revert to current slider value
+                self.shadowsValueInput.setText(str(self.shadowsSlider.value()))
+        except ValueError:
+            # Invalid input, revert to current slider value
+            self.shadowsValueInput.setText(str(self.shadowsSlider.value()))
+    
+    def _on_clarity_input_changed(self, text):
+        """Handle clarity input field changes."""
+        try:
+            value = int(text)
+            # Validate range (-200 to 200)
+            if -200 <= value <= 200:
+                self.adjustments['clarity'] = value
+                # Synchronize slider with input field
+                if self.claritySlider.value() != value:
+                    self.claritySlider.setValue(value)
+                self._schedule_update()
+            else:
+                # Out of range, revert to current slider value
+                self.clarityValueInput.setText(str(self.claritySlider.value()))
+        except ValueError:
+            # Invalid input, revert to current slider value
+            self.clarityValueInput.setText(str(self.claritySlider.value()))
+    
+    def _on_radius_input_changed(self, text):
+        """Handle radius input field changes."""
+        try:
+            value = int(text)
+            # Validate range (1 to 100)
+            if 1 <= value <= 100:
+                self.adjustments['radius'] = value
+                # Synchronize slider with input field
+                if self.radiusSlider.value() != value:
+                    self.radiusSlider.setValue(value)
+                self._schedule_update()
+            else:
+                # Out of range, revert to current slider value
+                self.radiusValueInput.setText(str(self.radiusSlider.value()))
+        except ValueError:
+            # Invalid input, revert to current slider value
+            self.radiusValueInput.setText(str(self.radiusSlider.value()))
     
     def _schedule_update(self):
         """Schedule a debounced update to improve performance."""
+        self.update_count += 1
+        
         if self.enable_debouncing and self.debounce_delay > 0:
             self.update_timer.stop()
             self.update_timer.start(self.debounce_delay)
         else:
             # Apply updates immediately if debouncing is disabled
             self._apply_real_time_adjustments()
+    
+    def set_immediate_updates(self, enabled=True):
+        """
+        Enable or disable immediate updates for real-time responsiveness.
+        
+        Args:
+            enabled (bool): If True, disables debouncing for immediate updates.
+                           If False, enables debouncing for better performance.
+        """
+        if enabled:
+            self.enable_debouncing = False
+            self.debounce_delay = 0
+        else:
+            self.enable_debouncing = True
+            self.debounce_delay = 50
     
     def _apply_real_time_adjustments(self):
         """Apply adjustments in real-time and emit signal."""
@@ -252,6 +397,13 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         self.claritySlider.setValue(0)
         self.radiusSlider.setValue(10)
         
+        # Reset input fields to default values
+        self.exposureValueInput.setText("0")
+        self.highlightsValueInput.setText("0")
+        self.shadowsValueInput.setText("0")
+        self.clarityValueInput.setText("0")
+        self.radiusValueInput.setText("10")
+        
         # Reset adjustments dict
         self.adjustments = {
             'exposure': 0,
@@ -260,13 +412,6 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
             'clarity': 0,
             'radius': 10
         }
-        
-        # Update value labels
-        self.exposureValue.setText("0")
-        self.highlightsValue.setText("0")
-        self.shadowsValue.setText("0")
-        self.clarityValue.setText("0")
-        self.radiusValue.setText("10")
         
         # Apply reset
         self._apply_real_time_adjustments()

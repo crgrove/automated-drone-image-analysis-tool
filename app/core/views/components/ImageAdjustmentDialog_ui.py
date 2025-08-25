@@ -81,7 +81,7 @@ class Ui_ImageAdjustmentDialog(object):
         group_layout.setContentsMargins(0, 0, 0, 0)
         group_layout.setSpacing(5)
         
-        # Label and value layout
+        # Label layout
         label_layout = QtWidgets.QHBoxLayout()
         
         # Label
@@ -93,22 +93,6 @@ class Ui_ImageAdjustmentDialog(object):
         label.setObjectName(label_name)
         setattr(self, label_name, label)
         label_layout.addWidget(label)
-        
-        # Spacer
-        label_spacer = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        label_layout.addItem(label_spacer)
-        
-        # Value label
-        value_label = QtWidgets.QLabel()
-        value_label.setText(str(default_val))
-        value_label.setMinimumWidth(30)
-        value_label.setAlignment(QtCore.Qt.AlignRight)
-        font = QtGui.QFont()
-        font.setPointSize(10)
-        value_label.setFont(font)
-        value_label.setObjectName(value_name)
-        setattr(self, value_name, value_label)
-        label_layout.addWidget(value_label)
         
         group_layout.addLayout(label_layout)
         
@@ -122,6 +106,27 @@ class Ui_ImageAdjustmentDialog(object):
         slider.setObjectName(slider_name)
         setattr(self, slider_name, slider)
         group_layout.addWidget(slider)
+        
+        # Slider row layout for slider and input field
+        slider_row_layout = QtWidgets.QHBoxLayout()
+        slider_row_layout.setContentsMargins(0, 0, 0, 0)
+        slider_row_layout.setSpacing(15)
+        
+        # Add slider to the left side of the row (will expand to fill available space)
+        slider_row_layout.addWidget(slider, 1)  # Stretch factor 1 to expand
+        
+        # Value input textbox at the end of the slider row
+        value_input = QtWidgets.QLineEdit()
+        value_input.setText(str(default_val))
+        value_input.setMinimumWidth(50)
+        value_input.setMaximumWidth(60)
+        value_input.setAlignment(QtCore.Qt.AlignRight)
+        value_input.setObjectName(f"{value_name}Input")
+        setattr(self, f"{value_name}Input", value_input)
+        slider_row_layout.addWidget(value_input, 0)  # No stretch, fixed size
+        
+        # Add the slider row layout to the group
+        group_layout.addLayout(slider_row_layout)
         
         self.verticalLayout.addWidget(group_widget)
 
