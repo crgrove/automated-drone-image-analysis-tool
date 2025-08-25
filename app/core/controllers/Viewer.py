@@ -112,6 +112,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_images()
         self._initialize_thumbnails()
         self._load_thumbnails_in_range(0, self.thumbnail_limit)
+        self._setupViewer() 
 
         # UI tweaks
         self.setFocusPolicy(Qt.StrongFocus)
@@ -210,19 +211,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                     pass  # Not a valid image
         self.images = valid_images
 
-        if len(self.images) == 0:
-            self._show_no_images_message()
-        else:
-            self._load_initial_image()
-            self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
-            self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
-            self.kmlButton.clicked.connect(self._kmlButton_clicked)
-            self.pdfButton.clicked.connect(self._pdfButton_clicked)
-            self.zipButton.clicked.connect(self._zipButton_clicked)
-            self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
-            self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
-            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
-
     def _initialize_thumbnails(self):
         """Initializes the layout for thumbnails with default styling."""
         self.thumbnailLayout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
@@ -266,6 +254,21 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.thumbnail_loader.finished.connect(self._on_thumbnail_load_finished)
         thread.started.connect(self.thumbnail_loader.run)
         thread.start()
+
+    def _setupViewer(self):
+        if len(self.images) == 0:
+            self._show_no_images_message()
+        else:
+            self._load_initial_image()
+            self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
+            self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
+            self.kmlButton.clicked.connect(self._kmlButton_clicked)
+            self.pdfButton.clicked.connect(self._pdfButton_clicked)
+            self.zipButton.clicked.connect(self._zipButton_clicked)
+            self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
+            self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
+            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
+        
 
     def _on_thumbnail_loaded(self, index, icon):
         """Updates the thumbnail icon and overlay for the loaded thumbnail.
