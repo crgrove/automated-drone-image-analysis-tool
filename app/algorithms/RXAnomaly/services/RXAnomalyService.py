@@ -43,7 +43,11 @@ class RXAnomalyService(AlgorithmService):
             AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
         """
         try:
-            masks = pieces = self.split_image(img, self.segments)
+            # Convert to CIE LAB color space for more perceptually uniform analysis
+            lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+            # Split the LAB image into segments for RX processing
+            masks = pieces = self.split_image(lab_img, self.segments)
             for x in range(len(pieces)):
                 for y in range(len(pieces[x])):
                     rx_values = spectral.rx(pieces[x][y])
