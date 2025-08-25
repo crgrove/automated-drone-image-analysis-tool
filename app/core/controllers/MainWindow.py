@@ -13,7 +13,7 @@ from core.views.MainWindow_ui import Ui_MainWindow
 
 from helpers.PickleHelper import PickleHelper
 
-from core.controllers.Viewer import Viewer
+from core.controllers.viewer.Viewer import Viewer
 from core.controllers.Perferences import Preferences
 from core.controllers.VideoParser import VideoParser
 from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
@@ -76,12 +76,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionLoadFile.triggered.connect(self._open_load_file)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
-        
+
         # Add RTMP Color Detection functionality
         self.rtmp_viewer = None
         if hasattr(self, 'actionRTMPDetection'):
             self.actionRTMPDetection.triggered.connect(self._open_rtmp_detection)
-            
+
         # Add RTMP Anomaly Detection functionality
         self.rtmp_anomaly_viewer = None
         if hasattr(self, 'actionRTMPAnomalyDetection'):
@@ -439,7 +439,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         parser = VideoParser(self.settings_service.get_setting('Theme'))
         parser.exec_()
-        
+
     def _open_rtmp_detection(self):
         """
         Opens the Real-Time RTMP Color Detection viewer.

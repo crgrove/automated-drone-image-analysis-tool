@@ -3,6 +3,7 @@ import subprocess
 import onnxruntime as ort
 import re
 
+
 class CudaCheck:
 
     @staticmethod
@@ -84,7 +85,7 @@ class CudaCheck:
                 pass
 
         results["cudnn_in_path"] = cudnn_dir in search_path if cudnn_dir else False
-                # Check ONNX Runtime GPU provider
+        # Check ONNX Runtime GPU provider
         providers = ort.get_available_providers()
         results["ort_cuda_provider_available"] = 'CUDAExecutionProvider' in providers
 

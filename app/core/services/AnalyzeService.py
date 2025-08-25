@@ -89,7 +89,7 @@ class AnalyzeService(QObject):
                 input_dir=self.input,
                 output_dir=self.output_dir,
                 identifier_color=self.identifier_color,
-                aoi_radius = self.aoi_radius,
+                aoi_radius=self.aoi_radius,
                 algorithm=self.algorithm['name'],
                 thermal=self.is_thermal,
                 num_processes=self.num_processes,

@@ -106,7 +106,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # coordinates for sharing
         self.current_decimal_coords = None
-        
+
         # scale bar (re‑parented later into HUD overlay)
         self.scaleBar = ScaleBarWidget()
 
@@ -114,7 +114,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_images()
         self._initialize_thumbnails()
         self._load_thumbnails_in_range(0, self.thumbnail_limit)
-        self._setupViewer() 
+        self._setupViewer()
 
         # UI tweaks
         self.setFocusPolicy(Qt.StrongFocus)
@@ -134,7 +134,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.main_image is not None:
             self.main_image.resetZoom()
             self._place_overlay()
-            
+
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
         for thread, loader in self.__threads:
@@ -161,7 +161,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         layout.insertWidget(layout.indexOf(self.showOverlayToggle) + 1, self.showOverlayLabel)
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
-        
+
         # Add highlight pixels of interest toggle
         self.highlightPixelsToggle = Toggle()
         layout.insertWidget(layout.indexOf(self.showOverlayLabel) + 1, self.highlightPixelsToggle)
@@ -171,10 +171,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle.setChecked(False)
         self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
         self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (Ctrl+I)")
-        
+
         # Add measure button to toolbar
         self._add_measure_button(self.theme)
-        
+
         # Session variable to store GSD value
         self.current_gsd = None
         self.measure_dialog = None
@@ -270,7 +270,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
-        
 
     def _on_thumbnail_loaded(self, index, icon):
         """Updates the thumbnail icon and overlay for the loaded thumbnail.
@@ -376,11 +375,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             image_service = ImageService(image['path'])
 
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
-            
+
             # Highlight pixels of interest if toggle is enabled
             if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
                 augmented_image = image_service.highlight_pixels_of_interest(augmented_image)
-            
+
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
@@ -389,7 +388,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
-
 
             altitude = image_service.get_relative_altitude(self.distance_unit)
             if altitude:
@@ -609,24 +607,24 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Opens the image adjustment dialog for the current image."""
         if self.main_image is None:
             return
-        
+
         # Get current pixmap from the image viewer
         current_pixmap = self.main_image.pixmap()
         if current_pixmap is None:
             return
-        
+
         # Store original pixmap for restoration if cancelled
         self._original_pixmap = current_pixmap
-        
+
         # Create and show the adjustment dialog
         dialog = ImageAdjustmentDialog(self, current_pixmap)
-        
+
         # Connect the real-time adjustment signal
         dialog.imageAdjusted.connect(self._on_image_adjusted)
-        
+
         # Show dialog
         result = dialog.exec_()
-        
+
         # If user clicked Apply or OK, keep the adjustments
         if result == QDialog.Accepted:
             adjusted_pixmap = dialog.get_adjusted_pixmap()
@@ -638,7 +636,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _on_image_adjusted(self, adjusted_pixmap):
         """Handle real-time image adjustments from the dialog.
-        
+
         Args:
             adjusted_pixmap (QPixmap): The adjusted image pixmap.
         """
@@ -798,8 +796,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         else:
             self.statusBar.setText("")
 
-
-
     # ---------- coordinates popup ----------
     def _on_coordinates_clicked(self, link):
         """Handle clicks on GPS coordinates in the status bar."""
@@ -807,12 +803,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         coord_text = self.messages.get('GPS Coordinates')
         if not coord_text:
             return
-        
+
         # Show coordinates popup
         self._show_coordinates_popup(coord_text)
-    
 
-    
     def _show_coordinates_popup(self, coord_text):
         """Show a small popup with coordinate sharing options."""
         # Create popup widget
@@ -846,81 +840,81 @@ class Viewer(QMainWindow, Ui_Viewer):
                 font-weight: bold;
             }
         """)
-        
+
         # Create layout
         layout = QVBoxLayout(popup)
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Title
         title = QLabel(f"GPS Coordinates: {coord_text}")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
-        
+
         # Buttons
         copy_btn = QPushButton("📋 Copy coordinates")
         copy_btn.clicked.connect(lambda: self._copy_coords_to_clipboard(coord_text))
         layout.addWidget(copy_btn)
-        
+
         maps_btn = QPushButton("🗺️ Open in Google Maps")
         maps_btn.clicked.connect(self._open_in_maps)
         layout.addWidget(maps_btn)
-        
+
         earth_btn = QPushButton("🌍 View in Google Earth")
         earth_btn.clicked.connect(self._open_in_earth)
         layout.addWidget(earth_btn)
-        
+
         whatsapp_btn = QPushButton("📱 Send via WhatsApp")
         whatsapp_btn.clicked.connect(self._share_whatsapp)
         layout.addWidget(whatsapp_btn)
-        
+
         telegram_btn = QPushButton("📨 Send via Telegram")
         telegram_btn.clicked.connect(self._share_telegram)
         layout.addWidget(telegram_btn)
-        
+
         # Position popup near the status bar
         popup.adjustSize()
         statusbar_pos = self.statusBarWidget.mapToGlobal(self.statusBarWidget.rect().bottomLeft())
         popup_pos = self.mapFromGlobal(statusbar_pos)
-        
+
         # Ensure popup doesn't go off-screen
         screen_geometry = self.screen().geometry()
         popup_x = max(screen_geometry.x(), min(popup_pos.x(), screen_geometry.right() - popup.width()))
         popup_y = max(screen_geometry.y(), min(popup_pos.y() - popup.height(), screen_geometry.bottom() - popup.height()))
-        
+
         popup.move(popup_x, popup_y)
-        
+
         # Show popup
         popup.show()
-        
+
         # Auto-close when clicking outside
         popup.setFocus()
-        
+
         # Use a simple timer to auto-close the popup after 5 seconds
         close_timer = QTimer(popup)
         close_timer.setSingleShot(True)
         close_timer.timeout.connect(popup.close)
         close_timer.start(5000)  # 5 seconds
-        
+
         # Install a simple event filter to close popup when clicking outside
         popup.installEventFilter(self._create_simple_popup_filter(popup))
-    
+
     def _create_simple_popup_filter(self, popup):
         """Create a simple event filter to close the popup when clicking outside."""
         from PyQt5.QtCore import QObject
-        
+
         class SimplePopupFilter(QObject):
             def __init__(self, popup_widget):
                 super().__init__()
                 self.popup = popup_widget
-            
+
             def eventFilter(self, obj, event):
                 if event.type() == QEvent.MouseButtonPress:
                     if not self.popup.geometry().contains(event.globalPos()):
                         self.popup.close()
                         return True
                 return False
-        
+
         return SimplePopupFilter(popup)
 
     def _copy_coords_to_clipboard(self, coord_text=None):
@@ -964,14 +958,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hfov is None:
             hfov = 60.0
 
-        #theta = 90 + pitch
-        #slant = altitude / math.cos(math.radians(theta))
-        #ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
-        #ge_fov = 60.0
-        #range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
+        # theta = 90 + pitch
+        # slant = altitude / math.cos(math.radians(theta))
+        # ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
+        # ge_fov = 60.0
+        # range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
         range_val = 50
         tilt = max(0, min(180, 90 + pitch))
-        #cam_alt = range_val * math.cos(math.radians(tilt))
+        # cam_alt = range_val * math.cos(math.radians(tilt))
 
         kml = (
             "<?xml version='1.0' encoding='UTF-8'?>\n"
@@ -1020,7 +1014,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             return
         lat, lon = lat_lon
         maps = f"https://www.google.com/maps?q={lat},{lon}"
-        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}') }"
+        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}')}"
         QDesktopServices.openUrl(QUrl(tg_url))
 
     def _get_decimals_or_parse(self):
@@ -1057,8 +1051,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._toastTimer.start(max(1, msec))
         except Exception:
             pass
-
-
 
     def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or GPS coordinates at the mouse position.
@@ -1218,14 +1210,14 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _add_measure_button(self, theme):
         """Adds a measure button to the toolbar.
-        
+
         Args:
             theme (str): The current active theme.
         """
         # Find the location after showOverlayLabel in the layout
         layout = self.TitleWidget.layout()
         overlay_label_index = layout.indexOf(self.showOverlayLabel)
-        
+
         # Create measure button
         from PyQt5.QtWidgets import QToolButton
         from PyQt5.QtGui import QIcon
@@ -1236,36 +1228,36 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.measureButton.setObjectName("measureButton")
         self.measureButton.setToolTip("Measure Distance (Ctrl+M)")
         self.measureButton.clicked.connect(self._open_measure_dialog)
-        
+
         # Add spacer and button after the overlay label
         layout.insertSpacing(overlay_label_index + 1, 10)
         layout.insertWidget(overlay_label_index + 2, self.measureButton)
-    
+
     def _open_measure_dialog(self):
         """Opens the measure dialog for distance measurement."""
         if self.main_image is None or not self.main_image.hasImage():
             return
-        
+
         # Import here to avoid circular imports
         from core.controllers.viewer.MeasureDialog import MeasureDialog
-        
+
         # Try to get GSD from current image if we don't have a stored value
         if self.current_gsd is None:
             gsd_text = self.messages.get("Estimated Average GSD")  # e.g. '3.2cm/px'
             if gsd_text:
                 try:
                     self.current_gsd = float(gsd_text.replace("cm/px", "").strip())
-                except:
+                except Exception:
                     pass
-        
+
         if self.measure_dialog is None or not self.measure_dialog.isVisible():
             self.measure_dialog = MeasureDialog(self, self.main_image, self.current_gsd, self.distance_unit)
             self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
             self.measure_dialog.show()
-    
+
     def _on_gsd_changed(self, gsd_value):
         """Updates the stored GSD value.
-        
+
         Args:
             gsd_value (float): The new GSD value in cm/px.
         """

@@ -133,7 +133,6 @@ class MetaDataHelper:
             et.terminate()
         return thermal_img_bytes
 
-
     @staticmethod
     def get_meta_data_exiftool(file_path):
         """
@@ -234,23 +233,25 @@ class MetaDataHelper:
 
     @staticmethod
     def get_xmp_data_merged(file_path: str) -> dict:
-        import struct, xml.etree.ElementTree as ET
-        _XMP_STD_HDR = b"http://ns.adobe.com/xap/1.0/\x00"
         _XMP_EXT_HDR = b"http://ns.adobe.com/xmp/extension/\x00"
 
         def parse_base(data: bytes):
             s = data.find(b'<?xpacket begin')
-            if s == -1: return None, {}
+            if s == -1:
+                return None, {}
             e = data.find(b'<?xpacket end', s)
-            if e == -1: return None, {}
+            if e == -1:
+                return None, {}
             e = data.find(b'>', e) + 1
-            if e <= 0: return None, {}
+            if e <= 0:
+                return None, {}
             xml = data[s:e].decode('utf-8', 'ignore')
             d = MetaDataHelper._parse_xmp_xml(xml)
             return d.get('HasExtendedXMP'), d  # our parser strips ns → key becomes 'HasExtendedXMP'
 
         def collect_ext(data: bytes, guid: str):
-            if not guid: return None
+            if not guid:
+                return None
             chunks, total = [], None
             i = 2
             while i + 4 <= len(data) and data[i] == 0xFF and data[i+1] != 0xDA:
@@ -263,12 +264,13 @@ class MetaDataHelper:
                         g = payload[len(_XMP_EXT_HDR):len(_XMP_EXT_HDR)+32].decode('ascii', 'ignore')
                         if g == guid:
                             tlen = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+32:len(_XMP_EXT_HDR)+36])[0]
-                            off  = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+36:len(_XMP_EXT_HDR)+40])[0]
+                            off = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+36:len(_XMP_EXT_HDR)+40])[0]
                             chunk = payload[len(_XMP_EXT_HDR)+40:]
                             total = tlen if total is None else total
                             chunks.append((off, bytes(chunk)))
                 i = seg_end
-            if not chunks or total is None: return None
+            if not chunks or total is None:
+                return None
             buf = bytearray(total)
             for off, ch in sorted(chunks, key=lambda x: x[0]):
                 buf[off:off+len(ch)] = ch
@@ -287,7 +289,8 @@ class MetaDataHelper:
             ext_dict = MetaDataHelper._parse_xmp_xml(ext_xml.decode('utf-8', 'ignore'))
         except Exception:
             ext_dict = {}
-        merged = dict(base); merged.update(ext_dict)
+        merged = dict(base)
+        merged.update(ext_dict)
         return merged
 
     @staticmethod
@@ -401,6 +404,7 @@ class MetaDataHelper:
         """
         # 1) Build/parse the current base XMP
         xmp_segment = MetaDataHelper.extract_xmp(destination_file)
+
         def minimal_packet():
             return (
                 '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>'
@@ -471,7 +475,7 @@ class MetaDataHelper:
         ET.register_namespace("custom", namespace_uri)
         ext_xml = ET.tostring(ext_root, encoding="utf-8", xml_declaration=False)
 
-        guid =MetaDataHelper._make_guid(ext_xml)
+        guid = MetaDataHelper._make_guid(ext_xml)
 
         # Add GUID pointer to base packet
         desc.set("{http://ns.adobe.com/xmp/note/}HasExtendedXMP", guid)
@@ -482,7 +486,7 @@ class MetaDataHelper:
 
         # 2) Write the extended packet (chunked APP1)
         MetaDataHelper.embed_extended_xmp(ext_xml, destination_file, guid)
-        
+
     @staticmethod
     def embed_extended_xmp(extended_xml_bytes: bytes, destination_file: str, guid: str):
         """
@@ -518,7 +522,6 @@ class MetaDataHelper:
 
         with open(destination_file, "wb") as f:
             f.write(out)
-
 
     @staticmethod
     def _parse_xmp_xml(xmp_xml):

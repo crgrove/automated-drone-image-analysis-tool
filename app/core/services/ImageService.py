@@ -314,7 +314,6 @@ class ImageService:
             return drones_df[
                 (drones_df['Model (Exif)'] == model)
             ]
-        
 
     def circle_areas_of_interest(self, identifier_color, areas_of_interest):
         """
@@ -344,11 +343,11 @@ class ImageService:
     def highlight_pixels_of_interest(self, image_array, highlight_color=(255, 0, 255)):
         """
         Highlights pixels of interest stored in XMP metadata with the specified color.
-        
+
         Args:
             image_array (np.ndarray): The input image array.
             highlight_color (tuple): RGB color tuple for highlighting (default: magenta).
-            
+
         Returns:
             np.ndarray: The image array with highlighted pixels of interest.
         """
@@ -357,17 +356,17 @@ class ImageService:
             xmp_data = MetaDataHelper.get_xmp_data(self.path, parse=True)
             if not xmp_data:
                 return image_array
-            
+
             # Look for pixels of interest in the custom namespace
             pixels_key = None
             for key in xmp_data.keys():
                 if 'PixelsOfInterest' in key:
                     pixels_key = key
                     break
-            
+
             if not pixels_key:
                 return image_array
-            
+
             # Parse the pixels of interest
             pixels_str = xmp_data[pixels_key]
             try:
@@ -375,16 +374,16 @@ class ImageService:
                 pixels_of_interest = json.loads(pixels_str)
             except (json.JSONDecodeError, TypeError):
                 return image_array
-            
+
             if not pixels_of_interest:
                 return image_array
-            
+
             # Create a copy of the image to avoid modifying the original
             highlighted_image = image_array.copy()
-            
+
             # Convert highlight color to numpy array
             highlight_color_array = np.array(highlight_color, dtype=np.uint8)
-            
+
             # Highlight each pixel with the specified color
             for pixel in pixels_of_interest:
                 if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
@@ -392,15 +391,15 @@ class ImageService:
                     # Check bounds
                     if 0 <= y < highlighted_image.shape[0] and 0 <= x < highlighted_image.shape[1]:
                         highlighted_image[y, x] = highlight_color_array
-            
+
             return highlighted_image
-            
+
         except Exception as e:
             # Log error if logger is available
             try:
                 from core.services.LoggerService import LoggerService
                 logger = LoggerService()
                 logger.error(f"Error highlighting pixels of interest: {e}")
-            except:
+            except Exception:
                 pass
             return image_array
