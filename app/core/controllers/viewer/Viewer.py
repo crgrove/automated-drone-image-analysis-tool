@@ -3,24 +3,27 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 import qimage2ndarray
-from PIL import Image, UnidentifiedImageError
+from PIL import UnidentifiedImageError
 import traceback
 import math
-import numpy as np
-import json
+
 from pathlib import Path
-from collections import UserDict, OrderedDict
-from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QImageReader, QIcon, QMovie, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
-from PyQt5.QtWidgets import QSizePolicy
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QPointF, QEvent, QRect, QTimer, QUrl
-from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QCheckBox
+
+from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
+from PyQt5.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
+from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
 from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
 from qtwidgets import Toggle
 import tempfile
 
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
-from core.controllers.ImageAdjustmentDialog import ImageAdjustmentDialog
+from core.controllers.viewer.ImageAdjustmentDialog import ImageAdjustmentDialog
+from core.controllers.viewer.StatusDict import StatusDict
+from core.controllers.viewer.ScaleBarWidget import ScaleBarWidget
+from core.controllers.viewer.LoadingDialog import LoadingDialog
+from core.controllers.viewer.ThumbnailLoader import ThumbnailLoader
+from core.controllers.viewer.PdfGenerationThread import PdfGenerationThread
 
 from core.services.LoggerService import LoggerService
 from core.services.KMLGeneratorService import KMLGeneratorService
@@ -29,7 +32,6 @@ from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo
-from helpers.MetaDataHelper import MetaDataHelper
 from urllib.parse import quote_plus
 
 
@@ -1245,7 +1247,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             return
         
         # Import here to avoid circular imports
-        from core.controllers.MeasureDialog import MeasureDialog
+        from core.controllers.viewer.MeasureDialog import MeasureDialog
         
         # Try to get GSD from current image if we don't have a stored value
         if self.current_gsd is None:
@@ -1321,202 +1323,3 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, "main_image") and obj is self.main_image.viewport() and ev.type() == QEvent.Resize:
             self._place_overlay()
         return super().eventFilter(obj, ev)
-
-
-class LoadingDialog(QDialog):
-    """Custom dialog for showing a loading spinner and message."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Generating Report")
-        self.setModal(True)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        self.setFixedSize(300, 200)
-
-        # Layout and widgets
-        layout = QVBoxLayout()
-
-        # Add spinning loader
-        self.spinner_label = QLabel(self)
-        self.spinner_label.setAlignment(Qt.AlignCenter)
-        self.spinner_movie = QMovie(":/icons/loading.gif")  # Path to your GIF in the resource file
-        self.spinner_movie.setScaledSize(QSize(50, 50))  # Adjust the size if needed
-        self.spinner_label.setMovie(self.spinner_movie)
-        self.spinner_movie.start()  # Start the animation
-
-        # Add message label
-        self.message_label = QLabel("Report generation in progress...")
-        self.message_label.setAlignment(Qt.AlignCenter)
-
-        # Add cancel button
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.clicked.connect(self.reject)
-
-        # Add widgets to layout
-        layout.addWidget(self.spinner_label)
-        layout.addWidget(self.message_label)
-        layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
-
-        self.setLayout(layout)
-
-
-class ThumbnailLoader(QThread):
-    """Threaded loader for generating and displaying image thumbnails."""
-
-    thumbnail_loaded = pyqtSignal(int, QIcon)
-
-    def __init__(self, images, start_index, end_index, existing_thumbnails, parent=None):
-        """Initializes the thumbnail loader.
-
-        Args:
-            images (list): List of image data dictionaries.
-            start_index (int): Starting index for thumbnail loading.
-            end_index (int): Ending index for thumbnail loading.
-            existing_thumbnails (list): Indices of already loaded thumbnails.
-            parent (QObject, optional): Parent object for the loader.
-        """
-        super().__init__(parent)
-        self.images = images
-        self.start_index = max(start_index, 0)
-        self.end_index = min(end_index, len(images))
-        self.existing_thumbnails = existing_thumbnails
-
-    def run(self):
-        """Runs the thumbnail loading process."""
-        for index in range(self.start_index, self.end_index):
-            if index not in self.existing_thumbnails:
-                image_path = self.images[index]['path']
-                reader = QImageReader(image_path)
-                reader.setScaledSize(QSize(100, 56))
-                pixmap = QPixmap.fromImage(reader.read())
-                icon = QIcon(pixmap)
-                self.thumbnail_loaded.emit(index, icon)
-
-
-class PdfGenerationThread(QThread):
-    """Thread for generating the PDF report."""
-    finished = pyqtSignal()
-    canceled = pyqtSignal()
-    errorOccurred = pyqtSignal(str)
-
-    def __init__(self, pdf_generator, output_path):
-        """Initializes the PdfGenerationThread.
-
-        Args:
-            pdf_generator (PdfGeneratorService): The PDF generator instance responsible for creating the report.
-            output_path (str): The file path where the generated PDF will be saved.
-        """
-        super().__init__()
-        self.pdf_generator = pdf_generator
-        self.output_path = output_path
-        self._is_canceled = False
-
-    def run(self):
-        """Executes the PDF generation process.
-
-        If the process is not canceled, it generates the PDF report and emits
-        the `finished` signal upon successful completion.
-        """
-        try:
-            if not self._is_canceled:
-                error_message = self.pdf_generator.generate_report(self.output_path)
-                if error_message:
-                    self.errorOccurred.emit(error_message)  # Emit error if there's an error message
-                else:
-                    self.finished.emit()  # Emit finished if successful
-        except Exception as e:
-            self.errorOccurred.emit(str(e))  # Emit error if an exception occurs
-
-    def cancel(self):
-        """Cancels the PDF generation process.
-
-        Sets the `_is_canceled` flag to True and emits the `canceled` signal.
-        """
-        self._is_canceled = True
-        self.canceled.emit()
-
-
-class StatusDict(UserDict):
-    """
-    Dictionary-like object that maintains a custom key order and supports
-    callback execution when values are updated.
-
-    Attributes:
-        callback (Callable): Function to call when values are updated.
-        key_order (list): Explicit order to maintain for dictionary keys.
-    """
-    def __init__(self, *args, callback=None, key_order=None, **kwargs):
-        self.data = OrderedDict()  # Maintain explicit ordering
-        super().__init__(*args, **kwargs)
-        self.callback = callback
-        self.key_order = key_order or []  # Store explicit ordering
-
-    def __setitem__(self, key, value):
-        if key in self.data:
-            del self.data[key]  # Remove existing entry to reinsert in correct order
-        self.data[key] = value  # Insert the key-value pair
-
-        self._enforce_order()  # Ensure keys are in correct order
-
-        if self.callback:
-            self.callback(key, value)
-
-    def __delitem__(self, key):
-        super().__delitem__(key)
-        if self.callback:
-            self.callback(f"Deleted {key}")
-
-    def set_order(self, key_order):
-        """Sets the explicit order of keys in the dictionary."""
-        self.key_order = key_order
-        self._enforce_order()  # Apply the new order immediately
-
-    def _enforce_order(self):
-        """Reorders the dictionary based on self.key_order."""
-        new_data = OrderedDict()
-        for key in self.key_order:
-            if key in self.data:
-                new_data[key] = self.data[key]
-        self.data = new_data  # Replace existing dict with the ordered one
-
-    def items(self):
-        """Returns items in the explicitly set order."""
-        return [(key, self.data[key]) for key in self.key_order if key in self.data]
-
-
-class ScaleBarWidget(QWidget):
-    """
-    Draws a *fixed‑width* scale bar (default 120 px) and a text label that you
-    can change at runtime with setLabel().
-    """
-    def __init__(self, parent=None, bar_px=120):
-        super().__init__(parent)
-        self._bar_px = bar_px
-        self._label_text = ""
-        self.setFixedSize(bar_px + 80, 30)          # +80 leaves room for text
-
-    # ---------- public API ----------
-    def setLabel(self, text: str):
-        if text != self._label_text:
-            self._label_text = text
-            self.update()        # trigger paintEvent
-
-    # ---------- paint ----------
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        pen = QPen(Qt.white, 2)
-        painter.setPen(pen)
-
-        mid_y = self.height() // 2
-        start = 10                       # left margin
-        end = start + self._bar_px
-
-        # bar + end caps
-        painter.drawLine(start, mid_y, end, mid_y)
-        painter.drawLine(start, mid_y - 5, start, mid_y + 5)
-        painter.drawLine(end,   mid_y - 5, end,   mid_y + 5)
-
-        # label
-        painter.setFont(QFont("Arial", 10))
-        painter.drawText(end + 8, mid_y + 4, self._label_text)
