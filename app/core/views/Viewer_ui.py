@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\John\Downloads\ADIAT_Dev2\automated-drone-image-analysis-tool\resources/views\Viewer.ui'
+# Form implementation generated from reading ui file 'C:\Users\charl\source\repos\crgrove\adiat_ai\resources/views\Viewer.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Viewer(object):
     def setupUi(self, Viewer):
         Viewer.setObjectName("Viewer")
-        Viewer.resize(1040, 915)
+        Viewer.resize(1040, 852)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/ADIAT.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Viewer.setWindowIcon(icon)
@@ -229,13 +229,23 @@ class Ui_Viewer(object):
         self.thumbnailLayout.addLayout(self.horizontalLayout)
         self.thumbnailScrollArea.setWidget(self.scrollAreaWidgetContents)
         self.verticalLayout.addWidget(self.thumbnailScrollArea)
-        Viewer.setCentralWidget(self.centralwidget)
-        self.statusbar = QtWidgets.QStatusBar(Viewer)
+        self.statusBarWidget = QtWidgets.QWidget(self.centralwidget)
+        self.statusBarWidget.setObjectName("statusBarWidget")
+        self.horizontalLayout_4 = QtWidgets.QHBoxLayout(self.statusBarWidget)
+        self.horizontalLayout_4.setObjectName("horizontalLayout_4")
+        self.statusBar = QtWidgets.QLabel(self.statusBarWidget)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.statusBar.sizePolicy().hasHeightForWidth())
+        self.statusBar.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setPointSize(10)
-        self.statusbar.setFont(font)
-        self.statusbar.setObjectName("statusbar")
-        Viewer.setStatusBar(self.statusbar)
+        self.statusBar.setFont(font)
+        self.statusBar.setObjectName("statusBar")
+        self.horizontalLayout_4.addWidget(self.statusBar)
+        self.verticalLayout.addWidget(self.statusBarWidget)
+        Viewer.setCentralWidget(self.centralwidget)
         self.actionOpen = QtWidgets.QAction(Viewer)
         self.actionOpen.setObjectName("actionOpen")
 
@@ -266,5 +276,6 @@ class Ui_Viewer(object):
         self.previousImageButton.setProperty("iconName", _translate("Viewer", "previous.png"))
         self.nextImageButton.setText(_translate("Viewer", "Next Image"))
         self.nextImageButton.setProperty("iconName", _translate("Viewer", "next.png"))
+        self.statusBar.setText(_translate("Viewer", "TextLabel"))
         self.actionOpen.setText(_translate("Viewer", "Open"))
 from . import resources_rc
