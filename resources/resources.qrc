@@ -5,9 +5,9 @@
     <file alias="Roboto-Regular.ttf">fonts/Roboto-Regular.ttf</file>
     <file alias="ADIAT.ico">icons/ADIAT.ico</file>
   </qresource>
-
   <qresource prefix="/icons">
     <file alias="cancel.png">icons/dark_theme/cancel.png</file>
+    <file alias="adjustments.png">icons/dark_theme/adjustments.png</file>
     <file alias="color.png">icons/dark_theme/color.png</file>
     <file alias="download.png">icons/dark_theme/download.png</file>
     <file alias="eye.png">icons/dark_theme/eye.png</file>
@@ -19,15 +19,15 @@
     <file alias="north.png">icons/dark_theme/north.png</file>
     <file alias="pdf.png">icons/dark_theme/pdf.png</file>
     <file alias="previous.png">icons/dark_theme/previous.png</file>
-    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="search.png">icons/dark_theme/search.png</file>
+    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="start.png">icons/dark_theme/start.png</file>
     <file alias="zip.png">icons/dark_theme/zip.png</file>
     <file alias="zoom_in.png">icons/dark_theme/zoom_in.png</file>
     <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
   </qresource>
-  
   <qresource prefix="/icons/dark">
+    <file alias="adjustments.png">icons/dark_theme/adjustments.png</file>
     <file alias="cancel.png">icons/dark_theme/cancel.png</file>
     <file alias="color.png">icons/dark_theme/color.png</file>
     <file alias="download.png">icons/dark_theme/download.png</file>
@@ -40,15 +40,16 @@
     <file alias="north.png">icons/dark_theme/north.png</file>
     <file alias="pdf.png">icons/dark_theme/pdf.png</file>
     <file alias="previous.png">icons/dark_theme/previous.png</file>
-    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="search.png">icons/dark_theme/search.png</file>
+    <file alias="ruler.png">icons/dark_theme/ruler.png</file>
     <file alias="start.png">icons/dark_theme/start.png</file>
     <file alias="zip.png">icons/dark_theme/zip.png</file>
     <file alias="zoom_in.png">icons/dark_theme/zoom_in.png</file>
     <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
   </qresource>
-
   <qresource prefix="/icons/light">
+    <file alias="adjustments.png">icons/light_theme/adjustments.png</file>
+    <file alias="ruler.png">icons/light_theme/ruler.png</file>
     <file alias="cancel.png">icons/light_theme/cancel.png</file>
     <file alias="color.png">icons/light_theme/color.png</file>
     <file alias="download.png">icons/light_theme/download.png</file>
@@ -61,7 +62,6 @@
     <file alias="north.png">icons/light_theme/north.png</file>
     <file alias="pdf.png">icons/light_theme/pdf.png</file>
     <file alias="previous.png">icons/light_theme/previous.png</file>
-    <file alias="ruler.png">icons/light_theme/ruler.png</file>
     <file alias="search.png">icons/light_theme/search.png</file>
     <file alias="start.png">icons/light_theme/start.png</file>
     <file alias="zip.png">icons/light_theme/zip.png</file>

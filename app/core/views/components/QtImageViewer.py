@@ -20,7 +20,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import (
     QGraphicsView, QGraphicsScene, QFileDialog, QSizePolicy,
     QGraphicsItem, QGraphicsEllipseItem, QGraphicsRectItem,
-    QGraphicsLineItem, QGraphicsPolygonItem
+    QGraphicsLineItem, QGraphicsPolygonItem, QApplication
 )
 
 # Optional deps
@@ -149,6 +149,15 @@ class QtImageViewer(QGraphicsView):
     def getZoom(self) -> float:
         """Current zoom factor (1.0 == image fits view in X)."""
         return self._zoom
+
+    def fitInView(self, rect, mode):
+        """Override fitInView to emit viewChanged after the transformation completes."""
+        super().fitInView(rect, mode)
+        # Force the view to update and process events to ensure transformation is complete
+        self.viewport().update()
+        QApplication.processEvents()
+        # Now emit viewChanged after the view has been updated
+        self.viewChanged.emit()
 
     def _validate_zoom_rect(self, rect):
         """Validate and sanitize a zoom rectangle."""

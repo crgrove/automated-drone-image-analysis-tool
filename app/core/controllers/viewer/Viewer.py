@@ -164,6 +164,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # Add highlight pixels of interest toggle
         self.highlightPixelsToggle = Toggle()
+        layout.replaceWidget(self.highlightPixelsOfInterestCheckBox, self.highlightPixelsToggle)
+        self.highlightPixelsOfInterestCheckBox.deleteLater()
+        
         layout.insertWidget(layout.indexOf(self.showOverlayLabel) + 1, self.highlightPixelsToggle)
         self.highlightPixelsLabel = QLabel("Highlight Pixels of Interest")
         self.highlightPixelsLabel.setFont(font)
@@ -173,7 +176,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (Ctrl+I)")
 
         # Add measure button to toolbar
-        self._add_measure_button(self.theme)
 
         # Session variable to store GSD value
         self.current_gsd = None
@@ -267,6 +269,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
             self.zipButton.clicked.connect(self._zipButton_clicked)
+            self.measureButton.clicked.connect(self._open_measure_dialog)
+            self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
@@ -1207,31 +1211,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.northIcon = self._compassLbl  # redirect for _rotate_north_icon
         # keep overlay positioned when user pans / zooms
         self.main_image.viewChanged.connect(self._place_overlay)
-
-    def _add_measure_button(self, theme):
-        """Adds a measure button to the toolbar.
-
-        Args:
-            theme (str): The current active theme.
-        """
-        # Find the location after showOverlayLabel in the layout
-        layout = self.TitleWidget.layout()
-        overlay_label_index = layout.indexOf(self.showOverlayLabel)
-
-        # Create measure button
-        from PyQt5.QtWidgets import QToolButton
-        from PyQt5.QtGui import QIcon
-        self.measureButton = QToolButton(self.TitleWidget)
-        # Use the new ruler icon
-        self.measureButton.setIcon(QIcon(f":/icons/{theme.lower()}/ruler.png"))
-        self.measureButton.setIconSize(QSize(25, 25))
-        self.measureButton.setObjectName("measureButton")
-        self.measureButton.setToolTip("Measure Distance (Ctrl+M)")
-        self.measureButton.clicked.connect(self._open_measure_dialog)
-
-        # Add spacer and button after the overlay label
-        layout.insertSpacing(overlay_label_index + 1, 10)
-        layout.insertWidget(overlay_label_index + 2, self.measureButton)
+        # Also connect zoom changes to ensure overlay is positioned after zoom completes
+        self.main_image.zoomChanged.connect(self._place_overlay)
 
     def _open_measure_dialog(self):
         """Opens the measure dialog for distance measurement."""
