@@ -34,7 +34,13 @@ except ImportError:
     qimage2ndarray = None
 
 __author__ = "Marcel Goldschen-Ohm <marcel.goldschen@gmail.com>"
-__version__ = "2.1.0 (custom-zoomChanged)"
+__version__ = "2.1.1 (fixed-lockup)"
+
+# Constants for zoom limits
+MIN_ZOOM_RECT_SIZE = 10.0  # Minimum size in pixels to prevent degenerate rectangles
+MAX_ZOOM_STACK_DEPTH = 50  # Maximum zoom stack depth to prevent memory issues
+MIN_ZOOM_FACTOR = 0.01  # Minimum zoom factor (1% of original)
+MAX_ZOOM_FACTOR = 100.0  # Maximum zoom factor (100x original)
 
 
 # --------------------------------------------------------------------------- #
@@ -68,6 +74,7 @@ class QtImageViewer(QGraphicsView):
         self.setScene(self.scene)
         self._image = None               # QGraphicsPixmapItem
         self._zoom = 1.0                # current view‑to‑scene scale
+        self._recursion_guard = False   # Prevent infinite recursion
 
         # ---- interaction state
         self.zoomStack = []          # list[QRectF] – manual zoom rectangles
@@ -143,6 +150,42 @@ class QtImageViewer(QGraphicsView):
         """Current zoom factor (1.0 == image fits view in X)."""
         return self._zoom
 
+    def _validate_zoom_rect(self, rect):
+        """Validate and sanitize a zoom rectangle."""
+        if not rect or not rect.isValid():
+            return None
+            
+        # Ensure minimum size
+        if rect.width() < MIN_ZOOM_RECT_SIZE or rect.height() < MIN_ZOOM_RECT_SIZE:
+            return None
+            
+        # Ensure it's within scene bounds
+        scene_rect = self.sceneRect()
+        if not scene_rect.isValid():
+            return None
+            
+        # Intersect with scene
+        rect = rect.intersected(scene_rect)
+        
+        # Check if intersection is still valid
+        if not rect.isValid() or rect.width() < MIN_ZOOM_RECT_SIZE or rect.height() < MIN_ZOOM_RECT_SIZE:
+            return None
+            
+        return rect
+
+    def _cleanup_zoom_stack(self):
+        """Clean up zoom stack by removing invalid entries."""
+        if not self.zoomStack:
+            return
+            
+        # Remove invalid rectangles
+        self.zoomStack = [r for r in self.zoomStack if self._validate_zoom_rect(r)]
+        
+        # Limit stack depth
+        if len(self.zoomStack) > MAX_ZOOM_STACK_DEPTH:
+            # Keep only the most recent entries
+            self.zoomStack = self.zoomStack[-MAX_ZOOM_STACK_DEPTH:]
+
     # ===================================================================== #
     #  Image handling                                                        #
     # ===================================================================== #
@@ -200,43 +243,92 @@ class QtImageViewer(QGraphicsView):
     # ===================================================================== #
     def updateViewer(self):
         """Apply current zoom stack or fit whole image, then emit zoom."""
-        if not self.hasImage():
+        if not self.hasImage() or self._recursion_guard:
             return
+            
+        try:
+            self._recursion_guard = True
+            
+            # Clean up zoom stack first
+            self._cleanup_zoom_stack()
+            
+            if self.zoomStack:
+                last_rect = self.zoomStack[-1]
+                if self._validate_zoom_rect(last_rect):
+                    self.fitInView(last_rect, self.aspectRatioMode)
+                else:
+                    # Invalid rect, reset zoom
+                    self.zoomStack.clear()
+                    self.fitInView(self.sceneRect(), self.aspectRatioMode)
+            else:
+                if self.thumbnail:
+                    self.fitInView(self.sceneRect(), self.aspectRatioMode)
 
-        if self.zoomStack:
-            self.fitInView(self.zoomStack[-1], self.aspectRatioMode)
-        else:
-            if self.thumbnail:
-                self.fitInView(self.sceneRect(), self.aspectRatioMode)
-
-        self._emit_zoom_if_changed()
+            self._emit_zoom_if_changed()
+            
+        finally:
+            self._recursion_guard = False
 
     # --------------------- programmatic zoom helpers --------------------- #
     def setZoom(self, scale: float):
         """Zoom around the image centre to *scale*."""
-        if scale <= 0 or not self.hasImage():
+        if scale <= 0 or not self.hasImage() or self._recursion_guard:
             return
+            
+        # Clamp scale to reasonable limits
+        scale = max(MIN_ZOOM_FACTOR, min(MAX_ZOOM_FACTOR, scale))
+        
         self.clearZoom()
         self.zoomStack.append(self.sceneRect())
-        zr = self.zoomStack[-1]
+        zr = QRectF(self.zoomStack[-1])
         c = zr.center()
-        zr.setWidth(zr.width() / scale)
-        zr.setHeight(zr.height() / scale)
+        new_width = zr.width() / scale
+        new_height = zr.height() / scale
+        
+        # Check minimum size
+        if new_width < MIN_ZOOM_RECT_SIZE or new_height < MIN_ZOOM_RECT_SIZE:
+            self.zoomStack.clear()
+            return
+            
+        zr.setWidth(new_width)
+        zr.setHeight(new_height)
         zr.moveCenter(c)
-        self.zoomStack[-1] = zr.intersected(self.sceneRect())
-        self.updateViewer()
+        
+        validated_rect = self._validate_zoom_rect(zr)
+        if validated_rect:
+            self.zoomStack[-1] = validated_rect
+            self.updateViewer()
+        else:
+            self.zoomStack.clear()
 
     def zoomToArea(self, center_xy, scale):
-        if not self.hasImage():
+        if not self.hasImage() or self._recursion_guard:
             return
+            
+        # Clamp scale
+        scale = max(MIN_ZOOM_FACTOR, min(MAX_ZOOM_FACTOR, scale))
+        
         self.clearZoom()
         self.zoomStack.append(self.sceneRect())
-        zr = self.zoomStack[-1]
-        zr.setWidth(zr.width() / scale)
-        zr.setHeight(zr.height() / scale)
+        zr = QRectF(self.zoomStack[-1])
+        new_width = zr.width() / scale
+        new_height = zr.height() / scale
+        
+        # Check minimum size
+        if new_width < MIN_ZOOM_RECT_SIZE or new_height < MIN_ZOOM_RECT_SIZE:
+            self.zoomStack.clear()
+            return
+            
+        zr.setWidth(new_width)
+        zr.setHeight(new_height)
         zr.moveCenter(QPointF(*center_xy))
-        self.zoomStack[-1] = zr.intersected(self.sceneRect())
-        self.updateViewer()
+        
+        validated_rect = self._validate_zoom_rect(zr)
+        if validated_rect:
+            self.zoomStack[-1] = validated_rect
+            self.updateViewer()
+        else:
+            self.zoomStack.clear()
 
     def _zoomInAtPos(self, scene_pos, factor=None):
         """Zoom in so that *scene_pos* stays centred on screen."""
@@ -250,11 +342,23 @@ class QtImageViewer(QGraphicsView):
         elif len(self.zoomStack) > 1:
             self.zoomStack[:] = self.zoomStack[-1:]
 
-        zr = self.zoomStack[-1]         # current zoom rect
-        zr.setWidth(zr.width() / factor)
-        zr.setHeight(zr.height() / factor)
+        zr = QRectF(self.zoomStack[-1])  # Make a copy of current zoom rect
+        new_width = zr.width() / factor
+        new_height = zr.height() / factor
+        
+        # Check minimum size
+        if new_width < MIN_ZOOM_RECT_SIZE or new_height < MIN_ZOOM_RECT_SIZE:
+            return
+            
+        zr.setWidth(new_width)
+        zr.setHeight(new_height)
         zr.moveCenter(scene_pos)        # keep cursor position centred
-        self.zoomStack[-1] = zr.intersected(self.sceneRect())
+        
+        validated_rect = self._validate_zoom_rect(zr)
+        if validated_rect:
+            self.zoomStack[-1] = validated_rect
+        else:
+            return
 
         self.updateViewer()
         self.viewChanged.emit()
@@ -276,24 +380,27 @@ class QtImageViewer(QGraphicsView):
         if len(self.zoomStack) > 1:
             self.zoomStack[:] = self.zoomStack[-1:]        # keep only current
 
-        zr = self.zoomStack[-1]
+        zr = QRectF(self.zoomStack[-1])  # Make a copy
         zr.setWidth(zr.width() * factor)
         zr.setHeight(zr.height() * factor)
         zr.moveCenter(scene_pos)
-        zr = zr.intersected(self.sceneRect())
-
-        if zr == self.sceneRect():
-            self.zoomStack.clear()        # we’re back to full view
+        
+        validated_rect = self._validate_zoom_rect(zr)
+        
+        if not validated_rect or validated_rect.contains(self.sceneRect()):
+            # We're back to full view
+            self.zoomStack.clear()
         else:
-            self.zoomStack[-1] = zr
+            self.zoomStack[-1] = validated_rect
 
         self.updateViewer()
         self.viewChanged.emit()
 
     def resetZoom(self):
         self.clearZoom()
-        self.fitInView(self.sceneRect(), self.aspectRatioMode)
-        self._emit_zoom_if_changed()
+        if self.hasImage():
+            self.fitInView(self.sceneRect(), self.aspectRatioMode)
+            self._emit_zoom_if_changed()
 
     def clearZoom(self):
         if self.zoomStack:
@@ -326,10 +433,8 @@ class QtImageViewer(QGraphicsView):
             self.zoomStack.append(self.sceneRect())
 
         current_zr = self.zoomStack[-1]
-
-        # Safeguard against excessively small zoom rects
-        MIN_ZOOM_RECT_SIZE = 1.0  # Prevent extremely small rectangles
-
+        
+        # Calculate cursor position ratios
         cursor_ratio_x = (cursor_scene_pos.x() - current_zr.left()) / current_zr.width()
         cursor_ratio_y = (cursor_scene_pos.y() - current_zr.top()) / current_zr.height()
 
@@ -438,8 +543,10 @@ class QtImageViewer(QGraphicsView):
                    abs(ev.pos().y()-self._pixelPosition.y())) <= 3:
                 pass
             else:
-                if zoomRect.isValid() and zoomRect != self.sceneRect():
-                    self.zoomStack.append(zoomRect)
+                validated_rect = self._validate_zoom_rect(zoomRect)
+                if validated_rect and validated_rect != self.sceneRect():
+                    self.zoomStack.append(validated_rect)
+                    self._cleanup_zoom_stack()
                     self.updateViewer()
                     self.viewChanged.emit()
             self._isZooming = False
@@ -461,7 +568,12 @@ class QtImageViewer(QGraphicsView):
                 currentView = self.mapToScene(self.viewport().rect()).boundingRect()
                 delta = currentView.topLeft() - self._scenePosition
                 self.zoomStack[-1].translate(delta)
-                self.zoomStack[-1] = self.zoomStack[-1].intersected(self.sceneRect())
+                validated_rect = self._validate_zoom_rect(self.zoomStack[-1])
+                if validated_rect:
+                    self.zoomStack[-1] = validated_rect
+                else:
+                    self.zoomStack.pop()
+                self._cleanup_zoom_stack()
                 self.viewChanged.emit()
             self._isPanning = False
             ev.accept()
