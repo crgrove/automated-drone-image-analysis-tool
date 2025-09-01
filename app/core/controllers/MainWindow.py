@@ -88,8 +88,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.actionRTMPAnomalyDetection.triggered.connect(self._open_rtmp_anomaly_detection)
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
-        self.minAreaSpinBox.valueChanged.connect(self._minAreaSpinBox_change)
-        self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_change)
+        # Connect to editingFinished instead of valueChanged for deferred validation
+        self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
+        self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
+        # Store original values to detect actual changes
+        self._minAreaOriginal = self.minAreaSpinBox.value()
+        self._maxAreaOriginal = self.maxAreaSpinBox.value()
         self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
         self.histogramButton.clicked.connect(self._histogramButton_clicked)
         self.kMeansCheckbox.stateChanged.connect(self._kMeansCheckbox_change)
@@ -193,19 +197,65 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.HistogramImgWidget.setVisible(self.histogramCheckbox.isChecked())
 
-    def _minAreaSpinBox_change(self):
+    def _minAreaSpinBox_editingFinished(self):
         """
-        Verifies that the min area spinbox value is still smaller than the max spinbox value and, if not, updates the max spinbox value
+        Validates min area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the max area needs to be adjusted.
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
-            self.maxAreaSpinBox.setValue(self.minAreaSpinBox.value()+1)
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
+        
+        # Only validate if value actually changed
+        if min_val == self._minAreaOriginal:
+            return
+            
+        # Check if min is greater than or equal to max
+        if min_val >= max_val and max_val > 0:
+            new_max = min_val + 1
+            self.maxAreaSpinBox.setValue(new_max)
+            self._maxAreaOriginal = new_max  # Update the stored max value
+            
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Maximum area has been adjusted to {new_max} pixels to maintain valid range.\n"
+                f"(Minimum area must be less than maximum area)",
+                QMessageBox.Ok
+            )
+        
+        # Update stored original value
+        self._minAreaOriginal = min_val
 
-    def _maxAreaSpinBox_change(self):
+    def _maxAreaSpinBox_editingFinished(self):
         """
-        Verifies that the max area spinbox value is still larger than the min spinbox value and, if not, updates the min spinbox value
+        Validates max area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the min area needs to be adjusted.
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
-            self.minAreaSpinBox.setValue(self.maxAreaSpinBox.value()-1)
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
+        
+        # Only validate if value actually changed
+        if max_val == self._maxAreaOriginal:
+            return
+            
+        # Check if max is less than or equal to min
+        if max_val <= min_val and max_val > 0:
+            new_min = max(0, max_val - 1)  # Ensure min doesn't go below 0
+            self.minAreaSpinBox.setValue(new_min)
+            self._minAreaOriginal = new_min  # Update the stored min value
+            
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Minimum area has been adjusted to {new_min} pixels to maintain valid range.\n"
+                f"(Maximum area must be greater than minimum area)",
+                QMessageBox.Ok
+            )
+        
+        # Update stored original value
+        self._maxAreaOriginal = max_val
 
     def _kMeansCheckbox_change(self):
         """
@@ -408,8 +458,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxProcessesSpinBox.setValue(settings['num_processes'])
         if 'min_area' in settings:
             self.minAreaSpinBox.setValue(int(settings['min_area']))
+            self._minAreaOriginal = int(settings['min_area'])
         if 'max_area' in settings:
             self.maxAreaSpinBox.setValue(int(settings['max_area']))
+            self._maxAreaOriginal = int(settings['max_area'])
         if 'hist_ref_path' in settings:
             if settings['hist_ref_path'] != "":
                 self.histogramCheckbox.setChecked(True)
@@ -530,10 +582,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         min_area = self.settings_service.get_setting('MinObjectArea')
         if isinstance(min_area, int):
             self.minAreaSpinBox.setValue(min_area)
+            self._minAreaOriginal = min_area
 
         max_area = self.settings_service.get_setting('MaxObjectArea')
         if isinstance(max_area, int):
             self.maxAreaSpinBox.setValue(max_area)
+            self._maxAreaOriginal = max_area
 
         max_processes = self.settings_service.get_setting('MaxProcesses')
         if isinstance(max_processes, int):
