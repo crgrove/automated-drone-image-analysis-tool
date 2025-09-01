@@ -237,7 +237,13 @@ class AnalyzeService(QObject):
             return
         # Add successfully processed image to results
         if result.areas_of_interest:
-            self.images_with_aois.append({"path": result.output_path, "aois": result.areas_of_interest})
+            # Include original path for mask-based approach
+            image_data = {
+                "path": result.output_path,  # This will be the mask path
+                "original_path": result.input_path,  # Original image path
+                "aois": result.areas_of_interest
+            }
+            self.images_with_aois.append(image_data)
             self.sig_msg.emit('Areas of interest identified in ' + file_name)
             # Guard against None and ensure integers for comparison
             if (result.base_contour_count is not None

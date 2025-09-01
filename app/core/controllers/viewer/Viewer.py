@@ -173,7 +173,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         layout.insertWidget(layout.indexOf(self.highlightPixelsToggle) + 1, self.highlightPixelsLabel)
         self.highlightPixelsToggle.setChecked(False)
         self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
-        self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (Ctrl+I)")
+        self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (H or Ctrl+I)")
 
         # Add measure button to toolbar
 
@@ -201,6 +201,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._open_measure_dialog()
         if e.key() == Qt.Key_I and e.modifiers() == Qt.ControlModifier:
             self._highlight_pixels_change(not self.highlightPixelsToggle.isChecked())
+        if e.key() == Qt.Key_H and e.modifiers() == Qt.NoModifier:
+            # Toggle highlight pixels with 'H' key (no modifier)
+            self.highlightPixelsToggle.setChecked(not self.highlightPixelsToggle.isChecked())
+            self._highlight_pixels_change(self.highlightPixelsToggle.isChecked())
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -376,13 +380,32 @@ class Viewer(QMainWindow, Ui_Viewer):
             image = self.images[self.current_image]
             if 'thumbnail' in image:
                 self._set_active_thumbnail(image['thumbnail'])
-            image_service = ImageService(image['path'])
+            
+            # Use original image path if available (mask-based approach)
+            # Fall back to path for legacy support
+            image_path = image.get('path', '')
+            mask_path = image.get('mask_path', '')
+            
+            # Load the original image
+            image_service = ImageService(image_path)
 
+            # Draw AOI boundaries (circles or contours)
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
 
             # Highlight pixels of interest if toggle is enabled
             if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
-                augmented_image = image_service.highlight_pixels_of_interest(augmented_image)
+                if mask_path:
+                    # Use mask-based highlighting (new efficient approach)
+                    # Pass the identifier color from settings to match AOI circle color
+                    augmented_image = image_service.apply_mask_highlight(
+                        augmented_image, 
+                        mask_path, 
+                        self.settings['identifier_color'],
+                        image['areas_of_interest']
+                    )
+                else:
+                    # Fall back to old method for backward compatibility
+                    augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
 
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
@@ -473,8 +496,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             highlight.canZoom = False
             highlight.canPan = False
 
-            # Create coordinate label
-            coord_label = QLabel(f"X: {center[0]}, Y: {center[1]}")
+            # Create coordinate label with pixel area
+            pixel_area = area_of_interest.get('area', 0)
+            coord_label = QLabel(f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px")
             coord_label.setAlignment(Qt.AlignCenter)
             coord_label.setStyleSheet("""
                 QLabel {
@@ -604,8 +628,61 @@ class Viewer(QMainWindow, Ui_Viewer):
         Args:
             state (bool): True if pixels should be highlighted, False otherwise.
         """
-        if hasattr(self, 'main_image') and self.main_image is not None:
-            self._load_image()  # Reload image to apply/remove highlighting
+        if not hasattr(self, 'main_image') or self.main_image is None:
+            return
+            
+        # Save the current zoom stack and viewport to preserve state
+        saved_zoom_stack = self.main_image.zoomStack.copy() if self.main_image.zoomStack else []
+        saved_transform = self.main_image.transform()
+        
+        # Save AOI list scroll position
+        aoi_scroll_pos = self.aoiListWidget.verticalScrollBar().value() if hasattr(self, 'aoiListWidget') else 0
+        
+        # Reload just the image content without resetting view
+        image = self.images[self.current_image]
+        image_path = image.get('path', '')
+        mask_path = image.get('mask_path', '')
+        
+        # Load and process the image
+        image_service = ImageService(image_path)
+        augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+        
+        # Apply highlight if enabled
+        if state:
+            if mask_path:
+                # Use mask-based highlighting (new efficient approach)
+                augmented_image = image_service.apply_mask_highlight(
+                    augmented_image, 
+                    mask_path, 
+                    self.settings['identifier_color'],
+                    image['areas_of_interest']
+                )
+            else:
+                # Fall back to old method for backward compatibility
+                augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
+        
+        # Update the image without resetting the view
+        img = QImage(qimage2ndarray.array2qimage(augmented_image))
+        
+        # Temporarily block zoom stack updates
+        old_stack = self.main_image.zoomStack
+        self.main_image.zoomStack = saved_zoom_stack
+        
+        # Set the new image
+        self.main_image.setImage(img)
+        
+        # Restore the transform exactly
+        self.main_image.setTransform(saved_transform)
+        
+        # Restore zoom stack
+        self.main_image.zoomStack = saved_zoom_stack
+        
+        # Force emit zoom to update any UI elements
+        self.main_image._emit_zoom_if_changed()
+        
+        # Restore AOI list scroll position
+        if hasattr(self, 'aoiListWidget') and aoi_scroll_pos > 0:
+            self.aoiListWidget.verticalScrollBar().setValue(aoi_scroll_pos)
 
     def _open_image_adjustment_dialog(self):
         """Opens the image adjustment dialog for the current image."""

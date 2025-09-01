@@ -80,16 +80,27 @@ class XmlService:
 
         if images_xml is not None:
             for image_xml in images_xml:
+                # Check for new mask-based approach
+                mask_path = image_xml.get('mask_path', "")
                 path = image_xml.get('path')
 
-                # Ensure path resolution even when xml_path is None
-                if self.xml_path and not os.path.isabs(path):
-                    dir = os.path.dirname(self.xml_path)
-                    path = os.path.join(dir, path)
+                # For mask files, they're stored as just filenames, so build full path
+                if mask_path and self.xml_path:
+                    # Mask files are in the same directory as the XML file
+                    xml_dir = os.path.dirname(self.xml_path)
+                    mask_path = os.path.join(xml_dir, mask_path)
+                    
+                # Original image paths might be absolute or relative
+                if path:
+                    if not os.path.isabs(path) and self.xml_path:
+                        # If relative, make it relative to XML location
+                        dir = os.path.dirname(self.xml_path)
+                        path = os.path.join(dir, path)
 
                 image = {
                     'xml': image_xml,
-                    'path': path,
+                    'path': path,  # Original image path
+                    'mask_path': mask_path,  # Mask file path (if using new approach)
                     'hidden': image_xml.get('hidden') == "True" if image_xml.get('hidden') else False
                 }
 
@@ -100,6 +111,11 @@ class XmlService:
                         'center': literal_eval(area_of_interest_xml.get('center', "(0, 0)")),
                         'radius': int(area_of_interest_xml.get('radius', "0"))
                     }
+                    # Add optional fields if they exist (for backward compatibility)
+                    if area_of_interest_xml.get('contour'):
+                        area_of_interest['contour'] = literal_eval(area_of_interest_xml.get('contour'))
+                    if area_of_interest_xml.get('detected_pixels'):
+                        area_of_interest['detected_pixels'] = literal_eval(area_of_interest_xml.get('detected_pixels'))
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -148,7 +164,18 @@ class XmlService:
             images_xml = ET.SubElement(root, "images")
 
         image = ET.SubElement(images_xml, 'image')
-        image.set('path', img["path"])
+        # Check if this is a mask path (ends with .png) or original image path
+        if img["path"] and img["path"].endswith('.png'):
+            # This is a mask file, store just the filename as mask_path
+            # This avoids path duplication issues
+            mask_filename = os.path.basename(img["path"])
+            image.set('mask_path', mask_filename)
+            # Store the original path
+            if "original_path" in img:
+                image.set('path', img["original_path"])
+        else:
+            # Legacy support - old style with duplicated images
+            image.set('path', img["path"])
         image.set('hidden', "False")
 
         for area in img["aois"]:
@@ -156,6 +183,15 @@ class XmlService:
             area_xml.set('center', str(area['center']))
             area_xml.set('radius', str(area['radius']))
             area_xml.set('area', str(area['area']))
+            # Optionally save contour and detected_pixels if available
+            # Note: These can be large, so we might want to make this configurable
+            if 'contour' in area and area['contour']:
+                area_xml.set('contour', str(area['contour']))
+            if 'detected_pixels' in area and area['detected_pixels']:
+                # Only save a limited number of pixels to avoid huge XML files
+                # Full pixel data is preserved in the image XMP metadata
+                if len(area['detected_pixels']) <= 100:
+                    area_xml.set('detected_pixels', str(area['detected_pixels']))
 
     def save_xml_file(self, path):
         """

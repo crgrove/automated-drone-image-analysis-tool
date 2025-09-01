@@ -45,7 +45,6 @@ class ColorRangeService(AlgorithmService):
 
             # Find pixels within the specified color range
             mask = cv2.inRange(img, cv_lower_limit, cv_upper_limit)
-            pixels_of_interest = self.collect_pixels_of_interest(mask)
 
             # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
@@ -53,10 +52,12 @@ class ColorRangeService(AlgorithmService):
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
             
+            # Store mask instead of duplicating image
+            mask_path = None
             if areas_of_interest:
-                self.store_image(full_path, output_path, pixels_of_interest)
+                mask_path = self.store_mask(full_path, output_path, mask)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
         
         except Exception as e:
             # Log and return an error if processing fails

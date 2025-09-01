@@ -20,3 +20,36 @@ package-lock.json
 .venv/
 .vscode/
 app/algorithms/AIPersonDetector/services/ai_person_model_bak.onnx
+
+# Virtual environments
+adiat_env/
+adiat_env_new/
+venv/
+env/
+
+# Build and setup files
+opencv_build/
+*.whl
+*.bat
+setup_*.py
+install_*.py
+download_*.py
+fix_*.py
+detect_*.py
+diagnose_*.py
+test_*.py
+profile_*.py
+check_*.py
+clean_*.py
+find_*.py
+get_*.py
+requirements-*.txt
+nul
+
+# Temporary and debug files
+debug_*.py
+add_*.py
+app/core/views/components/*_fixed.py
+
+# Documentation generated during development
+MOTION_DETECTION_GUIDE.md
