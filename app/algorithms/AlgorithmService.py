@@ -84,6 +84,9 @@ class AlgorithmService:
         areas_of_interest = []
         temp_mask = np.zeros((height, width), dtype=np.uint8)
         base_contour_count = 0
+        
+        # Store original detected pixels for each valid contour
+        original_pixels_mask = np.zeros((height, width), dtype=np.uint8)
 
         # First pass: filter contours and optionally mark them for combining
         for cnt in contours:
@@ -99,9 +102,25 @@ class AlgorithmService:
 
                 # Add to mask for later combining
                 cv2.circle(temp_mask, center, radius, 255, -1)
+                
+                # Also keep track of original pixels
+                original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
 
                 if not self.combine_aois:
-                    areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+                    # Store the contour points for drawing the boundary
+                    contour_points = cnt.reshape(-1, 2).tolist()
+                    
+                    # Get the detected pixels for this AOI
+                    detected_pixels = np.argwhere(mask > 0)
+                    detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
+                    
+                    areas_of_interest.append({
+                        'center': center, 
+                        'radius': radius, 
+                        'area': area,
+                        'contour': contour_points,
+                        'detected_pixels': detected_pixels_list
+                    })
 
         # Second pass: combine AOIs if needed
         if self.combine_aois:
@@ -124,44 +143,54 @@ class AlgorithmService:
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius)
-                areas_of_interest.append({'center': center, 'radius': radius, 'area': area})
+                # Store the contour points for drawing the boundary
+                contour_points = cnt.reshape(-1, 2).tolist()
+                
+                # Get the original detected pixels that belong to this combined AOI
+                aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
+                aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
+                aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
+                
+                areas_of_interest.append({
+                    'center': center, 
+                    'radius': radius, 
+                    'area': area,
+                    'contour': contour_points,
+                    'detected_pixels': aoi_pixels_list
+                })
 
         # Sort for consistent ordering
         areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
 
         return areas_of_interest, base_contour_count
 
-    def store_image(self, input_file, output_file, pixels_of_interest, temperature_data=None):
+    def store_mask(self, input_file, output_file, mask, temperature_data=None):
         """
-        Duplicates the input image to the output location and stores AOIs and temperature data in XMP.
+        Saves the detection mask instead of duplicating the image.
 
         Args:
             input_file (str): Path to the input image file.
-            output_file (str): Path to save the output image.
-            pixels_of_interest (list or np.ndarray): List/array of pixel coordinates.
+            output_file (str): Path to save the mask (will be saved as PNG).
+            mask (np.ndarray): Binary mask of detected pixels (0 or 255).
             temperature_data (np.ndarray or list, optional): Temperature matrix to store.
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Step 1: Duplicate file with all metadata intact
-        shutil.copy2(input_file, output_file)
         
-        MetaDataHelper.add_xmp_field(
-            output_file,
-            namespace_uri="http://example.com/poi/1.0/",
-            tag_name="PixelsOfInterest",
-            value_str=json.dumps(pixels_of_interest, default=lambda x: x.tolist() if hasattr(x, "tolist") else x)
-        )
-
-        # Step 3: Store temperature data in a separate custom namespace (if provided)
+        # Change extension to .png for mask
+        mask_file = path.with_suffix('.png')
+        
+        # Save the mask as a compressed PNG (binary masks compress very well)
+        # Use maximum compression (9) since masks are small
+        cv2.imwrite(str(mask_file), mask, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        
+        # Store temperature data if provided (for thermal algorithms)
         if temperature_data is not None:
-            MetaDataHelper.add_xmp_field(
-                output_file,
-                namespace_uri="http://example.com/thermal/1.0/",
-                tag_name="TemperatureData",
-                value_str= json.dumps(temperature_data.tolist())
-            )
+            temp_file = path.with_suffix('.thermal.json')
+            with open(temp_file, 'w') as f:
+                json.dump(temperature_data.tolist() if hasattr(temperature_data, 'tolist') else temperature_data, f)
+        
+        return str(mask_file)
 
     def split_image(self, img, segments, overlap=0):
         """

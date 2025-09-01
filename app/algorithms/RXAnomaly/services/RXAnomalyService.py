@@ -55,18 +55,18 @@ class RXAnomalyService(AlgorithmService):
                     masks[x][y] = np.uint8((1 * (rx_values > chi_values)))
             combined_mask = self.glue_image(masks)
 
-            pixels_of_interest = self.collect_pixels_of_interest(combined_mask)
-
             # Find contours of the identified areas and circle areas of interest.
             contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
             
+            # Store mask instead of duplicating image
+            mask_path = None
             if areas_of_interest:
-                self.store_image(full_path, output_path, pixels_of_interest)
+                mask_path = self.store_mask(full_path, output_path, combined_mask)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
 
         except Exception as e:
