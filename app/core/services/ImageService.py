@@ -1,4 +1,5 @@
 
+import os
 import piexif
 import pandas as pd
 import cv2
@@ -317,7 +318,7 @@ class ImageService:
 
     def circle_areas_of_interest(self, identifier_color, areas_of_interest):
         """
-        Augments the image with circles around areas of interest.
+        Augments the image with contour outlines or circles for areas of interest.
 
         Returns:
             (augmented_image: np.ndarray, areas_of_interest: list[dict])
@@ -328,17 +329,99 @@ class ImageService:
         bgr = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
 
         for aoi in areas_of_interest or []:
-            if "center" not in aoi or "radius" not in aoi:
-                continue
-            cx, cy = aoi["center"]
-            r = int(aoi["radius"])
-            if r <= 0:
-                continue
-            # Ensure ints for OpenCV
+            # Get center and radius for circle drawing
+            cx, cy = aoi.get("center", (0, 0))
+            r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
-            cv2.circle(image_copy, center, r, bgr, thickness=2)
+            
+            # Draw contour outline if available (this is the actual combined boundary)
+            if "contour" in aoi and aoi["contour"] and len(aoi["contour"]) > 2:
+                # Convert contour points back to numpy array format for OpenCV
+                contour = np.array(aoi["contour"], dtype=np.int32)
+                if len(contour.shape) == 2:
+                    contour = contour.reshape((-1, 1, 2))
+                # Draw contour with solid line
+                cv2.polylines(image_copy, [contour], True, bgr, thickness=2)
+                
+                # Also draw the minimum enclosing circle with dotted line for reference
+                if r > 0:
+                    # Draw dotted circle by drawing small arcs
+                    for angle in range(0, 360, 10):
+                        start_angle = angle
+                        end_angle = angle + 5
+                        cv2.ellipse(image_copy, center, (r, r), 0, start_angle, end_angle, bgr, thickness=1)
+            elif r > 0:
+                # Fallback to circle if no contour data (for backward compatibility)
+                cv2.circle(image_copy, center, r, bgr, thickness=2)
 
         return image_copy
+    
+    def apply_mask_highlight(self, image_array, mask_path, identifier_color=(255, 0, 255), areas_of_interest=None):
+        """
+        Applies a mask overlay to highlight detected pixels.
+        
+        Args:
+            image_array (np.ndarray): The input image array in BGR format.
+            mask_path (str): Path to the mask PNG file.
+            identifier_color (tuple): RGB color tuple for highlighting (uses Object Identifier color).
+            areas_of_interest (list, optional): Not used currently, but kept for future filtering.
+            
+        Returns:
+            np.ndarray: The image array with mask applied.
+        """
+        if not mask_path or not os.path.exists(mask_path):
+            return image_array
+            
+        # Load the mask
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            return image_array
+        
+        # Resize mask if needed to match image dimensions
+        if mask.shape[:2] != image_array.shape[:2]:
+            mask = cv2.resize(mask, (image_array.shape[1], image_array.shape[0]), interpolation=cv2.INTER_NEAREST)
+        
+        highlighted_image = image_array.copy()
+        
+        # Apply the mask - white pixels (255) get colored, black (0) stay transparent
+        # Image is in BGR format, identifier_color is RGB, so convert
+        bgr_color = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
+        
+        # Apply color to all white pixels in the mask
+        mask_indices = mask > 0
+        highlighted_image[mask_indices] = bgr_color
+            
+        return highlighted_image
+    
+    def highlight_aoi_pixels(self, image_array, areas_of_interest, highlight_color=(255, 0, 255)):
+        """
+        Highlights detected pixels within areas of interest.
+        
+        Args:
+            image_array (np.ndarray): The input image array.
+            areas_of_interest (list): List of AOI dictionaries with detected_pixels.
+            highlight_color (tuple): RGB color tuple for highlighting (default: magenta).
+            
+        Returns:
+            np.ndarray: The image array with highlighted pixels.
+        """
+        highlighted_image = image_array.copy()
+        
+        # Convert highlight color to numpy array
+        highlight_color_array = np.array(highlight_color, dtype=np.uint8)
+        
+        for aoi in areas_of_interest or []:
+            if "detected_pixels" in aoi and aoi["detected_pixels"]:
+                for pixel in aoi["detected_pixels"]:
+                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                        x, y = int(pixel[0]), int(pixel[1])
+                        # Check bounds
+                        if 0 <= y < highlighted_image.shape[0] and 0 <= x < highlighted_image.shape[1]:
+                            # Convert from BGR to RGB for display if needed
+                            if len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3:
+                                highlighted_image[y, x] = highlight_color_array
+                            
+        return highlighted_image
 
     def highlight_pixels_of_interest(self, image_array, highlight_color=(255, 0, 255)):
         """
