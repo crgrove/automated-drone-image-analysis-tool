@@ -3,15 +3,15 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 import sys
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication
 from multiprocessing import freeze_support
 from core.controllers.MainWindow import MainWindow
 # import faulthandler
 import qdarktheme
 from os import path
 
-version = '1.6.1'
+version = '2.0.0'
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
     mw = MainWindow(qdarktheme, version)
     mw.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

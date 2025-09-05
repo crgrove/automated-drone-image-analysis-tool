@@ -11,13 +11,13 @@ calls to setZoom/zoomToArea, widget resize, etc.
 """
 
 import os.path
-from PyQt5.QtCore import (
-    Qt, QRectF, QPoint, QPointF, pyqtSignal, QEvent, QSize
+from PySide6.QtCore import (
+    Qt, QRectF, QPoint, QPointF, Signal, QEvent, QSize
 )
-from PyQt5.QtGui import (
+from PySide6.QtGui import (
     QImage, QPixmap, QPainterPath, QMouseEvent, QPainter, QPen, QCursor
 )
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QFileDialog, QSizePolicy,
     QGraphicsItem, QGraphicsEllipseItem, QGraphicsRectItem,
     QGraphicsLineItem, QGraphicsPolygonItem, QApplication
@@ -48,19 +48,19 @@ MAX_ZOOM_FACTOR = 100.0  # Maximum zoom factor (100x original)
 # --------------------------------------------------------------------------- #
 class QtImageViewer(QGraphicsView):
     # -------------------------- public signals --------------------------- #
-    leftMouseButtonPressed = pyqtSignal(float, float, object)
-    leftMouseButtonReleased = pyqtSignal(float, float)
-    middleMouseButtonPressed = pyqtSignal(float, float)
-    middleMouseButtonReleased = pyqtSignal(float, float)
-    rightMouseButtonPressed = pyqtSignal(float, float)
-    rightMouseButtonReleased = pyqtSignal(float, float)
-    leftMouseButtonDoubleClicked = pyqtSignal(float, float)
-    rightMouseButtonDoubleClicked = pyqtSignal(float, float)
+    leftMouseButtonPressed = Signal(float, float, object)
+    leftMouseButtonReleased = Signal(float, float)
+    middleMouseButtonPressed = Signal(float, float)
+    middleMouseButtonReleased = Signal(float, float)
+    rightMouseButtonPressed = Signal(float, float)
+    rightMouseButtonReleased = Signal(float, float)
+    leftMouseButtonDoubleClicked = Signal(float, float)
+    rightMouseButtonDoubleClicked = Signal(float, float)
 
-    viewChanged = pyqtSignal()          # any pan / zoom
-    zoomChanged = pyqtSignal(float)     # **every** zoom change
-    mousePositionOnImageChanged = pyqtSignal(QPoint)
-    roiSelected = pyqtSignal(int)
+    viewChanged = Signal()          # any pan / zoom
+    zoomChanged = Signal(float)     # **every** zoom change
+    mousePositionOnImageChanged = Signal(QPoint)
+    roiSelected = Signal(int)
 
     # ------------------------------ init --------------------------------- #
     def __init__(self, window, parent=None, center=None, thumbnail=False):
@@ -75,6 +75,7 @@ class QtImageViewer(QGraphicsView):
         self._image = None               # QGraphicsPixmapItem
         self._zoom = 1.0                # current view‑to‑scene scale
         self._recursion_guard = False   # Prevent infinite recursion
+        self._is_destroyed = False      # Flag to prevent operations after destruction
 
         # ---- interaction state
         self.zoomStack = []          # list[QRectF] – manual zoom rectangles
@@ -102,6 +103,15 @@ class QtImageViewer(QGraphicsView):
         # ---- misc
         self.center = center
         self.thumbnail = thumbnail
+
+    def __del__(self):
+        """Destructor to mark object as destroyed."""
+        self._is_destroyed = True
+
+    def closeEvent(self, event):
+        """Handle close event to prevent operations after destruction."""
+        self._is_destroyed = True
+        super().closeEvent(event)
 
     def keyPressEvent(self, ev):
         plus_keys = {Qt.Key_Plus,  Qt.Key_Equal}
@@ -141,27 +151,45 @@ class QtImageViewer(QGraphicsView):
         Re‑calculate effective zoom from the view’s transform matrix and
         emit zoomChanged(float) only if the value really changed.
         """
+        if self._is_destroyed:
+            return
         new_zoom = self.transform().m11()        # isotropic, so x==y
         if abs(new_zoom - self._zoom) > 1e-6:
             self._zoom = new_zoom
-            self.zoomChanged.emit(self._zoom)
+            if not self._is_destroyed:
+                self.zoomChanged.emit(self._zoom)
 
     def getZoom(self) -> float:
         """Current zoom factor (1.0 == image fits view in X)."""
+        if self._is_destroyed:
+            return 1.0
         return self._zoom
+
+    def _safe_scene_rect(self):
+        """Safely get scene rect, returning None if destroyed."""
+        if self._is_destroyed:
+            return None
+        try:
+            return self.sceneRect()
+        except RuntimeError:
+            self._is_destroyed = True
+            return None
 
     def fitInView(self, rect, mode):
         """Override fitInView to emit viewChanged after the transformation completes."""
+        if self._is_destroyed:
+            return
         super().fitInView(rect, mode)
         # Force the view to update and process events to ensure transformation is complete
         self.viewport().update()
         QApplication.processEvents()
         # Now emit viewChanged after the view has been updated
-        self.viewChanged.emit()
+        if not self._is_destroyed:
+            self.viewChanged.emit()
 
     def _validate_zoom_rect(self, rect):
         """Validate and sanitize a zoom rectangle."""
-        if not rect or not rect.isValid():
+        if self._is_destroyed or not rect or not rect.isValid():
             return None
             
         # Ensure minimum size
@@ -169,8 +197,8 @@ class QtImageViewer(QGraphicsView):
             return None
             
         # Ensure it's within scene bounds
-        scene_rect = self.sceneRect()
-        if not scene_rect.isValid():
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect or not scene_rect.isValid():
             return None
             
         # Intersect with scene
@@ -184,7 +212,7 @@ class QtImageViewer(QGraphicsView):
 
     def _cleanup_zoom_stack(self):
         """Clean up zoom stack by removing invalid entries."""
-        if not self.zoomStack:
+        if not self.zoomStack or self._is_destroyed:
             return
             
         # Remove invalid rectangles
@@ -199,21 +227,31 @@ class QtImageViewer(QGraphicsView):
     #  Image handling                                                        #
     # ===================================================================== #
     def hasImage(self):
+        if self._is_destroyed:
+            return False
         return self._image is not None
 
     def clearImage(self):
+        if self._is_destroyed:
+            return
         if self._image:
             self.scene.removeItem(self._image)
             self._image = None
 
     def pixmap(self):
+        if self._is_destroyed:
+            return None
         return self._image.pixmap() if self._image else None
 
     def image(self):
+        if self._is_destroyed:
+            return None
         return self._image.pixmap().toImage() if self._image else None
 
     def setImage(self, image):
         """Accept QPixmap, QImage or 2‑D numpy array."""
+        if self._is_destroyed:
+            return
         if isinstance(image, QPixmap):
             pixmap = image
         elif isinstance(image, QImage):
@@ -239,9 +277,12 @@ class QtImageViewer(QGraphicsView):
             self._image = self.scene.addPixmap(pixmap)
 
         self.setSceneRect(QRectF(pixmap.rect()))
-        self.updateViewer()
+        if not self._is_destroyed:
+            self.updateViewer()
 
     def open(self, path=None):
+        if self._is_destroyed:
+            return
         if path is None:
             path, _ = QFileDialog.getOpenFileName(self, "Open image")
         if path and os.path.isfile(path):
@@ -252,7 +293,7 @@ class QtImageViewer(QGraphicsView):
     # ===================================================================== #
     def updateViewer(self):
         """Apply current zoom stack or fit whole image, then emit zoom."""
-        if not self.hasImage() or self._recursion_guard:
+        if not self.hasImage() or self._recursion_guard or self._is_destroyed:
             return
             
         try:
@@ -268,10 +309,14 @@ class QtImageViewer(QGraphicsView):
                 else:
                     # Invalid rect, reset zoom
                     self.zoomStack.clear()
-                    self.fitInView(self.sceneRect(), self.aspectRatioMode)
+                    scene_rect = self._safe_scene_rect()
+                    if scene_rect:
+                        self.fitInView(scene_rect, self.aspectRatioMode)
             else:
                 if self.thumbnail:
-                    self.fitInView(self.sceneRect(), self.aspectRatioMode)
+                    scene_rect = self._safe_scene_rect()
+                    if scene_rect:
+                        self.fitInView(scene_rect, self.aspectRatioMode)
 
             self._emit_zoom_if_changed()
             
@@ -281,14 +326,17 @@ class QtImageViewer(QGraphicsView):
     # --------------------- programmatic zoom helpers --------------------- #
     def setZoom(self, scale: float):
         """Zoom around the image centre to *scale*."""
-        if scale <= 0 or not self.hasImage() or self._recursion_guard:
+        if scale <= 0 or not self.hasImage() or self._recursion_guard or self._is_destroyed:
             return
             
         # Clamp scale to reasonable limits
         scale = max(MIN_ZOOM_FACTOR, min(MAX_ZOOM_FACTOR, scale))
         
         self.clearZoom()
-        self.zoomStack.append(self.sceneRect())
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect:
+            return
+        self.zoomStack.append(scene_rect)
         zr = QRectF(self.zoomStack[-1])
         c = zr.center()
         new_width = zr.width() / scale
@@ -311,14 +359,17 @@ class QtImageViewer(QGraphicsView):
             self.zoomStack.clear()
 
     def zoomToArea(self, center_xy, scale):
-        if not self.hasImage() or self._recursion_guard:
+        if not self.hasImage() or self._recursion_guard or self._is_destroyed:
             return
             
         # Clamp scale
         scale = max(MIN_ZOOM_FACTOR, min(MAX_ZOOM_FACTOR, scale))
         
         self.clearZoom()
-        self.zoomStack.append(self.sceneRect())
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect:
+            return
+        self.zoomStack.append(scene_rect)
         zr = QRectF(self.zoomStack[-1])
         new_width = zr.width() / scale
         new_height = zr.height() / scale
@@ -341,7 +392,7 @@ class QtImageViewer(QGraphicsView):
 
     def _zoomInAtPos(self, scene_pos, factor=None):
         """Zoom in so that *scene_pos* stays centred on screen."""
-        if not self.canZoom or self.thumbnail or not self.hasImage():
+        if not self.canZoom or self.thumbnail or not self.hasImage() or self._is_destroyed:
             return
         factor = factor or self.wheelZoomFactor or 1.25
 
@@ -370,16 +421,22 @@ class QtImageViewer(QGraphicsView):
             return
 
         self.updateViewer()
-        self.viewChanged.emit()
+        if not self._is_destroyed:
+            self.viewChanged.emit()
 
     # ------------------------------------------------------------- #
     #  zoom helper: zoom‑out while keeping scene_pos centred         #
     # ------------------------------------------------------------- #
     def _zoomOutAtPos(self, scene_pos, factor=None):
         """Zoom out so *scene_pos* stays centred on screen."""
-        if not self.canZoom or self.thumbnail or not self.hasImage():
+        if not self.canZoom or self.thumbnail or not self.hasImage() or self._is_destroyed:
             return
         factor = factor or self.wheelZoomFactor or 1.25
+
+        # Get scene_rect once at the start
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect:
+            return
 
         if not self.zoomStack:
             self.resetZoom()
@@ -396,50 +453,63 @@ class QtImageViewer(QGraphicsView):
         
         validated_rect = self._validate_zoom_rect(zr)
         
-        if not validated_rect or validated_rect.contains(self.sceneRect()):
+        if not validated_rect or validated_rect.contains(scene_rect):
             # We're back to full view
             self.zoomStack.clear()
         else:
             self.zoomStack[-1] = validated_rect
 
         self.updateViewer()
-        self.viewChanged.emit()
+        if not self._is_destroyed:
+            self.viewChanged.emit()
 
     def resetZoom(self):
+        if self._is_destroyed:
+            return
         self.clearZoom()
         if self.hasImage():
-            self.fitInView(self.sceneRect(), self.aspectRatioMode)
-            self._emit_zoom_if_changed()
+            scene_rect = self._safe_scene_rect()
+            if scene_rect:
+                self.fitInView(scene_rect, self.aspectRatioMode)
+                self._emit_zoom_if_changed()
 
     def clearZoom(self):
+        if self._is_destroyed:
+            return
         if self.zoomStack:
             self.zoomStack.clear()
             self.updateViewer()
-            self.viewChanged.emit()
+            if not self._is_destroyed:
+                self.viewChanged.emit()
 
     # ===================================================================== #
     #  Qt events that might change zoom                                      #
     # ===================================================================== #
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self.updateViewer()                       # recompute & emit
+        if not self._is_destroyed:
+            self.updateViewer()                       # recompute & emit
 
     def showEvent(self, ev):
         super().showEvent(ev)
-        self.resetZoom()
+        if not self._is_destroyed:
+            self.resetZoom()
 
     # -------------------------- wheel zoom ------------------------------ #
     def wheelEvent(self, ev):
-        if self.thumbnail or self.wheelZoomFactor in (None, 1) or not self.hasImage():
+        if self.thumbnail or self.wheelZoomFactor in (None, 1) or not self.hasImage() or self._is_destroyed:
             return super().wheelEvent(ev)
 
         zoom_in = ev.angleDelta().y() > 0
-        cursor_scene_pos = self.mapToScene(ev.pos())
+        cursor_scene_pos = self.mapToScene(ev.position().toPoint())
         factor = self.wheelZoomFactor if zoom_in else 1 / self.wheelZoomFactor
 
         # Ensure zoom stack is initialized
         if not self.zoomStack:
-            self.zoomStack.append(self.sceneRect())
+            scene_rect = self._safe_scene_rect()
+            if not scene_rect:
+                return
+            self.zoomStack.append(scene_rect)
 
         current_zr = self.zoomStack[-1]
         
@@ -457,10 +527,13 @@ class QtImageViewer(QGraphicsView):
         new_left = cursor_scene_pos.x() - cursor_ratio_x * new_width
         new_top = cursor_scene_pos.y() - cursor_ratio_y * new_height
 
-        new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(self.sceneRect())
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect:
+            return
+        new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(scene_rect)
 
         # Check if zoom-out reaches original view
-        if not zoom_in and (new_zr == self.sceneRect() or new_zr.contains(self.sceneRect())):
+        if not zoom_in and (new_zr == scene_rect or new_zr.contains(scene_rect)):
             self.resetZoom()
             ev.accept()
             return
@@ -469,7 +542,8 @@ class QtImageViewer(QGraphicsView):
         if new_zr.isValid():
             self.zoomStack[-1] = new_zr
             self.updateViewer()
-            self.viewChanged.emit()
+            if not self._is_destroyed:
+                self.viewChanged.emit()
         else:
             self.resetZoom()
 
@@ -481,6 +555,8 @@ class QtImageViewer(QGraphicsView):
     # -------------------------------------------------------------------- #
     # ------------------------- mousePressEvent -------------------------- #
     def mousePressEvent(self, ev):
+        if self._is_destroyed:
+            return
         dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
         if ev.modifiers() & dummyMods:
             super().mousePressEvent(ev)
@@ -489,7 +565,7 @@ class QtImageViewer(QGraphicsView):
 
         # ------------- region zoom start
         if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
-            self._pixelPosition = ev.pos()
+            self._pixelPosition = ev.position().toPoint()
             self.setDragMode(QGraphicsView.RubberBandDrag)
             super().mousePressEvent(ev)
             self._isZooming = True
@@ -501,20 +577,21 @@ class QtImageViewer(QGraphicsView):
             if self.zoomStack:
                 self.zoomStack.pop()
                 self.updateViewer()
-                self.viewChanged.emit()
+                if not self._is_destroyed:
+                    self.viewChanged.emit()
             ev.accept()
             return
 
         # ------------- pan start
         if (self.panButton and ev.button() == self.panButton and self.canPan):
-            self._pixelPosition = ev.pos()
+            self._pixelPosition = ev.position().toPoint()
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             if self.panButton == Qt.LeftButton:
                 super().mousePressEvent(ev)
             else:  # fake left‑button drag
                 self.viewport().setCursor(Qt.ClosedHandCursor)
                 fakeMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-                fakeEv = QMouseEvent(QEvent.MouseButtonPress, QPointF(ev.pos()),
+                fakeEv = QMouseEvent(QEvent.MouseButtonPress, ev.position(),
                                      Qt.LeftButton, ev.buttons(), fakeMods)
                 self.mousePressEvent(fakeEv)
             self._scenePosition = self.mapToScene(self.viewport().rect()).boundingRect().topLeft()
@@ -522,18 +599,23 @@ class QtImageViewer(QGraphicsView):
             ev.accept()
             return
 
-        scenePos = self.mapToScene(ev.pos())
+        scenePos = self.mapToScene(ev.position().toPoint())
         if ev.button() == Qt.LeftButton:
-            self.leftMouseButtonPressed.emit(scenePos.x(), scenePos.y(), self)
+            if not self._is_destroyed:
+                self.leftMouseButtonPressed.emit(scenePos.x(), scenePos.y(), self)
         elif ev.button() == Qt.MiddleButton:
-            self.middleMouseButtonPressed.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.middleMouseButtonPressed.emit(scenePos.x(), scenePos.y())
         elif ev.button() == Qt.RightButton:
-            self.rightMouseButtonPressed.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.rightMouseButtonPressed.emit(scenePos.x(), scenePos.y())
 
         super().mousePressEvent(ev)
 
     # ----------------------- mouseReleaseEvent -------------------------- #
     def mouseReleaseEvent(self, ev):
+        if self._is_destroyed:
+            return
         dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
         if ev.modifiers() & dummyMods:
             super().mouseReleaseEvent(ev)
@@ -543,21 +625,25 @@ class QtImageViewer(QGraphicsView):
         # ---- finish region zoom
         if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
             super().mouseReleaseEvent(ev)
-            zoomRect = self.scene.selectionArea().boundingRect().intersected(self.sceneRect())
+            scene_rect = self._safe_scene_rect()
+            if not scene_rect:
+                return
+            zoomRect = self.scene.selectionArea().boundingRect().intersected(scene_rect)
             self.scene.setSelectionArea(QPainterPath())
             self.setDragMode(QGraphicsView.NoDrag)
 
             # tiny rubber‑band → treat as click
-            if max(abs(ev.pos().x()-self._pixelPosition.x()),
-                   abs(ev.pos().y()-self._pixelPosition.y())) <= 3:
+            if max(abs(ev.position().x()-self._pixelPosition.x()),
+                   abs(ev.position().y()-self._pixelPosition.y())) <= 3:
                 pass
             else:
                 validated_rect = self._validate_zoom_rect(zoomRect)
-                if validated_rect and validated_rect != self.sceneRect():
+                if validated_rect and validated_rect != scene_rect:
                     self.zoomStack.append(validated_rect)
                     self._cleanup_zoom_stack()
                     self.updateViewer()
-                    self.viewChanged.emit()
+                    if not self._is_destroyed:
+                        self.viewChanged.emit()
             self._isZooming = False
             ev.accept()
             return
@@ -569,7 +655,7 @@ class QtImageViewer(QGraphicsView):
             else:
                 self.viewport().setCursor(Qt.ArrowCursor)
                 fakeMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-                fakeEv = QMouseEvent(QEvent.MouseButtonRelease, QPointF(ev.pos()),
+                fakeEv = QMouseEvent(QEvent.MouseButtonRelease, ev.position(),
                                      Qt.LeftButton, ev.buttons(), fakeMods)
                 self.mouseReleaseEvent(fakeEv)
             self.setDragMode(QGraphicsView.NoDrag)
@@ -583,39 +669,49 @@ class QtImageViewer(QGraphicsView):
                 else:
                     self.zoomStack.pop()
                 self._cleanup_zoom_stack()
-                self.viewChanged.emit()
+                if not self._is_destroyed:
+                    self.viewChanged.emit()
             self._isPanning = False
             ev.accept()
             return
 
-        scenePos = self.mapToScene(ev.pos())
+        scenePos = self.mapToScene(ev.position().toPoint())
         if ev.button() == Qt.LeftButton:
-            self.leftMouseButtonReleased.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.leftMouseButtonReleased.emit(scenePos.x(), scenePos.y())
         elif ev.button() == Qt.MiddleButton:
-            self.middleMouseButtonReleased.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.middleMouseButtonReleased.emit(scenePos.x(), scenePos.y())
         elif ev.button() == Qt.RightButton:
-            self.rightMouseButtonReleased.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.rightMouseButtonReleased.emit(scenePos.x(), scenePos.y())
 
         super().mouseReleaseEvent(ev)
 
     # ----------------------- mouseDoubleClickEvent ---------------------- #
     def mouseDoubleClickEvent(self, ev):
+        if self._is_destroyed:
+            return
         if (self.zoomOutButton and ev.button() == self.zoomOutButton and self.canZoom):
             self.resetZoom()
             ev.accept()
             return
 
-        scenePos = self.mapToScene(ev.pos())
+        scenePos = self.mapToScene(ev.position().toPoint())
         if ev.button() == Qt.LeftButton:
             self.resetZoom()
-            self.leftMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.leftMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())
         elif ev.button() == Qt.RightButton:
-            self.rightMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())
+            if not self._is_destroyed:
+                self.rightMouseButtonDoubleClicked.emit(scenePos.x(), scenePos.y())
 
         super().mouseDoubleClickEvent(ev)
 
     # ------------------------- mouseMoveEvent --------------------------- #
     def mouseMoveEvent(self, ev):
+        if self._is_destroyed:
+            return
         if self._isPanning:
             super().mouseMoveEvent(ev)
             if self.zoomStack:
@@ -623,60 +719,83 @@ class QtImageViewer(QGraphicsView):
                 delta = currentView.topLeft() - self._scenePosition
                 self._scenePosition = currentView.topLeft()
                 self.zoomStack[-1].translate(delta)
-                self.zoomStack[-1] = self.zoomStack[-1].intersected(self.sceneRect())
-                self.updateViewer()
-                self.viewChanged.emit()
+                scene_rect = self._safe_scene_rect()
+                if scene_rect:
+                    self.zoomStack[-1] = self.zoomStack[-1].intersected(scene_rect)
+                    self.updateViewer()
+                    if not self._is_destroyed:
+                        self.viewChanged.emit()
 
-        scenePos = self.mapToScene(ev.pos())
-        if self.sceneRect().contains(scenePos):
+        scenePos = self.mapToScene(ev.position().toPoint())
+        scene_rect = self._safe_scene_rect()
+        if scene_rect and scene_rect.contains(scenePos):
             x = int(round(scenePos.x() - 0.5))
             y = int(round(scenePos.y() - 0.5))
-            self.mousePositionOnImageChanged.emit(QPoint(x, y))
+            if not self._is_destroyed:
+                self.mousePositionOnImageChanged.emit(QPoint(x, y))
         else:
-            self.mousePositionOnImageChanged.emit(QPoint(-1, -1))
+            if not self._is_destroyed:
+                self.mousePositionOnImageChanged.emit(QPoint(-1, -1))
 
         super().mouseMoveEvent(ev)
 
     # ------------------------- cursor helpers --------------------------- #
     def enterEvent(self, ev):
+        if self._is_destroyed:
+            return
         if not self.thumbnail:
             self.setCursor(Qt.CrossCursor)
 
     def leaveEvent(self, ev):
+        if self._is_destroyed:
+            return
         self.setCursor(Qt.ArrowCursor)
 
     # ===================================================================== #
     #  ROI helpers                                                           #
     # ===================================================================== #
     def addROIs(self, rois):
+        if self._is_destroyed:
+            return
         for roi in rois:
             self.scene.addItem(roi)
             self.ROIs.append(roi)
 
     def deleteROIs(self, rois):
+        if self._is_destroyed:
+            return
         for roi in rois:
             self.scene.removeItem(roi)
             self.ROIs.remove(roi)
             del roi
 
     def clearROIs(self):
+        if self._is_destroyed:
+            return
         for roi in self.ROIs:
             self.scene.removeItem(roi)
         self.ROIs.clear()
 
     def roiClicked(self, roi):
+        if self._is_destroyed:
+            return
         try:
             idx = self.ROIs.index(roi)
-            self.roiSelected.emit(idx)
+            if not self._is_destroyed:
+                self.roiSelected.emit(idx)
         except ValueError:
             pass
 
     def setROIsAreMovable(self, movable: bool):
+        if self._is_destroyed:
+            return
         flag = QGraphicsItem.ItemIsMovable
         for roi in self.ROIs:
             roi.setFlag(flag, movable)
 
     def addSpots(self, xy_iterable, radius):
+        if self._is_destroyed:
+            return
         for x, y in xy_iterable:
             spot = EllipseROI(self)
             spot.setRect(x - radius, y - radius, 2*radius, 2*radius)
@@ -699,7 +818,7 @@ class _BaseROIItem:
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
-        if ev.button() == Qt.LeftButton:
+        if ev.button() == Qt.LeftButton and not getattr(self._viewer, '_is_destroyed', True):
             self._viewer.roiClicked(self)
 
 

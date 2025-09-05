@@ -21,7 +21,7 @@ from typing import Optional, Tuple, Callable, Dict, Any
 from enum import Enum
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 from core.services.LoggerService import LoggerService
 
 
@@ -65,11 +65,11 @@ class RTMPStreamService(QThread):
     """
 
     # Signals for Qt integration
-    frameReady = pyqtSignal(np.ndarray, float, int)  # frame, timestamp, frame_number
-    connectionStatusChanged = pyqtSignal(bool, str)  # connected, status_message
-    streamStatsChanged = pyqtSignal(dict)  # fps, resolution, bitrate, etc.
-    errorOccurred = pyqtSignal(str)  # error_message
-    videoPositionChanged = pyqtSignal(float, float)  # current_time, total_time
+    frameReady = Signal(np.ndarray, float, int)  # frame, timestamp, frame_number
+    connectionStatusChanged = Signal(bool, str)  # connected, status_message
+    streamStatsChanged = Signal(dict)  # fps, resolution, bitrate, etc.
+    errorOccurred = Signal(str)  # error_message
+    videoPositionChanged = Signal(float, float)  # current_time, total_time
 
     def __init__(self, config: StreamConfig):
         super().__init__()
@@ -493,10 +493,10 @@ class StreamManager(QObject):
     Provides simplified interface for ADIAT integration.
     """
 
-    frameReceived = pyqtSignal(np.ndarray, float)  # frame, timestamp
-    connectionChanged = pyqtSignal(bool, str)  # connected, message
-    statsUpdated = pyqtSignal(dict)  # stream statistics
-    videoPositionChanged = pyqtSignal(float, float)  # current_time, total_time
+    frameReceived = Signal(np.ndarray, float)  # frame, timestamp
+    connectionChanged = Signal(bool, str)  # connected, message
+    statsUpdated = Signal(dict)  # stream statistics
+    videoPositionChanged = Signal(float, float)  # current_time, total_time
 
     def __init__(self):
         super().__init__()

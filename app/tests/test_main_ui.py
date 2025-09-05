@@ -1,9 +1,9 @@
 import os
 from os import path
-from PyQt5.QtGui import QColor
-from PyQt5.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt
 from unittest.mock import patch
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from app.core.controllers.VideoParser import VideoParser
 from app.core.controllers.Perferences import Preferences

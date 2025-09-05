@@ -9,11 +9,11 @@ import math
 
 from pathlib import Path
 
-from PyQt5.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
-from PyQt5.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
-from PyQt5.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
-from PyQt5.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
-from qtwidgets import Toggle
+from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
+from PySide6.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
+from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
+from core.views.components.Toggle import Toggle
 import tempfile
 
 from core.views.Viewer_ui import Ui_Viewer
@@ -627,7 +627,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         dialog.imageAdjusted.connect(self._on_image_adjusted)
 
         # Show dialog
-        result = dialog.exec_()
+        result = dialog.exec()
 
         # If user clicked Apply or OK, keep the adjustments
         if result == QDialog.Accepted:
@@ -720,7 +720,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         msg.setText(text)
         msg.setWindowTitle("Error Loading Images")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def _pdfButton_clicked(self):
         """Handles clicks on the Generate PDF button."""
@@ -741,7 +741,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.pdf_thread.start()
 
                 # Show the loading dialog and handle cancellation
-                if self.loading_dialog.exec_() == QDialog.Rejected:
+                if self.loading_dialog.exec() == QDialog.Rejected:
                     self.pdf_thread.cancel()
 
             except Exception as e:
@@ -905,7 +905,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _create_simple_popup_filter(self, popup):
         """Create a simple event filter to close the popup when clicking outside."""
-        from PyQt5.QtCore import QObject
+        from PySide6.QtCore import QObject
 
         class SimplePopupFilter(QObject):
             def __init__(self, popup_widget):
@@ -922,7 +922,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         return SimplePopupFilter(popup)
 
     def _copy_coords_to_clipboard(self, coord_text=None):
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
         if coord_text is None:
             if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
                 coord_text = self.messages.data.get('GPS Coordinates')

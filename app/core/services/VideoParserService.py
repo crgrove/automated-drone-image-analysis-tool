@@ -6,7 +6,7 @@ import cv2
 import math
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from core.services.LoggerService import LoggerService
 from helpers.MetaDataHelper import MetaDataHelper
@@ -16,8 +16,8 @@ class VideoParserService(QObject):
     """Service to parse video into images."""
 
     # Signals to send info back to the GUI
-    sig_msg = pyqtSignal(str)
-    sig_done = pyqtSignal(int, int)
+    sig_msg = Signal(str)
+    sig_done = Signal(int, int)
 
     def __init__(self, id, video, srt, output, interval):
         """
@@ -39,7 +39,7 @@ class VideoParserService(QObject):
         self.interval = interval
         self.cancelled = False
 
-    @pyqtSlot()
+    @Slot()
     def process_video(self):
         """
         Convert video frames to still images and attach metadata from an SRT file if provided.
@@ -143,7 +143,7 @@ class VideoParserService(QObject):
             self.sig_msg.emit(f"Processing error: {str(e)}")
             self.sig_done.emit(self.__id, 0)
 
-    @pyqtSlot()
+    @Slot()
     def process_cancel(self):
         """
         Cancel the video processing operation.

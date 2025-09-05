@@ -71,7 +71,6 @@ class AIPersonDetectorService(AlgorithmService):
 
         try:
             img_pre_processed = self._preprocess_whole_image(img)
-            h, w = img.shape[:2]
             all_boxes = []
             all_scores = []
             all_classes = []
@@ -173,22 +172,6 @@ class AIPersonDetectorService(AlgorithmService):
             y2 = int((y2 / MODEL_IMG_SIZE) * crop_h) + slice_rect[1]
             bboxes.append((x1, y1, x2, y2, float(conf), int(cls)))
         return bboxes
-
-    def _draw_boxes(self, img, bboxes):
-        """
-        Draw bounding boxes on an image for visualization.
-
-        Args:
-            img (np.ndarray): Original image (BGR or RGB).
-            bboxes (list[tuple]): List of (x1, y1, x2, y2, confidence, class).
-
-        Returns:
-            np.ndarray: Image with boxes drawn.
-        """
-        for (x1, y1, x2, y2, conf, cls) in bboxes:
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(img, f'{conf:.2f}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        return img
 
     def _create_onnx_session(self):
         """

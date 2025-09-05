@@ -5,8 +5,8 @@ from algorithms.MatchedFilter.views.MatchedFilter_ui import Ui_MatchedFilter
 from algorithms.MatchedFilter.controllers.MatchedFilterRangeViewerController import MatchedFilterRangeViewer
 from core.services.LoggerService import LoggerService
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget, QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QColorDialog
 
 
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):

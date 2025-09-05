@@ -16,9 +16,9 @@ import numpy as np
 import time
 from typing import Optional, List, Dict, Any
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
                              QGroupBox, QGridLayout, QTextEdit, QSplitter,
                              QCheckBox, QComboBox, QProgressBar,
@@ -43,7 +43,7 @@ class VideoDisplayWidget(QLabel):
         self.setText("No Stream Connected")
         self.setScaledContents(False)
         # Set size policy to expanding so it grows to fill available space
-        from PyQt5.QtWidgets import QSizePolicy
+        from PySide6.QtWidgets import QSizePolicy
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def update_frame(self, frame: np.ndarray):
@@ -70,11 +70,11 @@ class VideoDisplayWidget(QLabel):
 class VideoTimelineWidget(QWidget):
     """Video timeline control widget for file playback."""
 
-    playPauseToggled = pyqtSignal()
-    seekRequested = pyqtSignal(float)  # time in seconds
-    seekRelative = pyqtSignal(float)   # relative seconds
-    jumpToBeginning = pyqtSignal()
-    jumpToEnd = pyqtSignal()
+    playPauseToggled = Signal()
+    seekRequested = Signal(float)  # time in seconds
+    seekRelative = Signal(float)   # relative seconds
+    jumpToBeginning = Signal()
+    jumpToEnd = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -217,7 +217,7 @@ class VideoTimelineWidget(QWidget):
 class AnomalyControlWidget(QWidget):
     """Anomaly detection control widget."""
 
-    configChanged = pyqtSignal(dict)  # Emitted when configuration changes
+    configChanged = Signal(dict)  # Emitted when configuration changes
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -423,8 +423,8 @@ class AnomalyControlWidget(QWidget):
 class StreamControlWidget(QWidget):
     """Stream connection and control widget."""
 
-    connectRequested = pyqtSignal(str, str)  # url, stream_type
-    disconnectRequested = pyqtSignal()
+    connectRequested = Signal(str, str)  # url, stream_type
+    disconnectRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -969,9 +969,9 @@ class RTMPAnomalyDetectionViewer(QMainWindow):
 
 if __name__ == "__main__":
     import sys
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     viewer = RTMPAnomalyDetectionViewer()
     viewer.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

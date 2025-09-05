@@ -4,8 +4,8 @@ from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ColorRange.views.ColorRange_ui import Ui_ColorRange
 from algorithms.ColorRange.controllers.ColorRangeRangeViewerController import ColorRangeRangeViewer
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget, QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QColorDialog
 
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService

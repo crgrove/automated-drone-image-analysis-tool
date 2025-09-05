@@ -7,8 +7,8 @@ from algorithms.AIPersonDetector.views.AIPersonDetector_ui import Ui_AIPersonDet
 from core.services.LoggerService import LoggerService
 from helpers.CudaCheck import CudaCheck
 
-from PyQt5.QtWidgets import QWidget, QMessageBox
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QMessageBox
+from PySide6.QtCore import Qt
 
 
 class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmController):

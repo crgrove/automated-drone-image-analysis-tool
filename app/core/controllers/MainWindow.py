@@ -6,9 +6,9 @@ from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
 import os
 import platform
-from PyQt5.QtGui import QColor, QFont, QIcon
-from PyQt5.QtCore import QThread, pyqtSlot, QSize, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy, QAbstractButton
+from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtCore import QThread, Slot, QSize, Qt
+from PySide6.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy, QAbstractButton
 from core.views.MainWindow_ui import Ui_MainWindow
 
 from helpers.PickleHelper import PickleHelper
@@ -347,7 +347,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.outputWindow.appendPlainText(text)
 
-    @pyqtSlot()
+    @Slot()
     def _show_aois_limit_warning(self):
         """
         Displays a warning that the maximum number of areas of interest has been exceeded.
@@ -357,10 +357,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(f"Area of Interest Limit ({self.settings_service.get_setting('MaxAOIs')}) exceeded. Continue?")
         msg.setWindowTitle("Area of Interest Limit Exceeded")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        if msg.exec_() == QMessageBox.No:
+        if msg.exec() == QMessageBox.No:
             self._cancelButton_clicked()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_worker_msg(self, text):
         """
         Logs a message from the worker thread.
@@ -370,7 +370,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self._add_log_entry(text)
 
-    @pyqtSlot(int, int, str)
+    @Slot(int, int, str)
     def _on_worker_done(self, id, images_with_aois, xml_path):
         """
         Finalizes the UI upon completion of the analysis process.
@@ -405,7 +405,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(text)
         msg.setWindowTitle("Error")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def _open_load_file(self):
         """
@@ -490,7 +490,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens the Video Parser dialog.
         """
         parser = VideoParser(self.settings_service.get_setting('Theme'))
-        parser.exec_()
+        parser.exec()
 
     def _open_rtmp_detection(self):
         """
@@ -651,7 +651,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.theme.setup_theme("light")
             self._reapply_icons("light")
         else:
-            self.theme.setup_theme("dark")
+            self.theme.setup_theme()
             self._reapply_icons("dark")
 
     def _show_area_validation_error(self, message):
@@ -666,7 +666,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(message)
         msg.setWindowTitle("Invalid Value")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def _reapply_icons(self, theme):
         # decide which sub‑folder of your resources to use:

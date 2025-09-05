@@ -1,16 +1,16 @@
 """MeasureDialog controller for distance measurement functionality."""
 
 import math
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal
-from PyQt5.QtGui import QPen, QColor, QFont
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox
-from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsTextItem
+from PySide6.QtCore import Qt, QPointF, Signal
+from PySide6.QtGui import QPen, QColor, QFont
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox
+from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsTextItem
 
 
 class MeasureDialog(QDialog):
     """Dialog for measuring distances on images using GSD (Ground Sample Distance)."""
 
-    gsdChanged = pyqtSignal(float)
+    gsdChanged = Signal(float)
 
     def __init__(self, parent, image_viewer, current_gsd, distance_unit):
         """Initialize the measure dialog.

@@ -10,10 +10,10 @@ from typing import Optional, List, Tuple, Set
 from dataclasses import dataclass
 import cv2
 
-from PyQt5.QtCore import (Qt, QPoint, QPointF, pyqtSignal, QTimer, QRectF, QRect)
-from PyQt5.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QImage, QFont,
+from PySide6.QtCore import (Qt, QPoint, QPointF, Signal, QTimer, QRectF, QRect)
+from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QImage, QFont,
                         QMouseEvent, QKeyEvent, QWheelEvent, QTransform, QCursor)
-from PyQt5.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                            QPushButton, QSpinBox, QGroupBox, QGridLayout, 
                            QFileDialog, QSplitter, QGraphicsView, QGraphicsScene,
                            QGraphicsPixmapItem, QDialogButtonBox, QApplication,
@@ -31,8 +31,8 @@ class SelectionState:
 class FastImageViewer(QGraphicsView):
     """Fast image viewer with click-based selection."""
     
-    selectionChanged = pyqtSignal()
-    cursorHSVChanged = pyqtSignal(int, int, int)  # H degrees, S percent, V percent
+    selectionChanged = Signal()
+    cursorHSVChanged = Signal(int, int, int)  # H degrees, S percent, V percent
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -500,7 +500,7 @@ class FastImageViewer(QGraphicsView):
 class HSVColorRangeAssistant(QDialog):
     """Main dialog for HSV Color Range Assistant tool."""
     
-    rangeAccepted = pyqtSignal(dict)
+    rangeAccepted = Signal(dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -904,4 +904,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     dialog = HSVColorRangeAssistant()
     dialog.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

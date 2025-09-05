@@ -10,7 +10,7 @@ import traceback
 
 from pathlib import Path
 from multiprocessing import Pool, pool
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from core.services.LoggerService import LoggerService
 from core.services.HistogramNormalizationService import HistogramNormalizationService
@@ -30,9 +30,9 @@ class AnalyzeService(QObject):
     """Service to process images using a selected algorithm."""
 
     # Signals to send info back to the GUI
-    sig_msg = pyqtSignal(str)
-    sig_aois = pyqtSignal()
-    sig_done = pyqtSignal(int, int, str)
+    sig_msg = Signal(str)
+    sig_aois = Signal()
+    sig_done = Signal(int, int, str)
 
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
                  max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options, max_area):
@@ -78,7 +78,7 @@ class AnalyzeService(QObject):
         self.is_thermal = (self.algorithm['type'] == 'Thermal')
         self.pool = Pool(self.num_processes)
 
-    @pyqtSlot()
+    @Slot()
     def process_files(self):
         """
         Process all files in the input directory using the selected algorithm and settings.
@@ -220,7 +220,7 @@ class AnalyzeService(QObject):
             logger = LoggerService()
             logger.error(e)
 
-    @pyqtSlot()
+    @Slot()
     def _process_complete(self, result):
         """
         Handle completion of an image processing task.
@@ -256,7 +256,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit(f"Processing Progress: {percent_complete}% complete")
             self._last_progress_percent = percent_complete - (percent_complete % 10)
 
-    @pyqtSlot()
+    @Slot()
     def process_cancel(self):
         """
         Cancel any ongoing asynchronous processes.

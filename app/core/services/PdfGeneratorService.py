@@ -7,8 +7,8 @@ from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import QBuffer
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QBuffer
 
 import os
 import cv2

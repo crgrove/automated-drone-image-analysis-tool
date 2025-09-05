@@ -3,7 +3,7 @@ import os
 import qdarktheme
 import pytest
 from app.core.controllers.MainWindow import MainWindow
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'app')))
@@ -34,7 +34,7 @@ def app():
 @pytest.fixture(scope='function')
 def main_window(qtbot):
     version = "Version 1.6"
-    qdarktheme.setup_theme()
+    # qdarktheme.setup_theme()  # Not needed with PySide6, theme is set via stylesheet
     mw = MainWindow(qdarktheme, version)
     mw.show()
     qtbot.addWidget(mw)

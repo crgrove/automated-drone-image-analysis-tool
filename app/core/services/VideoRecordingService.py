@@ -17,7 +17,7 @@ from typing import Optional, Tuple, Dict, Any
 from dataclasses import dataclass
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 from core.services.LoggerService import LoggerService
 
 
@@ -47,11 +47,11 @@ class VideoRecorder(QThread):
     """
 
     # Signals
-    recordingStarted = pyqtSignal(str)  # output_path
-    recordingStopped = pyqtSignal(str, float)  # output_path, duration
-    segmentCompleted = pyqtSignal(str, str)  # old_path, new_path
-    errorOccurred = pyqtSignal(str)  # error_message
-    statsUpdated = pyqtSignal(dict)  # recording statistics
+    recordingStarted = Signal(str)  # output_path
+    recordingStopped = Signal(str, float)  # output_path, duration
+    segmentCompleted = Signal(str, str)  # old_path, new_path
+    errorOccurred = Signal(str)  # error_message
+    statsUpdated = Signal(dict)  # recording statistics
 
     def __init__(self, config: RecordingConfig):
         super().__init__()
@@ -400,8 +400,8 @@ class RecordingManager(QObject):
     Provides simplified interface for ADIAT integration.
     """
 
-    recordingStateChanged = pyqtSignal(bool, str)  # is_recording, path_or_message
-    recordingStats = pyqtSignal(dict)  # recording statistics
+    recordingStateChanged = Signal(bool, str)  # is_recording, path_or_message
+    recordingStats = Signal(dict)  # recording statistics
 
     def __init__(self, output_dir: str = "./recordings"):
         super().__init__()

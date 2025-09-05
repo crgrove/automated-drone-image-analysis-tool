@@ -16,9 +16,9 @@ Features:
 
 import numpy as np
 import cv2
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QDialog
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtWidgets import QDialog
 
 from core.views.components.ImageAdjustmentDialog_ui import Ui_ImageAdjustmentDialog
 
@@ -31,7 +31,7 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         imageAdjusted: Emitted when adjustments are applied with the adjusted QPixmap
     """
 
-    imageAdjusted = pyqtSignal(QPixmap)
+    imageAdjusted = Signal(QPixmap)
 
     def __init__(self, parent=None, original_pixmap=None):
         """
@@ -115,7 +115,11 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         width = qimage.width()
         height = qimage.height()
         ptr = qimage.bits()
-        ptr.setsize(qimage.byteCount())
+        
+        # PySide6/Python 3.8+ compatibility: memoryview.setsize() was removed
+        # Instead, we use the size directly from the QImage
+        byte_count = qimage.sizeInBytes()
+        ptr = ptr[:byte_count]  # Slice to the correct size
 
         # Convert to numpy array
         arr = np.frombuffer(ptr, np.uint8).reshape((height, width, 3))

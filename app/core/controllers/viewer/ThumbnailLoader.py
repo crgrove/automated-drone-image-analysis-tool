@@ -1,11 +1,11 @@
-from PyQt5.QtCore import QThread, pyqtSignal, QSize
-from PyQt5.QtGui import QIcon, QImageReader, QPixmap
+from PySide6.QtCore import QThread, Signal, QSize
+from PySide6.QtGui import QIcon, QImageReader, QPixmap
 
 
 class ThumbnailLoader(QThread):
     """Threaded loader for generating and displaying image thumbnails."""
 
-    thumbnail_loaded = pyqtSignal(int, QIcon)
+    thumbnail_loaded = Signal(int, QIcon)
 
     def __init__(self, images, start_index, end_index, existing_thumbnails, parent=None):
         """Initializes the thumbnail loader.

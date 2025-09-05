@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 import concurrent.futures
 
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 from core.services.LoggerService import LoggerService
 
 
@@ -64,9 +64,9 @@ class RealtimeAnomalyDetector(QObject):
     """
 
     # Qt signals for integration
-    detectionsReady = pyqtSignal(list, float, np.ndarray)  # detections, timestamp, annotated_frame
-    performanceUpdate = pyqtSignal(dict)  # processing_time, fps, detections_count
-    configurationChanged = pyqtSignal(dict)  # current config state
+    detectionsReady = Signal(list, float, np.ndarray)  # detections, timestamp, annotated_frame
+    performanceUpdate = Signal(dict)  # processing_time, fps, detections_count
+    configurationChanged = Signal(dict)  # current config state
 
     def __init__(self):
         super().__init__()
