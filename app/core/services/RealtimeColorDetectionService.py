@@ -49,6 +49,7 @@ class HSVConfig:
     gpu_acceleration: bool = False  # attempt GPU processing
     show_labels: bool = True  # show detection labels and center dots
     hsv_ranges: Optional[Dict[str, Any]] = None  # Precise HSV range data from new picker
+    processing_resolution: Optional[Tuple[int, int]] = None  # (width, height) to downsample to
 
 
 class RealtimeColorDetector(QObject):
@@ -209,14 +210,92 @@ class RealtimeColorDetector(QObject):
             if hsv_ranges is None:
                 return []
 
-            # Create a copy to avoid memory issues
-            frame_copy = frame.copy()
+            # Store original dimensions for coordinate mapping
+            original_height, original_width = frame.shape[:2]
+            scale_factor = 1.0
+            
+            # Downsample if processing resolution is specified
+            processing_frame = frame.copy()
+            if config.processing_resolution is not None:
+                target_width, target_height = config.processing_resolution
+                
+                # Only downsample if the frame is larger than target
+                if original_width > target_width or original_height > target_height:
+                    # Calculate scale factor maintaining aspect ratio
+                    scale_factor = min(
+                        target_width / original_width,
+                        target_height / original_height
+                    )
+                    new_width = int(original_width * scale_factor)
+                    new_height = int(original_height * scale_factor)
+                    
+                    # Resize for processing
+                    processing_frame = cv2.resize(frame, (new_width, new_height), 
+                                                 interpolation=cv2.INTER_LINEAR)
+                    
+                    # Adjust area constraints based on scale factor
+                    scaled_config = HSVConfig(
+                        target_color_rgb=config.target_color_rgb,
+                        hue_threshold=config.hue_threshold,
+                        saturation_threshold=config.saturation_threshold,
+                        value_threshold=config.value_threshold,
+                        min_area=int(config.min_area * scale_factor * scale_factor),
+                        max_area=int(config.max_area * scale_factor * scale_factor),
+                        confidence_threshold=config.confidence_threshold,
+                        morphology_enabled=config.morphology_enabled,
+                        gpu_acceleration=config.gpu_acceleration,
+                        show_labels=config.show_labels,
+                        hsv_ranges=config.hsv_ranges
+                    )
+                else:
+                    scaled_config = config
+            else:
+                scaled_config = config
 
             # GPU-accelerated processing if available
             if self._use_gpu:
-                detections = self._detect_gpu(frame_copy, timestamp, config, hsv_ranges)
+                detections = self._detect_gpu(processing_frame, timestamp, scaled_config, hsv_ranges)
             else:
-                detections = self._detect_cpu(frame_copy, timestamp, config, hsv_ranges)
+                detections = self._detect_cpu(processing_frame, timestamp, scaled_config, hsv_ranges)
+            
+            # Scale detection coordinates back to original resolution if needed
+            if scale_factor < 1.0:
+                inv_scale = 1.0 / scale_factor
+                scaled_detections = []
+                for detection in detections:
+                    # Scale bounding box
+                    x, y, w, h = detection.bbox
+                    scaled_bbox = (
+                        int(x * inv_scale),
+                        int(y * inv_scale),
+                        int(w * inv_scale),
+                        int(h * inv_scale)
+                    )
+                    
+                    # Scale centroid
+                    cx, cy = detection.centroid
+                    scaled_centroid = (
+                        int(cx * inv_scale),
+                        int(cy * inv_scale)
+                    )
+                    
+                    # Scale area
+                    scaled_area = detection.area * inv_scale * inv_scale
+                    
+                    # Scale contour points
+                    scaled_contour = (detection.contour * inv_scale).astype(np.int32)
+                    
+                    scaled_detection = Detection(
+                        bbox=scaled_bbox,
+                        centroid=scaled_centroid,
+                        area=scaled_area,
+                        confidence=detection.confidence,
+                        timestamp=detection.timestamp,
+                        contour=scaled_contour
+                    )
+                    scaled_detections.append(scaled_detection)
+                
+                detections = scaled_detections
 
         except Exception as e:
             self.logger.error(f"Detection error: {e}")
@@ -426,6 +505,11 @@ class RealtimeColorDetector(QObject):
             stats_text = f"Detections: {len(detections)} | Config: H-{h_minus}/+{h_plus}"
         else:
             stats_text = f"Detections: {len(detections)} | Config: H±{self._config.hue_threshold}"
+        
+        # Add processing resolution info if downsampling
+        if self._config.processing_resolution:
+            stats_text += f" | Processing: {self._config.processing_resolution[0]}x{self._config.processing_resolution[1]}"
+            
         cv2.putText(annotated, stats_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
         return annotated
