@@ -13,11 +13,11 @@ from typing import Tuple, Optional
 from PyQt5.QtCore import Qt, QRect, QPoint, pyqtSignal, QSize
 from PyQt5.QtGui import (QPainter, QColor, QPen, QBrush, QConicalGradient, 
                         QLinearGradient, QPolygonF, QFont, QFontMetrics,
-                        QPainterPath, QMouseEvent)
+                        QPainterPath, QMouseEvent, QIcon)
 from PyQt5.QtCore import QRectF
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                             QLineEdit, QPushButton, QFrame, QGridLayout,
-                            QSizePolicy, QColorDialog)
+                            QSizePolicy, QColorDialog, QToolButton, QStyle)
 
 
 class HSVRangePickerWidget(QWidget):
@@ -145,6 +145,55 @@ class HSVRangePickerWidget(QWidget):
         # Buttons row
         buttons_layout = QHBoxLayout()
         
+        # HSV Assistant button (icon button)
+        self.hsv_assistant_button = QToolButton()
+        self.hsv_assistant_button.setFixedSize(35, 35)
+        self.hsv_assistant_button.setToolTip("HSV Color Range Assistant - Click to select colors from image")
+        
+        # Try to use an icon, fall back to text if not available
+        try:
+            # Try to use a built-in Qt icon for image/picture
+            from PyQt5.QtWidgets import QStyle
+            icon = self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
+            if icon.isNull():
+                # If that doesn't work, try another icon
+                icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
+            
+            if not icon.isNull():
+                self.hsv_assistant_button.setIcon(icon)
+            else:
+                # Fall back to text symbol
+                self.hsv_assistant_button.setText("IMG")
+        except:
+            # If all else fails, use text
+            self.hsv_assistant_button.setText("IMG")
+        
+        self.hsv_assistant_button.setStyleSheet("""
+            QToolButton {
+                font-weight: bold;
+                color: #000000;  /* Black text */
+                background-color: #f0f0f0;
+                border: 1px solid #999;
+                border-radius: 3px;
+            }
+            QToolButton:hover {
+                color: #000000;  /* Keep text black on hover */
+                background-color: #e0e0e0;
+                border: 1px solid #333;  /* Darker border on hover */
+            }
+            QToolButton:pressed {
+                color: #000000;
+                background-color: #d0d0d0;
+            }
+            QToolTip {
+                background-color: #333333;  /* Dark background for tooltip */
+                color: #ffffff;  /* White text for tooltip */
+                border: 1px solid #555555;
+                padding: 2px;
+            }
+        """)
+        self.hsv_assistant_button.clicked.connect(self.open_hsv_assistant)
+        
         self.pick_screen_button = QPushButton("Pick Screen Color")
         self.pick_screen_button.setFixedHeight(35)
         self.pick_screen_button.clicked.connect(self.pick_screen_color)
@@ -153,6 +202,7 @@ class HSVRangePickerWidget(QWidget):
         self.add_custom_button.setFixedHeight(35)
         self.add_custom_button.clicked.connect(self.add_to_custom_colors)
         
+        buttons_layout.addWidget(self.hsv_assistant_button)
         buttons_layout.addWidget(self.pick_screen_button)
         buttons_layout.addWidget(self.add_custom_button)
         buttons_layout.addStretch()
@@ -293,6 +343,38 @@ class HSVRangePickerWidget(QWidget):
                 
         self.custom_colors[slot_index] = current_color
         self.update_custom_colors_grid()
+        
+    def open_hsv_assistant(self):
+        """Open the HSV Color Range Assistant dialog."""
+        from .HSVColorRangeAssistant import HSVColorRangeAssistant
+        
+        dialog = HSVColorRangeAssistant(self)
+        dialog.rangeAccepted.connect(self.apply_hsv_assistant_ranges)
+        dialog.exec_()
+        
+    def apply_hsv_assistant_ranges(self, ranges):
+        """Apply ranges from HSV Assistant."""
+        # Extract values from ranges dict
+        h_center = ranges['h_center'] / 179  # Convert from OpenCV to 0-1
+        s_center = ranges['s_center'] / 255
+        v_center = ranges['v_center'] / 255
+        
+        # Set center color
+        self.h = h_center
+        self.s = s_center
+        self.v = v_center
+        
+        # Set ranges
+        self.h_minus = ranges['h_minus']
+        self.h_plus = ranges['h_plus']
+        self.s_minus = ranges['s_minus']
+        self.s_plus = ranges['s_plus']
+        self.v_minus = ranges['v_minus']
+        self.v_plus = ranges['v_plus']
+        
+        # Update display
+        self.update_display()
+        self.emit_signals()
         
     def update_custom_colors_grid(self):
         """Update the custom colors grid display."""
