@@ -295,6 +295,22 @@ class AnomalyControlWidget(QWidget):
         # Processing options
         options_group = QGroupBox("Processing Options")
         options_layout = QVBoxLayout(options_group)
+        
+        # Resolution dropdown for processing
+        resolution_layout = QHBoxLayout()
+        resolution_layout.addWidget(QLabel("Processing Resolution:"))
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItem("Auto (640x480)", (640, 480))
+        self.resolution_combo.addItem("Ultra Fast (320x240)", (320, 240))
+        self.resolution_combo.addItem("Fast (480x360)", (480, 360))
+        self.resolution_combo.addItem("Balanced (640x480)", (640, 480))
+        self.resolution_combo.addItem("Quality (960x720)", (960, 720))
+        self.resolution_combo.addItem("Full Resolution", None)
+        self.resolution_combo.setCurrentIndex(0)  # Default to Auto
+        self.resolution_combo.setToolTip("Lower resolution = faster processing")
+        resolution_layout.addWidget(self.resolution_combo)
+        resolution_layout.addStretch()
+        options_layout.addLayout(resolution_layout)
 
         # Confidence threshold slider
         confidence_layout = QGridLayout()
@@ -347,6 +363,7 @@ class AnomalyControlWidget(QWidget):
         self.morphology_checkbox.toggled.connect(self.emit_config)
         self.gpu_checkbox.toggled.connect(self.emit_config)
         self.heatmap_checkbox.toggled.connect(self.emit_config)
+        self.resolution_combo.currentIndexChanged.connect(self.emit_config)
 
     def update_sensitivity(self):
         """Handle sensitivity slider changes."""
@@ -401,7 +418,8 @@ class AnomalyControlWidget(QWidget):
             'confidence_threshold': self.confidence_slider.value() / 100.0,  # Convert to 0-1 range
             'morphology_enabled': self.morphology_checkbox.isChecked(),
             'gpu_acceleration': self.gpu_checkbox.isChecked(),
-            'show_heatmap': self.heatmap_checkbox.isChecked()
+            'show_heatmap': self.heatmap_checkbox.isChecked(),
+            'processing_resolution': self.resolution_combo.currentData()
         }
         self.configChanged.emit(config)
 
@@ -416,7 +434,8 @@ class AnomalyControlWidget(QWidget):
             confidence_threshold=self.confidence_slider.value() / 100.0,
             morphology_enabled=self.morphology_checkbox.isChecked(),
             gpu_acceleration=self.gpu_checkbox.isChecked(),
-            show_heatmap=self.heatmap_checkbox.isChecked()
+            show_heatmap=self.heatmap_checkbox.isChecked(),
+            processing_resolution=self.resolution_combo.currentData()
         )
 
 

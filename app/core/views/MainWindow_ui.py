@@ -382,11 +382,17 @@ class Ui_MainWindow(object):
         font.setPointSize(10)
         self.actionRTMPAnomalyDetection.setFont(font)
         self.actionRTMPAnomalyDetection.setObjectName("actionRTMPAnomalyDetection")
+        self.actionRTMPMotionDetection = QtWidgets.QAction(MainWindow)
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.actionRTMPMotionDetection.setFont(font)
+        self.actionRTMPMotionDetection.setObjectName("actionRTMPMotionDetection")
         self.menuFile.addAction(self.actionLoadFile)
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
         self.menuFile.addAction(self.actionRTMPDetection)
         self.menuFile.addAction(self.actionRTMPAnomalyDetection)
+        self.menuFile.addAction(self.actionRTMPMotionDetection)
         self.mainBar.addAction(self.menuFile.menuAction())
 
         self.retranslateUi(MainWindow)
@@ -424,4 +430,5 @@ class Ui_MainWindow(object):
         self.actionVideoParser.setText(_translate("MainWindow", "Video Parser"))
         self.actionRTMPDetection.setText(_translate("MainWindow", "Real-Time Color Detection"))
         self.actionRTMPAnomalyDetection.setText(_translate("MainWindow", "Real-Time Anomaly Detection"))
+        self.actionRTMPMotionDetection.setText(_translate("MainWindow", "Real-Time Motion Detection"))
 from . import resources_rc

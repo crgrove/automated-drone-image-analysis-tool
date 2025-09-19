@@ -48,6 +48,7 @@ class AnomalyConfig:
     gpu_acceleration: bool = False  # attempt GPU processing
     distance_metric: str = "euclidean"  # euclidean, manhattan, or mahalanobis_approx
     show_heatmap: bool = False  # show anomaly heatmap overlay
+    processing_resolution: Optional[Tuple[int, int]] = None  # (width, height) to downsample to
 
 
 class RealtimeAnomalyDetector(QObject):
@@ -245,30 +246,45 @@ class RealtimeAnomalyDetector(QObject):
         fit the local spectral statistical model - like a pink shirt in natural scenery.
         """
         h, w, c = lab_frame.shape
-        anomaly_map = np.zeros((h, w), dtype=np.float32)
-
+        
         if config.window_size <= 1:
             # Global RX anomaly detection for fastest performance
             return self._compute_global_rx_anomaly(lab_frame)
 
-        # Local RX anomaly detection - proper implementation
+        # For better performance with local windows, use strided approach
         window_size = config.window_size if config.window_size % 2 == 1 else config.window_size + 1
+        
+        # Use stride for faster processing (skip pixels)
+        stride = max(1, window_size // 4)  # Adaptive stride based on window size
+        
+        # Create sparse anomaly map
+        sparse_h = (h + stride - 1) // stride
+        sparse_w = (w + stride - 1) // stride
+        sparse_anomaly_map = np.zeros((sparse_h, sparse_w), dtype=np.float32)
+        
         half_window = window_size // 2
-
-        # Pad the frame to handle borders
-        padded_frame = np.pad(lab_frame, ((half_window, half_window), (half_window, half_window), (0, 0)), mode='reflect')
-
-        # Efficient sliding window using array operations
-        for i in range(h):
-            for j in range(w):
+        padded_frame = np.pad(lab_frame, ((half_window, half_window), (half_window, half_window), (0, 0)), mode='edge')
+        
+        # Compute on sparse grid
+        for i in range(sparse_h):
+            for j in range(sparse_w):
+                y = min(i * stride, h - 1)
+                x = min(j * stride, w - 1)
+                
                 # Extract local window
-                window = padded_frame[i:i+window_size, j:j+window_size]
-                center_pixel = lab_frame[i, j]
-
-                # Compute RX anomaly score for this pixel
+                window = padded_frame[y:y+window_size, x:x+window_size]
+                center_pixel = lab_frame[y, x]
+                
+                # Compute RX anomaly score
                 anomaly_score = self._compute_rx_score(center_pixel, window, config.distance_metric)
-                anomaly_map[i, j] = anomaly_score
-
+                sparse_anomaly_map[i, j] = anomaly_score
+        
+        # Upsample sparse map back to original size using fast interpolation
+        if stride > 1:
+            anomaly_map = cv2.resize(sparse_anomaly_map, (w, h), interpolation=cv2.INTER_LINEAR)
+        else:
+            anomaly_map = sparse_anomaly_map
+        
         # Normalize to [0, 1]
         if anomaly_map.max() > 0:
             anomaly_map = anomaly_map / anomaly_map.max()
@@ -354,17 +370,20 @@ class RealtimeAnomalyDetector(QObject):
         """
         Prepare frame for processing by downscaling if necessary for real-time performance.
 
-        Target processing resolution: 640x480 for optimal performance.
-        Larger frames are downscaled proportionally.
+        Uses configured processing resolution or defaults to 640x480.
 
         Returns:
             tuple: (processing_frame, scale_factor)
         """
         height, width = frame.shape[:2]
 
-        # Target resolution for optimal real-time performance
-        target_width = 640
-        target_height = 480
+        # Use configured resolution or default for optimal performance
+        if self._config.processing_resolution is not None:
+            target_width, target_height = self._config.processing_resolution
+        else:
+            # Default resolution for optimal real-time performance
+            target_width = 640
+            target_height = 480
 
         # Calculate if we need to downscale
         if width <= target_width and height <= target_height:
@@ -380,11 +399,8 @@ class RealtimeAnomalyDetector(QObject):
         new_width = int(width * scale_factor)
         new_height = int(height * scale_factor)
 
-        # Downscale frame
-        processing_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
-
-        # Commented out to avoid logging spam in production
-        # self.logger.info(f"Downscaled frame from {width}x{height} to {new_width}x{new_height} (scale: {scale_factor:.2f})")
+        # Downscale frame using INTER_LINEAR for better performance than INTER_AREA
+        processing_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
 
         return processing_frame, scale_factor
 
@@ -610,7 +626,8 @@ class RealtimeAnomalyDetector(QObject):
             'morphology_enabled': self._config.morphology_enabled,
             'gpu_acceleration': self._use_gpu,
             'distance_metric': self._config.distance_metric,
-            'show_heatmap': self._config.show_heatmap
+            'show_heatmap': self._config.show_heatmap,
+            'processing_resolution': self._config.processing_resolution
         }
 
     def get_performance_info(self) -> Dict[str, Any]:

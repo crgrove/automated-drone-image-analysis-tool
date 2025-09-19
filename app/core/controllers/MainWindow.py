@@ -18,6 +18,7 @@ from core.controllers.Perferences import Preferences
 from core.controllers.VideoParser import VideoParser
 from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
 from core.controllers.RTMPAnomalyDetectionViewer import RTMPAnomalyDetectionViewer
+from core.controllers.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
 
 from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
@@ -86,6 +87,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.rtmp_anomaly_viewer = None
         if hasattr(self, 'actionRTMPAnomalyDetection'):
             self.actionRTMPAnomalyDetection.triggered.connect(self._open_rtmp_anomaly_detection)
+        
+        # Add RTMP Motion Detection functionality
+        self.rtmp_motion_viewer = None
+        if hasattr(self, 'actionRTMPMotionDetection'):
+            self.actionRTMPMotionDetection.triggered.connect(self._open_rtmp_motion_detection)
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
         # Connect to editingFinished instead of valueChanged for deferred validation
@@ -525,6 +531,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.logger.error(f"Error opening RTMP anomaly viewer: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open RTMP Anomaly Detection viewer:\n{str(e)}")
+
+    def _open_rtmp_motion_detection(self):
+        """
+        Opens the Real-Time RTMP Motion Detection viewer with dual-mode support.
+        """
+        try:
+            if self.rtmp_motion_viewer is None or not self.rtmp_motion_viewer.isVisible():
+                self.rtmp_motion_viewer = RTMPMotionDetectionViewer(self)
+                self.rtmp_motion_viewer.show()
+                self.logger.info("RTMP Motion Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_motion_viewer.raise_()
+                self.rtmp_motion_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP motion viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Motion Detection viewer:\n{str(e)}")
 
     def closeEvent(self, event):
         """
