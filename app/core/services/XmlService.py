@@ -92,6 +92,8 @@ class XmlService:
                     
                 # Original image paths might be absolute or relative
                 if path:
+                    # Convert forward slashes back to platform-specific separator
+                    path = path.replace('/', os.sep)
                     if not os.path.isabs(path) and self.xml_path:
                         # If relative, make it relative to XML location
                         dir = os.path.dirname(self.xml_path)
@@ -170,9 +172,24 @@ class XmlService:
             # This avoids path duplication issues
             mask_filename = os.path.basename(img["path"])
             image.set('mask_path', mask_filename)
-            # Store the original path
+            # Store the original path as relative if possible
             if "original_path" in img:
-                image.set('path', img["original_path"])
+                original_path = img["original_path"]
+                # Try to make the path relative to the XML file location
+                if self.xml_path and os.path.isabs(original_path):
+                    try:
+                        xml_dir = os.path.dirname(self.xml_path)
+                        relative_path = os.path.relpath(original_path, xml_dir)
+                        # Only use relative path if it doesn't go up too many levels
+                        # (to avoid ../../../.. type paths that might break)
+                        # Use forward slashes for consistency and cross-platform compatibility
+                        relative_path = relative_path.replace('\\', '/')
+                        if not relative_path.startswith('../../..'):
+                            original_path = relative_path
+                    except ValueError:
+                        # Different drives on Windows, keep absolute
+                        pass
+                image.set('path', original_path)
         else:
             # Legacy support - old style with duplicated images
             image.set('path', img["path"])

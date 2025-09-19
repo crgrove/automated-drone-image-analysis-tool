@@ -389,12 +389,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             
             # Load the original image
             # Note: When using mask-based storage, image_path should already point to the original source image
-            print(f"DEBUG: Loading image from path: {image_path}")
-            print(f"DEBUG: Mask path: {mask_path}")
             image_service = ImageService(image_path)
-            # Check if we have GPS data
-            test_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
-            print(f"DEBUG: GPS data found: {test_gps}")
 
             # Draw AOI boundaries (circles or contours)
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
@@ -883,7 +878,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         # GPS Coordinates first (with hyperlink)
         gps_value = self.messages.get("GPS Coordinates")
         if gps_value:
-            status_items.append(f'<a href="#">GPS Coordinates: {gps_value}</a>')
+            # Use the GPS coordinates as the href value so "Copy Link Location" copies the coordinates
+            status_items.append(f'<a href="{gps_value}">GPS Coordinates: {gps_value}</a>')
 
         # Add all other messages
         for k, v in self.messages.items():
