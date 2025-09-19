@@ -7,8 +7,8 @@ that are shared between RGB and HSV color pickers, persisting across sessions.
 
 import json
 from typing import List, Tuple, Optional
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QColorDialog
 from core.services.SettingsService import SettingsService
 
 

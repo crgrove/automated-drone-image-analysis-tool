@@ -1,4 +1,4 @@
-from PyQt5 import QtCore
+from PySide6 import QtCore
 
 
 class SettingsService:
@@ -20,14 +20,15 @@ class SettingsService:
         """
         self.settings.setValue(name, value)
 
-    def get_setting(self, name):
+    def get_setting(self, name, default_value=''):
         """
         Retrieve the value of a specified setting from QSettings.
 
         Args:
             name (str): The name of the setting to retrieve.
+            default_value (str): The default value to return if the setting does not exist.
 
         Returns:
-            str: The value of the setting, or an empty string if the setting does not exist.
+            str: The value of the setting, or the default value if the setting does not exist.
         """
-        return self.settings.value(name)
+        return self.settings.value(name, default_value)

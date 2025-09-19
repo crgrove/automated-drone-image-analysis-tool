@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from PyQt5 import QtCore
-from PyQt5.QtCore import QSettings
+from PySide6 import QtCore
+from PySide6.QtCore import QSettings
 from app.core.services.SettingsService import SettingsService  # Adjust the import according to your project structure
 
 

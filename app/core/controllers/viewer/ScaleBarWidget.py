@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtGui import QPainter, QPen, QFont
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QPainter, QPen, QFont
+from PySide6.QtCore import Qt
 
 
 class ScaleBarWidget(QWidget):

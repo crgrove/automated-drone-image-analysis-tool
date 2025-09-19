@@ -4,7 +4,7 @@
 # ADIAT - Automated Drone Image Analysis Tool
 # Image adjustment dialog with real-time sliders for exposure, highlights, shadows, clarity, and radius
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class Ui_ImageAdjustmentDialog(object):

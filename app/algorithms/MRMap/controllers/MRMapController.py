@@ -1,7 +1,7 @@
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.MRMap.views.MRMap_ui import Ui_MRMap
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 class MRMapController(QWidget, Ui_MRMap, AlgorithmController):

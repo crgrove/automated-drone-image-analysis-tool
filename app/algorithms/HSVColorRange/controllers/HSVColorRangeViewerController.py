@@ -5,9 +5,9 @@ from helpers.ColorUtils import ColorUtils
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
 from core.views.components.QtImageViewer import QtImageViewer
 
-from PyQt5.QtGui import QImage
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QDialog, QFrame
+from PySide6.QtGui import QImage
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtWidgets import QDialog, QFrame
 
 
 class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):

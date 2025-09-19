@@ -1,11 +1,11 @@
-from PyQt5.QtCore import QThread, pyqtSignal
+from PySide6.QtCore import QThread, Signal
 
 
 class PdfGenerationThread(QThread):
     """Thread for generating the PDF report."""
-    finished = pyqtSignal()
-    canceled = pyqtSignal()
-    errorOccurred = pyqtSignal(str)
+    finished = Signal()
+    canceled = Signal()
+    errorOccurred = Signal(str)
 
     def __init__(self, pdf_generator, output_path):
         """Initializes the PdfGenerationThread.

@@ -2,7 +2,7 @@ from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ThermalAnomaly.views.ThermalAnomaly_ui import Ui_ThermalAnomaly
 from core.services.SettingsService import SettingsService
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):

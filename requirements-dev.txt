@@ -1,5 +1,4 @@
-pyqt-distutils
-qt5-tools
+qt6-tools
 PyInstaller
 pytest-qt
 flake8

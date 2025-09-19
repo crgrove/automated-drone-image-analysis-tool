@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-from PyQt5.QtGui import QMovie
-from PyQt5.QtCore import Qt, QSize
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+from PySide6.QtGui import QMovie
+from PySide6.QtCore import Qt, QSize
 
 
 class LoadingDialog(QDialog):

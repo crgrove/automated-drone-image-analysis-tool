@@ -9,9 +9,9 @@ import cv2
 import numpy as np
 from typing import Tuple, Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                             QPushButton, QFrame, QCheckBox, QGroupBox,
                             QSizePolicy, QGridLayout, QColorDialog)
 
@@ -23,7 +23,7 @@ class ColorRangeDialog(QDialog):
     """Advanced color range selection dialog with live preview."""
     
     # Signal emitted when color selection is accepted
-    colorSelected = pyqtSignal(dict)  # HSV range data
+    colorSelected = Signal(dict)  # HSV range data
     
     def __init__(self, initial_image=None, initial_hsv=(0, 1, 1), 
                  initial_ranges=None, parent=None):
@@ -371,7 +371,7 @@ class ColorRangeDialog(QDialog):
 class ColorSwatchButton(QPushButton):
     """Custom button widget for color swatches."""
     
-    colorSelected = pyqtSignal(QColor)
+    colorSelected = Signal(QColor)
     
     def __init__(self, index, parent=None):
         super().__init__(parent)
@@ -451,7 +451,7 @@ def show_color_picker_dialog(image=None, initial_hsv=(0, 1, 1), initial_ranges=N
     """
     dialog = ColorRangeDialog(image, initial_hsv, initial_ranges, parent)
     
-    if dialog.exec_() == QDialog.Accepted:
+    if dialog.exec() == QDialog.Accepted:
         return dialog.get_hsv_ranges()
     else:
         return None
@@ -459,7 +459,7 @@ def show_color_picker_dialog(image=None, initial_hsv=(0, 1, 1), initial_ranges=N
 
 if __name__ == "__main__":
     import sys
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
     
@@ -476,4 +476,4 @@ if __name__ == "__main__":
     else:
         print("Dialog cancelled")
         
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

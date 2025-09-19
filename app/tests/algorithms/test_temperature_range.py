@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 
 def testTemperatureRangeE2E(main_window, testData, qtbot):

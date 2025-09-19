@@ -2,7 +2,7 @@ from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ThermalRange.views.ThermalRange_ui import Ui_ThermalRange
 from core.services.SettingsService import SettingsService
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):

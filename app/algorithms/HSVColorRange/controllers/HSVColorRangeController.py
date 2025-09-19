@@ -6,8 +6,8 @@ from algorithms.HSVColorRange.controllers.HSVColorRangeViewerController import H
 from algorithms.HSVColorRange.views.color_range_dialog import ColorRangeDialog
 from core.services.LoggerService import LoggerService
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget, QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QColorDialog
 
 
 class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
@@ -111,7 +111,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             # Create and show dialog
             dialog = ColorRangeDialog(None, initial_hsv, initial_ranges, self)
             
-            if dialog.exec_() == ColorRangeDialog.Accepted:
+            if dialog.exec() == ColorRangeDialog.Accepted:
                 hsv_data = dialog.get_hsv_ranges()
                 
                 # Store the data in our format for the service

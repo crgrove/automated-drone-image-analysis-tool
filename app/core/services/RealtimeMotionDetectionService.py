@@ -20,7 +20,7 @@ from enum import Enum
 from threading import Lock
 import collections
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 from core.services.LoggerService import LoggerService
 
 
@@ -94,10 +94,10 @@ class RealtimeMotionDetector(QObject):
     """
     
     # Qt signals for integration
-    detectionsReady = pyqtSignal(list, object, np.ndarray)  # detections, camera_motion, annotated_frame
-    performanceUpdate = pyqtSignal(dict)  # processing_time, fps, detections_count
-    configurationChanged = pyqtSignal(dict)  # current config state
-    modeChanged = pyqtSignal(str)  # new detection mode
+    detectionsReady = Signal(list, object, np.ndarray)  # detections, camera_motion, annotated_frame
+    performanceUpdate = Signal(dict)  # processing_time, fps, detections_count
+    configurationChanged = Signal(dict)  # current config state
+    modeChanged = Signal(str)  # new detection mode
     
     def __init__(self):
         super().__init__()

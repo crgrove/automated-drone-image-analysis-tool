@@ -1,7 +1,7 @@
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.RXAnomaly.views.RXAnomaly_ui import Ui_RXAnomaly
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):

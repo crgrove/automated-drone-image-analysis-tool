@@ -15,10 +15,10 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from PyQt5.QtCore import QObject, QTimer, pyqtSignal, Qt
-from PyQt5.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtMultimedia import QSound
+from PySide6.QtCore import QObject, QTimer, Signal, Qt
+from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtMultimedia import QSound
 
 from core.services.RealtimeColorDetectionService import Detection
 from core.services.LoggerService import LoggerService
@@ -126,9 +126,9 @@ class AlertManager(QObject):
     """
 
     # Signals
-    alertTriggered = pyqtSignal(dict, list)  # alert_info, detections
-    alertConfigChanged = pyqtSignal(dict)  # new config
-    statsChanged = pyqtSignal(dict)  # alert statistics
+    alertTriggered = Signal(dict, list)  # alert_info, detections
+    alertConfigChanged = Signal(dict)  # new config
+    statsChanged = Signal(dict)  # alert statistics
 
     def __init__(self, config: AlertConfig = None):
         super().__init__()
@@ -437,7 +437,7 @@ class AlertManager(QObject):
             # Popup window
             if self.config.show_popup_window:
                 # This should be called from the main thread
-                from PyQt5.QtCore import QMetaObject, Qt
+                from PySide6.QtCore import QMetaObject, Qt
                 try:
                     QMetaObject.invokeMethod(
                         self,
@@ -472,7 +472,7 @@ class AlertManager(QObject):
             msg_box.setWindowTitle("ADIAT - Detection Alert")
             msg_box.setText(message)
             msg_box.setIcon(QMessageBox.Information)
-            msg_box.exec_()
+            msg_box.exec()
         except Exception as e:
             self.logger.error(f"Error showing popup: {e}")
 

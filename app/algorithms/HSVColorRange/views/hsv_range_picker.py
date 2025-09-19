@@ -10,12 +10,12 @@ import sys
 import math
 from typing import Tuple, Optional
 
-from PyQt5.QtCore import Qt, QRect, QPoint, pyqtSignal, QSize
-from PyQt5.QtGui import (QPainter, QColor, QPen, QBrush, QConicalGradient, 
+from PySide6.QtCore import Qt, QRect, QPoint, Signal, QSize
+from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QConicalGradient, 
                         QLinearGradient, QPolygonF, QFont, QFontMetrics,
                         QPainterPath, QMouseEvent, QIcon)
-from PyQt5.QtCore import QRectF
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+from PySide6.QtCore import QRectF
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                             QLineEdit, QPushButton, QFrame, QGridLayout,
                             QSizePolicy, QColorDialog, QToolButton, QStyle)
 
@@ -24,8 +24,8 @@ class HSVRangePickerWidget(QWidget):
     """Advanced HSV color range picker with visual feedback."""
     
     # Signals emitted when values change
-    colorChanged = pyqtSignal(float, float, float)  # h, s, v (0-1 range)
-    rangeChanged = pyqtSignal(float, float, float, float, float, float)  # h-, h+, s-, s+, v-, v+
+    colorChanged = Signal(float, float, float)  # h, s, v (0-1 range)
+    rangeChanged = Signal(float, float, float, float, float, float)  # h-, h+, s-, s+, v-, v+
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -153,7 +153,7 @@ class HSVRangePickerWidget(QWidget):
         # Try to use an icon, fall back to text if not available
         try:
             # Try to use a built-in Qt icon for image/picture
-            from PyQt5.QtWidgets import QStyle
+            from PySide6.QtWidgets import QStyle
             icon = self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
             if icon.isNull():
                 # If that doesn't work, try another icon
@@ -350,7 +350,7 @@ class HSVRangePickerWidget(QWidget):
         
         dialog = HSVColorRangeAssistant(self)
         dialog.rangeAccepted.connect(self.apply_hsv_assistant_ranges)
-        dialog.exec_()
+        dialog.exec()
         
     def apply_hsv_assistant_ranges(self, ranges):
         """Apply ranges from HSV Assistant."""
@@ -554,7 +554,7 @@ class HSVRangePickerWidget(QWidget):
 class SVSquareWidget(QWidget):
     """Saturation/Value square selector with range visualization."""
     
-    valueChanged = pyqtSignal(float, float, float, float, float, float)  # s, v, s-, s+, v-, v+
+    valueChanged = Signal(float, float, float, float, float, float)  # s, v, s-, s+, v-, v+
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -779,7 +779,7 @@ class SVSquareWidget(QWidget):
 class HueRingWidget(QWidget):
     """Hue ring selector with range visualization."""
     
-    valueChanged = pyqtSignal(float, float, float)  # h, h_minus, h_plus
+    valueChanged = Signal(float, float, float)  # h, h_minus, h_plus
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -998,11 +998,11 @@ class HueRingWidget(QWidget):
 
 
 if __name__ == "__main__":
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
     
     widget = HSVRangePickerWidget()
     widget.show()
     
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

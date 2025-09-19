@@ -13,13 +13,13 @@ import numpy as np
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import (
     QMainWindow, QMessageBox, QFileDialog, QSlider, QLabel,
     QComboBox, QPushButton, QCheckBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QVBoxLayout, QHBoxLayout, QGridLayout
 )
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor
+from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor
 
 from core.views.RTMPMotionDetectionViewer_ui import Ui_RTMPMotionDetectionViewer
 from core.services.RTMPStreamService import StreamManager, StreamType

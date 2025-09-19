@@ -1,7 +1,7 @@
 from core.views.VideoParser_ui import Ui_VideoParser
-from PyQt5.QtCore import QThread, pyqtSlot
-from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton
-from PyQt5.QtGui import QIcon
+from PySide6.QtCore import QThread, Slot
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton
+from PySide6.QtGui import QIcon
 
 
 from core.services.LoggerService import LoggerService
@@ -138,7 +138,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         else:
             event.accept()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_worker_msg(self, text):
         """Slot to handle log messages from the worker thread.
 
@@ -149,7 +149,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         """
         self._add_log_entry(text)
 
-    @pyqtSlot(int, int)
+    @Slot(int, int)
     def _on_worker_done(self, id, image_count):
         """Slot to handle the completion signal from the worker thread.
 
@@ -215,7 +215,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg.setText(text)
         msg.setWindowTitle("Error Starting Processing")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def _reapply_icons(self, theme):
         # decide which sub‑folder of your resources to use:
