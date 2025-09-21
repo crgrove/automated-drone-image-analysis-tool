@@ -12,8 +12,8 @@ import numpy as np
 
 from pathlib import Path
 
-from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
-from PySide6.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
+from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush
+from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF
 from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
 from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu
 from core.views.components.Toggle import Toggle
@@ -75,7 +75,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.is_thermal = (self.settings['thermal'] == 'True')
         self.position_format = position_format
         self.temperature_data = None
+        self.current_image_array = None  # Cache for the current image RGB array
         self.active_thumbnail = None
+        self.magnifying_glass_enabled = False
+        self.magnifying_glass_widget = None
+        self.magnifying_glass_pos = None
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
         self.show_hidden = show_hidden
@@ -95,7 +99,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.messages = StatusDict(callback=self._message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Drone Orientation", "Estimated Average GSD",
-                                              "Temperature"])
+                                              "Temperature", "Color Values"])
         self._reapply_icons(self.theme)
         self.statusBar.linkActivated.connect(self._on_coordinates_clicked)
 
@@ -394,6 +398,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Drone Orientation'] = None
             self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
 
+            # Hide magnifying glass when loading new image
+            if self.magnifying_glass_widget:
+                self.magnifying_glass_widget.hide()
+                self.magnifying_glass_enabled = False
+
             image = self.images[self.current_image]
             if 'thumbnail' in image:
                 self._set_active_thumbnail(image['thumbnail'])
@@ -402,11 +411,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Fall back to path for legacy support
             image_path = image.get('path', '')
             mask_path = image.get('mask_path', '')
-            
+
             # Load the original image
             # Note: When using mask-based storage, image_path should already point to the original source image
-            # Pass mask_path for thermal data retrieval from mask metadata
-            image_service = ImageService(image_path, mask_path)
+            image_service = ImageService(image_path)
+
+            # Cache the image array for pixel value display
+            self.current_image_array = image_service.img_array.copy()
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
             if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
@@ -479,8 +490,28 @@ class Viewer(QMainWindow, Ui_Viewer):
             except Exception:
                 self.current_decimal_coords = None
             if self.is_thermal:
+                # First try to get thermal data from XMP metadata
                 self.temperature_data = image_service.get_thermal_data(self.temperature_unit)
+
+                # If no thermal data in XMP, try to parse it directly from the thermal image
+                if self.temperature_data is None:
+                    try:
+                        from core.services.ThermalParserService import ThermalParserService
+                        # Check if this is a thermal image file
+                        if image_path.lower().endswith(('.jpg', '.jpeg', '.rjpeg')):
+                            thermal_parser = ThermalParserService(dtype=np.float32)
+                            temperature_c, _ = thermal_parser.parse_file(image_path)
+
+                            # Convert to the desired unit
+                            if self.temperature_unit == 'F' and temperature_c is not None:
+                                self.temperature_data = temperature_c * 1.8 + 32.0
+                            else:
+                                self.temperature_data = temperature_c
+                    except Exception as e:
+                        self.logger.error(f"Failed to parse thermal data from image: {e}")
+                        self.temperature_data = None
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
+            self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
             self.main_image.zoomChanged.connect(self._update_scale_bar)
             self._update_scale_bar(self.main_image.getZoom())
 
@@ -591,7 +622,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 mask_path = image.get('mask_path', '')
 
                 # Load the image
-                image_service = ImageService(image_path, mask_path)
+                image_service = ImageService(image_path)
                 img_array = image_service.img_array  # This is already in RGB format
 
                 center = area_of_interest['center']
@@ -901,8 +932,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         mask_path = image.get('mask_path', '')
         
         # Load and process the image
-        # Pass mask_path for thermal data retrieval from mask metadata
-        image_service = ImageService(image_path, mask_path)
+        image_service = ImageService(image_path)
+
+        # Update the cached image array
+        self.current_image_array = image_service.img_array.copy()
         
         # Start with the base image or with circles based on toggle
         if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
@@ -1472,8 +1505,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._show_toast("AOI data copied", 2000, color="#00C853")
 
     def _mainImage_mouse_pos(self, pos):
-        """Displays temperature data at the mouse position on thermal images.
-        
+        """Displays temperature data or color values at the mouse position.
+
+        For thermal images: Shows temperature
+        For HSV-based algorithms (HSVColorRange, RXAnomaly, MRMap): Shows H, S, V values
+        For RGB-based algorithms (ColorRange, MatchedFilter): Shows R, G, B values
+
         The position is already in image coordinates, accounting for zoom/pan
         transformations handled by QtImageViewer's mapToScene method.
 
@@ -1484,7 +1521,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Clear previous cursor position message
         if "Cursor Position" in self.messages:
             self.messages["Cursor Position"] = None
-            
+
+        # Clear previous color values message
+        if "Color Values" in self.messages:
+            self.messages["Color Values"] = None
+
         if self.temperature_data is not None:
             # Check if cursor is within valid image bounds
             if pos.x() >= 0 and pos.y() >= 0:
@@ -1503,14 +1544,240 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.messages["Temperature"] = None
         else:
             # No temperature data available (non-thermal image)
-            # Optionally show cursor position for non-thermal images
-            if pos.x() >= 0 and pos.y() >= 0:
-                # Only show position if cursor is on the image
-                if hasattr(self, 'main_image') and self.main_image and self.main_image.hasImage():
-                    # You could enable this to show cursor position for all images:
-                    # self.messages["Cursor Position"] = f"({pos.x()}, {pos.y()})"
-                    pass
             self.messages["Temperature"] = None
+
+            # Display color values for non-thermal images only
+            # Check if this is actually a non-thermal algorithm
+            algorithm_name = self.settings.get('algorithm', '')
+            if algorithm_name not in ['ThermalRange', 'ThermalAnomaly']:
+                if pos.x() >= 0 and pos.y() >= 0:
+                    # Only show color values if cursor is on the image
+                    if hasattr(self, 'main_image') and self.main_image and self.main_image.hasImage():
+                        try:
+                            # Use cached image array if available, otherwise load it
+                            if self.current_image_array is not None:
+                                img_array = self.current_image_array
+                            else:
+                                # Fallback: load image if cache is missing
+                                image = self.images[self.current_image]
+                                image_path = image.get('path', '')
+                                from core.services.ImageService import ImageService
+                                image_service = ImageService(image_path)
+                                img_array = image_service.img_array
+                                self.current_image_array = img_array.copy()
+
+                            # Check bounds
+                            if (0 <= pos.y() < img_array.shape[0]) and (0 <= pos.x() < img_array.shape[1]):
+                                # Get RGB values at cursor position
+                                r, g, b = img_array[pos.y(), pos.x()]
+
+                                # Determine which values to display based on algorithm
+                                if algorithm_name in ['HSVColorRange', 'RXAnomaly', 'MRMap']:
+                                    # Display HSV values
+                                    # Convert RGB to HSV
+                                    r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+                                    h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+
+                                    # Convert to standard ranges: H (0-360), S (0-100), V (0-100)
+                                    h_deg = int(h * 360)
+                                    s_pct = int(s * 100)
+                                    v_pct = int(v * 100)
+
+                                    color_display = f"H: {h_deg}°, S: {s_pct}%, V: {v_pct}% at ({pos.x()}, {pos.y()})"
+                                    self.messages["Color Values"] = color_display
+                                elif algorithm_name in ['ColorRange', 'MatchedFilter', 'AIPersonDetector']:
+                                    # Display RGB values
+                                    color_display = f"R: {r}, G: {g}, B: {b} at ({pos.x()}, {pos.y()})"
+                                    self.messages["Color Values"] = color_display
+                                else:
+                                    # Default to RGB for unknown algorithms
+                                    color_display = f"R: {r}, G: {g}, B: {b} at ({pos.x()}, {pos.y()})"
+                                    self.messages["Color Values"] = color_display
+                        except Exception as e:
+                            # Log error but don't show to user
+                            self.logger.error(f"Error getting pixel values: {e}")
+
+        # Update magnifying glass if enabled
+        if self.magnifying_glass_enabled and pos.x() >= 0 and pos.y() >= 0:
+            self._update_magnifying_glass(pos)
+
+    def _toggle_magnifying_glass(self, x, y):
+        """Toggle the magnifying glass on/off when middle mouse button is pressed.
+
+        Args:
+            x (float): X coordinate where middle mouse was pressed
+            y (float): Y coordinate where middle mouse was pressed
+        """
+        self.magnifying_glass_enabled = not self.magnifying_glass_enabled
+
+        if self.magnifying_glass_enabled:
+            # Create magnifying glass widget if it doesn't exist
+            if self.magnifying_glass_widget is None:
+                self._create_magnifying_glass()
+
+            # Show the magnifying glass
+            if self.magnifying_glass_widget:
+                self.magnifying_glass_widget.show()
+                # Update it with current position
+                current_pos = self.main_image.mapFromGlobal(self.cursor().pos())
+                scene_pos = self.main_image.mapToScene(current_pos)
+                if self.main_image.hasImage():
+                    image_pos = QPoint(int(scene_pos.x()), int(scene_pos.y()))
+                    self._update_magnifying_glass(image_pos)
+        else:
+            # Hide magnifying glass
+            if self.magnifying_glass_widget:
+                self.magnifying_glass_widget.hide()
+
+    def _create_magnifying_glass(self):
+        """Create the magnifying glass widget."""
+        try:
+            # Create a QLabel to display the magnified image (400x400 - twice the original size)
+            self.magnifying_glass_widget = QLabel(self.main_image)
+            self.magnifying_glass_widget.setFixedSize(400, 400)
+
+            # Style the magnifying glass with a border
+            self.magnifying_glass_widget.setStyleSheet("""
+                QLabel {
+                    border: 2px solid #4A90E2;
+                    border-radius: 200px;
+                    background-color: black;
+                }
+            """)
+
+            # Initially hide it
+            self.magnifying_glass_widget.hide()
+
+        except Exception as e:
+            self.logger.error(f"Error creating magnifying glass: {e}")
+            self.magnifying_glass_widget = None
+
+    def _update_magnifying_glass(self, image_pos):
+        """Update the magnifying glass with the zoomed area under the cursor.
+
+        Args:
+            image_pos (QPoint): The position in image coordinates
+        """
+        if not self.magnifying_glass_widget or not self.magnifying_glass_enabled:
+            return
+
+        try:
+            # Get the current image array
+            if self.current_image_array is None:
+                return
+
+            img_array = self.current_image_array
+            h, w = img_array.shape[:2]
+
+            # Get current zoom level of the main viewer
+            current_zoom = self.main_image.getZoom() if hasattr(self.main_image, 'getZoom') else 1.0
+
+            # Calculate the magnification factor (5x the current zoom)
+            # But we need to consider the display size vs source size
+            # Since we're showing 400x400 pixels, we need to calculate the source size
+            # that when scaled will give us 5x the current zoom
+            magnification_factor = 5.0
+
+            # The source size should be such that when displayed at 400x400,
+            # it represents 5x magnification relative to current zoom
+            # So if current zoom is 2x, we want 10x total magnification
+            # 400 pixels display / (5 * current_zoom) = source size
+            source_size = int(400 / (magnification_factor * max(current_zoom, 0.1)))
+            source_size = max(10, min(source_size, min(h, w)))  # Clamp to reasonable values
+
+            half_size = source_size // 2
+
+            # Ensure image_pos is within bounds
+            # Clamp the position to valid image coordinates
+            x_pos = max(0, min(image_pos.x(), w - 1))
+            y_pos = max(0, min(image_pos.y(), h - 1))
+
+            # Calculate bounds for the source rectangle
+            x_start = x_pos - half_size
+            y_start = y_pos - half_size
+            x_end = x_pos + half_size
+            y_end = y_pos + half_size
+
+            # Handle edge cases - create a padded region if necessary
+            pad_left = max(0, -x_start)
+            pad_top = max(0, -y_start)
+            pad_right = max(0, x_end - w)
+            pad_bottom = max(0, y_end - h)
+
+            # Adjust coordinates to valid range
+            x_start = max(0, x_start)
+            y_start = max(0, y_start)
+            x_end = min(w, x_end)
+            y_end = min(h, y_end)
+
+            # Extract the region
+            region = img_array[y_start:y_end, x_start:x_end].copy()
+
+            # Pad the region if we're at the edges
+            if pad_left > 0 or pad_top > 0 or pad_right > 0 or pad_bottom > 0:
+                padded = np.zeros((source_size, source_size, 3), dtype=np.uint8)
+                padded[pad_top:pad_top + region.shape[0],
+                       pad_left:pad_left + region.shape[1]] = region
+                region = padded
+
+            # Scale up the region to 400x400 using cv2 for better quality
+            import cv2
+            magnified = cv2.resize(region, (400, 400), interpolation=cv2.INTER_LINEAR)
+
+            # Convert to QImage and then QPixmap
+            qimg = QImage(qimage2ndarray.array2qimage(magnified))
+            pixmap = QPixmap.fromImage(qimg)
+
+            # Draw crosshair on the magnified image
+            painter = QPainter(pixmap)
+            painter.setPen(QPen(QColor(255, 255, 0, 180), 2))
+            painter.drawLine(200, 0, 200, 400)  # Vertical line
+            painter.drawLine(0, 200, 400, 200)  # Horizontal line
+            painter.end()
+
+            # Apply circular mask to make it look like a magnifying glass
+            masked_pixmap = QPixmap(400, 400)
+            masked_pixmap.fill(Qt.transparent)
+
+            painter = QPainter(masked_pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+
+            # Create circular clipping path
+            painter.setBrush(QBrush(pixmap))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(0, 0, 400, 400)
+
+            # Draw border
+            painter.setPen(QPen(QColor(74, 144, 226), 3))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(2, 2, 396, 396)
+            painter.end()
+
+            # Set the pixmap to the label
+            self.magnifying_glass_widget.setPixmap(masked_pixmap)
+
+            # Position the magnifying glass near the cursor
+            # Get the cursor position in the main_image widget coordinates
+            cursor_pos = self.main_image.mapFromGlobal(self.cursor().pos())
+
+            # Offset the magnifying glass so it doesn't cover the cursor
+            offset_x = 30
+            offset_y = 30
+
+            # Calculate position, keeping it within bounds
+            new_x = cursor_pos.x() + offset_x
+            new_y = cursor_pos.y() + offset_y
+
+            # Adjust if it goes off the edge of the viewer
+            if new_x + 400 > self.main_image.width():
+                new_x = cursor_pos.x() - 430  # Show on left side
+            if new_y + 400 > self.main_image.height():
+                new_y = cursor_pos.y() - 430  # Show above
+
+            self.magnifying_glass_widget.move(new_x, new_y)
+
+        except Exception as e:
+            self.logger.error(f"Error updating magnifying glass: {e}")
 
     def _rotate_north_icon(self, direction):
         """
