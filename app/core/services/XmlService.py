@@ -94,6 +94,7 @@ class XmlService:
                 if path:
                     # Convert forward slashes back to platform-specific separator
                     path = path.replace('/', os.sep)
+
                     if not os.path.isabs(path) and self.xml_path:
                         # If relative, make it relative to XML location
                         dir = os.path.dirname(self.xml_path)

@@ -403,8 +403,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             
             # Load the original image
             # Note: When using mask-based storage, image_path should already point to the original source image
+
             # Pass mask_path for thermal data retrieval from mask metadata
             image_service = ImageService(image_path, mask_path)
+
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
             if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
