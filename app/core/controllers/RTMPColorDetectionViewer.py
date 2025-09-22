@@ -653,6 +653,17 @@ class HSVControlWidget(QWidget):
         # Processing options
         options_group = QGroupBox("Processing Options")
         options_layout = QVBoxLayout(options_group)
+        
+        # Processing resolution dropdown
+        resolution_layout = QHBoxLayout()
+        resolution_layout.addWidget(QLabel("Processing Resolution:"))
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItems(["Original", "640x480", "1280x720", "1920x1080"])
+        self.resolution_combo.setCurrentText("Original")
+        self.resolution_combo.setToolTip("Downsample video for faster multi-color detection")
+        resolution_layout.addWidget(self.resolution_combo)
+        resolution_layout.addStretch()
+        options_layout.addLayout(resolution_layout)
 
         # Confidence threshold slider
         confidence_layout = QGridLayout()
@@ -705,6 +716,7 @@ class HSVControlWidget(QWidget):
         self.value_plus_spinbox.valueChanged.connect(self.emit_config)
         self.min_area_spinbox.valueChanged.connect(self.emit_config)
         self.max_area_spinbox.valueChanged.connect(self.emit_config)
+        self.resolution_combo.currentTextChanged.connect(self.emit_config)
         self.confidence_slider.valueChanged.connect(self.update_confidence_threshold)
         self.morphology_checkbox.toggled.connect(self.emit_config)
         self.gpu_checkbox.toggled.connect(self.emit_config)
@@ -824,6 +836,17 @@ class HSVControlWidget(QWidget):
                 'v_minus': self.value_minus_spinbox.value() / 255,
                 'v_plus': self.value_plus_spinbox.value() / 255
             }
+        
+        # Parse processing resolution
+        processing_resolution = None
+        resolution_text = self.resolution_combo.currentText()
+        if resolution_text != "Original":
+            if resolution_text == "640x480":
+                processing_resolution = (640, 480)
+            elif resolution_text == "1280x720":
+                processing_resolution = (1280, 720)
+            elif resolution_text == "1920x1080":
+                processing_resolution = (1920, 1080)
 
         config = {
             'target_color_rgb': (self.selected_color.red(), self.selected_color.green(), self.selected_color.blue()),
@@ -834,6 +857,7 @@ class HSVControlWidget(QWidget):
             'value_threshold': int((self.value_minus_spinbox.value() + self.value_plus_spinbox.value()) / 2),
             'min_area': self.min_area_spinbox.value(),
             'max_area': self.max_area_spinbox.value(),
+            'processing_resolution': processing_resolution,
             'confidence_threshold': self.confidence_slider.value() / 100.0,  # Convert to 0-1 range
             'morphology_enabled': self.morphology_checkbox.isChecked(),
             'gpu_acceleration': self.gpu_checkbox.isChecked(),
@@ -856,6 +880,17 @@ class HSVControlWidget(QWidget):
                 'v_minus': self.value_minus_spinbox.value() / 255,
                 'v_plus': self.value_plus_spinbox.value() / 255
             }
+        
+        # Parse processing resolution
+        processing_resolution = None
+        resolution_text = self.resolution_combo.currentText()
+        if resolution_text != "Original":
+            if resolution_text == "640x480":
+                processing_resolution = (640, 480)
+            elif resolution_text == "1280x720":
+                processing_resolution = (1280, 720)
+            elif resolution_text == "1920x1080":
+                processing_resolution = (1920, 1080)
 
         return HSVConfig(
             target_color_rgb=(self.selected_color.red(), self.selected_color.green(), self.selected_color.blue()),
@@ -865,6 +900,7 @@ class HSVControlWidget(QWidget):
             value_threshold=int((self.value_minus_spinbox.value() + self.value_plus_spinbox.value()) / 2),
             min_area=self.min_area_spinbox.value(),
             max_area=self.max_area_spinbox.value(),
+            processing_resolution=processing_resolution,
             confidence_threshold=self.confidence_slider.value() / 100.0,
             morphology_enabled=self.morphology_checkbox.isChecked(),
             gpu_acceleration=self.gpu_checkbox.isChecked(),

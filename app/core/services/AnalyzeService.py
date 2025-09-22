@@ -159,10 +159,14 @@ class AnalyzeService(QObject):
 
             # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
+            
+            # Set the XML path before adding images so relative paths can be calculated
+            file_path = os.path.join(self.output, "ADIAT_Data.xml")
+            self.xmlService.xml_path = file_path
+            
             for img in self.images_with_aois:
                 self.xmlService.add_image_to_xml(img)
 
-            file_path = os.path.join(self.output, "ADIAT_Data.xml")
             self.xmlService.save_xml_file(file_path)
             ttl_time = round(time.time() - start_time, 3)
             self.sig_done.emit(self.__id, len(self.images_with_aois), file_path)
@@ -244,7 +248,10 @@ class AnalyzeService(QObject):
                 "aois": result.areas_of_interest
             }
             self.images_with_aois.append(image_data)
-            self.sig_msg.emit('Areas of interest identified in ' + file_name)
+
+            num_aois = len(result.areas_of_interest)
+            self.sig_msg.emit(f'{num_aois} Areas of interest identified in ' + file_name)
+
             # Guard against None and ensure integers for comparison
             if (result.base_contour_count is not None
                     and isinstance(result.base_contour_count, (int, np.integer))

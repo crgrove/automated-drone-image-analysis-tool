@@ -6,6 +6,7 @@ import qimage2ndarray
 from PIL import UnidentifiedImageError
 import traceback
 import math
+import re
 
 from pathlib import Path
 
@@ -387,6 +388,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             mask_path = image.get('mask_path', '')
             
             # Load the original image
+            # Note: When using mask-based storage, image_path should already point to the original source image
+
             image_service = ImageService(image_path)
 
             # Draw AOI boundaries (circles or contours)
@@ -463,8 +466,20 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self._hud.hide()
             self._place_overlay()
         except Exception as e:
-            print(traceback.format_exc())
-            self.logger.error(e)
+            error_msg = f"Error loading image {self.current_image + 1}: {str(e)}"
+            self.logger.error(error_msg)
+            self.logger.error(f"Traceback:\n{traceback.format_exc()}")
+            print(f"\n{'='*60}")
+            print(f"ERROR IN VIEWER - _load_image()")
+            print(f"Image index: {self.current_image}")
+            if image:
+                print(f"Image path: {image.get('path', 'N/A')}")
+                print(f"Mask path: {image.get('mask_path', 'N/A')}")
+            print(f"Error: {str(e)}")
+            print(f"Traceback:\n{traceback.format_exc()}")
+            print(f"{'='*60}\n")
+            # Show error to user
+            QMessageBox.critical(self, "Error Loading Image", error_msg)
 
     def _load_areas_of_interest(self, augmented_image, areas_of_interest):
         """Loads areas of interest thumbnails for a given image.
@@ -864,7 +879,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         # GPS Coordinates first (with hyperlink)
         gps_value = self.messages.get("GPS Coordinates")
         if gps_value:
-            status_items.append(f'<a href="#">GPS Coordinates: {gps_value}</a>')
+            # Use the GPS coordinates as the href value so "Copy Link Location" copies the coordinates
+            status_items.append(f'<a href="{gps_value}">GPS Coordinates: {gps_value}</a>')
 
         # Add all other messages
         for k, v in self.messages.items():
