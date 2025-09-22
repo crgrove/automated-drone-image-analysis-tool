@@ -72,6 +72,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
         self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
         self.settings, _ = self.xml_service.get_settings()
+
+        # Load flagged AOIs from XML
+        self._load_flagged_aois_from_xml()
         self.is_thermal = (self.settings['thermal'] == 'True')
         self.position_format = position_format
         self.temperature_data = None
@@ -80,6 +83,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.active_thumbnail = None
         self.magnifying_glass_enabled = False
         self.magnifying_glass_widget = None
+
+        # AOI selection and flagging
+        self.selected_aoi_index = -1  # Currently selected AOI index
+        # Note: self.flagged_aois is initialized and populated by _load_flagged_aois_from_xml() above
+        self.filter_flagged_only = False  # Whether to show only flagged AOIs
+        self.aoi_containers = []  # Store references to AOI container widgets
         self.magnifying_glass_pos = None
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
@@ -232,6 +241,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self._show_north_oriented_image()
+        if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
+            # Flag/unflag the currently selected AOI
+            self._toggle_aoi_flag()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -377,6 +389,47 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._load_initial_image()
             self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
+
+            # Create flag filter button and add it immediately
+            self.flagFilterButton = QPushButton("🚩 Filter")
+            self.flagFilterButton.setToolTip("Toggle filter to show only flagged AOIs")
+            self.flagFilterButton.setFixedSize(80, 30)
+            self.flagFilterButton.setStyleSheet("""
+                QPushButton {
+                    background-color: #404040;
+                    color: white;
+                    border: 1px solid #555;
+                    border-radius: 3px;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #505050;
+                }
+                QPushButton:checked {
+                    background-color: #ff4444;
+                    border: 2px solid #ff0000;
+                    color: white;
+                    font-weight: bold;
+                }
+            """)
+            self.flagFilterButton.setCheckable(True)
+            self.flagFilterButton.clicked.connect(self._toggle_flag_filter)
+
+            # Try multiple approaches to add the button
+            # Approach 1: Add next to measureButton (which is visible in your screenshot)
+            if hasattr(self, 'measureButton'):
+                parent = self.measureButton.parent()
+                if parent and parent.layout():
+                    layout = parent.layout()
+                    for i in range(layout.count()):
+                        if layout.itemAt(i).widget() == self.measureButton:
+                            layout.insertWidget(i + 1, self.flagFilterButton)
+                            self.flagFilterButton.show()
+                            break
+
+            # Approach 2: Also try adding after nextImageButton
+            QTimer.singleShot(100, self._add_flag_button_to_layout)
+
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
             self.zipButton.clicked.connect(self._zipButton_clicked)
@@ -587,7 +640,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             # For AOI thumbnails, we don't need to draw circles on the full image
             # Just pass the base image array - circles can be drawn on individual crops if needed
             # Use the base image array for AOI thumbnails (no need to process full image)
-            self._load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
+            self._load_areas_of_interest(image_service.img_array, image['areas_of_interest'], self.current_image)
 
 
             self.main_image.resetZoom()
@@ -789,23 +842,47 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         return None, None
 
-    def _load_areas_of_interest(self, augmented_image, areas_of_interest):
+    def _load_areas_of_interest(self, augmented_image, areas_of_interest, image_index=None):
         """Loads areas of interest thumbnails for a given image.
 
         Args:
-            image (dict): Information about the image to load areas of interest for.
+            augmented_image: The image array to create thumbnails from
+            areas_of_interest: List of AOI dictionaries
+            image_index: Index of the current image (if None, uses self.current_image)
         """
         self.aoiListWidget.clear()
         count = 0
         self.highlights = []
+        self.aoi_containers = []  # Reset container list
+        self.selected_aoi_index = -1  # Reset selection
+
+        # Get flagged AOIs for this image
+        img_idx = image_index if image_index is not None else self.current_image
+        flagged_set = self.flagged_aois.get(img_idx, set())
+
+        # Keep track of actual visible container index
+        visible_container_index = 0
 
         # Load AOI thumbnails normally for all datasets
         for area_of_interest in areas_of_interest:
+            # Skip if we're filtering and this AOI is not flagged
+            if self.filter_flagged_only and count not in flagged_set:
+                count += 1
+                continue
+
             # Create container widget for thumbnail and label
             container = QWidget()
+            container.setProperty("aoi_index", count)  # Store AOI index
+            container.setProperty("visible_index", visible_container_index)  # Store visible index
             layout = QVBoxLayout(container)
             layout.setSpacing(2)
             layout.setContentsMargins(0, 0, 0, 0)
+
+            # Set up click handling for selection (use visible index for selection)
+            def handle_click(event, idx=count, vis_idx=visible_container_index):
+                self._select_aoi(idx, vis_idx)
+                return QWidget.mousePressEvent(container, event)  # Call the original handler
+            container.mousePressEvent = handle_click
 
             # Skip thumbnail creation if no image provided (deferred case)
             if augmented_image is None:
@@ -886,6 +963,13 @@ class Viewer(QMainWindow, Ui_Viewer):
                 """)
                 color_layout.addWidget(color_label)
 
+                # Add flag icon if this AOI is flagged
+                if count in flagged_set:
+                    flag_label = QLabel("🚩")
+                    flag_label.setStyleSheet("QLabel { color: red; font-size: 14px; font-weight: bold; }")
+                    flag_label.setToolTip("This AOI is flagged")
+                    color_layout.addWidget(flag_label)
+
                 # Center the layout
                 color_layout.addStretch()
                 color_layout.insertStretch(0)
@@ -911,7 +995,16 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.aoiListWidget.setSpacing(5)
             self.highlights.append(highlight)
             highlight.leftMouseButtonPressed.connect(self._area_of_interest_click)
+
+            # Store container reference
+            self.aoi_containers.append(container)
+
+            # Apply selection style if this is the selected AOI
+            if count == self.selected_aoi_index:
+                self._update_aoi_selection_style(container, True)
+
             count += 1
+            visible_container_index += 1
 
         self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
 
@@ -1177,12 +1270,236 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         self.main_image.zoomToArea(img.center, 6)
 
+    def _select_aoi(self, aoi_index, visible_index):
+        """Select an AOI and update the visual selection.
+
+        Args:
+            aoi_index (int): Index of the AOI in the full list
+            visible_index (int): Index of the AOI in the visible containers list
+        """
+
+        # Clear ALL container styles first using the proper update method
+        for i, container in enumerate(self.aoi_containers):
+            self._update_aoi_selection_style(container, False)
+
+        # Set new selection
+        self.selected_aoi_index = aoi_index
+
+        # Apply selection style to the clicked container using the proper method
+        if visible_index >= 0 and visible_index < len(self.aoi_containers):
+            container = self.aoi_containers[visible_index]
+            self._update_aoi_selection_style(container, True)
+            container.update()
+            container.repaint()
+
+        # Style updates are now applied directly without processEvents
+
+    def _update_aoi_selection_style(self, container, selected):
+        """Update the visual style of an AOI container based on selection state.
+
+        Args:
+            container (QWidget): The AOI container widget
+            selected (bool): Whether the container is selected
+        """
+        if selected:
+            # Get the current settings color for the outline
+            color = self.settings.get('identifier_color', [255, 255, 0])
+            container.setStyleSheet(f"""
+                QWidget {{
+                    border: 3px solid rgb({color[0]}, {color[1]}, {color[2]});
+                    border-radius: 5px;
+                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 20);
+                }}
+            """)
+        else:
+            # Explicitly set no border style to override any previous style
+            container.setStyleSheet("""
+                QWidget {
+                    border: none;
+                    background-color: transparent;
+                }
+            """)
+            container.repaint()
+
+    def _load_flagged_aois_from_xml(self):
+        """Load flagged AOI information from XML."""
+        self.flagged_aois = {}
+        if hasattr(self, 'images') and self.images:
+            for img_idx, image in enumerate(self.images):
+                if 'areas_of_interest' in image:
+                    for aoi_idx, aoi in enumerate(image['areas_of_interest']):
+                        # Check if this AOI is flagged in the XML data
+                        flagged = aoi.get('flagged', False)
+                        if flagged:
+                            if img_idx not in self.flagged_aois:
+                                self.flagged_aois[img_idx] = set()
+                            self.flagged_aois[img_idx].add(aoi_idx)
+
+    def _save_flagged_aoi_to_xml(self, image_index, aoi_index, is_flagged):
+        """Save the flagged status of an AOI to XML.
+
+        Args:
+            image_index (int): Index of the image
+            aoi_index (int): Index of the AOI within the image
+            is_flagged (bool): Whether the AOI is flagged
+        """
+        if hasattr(self, 'images') and 0 <= image_index < len(self.images):
+            image = self.images[image_index]
+            if 'areas_of_interest' in image and 0 <= aoi_index < len(image['areas_of_interest']):
+                aoi = image['areas_of_interest'][aoi_index]
+                aoi['flagged'] = is_flagged
+
+                # Update the XML element if it exists
+                if 'xml' in aoi and aoi['xml'] is not None:
+                    aoi['xml'].set('flagged', str(is_flagged))
+                    # Save the XML file using the xml_service method
+                    if hasattr(self, 'xml_service') and self.xml_service:
+                        try:
+                            # Use the xml_service save method
+                            self.xml_service.save_xml_file(self.xml_path)
+                        except Exception as e:
+                            pass
+                    else:
+                        pass
+                else:
+                    pass
+
+    def _toggle_aoi_flag(self):
+        """Toggle the flag status of the currently selected AOI."""
+        if self.selected_aoi_index < 0:
+            return
+
+        # Get or create flagged set for current image
+        if self.current_image not in self.flagged_aois:
+            self.flagged_aois[self.current_image] = set()
+
+        flagged_set = self.flagged_aois[self.current_image]
+
+        # Toggle flag status
+        is_now_flagged = self.selected_aoi_index not in flagged_set
+        if is_now_flagged:
+            flagged_set.add(self.selected_aoi_index)
+        else:
+            flagged_set.remove(self.selected_aoi_index)
+
+        # Save to XML
+        self._save_flagged_aoi_to_xml(self.current_image, self.selected_aoi_index, is_now_flagged)
+
+        # Save scroll position
+        scroll_pos = self.aoiListWidget.verticalScrollBar().value()
+
+        # Remember selected AOI index
+        selected_idx = self.selected_aoi_index
+
+        # Refresh the AOI display to show/hide flag icon
+        image = self.images[self.current_image]
+        if hasattr(self, 'current_image_array') and self.current_image_array is not None:
+            self._load_areas_of_interest(self.current_image_array, image['areas_of_interest'], self.current_image)
+
+        # Restore selection and scroll position
+        self.selected_aoi_index = selected_idx
+        # Find the container with the matching AOI index
+        for container in self.aoi_containers:
+            if container.property("aoi_index") == selected_idx:
+                self._update_aoi_selection_style(container, True)
+                break
+        self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
+
+    def _add_flag_button_to_layout(self):
+        """Add the flag filter button to the layout after UI initialization."""
+        try:
+            # Get the parent widget of nextImageButton
+            parent = self.nextImageButton.parent()
+            if parent:
+                layout = parent.layout()
+                if layout:
+                    # Find the position of nextImageButton
+                    next_button_index = -1
+                    for i in range(layout.count()):
+                        item = layout.itemAt(i)
+                        widget = item.widget() if item else None
+                        if widget == self.nextImageButton:
+                            next_button_index = i
+                            break
+
+                    # Insert flag button right after next button
+                    if next_button_index >= 0:
+                        layout.insertWidget(next_button_index + 1, self.flagFilterButton)
+                        self.flagFilterButton.show()
+                    else:
+                        pass
+                else:
+                    pass
+            else:
+                pass
+        except Exception as e:
+            self.logger.error(f"Error adding flag button: {e}")
+
+    def _toggle_flag_filter(self):
+        """Toggle the flag filter on/off and refresh the AOI display."""
+        self.filter_flagged_only = self.flagFilterButton.isChecked()
+
+        # Update button appearance based on state
+        if self.filter_flagged_only:
+            self.flagFilterButton.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(255, 0, 0, 100);
+                    border: 2px solid red;
+                    border-radius: 3px;
+                    font-size: 16px;
+                    color: red;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 0, 0, 150);
+                }
+            """)
+        else:
+            self.flagFilterButton.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: 1px solid #555;
+                    border-radius: 3px;
+                    font-size: 16px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 255, 255, 20);
+                }
+            """)
+
+        # Refresh AOI display with filter applied
+        image = self.images[self.current_image]
+        if hasattr(self, 'current_image_array') and self.current_image_array is not None:
+            self._load_areas_of_interest(self.current_image_array, image['areas_of_interest'], self.current_image)
+
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
         file_name, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
         if file_name:  # Only proceed if a filename was selected
-            kml_service = KMLGeneratorService()
-            kml_service.generate_kml_export([img for img in self.images if not img.get("hidden", False)], file_name)
+            # Filter images and their AOIs based on flags
+            filtered_images = []
+            for idx, img in enumerate(self.images):
+                if not img.get("hidden", False):
+                    # Create a copy of the image data
+                    img_copy = img.copy()
+
+                    # Filter AOIs to only include flagged ones
+                    if idx in self.flagged_aois and self.flagged_aois[idx]:
+                        flagged_indices = self.flagged_aois[idx]
+                        filtered_aois = [
+                            aoi for i, aoi in enumerate(img['areas_of_interest'])
+                            if i in flagged_indices
+                        ]
+                        img_copy['areas_of_interest'] = filtered_aois
+
+                        # Only include image if it has flagged AOIs
+                        if filtered_aois:
+                            filtered_images.append(img_copy)
+
+            if filtered_images:
+                kml_service = KMLGeneratorService()
+                kml_service.generate_kml_export(filtered_images, file_name)
+            else:
+                self._show_toast("No flagged AOIs to export", 3000, color="#F44336")
 
     def crop_image(self, img_arr, startx, starty, endx, endy):
         """Crops a portion of an image array.
@@ -1219,6 +1536,34 @@ class Viewer(QMainWindow, Ui_Viewer):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF files (*.pdf)")
         if file_name:
             try:
+                # Filter images to only include those with flagged AOIs
+                original_images = self.images
+                filtered_images = []
+
+                for idx, img in enumerate(self.images):
+                    if not img.get("hidden", False):
+                        # Check if this image has flagged AOIs
+                        if idx in self.flagged_aois and self.flagged_aois[idx]:
+                            # Create a copy of the image data with only flagged AOIs
+                            img_copy = img.copy()
+                            flagged_indices = self.flagged_aois[idx]
+                            filtered_aois = [
+                                aoi for i, aoi in enumerate(img['areas_of_interest'])
+                                if i in flagged_indices
+                            ]
+                            img_copy['areas_of_interest'] = filtered_aois
+
+                            # Only include image if it has flagged AOIs
+                            if filtered_aois:
+                                filtered_images.append(img_copy)
+
+                if not filtered_images:
+                    self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
+                    return
+
+                # Temporarily replace images with filtered version for PDF generation
+                self.images = filtered_images
+
                 pdf_generator = PdfGeneratorService(self)
 
                 # Create and show the loading dialog
@@ -1226,9 +1571,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.pdf_thread = PdfGenerationThread(pdf_generator, file_name)
 
                 # Connect signals
-                self.pdf_thread.finished.connect(self._on_pdf_generation_finished)
-                self.pdf_thread.canceled.connect(self._on_pdf_generation_cancelled)
-                self.pdf_thread.errorOccurred.connect(self._on_pdf_generation_error)
+                self.pdf_thread.finished.connect(lambda: self._on_pdf_generation_finished(original_images))
+                self.pdf_thread.canceled.connect(lambda: self._on_pdf_generation_cancelled(original_images))
+                self.pdf_thread.errorOccurred.connect(lambda e: self._on_pdf_generation_error(e, original_images))
 
                 self.pdf_thread.start()
 
@@ -1237,16 +1582,23 @@ class Viewer(QMainWindow, Ui_Viewer):
                     self.pdf_thread.cancel()
 
             except Exception as e:
+                # Restore original images in case of error
+                if 'original_images' in locals():
+                    self.images = original_images
                 self.logger.error(f"Error generating PDF file: {str(e)}")
                 self._show_error(f"Failed to generate PDF file: {str(e)}")
 
-    def _on_pdf_generation_finished(self):
+    def _on_pdf_generation_finished(self, original_images=None):
         """Handles successful completion of PDF generation."""
+        if original_images is not None:
+            self.images = original_images
         self.loading_dialog.accept()
         QMessageBox.information(self, "Success", "PDF report generated successfully!")
 
-    def _on_pdf_generation_cancelled(self):
+    def _on_pdf_generation_cancelled(self, original_images=None):
         """Handles cancellation of PDF generation."""
+        if original_images is not None:
+            self.images = original_images
         if self.pdf_thread and self.pdf_thread.isRunning():
             self.pdf_thread.terminate()  # Forcefully terminate the thread
             self.pdf_thread.wait()      # Wait for the thread to terminate completely
@@ -1254,8 +1606,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
             self.loading_dialog.reject()  # Close the dialog
 
-    def _on_pdf_generation_error(self, error_message):
+    def _on_pdf_generation_error(self, error_message, original_images=None):
         """Handles errors during PDF generation."""
+        if original_images is not None:
+            self.images = original_images
         if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
             self.loading_dialog.reject()  # Close the loading dialog
         self._show_error(f"PDF generation failed: {error_message}")
