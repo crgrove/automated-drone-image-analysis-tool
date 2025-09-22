@@ -52,8 +52,8 @@ class FastImageViewer(QGraphicsView):
         self.selection_mask = None  # Boolean mask
         
         # Selection state
-        self.radius = 10  # Selection radius
-        self.tolerance = 10  # Color tolerance for similar pixels
+        self.radius = 1  # Selection radius (default 1 px)
+        self.tolerance = 2  # Color tolerance for similar pixels (default 2)
         self.ctrl_pressed = False
         
         # Selected HSV values set - for tracking what colors are selected
@@ -569,7 +569,7 @@ class HSVColorRangeAssistant(QDialog):
         layout.addWidget(QLabel("Selection Radius:"))
         self.radius_spin = QSpinBox()
         self.radius_spin.setRange(1, 50)
-        self.radius_spin.setValue(10)
+        self.radius_spin.setValue(1)  # Default 1 px
         self.radius_spin.setSuffix(" px")
         self.radius_spin.valueChanged.connect(self.on_radius_changed)
         layout.addWidget(self.radius_spin)
@@ -578,21 +578,26 @@ class HSVColorRangeAssistant(QDialog):
         layout.addWidget(QLabel("Color Tolerance:"))
         self.tolerance_spin = QSpinBox()
         self.tolerance_spin.setRange(0, 50)
-        self.tolerance_spin.setValue(10)
+        self.tolerance_spin.setValue(2)  # Default 2
         self.tolerance_spin.setToolTip("HSV tolerance for matching similar pixels")
         self.tolerance_spin.valueChanged.connect(self.on_tolerance_changed)
         layout.addWidget(self.tolerance_spin)
         
         
         layout.addStretch()
-        
+
         # Help text
         help_text = QLabel(
             "CTRL+Click: Select similar colors | CTRL+SHIFT+Click: Remove | [ ] : Radius"
         )
         help_text.setStyleSheet("color: #666;")
         layout.addWidget(help_text)
-        
+
+        # Help button (right side)
+        help_btn = QPushButton("Help")
+        help_btn.clicked.connect(self.show_help)
+        layout.addWidget(help_btn)
+
         return toolbar
         
     def create_right_panel(self) -> QWidget:
@@ -650,46 +655,64 @@ class HSVColorRangeAssistant(QDialog):
         
         self.h_range_label = QLabel("0-0")
         range_layout.addWidget(self.h_range_label, 1, 4)
-        
+
+        # Hue warning label
+        self.h_warning_label = QLabel("WARNING: Too wide of a Hue range can result in false positives!")
+        self.h_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
+        self.h_warning_label.setVisible(False)
+        range_layout.addWidget(self.h_warning_label, 2, 0, 1, 5)  # Span across columns
+
         # S range
-        range_layout.addWidget(QLabel("Sat:"), 2, 0)
+        range_layout.addWidget(QLabel("Sat:"), 3, 0)
         self.s_center_label = QLabel("0%")
-        range_layout.addWidget(self.s_center_label, 2, 1)
-        
+        range_layout.addWidget(self.s_center_label, 3, 1)
+
         self.s_minus_buffer = QSpinBox()
         self.s_minus_buffer.setRange(0, 100)
         self.s_minus_buffer.setSuffix("%")
         self.s_minus_buffer.valueChanged.connect(self.update_ranges)
-        range_layout.addWidget(self.s_minus_buffer, 2, 2)
-        
+        range_layout.addWidget(self.s_minus_buffer, 3, 2)
+
         self.s_plus_buffer = QSpinBox()
         self.s_plus_buffer.setRange(0, 100)
         self.s_plus_buffer.setSuffix("%")
         self.s_plus_buffer.valueChanged.connect(self.update_ranges)
-        range_layout.addWidget(self.s_plus_buffer, 2, 3)
-        
+        range_layout.addWidget(self.s_plus_buffer, 3, 3)
+
         self.s_range_label = QLabel("0-0")
-        range_layout.addWidget(self.s_range_label, 2, 4)
+        range_layout.addWidget(self.s_range_label, 3, 4)
+
+        # Saturation warning label
+        self.s_warning_label = QLabel("WARNING: Too low of a Saturation level can result in false positives!")
+        self.s_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
+        self.s_warning_label.setVisible(False)
+        range_layout.addWidget(self.s_warning_label, 4, 0, 1, 5)
         
         # V range
-        range_layout.addWidget(QLabel("Val:"), 3, 0)
+        range_layout.addWidget(QLabel("Val:"), 5, 0)
         self.v_center_label = QLabel("0%")
-        range_layout.addWidget(self.v_center_label, 3, 1)
-        
+        range_layout.addWidget(self.v_center_label, 5, 1)
+
         self.v_minus_buffer = QSpinBox()
         self.v_minus_buffer.setRange(0, 100)
         self.v_minus_buffer.setSuffix("%")
         self.v_minus_buffer.valueChanged.connect(self.update_ranges)
-        range_layout.addWidget(self.v_minus_buffer, 3, 2)
-        
+        range_layout.addWidget(self.v_minus_buffer, 5, 2)
+
         self.v_plus_buffer = QSpinBox()
         self.v_plus_buffer.setRange(0, 100)
         self.v_plus_buffer.setSuffix("%")
         self.v_plus_buffer.valueChanged.connect(self.update_ranges)
-        range_layout.addWidget(self.v_plus_buffer, 3, 3)
-        
+        range_layout.addWidget(self.v_plus_buffer, 5, 3)
+
         self.v_range_label = QLabel("0-0")
-        range_layout.addWidget(self.v_range_label, 3, 4)
+        range_layout.addWidget(self.v_range_label, 5, 4)
+
+        # Value warning label
+        self.v_warning_label = QLabel("WARNING: Too low of a Value level can result in false positives!")
+        self.v_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
+        self.v_warning_label.setVisible(False)
+        range_layout.addWidget(self.v_warning_label, 6, 0, 1, 5)
         
         layout.addWidget(range_group)
         
@@ -707,8 +730,10 @@ class HSVColorRangeAssistant(QDialog):
         preview_layout = QVBoxLayout(preview_group)
         self.preview_label = QLabel()
         self.preview_label.setMinimumHeight(200)
+        self.preview_label.setMinimumWidth(300)
         self.preview_label.setStyleSheet("border: 1px solid black; background: black;")
-        self.preview_label.setScaledContents(True)
+        self.preview_label.setScaledContents(False)  # We handle scaling manually
+        self.preview_label.setAlignment(Qt.AlignCenter)
         preview_layout.addWidget(self.preview_label)
         layout.addWidget(preview_group)
         
@@ -744,10 +769,14 @@ class HSVColorRangeAssistant(QDialog):
     def update_ranges(self):
         """Update HSV ranges from selection."""
         pixels = self.viewer.get_selected_pixels_hsv()
-        
+
         if pixels is None or len(pixels) == 0:
             self.pixel_count_label.setText("Selected Pixels: 0")
             self.selected_percent_label.setText("Coverage: 0%")
+            # Clear the mask preview when no pixels are selected
+            self.preview_label.clear()
+            # Reset all color and HSV range displays to defaults
+            self.reset_displays()
             return
             
         # Update pixel count
@@ -803,6 +832,39 @@ class HSVColorRangeAssistant(QDialog):
         self.update_displays()
         self.update_preview()
         
+    def reset_displays(self):
+        """Reset all display values to defaults."""
+        # Reset color preview to neutral gray
+        self.color_preview.setStyleSheet("background-color: #808080; border: 1px solid black;")
+        self.hex_label.setText("#000000")
+        self.hsv_label.setText("H:0 S:0 V:0")
+
+        # Reset center labels
+        self.h_center_label.setText("0°")
+        self.s_center_label.setText("0%")
+        self.v_center_label.setText("0%")
+
+        # Reset range labels
+        self.h_range_label.setText("0°-0°")
+        self.s_range_label.setText("0%-0%")
+        self.v_range_label.setText("0%-0%")
+
+        # Reset the hsv_ranges to default
+        self.hsv_ranges = {
+            'h_center': 0, 's_center': 0, 'v_center': 0,
+            'h_minus': 0, 'h_plus': 0,
+            's_minus': 0, 's_plus': 0,
+            'v_minus': 0, 'v_plus': 0
+        }
+
+        # Hide all warning labels
+        if hasattr(self, 'h_warning_label'):
+            self.h_warning_label.setVisible(False)
+        if hasattr(self, 's_warning_label'):
+            self.s_warning_label.setVisible(False)
+        if hasattr(self, 'v_warning_label'):
+            self.v_warning_label.setVisible(False)
+
     def update_displays(self):
         """Update UI displays."""
         if not self.hsv_ranges:
@@ -839,7 +901,10 @@ class HSVColorRangeAssistant(QDialog):
         self.h_range_label.setText(f"{int(h_low*2)}°-{int(h_high*2)}°")
         self.s_range_label.setText(f"{int(s_low/2.55)}%-{int(s_high/2.55)}%")
         self.v_range_label.setText(f"{int(v_low/2.55)}%-{int(v_high/2.55)}%")
-            
+
+        # Check and update warning labels
+        self.check_range_warnings()
+
     def update_preview(self):
         """Update mask preview."""
         if self.viewer.image_hsv is None:
@@ -872,16 +937,103 @@ class HSVColorRangeAssistant(QDialog):
         
         # Create mask
         mask = cv2.inRange(self.viewer.image_hsv, lower, upper)
-        
-        # Resize for preview
-        preview = cv2.resize(mask, (300, 200))
-        
+
+        # Get the actual image dimensions
+        if self.viewer.image_hsv is not None:
+            img_height, img_width = self.viewer.image_hsv.shape[:2]
+        else:
+            img_height, img_width = mask.shape
+
+        aspect_ratio = img_width / img_height
+
+        # Calculate preview size maintaining aspect ratio
+        # Set maximum bounds for the preview
+        max_width = 300
+        max_height = 200
+
+        # Scale to fit within bounds while maintaining aspect ratio
+        scale = min(max_width / img_width, max_height / img_height)
+        preview_width = int(img_width * scale)
+        preview_height = int(img_height * scale)
+
+        # Resize for preview maintaining aspect ratio
+        preview = cv2.resize(mask, (preview_width, preview_height))
+
         # Convert to QPixmap
         h, w = preview.shape
         qimg = QImage(preview.data, w, h, w, QImage.Format_Grayscale8)
         pixmap = QPixmap.fromImage(qimg)
-        self.preview_label.setPixmap(pixmap)
-        
+
+        # Scale the pixmap to fit the label while preserving aspect ratio
+        self.preview_label.setPixmap(pixmap.scaled(
+            self.preview_label.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        ))
+
+    def check_range_warnings(self):
+        """Check and display warning labels based on range values."""
+        # Check Saturation warning - if lower bound is in the bottom 25% (< 64 out of 255)
+        s_center = self.hsv_ranges.get('s_center', 0)
+        s_minus = self.hsv_ranges.get('s_minus', 0)
+        s_low = max(0, s_center - s_minus)
+
+        # Show warning if saturation lower bound is less than 25% (64/255)
+        self.s_warning_label.setVisible(s_low < 64)
+
+        # Check Value warning - if lower bound is in the bottom 25% (< 64 out of 255)
+        v_center = self.hsv_ranges.get('v_center', 0)
+        v_minus = self.hsv_ranges.get('v_minus', 0)
+        v_low = max(0, v_center - v_minus)
+
+        # Show warning if value lower bound is less than 25% (64/255)
+        self.v_warning_label.setVisible(v_low < 64)
+
+        # Check Hue warning - if range is wider than 60 degrees (30 in OpenCV's 0-179 scale)
+        h_minus = self.hsv_ranges.get('h_minus', 0)
+        h_plus = self.hsv_ranges.get('h_plus', 0)
+
+        # Calculate total hue range width (it's simply the sum of both buffers)
+        h_range = h_minus + h_plus
+
+        # Show warning if hue range is more than 30 (60 degrees in 360 scale, 30 in 180 scale)
+        self.h_warning_label.setVisible(h_range > 30)
+
+    def show_help(self):
+        """Show help dialog with instructions."""
+        from PySide6.QtWidgets import QMessageBox
+
+        help_text = """
+<h2>HSV Color Range Assistant - Help</h2>
+
+<p>This tool helps you pick the HSV color range of a specific color in a photo. Click on the BROWSE button to open an image.</p>
+
+<h3>Navigation:</h3>
+<p>• Use the mouse scroll wheel to zoom in/out of the image<br>
+• Use the left mouse button to drag the image around and pan it</p>
+
+<h3>Color Selection:</h3>
+<p>• Hold the <b>CTRL/OPTION key</b> while left clicking on a color in the image that you want to select<br>
+• All pixels in the image that share that HSV color value will be selected and highlighted in white</p>
+
+<h3>Selection Radius:</h3>
+<p>You can adjust the Selection Radius of the mouse cursor to be larger or smaller. When you CTRL click it will select all colors within that radius of the mouse cursor.</p>
+
+<h3>Corrections:</h3>
+<p>If you make a mistake you can UNDO the last selection or you can press the RESET button to start over.</p>
+
+<h3>Mask Preview:</h3>
+<p>On the right side the Mask Preview section will show you what pixels in the image were selected. If you see pixels outside of your target object that you are selecting that means you may need to adjust the Color Tolerance or be more careful with your selections.</p>
+"""
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("HSV Color Range Assistant - Help")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(help_text)
+        msg.setIcon(QMessageBox.Information)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+
     def accept(self):
         """Accept and emit ranges."""
         # Convert ranges to normalized format expected by HSV picker
