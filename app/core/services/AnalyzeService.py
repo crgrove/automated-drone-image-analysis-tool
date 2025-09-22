@@ -248,7 +248,7 @@ class AnalyzeService(QObject):
                 "aois": result.areas_of_interest
             }
             self.images_with_aois.append(image_data)
-
+            
             num_aois = len(result.areas_of_interest)
             self.sig_msg.emit(f'{num_aois} Areas of interest identified in ' + file_name)
 

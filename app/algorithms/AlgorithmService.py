@@ -170,50 +170,30 @@ class AlgorithmService:
 
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
         """
-        Saves the detection mask with optional thermal data embedded in PNG metadata.
+        Saves the detection mask instead of duplicating the image.
 
         Args:
             input_file (str): Path to the input image file.
             output_file (str): Path to save the mask (will be saved as PNG).
             mask (np.ndarray): Binary mask of detected pixels (0 or 255).
-            temperature_data (np.ndarray or list, optional): Temperature matrix to store in metadata.
+            temperature_data (np.ndarray or list, optional): Temperature matrix to store.
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
         
         # Change extension to .png for mask
         mask_file = path.with_suffix('.png')
+       
+        # Save the mask as a compressed PNG (binary masks compress very well)
+        # Use maximum compression (9) since masks are small
+        cv2.imwrite(str(mask_file), mask, [cv2.IMWRITE_PNG_COMPRESSION, 9])
         
-        # Convert mask to PIL Image
-        pil_image = Image.fromarray(mask.astype(np.uint8))
-        
-        # Create PNG metadata
-        metadata = PngInfo()
-        
-        # Add thermal data to metadata if provided
+        # Store temperature data if provided (for thermal algorithms)
         if temperature_data is not None:
-            # Convert temperature data to JSON string
-            if hasattr(temperature_data, 'tolist'):
-                temp_json = json.dumps(temperature_data.tolist())
-            else:
-                temp_json = json.dumps(temperature_data)
-            
-            # Compress the JSON data to reduce size
-            compressed_data = zlib.compress(temp_json.encode('utf-8'), 9)
-            
-            # Encode as base64 for safe storage in PNG text chunk
-            encoded_data = base64.b64encode(compressed_data).decode('ascii')
-            
-            # Store in PNG metadata with custom key
-            metadata.add_text("ThermalData", encoded_data)
-            metadata.add_text("ThermalDataCompression", "zlib+base64")
-            
-            # Also save shape information for easy reconstruction
-            if hasattr(temperature_data, 'shape'):
-                metadata.add_text("ThermalDataShape", json.dumps(temperature_data.shape))
-        
-        # Save the PNG with metadata
-        pil_image.save(str(mask_file), "PNG", pnginfo=metadata, compress_level=9)
+            temp_file = path.with_suffix('.thermal.json')
+            with open(temp_file, 'w') as f:
+                json.dump(temperature_data.tolist() if hasattr(temperature_data, 'tolist') else temperature_data, f)
+
         
         return str(mask_file)
 
