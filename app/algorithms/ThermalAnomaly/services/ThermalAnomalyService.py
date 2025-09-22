@@ -66,17 +66,20 @@ class ThermalAnomalyService(AlgorithmService):
                         masks[x][y] = np.uint8(1 * (temperature_c_pieces[x][y] < min_threshold))
 
             combined_mask = self.glue_image(masks)
-            pixels_of_interest = self.collect_pixels_of_interest(combined_mask)
             # Find contours of the identified areas and circle areas of interest.
             contours, hierarchy = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = full_path.replace(input_dir, output_dir)
 
+            # Store mask instead of duplicating image (with temperature data for thermal)
+            mask_path = None
             if areas_of_interest:
-                self.store_image(full_path, output_path, pixels_of_interest, temperature_c)
+                # Convert mask to 0-255 range for storage
+                combined_mask_255 = combined_mask * 255
+                mask_path = self.store_mask(full_path, output_path, combined_mask_255, temperature_c)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # Log and return an error if processing fails.
