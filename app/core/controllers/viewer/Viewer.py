@@ -76,6 +76,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.position_format = position_format
         self.temperature_data = None
         self.current_image_array = None  # Cache for the current image RGB array
+        self.current_image_service = None  # Keep reference to ImageService
         self.active_thumbnail = None
         self.magnifying_glass_enabled = False
         self.magnifying_glass_widget = None
@@ -119,8 +120,10 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # ---- load everything ----
         self._load_images()
-        self._initialize_thumbnails()
-        self._load_thumbnails_in_range(0, self.thumbnail_limit)
+
+        # Defer thumbnail initialization to avoid blocking with large datasets
+        # Only initialize visible thumbnails first
+        self._initialize_thumbnails_deferred()
         self._setupViewer()
 
         # UI tweaks
@@ -226,6 +229,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Toggle AOI circle drawing with 'C' key (no modifier)
             self.drawAOICircleToggle.setChecked(not self.drawAOICircleToggle.isChecked())
             self._draw_aoi_circle_change(self.drawAOICircleToggle.isChecked())
+        if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
+            # Show north-oriented image with 'R' key
+            self._show_north_oriented_image()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -267,6 +273,86 @@ class Viewer(QMainWindow, Ui_Viewer):
             image['thumbnail'] = button
         # self.scrollAreaWidgetContents.setMinimumHeight(96)
         # self.thumbnailScrollArea.setMinimumHeight(116)
+
+    def _initialize_thumbnails_deferred(self):
+        """Initialize only visible thumbnails first, defer the rest."""
+        self.thumbnailLayout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.thumbnailLayout.setSpacing(5)
+
+        # Only create widgets for the first batch of thumbnails
+        initial_count = min(self.thumbnail_limit, len(self.images))
+
+        for index in range(initial_count):
+            image = self.images[index]
+            frame = QFrame()
+            button = QPushButton()
+            button.setFixedSize(QSize(100, 56))
+            button.setProperty('imageIndex', index)
+            button.setProperty('frame', frame)
+            button.clicked.connect(self._on_thumbnail_clicked)
+            layout = QVBoxLayout(frame)
+            layout.addWidget(button)
+            layout.setAlignment(Qt.AlignCenter)
+            frame.setLayout(layout)
+            frame.setFixedSize(QSize(*self.thumbnail_size))
+            frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
+            overlay = QLabel(frame)
+            overlay.setFixedSize(frame.width(), frame.height())
+            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+            overlay.move(0, 0)
+            overlay.show()
+            button.setProperty('overlay', overlay)
+            self.thumbnailLayout.addWidget(frame)
+            image['thumbnail'] = button
+
+        # Start loading thumbnail images for the initial batch
+        self._load_thumbnails_in_range(0, initial_count)
+
+        # Defer creation of remaining thumbnail widgets
+        if len(self.images) > initial_count:
+            QTimer.singleShot(500, lambda: self._create_remaining_thumbnails(initial_count))
+
+    def _create_remaining_thumbnails(self, start_index):
+        """Create remaining thumbnail widgets in batches to avoid blocking."""
+        batch_size = 30
+        end_index = min(start_index + batch_size, len(self.images))
+
+        for index in range(start_index, end_index):
+            if index >= len(self.images):
+                break
+
+            image = self.images[index]
+            # Skip if thumbnail already exists
+            if 'thumbnail' in image:
+                continue
+
+            frame = QFrame()
+            button = QPushButton()
+            button.setFixedSize(QSize(100, 56))
+            button.setProperty('imageIndex', index)
+            button.setProperty('frame', frame)
+            button.clicked.connect(self._on_thumbnail_clicked)
+            layout = QVBoxLayout(frame)
+            layout.addWidget(button)
+            layout.setAlignment(Qt.AlignCenter)
+            frame.setLayout(layout)
+            frame.setFixedSize(QSize(*self.thumbnail_size))
+            frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
+            overlay = QLabel(frame)
+            overlay.setFixedSize(frame.width(), frame.height())
+            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+            overlay.move(0, 0)
+            overlay.show()
+            button.setProperty('overlay', overlay)
+            self.thumbnailLayout.addWidget(frame)
+            image['thumbnail'] = button
+
+        # Load thumbnails for this batch
+        self._load_thumbnails_in_range(start_index, end_index)
+
+        # Continue with next batch if there are more images
+        if end_index < len(self.images):
+            QTimer.singleShot(100, lambda: self._create_remaining_thumbnails(end_index))
 
     def _load_thumbnails_in_range(self, start_index, end_index):
         """Loads thumbnails in the specified range asynchronously.
@@ -377,23 +463,44 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.current_image = 0
 
             self.placeholderImage.deleteLater()
+
             self.main_image = QtImageViewer(self, self.centralwidget)
-            self.main_image.setMinimumSize(QSize(0, 0))
+            # Set a reasonable minimum size to prevent the widget from being too small
+            self.main_image.setMinimumSize(QSize(400, 300))
             self.main_image.setObjectName("mainImage")
             self.main_image.aspectRatioMode = Qt.KeepAspectRatio
             self.main_image.canZoom = True
             self.main_image.canPan = True
+
             self.ImageLayout.replaceWidget(self.placeholderImage, self.main_image)
             self.main_image.viewport().installEventFilter(self)
 
-            self._load_image()
+            # Force the layout to update and give the widget proper size
+            from PySide6.QtWidgets import QApplication
+            self.ImageLayout.update()
+            self.centralwidget.updateGeometry()
+            QApplication.processEvents()
+
+            # Give the widget time to properly size itself
+            QTimer.singleShot(100, self._delayed_load_image)
+            return  # Exit here and continue in _delayed_load_image
 
         except Exception as e:
+            import traceback
+            self.logger.error(e)
+
+    def _delayed_load_image(self):
+        """Load the image after a small delay to ensure proper widget initialization."""
+        try:
+            self._load_image()
+        except Exception as e:
+            import traceback
             self.logger.error(e)
 
     def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
         try:
+
             # Clear previous status
             self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Drone Orientation'] = None
             self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
@@ -404,6 +511,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.magnifying_glass_enabled = False
 
             image = self.images[self.current_image]
+
             if 'thumbnail' in image:
                 self._set_active_thumbnail(image['thumbnail'])
             
@@ -414,17 +522,48 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Load the original image
             # Note: When using mask-based storage, image_path should already point to the original source image
-            image_service = ImageService(image_path)
 
-            # Cache the image array for pixel value display
-            self.current_image_array = image_service.img_array.copy()
+            # Check if file exists
+            import os
+            if not os.path.exists(image_path):
+                self.logger.error(f"Image file does not exist: {image_path}")
+                return
+
+            try:
+                image_service = ImageService(image_path)
+            except Exception as e:
+                import traceback
+                raise
+
+            # Store reference to ImageService for later use
+            self.current_image_service = image_service
+
+            # Cache the image array for pixel value display - with better memory handling
+
+            has_img_array = hasattr(image_service, 'img_array')
+
+            if has_img_array:
+                try:
+                    img_arr = image_service.img_array
+                    if img_arr is not None:
+                        # Just store the reference, skip all the shape checking for now
+                        self.current_image_array = img_arr
+                    else:
+                        self.current_image_array = None
+                except Exception as e:
+                    import traceback
+                    self.current_image_array = None
+            else:
+                self.current_image_array = None
+
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
             if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
                 augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
             else:
                 # Get the original image without circles
-                augmented_image = image_service.img_array.copy()
+                # Use reference instead of copy to avoid crash
+                augmented_image = image_service.img_array
 
             # Highlight pixels of interest if toggle is enabled
             if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
@@ -432,8 +571,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                     # Use mask-based highlighting (new efficient approach)
                     # Pass the identifier color from settings to match AOI circle color
                     augmented_image = image_service.apply_mask_highlight(
-                        augmented_image, 
-                        mask_path, 
+                        augmented_image,
+                        mask_path,
                         self.settings['identifier_color'],
                         image['areas_of_interest']
                     )
@@ -444,21 +583,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
-            
-            # For thumbnails, always show circles regardless of toggle state
-            thumbnail_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
-            if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
-                if mask_path:
-                    thumbnail_image = image_service.apply_mask_highlight(
-                        thumbnail_image, 
-                        mask_path, 
-                        self.settings['identifier_color'],
-                        image['areas_of_interest']
-                    )
-                else:
-                    thumbnail_image = image_service.highlight_aoi_pixels(thumbnail_image, image['areas_of_interest'])
-            
-            self._load_areas_of_interest(thumbnail_image, image['areas_of_interest'])
+
+            # For AOI thumbnails, we don't need to draw circles on the full image
+            # Just pass the base image array - circles can be drawn on individual crops if needed
+            # Use the base image array for AOI thumbnails (no need to process full image)
+            self._load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
+
+
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
@@ -561,28 +692,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             if self.is_thermal:
                 # Check if temperature data is available
                 if self.temperature_data is None:
-                    # Try to load thermal data from the original image if not already loaded
-                    try:
-                        from core.services.ThermalParserService import ThermalParserService
-                        image = self.images[self.current_image]
-                        image_path = image.get('path', '')
-
-                        # Check if this is a thermal image file (.jpg, .jpeg, .rjpeg)
-                        if image_path.lower().endswith(('.jpg', '.jpeg', '.rjpeg')):
-                            thermal_parser = ThermalParserService(dtype=np.float32)
-                            temperature_c, _ = thermal_parser.parse_file(image_path)
-
-                            # Convert to the desired unit
-                            if self.temperature_unit == 'F' and temperature_c is not None:
-                                self.temperature_data = temperature_c * 1.8 + 32.0
-                            else:
-                                self.temperature_data = temperature_c
-                    except Exception as e:
-                        self.logger.error(f"Failed to parse thermal data: {e}")
-                        return "Temp: N/A", None
-
-                # If still no data, return N/A
-                if self.temperature_data is None:
+                    # Temperature data should have been loaded once in _load_image
+                    # If it's still None here, it means thermal data isn't available
                     return "Temp: N/A", None
 
                 center = area_of_interest['center']
@@ -616,14 +727,15 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # For non-thermal images, calculate average color
             else:
-                # Get the current image
-                image = self.images[self.current_image]
-                image_path = image.get('path', '')
-                mask_path = image.get('mask_path', '')
-
-                image_service = ImageService(image_path)
-
-                img_array = image_service.img_array  # This is already in RGB format
+                # Use the already-loaded image array instead of loading from disk
+                if hasattr(self, 'current_image_array') and self.current_image_array is not None:
+                    img_array = self.current_image_array
+                else:
+                    # Fallback only if we don't have the cached image
+                    image = self.images[self.current_image]
+                    image_path = image.get('path', '')
+                    image_service = ImageService(image_path)
+                    img_array = image_service.img_array
 
                 center = area_of_interest['center']
                 radius = area_of_interest.get('radius', 0)
@@ -686,12 +798,18 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.aoiListWidget.clear()
         count = 0
         self.highlights = []
+
+        # Load AOI thumbnails normally for all datasets
         for area_of_interest in areas_of_interest:
             # Create container widget for thumbnail and label
             container = QWidget()
             layout = QVBoxLayout(container)
             layout.setSpacing(2)
             layout.setContentsMargins(0, 0, 0, 0)
+
+            # Skip thumbnail creation if no image provided (deferred case)
+            if augmented_image is None:
+                continue
 
             center = area_of_interest['center']
             radius = area_of_interest['radius'] + 10
@@ -934,14 +1052,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Load and process the image
         image_service = ImageService(image_path)
 
-        # Update the cached image array
-        self.current_image_array = image_service.img_array.copy()
+        # Update the cached image array - using reference to avoid crash
+        # Store the service reference to keep data alive
+        self.current_image_service = image_service
+        self.current_image_array = image_service.img_array
         
         # Start with the base image or with circles based on toggle
         if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
         else:
-            augmented_image = image_service.img_array.copy()
+            # Use reference instead of copy to avoid crash
+            augmented_image = image_service.img_array
         
         # Apply highlight if enabled (independent of circle drawing)
         if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
@@ -1553,17 +1674,22 @@ class Viewer(QMainWindow, Ui_Viewer):
                     # Only show color values if cursor is on the image
                     if hasattr(self, 'main_image') and self.main_image and self.main_image.hasImage():
                         try:
-                            # Use cached image array if available, otherwise load it
+                            # Use cached image array if available
                             if self.current_image_array is not None:
                                 img_array = self.current_image_array
+                            elif self.current_image_service is not None and hasattr(self.current_image_service, 'img_array'):
+                                # Use the stored ImageService reference
+                                img_array = self.current_image_service.img_array
                             else:
-                                # Fallback: load image if cache is missing
+                                # Fallback: load image if both cache and service are missing
                                 image = self.images[self.current_image]
                                 image_path = image.get('path', '')
                                 from core.services.ImageService import ImageService
                                 image_service = ImageService(image_path)
                                 img_array = image_service.img_array
-                                self.current_image_array = img_array.copy()
+                                # Store reference instead of copying
+                                self.current_image_service = image_service
+                                self.current_image_array = img_array
 
                             # Check bounds
                             if (0 <= pos.y() < img_array.shape[0]) and (0 <= pos.x() < img_array.shape[1]):
@@ -1777,6 +1903,101 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         except Exception as e:
             self.logger.error(f"Error updating magnifying glass: {e}")
+
+    def _show_north_oriented_image(self):
+        """Show a popup window with the current image rotated to true north based on bearing info."""
+        try:
+            # Get the current image's bearing/yaw information
+            if not hasattr(self, 'current_image') or self.current_image < 0:
+                return
+
+            image = self.images[self.current_image]
+            image_path = image.get('path', '')
+
+            # Get the drone orientation (yaw/bearing)
+            image_service = ImageService(image_path)
+            direction = image_service.get_drone_orientation()
+
+            if direction is None:
+                # Show message that no bearing info is available
+                self._show_toast("No bearing info available", 3000, color="#F44336")
+                return
+
+            # Get the current image array
+            if not hasattr(self, 'current_image_array') or self.current_image_array is None:
+                return
+
+            img_array = self.current_image_array.copy()
+
+            # Calculate rotation angle to orient to north
+            # If drone is facing east (90°), we need to rotate -90° to face north
+            rotation_angle = -direction
+
+            # Rotate the image
+            import cv2
+            h, w = img_array.shape[:2]
+            center = (w // 2, h // 2)
+
+            # Get rotation matrix
+            M = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
+
+            # Calculate new image bounds after rotation
+            cos = abs(M[0, 0])
+            sin = abs(M[0, 1])
+            new_w = int((h * sin) + (w * cos))
+            new_h = int((h * cos) + (w * sin))
+
+            # Adjust rotation matrix to prevent cropping
+            M[0, 2] += (new_w / 2) - center[0]
+            M[1, 2] += (new_h / 2) - center[1]
+
+            # Perform rotation
+            rotated_img = cv2.warpAffine(img_array, M, (new_w, new_h),
+                                        borderMode=cv2.BORDER_CONSTANT,
+                                        borderValue=(128, 128, 128))
+
+            # Create popup window
+            popup = QDialog(self)
+            popup.setWindowTitle(f"North-Oriented View (Rotated {rotation_angle:.1f}°)")
+            popup.setModal(False)  # Non-modal so user can still interact with main window
+
+            # Create layout
+            layout = QVBoxLayout(popup)
+
+            # Create image viewer widget
+            image_viewer = QtImageViewer(self)
+            image_viewer.setMinimumSize(800, 600)
+
+            # Convert rotated image to QImage and display
+            qimg = qimage2ndarray.array2qimage(rotated_img)
+            image_viewer.setImage(qimg)
+
+            # Add label showing rotation info
+            info_label = QLabel(f"Original bearing: {direction:.1f}° | Rotation applied: {rotation_angle:.1f}°")
+            info_label.setAlignment(Qt.AlignCenter)
+            info_label.setStyleSheet("QLabel { background-color: rgba(0,0,0,150); color: white; padding: 5px; }")
+
+            # Add north arrow indicator
+            north_label = QLabel("↑ NORTH")
+            north_label.setAlignment(Qt.AlignCenter)
+            north_label.setStyleSheet("QLabel { color: red; font-size: 16px; font-weight: bold; }")
+
+            layout.addWidget(north_label)
+            layout.addWidget(image_viewer)
+            layout.addWidget(info_label)
+
+            # Add close button
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(popup.close)
+            layout.addWidget(close_btn)
+
+            # Show the popup
+            popup.resize(1000, 800)
+            popup.show()
+
+        except Exception as e:
+            self.logger.error(f"Error showing north-oriented image: {e}")
+            self._show_toast(f"Error: {str(e)}", 3000, color="#F44336")
 
     def _rotate_north_icon(self, direction):
         """
