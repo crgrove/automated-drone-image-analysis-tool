@@ -132,7 +132,7 @@ class Ui_MainWindow(object):
         self.minAreaSpinBox.setObjectName(u"minAreaSpinBox")
         self.minAreaSpinBox.setFont(font)
         self.minAreaSpinBox.setMinimum(1)
-        self.minAreaSpinBox.setMaximum(199998)
+        self.minAreaSpinBox.setMaximum(999)
         self.minAreaSpinBox.setValue(10)
 
         self.GeneralLayout.addWidget(self.minAreaSpinBox)
@@ -150,7 +150,7 @@ class Ui_MainWindow(object):
         self.maxAreaSpinBox.setObjectName(u"maxAreaSpinBox")
         self.maxAreaSpinBox.setFont(font)
         self.maxAreaSpinBox.setMinimum(0)
-        self.maxAreaSpinBox.setMaximum(199999)
+        self.maxAreaSpinBox.setMaximum(1999)
         self.maxAreaSpinBox.setSingleStep(1)
         self.maxAreaSpinBox.setValue(0)
 
@@ -431,7 +431,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR", None))
-        self.actionLoadFile.setText(QCoreApplication.translate("MainWindow", u"Load File", None))
+        self.actionLoadFile.setText(QCoreApplication.translate("MainWindow", u"Load Results File", None))
         self.actionPreferences.setText(QCoreApplication.translate("MainWindow", u"Preferences", None))
         self.actionVideoParser.setText(QCoreApplication.translate("MainWindow", u"Video Parser", None))
         self.actionRTMPDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Color Detection", None))

@@ -328,13 +328,25 @@ class ImageService:
         """
         drones_df = PickleHelper.get_drone_sensor_info()
 
+        # Check if drones_df was loaded successfully
+        if drones_df is None or drones_df.empty:
+            return None
+
         model = self.exif_data["0th"].get(piexif.ImageIFD.Model)
         if model:
             model = model.decode('utf-8').strip().rstrip("\x00")
         if not model or not self.drone_make:
             return None
 
+        # Try multiple ways to get ImageSource
         image_source = MetaDataHelper.get_drone_xmp_attribute('ImageSource', self.drone_make, self.xmp_data)
+        if not image_source:
+            # Try direct lookup in xmp_data with various keys
+            for key in ['ImageSource', 'XMP:ImageSource', 'drone-dji:ImageSource']:
+                if key in self.xmp_data:
+                    image_source = self.xmp_data[key]
+                    break
+
         image_width = self.exif_data["Exif"].get(piexif.ExifIFD.PixelXDimension)
 
         iso = self.exif_data["Exif"].get(piexif.ExifIFD.ISOSpeedRatings)

@@ -4,6 +4,7 @@ import cv2
 from typing import List
 import os
 import platform
+import sys
 
 DIRP_HANDLE = c_void_p
 DIRP_VERBOSE_LEVEL_NONE = 0
@@ -266,7 +267,15 @@ class DjiThermalParserService:
         Raises:
             NotImplementedError: If the platform or architecture is unsupported.
         """
-        folder_plugin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'external')
+        # Determine the base path based on whether we're running from a PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            # Running from a PyInstaller bundle
+            app_root = sys._MEIPASS
+        else:
+            # Running from source code
+            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+        folder_plugin = os.path.join(app_root, 'external')
         system = platform.system()
         architecture = platform.architecture()[0]
 
