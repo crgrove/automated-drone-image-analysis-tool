@@ -179,13 +179,39 @@ class QtImageViewer(QGraphicsView):
         """Override fitInView to emit viewChanged after the transformation completes."""
         if self._is_destroyed:
             return
-        super().fitInView(rect, mode)
+            
+        # Additional safety check before calling super()
+        try:
+            super().fitInView(rect, mode)
+        except RuntimeError:
+            # Widget was destroyed during the call
+            self._is_destroyed = True
+            return
+            
+        # Check again after super() call
+        if self._is_destroyed:
+            return
+            
         # Force the view to update and process events to ensure transformation is complete
-        self.viewport().update()
-        QApplication.processEvents()
+        try:
+            self.viewport().update()
+            QApplication.processEvents()
+        except RuntimeError:
+            # Widget was destroyed during processing
+            self._is_destroyed = True
+            return
+            
         # Now emit viewChanged after the view has been updated
-        if not self._is_destroyed:
-            self.viewChanged.emit()
+        self._safe_emit_view_changed()
+
+    def _safe_emit_view_changed(self):
+        """Safely emit the viewChanged signal with proper error handling."""
+        if not self._is_destroyed and hasattr(self, 'viewChanged') and self.viewChanged is not None:
+            try:
+                self.viewChanged.emit()
+            except RuntimeError:
+                # Widget was deleted during signal emission, ignore
+                pass
 
     def _validate_zoom_rect(self, rect):
         """Validate and sanitize a zoom rectangle."""
@@ -302,6 +328,10 @@ class QtImageViewer(QGraphicsView):
             # Clean up zoom stack first
             self._cleanup_zoom_stack()
             
+            # Check if still valid after cleanup
+            if self._is_destroyed:
+                return
+            
             if self.zoomStack:
                 last_rect = self.zoomStack[-1]
                 if self._validate_zoom_rect(last_rect):
@@ -310,15 +340,17 @@ class QtImageViewer(QGraphicsView):
                     # Invalid rect, reset zoom
                     self.zoomStack.clear()
                     scene_rect = self._safe_scene_rect()
-                    if scene_rect:
+                    if scene_rect and not self._is_destroyed:
                         self.fitInView(scene_rect, self.aspectRatioMode)
             else:
                 if self.thumbnail:
                     scene_rect = self._safe_scene_rect()
-                    if scene_rect:
+                    if scene_rect and not self._is_destroyed:
                         self.fitInView(scene_rect, self.aspectRatioMode)
 
-            self._emit_zoom_if_changed()
+            # Final check before emitting
+            if not self._is_destroyed:
+                self._emit_zoom_if_changed()
             
         finally:
             self._recursion_guard = False
@@ -421,8 +453,7 @@ class QtImageViewer(QGraphicsView):
             return
 
         self.updateViewer()
-        if not self._is_destroyed:
-            self.viewChanged.emit()
+        self._safe_emit_view_changed()
 
     # ------------------------------------------------------------- #
     #  zoom helper: zoom‑out while keeping scene_pos centred         #
@@ -461,7 +492,7 @@ class QtImageViewer(QGraphicsView):
 
         self.updateViewer()
         if not self._is_destroyed:
-            self.viewChanged.emit()
+            self._safe_emit_view_changed()
 
     def resetZoom(self):
         if self._is_destroyed:
@@ -480,7 +511,7 @@ class QtImageViewer(QGraphicsView):
             self.zoomStack.clear()
             self.updateViewer()
             if not self._is_destroyed:
-                self.viewChanged.emit()
+                self._safe_emit_view_changed()
 
     # ===================================================================== #
     #  Qt events that might change zoom                                      #
@@ -543,7 +574,7 @@ class QtImageViewer(QGraphicsView):
             self.zoomStack[-1] = new_zr
             self.updateViewer()
             if not self._is_destroyed:
-                self.viewChanged.emit()
+                self._safe_emit_view_changed()
         else:
             self.resetZoom()
 
@@ -578,7 +609,7 @@ class QtImageViewer(QGraphicsView):
                 self.zoomStack.pop()
                 self.updateViewer()
                 if not self._is_destroyed:
-                    self.viewChanged.emit()
+                    self._safe_emit_view_changed()
             ev.accept()
             return
 
@@ -643,7 +674,7 @@ class QtImageViewer(QGraphicsView):
                     self._cleanup_zoom_stack()
                     self.updateViewer()
                     if not self._is_destroyed:
-                        self.viewChanged.emit()
+                        self._safe_emit_view_changed()
             self._isZooming = False
             ev.accept()
             return
@@ -670,7 +701,7 @@ class QtImageViewer(QGraphicsView):
                     self.zoomStack.pop()
                 self._cleanup_zoom_stack()
                 if not self._is_destroyed:
-                    self.viewChanged.emit()
+                    self._safe_emit_view_changed()
             self._isPanning = False
             ev.accept()
             return
@@ -724,7 +755,7 @@ class QtImageViewer(QGraphicsView):
                     self.zoomStack[-1] = self.zoomStack[-1].intersected(scene_rect)
                     self.updateViewer()
                     if not self._is_destroyed:
-                        self.viewChanged.emit()
+                        self._safe_emit_view_changed()
 
         scenePos = self.mapToScene(ev.position().toPoint())
         scene_rect = self._safe_scene_rect()

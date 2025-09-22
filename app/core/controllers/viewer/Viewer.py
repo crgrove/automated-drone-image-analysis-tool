@@ -9,33 +9,43 @@ import math
 import re
 import colorsys
 import numpy as np
-
-from pathlib import Path
-
-from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush
-from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF
-from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu
-from core.views.components.Toggle import Toggle
 import tempfile
+import cv2
+from pathlib import Path
+from urllib.parse import quote_plus
 
+from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush, QCursor
+from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
+from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu
+
+from core.views.components.Toggle import Toggle
 from core.views.Viewer_ui import Ui_Viewer
 from core.views.components.QtImageViewer import QtImageViewer
-from core.controllers.viewer.ImageAdjustmentDialog import ImageAdjustmentDialog
-from core.controllers.viewer.StatusDict import StatusDict
-from core.controllers.viewer.ScaleBarWidget import ScaleBarWidget
-from core.controllers.viewer.LoadingDialog import LoadingDialog
-from core.controllers.viewer.ThumbnailLoader import ThumbnailLoader
-from core.controllers.viewer.PdfGenerationThread import PdfGenerationThread
+
+from core.controllers.viewer.status.StatusDict import StatusDict
+
+from core.controllers.viewer.components.ImageAdjustmentDialog import ImageAdjustmentDialog
+from core.controllers.viewer.components.ScaleBarWidget import ScaleBarWidget
+from core.controllers.viewer.components.LoadingDialog import LoadingDialog
+from core.controllers.viewer.components.MeasureDialog import MeasureDialog
+from core.controllers.viewer.components.MagnifyingGlass import MagnifyingGlass
+from core.controllers.viewer.components.OverlayWidget import OverlayWidget
+
+from core.controllers.viewer.exports.KMLExportController import KMLExportController
+from core.controllers.viewer.exports.PDFExportController import PDFExportController
+from core.controllers.viewer.exports.ZipExportController import ZipExportController
+
+from core.controllers.viewer.aoi.AOIController import AOIController
+from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
+from core.controllers.viewer.coordinates.CoordinateController import CoordinateController
+from core.controllers.viewer.status.StatusController import StatusController
 
 from core.services.LoggerService import LoggerService
-from core.services.KMLGeneratorService import KMLGeneratorService
 from core.services.XmlService import XmlService
-from core.services.PdfGeneratorService import PdfGeneratorService
-from core.services.ZipBundleService import ZipBundleService
 from core.services.ImageService import ImageService
+from core.services.ThermalParserService import ThermalParserService
 from helpers.LocationInfo import LocationInfo
-from urllib.parse import quote_plus
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -58,7 +68,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             theme (str): The current active theme.
         """
         super().__init__()
-        self.__threads = []
+        self._threads = []
         self.main_image = None
         self.logger = LoggerService()
         self.theme = theme  # Store theme before calling _add_Toggles
@@ -73,45 +83,34 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
         self.settings, _ = self.xml_service.get_settings()
 
+        # Initialize controllers
+        self.aoi_controller = AOIController(self, self.logger)
+        self.thumbnail_controller = ThumbnailController(self, self.logger)
+        self.coordinate_controller = CoordinateController(self, self.logger)
+        self.status_controller = StatusController(self, self.logger)
+
         # Load flagged AOIs from XML
-        self._load_flagged_aois_from_xml()
+        self.aoi_controller.initialize_from_xml(self.images)
         self.is_thermal = (self.settings['thermal'] == 'True')
         self.position_format = position_format
         self.temperature_data = None
         self.current_image_array = None  # Cache for the current image RGB array
         self.current_image_service = None  # Keep reference to ImageService
-        self.active_thumbnail = None
-        self.magnifying_glass_enabled = False
-        self.magnifying_glass_widget = None
 
-        # AOI selection and flagging
-        self.selected_aoi_index = -1  # Currently selected AOI index
-        # Note: self.flagged_aois is initialized and populated by _load_flagged_aois_from_xml() above
-        self.filter_flagged_only = False  # Whether to show only flagged AOIs
-        self.aoi_containers = []  # Store references to AOI container widgets
-        self.magnifying_glass_pos = None
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
 
-        # thumbnail config
-        self.thumbnail_limit = 30
-        self.thumbnail_size = (122, 78)
-        self.thumbnail_loader = None
-        self.visible_thumbnails_range = (0, 0)
-
-        # compass asset
-        self.original_north_pix = QPixmap(f":/icons/{self.theme.lower()}/north.png")
 
         # status‑bar helper
-        self.messages = StatusDict(callback=self._message_listener,
+        self.messages = StatusDict(callback=self.status_controller.message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Drone Orientation", "Estimated Average GSD",
                                               "Temperature", "Color Values"])
         self._reapply_icons(self.theme)
-        self.statusBar.linkActivated.connect(self._on_coordinates_clicked)
+        self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
 
         # toast (non intrusive) over statusBarWidget
         self._toastLabel = QLabel(self.statusBarWidget)
@@ -124,15 +123,20 @@ class Viewer(QMainWindow, Ui_Viewer):
         # coordinates for sharing
         self.current_decimal_coords = None
 
-        # scale bar (re‑parented later into HUD overlay)
+        # scale bar (will be used by overlay widget)
         self.scaleBar = ScaleBarWidget()
 
         # ---- load everything ----
         self._load_images()
 
+        # Set up UI elements for controllers
+        self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, None)  # flag button will be set later
+        self.thumbnail_controller.set_ui_elements(self.thumbnailLayout, self.thumbnailScrollArea)
+        self.status_controller.set_ui_elements(self.statusBar, self._toastLabel, self._toastTimer, self.messages)
+
         # Defer thumbnail initialization to avoid blocking with large datasets
         # Only initialize visible thumbnails first
-        self._initialize_thumbnails_deferred()
+        self.thumbnail_controller.initialize_thumbnails_deferred()
         self._setupViewer()
 
         # UI tweaks
@@ -146,21 +150,37 @@ class Viewer(QMainWindow, Ui_Viewer):
     def showEvent(self, event):
         super().showEvent(event)
         if not hasattr(self, '_initialized_once'):
-            QTimer.singleShot(50, self._initial_fit_image)  # Slightly longer delay
+            # Call directly after the event is processed
+            QApplication.processEvents()
+            self._initial_fit_image()
             self._initialized_once = True
 
     def _initial_fit_image(self):
-        if self.main_image is not None:
+        if self.main_image is not None and not self.main_image._is_destroyed:
             self.main_image.resetZoom()
-            self._place_overlay()
+            if hasattr(self, 'overlay'):
+                self.overlay._place_overlay()
 
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
-        for thread, loader in self.__threads:
+        for thread, loader in self._threads:
             if thread.isRunning():
                 thread.requestInterruption()  # Optional: politely request interruption
                 thread.quit()
                 thread.wait()  # Wait until the thread has terminated
+        
+        # Clean up magnifying glass controller
+        if hasattr(self, 'magnifying_glass'):
+            self.magnifying_glass.cleanup()
+        
+        # Clean up overlay widget
+        if hasattr(self, 'overlay'):
+            self.overlay.cleanup()
+        
+        # Clean up controllers
+        if hasattr(self, 'thumbnail_controller'):
+            self.thumbnail_controller.cleanup()
+            
         event.accept()
 
     def _add_Toggles(self):
@@ -240,10 +260,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._draw_aoi_circle_change(self.drawAOICircleToggle.isChecked())
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
-            self._show_north_oriented_image()
+            self.coordinate_controller.show_north_oriented_image()
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
-            self._toggle_aoi_flag()
+            self.aoi_controller.toggle_aoi_flag()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -258,129 +278,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                     pass  # Not a valid image
         self.images = valid_images
 
-    def _initialize_thumbnails(self):
-        """Initializes the layout for thumbnails with default styling."""
-        self.thumbnailLayout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.thumbnailLayout.setSpacing(5)
-        for index, image in enumerate(self.images[:]):
-            frame = QFrame()
-            button = QPushButton()
-            button.setFixedSize(QSize(100, 56))
-            button.setProperty('imageIndex', index)
-            button.setProperty('frame', frame)
-            button.clicked.connect(self._on_thumbnail_clicked)
-            layout = QVBoxLayout(frame)
-            layout.addWidget(button)
-            layout.setAlignment(Qt.AlignCenter)
-            frame.setLayout(layout)
-            frame.setFixedSize(QSize(*self.thumbnail_size))
-            frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
-            overlay = QLabel(frame)
-            overlay.setFixedSize(frame.width(), frame.height())
-            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
-            overlay.move(0, 0)
-            overlay.show()
-            button.setProperty('overlay', overlay)
-            self.thumbnailLayout.addWidget(frame)
-            image['thumbnail'] = button
-        # self.scrollAreaWidgetContents.setMinimumHeight(96)
-        # self.thumbnailScrollArea.setMinimumHeight(116)
 
-    def _initialize_thumbnails_deferred(self):
-        """Initialize only visible thumbnails first, defer the rest."""
-        self.thumbnailLayout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.thumbnailLayout.setSpacing(5)
 
-        # Only create widgets for the first batch of thumbnails
-        initial_count = min(self.thumbnail_limit, len(self.images))
-
-        for index in range(initial_count):
-            image = self.images[index]
-            frame = QFrame()
-            button = QPushButton()
-            button.setFixedSize(QSize(100, 56))
-            button.setProperty('imageIndex', index)
-            button.setProperty('frame', frame)
-            button.clicked.connect(self._on_thumbnail_clicked)
-            layout = QVBoxLayout(frame)
-            layout.addWidget(button)
-            layout.setAlignment(Qt.AlignCenter)
-            frame.setLayout(layout)
-            frame.setFixedSize(QSize(*self.thumbnail_size))
-            frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
-            overlay = QLabel(frame)
-            overlay.setFixedSize(frame.width(), frame.height())
-            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
-            overlay.move(0, 0)
-            overlay.show()
-            button.setProperty('overlay', overlay)
-            self.thumbnailLayout.addWidget(frame)
-            image['thumbnail'] = button
-
-        # Start loading thumbnail images for the initial batch
-        self._load_thumbnails_in_range(0, initial_count)
-
-        # Defer creation of remaining thumbnail widgets
-        if len(self.images) > initial_count:
-            QTimer.singleShot(500, lambda: self._create_remaining_thumbnails(initial_count))
-
-    def _create_remaining_thumbnails(self, start_index):
-        """Create remaining thumbnail widgets in batches to avoid blocking."""
-        batch_size = 30
-        end_index = min(start_index + batch_size, len(self.images))
-
-        for index in range(start_index, end_index):
-            if index >= len(self.images):
-                break
-
-            image = self.images[index]
-            # Skip if thumbnail already exists
-            if 'thumbnail' in image:
-                continue
-
-            frame = QFrame()
-            button = QPushButton()
-            button.setFixedSize(QSize(100, 56))
-            button.setProperty('imageIndex', index)
-            button.setProperty('frame', frame)
-            button.clicked.connect(self._on_thumbnail_clicked)
-            layout = QVBoxLayout(frame)
-            layout.addWidget(button)
-            layout.setAlignment(Qt.AlignCenter)
-            frame.setLayout(layout)
-            frame.setFixedSize(QSize(*self.thumbnail_size))
-            frame.setStyleSheet("border: 1px solid grey; border-radius: 3px;")
-            overlay = QLabel(frame)
-            overlay.setFixedSize(frame.width(), frame.height())
-            overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
-            overlay.move(0, 0)
-            overlay.show()
-            button.setProperty('overlay', overlay)
-            self.thumbnailLayout.addWidget(frame)
-            image['thumbnail'] = button
-
-        # Load thumbnails for this batch
-        self._load_thumbnails_in_range(start_index, end_index)
-
-        # Continue with next batch if there are more images
-        if end_index < len(self.images):
-            QTimer.singleShot(100, lambda: self._create_remaining_thumbnails(end_index))
-
-    def _load_thumbnails_in_range(self, start_index, end_index):
-        """Loads thumbnails in the specified range asynchronously.
-
-        Args:
-            start_index (int): The starting index of thumbnails to load.
-            end_index (int): The ending index of thumbnails to load.
-        """
-        self.thumbnail_loader = ThumbnailLoader(self.images, start_index, end_index, self.loaded_thumbnails)
-        thread = QThread()
-        self.__threads.append((thread, self.thumbnail_loader))
-        self.thumbnail_loader.moveToThread(thread)
-        self.thumbnail_loader.thumbnail_loaded.connect(self._on_thumbnail_loaded)
-        self.thumbnail_loader.finished.connect(self._on_thumbnail_load_finished)
-        thread.started.connect(self.thumbnail_loader.run)
-        thread.start()
 
     def _setupViewer(self):
         if len(self.images) == 0:
@@ -413,7 +312,10 @@ class Viewer(QMainWindow, Ui_Viewer):
                 }
             """)
             self.flagFilterButton.setCheckable(True)
-            self.flagFilterButton.clicked.connect(self._toggle_flag_filter)
+            self.flagFilterButton.clicked.connect(self.aoi_controller.toggle_flag_filter)
+            
+            # Set the flag button in the AOI controller
+            self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, self.flagFilterButton)
 
             # Try multiple approaches to add the button
             # Approach 1: Add next to measureButton (which is visible in your screenshot)
@@ -428,7 +330,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                             break
 
             # Approach 2: Also try adding after nextImageButton
-            QTimer.singleShot(100, self._add_flag_button_to_layout)
+            self.aoi_controller.add_flag_button_to_layout()
 
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
@@ -437,75 +339,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
-            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self._on_thumbnail_scroll)
+            self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
 
-    def _on_thumbnail_loaded(self, index, icon):
-        """Updates the thumbnail icon and overlay for the loaded thumbnail.
-
-        Args:
-            index (int): The index of the loaded thumbnail.
-            icon (QIcon): The icon to display for the thumbnail.
-        """
-        button = self.images[index]['thumbnail']
-        button.setIcon(icon)
-        button.setIconSize(QSize(100, 56))
-        if self.images[index].get('hidden'):
-            overlay = button.property('overlay')
-            overlay.setStyleSheet("background-color: rgba(128, 128, 128, 150);")
-
-        self.loaded_thumbnails.append(index)
-
-    def _on_thumbnail_load_finished(self):
-        """Stops and quits all thumbnail threads after loading is complete."""
-        for thread, analyze in self.__threads:
-            thread.quit()
-
-    def _on_thumbnail_scroll(self):
-        """Loads thumbnails in the visible range when the user scrolls."""
-        scrollbar = self.thumbnailScrollArea.horizontalScrollBar()
-        max_scroll_value = scrollbar.maximum()
-        current_scroll_value = scrollbar.value()
-        total_images = len(self.images)
-        visible_thumbnails = math.ceil(self.width()/self.thumbnail_size[0])
-        if max_scroll_value == 0:
-            current_index = 0
-        else:
-            current_index = math.ceil((current_scroll_value / max_scroll_value) * total_images)
-        visible_start_index = max(0, current_index - int(self.thumbnail_limit))
-        visible_end_index = min(current_index + visible_thumbnails + 4, total_images)
-        if (int(visible_start_index), int(visible_end_index)) != self.visible_thumbnails_range:
-            self._load_thumbnails_in_range(visible_start_index, visible_end_index)
-            self.visible_thumbnails_range = (int(visible_start_index), int(visible_end_index))
-
-    def _on_thumbnail_clicked(self):
-        """Loads the image associated with the clicked thumbnail."""
-        button = self.sender()
-        self.current_image = button.property('imageIndex')
-        self._load_image()
-
-    def _scroll_thumbnail_int_view(self):
-        """Ensures the active thumbnail is visible in the scroll area."""
-        if self.active_thumbnail:
-            self.thumbnailScrollArea.ensureWidgetVisible(self.active_thumbnail)
-            self._on_thumbnail_scroll()
-
-    def _set_active_thumbnail(self, button):
-        """Sets the specified thumbnail as active.
-
-        Args:
-            button (QPushButton): The thumbnail button to set as active.
-        """
-        frame = button.property('frame')
-        if self.active_thumbnail:
-            self.active_thumbnail.setStyleSheet("border: 1px solid grey;")
-
-        frame.setStyleSheet("QFrame { border: 1px solid blue; }")
-        self.active_thumbnail = frame
 
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:
-            # (original logic unchanged up to constructing QtImageViewer)
+            # Find the first visible image
             self.current_image = None
             for i in range(0, len(self.images)):
                 if not self.show_hidden and self.images[i]['hidden']:
@@ -514,8 +354,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 break
             if self.current_image is None:
                 self.current_image = 0
-
-            self.placeholderImage.deleteLater()
 
             self.main_image = QtImageViewer(self, self.centralwidget)
             # Set a reasonable minimum size to prevent the widget from being too small
@@ -526,47 +364,51 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.canPan = True
 
             self.ImageLayout.replaceWidget(self.placeholderImage, self.main_image)
+            # Now it's safe to delete the placeholder
+            self.placeholderImage.deleteLater()
             self.main_image.viewport().installEventFilter(self)
 
-            # Force the layout to update and give the widget proper size
-            from PySide6.QtWidgets import QApplication
+            # Initialize magnifying glass controller
+            self.magnifying_glass = MagnifyingGlass(self.main_image, self.logger)
+            
+            # Initialize overlay widget
+            self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
+            
+            # Initialize export controllers
+            self.kml_export = KMLExportController(self, self.logger)
+            self.pdf_export = PDFExportController(self, self.logger)
+            self.zip_export = ZipExportController(self, self.logger)
+
+            # Force the layout to update and ensure proper sizing
             self.ImageLayout.update()
             self.centralwidget.updateGeometry()
             QApplication.processEvents()
 
-            # Give the widget time to properly size itself
-            QTimer.singleShot(100, self._delayed_load_image)
-            return  # Exit here and continue in _delayed_load_image
-
-        except Exception as e:
-            import traceback
-            self.logger.error(e)
-
-    def _delayed_load_image(self):
-        """Load the image after a small delay to ensure proper widget initialization."""
-        try:
+            # Load the image immediately - the widget should be properly sized now
             self._load_image()
+
         except Exception as e:
-            import traceback
             self.logger.error(e)
 
     def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
         try:
+            # Prevent race conditions by checking if main_image is still valid
+            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
+                return
 
             # Clear previous status
             self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Drone Orientation'] = None
             self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
 
             # Hide magnifying glass when loading new image
-            if self.magnifying_glass_widget:
-                self.magnifying_glass_widget.hide()
-                self.magnifying_glass_enabled = False
+            if hasattr(self, 'magnifying_glass'):
+                self.magnifying_glass._hide()
 
             image = self.images[self.current_image]
 
             if 'thumbnail' in image:
-                self._set_active_thumbnail(image['thumbnail'])
+                self.thumbnail_controller.set_active_thumbnail(image['thumbnail'])
             
             # Use original image path if available (mask-based approach)
             # Fall back to path for legacy support
@@ -577,7 +419,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Note: When using mask-based storage, image_path should already point to the original source image
 
             # Check if file exists
-            import os
             if not os.path.exists(image_path):
                 self.logger.error(f"Image file does not exist: {image_path}")
                 return
@@ -585,7 +426,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             try:
                 image_service = ImageService(image_path)
             except Exception as e:
-                import traceback
                 raise
 
             # Store reference to ImageService for later use
@@ -604,7 +444,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                     else:
                         self.current_image_array = None
                 except Exception as e:
-                    import traceback
                     self.current_image_array = None
             else:
                 self.current_image_array = None
@@ -634,15 +473,23 @@ class Viewer(QMainWindow, Ui_Viewer):
                     augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
 
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
+            
+            # Critical section: check if widget is still valid before setting image
+            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
+                return
+                
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
 
             # For AOI thumbnails, we don't need to draw circles on the full image
             # Just pass the base image array - circles can be drawn on individual crops if needed
             # Use the base image array for AOI thumbnails (no need to process full image)
-            self._load_areas_of_interest(image_service.img_array, image['areas_of_interest'], self.current_image)
+            self.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'], self.current_image)
 
-
+            # Check again before resetting zoom
+            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
+                return
+                
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
@@ -668,11 +515,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             try:
                 gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
                 if gps and 'latitude' in gps and 'longitude' in gps:
-                    self.current_decimal_coords = (gps['latitude'], gps['longitude'])
+                    self.coordinate_controller.update_current_coordinates((gps['latitude'], gps['longitude']))
                 else:
-                    self.current_decimal_coords = None
+                    self.coordinate_controller.update_current_coordinates(None)
             except Exception:
-                self.current_decimal_coords = None
+                self.coordinate_controller.update_current_coordinates(None)
             if self.is_thermal:
                 # First try to get thermal data from XMP metadata
                 self.temperature_data = image_service.get_thermal_data(self.temperature_unit)
@@ -680,7 +527,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # If no thermal data in XMP, try to parse it directly from the thermal image
                 if self.temperature_data is None:
                     try:
-                        from core.services.ThermalParserService import ThermalParserService
                         # Check if this is a thermal image file
                         if image_path.lower().endswith(('.jpg', '.jpeg', '.rjpeg')):
                             thermal_parser = ThermalParserService(dtype=np.float32)
@@ -699,21 +545,14 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.zoomChanged.connect(self._update_scale_bar)
             self._update_scale_bar(self.main_image.getZoom())
 
-            # move HUD to this viewport (in case of re‑parenting quirks)
-            self._build_overlay()
-            self._rotate_north_icon(direction)
-
-            # HUD overlay visibility logic:
-            # Show if either direction or avg_gsd is available; hide if both are missing
-            if hasattr(self, "_hud"):
-                if (direction is None) and (avg_gsd is None):
-                    self._hud.hide()
-                else:
-                    if self.showOverlayToggle.isChecked():
-                        self._hud.show()
-                    else:
-                        self._hud.hide()
-            self._place_overlay()
+            # Update overlay with new image data
+            if hasattr(self, 'overlay'):
+                self.overlay.rotate_north_icon(direction)
+                self.overlay.update_visibility(
+                    self.showOverlayToggle.isChecked(),
+                    direction,
+                    avg_gsd
+                )
         except Exception as e:
             error_msg = f"Error loading image {self.current_image + 1}: {str(e)}"
             self.logger.error(error_msg)
@@ -730,286 +569,14 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show error to user
             QMessageBox.critical(self, "Error Loading Image", error_msg)
 
-    def _calculate_aoi_average_info(self, area_of_interest):
-        """Calculate average color or temperature for an AOI.
 
-        Args:
-            area_of_interest (dict): AOI dictionary with center, radius, and optionally detected_pixels
-
-        Returns:
-            tuple: (info_text, rgb_tuple) where info_text is the formatted string and
-                   rgb_tuple is (r, g, b) for colors or None for temperature
-        """
-        try:
-            # For thermal images, calculate average temperature
-            if self.is_thermal:
-                # Check if temperature data is available
-                if self.temperature_data is None:
-                    # Temperature data should have been loaded once in _load_image
-                    # If it's still None here, it means thermal data isn't available
-                    return "Temp: N/A", None
-
-                center = area_of_interest['center']
-                radius = area_of_interest.get('radius', 0)
-                cx, cy = center
-                shape = self.temperature_data.shape
-
-                # Get temperature values for detected pixels or within the AOI circle
-                temps = []
-
-                # If we have detected pixels, use those for temperature
-                if 'detected_pixels' in area_of_interest and area_of_interest['detected_pixels']:
-                    for pixel in area_of_interest['detected_pixels']:
-                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                            px, py = int(pixel[0]), int(pixel[1])
-                            if 0 <= py < shape[0] and 0 <= px < shape[1]:
-                                temps.append(self.temperature_data[py][px])
-                # Otherwise sample temperatures within the circle
-                else:
-                    for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
-                        for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
-                            # Check if pixel is within circle
-                            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                                temps.append(self.temperature_data[y][x])
-
-                if temps:
-                    avg_temp = sum(temps) / len(temps)
-                    return f"Avg Temp: {avg_temp:.1f}° {self.temperature_unit}", None
-                else:
-                    return None, None
-
-            # For non-thermal images, calculate average color
-            else:
-                # Use the already-loaded image array instead of loading from disk
-                if hasattr(self, 'current_image_array') and self.current_image_array is not None:
-                    img_array = self.current_image_array
-                else:
-                    # Fallback only if we don't have the cached image
-                    image = self.images[self.current_image]
-                    image_path = image.get('path', '')
-                    image_service = ImageService(image_path)
-                    img_array = image_service.img_array
-
-                center = area_of_interest['center']
-                radius = area_of_interest.get('radius', 0)
-
-                # Collect RGB values within the AOI
-                colors = []
-                cx, cy = center
-                shape = img_array.shape
-
-                # If we have detected pixels, use those
-                if 'detected_pixels' in area_of_interest and area_of_interest['detected_pixels']:
-                    for pixel in area_of_interest['detected_pixels']:
-                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                            px, py = int(pixel[0]), int(pixel[1])
-                            if 0 <= py < shape[0] and 0 <= px < shape[1]:
-                                colors.append(img_array[py, px])
-                # Otherwise sample within the circle
-                else:
-                    for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
-                        for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
-                            # Check if pixel is within circle
-                            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                                colors.append(img_array[y, x])
-
-                if colors:
-                    # Calculate average RGB
-                    avg_rgb = np.mean(colors, axis=0).astype(int)
-
-                    # Convert to HSV for display (full saturation and value)
-                    # First normalize RGB to 0-1 range
-                    r, g, b = avg_rgb[0] / 255.0, avg_rgb[1] / 255.0, avg_rgb[2] / 255.0
-
-                    # Convert to HSV
-                    import colorsys
-                    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-
-                    # Create full saturation and full value version
-                    full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
-                    full_sat_rgb = tuple(int(c * 255) for c in full_sat_rgb)
-
-                    # Format as hex color
-                    hex_color = '#{:02x}{:02x}{:02x}'.format(*full_sat_rgb)
-
-                    # Return hue angle, hex color, and RGB tuple for the color square
-                    hue_degrees = int(h * 360)
-                    return f"Hue: {hue_degrees}° {hex_color}", full_sat_rgb
-
-        except Exception as e:
-            self.logger.error(f"Error calculating AOI average info: {e}")
-            return None, None
-
-        return None, None
-
-    def _load_areas_of_interest(self, augmented_image, areas_of_interest, image_index=None):
-        """Loads areas of interest thumbnails for a given image.
-
-        Args:
-            augmented_image: The image array to create thumbnails from
-            areas_of_interest: List of AOI dictionaries
-            image_index: Index of the current image (if None, uses self.current_image)
-        """
-        self.aoiListWidget.clear()
-        count = 0
-        self.highlights = []
-        self.aoi_containers = []  # Reset container list
-        self.selected_aoi_index = -1  # Reset selection
-
-        # Get flagged AOIs for this image
-        img_idx = image_index if image_index is not None else self.current_image
-        flagged_set = self.flagged_aois.get(img_idx, set())
-
-        # Keep track of actual visible container index
-        visible_container_index = 0
-
-        # Load AOI thumbnails normally for all datasets
-        for area_of_interest in areas_of_interest:
-            # Skip if we're filtering and this AOI is not flagged
-            if self.filter_flagged_only and count not in flagged_set:
-                count += 1
-                continue
-
-            # Create container widget for thumbnail and label
-            container = QWidget()
-            container.setProperty("aoi_index", count)  # Store AOI index
-            container.setProperty("visible_index", visible_container_index)  # Store visible index
-            layout = QVBoxLayout(container)
-            layout.setSpacing(2)
-            layout.setContentsMargins(0, 0, 0, 0)
-
-            # Set up click handling for selection (use visible index for selection)
-            def handle_click(event, idx=count, vis_idx=visible_container_index):
-                self._select_aoi(idx, vis_idx)
-                return QWidget.mousePressEvent(container, event)  # Call the original handler
-            container.mousePressEvent = handle_click
-
-            # Skip thumbnail creation if no image provided (deferred case)
-            if augmented_image is None:
-                continue
-
-            center = area_of_interest['center']
-            radius = area_of_interest['radius'] + 10
-            crop_arr = self.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
-
-            # Create the image viewer
-            highlight = QtImageViewer(self, container, center, True)
-            highlight.setObjectName(f"highlight{count}")
-            highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
-            highlight.aspectRatioMode = Qt.KeepAspectRatio
-            img = qimage2ndarray.array2qimage(crop_arr)
-            highlight.setImage(img)
-            highlight.canZoom = False
-            highlight.canPan = False
-
-            # Calculate average color/temperature for the AOI
-            avg_color_info, color_rgb = self._calculate_aoi_average_info(area_of_interest)
-
-            # Create coordinate label with pixel area
-            pixel_area = area_of_interest.get('area', 0)
-            coord_text = f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px"
-
-            # Create info widget container for both text and color square
-            info_widget = QWidget()
-            info_widget.setStyleSheet("""
-                QWidget {
-                    background-color: rgba(0, 0, 0, 150);
-                    border-radius: 2px;
-                }
-            """)
-            info_layout = QVBoxLayout(info_widget)
-            info_layout.setContentsMargins(4, 2, 4, 2)
-            info_layout.setSpacing(2)
-
-            # Create coordinate label
-            coord_label = QLabel(coord_text)
-            coord_label.setAlignment(Qt.AlignCenter)
-            coord_label.setStyleSheet("""
-                QLabel {
-                    color: white;
-                    font-size: 10px;
-                }
-            """)
-            info_layout.addWidget(coord_label)
-
-            # Add color/temperature information with color square if applicable
-            if avg_color_info:
-                # Create horizontal layout for color info
-                color_container = QWidget()
-                color_layout = QHBoxLayout(color_container)
-                color_layout.setContentsMargins(0, 0, 0, 0)
-                color_layout.setSpacing(4)
-
-                # Add color square if we have RGB values (not for temperature)
-                if color_rgb is not None:
-                    color_square = QLabel()
-                    color_square.setFixedSize(12, 12)
-                    color_square.setStyleSheet(f"""
-                        QLabel {{
-                            background-color: rgb({color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]});
-                            border: 1px solid white;
-                        }}
-                    """)
-                    color_layout.addWidget(color_square)
-
-                # Add text label
-                color_label = QLabel(avg_color_info)
-                color_label.setAlignment(Qt.AlignCenter)
-                color_label.setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 10px;
-                    }
-                """)
-                color_layout.addWidget(color_label)
-
-                # Add flag icon if this AOI is flagged
-                if count in flagged_set:
-                    flag_label = QLabel("🚩")
-                    flag_label.setStyleSheet("QLabel { color: red; font-size: 14px; font-weight: bold; }")
-                    flag_label.setToolTip("This AOI is flagged")
-                    color_layout.addWidget(flag_label)
-
-                # Center the layout
-                color_layout.addStretch()
-                color_layout.insertStretch(0)
-
-                info_layout.addWidget(color_container)
-
-            # Enable context menu for the info widget
-            info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-            # Use default parameters to properly capture the current values
-            info_widget.customContextMenuRequested.connect(
-                lambda pos, c=center, a=pixel_area, info=avg_color_info: self._show_aoi_context_menu(pos, info_widget, c, a, info)
-            )
-
-            # Add widgets to layout
-            layout.addWidget(highlight)
-            layout.addWidget(info_widget)
-
-            # Create list item
-            listItem = QListWidgetItem()
-            listItem.setSizeHint(QSize(190, 210))  # Increased height to accommodate label
-            self.aoiListWidget.addItem(listItem)
-            self.aoiListWidget.setItemWidget(listItem, container)
-            self.aoiListWidget.setSpacing(5)
-            self.highlights.append(highlight)
-            highlight.leftMouseButtonPressed.connect(self._area_of_interest_click)
-
-            # Store container reference
-            self.aoi_containers.append(container)
-
-            # Apply selection style if this is the selected AOI
-            if count == self.selected_aoi_index:
-                self._update_aoi_selection_style(container, True)
-
-            count += 1
-            visible_container_index += 1
-
-        self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
 
     def _previousImageButton_clicked(self):
         """Navigates to the previous image in the list, skipping hidden images if applicable."""
+        # Prevent race conditions by checking if viewer is still valid
+        if not hasattr(self, 'main_image') or self.main_image is None:
+            return
+            
         found = False
         for i in range(self.current_image - 1, -1, -1):
             if not self.show_hidden and self.images[i]['hidden']:
@@ -1028,12 +595,16 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         if found:
             self._load_image()
-            self._scroll_thumbnail_int_view()
+            self.thumbnail_controller.scroll_thumbnail_into_view()
         else:
             self._show_additional_images_message()
 
     def _nextImageButton_clicked(self):
         """Navigates to the next image in the list, skipping hidden images if applicable."""
+        # Prevent race conditions by checking if viewer is still valid
+        if not hasattr(self, 'main_image') or self.main_image is None:
+            return
+            
         found = False
         for i in range(self.current_image + 1, len(self.images)):
             if not self.show_hidden and self.images[i]['hidden']:
@@ -1052,17 +623,17 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         if found:
             self._load_image()
-            self._scroll_thumbnail_int_view()
+            self.thumbnail_controller.scroll_thumbnail_into_view()
         else:
             self._show_additional_images_message()
 
     def _show_no_images_message(self):
         """Displays an error message when there are no available images."""
-        self._show_error("No active images available.")
+        self.status_controller.show_no_images_message()
 
     def _show_additional_images_message(self):
         """Displays an error message when there are no available images."""
-        self._show_error("No other images available.")
+        self.status_controller.show_additional_images_message()
 
     def _hide_image_change(self, state):
         """Toggles visibility of the current image and updates XML.
@@ -1076,13 +647,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         if image_element is not None:
             image_element.set('hidden', "True" if state else "False")
             self.xml_service.save_xml_file(self.xml_path)
-            overlay = image['thumbnail'].property('overlay')
+            self.thumbnail_controller.update_thumbnail_overlay(self.current_image, state)
             if state:
-                overlay.setStyleSheet("background-color: rgba(128, 128, 128, 150);")
                 if not image['hidden']:
                     self.hidden_image_count += 1
             else:
-                overlay.setStyleSheet("background-color: none;")
                 if image['hidden']:
                     self.hidden_image_count -= 1
             image['hidden'] = state
@@ -1096,13 +665,29 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Toggles visibility of the overlay.
 
         Args:
-            state (bool): True if the image should be hidden, False otherwise.
+            state (bool): True if the overlay should be shown, False otherwise.
         """
-        if self._hud is not None:
-            if state:
-                self._hud.show()
-            else:
-                self._hud.hide()
+        if hasattr(self, 'overlay'):
+            # Get current direction and GSD to determine if overlay should be visible
+            direction = None
+            avg_gsd = None
+            
+            # Try to get current values from messages
+            gsd_text = self.messages.get("Estimated Average GSD")
+            if gsd_text:
+                try:
+                    avg_gsd = float(gsd_text.replace("cm/px", "").strip())
+                except Exception:
+                    pass
+            
+            direction_text = self.messages.get("Drone Orientation")
+            if direction_text:
+                try:
+                    direction = float(direction_text.replace("°", "").strip())
+                except Exception:
+                    pass
+            
+            self.overlay.update_visibility(state, direction, avg_gsd)
 
     def _highlight_pixels_change(self, state):
         """Toggles highlighting of pixels of interest.
@@ -1245,7 +830,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.jumpToLine.text() != "":
             self.current_image = int(self.jumpToLine.text()) - 1
             self._load_image()
-            self._scroll_thumbnail_int_view()
+            self.thumbnail_controller.scroll_thumbnail_into_view()
             self.jumpToLine.setText("")
 
     def resizeEvent(self, event):
@@ -1258,247 +843,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.main_image is not None:
             if event.oldSize() != event.size():
                 self.main_image.updateViewer()
-                self._place_overlay()
+                # Overlay positioning is handled automatically by the overlay widget
 
-    def _area_of_interest_click(self, x, y, img):
-        """Handles clicks on area of interest thumbnails.
-
-        Args:
-            x (int): X coordinate of the cursor.
-            y (int): Y coordinate of the cursor.
-            img (QtImageViewer): The clicked thumbnail image viewer.
-        """
-        self.main_image.zoomToArea(img.center, 6)
-
-    def _select_aoi(self, aoi_index, visible_index):
-        """Select an AOI and update the visual selection.
-
-        Args:
-            aoi_index (int): Index of the AOI in the full list
-            visible_index (int): Index of the AOI in the visible containers list
-        """
-
-        # Clear ALL container styles first using the proper update method
-        for i, container in enumerate(self.aoi_containers):
-            self._update_aoi_selection_style(container, False)
-
-        # Set new selection
-        self.selected_aoi_index = aoi_index
-
-        # Apply selection style to the clicked container using the proper method
-        if visible_index >= 0 and visible_index < len(self.aoi_containers):
-            container = self.aoi_containers[visible_index]
-            self._update_aoi_selection_style(container, True)
-            container.update()
-            container.repaint()
-
-        # Style updates are now applied directly without processEvents
-
-    def _update_aoi_selection_style(self, container, selected):
-        """Update the visual style of an AOI container based on selection state.
-
-        Args:
-            container (QWidget): The AOI container widget
-            selected (bool): Whether the container is selected
-        """
-        if selected:
-            # Get the current settings color for the selection (typically magenta/pink)
-            color = self.settings.get('identifier_color', [255, 255, 0])
-            # Just change the background color, no border
-            container.setStyleSheet(f"""
-                QWidget {{
-                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 40);
-                    border-radius: 5px;
-                }}
-            """)
-        else:
-            # Explicitly set background to transparent to clear previous selection
-            container.setStyleSheet("""
-                QWidget {
-                    background-color: transparent;
-                }
-            """)
-            container.repaint()
-
-    def _load_flagged_aois_from_xml(self):
-        """Load flagged AOI information from XML."""
-        self.flagged_aois = {}
-        if hasattr(self, 'images') and self.images:
-            for img_idx, image in enumerate(self.images):
-                if 'areas_of_interest' in image:
-                    for aoi_idx, aoi in enumerate(image['areas_of_interest']):
-                        # Check if this AOI is flagged in the XML data
-                        flagged = aoi.get('flagged', False)
-                        if flagged:
-                            if img_idx not in self.flagged_aois:
-                                self.flagged_aois[img_idx] = set()
-                            self.flagged_aois[img_idx].add(aoi_idx)
-
-    def _save_flagged_aoi_to_xml(self, image_index, aoi_index, is_flagged):
-        """Save the flagged status of an AOI to XML.
-
-        Args:
-            image_index (int): Index of the image
-            aoi_index (int): Index of the AOI within the image
-            is_flagged (bool): Whether the AOI is flagged
-        """
-        if hasattr(self, 'images') and 0 <= image_index < len(self.images):
-            image = self.images[image_index]
-            if 'areas_of_interest' in image and 0 <= aoi_index < len(image['areas_of_interest']):
-                aoi = image['areas_of_interest'][aoi_index]
-                aoi['flagged'] = is_flagged
-
-                # Update the XML element if it exists
-                if 'xml' in aoi and aoi['xml'] is not None:
-                    aoi['xml'].set('flagged', str(is_flagged))
-                    # Save the XML file using the xml_service method
-                    if hasattr(self, 'xml_service') and self.xml_service:
-                        try:
-                            # Use the xml_service save method
-                            self.xml_service.save_xml_file(self.xml_path)
-                        except Exception as e:
-                            pass
-                    else:
-                        pass
-                else:
-                    pass
-
-    def _toggle_aoi_flag(self):
-        """Toggle the flag status of the currently selected AOI."""
-        if self.selected_aoi_index < 0:
-            return
-
-        # Get or create flagged set for current image
-        if self.current_image not in self.flagged_aois:
-            self.flagged_aois[self.current_image] = set()
-
-        flagged_set = self.flagged_aois[self.current_image]
-
-        # Toggle flag status
-        is_now_flagged = self.selected_aoi_index not in flagged_set
-        if is_now_flagged:
-            flagged_set.add(self.selected_aoi_index)
-        else:
-            flagged_set.remove(self.selected_aoi_index)
-
-        # Save to XML
-        self._save_flagged_aoi_to_xml(self.current_image, self.selected_aoi_index, is_now_flagged)
-
-        # Save scroll position
-        scroll_pos = self.aoiListWidget.verticalScrollBar().value()
-
-        # Remember selected AOI index
-        selected_idx = self.selected_aoi_index
-
-        # Refresh the AOI display to show/hide flag icon
-        image = self.images[self.current_image]
-        if hasattr(self, 'current_image_array') and self.current_image_array is not None:
-            self._load_areas_of_interest(self.current_image_array, image['areas_of_interest'], self.current_image)
-
-        # Restore selection and scroll position
-        self.selected_aoi_index = selected_idx
-        # Find the container with the matching AOI index
-        for container in self.aoi_containers:
-            if container.property("aoi_index") == selected_idx:
-                self._update_aoi_selection_style(container, True)
-                break
-        self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
-
-    def _add_flag_button_to_layout(self):
-        """Add the flag filter button to the layout after UI initialization."""
-        try:
-            # Get the parent widget of nextImageButton
-            parent = self.nextImageButton.parent()
-            if parent:
-                layout = parent.layout()
-                if layout:
-                    # Find the position of nextImageButton
-                    next_button_index = -1
-                    for i in range(layout.count()):
-                        item = layout.itemAt(i)
-                        widget = item.widget() if item else None
-                        if widget == self.nextImageButton:
-                            next_button_index = i
-                            break
-
-                    # Insert flag button right after next button
-                    if next_button_index >= 0:
-                        layout.insertWidget(next_button_index + 1, self.flagFilterButton)
-                        self.flagFilterButton.show()
-                    else:
-                        pass
-                else:
-                    pass
-            else:
-                pass
-        except Exception as e:
-            self.logger.error(f"Error adding flag button: {e}")
-
-    def _toggle_flag_filter(self):
-        """Toggle the flag filter on/off and refresh the AOI display."""
-        self.filter_flagged_only = self.flagFilterButton.isChecked()
-
-        # Update button appearance based on state
-        if self.filter_flagged_only:
-            self.flagFilterButton.setStyleSheet("""
-                QPushButton {
-                    background-color: rgba(255, 0, 0, 100);
-                    border: 2px solid red;
-                    border-radius: 3px;
-                    font-size: 16px;
-                    color: red;
-                }
-                QPushButton:hover {
-                    background-color: rgba(255, 0, 0, 150);
-                }
-            """)
-        else:
-            self.flagFilterButton.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: 1px solid #555;
-                    border-radius: 3px;
-                    font-size: 16px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(255, 255, 255, 20);
-                }
-            """)
-
-        # Refresh AOI display with filter applied
-        image = self.images[self.current_image]
-        if hasattr(self, 'current_image_array') and self.current_image_array is not None:
-            self._load_areas_of_interest(self.current_image_array, image['areas_of_interest'], self.current_image)
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save KML File", "", "KML files (*.kml)")
-        if file_name:  # Only proceed if a filename was selected
-            # Filter images and their AOIs based on flags
-            filtered_images = []
-            for idx, img in enumerate(self.images):
-                if not img.get("hidden", False):
-                    # Create a copy of the image data
-                    img_copy = img.copy()
-
-                    # Filter AOIs to only include flagged ones
-                    if idx in self.flagged_aois and self.flagged_aois[idx]:
-                        flagged_indices = self.flagged_aois[idx]
-                        filtered_aois = [
-                            aoi for i, aoi in enumerate(img['areas_of_interest'])
-                            if i in flagged_indices
-                        ]
-                        img_copy['areas_of_interest'] = filtered_aois
-
-                        # Only include image if it has flagged AOIs
-                        if filtered_aois:
-                            filtered_images.append(img_copy)
-
-            if filtered_images:
-                kml_service = KMLGeneratorService()
-                kml_service.generate_kml_export(filtered_images, file_name)
-            else:
-                self._show_toast("No flagged AOIs to export", 3000, color="#F44336")
+        if hasattr(self, 'kml_export'):
+            self.kml_export.export_kml(self.images, self.aoi_controller.flagged_aois)
 
     def crop_image(self, img_arr, startx, starty, endx, endy):
         """Crops a portion of an image array.
@@ -1517,390 +868,21 @@ class Viewer(QMainWindow, Ui_Viewer):
         ex, ey = min(img_arr.shape[1] - 1, endx), min(img_arr.shape[0] - 1, endy)
         return img_arr[sy:ey, sx:ex]
 
-    def _show_error(self, text):
-        """Displays an error message box.
-
-        Args:
-            text (str): Error message to display.
-        """
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Critical)
-        msg.setText(text)
-        msg.setWindowTitle("Error Loading Images")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec()
 
     def _pdfButton_clicked(self):
         """Handles clicks on the Generate PDF button."""
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save PDF File", "", "PDF files (*.pdf)")
-        if file_name:
-            try:
-                # Filter images to only include those with flagged AOIs
-                original_images = self.images
-                filtered_images = []
+        if hasattr(self, 'pdf_export'):
+            self.pdf_export.export_pdf(self.images, self.aoi_controller.flagged_aois)
 
-                for idx, img in enumerate(self.images):
-                    if not img.get("hidden", False):
-                        # Check if this image has flagged AOIs
-                        if idx in self.flagged_aois and self.flagged_aois[idx]:
-                            # Create a copy of the image data with only flagged AOIs
-                            img_copy = img.copy()
-                            flagged_indices = self.flagged_aois[idx]
-                            filtered_aois = [
-                                aoi for i, aoi in enumerate(img['areas_of_interest'])
-                                if i in flagged_indices
-                            ]
-                            img_copy['areas_of_interest'] = filtered_aois
-
-                            # Only include image if it has flagged AOIs
-                            if filtered_aois:
-                                filtered_images.append(img_copy)
-
-                if not filtered_images:
-                    self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
-                    return
-
-                # Temporarily replace images with filtered version for PDF generation
-                self.images = filtered_images
-
-                pdf_generator = PdfGeneratorService(self)
-
-                # Create and show the loading dialog
-                self.loading_dialog = LoadingDialog(self)
-                self.pdf_thread = PdfGenerationThread(pdf_generator, file_name)
-
-                # Connect signals
-                self.pdf_thread.finished.connect(lambda: self._on_pdf_generation_finished(original_images))
-                self.pdf_thread.canceled.connect(lambda: self._on_pdf_generation_cancelled(original_images))
-                self.pdf_thread.errorOccurred.connect(lambda e: self._on_pdf_generation_error(e, original_images))
-
-                self.pdf_thread.start()
-
-                # Show the loading dialog and handle cancellation
-                if self.loading_dialog.exec() == QDialog.Rejected:
-                    self.pdf_thread.cancel()
-
-            except Exception as e:
-                # Restore original images in case of error
-                if 'original_images' in locals():
-                    self.images = original_images
-                self.logger.error(f"Error generating PDF file: {str(e)}")
-                self._show_error(f"Failed to generate PDF file: {str(e)}")
-
-    def _on_pdf_generation_finished(self, original_images=None):
-        """Handles successful completion of PDF generation."""
-        if original_images is not None:
-            self.images = original_images
-        self.loading_dialog.accept()
-        QMessageBox.information(self, "Success", "PDF report generated successfully!")
-
-    def _on_pdf_generation_cancelled(self, original_images=None):
-        """Handles cancellation of PDF generation."""
-        if original_images is not None:
-            self.images = original_images
-        if self.pdf_thread and self.pdf_thread.isRunning():
-            self.pdf_thread.terminate()  # Forcefully terminate the thread
-            self.pdf_thread.wait()      # Wait for the thread to terminate completely
-        # Close the loading dialog
-        if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
-            self.loading_dialog.reject()  # Close the dialog
-
-    def _on_pdf_generation_error(self, error_message, original_images=None):
-        """Handles errors during PDF generation."""
-        if original_images is not None:
-            self.images = original_images
-        if hasattr(self, 'loading_dialog') and self.loading_dialog.isVisible():
-            self.loading_dialog.reject()  # Close the loading dialog
-        self._show_error(f"PDF generation failed: {error_message}")
 
     def _zipButton_clicked(self):
         """Handles clicks on the Generate Zip Bundle."""
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Zip File", "", "Zip files (*.zip)")
-        if file_name:
-            try:
-                file_paths = [img['path'] for img in self.images if not img.get('hidden', False)]
-                zip_generator = ZipBundleService()
-                zip_generator.generate_zip_file(file_paths, file_name)
-            except Exception as e:
-                self.logger.error(f"Error generating Zip file: {str(e)}")
-                self._show_error(f"Failed to generate Zip file: {str(e)}")
+        if hasattr(self, 'zip_export'):
+            self.zip_export.export_zip(self.images)
 
-    def _message_listener(self, key, value):
-        """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
-        status_items = []
-
-        # GPS Coordinates first (with hyperlink)
-        gps_value = self.messages.get("GPS Coordinates")
-        if gps_value:
-            # Use the GPS coordinates as the href value so "Copy Link Location" copies the coordinates
-            status_items.append(f'<a href="{gps_value}">GPS Coordinates: {gps_value}</a>')
-
-        # Add all other messages
-        for k, v in self.messages.items():
-            if v is not None and k != "GPS Coordinates":
-                status_items.append(f"{k}: {v}")
-
-        # Update status bar
-        if status_items:
-            self.statusBar.setText(" | ".join(status_items))
-        else:
-            self.statusBar.setText("")
 
     # ---------- coordinates popup ----------
-    def _on_coordinates_clicked(self, link):
-        """Handle clicks on GPS coordinates in the status bar."""
-        # Get coordinates from messages
-        coord_text = self.messages.get('GPS Coordinates')
-        if not coord_text:
-            return
 
-        # Show coordinates popup
-        self._show_coordinates_popup(coord_text)
-
-    def _show_coordinates_popup(self, coord_text):
-        """Show a small popup with coordinate sharing options."""
-        # Create popup widget
-        popup = QWidget(self, Qt.Popup)
-        popup.setStyleSheet("""
-            QWidget {
-                background-color: #2b2b2b;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                color: white;
-            }
-            QPushButton {
-                background-color: #404040;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                color: white;
-                padding: 8px 12px;
-                min-width: 120px;
-                text-align: left;
-            }
-            QPushButton:hover {
-                background-color: #505050;
-                border-color: #666666;
-            }
-            QPushButton:pressed {
-                background-color: #606060;
-            }
-            QLabel {
-                padding: 8px 12px;
-                border-bottom: 1px solid #555555;
-                font-weight: bold;
-            }
-        """)
-
-        # Create layout
-        layout = QVBoxLayout(popup)
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        # Title
-        title = QLabel(f"GPS Coordinates: {coord_text}")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        # Buttons
-        copy_btn = QPushButton("📋 Copy coordinates")
-        copy_btn.clicked.connect(lambda: self._copy_coords_to_clipboard(coord_text))
-        layout.addWidget(copy_btn)
-
-        maps_btn = QPushButton("🗺️ Open in Google Maps")
-        maps_btn.clicked.connect(self._open_in_maps)
-        layout.addWidget(maps_btn)
-
-        earth_btn = QPushButton("🌍 View in Google Earth")
-        earth_btn.clicked.connect(self._open_in_earth)
-        layout.addWidget(earth_btn)
-
-        whatsapp_btn = QPushButton("📱 Send via WhatsApp")
-        whatsapp_btn.clicked.connect(self._share_whatsapp)
-        layout.addWidget(whatsapp_btn)
-
-        telegram_btn = QPushButton("📨 Send via Telegram")
-        telegram_btn.clicked.connect(self._share_telegram)
-        layout.addWidget(telegram_btn)
-
-        # Position popup near the status bar
-        popup.adjustSize()
-        statusbar_pos = self.statusBarWidget.mapToGlobal(self.statusBarWidget.rect().bottomLeft())
-        popup_pos = self.mapFromGlobal(statusbar_pos)
-
-        # Ensure popup doesn't go off-screen
-        screen_geometry = self.screen().geometry()
-        popup_x = max(screen_geometry.x(), min(popup_pos.x(), screen_geometry.right() - popup.width()))
-        popup_y = max(screen_geometry.y(), min(popup_pos.y() - popup.height(), screen_geometry.bottom() - popup.height()))
-
-        popup.move(popup_x, popup_y)
-
-        # Show popup
-        popup.show()
-
-        # Auto-close when clicking outside
-        popup.setFocus()
-
-        # Use a simple timer to auto-close the popup after 5 seconds
-        close_timer = QTimer(popup)
-        close_timer.setSingleShot(True)
-        close_timer.timeout.connect(popup.close)
-        close_timer.start(5000)  # 5 seconds
-
-        # Install a simple event filter to close popup when clicking outside
-        popup.installEventFilter(self._create_simple_popup_filter(popup))
-
-    def _create_simple_popup_filter(self, popup):
-        """Create a simple event filter to close the popup when clicking outside."""
-        from PySide6.QtCore import QObject
-
-        class SimplePopupFilter(QObject):
-            def __init__(self, popup_widget):
-                super().__init__()
-                self.popup = popup_widget
-
-            def eventFilter(self, obj, event):
-                if event.type() == QEvent.MouseButtonPress:
-                    if not self.popup.geometry().contains(event.globalPos()):
-                        self.popup.close()
-                        return True
-                return False
-
-        return SimplePopupFilter(popup)
-
-    def _copy_coords_to_clipboard(self, coord_text=None):
-        from PySide6.QtWidgets import QApplication
-        if coord_text is None:
-            if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
-                coord_text = self.messages.data.get('GPS Coordinates')
-        if not coord_text:
-            return
-        QApplication.clipboard().setText(str(coord_text))
-        self._show_toast("Coordinates copied", 3000, color="#00C853")
-
-    def _open_in_maps(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
-            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
-            return
-        lat, lon = lat_lon
-        url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
-        QDesktopServices.openUrl(url)
-
-    def _open_in_earth(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
-            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
-            return
-
-        lat, lon = lat_lon
-        image_path = self.images[self.current_image]['path']
-        image_service = ImageService(image_path)
-        yaw, pitch = image_service.get_gimbal_orientation()
-        altitude = image_service.get_asl_altitude('m')
-        hfov = image_service.get_camera_hfov()
-
-        if yaw is None:
-            yaw = 0.0
-        if pitch is None:
-            pitch = -90.0
-        if altitude is None:
-            altitude = 100.0
-        if hfov is None:
-            hfov = 60.0
-
-        # theta = 90 + pitch
-        # slant = altitude / math.cos(math.radians(theta))
-        # ground_width = 2 * slant * math.tan(math.radians(hfov / 2))
-        # ge_fov = 60.0
-        # range_val = ground_width / (2 * math.tan(math.radians(ge_fov / 2)))
-        range_val = 50
-        tilt = max(0, min(180, 90 + pitch))
-        # cam_alt = range_val * math.cos(math.radians(tilt))
-
-        kml = (
-            "<?xml version='1.0' encoding='UTF-8'?>\n"
-            "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
-            "  <Document>\n"
-            "    <name>ADIAT View</name>\n"
-            "    <open>1</open>\n"
-            "    <LookAt>\n"
-            f"      <longitude>{lon}</longitude>\n"
-            f"      <latitude>{lat}</latitude>\n"
-            f"      <altitude>{altitude}</altitude>\n"
-            f"      <heading>{yaw}</heading>\n"
-            f"      <tilt>{tilt}</tilt>\n"
-            "      <altitudeMode>absolute</altitudeMode>\n"
-            f"      <range>{range_val}</range>\n"
-            "    </LookAt>\n"
-            "    <Placemark>\n"
-            "      <name>Photo Location</name>\n"
-            f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
-            "    </Placemark>\n"
-            "  </Document>\n"
-            "</kml>\n"
-        )
-
-        fd, kml_path = tempfile.mkstemp(suffix='.kml')
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            f.write(kml)
-
-        QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
-
-    def _share_whatsapp(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
-            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
-            return
-        lat, lon = lat_lon
-        maps = f"https://www.google.com/maps?q={lat},{lon}"
-        text = f"Coordinate: {lat}, {lon} — {maps}"
-        wa_url = f"https://wa.me/?text={quote_plus(text)}"
-        QDesktopServices.openUrl(QUrl(wa_url))
-
-    def _share_telegram(self):
-        lat_lon = self._get_decimals_or_parse()
-        if not lat_lon:
-            self._show_toast("Coordinates unavailable", 3000, color="#F44336")
-            return
-        lat, lon = lat_lon
-        maps = f"https://www.google.com/maps?q={lat},{lon}"
-        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}')}"
-        QDesktopServices.openUrl(QUrl(tg_url))
-
-    def _get_decimals_or_parse(self):
-        # Prefer decimal coords captured from EXIF
-        if getattr(self, 'current_decimal_coords', None):
-            return self.current_decimal_coords
-        coord_text = None
-        if hasattr(self, 'messages') and hasattr(self.messages, 'data'):
-            coord_text = self.messages.data.get('GPS Coordinates')
-        if coord_text and "," in str(coord_text):
-            try:
-                lat_s, lon_s = str(coord_text).split(",", 1)
-                return float(lat_s.strip()), float(lon_s.strip())
-            except Exception:
-                return None
-        return None
-
-    def _show_toast(self, text: str, msec: int = 3000, color: str = "#00C853"):
-        try:
-            self._toastLabel.setText(text)
-            self._toastLabel.setStyleSheet(
-                f"QLabel{{background-color:{color}; color:white; border-radius:6px; padding:6px 10px; font-weight:bold;}}"
-            )
-            self._toastLabel.adjustSize()
-            sb_w = self.statusBarWidget.width()
-            sb_h = self.statusBarWidget.height()
-            tw = self._toastLabel.width()
-            th = self._toastLabel.height()
-            x = max(4, (sb_w - tw) // 2)
-            y = max(2, (sb_h - th) // 2)
-            self._toastLabel.move(x, y)
-            self._toastLabel.raise_()
-            self._toastLabel.setVisible(True)
-            self._toastTimer.start(max(1, msec))
-        except Exception:
-            pass
 
     def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
         """Show context menu for AOI coordinate label with copy option.
@@ -1936,7 +918,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         copy_action.triggered.connect(lambda: self._copy_aoi_data(center, pixel_area, avg_info))
 
         # Get the current cursor position (global coordinates)
-        from PySide6.QtGui import QCursor
         global_pos = QCursor.pos()
 
         # Show menu at cursor position
@@ -1950,8 +931,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
         """
-        from PySide6.QtWidgets import QApplication
-
         # Get current image information
         image = self.images[self.current_image]
         image_name = image.get('name', 'Unknown')
@@ -1976,7 +955,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         QApplication.clipboard().setText(clipboard_text)
 
         # Show confirmation toast
-        self._show_toast("AOI data copied", 2000, color="#00C853")
+        self.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
+
+
+    def _toggle_magnifying_glass(self, x, y):
+        """Toggle the magnifying glass on/off when middle mouse button is pressed.
+
+        Args:
+            x (float): X coordinate where middle mouse was pressed
+            y (float): Y coordinate where middle mouse was pressed
+        """
+        if hasattr(self, 'magnifying_glass'):
+            self.magnifying_glass.toggle(x, y)
+
+    def _update_scale_bar(self, zoom: float):
+        """Update the scale bar through the overlay widget.
+        
+        Args:
+            zoom: Current zoom level
+        """
+        if hasattr(self, 'overlay'):
+            self.overlay.update_scale_bar(zoom, self.messages, self.distance_unit)
 
     def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or color values at the mouse position.
@@ -2037,7 +1036,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                                 # Fallback: load image if both cache and service are missing
                                 image = self.images[self.current_image]
                                 image_path = image.get('path', '')
-                                from core.services.ImageService import ImageService
                                 image_service = ImageService(image_path)
                                 img_array = image_service.img_array
                                 # Store reference instead of copying
@@ -2076,434 +1074,13 @@ class Viewer(QMainWindow, Ui_Viewer):
                             self.logger.error(f"Error getting pixel values: {e}")
 
         # Update magnifying glass if enabled
-        if self.magnifying_glass_enabled and pos.x() >= 0 and pos.y() >= 0:
-            self._update_magnifying_glass(pos)
-
-    def _toggle_magnifying_glass(self, x, y):
-        """Toggle the magnifying glass on/off when middle mouse button is pressed.
-
-        Args:
-            x (float): X coordinate where middle mouse was pressed
-            y (float): Y coordinate where middle mouse was pressed
-        """
-        self.magnifying_glass_enabled = not self.magnifying_glass_enabled
-
-        if self.magnifying_glass_enabled:
-            # Create magnifying glass widget if it doesn't exist
-            if self.magnifying_glass_widget is None:
-                self._create_magnifying_glass()
-
-            # Show the magnifying glass
-            if self.magnifying_glass_widget:
-                self.magnifying_glass_widget.show()
-                # Update it with current position
-                current_pos = self.main_image.mapFromGlobal(self.cursor().pos())
-                scene_pos = self.main_image.mapToScene(current_pos)
-                if self.main_image.hasImage():
-                    image_pos = QPoint(int(scene_pos.x()), int(scene_pos.y()))
-                    self._update_magnifying_glass(image_pos)
-        else:
-            # Hide magnifying glass
-            if self.magnifying_glass_widget:
-                self.magnifying_glass_widget.hide()
-
-    def _create_magnifying_glass(self):
-        """Create the magnifying glass widget."""
-        try:
-            # Create a QLabel to display the magnified image (400x400 - twice the original size)
-            self.magnifying_glass_widget = QLabel(self.main_image)
-            self.magnifying_glass_widget.setFixedSize(400, 400)
-
-            # Style the magnifying glass with a border
-            self.magnifying_glass_widget.setStyleSheet("""
-                QLabel {
-                    border: 2px solid #4A90E2;
-                    border-radius: 200px;
-                    background-color: black;
-                }
-            """)
-
-            # Initially hide it
-            self.magnifying_glass_widget.hide()
-
-        except Exception as e:
-            self.logger.error(f"Error creating magnifying glass: {e}")
-            self.magnifying_glass_widget = None
-
-    def _update_magnifying_glass(self, image_pos):
-        """Update the magnifying glass with the zoomed area under the cursor.
-
-        Args:
-            image_pos (QPoint): The position in image coordinates
-        """
-        if not self.magnifying_glass_widget or not self.magnifying_glass_enabled:
-            return
-
-        try:
-            # Get the current image array
-            if self.current_image_array is None:
-                return
-
-            img_array = self.current_image_array
-            h, w = img_array.shape[:2]
-
-            # Get current zoom level of the main viewer
-            current_zoom = self.main_image.getZoom() if hasattr(self.main_image, 'getZoom') else 1.0
-
-            # Calculate the magnification factor (5x the current zoom)
-            # But we need to consider the display size vs source size
-            # Since we're showing 400x400 pixels, we need to calculate the source size
-            # that when scaled will give us 5x the current zoom
-            magnification_factor = 5.0
-
-            # The source size should be such that when displayed at 400x400,
-            # it represents 5x magnification relative to current zoom
-            # So if current zoom is 2x, we want 10x total magnification
-            # 400 pixels display / (5 * current_zoom) = source size
-            source_size = int(400 / (magnification_factor * max(current_zoom, 0.1)))
-            source_size = max(10, min(source_size, min(h, w)))  # Clamp to reasonable values
-
-            half_size = source_size // 2
-
-            # Ensure image_pos is within bounds
-            # Clamp the position to valid image coordinates
-            x_pos = max(0, min(image_pos.x(), w - 1))
-            y_pos = max(0, min(image_pos.y(), h - 1))
-
-            # Calculate bounds for the source rectangle
-            x_start = x_pos - half_size
-            y_start = y_pos - half_size
-            x_end = x_pos + half_size
-            y_end = y_pos + half_size
-
-            # Handle edge cases - create a padded region if necessary
-            pad_left = max(0, -x_start)
-            pad_top = max(0, -y_start)
-            pad_right = max(0, x_end - w)
-            pad_bottom = max(0, y_end - h)
-
-            # Adjust coordinates to valid range
-            x_start = max(0, x_start)
-            y_start = max(0, y_start)
-            x_end = min(w, x_end)
-            y_end = min(h, y_end)
-
-            # Extract the region
-            region = img_array[y_start:y_end, x_start:x_end].copy()
-
-            # Pad the region if we're at the edges
-            if pad_left > 0 or pad_top > 0 or pad_right > 0 or pad_bottom > 0:
-                padded = np.zeros((source_size, source_size, 3), dtype=np.uint8)
-                padded[pad_top:pad_top + region.shape[0],
-                       pad_left:pad_left + region.shape[1]] = region
-                region = padded
-
-            # Scale up the region to 400x400 using cv2 for better quality
-            import cv2
-            magnified = cv2.resize(region, (400, 400), interpolation=cv2.INTER_LINEAR)
-
-            # Convert to QImage and then QPixmap
-            qimg = QImage(qimage2ndarray.array2qimage(magnified))
-            pixmap = QPixmap.fromImage(qimg)
-
-            # Draw crosshair on the magnified image
-            painter = QPainter(pixmap)
-            painter.setPen(QPen(QColor(255, 255, 0, 180), 2))
-            painter.drawLine(200, 0, 200, 400)  # Vertical line
-            painter.drawLine(0, 200, 400, 200)  # Horizontal line
-            painter.end()
-
-            # Apply circular mask to make it look like a magnifying glass
-            masked_pixmap = QPixmap(400, 400)
-            masked_pixmap.fill(Qt.transparent)
-
-            painter = QPainter(masked_pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)
-
-            # Create circular clipping path
-            painter.setBrush(QBrush(pixmap))
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(0, 0, 400, 400)
-
-            # Draw border
-            painter.setPen(QPen(QColor(74, 144, 226), 3))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(2, 2, 396, 396)
-            painter.end()
-
-            # Set the pixmap to the label
-            self.magnifying_glass_widget.setPixmap(masked_pixmap)
-
-            # Position the magnifying glass near the cursor
-            # Get the cursor position in the main_image widget coordinates
-            cursor_pos = self.main_image.mapFromGlobal(self.cursor().pos())
-
-            # Offset the magnifying glass so it doesn't cover the cursor
-            offset_x = 30
-            offset_y = 30
-
-            # Calculate position, keeping it within bounds
-            new_x = cursor_pos.x() + offset_x
-            new_y = cursor_pos.y() + offset_y
-
-            # Adjust if it goes off the edge of the viewer
-            if new_x + 400 > self.main_image.width():
-                new_x = cursor_pos.x() - 430  # Show on left side
-            if new_y + 400 > self.main_image.height():
-                new_y = cursor_pos.y() - 430  # Show above
-
-            self.magnifying_glass_widget.move(new_x, new_y)
-
-        except Exception as e:
-            self.logger.error(f"Error updating magnifying glass: {e}")
-
-    def _show_north_oriented_image(self):
-        """Show a popup window with the current image rotated to true north based on bearing info."""
-        try:
-            # Get the current image's bearing/yaw information
-            if not hasattr(self, 'current_image') or self.current_image < 0:
-                return
-
-            image = self.images[self.current_image]
-            image_path = image.get('path', '')
-
-            # Get the drone orientation (yaw/bearing)
-            image_service = ImageService(image_path)
-            direction = image_service.get_drone_orientation()
-
-            if direction is None:
-                # Show message that no bearing info is available
-                self._show_toast("No bearing info available", 3000, color="#F44336")
-                return
-
-            # Get the current image array
-            if not hasattr(self, 'current_image_array') or self.current_image_array is None:
-                return
-
-            img_array = self.current_image_array.copy()
-
-            # Calculate rotation angle to orient to north
-            # If drone is facing east (90°), we need to rotate -90° to face north
-            rotation_angle = -direction
-
-            # Rotate the image
-            import cv2
-            h, w = img_array.shape[:2]
-            center = (w // 2, h // 2)
-
-            # Get rotation matrix
-            M = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
-
-            # Calculate new image bounds after rotation
-            cos = abs(M[0, 0])
-            sin = abs(M[0, 1])
-            new_w = int((h * sin) + (w * cos))
-            new_h = int((h * cos) + (w * sin))
-
-            # Adjust rotation matrix to prevent cropping
-            M[0, 2] += (new_w / 2) - center[0]
-            M[1, 2] += (new_h / 2) - center[1]
-
-            # Perform rotation
-            rotated_img = cv2.warpAffine(img_array, M, (new_w, new_h),
-                                        borderMode=cv2.BORDER_CONSTANT,
-                                        borderValue=(128, 128, 128))
-
-            # Create popup window
-            popup = QDialog(self)
-            popup.setWindowTitle(f"North-Oriented View (Rotated {rotation_angle:.1f}°)")
-            popup.setModal(False)  # Non-modal so user can still interact with main window
-
-            # Create layout
-            layout = QVBoxLayout(popup)
-
-            # Create image viewer widget
-            image_viewer = QtImageViewer(self)
-            image_viewer.setMinimumSize(800, 600)
-
-            # Convert rotated image to QImage and display
-            qimg = qimage2ndarray.array2qimage(rotated_img)
-            image_viewer.setImage(qimg)
-
-            # Add label showing rotation info
-            info_label = QLabel(f"Original bearing: {direction:.1f}° | Rotation applied: {rotation_angle:.1f}°")
-            info_label.setAlignment(Qt.AlignCenter)
-            info_label.setStyleSheet("QLabel { background-color: rgba(0,0,0,150); color: white; padding: 5px; }")
-
-            # Add north arrow indicator
-            north_label = QLabel("↑ NORTH")
-            north_label.setAlignment(Qt.AlignCenter)
-            north_label.setStyleSheet("QLabel { color: red; font-size: 16px; font-weight: bold; }")
-
-            layout.addWidget(north_label)
-            layout.addWidget(image_viewer)
-            layout.addWidget(info_label)
-
-            # Add close button
-            close_btn = QPushButton("Close")
-            close_btn.clicked.connect(popup.close)
-            layout.addWidget(close_btn)
-
-            # Show the popup
-            popup.resize(1000, 800)
-            popup.show()
-
-        except Exception as e:
-            self.logger.error(f"Error showing north-oriented image: {e}")
-            self._show_toast(f"Error: {str(e)}", 3000, color="#F44336")
-
-    def _rotate_north_icon(self, direction):
-        """
-        Draws a north-facing arrow icon based on the given drone orientation.
-
-        Args:
-            direction (float | None): Yaw angle in degrees. If None, hides the arrow.
-        """
-        if direction is None:
-            # Hide the icon by setting a fully transparent 1x1 pixmap
-            transparent = QPixmap(1, 1)
-            transparent.fill(Qt.transparent)
-            self.northIcon.setPixmap(transparent)
-            return
-
-        angle = 360 - direction
-        pm = self.original_north_pix
-        w, h = pm.width(), pm.height()
-
-        # Find the true tip: first non-transparent pixel from the top, center column
-        img = pm.toImage().convertToFormat(QImage.Format_ARGB32)
-        cx = w // 2
-        for y in range(h):
-            if QColor(img.pixel(cx, y)).alpha() > 0:
-                tip_y = y
-                break
-        else:
-            tip_y = 0  # fallback if arrow is fully transparent
-
-        tip_offset_px = h / 2 - tip_y  # distance from center to true tip
-
-        # final canvas size
-        final_size = 50
-        margin = 12
-        spacing = 8  # spacing between arrow tip and label in final rendered px
-
-        # scale so the arrow fits inside the canvas minus margin
-        diag = math.hypot(w, h)
-        scale = (final_size - 2 * margin) / diag
-
-        canvas = QPixmap(final_size, final_size)
-        canvas.fill(Qt.transparent)
-
-        p = QPainter(canvas)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-
-        # --- draw arrow ---
-        p.save()
-        p.translate(final_size / 2, final_size / 2)
-        p.rotate(angle)
-        p.scale(scale, scale)
-        p.drawPixmap(round(-w / 2), round(-h / 2), pm)
-        p.restore()
-
-        # --- draw 'N' label a fixed number of px past the visual tip ---
-        font = QFont()
-        font.setPointSize(11)
-        font.setBold(True)
-        p.setFont(font)
-        fm = p.fontMetrics()
-        text = "N"
-        tw = fm.horizontalAdvance(text)
-
-        # scaled distance from center to arrow tip, plus spacing beyond tip
-        tip_offset = tip_offset_px * scale + spacing
-
-        p.save()
-        p.translate(final_size / 2, final_size / 2)
-        p.rotate(angle)
-        p.translate(0, -tip_offset)  # move up to just past tip
-        p.rotate(-angle)             # make text upright again
-
-        default_text_color = self.palette().color(QPalette.Text)
-        p.setPen(QPen(default_text_color))
-
-        text_y = (fm.ascent() - fm.height() / 2)
-        p.drawText(QPointF(-tw / 2, text_y), text)
-        p.restore()
-
-        p.end()
-        self.northIcon.setPixmap(canvas)
-
-    def _update_scale_bar(self, zoom: float):
-        """
-        Called from QtImageViewer.zoomChanged.
-        Computes the real‑world length represented by `scaleBar._bar_px`
-        at the current zoom and writes it into the label.
-        """
-        try:
-            if not self.main_image or not self.main_image.hasImage():
-                self.scaleBar.setVisible(False)
-                return
-
-            gsd_text = self.messages.get("Estimated Average GSD")  # e.g. '3.2cm/px'
-            if not gsd_text:
-                self.scaleBar.setVisible(False)
-                return
-
-            # -------- compute label --------
-            gsd_cm = float(gsd_text.replace("cm/px", "").strip())   # cm / px
-            zoomed_gsd = gsd_cm / zoom                                  # cm / px at current zoom
-            bar_px = self.scaleBar._bar_px                          # fixed 120 px
-            real_cm = bar_px * zoomed_gsd                            # cm represented by bar
-
-            if self.distance_unit == 'ft':
-                real_in = real_cm / 2.54
-                if real_in >= 12:
-                    label = f"{real_in / 12:.2f} ft"
-                else:
-                    label = f"{real_in:.1f} in"
-            else:
-                if real_cm >= 100:
-                    label = f"{real_cm / 100:.1f} m"
-                else:
-                    label = f"{real_cm:.0f} cm"
-
-            # -------- show --------
-            self.scaleBar.setLabel(label)
-            self.scaleBar.setVisible(True)
-
-        except Exception as e:
-            self.logger.error(f"scale‑bar update failed: {e}")
-
-    def _build_overlay(self):
-        """Create semi‑transparent HUD once per main_image."""
-        if hasattr(self, "_hud"):
-            return
-        self._hud = QWidget(self.main_image.viewport())
-        self._hud.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._hud.setObjectName("hud")
-        self._hud.setStyleSheet("#hud{background:rgba(0,0,0,150); border-radius:6px;}")
-        lay = QHBoxLayout(self._hud)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lay.setSpacing(10)
-        self._compassLbl = QLabel(self._hud)
-        self._compassLbl.setFixedSize(50, 50)
-        lay.addWidget(self._compassLbl)
-        self.scaleBar.setParent(self._hud)
-        lay.addWidget(self.scaleBar)
-        self.northIcon = self._compassLbl  # redirect for _rotate_north_icon
-        # keep overlay positioned when user pans / zooms
-        self.main_image.viewChanged.connect(self._place_overlay)
-        # Also connect zoom changes to ensure overlay is positioned after zoom completes
-        self.main_image.zoomChanged.connect(self._place_overlay)
+        if hasattr(self, 'magnifying_glass') and self.magnifying_glass.is_enabled() and pos.x() >= 0 and pos.y() >= 0:
+            self.magnifying_glass.update_position(pos)
 
     def _open_measure_dialog(self):
         """Opens the measure dialog for distance measurement."""
         if self.main_image is None or not self.main_image.hasImage():
             return
-
-        # Import here to avoid circular imports
-        from core.controllers.viewer.MeasureDialog import MeasureDialog
 
         # Try to get GSD from current image if we don't have a stored value
         if self.current_gsd is None:
@@ -2542,40 +1119,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                 btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
                 btn.repaint()
 
-    def _place_overlay(self):
-        """Anchor HUD to bottom‑right corner *of the image*, not viewport."""
-        if not hasattr(self, "_hud"):
-            return
 
-        self._hud.adjustSize()  # Make sure widget/layout is up to date
-        self._hud.updateGeometry()
-        vp = self.main_image.viewport()
-        margin = 12
-
-        # bottom‑right of the image (sceneRect) in viewport coords
-        br_scene = self.main_image.sceneRect().bottomRight()
-        br_view = self.main_image.mapFromScene(br_scene)
-
-        hud_w, hud_h = self._hud.width(), self._hud.height()
-        vp_w, vp_h = vp.width(), vp.height()
-
-        # Calculate target position (anchored to image bottom-right)
-        x = br_view.x() - hud_w - margin
-        y = br_view.y() - hud_h - margin
-
-        # Clamp into viewport
-        x = max(margin, min(x, vp_w - hud_w - margin))
-        y = max(margin, min(y, vp_h - hud_h - margin))
-
-        # Fallback if overlay is bigger than viewport
-        if hud_w + 2 * margin > vp_w or hud_h + 2 * margin > vp_h:
-            x, y = margin, margin
-
-        self._hud.move(x, y)
-        self._hud.raise_()
-
-    # Qt event filter keeps HUD glued to corner on viewport resize
+    # Qt event filter for viewport resize events
     def eventFilter(self, obj, ev):
-        if hasattr(self, "main_image") and obj is self.main_image.viewport() and ev.type() == QEvent.Resize:
-            self._place_overlay()
+        # Overlay positioning is now handled automatically by the overlay widget
         return super().eventFilter(obj, ev)

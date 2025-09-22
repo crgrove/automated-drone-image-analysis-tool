@@ -59,15 +59,24 @@ class ThermalParserService:
         Returns:
             tuple[str, str]: Camera model name and platform ('FLIR', 'DJI', 'AUTEL', or 'None').
         """
-        camera_model = meta_fields.get('CameraModel', meta_fields.get('Model'))
+        camera_model = meta_fields.get('CameraModel', meta_fields.get('Model', '')).strip()
+
+        # Normalize for easier matching
+        cam_upper = camera_model.upper()
+
+        # Explicit lists first
         if camera_model in self.FLIR_MODELS:
             return camera_model, 'FLIR'
         elif camera_model in self.DJI_MODELS:
             return camera_model, 'DJI'
         elif camera_model in self.AUTEL_MODELS:
             return camera_model, 'AUTEL'
-        else:
-            return 'Not Supported', 'None'
+
+        # Fallback rules
+        if "FLIR" in cam_upper or "BOSON" in cam_upper or "SKYDIO" in cam_upper:
+            return camera_model, "FLIR"
+
+        return camera_model if camera_model else "Not Supported", "None"
 
     def parse_file(self, full_path: str, palette: str = "White Hot"):
         """
