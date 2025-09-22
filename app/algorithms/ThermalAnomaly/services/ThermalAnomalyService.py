@@ -70,8 +70,7 @@ class ThermalAnomalyService(AlgorithmService):
             contours, hierarchy = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
-            output_path = full_path.replace(input_dir, output_dir)
-
+            output_path = self._construct_output_path(full_path, input_dir, output_dir)
             # Store mask instead of duplicating image (with temperature data for thermal)
             mask_path = None
             if areas_of_interest:

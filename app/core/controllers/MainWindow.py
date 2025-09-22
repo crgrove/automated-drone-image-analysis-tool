@@ -160,6 +160,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.inputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.inputFolderLine.setText(directory.replace('/', '\\'))
             self.settings_service.set_setting('InputFolder', pathlib.Path(directory).parent.__str__())
 
     def _outputFolderButton_clicked(self):
@@ -171,6 +173,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.outputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.outputFolderLine.setText(directory.replace('/', '\\'))
             self.settings_service.set_setting('OutputFolder', pathlib.Path(directory).parent.__str__())
 
     def _histogramButton_clicked(self):
@@ -181,6 +185,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
         if filename:
             self.histogramLine.setText(filename)
+            if os.name == 'nt':
+                self.histogramLine.setText(filename.replace('/', '\\'))
 
     def _algorithmComboBox_changed(self):
         """

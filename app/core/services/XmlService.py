@@ -170,12 +170,13 @@ class XmlService:
             images_xml = ET.SubElement(root, "images")
 
         image = ET.SubElement(images_xml, 'image')
+
         # Check if this is a mask path (ends with .png) or original image path
         if img["path"] and img["path"].endswith('.png'):
             # This is a mask file, store just the filename as mask_path
             # This avoids path duplication issues
             mask_filename = os.path.basename(img["path"])
-            image.set('mask_path', mask_filename)
+            image.set('mask_path', img["path"])
             # Store the original path as relative if possible
             if "original_path" in img:
                 original_path = img["original_path"]

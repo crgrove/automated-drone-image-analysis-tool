@@ -39,6 +39,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a Video File")
         if filename:
             self.videoSelectLine.setText(filename)
+            if os.name == 'nt':
+                self.videoSelectLine.setText(filename.replace('/', '\\'))
 
     def _srtSelectButton_clicked(self):
         """Handles the subtitle (SRT) file selection button click.
@@ -49,6 +51,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a SRT file", filter="SRT (*.srt)")
         if filename:
             self.srtSelectLine.setText(filename)
+            if os.name == 'nt':
+                self.srtSelectLine.setText(filename.replace('/', '\\'))
 
     def _outputSelectButton_clicked(self):
         """Handles the output directory selection button click.
@@ -61,6 +65,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", initial_dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.outputLine.setText(directory)
+            if os.name == 'nt':
+                self.outputLine.setText(directory.replace('/', '\\'))
 
     def _startButton_clicked(self):
         """Handles the start button click to begin video parsing.

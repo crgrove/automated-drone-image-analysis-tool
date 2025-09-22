@@ -201,6 +201,8 @@ class AnalyzeService(QObject):
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError(f"Could not load image: {full_path}")
         # img = cv2.resize(img, (4000, 3000))
         try:
             if not thermal:

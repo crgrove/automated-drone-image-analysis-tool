@@ -168,6 +168,35 @@ class AlgorithmService:
 
         return areas_of_interest, base_contour_count
 
+    def _construct_output_path(self, full_path, input_dir, output_dir):
+        """
+        Properly constructs an output path by replacing the input directory with the output directory.
+        
+        Args:
+            full_path (str): Full path to the input file
+            input_dir (str): Input directory path
+            output_dir (str): Output directory path
+            
+        Returns:
+            str: Properly constructed output path
+        """
+        # Convert all paths to Path objects for proper handling
+        full_path_obj = Path(full_path)
+        input_dir_obj = Path(input_dir)
+        output_dir_obj = Path(output_dir)
+        
+        # Get the relative path from input_dir to the file
+        try:
+            relative_path = full_path_obj.relative_to(input_dir_obj)
+        except ValueError:
+            # If the file is not under input_dir, just use the filename
+            relative_path = full_path_obj.name
+        
+        # Construct the output path
+        output_path = output_dir_obj / relative_path
+        
+        return str(output_path)
+
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
         """
         Saves the detection mask instead of duplicating the image.
@@ -283,7 +312,7 @@ class AnalysisResult:
             error_message (str, optional): Error message if processing failed. Defaults to None.
         """
         self.input_path = input_path
-        # Turn the output path into a relative path.
+
         if output_path is not None:
             if os.path.isabs(output_path):
                 self.output_path = output_path.replace(output_dir, '')
@@ -292,6 +321,7 @@ class AnalysisResult:
                 self.output_path = output_path
         else:
             self.output_path = output_path
+
         self.areas_of_interest = areas_of_interest
         self.base_contour_count = base_contour_count
         self.error_message = error_message

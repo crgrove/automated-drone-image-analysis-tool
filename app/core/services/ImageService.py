@@ -34,6 +34,8 @@ class ImageService:
         self.path = path
         self.mask_path = mask_path
         img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError(f"Could not load image: {self.path}")
         self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def get_relative_altitude(self, distance_unit):
@@ -170,6 +172,8 @@ class ImageService:
             return None
 
         focal_length = self.exif_data["Exif"].get(piexif.ExifIFD.FocalLength)
+        if focal_length is None:
+            return None
         focal_length = focal_length[0] / focal_length[1]
 
         altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)

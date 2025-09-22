@@ -25,6 +25,8 @@ class HistogramNormalizationService:
                 img.verify()  # Verifies it's a valid image
             # If no exception, proceed with OpenCV decoding
             self.hist_ref_img = cv2.imdecode(np.fromfile(hist_ref_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if self.hist_ref_img is None:
+                raise ValueError(f"Could not load reference image: {hist_ref_path}")
         except (UnidentifiedImageError, OSError):
             self.hist_ref_img = None  # Or handle the error as needed
             raise Exception("The reference image path is not a valid image file.")
