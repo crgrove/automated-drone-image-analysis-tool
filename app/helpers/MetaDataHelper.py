@@ -7,6 +7,7 @@ import platform
 import re
 import struct
 import xml.etree.ElementTree as ET
+import sys
 
 from helpers.PickleHelper import PickleHelper
 
@@ -26,10 +27,18 @@ class MetaDataHelper:
         Returns:
             str: Path to ExifTool executable.
         """
+        # Determine the base path based on whether we're running from a PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            # Running from a PyInstaller bundle
+            app_root = sys._MEIPASS
+        else:
+            # Running from source code
+            app_root = path.dirname(path.dirname(__file__))
+
         if platform.system() == 'Windows':
-            return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool.exe'))
+            return path.abspath(path.join(app_root, 'external/exiftool.exe'))
         elif platform.system() == 'Darwin':
-            return path.abspath(path.join(path.dirname(path.dirname(__file__)), 'external/exiftool'))
+            return path.abspath(path.join(app_root, 'external/exiftool'))
 
     @staticmethod
     def _transfer_exif_piexif(origin_file, destination_file):
@@ -233,6 +242,76 @@ class MetaDataHelper:
 
     @staticmethod
     def get_xmp_data_merged(file_path: str) -> dict:
+        """
+        Get XMP data using ExifTool first (for bundled exe compatibility),
+        falling back to direct file parsing if ExifTool fails.
+        """
+        # Try using ExifTool first (works better in bundled exe)
+        try:
+            metadata = MetaDataHelper.get_meta_data_exiftool(file_path)
+            if metadata:
+                # Extract XMP fields from ExifTool output
+                xmp_data = {}
+
+                # Process all metadata fields
+                for key, value in metadata.items():
+                    # Store original key-value for reference
+                    xmp_data[key] = value
+
+                    # Convert ExifTool format to expected XMP format
+                    if key.startswith('XMP:'):
+                        xmp_key = key[4:]  # Remove "XMP:" prefix
+                        xmp_data[xmp_key] = value
+                        # Also store with drone-dji namespace if it's a DJI field
+                        if any(field in xmp_key for field in ['FlightYaw', 'FlightPitch', 'FlightRoll',
+                                                               'GimbalYaw', 'GimbalPitch', 'GimbalRoll',
+                                                               'RelativeAltitude', 'AbsoluteAltitude']):
+                            xmp_data[f'drone-dji:{xmp_key}'] = value
+                    elif key.startswith('XMP-'):
+                        # Handle namespaced XMP tags like "XMP-drone-dji:FlightYawDegree"
+                        xmp_key = key[4:]  # Remove "XMP-" prefix
+                        xmp_data[xmp_key] = value
+                        # Also store without namespace for compatibility
+                        if ':' in xmp_key:
+                            simple_key = xmp_key.split(':')[-1]
+                            xmp_data[simple_key] = value
+                            # Store with proper drone-dji namespace
+                            if 'drone' in xmp_key.lower():
+                                namespace_key = xmp_key.replace('drone-dji:', 'drone-dji:')
+                                xmp_data[namespace_key] = value
+
+                # Ensure critical drone fields are properly mapped
+                # ExifTool might return these with different key formats
+                critical_mappings = [
+                    ('RelativeAltitude', 'drone-dji:RelativeAltitude'),
+                    ('AbsoluteAltitude', 'drone-dji:AbsoluteAltitude'),
+                    ('FlightYawDegree', 'drone-dji:FlightYawDegree'),
+                    ('GimbalYawDegree', 'drone-dji:GimbalYawDegree'),
+                    ('GimbalPitchDegree', 'drone-dji:GimbalPitchDegree'),
+                ]
+
+                for base_key, full_key in critical_mappings:
+                    # Check various possible key formats from ExifTool
+                    possible_keys = [
+                        base_key,
+                        f'XMP:{base_key}',
+                        f'XMP-drone-dji:{base_key}',
+                        f'drone-dji:{base_key}',
+                        full_key
+                    ]
+                    for possible_key in possible_keys:
+                        if possible_key in metadata:
+                            xmp_data[full_key] = metadata[possible_key]
+                            xmp_data[base_key] = metadata[possible_key]
+                            break
+
+                if xmp_data:
+                    return xmp_data
+        except Exception:
+            # If ExifTool fails, fall back to direct parsing
+            pass
+
+        # Fallback to original direct parsing method
         _XMP_EXT_HDR = b"http://ns.adobe.com/xmp/extension/\x00"
 
         def parse_base(data: bytes):
@@ -389,12 +468,89 @@ class MetaDataHelper:
         Returns:
             str or None: Attribute value, if available.
         """
+        # Handle special cases for attribute names
+        attribute_map = {
+            'AGL': 'Relative Altitude',  # AGL (Above Ground Level) maps to Relative Altitude
+        }
+        mapped_attribute = attribute_map.get(attribute, attribute)
+
         xmp_df = PickleHelper.get_xmp_mapping()
+
+        # If xmp_df is None or empty, use hardcoded mappings
+        if xmp_df is None or xmp_df.empty:
+            # Fallback hardcoded mappings for DJI drones
+            fallback_mappings = {
+                'Flight Yaw': 'drone-dji:FlightYawDegree',
+                'Flight Pitch': 'drone-dji:FlightPitchDegree',
+                'Flight Roll': 'drone-dji:FlightRollDegree',
+                'Gimbal Yaw': 'drone-dji:GimbalYawDegree',
+                'Gimbal Pitch': 'drone-dji:GimbalPitchDegree',
+                'Gimbal Roll': 'drone-dji:GimbalRollDegree',
+                'Relative Altitude': 'drone-dji:RelativeAltitude',
+                'AGL': 'drone-dji:RelativeAltitude'
+            }
+            if make and 'DJI' in make.upper():
+                key = fallback_mappings.get(mapped_attribute)
+                if key and key in xmp_data:
+                    return xmp_data[key]
+                # Also try without namespace
+                simple_key = key.split(':')[-1] if key and ':' in key else key
+                if simple_key and simple_key in xmp_data:
+                    return xmp_data[simple_key]
+
+        # Try to use the pickle mapping
         try:
-            key = xmp_df.loc[xmp_df['Attribute'] == attribute, make].iloc[0]
-            return xmp_data[key]
+            key = xmp_df.loc[xmp_df['Attribute'] == mapped_attribute, make].iloc[0]
+            if key in xmp_data:
+                return xmp_data[key]
+            # Also try without namespace
+            simple_key = key.split(':')[-1] if ':' in key else key
+            if simple_key in xmp_data:
+                return xmp_data[simple_key]
         except (KeyError, IndexError):
-            return None
+            pass
+
+        # Additional fallback: check common variations in xmp_data directly
+        if make and 'DJI' in make.upper():
+            # Define possible keys for different attributes
+            if attribute == 'AGL' or mapped_attribute == 'Relative Altitude':
+                possible_keys = [
+                    'drone-dji:RelativeAltitude',
+                    'RelativeAltitude',
+                    'XMP:RelativeAltitude',
+                    'XMP-drone-dji:RelativeAltitude',
+                ]
+            elif attribute == 'ImageSource':
+                possible_keys = [
+                    'drone-dji:ImageSource',
+                    'ImageSource',
+                    'XMP:ImageSource',
+                    'XMP-drone-dji:ImageSource',
+                    'drone-dji:CameraType',
+                    'CameraType',
+                ]
+            elif 'Gimbal' in attribute:
+                gimbal_type = attribute.replace('Gimbal ', '')
+                possible_keys = [
+                    f'drone-dji:Gimbal{gimbal_type}Degree',
+                    f'Gimbal{gimbal_type}Degree',
+                    f'XMP:Gimbal{gimbal_type}Degree',
+                    f'XMP-drone-dji:Gimbal{gimbal_type}Degree',
+                ]
+            else:
+                # Generic fallback
+                possible_keys = [
+                    f'drone-dji:{attribute}',
+                    attribute,
+                    f'XMP:{attribute}',
+                    f'XMP-drone-dji:{attribute}',
+                ]
+
+            for key in possible_keys:
+                if key in xmp_data:
+                    return xmp_data[key]
+
+        return None
 
     @staticmethod
     def add_xmp_field(destination_file: str, namespace_uri: str, tag_name: str, value_str: str, threshold: int = 48000):

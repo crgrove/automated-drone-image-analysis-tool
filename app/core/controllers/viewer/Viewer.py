@@ -1302,20 +1302,19 @@ class Viewer(QMainWindow, Ui_Viewer):
             selected (bool): Whether the container is selected
         """
         if selected:
-            # Get the current settings color for the outline
+            # Get the current settings color for the selection (typically magenta/pink)
             color = self.settings.get('identifier_color', [255, 255, 0])
+            # Just change the background color, no border
             container.setStyleSheet(f"""
                 QWidget {{
-                    border: 3px solid rgb({color[0]}, {color[1]}, {color[2]});
+                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 40);
                     border-radius: 5px;
-                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 20);
                 }}
             """)
         else:
-            # Explicitly set no border style to override any previous style
+            # Explicitly set background to transparent to clear previous selection
             container.setStyleSheet("""
                 QWidget {
-                    border: none;
                     background-color: transparent;
                 }
             """)

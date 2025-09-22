@@ -726,7 +726,7 @@ color: rgb(228, 231, 235);</string>
   </widget>
   <action name="actionLoadFile">
    <property name="text">
-    <string>Load File</string>
+    <string>Load Results File</string>
    </property>
    <property name="font">
     <font>
