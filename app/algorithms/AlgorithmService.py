@@ -4,7 +4,11 @@ import os
 import math
 import shutil
 import json
+import zlib
+import base64
 from pathlib import Path
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
 
@@ -179,7 +183,7 @@ class AlgorithmService:
         
         # Change extension to .png for mask
         mask_file = path.with_suffix('.png')
-        
+       
         # Save the mask as a compressed PNG (binary masks compress very well)
         # Use maximum compression (9) since masks are small
         cv2.imwrite(str(mask_file), mask, [cv2.IMWRITE_PNG_COMPRESSION, 9])
@@ -189,6 +193,7 @@ class AlgorithmService:
             temp_file = path.with_suffix('.thermal.json')
             with open(temp_file, 'w') as f:
                 json.dump(temperature_data.tolist() if hasattr(temperature_data, 'tolist') else temperature_data, f)
+
         
         return str(mask_file)
 

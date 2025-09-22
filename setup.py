@@ -135,7 +135,10 @@ class bdist_app(Command):
         pass
 
     def run(self):
-        self.run_command('build_res')
+        if has_build_ui:
+            self.run_command('build_res')
+        else:
+            print("Warning: pyqt-distutils not found, skipping UI resource build")
         check_call(['pyinstaller', '-y', 'app.spec'])
 
 

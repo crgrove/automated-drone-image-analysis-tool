@@ -6,6 +6,9 @@ import cv2
 import numpy as np
 import json
 import math
+import zlib
+import base64
+from PIL import Image
 
 from core.services.GSDService import GSDService
 
@@ -17,17 +20,19 @@ from helpers.LocationInfo import LocationInfo
 class ImageService:
     """Service to calculate various drone and image attributes based on metadata."""
 
-    def __init__(self, path):
+    def __init__(self, path, mask_path=None):
         """
         Initializes the ImageService by extracting Exif and XMP metadata.
 
         Args:
             path (str): The file path to the image.
+            mask_path (str, optional): Path to the mask file containing thermal metadata.
         """
         self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
         self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
+        self.mask_path = mask_path
         img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -227,12 +232,63 @@ class ImageService:
 
     def get_thermal_data(self, unit):
         """
-        Loads thermal data from XMP. Returns a NumPy array in C or F.
+        Loads thermal data from mask PNG metadata if available, otherwise from XMP.
+        Returns a NumPy array in C or F.
+        
+        Args:
+            unit (str): Temperature unit ('C' or 'F').
+            
+        Returns:
+            np.ndarray or None: Temperature data array in the specified unit.
         """
+        # First, try to load from mask PNG metadata if mask_path is provided
+        if self.mask_path and os.path.exists(self.mask_path):
+            try:
+                # Open the mask PNG and read metadata
+                mask_image = Image.open(self.mask_path)
+                
+                # Check if thermal data exists in metadata
+                if hasattr(mask_image, 'text') and 'ThermalData' in mask_image.text:
+                    encoded_data = mask_image.text.get('ThermalData')
+                    compression = mask_image.text.get('ThermalDataCompression', '')
+                    shape_str = mask_image.text.get('ThermalDataShape', '')
+                    
+                    if encoded_data and compression == 'zlib+base64':
+                        # Decode from base64
+                        compressed_data = base64.b64decode(encoded_data.encode('ascii'))
+                        
+                        # Decompress
+                        temp_json = zlib.decompress(compressed_data).decode('utf-8')
+                        
+                        # Parse JSON
+                        raw = json.loads(temp_json)
+                        
+                        # Convert to NumPy array
+                        data = np.asarray(raw, dtype=np.float32)
+                        
+                        # Reshape if shape information is available
+                        if shape_str:
+                            try:
+                                shape = json.loads(shape_str)
+                                data = data.reshape(shape)
+                            except Exception:
+                                pass  # Keep flat if reshape fails
+                        
+                        # Convert units if needed
+                        if unit == 'F':
+                            data = data * 1.8 + 32.0
+                        
+                        return data
+                        
+            except Exception as e:
+                # If reading from mask fails, fall back to XMP
+                print(f"Warning: Failed to read thermal data from mask: {e}")
+        
+        # Fall back to XMP metadata (original method)
         raw = self.xmp_data.get('TemperatureData', None)
         if raw is None:
-            return None  # or: return np.empty((0,), dtype=np.float32)
-
+            return None
+        
         # If it's a JSON string, decode it
         if isinstance(raw, str):
             try:
@@ -240,13 +296,13 @@ class ImageService:
             except Exception:
                 # Malformed JSON or unexpected type
                 return None
-
+        
         # Ensure NumPy array for numeric ops
         data = np.asarray(raw, dtype=np.float32)
-
+        
         if unit == 'F':
             data = data * 1.8 + 32.0
-
+        
         return data
 
     def _is_autel(self):

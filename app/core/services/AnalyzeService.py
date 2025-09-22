@@ -248,8 +248,10 @@ class AnalyzeService(QObject):
                 "aois": result.areas_of_interest
             }
             self.images_with_aois.append(image_data)
+            
             num_aois = len(result.areas_of_interest)
             self.sig_msg.emit(f'{num_aois} Areas of interest identified in ' + file_name)
+
             # Guard against None and ensure integers for comparison
             if (result.base_contour_count is not None
                     and isinstance(result.base_contour_count, (int, np.integer))

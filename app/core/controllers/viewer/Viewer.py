@@ -621,8 +621,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                 image_path = image.get('path', '')
                 mask_path = image.get('mask_path', '')
 
-                # Load the image
                 image_service = ImageService(image_path)
+
                 img_array = image_service.img_array  # This is already in RGB format
 
                 center = area_of_interest['center']
@@ -1521,7 +1521,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Clear previous cursor position message
         if "Cursor Position" in self.messages:
             self.messages["Cursor Position"] = None
-
         # Clear previous color values message
         if "Color Values" in self.messages:
             self.messages["Color Values"] = None

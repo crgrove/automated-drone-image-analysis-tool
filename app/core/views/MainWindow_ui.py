@@ -132,7 +132,7 @@ class Ui_MainWindow(object):
         self.minAreaSpinBox.setObjectName(u"minAreaSpinBox")
         self.minAreaSpinBox.setFont(font)
         self.minAreaSpinBox.setMinimum(1)
-        self.minAreaSpinBox.setMaximum(999)
+        self.minAreaSpinBox.setMaximum(199998)
         self.minAreaSpinBox.setValue(10)
 
         self.GeneralLayout.addWidget(self.minAreaSpinBox)
@@ -150,7 +150,7 @@ class Ui_MainWindow(object):
         self.maxAreaSpinBox.setObjectName(u"maxAreaSpinBox")
         self.maxAreaSpinBox.setFont(font)
         self.maxAreaSpinBox.setMinimum(0)
-        self.maxAreaSpinBox.setMaximum(1999)
+        self.maxAreaSpinBox.setMaximum(199999)
         self.maxAreaSpinBox.setSingleStep(1)
         self.maxAreaSpinBox.setValue(0)
 
