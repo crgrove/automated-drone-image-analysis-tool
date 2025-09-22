@@ -38,6 +38,10 @@ class MeasureDialog(QDialog):
         self.temp_line_item = None
         self.distance_text_item = None
 
+        # Fixed screen sizes (in pixels)
+        self.fixed_point_radius = 5  # Radius in screen pixels
+        self.fixed_line_width = 2    # Line width in screen pixels
+
         # Store original viewer settings and disable zoom/pan during measurement
         self.original_can_zoom = self.image_viewer.canZoom
         self.original_can_pan = self.image_viewer.canPan
@@ -123,6 +127,9 @@ class MeasureDialog(QDialog):
 
         # Connect GSD input
         self.gsd_input.textChanged.connect(self.onGsdChanged)
+        
+        # Connect to zoom changes to update item sizes
+        self.image_viewer.zoomChanged.connect(self.onZoomChanged)
 
         # Mouse tracking is already enabled in QtImageViewer
 
@@ -142,6 +149,14 @@ class MeasureDialog(QDialog):
                     self.calculateDistance()
         except ValueError:
             pass  # Invalid input, ignore
+    
+    def onZoomChanged(self, zoom_level):
+        """Handle zoom level changes to update item sizes.
+        
+        Args:
+            zoom_level: Current zoom level
+        """
+        self.updateItemSizes()
 
     def onImageClick(self, x, y, viewer):
         """Handle mouse clicks on the image.
@@ -162,10 +177,14 @@ class MeasureDialog(QDialog):
             self.first_point = point
             self.measuring = True
 
-            # Draw first point
-            self.point1_item = QGraphicsEllipseItem(x - 5, y - 5, 10, 10)
+            # Draw first point with size adjusted for current zoom
+            zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
+            radius = self.fixed_point_radius / zoom
+            pen_width = self.fixed_line_width / zoom
+            
+            self.point1_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
             self.point1_item.setBrush(QColor(255, 0, 0))
-            self.point1_item.setPen(QPen(QColor(255, 255, 255), 2))
+            self.point1_item.setPen(QPen(QColor(255, 255, 255), pen_width))
             self.image_viewer.scene.addItem(self.point1_item)
 
         else:
@@ -178,10 +197,14 @@ class MeasureDialog(QDialog):
                 self.image_viewer.scene.removeItem(self.temp_line_item)
                 self.temp_line_item = None
 
-            # Draw second point
-            self.point2_item = QGraphicsEllipseItem(x - 5, y - 5, 10, 10)
+            # Draw second point with size adjusted for current zoom
+            zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
+            radius = self.fixed_point_radius / zoom
+            pen_width = self.fixed_line_width / zoom
+            
+            self.point2_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
             self.point2_item.setBrush(QColor(255, 0, 0))
-            self.point2_item.setPen(QPen(QColor(255, 255, 255), 2))
+            self.point2_item.setPen(QPen(QColor(255, 255, 255), pen_width))
             self.image_viewer.scene.addItem(self.point2_item)
 
             # Draw final line
@@ -189,7 +212,7 @@ class MeasureDialog(QDialog):
                 self.first_point.x(), self.first_point.y(),
                 self.second_point.x(), self.second_point.y()
             )
-            self.line_item.setPen(QPen(QColor(0, 255, 0), 2))
+            self.line_item.setPen(QPen(QColor(0, 255, 0), pen_width))
             self.image_viewer.scene.addItem(self.line_item)
 
             # Calculate and display distance
@@ -206,11 +229,14 @@ class MeasureDialog(QDialog):
             if self.temp_line_item:
                 self.image_viewer.scene.removeItem(self.temp_line_item)
 
+            zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
+            pen_width = self.fixed_line_width / zoom
+            
             self.temp_line_item = QGraphicsLineItem(
                 self.first_point.x(), self.first_point.y(),
                 pos.x(), pos.y()
             )
-            self.temp_line_item.setPen(QPen(QColor(255, 255, 0), 2, Qt.DashLine))
+            self.temp_line_item.setPen(QPen(QColor(255, 255, 0), pen_width, Qt.DashLine))
             self.image_viewer.scene.addItem(self.temp_line_item)
 
     def calculateDistance(self):
@@ -291,12 +317,47 @@ class MeasureDialog(QDialog):
         self.measuring = False
         self.distance_display.setText("--")
 
+    def updateItemSizes(self):
+        """Update the sizes of all measurement items based on current zoom."""
+        zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
+        radius = self.fixed_point_radius / zoom
+        pen_width = self.fixed_line_width / zoom
+        
+        # Update first point
+        if self.point1_item and self.first_point:
+            self.image_viewer.scene.removeItem(self.point1_item)
+            x, y = self.first_point.x(), self.first_point.y()
+            self.point1_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
+            self.point1_item.setBrush(QColor(255, 0, 0))
+            self.point1_item.setPen(QPen(QColor(255, 255, 255), pen_width))
+            self.image_viewer.scene.addItem(self.point1_item)
+        
+        # Update second point
+        if self.point2_item and self.second_point:
+            self.image_viewer.scene.removeItem(self.point2_item)
+            x, y = self.second_point.x(), self.second_point.y()
+            self.point2_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
+            self.point2_item.setBrush(QColor(255, 0, 0))
+            self.point2_item.setPen(QPen(QColor(255, 255, 255), pen_width))
+            self.image_viewer.scene.addItem(self.point2_item)
+        
+        # Update line
+        if self.line_item and self.first_point and self.second_point:
+            self.image_viewer.scene.removeItem(self.line_item)
+            self.line_item = QGraphicsLineItem(
+                self.first_point.x(), self.first_point.y(),
+                self.second_point.x(), self.second_point.y()
+            )
+            self.line_item.setPen(QPen(QColor(0, 255, 0), pen_width))
+            self.image_viewer.scene.addItem(self.line_item)
+    
     def closeEvent(self, event):
         """Handle dialog close event."""
         # Disconnect signals
         try:
             self.image_viewer.leftMouseButtonPressed.disconnect(self.onImageClick)
             self.image_viewer.mousePositionOnImageChanged.disconnect(self.onMouseMove)
+            self.image_viewer.zoomChanged.disconnect(self.onZoomChanged)
         except Exception:
             pass  # Already disconnected
 

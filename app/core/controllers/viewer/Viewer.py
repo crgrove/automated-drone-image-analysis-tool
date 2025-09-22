@@ -1642,7 +1642,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Clear previous cursor position message
         if "Cursor Position" in self.messages:
             self.messages["Cursor Position"] = None
-
         # Clear previous color values message
         if "Color Values" in self.messages:
             self.messages["Color Values"] = None
