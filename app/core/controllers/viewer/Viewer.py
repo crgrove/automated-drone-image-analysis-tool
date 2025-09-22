@@ -7,13 +7,15 @@ from PIL import UnidentifiedImageError
 import traceback
 import math
 import re
+import colorsys
+import numpy as np
 
 from pathlib import Path
 
 from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
 from PySide6.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
 from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout, QMenu
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu
 from core.views.components.Toggle import Toggle
 import tempfile
 
@@ -515,6 +517,137 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show error to user
             QMessageBox.critical(self, "Error Loading Image", error_msg)
 
+    def _calculate_aoi_average_info(self, area_of_interest):
+        """Calculate average color or temperature for an AOI.
+
+        Args:
+            area_of_interest (dict): AOI dictionary with center, radius, and optionally detected_pixels
+
+        Returns:
+            tuple: (info_text, rgb_tuple) where info_text is the formatted string and
+                   rgb_tuple is (r, g, b) for colors or None for temperature
+        """
+        try:
+            # For thermal images, calculate average temperature
+            if self.is_thermal:
+                # Check if temperature data is available
+                if self.temperature_data is None:
+                    # Try to load thermal data from the original image if not already loaded
+                    try:
+                        from core.services.ThermalParserService import ThermalParserService
+                        image = self.images[self.current_image]
+                        image_path = image.get('path', '')
+
+                        # Check if this is a thermal image file (.jpg, .jpeg, .rjpeg)
+                        if image_path.lower().endswith(('.jpg', '.jpeg', '.rjpeg')):
+                            thermal_parser = ThermalParserService(dtype=np.float32)
+                            temperature_c, _ = thermal_parser.parse_file(image_path)
+
+                            # Convert to the desired unit
+                            if self.temperature_unit == 'F' and temperature_c is not None:
+                                self.temperature_data = temperature_c * 1.8 + 32.0
+                            else:
+                                self.temperature_data = temperature_c
+                    except Exception as e:
+                        self.logger.error(f"Failed to parse thermal data: {e}")
+                        return "Temp: N/A", None
+
+                # If still no data, return N/A
+                if self.temperature_data is None:
+                    return "Temp: N/A", None
+
+                center = area_of_interest['center']
+                radius = area_of_interest.get('radius', 0)
+                cx, cy = center
+                shape = self.temperature_data.shape
+
+                # Get temperature values for detected pixels or within the AOI circle
+                temps = []
+
+                # If we have detected pixels, use those for temperature
+                if 'detected_pixels' in area_of_interest and area_of_interest['detected_pixels']:
+                    for pixel in area_of_interest['detected_pixels']:
+                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                            px, py = int(pixel[0]), int(pixel[1])
+                            if 0 <= py < shape[0] and 0 <= px < shape[1]:
+                                temps.append(self.temperature_data[py][px])
+                # Otherwise sample temperatures within the circle
+                else:
+                    for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
+                        for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
+                            # Check if pixel is within circle
+                            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                                temps.append(self.temperature_data[y][x])
+
+                if temps:
+                    avg_temp = sum(temps) / len(temps)
+                    return f"Avg Temp: {avg_temp:.1f}° {self.temperature_unit}", None
+                else:
+                    return None, None
+
+            # For non-thermal images, calculate average color
+            else:
+                # Get the current image
+                image = self.images[self.current_image]
+                image_path = image.get('path', '')
+                mask_path = image.get('mask_path', '')
+
+                # Load the image
+                image_service = ImageService(image_path, mask_path)
+                img_array = image_service.img_array  # This is already in RGB format
+
+                center = area_of_interest['center']
+                radius = area_of_interest.get('radius', 0)
+
+                # Collect RGB values within the AOI
+                colors = []
+                cx, cy = center
+                shape = img_array.shape
+
+                # If we have detected pixels, use those
+                if 'detected_pixels' in area_of_interest and area_of_interest['detected_pixels']:
+                    for pixel in area_of_interest['detected_pixels']:
+                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                            px, py = int(pixel[0]), int(pixel[1])
+                            if 0 <= py < shape[0] and 0 <= px < shape[1]:
+                                colors.append(img_array[py, px])
+                # Otherwise sample within the circle
+                else:
+                    for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
+                        for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
+                            # Check if pixel is within circle
+                            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                                colors.append(img_array[y, x])
+
+                if colors:
+                    # Calculate average RGB
+                    avg_rgb = np.mean(colors, axis=0).astype(int)
+
+                    # Convert to HSV for display (full saturation and value)
+                    # First normalize RGB to 0-1 range
+                    r, g, b = avg_rgb[0] / 255.0, avg_rgb[1] / 255.0, avg_rgb[2] / 255.0
+
+                    # Convert to HSV
+                    import colorsys
+                    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+
+                    # Create full saturation and full value version
+                    full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
+                    full_sat_rgb = tuple(int(c * 255) for c in full_sat_rgb)
+
+                    # Format as hex color
+                    hex_color = '#{:02x}{:02x}{:02x}'.format(*full_sat_rgb)
+
+                    # Return hue angle, hex color, and RGB tuple for the color square
+                    hue_degrees = int(h * 360)
+                    return f"Hue: {hue_degrees}° {hex_color}", full_sat_rgb
+
+        except Exception as e:
+            self.logger.error(f"Error calculating AOI average info: {e}")
+            return None, None
+
+        return None, None
+
     def _load_areas_of_interest(self, augmented_image, areas_of_interest):
         """Loads areas of interest thumbnails for a given image.
 
@@ -545,30 +678,83 @@ class Viewer(QMainWindow, Ui_Viewer):
             highlight.canZoom = False
             highlight.canPan = False
 
+            # Calculate average color/temperature for the AOI
+            avg_color_info, color_rgb = self._calculate_aoi_average_info(area_of_interest)
+
             # Create coordinate label with pixel area
             pixel_area = area_of_interest.get('area', 0)
-            coord_label = QLabel(f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px")
-            coord_label.setAlignment(Qt.AlignCenter)
-            coord_label.setStyleSheet("""
-                QLabel {
+            coord_text = f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px"
+
+            # Create info widget container for both text and color square
+            info_widget = QWidget()
+            info_widget.setStyleSheet("""
+                QWidget {
                     background-color: rgba(0, 0, 0, 150);
-                    color: white;
-                    padding: 2px;
-                    font-size: 10px;
                     border-radius: 2px;
                 }
             """)
-            
-            # Enable context menu for the label
-            coord_label.setContextMenuPolicy(Qt.CustomContextMenu)
+            info_layout = QVBoxLayout(info_widget)
+            info_layout.setContentsMargins(4, 2, 4, 2)
+            info_layout.setSpacing(2)
+
+            # Create coordinate label
+            coord_label = QLabel(coord_text)
+            coord_label.setAlignment(Qt.AlignCenter)
+            coord_label.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    font-size: 10px;
+                }
+            """)
+            info_layout.addWidget(coord_label)
+
+            # Add color/temperature information with color square if applicable
+            if avg_color_info:
+                # Create horizontal layout for color info
+                color_container = QWidget()
+                color_layout = QHBoxLayout(color_container)
+                color_layout.setContentsMargins(0, 0, 0, 0)
+                color_layout.setSpacing(4)
+
+                # Add color square if we have RGB values (not for temperature)
+                if color_rgb is not None:
+                    color_square = QLabel()
+                    color_square.setFixedSize(12, 12)
+                    color_square.setStyleSheet(f"""
+                        QLabel {{
+                            background-color: rgb({color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]});
+                            border: 1px solid white;
+                        }}
+                    """)
+                    color_layout.addWidget(color_square)
+
+                # Add text label
+                color_label = QLabel(avg_color_info)
+                color_label.setAlignment(Qt.AlignCenter)
+                color_label.setStyleSheet("""
+                    QLabel {
+                        color: white;
+                        font-size: 10px;
+                    }
+                """)
+                color_layout.addWidget(color_label)
+
+                # Center the layout
+                color_layout.addStretch()
+                color_layout.insertStretch(0)
+
+                info_layout.addWidget(color_container)
+
+            # Enable context menu for the info widget
+            info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
             # Use default parameters to properly capture the current values
-            coord_label.customContextMenuRequested.connect(
-                lambda pos, c=center, a=pixel_area: self._show_aoi_context_menu(pos, coord_label, c, a)
+            info_widget.customContextMenuRequested.connect(
+                lambda pos, c=center, a=pixel_area, info=avg_color_info: self._show_aoi_context_menu(pos, info_widget, c, a, info)
             )
 
             # Add widgets to layout
             layout.addWidget(highlight)
-            layout.addWidget(coord_label)
+            layout.addWidget(info_widget)
 
             # Create list item
             listItem = QListWidgetItem()
@@ -1211,17 +1397,18 @@ class Viewer(QMainWindow, Ui_Viewer):
         except Exception:
             pass
 
-    def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area):
+    def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
         """Show context menu for AOI coordinate label with copy option.
-        
+
         Args:
             pos: Position where the context menu was requested (relative to label_widget)
             label_widget: The QLabel widget that was right-clicked
             center: Tuple of (x, y) coordinates of the AOI center
             pixel_area: The area of the AOI in pixels
+            avg_info: Average color/temperature information string
         """
         menu = QMenu(label_widget)
-        
+
         # Style the menu to match the application theme
         menu.setStyleSheet("""
             QMenu {
@@ -1238,45 +1425,51 @@ class Viewer(QMainWindow, Ui_Viewer):
                 background-color: #505050;
             }
         """)
-        
+
         # Add copy action
         copy_action = menu.addAction("Copy Data")
-        copy_action.triggered.connect(lambda: self._copy_aoi_data(center, pixel_area))
-        
+        copy_action.triggered.connect(lambda: self._copy_aoi_data(center, pixel_area, avg_info))
+
         # Get the current cursor position (global coordinates)
         from PySide6.QtGui import QCursor
         global_pos = QCursor.pos()
-        
+
         # Show menu at cursor position
         menu.exec(global_pos)
-    
-    def _copy_aoi_data(self, center, pixel_area):
+
+    def _copy_aoi_data(self, center, pixel_area, avg_info=None):
         """Copy AOI data to clipboard including image name, coordinates, and GPS.
-        
+
         Args:
             center: Tuple of (x, y) coordinates of the AOI center
             pixel_area: The area of the AOI in pixels
+            avg_info: Average color/temperature information string
         """
         from PySide6.QtWidgets import QApplication
-        
+
         # Get current image information
         image = self.images[self.current_image]
         image_name = image.get('name', 'Unknown')
-        
+
         # Get GPS coordinates if available
         gps_coords = self.messages.get('GPS Coordinates', 'N/A')
-        
+
         # Format the data for clipboard
         clipboard_text = (
             f"Image: {image_name}\n"
             f"AOI Coordinates: X={center[0]}, Y={center[1]}\n"
             f"AOI Area: {pixel_area:.0f} px\n"
-            f"GPS Coordinates: {gps_coords}"
         )
-        
+
+        # Add average info if available
+        if avg_info:
+            clipboard_text += f"Average: {avg_info}\n"
+
+        clipboard_text += f"GPS Coordinates: {gps_coords}"
+
         # Copy to clipboard
         QApplication.clipboard().setText(clipboard_text)
-        
+
         # Show confirmation toast
         self._show_toast("AOI data copied", 2000, color="#00C853")
 
