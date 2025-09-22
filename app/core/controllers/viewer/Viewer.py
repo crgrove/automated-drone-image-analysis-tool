@@ -13,7 +13,7 @@ from pathlib import Path
 from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices
 from PySide6.QtCore import Qt, QSize, QThread, QPointF, QEvent, QTimer, QUrl
 from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QLabel, QWidget, QAbstractButton, QHBoxLayout, QMenu
 from core.views.components.Toggle import Toggle
 import tempfile
 
@@ -175,6 +175,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle.setChecked(False)
         self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
         self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (H or Ctrl+I)")
+        
+        # Add draw AOI circle toggle
+        self.drawAOICircleToggle = Toggle()
+        layout.insertWidget(layout.indexOf(self.highlightPixelsLabel) + 1, self.drawAOICircleToggle)
+        self.drawAOICircleLabel = QLabel("Draw AOI Circle")
+        self.drawAOICircleLabel.setFont(font)
+        layout.insertWidget(layout.indexOf(self.drawAOICircleToggle) + 1, self.drawAOICircleLabel)
+        self.drawAOICircleToggle.setChecked(True)  # Default to showing circles
+        self.drawAOICircleToggle.clicked.connect(self._draw_aoi_circle_change)
+        self.drawAOICircleToggle.setToolTip("Toggle AOI Circle Drawing (C)")
 
         # Add measure button to toolbar
 
@@ -206,6 +216,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Toggle highlight pixels with 'H' key (no modifier)
             self.highlightPixelsToggle.setChecked(not self.highlightPixelsToggle.isChecked())
             self._highlight_pixels_change(self.highlightPixelsToggle.isChecked())
+        if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
+            # Toggle AOI circle drawing with 'C' key (no modifier)
+            self.drawAOICircleToggle.setChecked(not self.drawAOICircleToggle.isChecked())
+            self._draw_aoi_circle_change(self.drawAOICircleToggle.isChecked())
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -392,8 +406,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             image_service = ImageService(image_path)
 
-            # Draw AOI boundaries (circles or contours)
-            augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+            # Draw AOI boundaries (circles or contours) if toggle is enabled
+            if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
+                augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+            else:
+                # Get the original image without circles
+                augmented_image = image_service.img_array.copy()
 
             # Highlight pixels of interest if toggle is enabled
             if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
@@ -413,7 +431,21 @@ class Viewer(QMainWindow, Ui_Viewer):
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
-            self._load_areas_of_interest(augmented_image, image['areas_of_interest'])
+            
+            # For thumbnails, always show circles regardless of toggle state
+            thumbnail_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+            if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
+                if mask_path:
+                    thumbnail_image = image_service.apply_mask_highlight(
+                        thumbnail_image, 
+                        mask_path, 
+                        self.settings['identifier_color'],
+                        image['areas_of_interest']
+                    )
+                else:
+                    thumbnail_image = image_service.highlight_aoi_pixels(thumbnail_image, image['areas_of_interest'])
+            
+            self._load_areas_of_interest(thumbnail_image, image['areas_of_interest'])
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
@@ -524,6 +556,13 @@ class Viewer(QMainWindow, Ui_Viewer):
                     border-radius: 2px;
                 }
             """)
+            
+            # Enable context menu for the label
+            coord_label.setContextMenuPolicy(Qt.CustomContextMenu)
+            # Use default parameters to properly capture the current values
+            coord_label.customContextMenuRequested.connect(
+                lambda pos, c=center, a=pixel_area: self._show_aoi_context_menu(pos, coord_label, c, a)
+            )
 
             # Add widgets to layout
             layout.addWidget(highlight)
@@ -643,6 +682,23 @@ class Viewer(QMainWindow, Ui_Viewer):
         Args:
             state (bool): True if pixels should be highlighted, False otherwise.
         """
+        # Simply reload the image with current settings
+        self._reload_current_image_preserving_view()
+
+    def _draw_aoi_circle_change(self, state):
+        """Toggles drawing of AOI circles in the main image.
+
+        Args:
+            state (bool): True if circles should be drawn, False otherwise.
+        """
+        # Simply reload the image with current settings
+        self._reload_current_image_preserving_view()
+    
+    def _reload_current_image_preserving_view(self):
+        """Reloads the current image while preserving zoom and pan state.
+        
+        This method respects both the draw AOI circle and highlight pixels toggles.
+        """
         if not hasattr(self, 'main_image') or self.main_image is None:
             return
             
@@ -650,7 +706,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         saved_zoom_stack = self.main_image.zoomStack.copy() if self.main_image.zoomStack else []
         saved_transform = self.main_image.transform()
         
-        # Save AOI list scroll position
+        # Save AOI list scroll position  
         aoi_scroll_pos = self.aoiListWidget.verticalScrollBar().value() if hasattr(self, 'aoiListWidget') else 0
         
         # Reload just the image content without resetting view
@@ -660,12 +716,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         
         # Load and process the image
         image_service = ImageService(image_path)
-        augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
         
-        # Apply highlight if enabled
-        if state:
+        # Start with the base image or with circles based on toggle
+        if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
+            augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
+        else:
+            augmented_image = image_service.img_array.copy()
+        
+        # Apply highlight if enabled (independent of circle drawing)
+        if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
             if mask_path:
-                # Use mask-based highlighting (new efficient approach)
                 augmented_image = image_service.apply_mask_highlight(
                     augmented_image, 
                     mask_path, 
@@ -673,7 +733,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                     image['areas_of_interest']
                 )
             else:
-                # Fall back to old method for backward compatibility
                 augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
         
         # Update the image without resetting the view
@@ -1148,6 +1207,75 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._toastTimer.start(max(1, msec))
         except Exception:
             pass
+
+    def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area):
+        """Show context menu for AOI coordinate label with copy option.
+        
+        Args:
+            pos: Position where the context menu was requested (relative to label_widget)
+            label_widget: The QLabel widget that was right-clicked
+            center: Tuple of (x, y) coordinates of the AOI center
+            pixel_area: The area of the AOI in pixels
+        """
+        menu = QMenu(label_widget)
+        
+        # Style the menu to match the application theme
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2b2b2b;
+                border: 1px solid #555555;
+                color: white;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                border-radius: 3px;
+            }
+            QMenu::item:selected {
+                background-color: #505050;
+            }
+        """)
+        
+        # Add copy action
+        copy_action = menu.addAction("Copy Data")
+        copy_action.triggered.connect(lambda: self._copy_aoi_data(center, pixel_area))
+        
+        # Get the current cursor position (global coordinates)
+        from PySide6.QtGui import QCursor
+        global_pos = QCursor.pos()
+        
+        # Show menu at cursor position
+        menu.exec(global_pos)
+    
+    def _copy_aoi_data(self, center, pixel_area):
+        """Copy AOI data to clipboard including image name, coordinates, and GPS.
+        
+        Args:
+            center: Tuple of (x, y) coordinates of the AOI center
+            pixel_area: The area of the AOI in pixels
+        """
+        from PySide6.QtWidgets import QApplication
+        
+        # Get current image information
+        image = self.images[self.current_image]
+        image_name = image.get('name', 'Unknown')
+        
+        # Get GPS coordinates if available
+        gps_coords = self.messages.get('GPS Coordinates', 'N/A')
+        
+        # Format the data for clipboard
+        clipboard_text = (
+            f"Image: {image_name}\n"
+            f"AOI Coordinates: X={center[0]}, Y={center[1]}\n"
+            f"AOI Area: {pixel_area:.0f} px\n"
+            f"GPS Coordinates: {gps_coords}"
+        )
+        
+        # Copy to clipboard
+        QApplication.clipboard().setText(clipboard_text)
+        
+        # Show confirmation toast
+        self._show_toast("AOI data copied", 2000, color="#00C853")
 
     def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or GPS coordinates at the mouse position.
