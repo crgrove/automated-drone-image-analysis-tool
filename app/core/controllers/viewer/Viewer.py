@@ -404,7 +404,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Load the original image
             # Note: When using mask-based storage, image_path should already point to the original source image
 
-            image_service = ImageService(image_path)
+            # Pass mask_path for thermal data retrieval from mask metadata
+            image_service = ImageService(image_path, mask_path)
+
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
             if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
@@ -715,7 +717,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         mask_path = image.get('mask_path', '')
         
         # Load and process the image
-        image_service = ImageService(image_path)
+        # Pass mask_path for thermal data retrieval from mask metadata
+        image_service = ImageService(image_path, mask_path)
         
         # Start with the base image or with circles based on toggle
         if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
@@ -1278,17 +1281,45 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._show_toast("AOI data copied", 2000, color="#00C853")
 
     def _mainImage_mouse_pos(self, pos):
-        """Displays temperature data or GPS coordinates at the mouse position.
+        """Displays temperature data at the mouse position on thermal images.
+        
+        The position is already in image coordinates, accounting for zoom/pan
+        transformations handled by QtImageViewer's mapToScene method.
 
         Args:
-            pos (QPoint): The current mouse position on the image.
+            pos (QPoint): The current mouse position in image coordinates.
+                         Will be (-1, -1) when cursor is outside the image.
         """
+        # Clear previous cursor position message
+        if "Cursor Position" in self.messages:
+            self.messages["Cursor Position"] = None
+            
         if self.temperature_data is not None:
-            shape = self.temperature_data.shape
-            if (0 <= pos.y() < shape[0]) and (0 <= pos.x() < shape[1]):
-                temp_value = str(round(self.temperature_data[pos.y()][pos.x()], 2))
-                temp_display = f"{temp_value}° {self.temperature_unit}"
-                self.messages["Temperature"] = temp_display
+            # Check if cursor is within valid image bounds
+            if pos.x() >= 0 and pos.y() >= 0:
+                shape = self.temperature_data.shape
+                # Ensure position is within temperature data array bounds
+                if (0 <= pos.y() < shape[0]) and (0 <= pos.x() < shape[1]):
+                    temp_value = self.temperature_data[pos.y()][pos.x()]
+                    # Format temperature with 1 decimal place for cleaner display
+                    temp_display = f"{temp_value:.1f}° {self.temperature_unit} at ({pos.x()}, {pos.y()})"
+                    self.messages["Temperature"] = temp_display
+                else:
+                    # Cursor is on image but outside temperature data bounds
+                    self.messages["Temperature"] = None
+            else:
+                # Cursor is outside the image
+                self.messages["Temperature"] = None
+        else:
+            # No temperature data available (non-thermal image)
+            # Optionally show cursor position for non-thermal images
+            if pos.x() >= 0 and pos.y() >= 0:
+                # Only show position if cursor is on the image
+                if hasattr(self, 'main_image') and self.main_image and self.main_image.hasImage():
+                    # You could enable this to show cursor position for all images:
+                    # self.messages["Cursor Position"] = f"({pos.x()}, {pos.y()})"
+                    pass
+            self.messages["Temperature"] = None
 
     def _rotate_north_icon(self, direction):
         """
