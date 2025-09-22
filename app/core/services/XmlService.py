@@ -112,13 +112,16 @@ class XmlService:
                     area_of_interest = {
                         'area': float(area_of_interest_xml.get('area', "0")),
                         'center': literal_eval(area_of_interest_xml.get('center', "(0, 0)")),
-                        'radius': int(area_of_interest_xml.get('radius', "0"))
+                        'radius': int(area_of_interest_xml.get('radius', "0")),
+                        'xml': area_of_interest_xml  # Store XML element reference for updating
                     }
                     # Add optional fields if they exist (for backward compatibility)
                     if area_of_interest_xml.get('contour'):
                         area_of_interest['contour'] = literal_eval(area_of_interest_xml.get('contour'))
                     if area_of_interest_xml.get('detected_pixels'):
                         area_of_interest['detected_pixels'] = literal_eval(area_of_interest_xml.get('detected_pixels'))
+                    # Always set flagged status (default to False if not present)
+                    area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -201,6 +204,9 @@ class XmlService:
             area_xml.set('center', str(area['center']))
             area_xml.set('radius', str(area['radius']))
             area_xml.set('area', str(area['area']))
+            # Add flagged status if present
+            if 'flagged' in area:
+                area_xml.set('flagged', str(area['flagged']))
             # Optionally save contour and detected_pixels if available
             # Note: These can be large, so we might want to make this configurable
             if 'contour' in area and area['contour']:
