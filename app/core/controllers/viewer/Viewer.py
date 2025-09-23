@@ -150,13 +150,13 @@ class Viewer(QMainWindow, Ui_Viewer):
     def showEvent(self, event):
         super().showEvent(event)
         if not hasattr(self, '_initialized_once'):
-            # Call directly after the event is processed
-            QApplication.processEvents()
             self._initial_fit_image()
             self._initialized_once = True
 
     def _initial_fit_image(self):
         if self.main_image is not None and not self.main_image._is_destroyed:
+            # Ensure the widget is properly sized before resetting zoom
+            self.main_image.updateGeometry()
             self.main_image.resetZoom()
             if hasattr(self, 'overlay'):
                 self.overlay._place_overlay()
@@ -369,7 +369,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.viewport().installEventFilter(self)
 
             # Initialize magnifying glass controller
-            self.magnifying_glass = MagnifyingGlass(self.main_image, self.logger)
+            self.magnifying_glass = MagnifyingGlass(self.main_image, self.logger, self)
+            self.magnifying_glass_enabled = False
             
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
@@ -490,6 +491,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
                 return
                 
+            # Ensure the image is properly loaded before resetting zoom
+            if not self.main_image.hasImage():
+                return
+                
+            # Reset zoom to fit image properly
             self.main_image.resetZoom()
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
@@ -540,12 +546,15 @@ class Viewer(QMainWindow, Ui_Viewer):
                     except Exception as e:
                         self.logger.error(f"Failed to parse thermal data from image: {e}")
                         self.temperature_data = None
+            # Connect signals only once
+            if not hasattr(self, '_signals_connected'):
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
             self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
             self.main_image.zoomChanged.connect(self._update_scale_bar)
+                self._signals_connected = True
             self._update_scale_bar(self.main_image.getZoom())
 
-            # Update overlay with new image data
+            # Update overlay with new image data - AFTER zoom reset so scene is properly set up
             if hasattr(self, 'overlay'):
                 self.overlay.rotate_north_icon(direction)
                 self.overlay.update_visibility(
@@ -553,6 +562,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                     direction,
                     avg_gsd
                 )
+                # Position the overlay after image is loaded and zoomed
+                self.overlay._place_overlay()
         except Exception as e:
             error_msg = f"Error loading image {self.current_image + 1}: {str(e)}"
             self.logger.error(error_msg)
@@ -840,10 +851,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             event (QResizeEvent): Resize event.
         """
         super().resizeEvent(event)
-        if self.main_image is not None:
+        if self.main_image is not None and not self.main_image._is_destroyed:
             if event.oldSize() != event.size():
+                # Ensure image is properly resized to fit the new dimensions
+                if self.main_image.hasImage():
+                    self.main_image.resetZoom()
+                else:
                 self.main_image.updateViewer()
-                # Overlay positioning is handled automatically by the overlay widget
 
 
     def _kmlButton_clicked(self):
@@ -965,8 +979,22 @@ class Viewer(QMainWindow, Ui_Viewer):
             x (float): X coordinate where middle mouse was pressed
             y (float): Y coordinate where middle mouse was pressed
         """
+        self.logger.info(f"Middle mouse button pressed at ({x}, {y})")
         if hasattr(self, 'magnifying_glass'):
             self.magnifying_glass.toggle(x, y)
+            # Update the enabled flag to match the magnifying glass state
+            self.magnifying_glass_enabled = self.magnifying_glass.is_enabled()
+        else:
+            self.logger.warning("Magnifying glass not available")
+
+    def _update_magnifying_glass(self, pos):
+        """Update the magnifying glass position and content.
+
+        Args:
+            pos (QPoint): The current mouse position in image coordinates
+        """
+        if hasattr(self, 'magnifying_glass') and self.magnifying_glass.is_enabled():
+            self.magnifying_glass.update_position(pos)
 
     def _update_scale_bar(self, zoom: float):
         """Update the scale bar through the overlay widget.
@@ -1074,8 +1102,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                             self.logger.error(f"Error getting pixel values: {e}")
 
         # Update magnifying glass if enabled
-        if hasattr(self, 'magnifying_glass') and self.magnifying_glass.is_enabled() and pos.x() >= 0 and pos.y() >= 0:
-            self.magnifying_glass.update_position(pos)
+        if hasattr(self, 'magnifying_glass_enabled') and self.magnifying_glass_enabled and pos.x() >= 0 and pos.y() >= 0:
+            self._update_magnifying_glass(pos)
 
     def _open_measure_dialog(self):
         """Opens the measure dialog for distance measurement."""
@@ -1095,6 +1123,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.measure_dialog = MeasureDialog(self, self.main_image, self.current_gsd, self.distance_unit)
             self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
             self.measure_dialog.show()
+
+        # Update magnifying glass if enabled
+        if hasattr(self, 'magnifying_glass') and self.magnifying_glass.is_enabled():
+            self.magnifying_glass.update_position(pos)
 
     def _on_gsd_changed(self, gsd_value):
         """Updates the stored GSD value.

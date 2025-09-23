@@ -499,6 +499,9 @@ class QtImageViewer(QGraphicsView):
             return
         self.clearZoom()
         if self.hasImage():
+            # Ensure widget has a valid size before fitting
+            if self.width() <= 0 or self.height() <= 0:
+                return
             scene_rect = self._safe_scene_rect()
             if scene_rect:
                 self.fitInView(scene_rect, self.aspectRatioMode)

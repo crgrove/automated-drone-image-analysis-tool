@@ -23,16 +23,18 @@ class MagnifyingGlass:
     The magnifying glass can be toggled on/off with the middle mouse button.
     """
     
-    def __init__(self, main_image_widget, logger=None):
+    def __init__(self, main_image_widget, logger=None, viewer=None):
         """
         Initialize the magnifying glass controller.
         
         Args:
             main_image_widget: The QtImageViewer widget that displays the main image
             logger: Optional logger instance for error reporting
+            viewer: The Viewer instance that contains the image data
         """
         self.main_image = main_image_widget
         self.logger = logger or LoggerService()
+        self.viewer = viewer
         
         # Magnifying glass state
         self.enabled = False
@@ -110,15 +112,15 @@ class MagnifyingGlass:
             return
         
         try:
-            # Get the current image array from the main viewer
-            if not hasattr(self.main_image, 'parent') or not hasattr(self.main_image.parent(), 'current_image_array'):
+            # Get the current image array from the viewer instance
+            if not self.viewer or not hasattr(self.viewer, 'current_image_array'):
                 return
                 
-            current_image_array = self.main_image.parent().current_image_array
-            if current_image_array is None:
+            # Use the cached image array from the viewer
+            img_array = self.viewer.current_image_array
+            if img_array is None:
+                self.logger.warning("No cached image array available for magnifying glass")
                 return
-            
-            img_array = current_image_array
             h, w = img_array.shape[:2]
             
             # Get current zoom level of the main viewer

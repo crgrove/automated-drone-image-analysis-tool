@@ -41,7 +41,13 @@ class OverlayWidget(QWidget):
         # Setup widget properties
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setObjectName("hud")
-        self.setStyleSheet("#hud{background:rgba(0,0,0,150); border-radius:6px;}")
+        # Ensure stylesheet backgrounds are painted in Qt6
+        self.setAttribute(Qt.WA_StyledBackground)
+        # Use background-color to ensure style engine paints the background
+        self.setStyleSheet("#hud{background-color: rgba(0,0,0,100); border-radius:6px;}")
+        
+        # Set minimum size to ensure the widget is visible
+        self.setMinimumSize(200, 50)
         
         # Create layout
         self.layout = QHBoxLayout(self)
@@ -71,10 +77,22 @@ class OverlayWidget(QWidget):
         # Connect to main image events for positioning
         self.main_image.viewChanged.connect(self._place_overlay)
         self.main_image.zoomChanged.connect(self._place_overlay)
-        
-        # Initially hide the overlay
-        self.hide()
     
+    def paintEvent(self, event):
+        """
+        Paint a semi-transparent rounded rectangle as the overlay background.
+        This is more reliable across styles/engines than stylesheet-only.
+        """
+        # Let the base class/style draw first (if any), then paint our overlay on top
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 100))
+        radius = 6
+        painter.drawRoundedRect(self.rect(), radius, radius)
+
     def update_visibility(self, show_overlay, direction=None, avg_gsd=None):
         """
         Update the overlay visibility based on available data and user preference.
@@ -189,13 +207,18 @@ class OverlayWidget(QWidget):
         if not hasattr(self.main_image, '_is_destroyed') or self.main_image._is_destroyed:
             return
 
+        # Check if the image is properly loaded and scene is set up
+        if not self.main_image.hasImage() or self.main_image.sceneRect().isEmpty():
+            return
+
         self.adjustSize()  # Make sure widget/layout is up to date
         self.updateGeometry()
         vp = self.main_image.viewport()
         margin = 12
 
-        # bottom‑right of the image (sceneRect) in viewport coords
-        br_scene = self.main_image.sceneRect().bottomRight()
+        # Get scene and viewport dimensions
+        scene_rect = self.main_image.sceneRect()
+        br_scene = scene_rect.bottomRight()
         br_view = self.main_image.mapFromScene(br_scene)
 
         hud_w, hud_h = self.width(), self.height()
@@ -212,8 +235,9 @@ class OverlayWidget(QWidget):
         # Fallback if overlay is bigger than viewport
         if hud_w + 2 * margin > vp_w or hud_h + 2 * margin > vp_h:
             x, y = margin, margin
-
+            
         self.move(x, y)
+        self.show()  # Ensure overlay is visible
         self.raise_()
     
     def update_scale_bar(self, zoom: float, messages=None, distance_unit='m'):
