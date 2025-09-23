@@ -440,7 +440,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 return
 
             try:
-                image_service = ImageService(image_path)
+                image_service = ImageService(image_path, mask_path)
             except Exception as e:
                 raise
 
@@ -759,7 +759,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         mask_path = image.get('mask_path', '')
         
         # Load and process the image
-        image_service = ImageService(image_path)
+        image_service = ImageService(image_path, mask_path)
 
         # Update the cached image array - using reference to avoid crash
         # Store the service reference to keep data alive
@@ -777,8 +777,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
             if mask_path:
                 augmented_image = image_service.apply_mask_highlight(
-                    augmented_image, 
-                    mask_path, 
+                    augmented_image,
                     self.settings['identifier_color'],
                     image['areas_of_interest']
                 )
@@ -1184,7 +1183,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                                 # Fallback: load image if both cache and service are missing
                                 image = self.images[self.current_image]
                                 image_path = image.get('path', '')
-                                image_service = ImageService(image_path)
+                                mask_path = image.get('mask_path', '')
+                                image_service = ImageService(image_path, mask_path)
                                 img_array = image_service.img_array
                                 # Store reference instead of copying
                                 self.current_image_service = image_service

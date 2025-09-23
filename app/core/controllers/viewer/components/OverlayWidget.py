@@ -38,6 +38,11 @@ class OverlayWidget(QWidget):
         self.theme = theme
         self.logger = logger or LoggerService()
         
+        # Track visibility state of individual components
+        self._compass_visible = False
+        self._scale_bar_visible = False
+        self._user_wants_overlay = True
+        
         # Setup widget properties
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setObjectName("hud")
@@ -62,9 +67,15 @@ class OverlayWidget(QWidget):
         # Add scale bar to overlay
         self.scale_bar.setParent(self)
         self.layout.addWidget(self.scale_bar)
+        # Initially hide scale bar until data is available
+        self.scale_bar.setVisible(False)
         
         # Store reference to compass label for north icon updates
         self.north_icon = self.compass_label
+        # Initially hide compass until direction data is available
+        transparent_pixmap = QPixmap(1, 1)
+        transparent_pixmap.fill(Qt.transparent)
+        self.north_icon.setPixmap(transparent_pixmap)
         
         # Load compass asset
         self.original_north_pix = QPixmap(f":/icons/{self.theme.lower()}/north.png")
@@ -77,6 +88,9 @@ class OverlayWidget(QWidget):
         # Connect to main image events for positioning
         self.main_image.viewChanged.connect(self._place_overlay)
         self.main_image.zoomChanged.connect(self._place_overlay)
+        
+        # Initialize visibility state - start hidden since no components are visible yet
+        self._check_autohide()
     
     def paintEvent(self, event):
         """
@@ -93,6 +107,23 @@ class OverlayWidget(QWidget):
         radius = 6
         painter.drawRoundedRect(self.rect(), radius, radius)
 
+    def _check_autohide(self):
+        """
+        Check if the overlay should be auto-hidden based on component visibility.
+        
+        Auto-hides the overlay if:
+        - User wants to show overlay AND
+        - Neither compass nor scale bar is visible
+        """
+        if self._user_wants_overlay:
+            if not self._compass_visible and not self._scale_bar_visible:
+                self.hide()
+            else:
+                # Only show and position if we have at least one visible component
+                if not self.isVisible():
+                    self.show()
+                self._place_overlay()
+
     def update_visibility(self, show_overlay, direction=None, avg_gsd=None):
         """
         Update the overlay visibility based on available data and user preference.
@@ -102,14 +133,16 @@ class OverlayWidget(QWidget):
             direction (float|None): Drone orientation in degrees
             avg_gsd (float|None): Average ground sample distance
         """
-        # Show if either direction or avg_gsd is available; hide if both are missing
-        if (direction is None) and (avg_gsd is None):
+        self._user_wants_overlay = show_overlay
+        
+        # Update component visibility expectations based on available data
+        # (The actual visibility will be set by the individual update methods)
+        
+        if not show_overlay:
             self.hide()
         else:
-            if show_overlay:
-                self.show()
-            else:
-                self.hide()
+            # Let the autohide check determine visibility based on component states
+            self._check_autohide()
     
     def rotate_north_icon(self, direction):
         """
@@ -123,6 +156,8 @@ class OverlayWidget(QWidget):
             transparent = QPixmap(1, 1)
             transparent.fill(Qt.transparent)
             self.north_icon.setPixmap(transparent)
+            self._compass_visible = False
+            self._check_autohide()
             return
 
         angle = 360 - direction
@@ -135,6 +170,8 @@ class OverlayWidget(QWidget):
             transparent = QPixmap(1, 1)
             transparent.fill(Qt.transparent)
             self.north_icon.setPixmap(transparent)
+            self._compass_visible = False
+            self._check_autohide()
             return
 
         # Find the true tip: first non-transparent pixel from the top, center column
@@ -200,6 +237,8 @@ class OverlayWidget(QWidget):
 
         p.end()
         self.north_icon.setPixmap(canvas)
+        self._compass_visible = True
+        self._check_autohide()
     
     def _place_overlay(self):
         """Anchor HUD to bottom‑right corner *of the image*, not viewport."""
@@ -237,8 +276,8 @@ class OverlayWidget(QWidget):
             x, y = margin, margin
             
         self.move(x, y)
-        self.show()  # Ensure overlay is visible
         self.raise_()
+        # Note: Visibility is controlled by autohide logic, not placed here
     
     def update_scale_bar(self, zoom: float, messages=None, distance_unit='m'):
         """
@@ -250,16 +289,22 @@ class OverlayWidget(QWidget):
             distance_unit: Unit for distance display ('m' or 'ft')
         """
         if not self.scale_bar or not messages:
+            self._scale_bar_visible = False
+            self._check_autohide()
             return
             
         try:
             if not self.main_image or not self.main_image.hasImage():
                 self.scale_bar.setVisible(False)
+                self._scale_bar_visible = False
+                self._check_autohide()
                 return
 
             gsd_text = messages.get("Estimated Average GSD")  # e.g. '3.2cm/px'
             if not gsd_text:
                 self.scale_bar.setVisible(False)
+                self._scale_bar_visible = False
+                self._check_autohide()
                 return
 
             # -------- compute label --------
@@ -283,9 +328,13 @@ class OverlayWidget(QWidget):
             # -------- show --------
             self.scale_bar.setLabel(label)
             self.scale_bar.setVisible(True)
+            self._scale_bar_visible = True
+            self._check_autohide()
 
         except Exception as e:
             self.logger.error(f"scale‑bar update failed: {e}")
+            self._scale_bar_visible = False
+            self._check_autohide()
     
     def cleanup(self):
         """Clean up the overlay widget."""

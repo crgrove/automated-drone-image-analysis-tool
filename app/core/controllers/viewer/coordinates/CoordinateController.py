@@ -191,8 +191,10 @@ class CoordinateController:
             return
 
         lat, lon = lat_lon
-        image_path = self.parent.images[self.parent.current_image]['path']
-        image_service = ImageService(image_path)
+        image = self.parent.images[self.parent.current_image]
+        image_path = image['path']
+        mask_path = image.get('mask_path', '')
+        image_service = ImageService(image_path, mask_path)
         yaw, pitch = image_service.get_gimbal_orientation()
         altitude = image_service.get_asl_altitude('m')
         hfov = image_service.get_camera_hfov()
@@ -286,9 +288,10 @@ class CoordinateController:
 
             image = self.parent.images[self.parent.current_image]
             image_path = image.get('path', '')
+            mask_path = image.get('mask_path', '')
 
             # Get the drone orientation (yaw/bearing)
-            image_service = ImageService(image_path)
+            image_service = ImageService(image_path, mask_path)
             direction = image_service.get_drone_orientation()
 
             if direction is None:

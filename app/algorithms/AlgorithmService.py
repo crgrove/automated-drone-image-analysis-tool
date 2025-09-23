@@ -6,6 +6,7 @@ import shutil
 import json
 import zlib
 import base64
+import tifffile
 from pathlib import Path
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
@@ -199,31 +200,66 @@ class AlgorithmService:
 
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
         """
-        Saves the detection mask instead of duplicating the image.
+        Saves the detection mask as a TIFF file with temperature data embedded as additional bands.
 
         Args:
             input_file (str): Path to the input image file.
-            output_file (str): Path to save the mask (will be saved as PNG).
+            output_file (str): Path to save the mask (will be saved as .tif extension).
             mask (np.ndarray): Binary mask of detected pixels (0 or 255).
-            temperature_data (np.ndarray or list, optional): Temperature matrix to store.
+            temperature_data (np.ndarray or list, optional): Temperature matrix to store as additional bands.
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Change extension to .png for mask
-        mask_file = path.with_suffix('.png')
-       
-        # Save the mask as a compressed PNG (binary masks compress very well)
-        # Use maximum compression (9) since masks are small
-        cv2.imwrite(str(mask_file), mask, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-        
-        # Store temperature data if provided (for thermal algorithms)
-        if temperature_data is not None:
-            temp_file = path.with_suffix('.thermal.json')
-            with open(temp_file, 'w') as f:
-                json.dump(temperature_data.tolist() if hasattr(temperature_data, 'tolist') else temperature_data, f)
 
-        
+        # Change extension to .tif for mask
+        mask_file = path.with_suffix('.tif')
+
+        # Ensure mask is single channel grayscale
+        if len(mask.shape) == 3:
+            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+
+        bands = []
+
+        # First band: mask (uint8)
+        bands.append(mask.astype(np.uint8))
+
+        if temperature_data is not None:
+            # Convert to numpy if needed
+            if not isinstance(temperature_data, np.ndarray):
+                temperature_data = np.array(temperature_data)
+
+            # Resize if mismatch
+            if temperature_data.shape[:2] != mask.shape[:2]:
+                print(f"Warning: Temperature data shape {temperature_data.shape} doesn't match mask shape {mask.shape}")
+                temperature_data = cv2.resize(
+                    temperature_data.astype(np.float32),
+                    (mask.shape[1], mask.shape[0]),
+                    interpolation=cv2.INTER_LINEAR
+                )
+
+            # Always float32 for thermal
+            temp_scaled = temperature_data.astype(np.float32)
+
+            # If 2D, add channel dimension
+            if temp_scaled.ndim == 2:
+                temp_scaled = np.expand_dims(temp_scaled, axis=2)
+
+            # Add each channel as its own band
+            for i in range(temp_scaled.shape[2]):
+                bands.append(temp_scaled[:, :, i])
+
+        # Stack into shape (bands, height, width)
+        stacked = np.stack(bands, axis=0)
+
+        # Save with tifffile (multi-band, compressed)
+        tifffile.imwrite(
+            str(mask_file),
+            stacked,
+            photometric='minisblack',
+            metadata={'axes': 'CYX'},  # Channels, Y, X
+            compression='deflate'  # or 'zlib' / 'lzma' if you prefer
+        )
+
         return str(mask_file)
 
     def split_image(self, img, segments, overlap=0):

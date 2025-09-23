@@ -8,6 +8,7 @@ import json
 import math
 import zlib
 import base64
+import tifffile
 from PIL import Image
 
 from core.services.GSDService import GSDService
@@ -236,78 +237,45 @@ class ImageService:
 
     def get_thermal_data(self, unit):
         """
-        Loads thermal data from mask PNG metadata if available, otherwise from XMP.
-        Returns a NumPy array in C or F.
-        
+        Loads thermal data from a multi-band mask GeoTIFF.
+        Band 0 = mask, Bands 1..N = temperature data.
+
         Args:
             unit (str): Temperature unit ('C' or 'F').
-            
+
         Returns:
             np.ndarray or None: Temperature data array in the specified unit.
         """
-        # First, try to load from mask PNG metadata if mask_path is provided
-        if self.mask_path and os.path.exists(self.mask_path):
-            try:
-                # Open the mask PNG and read metadata
-                mask_image = Image.open(self.mask_path)
-                
-                # Check if thermal data exists in metadata
-                if hasattr(mask_image, 'text') and 'ThermalData' in mask_image.text:
-                    encoded_data = mask_image.text.get('ThermalData')
-                    compression = mask_image.text.get('ThermalDataCompression', '')
-                    shape_str = mask_image.text.get('ThermalDataShape', '')
-                    
-                    if encoded_data and compression == 'zlib+base64':
-                        # Decode from base64
-                        compressed_data = base64.b64decode(encoded_data.encode('ascii'))
-                        
-                        # Decompress
-                        temp_json = zlib.decompress(compressed_data).decode('utf-8')
-                        
-                        # Parse JSON
-                        raw = json.loads(temp_json)
-                        
-                        # Convert to NumPy array
-                        data = np.asarray(raw, dtype=np.float32)
-                        
-                        # Reshape if shape information is available
-                        if shape_str:
-                            try:
-                                shape = json.loads(shape_str)
-                                data = data.reshape(shape)
-                            except Exception:
-                                pass  # Keep flat if reshape fails
-                        
-                        # Convert units if needed
-                        if unit == 'F':
-                            data = data * 1.8 + 32.0
-                        
-                        return data
-                        
-            except Exception as e:
-                # If reading from mask fails, fall back to XMP
-                print(f"Warning: Failed to read thermal data from mask: {e}")
-        
-        # Fall back to XMP metadata (original method)
-        raw = self.xmp_data.get('TemperatureData', None)
-        if raw is None:
+        if not self.mask_path or not os.path.exists(self.mask_path):
             return None
-        
-        # If it's a JSON string, decode it
-        if isinstance(raw, str):
-            try:
-                raw = json.loads(raw)
-            except Exception:
-                # Malformed JSON or unexpected type
+
+        try:
+            # Read all bands from the TIFF
+            data = tifffile.imread(self.mask_path)
+
+            # Ensure 3D shape (bands, height, width)
+            if data.ndim == 2:
+                # Only one band, no thermal data
                 return None
-        
-        # Ensure NumPy array for numeric ops
-        data = np.asarray(raw, dtype=np.float32)
-        
-        if unit == 'F':
-            data = data * 1.8 + 32.0
-        
-        return data
+            elif data.ndim == 3:
+                # (bands, height, width)
+                if data.shape[0] < 2:
+                    return None  # no thermal bands present
+                # Take only the first thermal band (band 1) for backward compatibility
+                # Most thermal algorithms only store one temperature band anyway
+                thermal_data = data[1].astype(np.float32)  # Shape: (height, width)
+            else:
+                return None
+
+            # Convert units if needed
+            if unit.upper() == 'F':
+                thermal_data = thermal_data * 1.8 + 32.0
+
+            return thermal_data
+
+        except Exception as e:
+            print(f"Warning: Failed to read thermal data from {self.mask_path}: {e}")
+            return None
 
     def _is_autel(self):
         """
@@ -428,41 +396,58 @@ class ImageService:
 
         return image_copy
     
-    def apply_mask_highlight(self, image_array, mask_path, identifier_color=(255, 0, 255), areas_of_interest=None):
+    def apply_mask_highlight(self, image_array, mask_path=None, identifier_color=(255, 0, 255), areas_of_interest=None):
         """
         Applies a mask overlay to highlight detected pixels.
-        
+ 
         Args:
             image_array (np.ndarray): The input image array in BGR format.
-            mask_path (str): Path to the mask PNG file.
+            mask_path (str, optional): Path to the mask file (.tif or .png). If None, uses self.mask_path.
             identifier_color (tuple): RGB color tuple for highlighting (uses Object Identifier color).
             areas_of_interest (list, optional): Not used currently, but kept for future filtering.
-            
+ 
         Returns:
             np.ndarray: The image array with mask applied.
         """
-        if not mask_path or not os.path.exists(mask_path):
+        # Use provided mask_path or fall back to self.mask_path
+        effective_mask_path = mask_path or self.mask_path
+        if not effective_mask_path or not os.path.exists(effective_mask_path):
             return image_array
-            
-        # Load the mask
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+
+        # Load the mask depending on format
+        if effective_mask_path.lower().endswith((".tif", ".tiff")):
+            # Read multi-band GeoTIFF and pull first band as mask
+            data = tifffile.imread(effective_mask_path)
+            if data.ndim == 3:  # (bands, height, width)
+                mask = data[0].astype(np.uint8)
+            else:
+                mask = data.astype(np.uint8)
+        else:
+            # Fallback: load grayscale PNG
+            mask = cv2.imread(effective_mask_path, cv2.IMREAD_GRAYSCALE)
+
         if mask is None:
             return image_array
-        
+
         # Resize mask if needed to match image dimensions
         if mask.shape[:2] != image_array.shape[:2]:
             mask = cv2.resize(mask, (image_array.shape[1], image_array.shape[0]), interpolation=cv2.INTER_NEAREST)
-        
+
         highlighted_image = image_array.copy()
-        
-        # Apply the mask - white pixels (255) get colored, black (0) stay transparent
+
+        # Apply the mask - blend highlight color with original image
         # Image is in BGR format, identifier_color is RGB, so convert
-        bgr_color = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
-        
-        # Apply color to all white pixels in the mask
+        bgr_color = np.array([int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0])], dtype=np.uint8)
+
+        # Create a blended overlay where mask pixels are highlighted
         mask_indices = mask > 0
-        highlighted_image[mask_indices] = bgr_color
-            
+        if np.any(mask_indices):
+            # Blend with 70% original image and 30% highlight color for visibility
+            alpha = 0.3  # Highlight strength
+            highlighted_image[mask_indices] = (
+                highlighted_image[mask_indices] * (1 - alpha) + bgr_color * alpha
+            ).astype(np.uint8)
+
         return highlighted_image
     
     def highlight_aoi_pixels(self, image_array, areas_of_interest, highlight_color=(255, 0, 255)):

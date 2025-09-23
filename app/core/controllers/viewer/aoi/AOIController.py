@@ -144,8 +144,9 @@ class AOIController:
                     # Fallback only if we don't have the cached image
                     image = self.parent.images[self.parent.current_image]
                     image_path = image.get('path', '')
+                    mask_path = image.get('mask_path', '')
                     from core.services.ImageService import ImageService
-                    image_service = ImageService(image_path)
+                    image_service = ImageService(image_path, mask_path)
                     img_array = image_service.img_array
 
                 center = area_of_interest['center']
