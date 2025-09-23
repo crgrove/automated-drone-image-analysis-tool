@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1040</width>
-    <height>852</height>
+    <width>1552</width>
+    <height>951</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -86,6 +86,18 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="showAOIsCheckBox">
+         <property name="font">
+          <font>
+           <pointsize>9</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Show AOIs</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer_3">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
@@ -146,6 +158,29 @@
          </property>
          <property name="iconName" stdset="0">
           <string>ruler.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="magnifyButton">
+         <property name="toolTip">
+          <string>Toggle Magnifying Glass (Middle Mouse)</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="../resources.qrc">
+           <normaloff>:/icons/dark/icons/dark_theme/magnify.png</normaloff>:/icons/dark/icons/dark_theme/magnify.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>25</width>
+           <height>25</height>
+          </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>magnify.png</string>
          </property>
         </widget>
        </item>
@@ -527,7 +562,7 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>1020</width>
+         <width>1532</width>
          <height>96</height>
         </rect>
        </property>

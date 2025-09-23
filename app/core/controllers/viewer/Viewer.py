@@ -172,6 +172,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Clean up magnifying glass controller
         if hasattr(self, 'magnifying_glass'):
             self.magnifying_glass.cleanup()
+            # Reset button styling
+            self.magnifying_glass_enabled = False
+            self._update_magnify_button_style()
         
         # Clean up overlay widget
         if hasattr(self, 'overlay'):
@@ -215,14 +218,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (H or Ctrl+I)")
         
         # Add draw AOI circle toggle
-        self.drawAOICircleToggle = Toggle()
-        layout.insertWidget(layout.indexOf(self.highlightPixelsLabel) + 1, self.drawAOICircleToggle)
-        self.drawAOICircleLabel = QLabel("Draw AOI Circle")
+        self.showAOIsToggle = Toggle()
+        layout.replaceWidget(self.showAOIsCheckBox, self.showAOIsToggle)
+        self.showAOIsCheckBox.deleteLater()
+
+        layout.insertWidget(layout.indexOf(self.highlightPixelsLabel) + 1, self.showAOIsToggle)
+        self.drawAOICircleLabel = QLabel("Show AOIs")
         self.drawAOICircleLabel.setFont(font)
-        layout.insertWidget(layout.indexOf(self.drawAOICircleToggle) + 1, self.drawAOICircleLabel)
-        self.drawAOICircleToggle.setChecked(True)  # Default to showing circles
-        self.drawAOICircleToggle.clicked.connect(self._draw_aoi_circle_change)
-        self.drawAOICircleToggle.setToolTip("Toggle AOI Circle Drawing (C)")
+        layout.insertWidget(layout.indexOf(self.showAOIsToggle) + 1, self.drawAOICircleLabel)
+        self.showAOIsToggle.setChecked(True)  # Default to showing circles
+        self.showAOIsToggle.clicked.connect(self._draw_aoi_circle_change)
+        self.showAOIsToggle.setToolTip("Toggle AOI Circles (C)")
 
         # Add measure button to toolbar
 
@@ -256,8 +262,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._highlight_pixels_change(self.highlightPixelsToggle.isChecked())
         if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
             # Toggle AOI circle drawing with 'C' key (no modifier)
-            self.drawAOICircleToggle.setChecked(not self.drawAOICircleToggle.isChecked())
-            self._draw_aoi_circle_change(self.drawAOICircleToggle.isChecked())
+            self.showAOIsToggle.setChecked(not self.showAOIsToggle.isChecked())
+            self._draw_aoi_circle_change(self.showAOIsToggle.isChecked())
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self.coordinate_controller.show_north_oriented_image()
@@ -337,6 +343,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.zipButton.clicked.connect(self._zipButton_clicked)
             self.measureButton.clicked.connect(self._open_measure_dialog)
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
+            self.magnifyButton.clicked.connect(self._magnifyButton_clicked)
+            # Initialize magnify button styling
+            self._update_magnify_button_style()
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
@@ -405,6 +414,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Hide magnifying glass when loading new image
             if hasattr(self, 'magnifying_glass'):
                 self.magnifying_glass._hide()
+                # Update the enabled flag and button styling
+                self.magnifying_glass_enabled = self.magnifying_glass.is_enabled()
+                self._update_magnify_button_style()
 
             image = self.images[self.current_image]
 
@@ -454,7 +466,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
-            if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
+            if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
                 augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
             else:
                 # Get the original image without circles
@@ -755,7 +767,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.current_image_array = image_service.img_array
         
         # Start with the base image or with circles based on toggle
-        if hasattr(self, 'drawAOICircleToggle') and self.drawAOICircleToggle.isChecked():
+        if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
         else:
             # Use reference instead of copy to avoid crash
@@ -980,6 +992,104 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
 
 
+    def _magnifyButton_clicked(self):
+        if self.main_image and self.main_image.hasImage():
+            # Get center point of the image
+            image_rect = self.main_image.sceneRect()
+            center_x = image_rect.center().x()
+            center_y = image_rect.center().y()
+            self._toggle_magnifying_glass(center_x, center_y)
+        else:
+            self.logger.warning("No image available for magnifying glass")
+
+
+    def _update_magnify_button_style(self):
+        """Update the magnify button styling based on magnifying glass state."""
+        if hasattr(self, 'magnifyButton') and hasattr(self, 'magnifying_glass_enabled'):
+            # Set a property to track the active state
+            self.magnifyButton.setProperty("magnifyActive", self.magnifying_glass_enabled)
+            
+            if self.magnifying_glass_enabled:
+                # Active state - highlight the button with theme-aware colors
+                # Use a blue highlight similar to other active elements in the app
+                if hasattr(self, 'theme') and self.theme.lower() == 'light':
+                    # Light theme colors
+                    style = """
+                        QToolButton[magnifyActive="true"] {
+                            background-color: #4A90E2;
+                            border: 2px solid #357ABD;
+                            border-radius: 4px;
+                        }
+                        QToolButton[magnifyActive="true"]:hover {
+                            background-color: #5BA0F2;
+                            border: 2px solid #4A90E2;
+                        }
+                        QToolButton[magnifyActive="false"] {
+                            background-color: transparent;
+                            border: none;
+                        }
+                    """
+                else:
+                    # Dark theme colors (more muted but still visible)
+                    style = """
+                        QToolButton[magnifyActive="true"] {
+                            background-color: #5A7FB8;
+                            border: 2px solid #4A6B9A;
+                            border-radius: 4px;
+                        }
+                        QToolButton[magnifyActive="true"]:hover {
+                            background-color: #6A8FC8;
+                            border: 2px solid #5A7FB8;
+                        }
+                        QToolButton[magnifyActive="false"] {
+                            background-color: transparent;
+                            border: none;
+                        }
+                    """
+                self.magnifyButton.setStyleSheet(style)
+            else:
+                # Inactive state - use the same stylesheet but the property will make it use the inactive rules
+                if hasattr(self, 'theme') and self.theme.lower() == 'light':
+                    style = """
+                        QToolButton[magnifyActive="true"] {
+                            background-color: #4A90E2;
+                            border: 2px solid #357ABD;
+                            border-radius: 4px;
+                        }
+                        QToolButton[magnifyActive="true"]:hover {
+                            background-color: #5BA0F2;
+                            border: 2px solid #4A90E2;
+                        }
+                        QToolButton[magnifyActive="false"] {
+                            background-color: transparent;
+                            border: none;
+                        }
+                    """
+                else:
+                    style = """
+                        QToolButton[magnifyActive="true"] {
+                            background-color: #5A7FB8;
+                            border: 2px solid #4A6B9A;
+                            border-radius: 4px;
+                        }
+                        QToolButton[magnifyActive="true"]:hover {
+                            background-color: #6A8FC8;
+                            border: 2px solid #5A7FB8;
+                        }
+                        QToolButton[magnifyActive="false"] {
+                            background-color: transparent;
+                            border: none;
+                        }
+                    """
+                self.magnifyButton.setStyleSheet(style)
+            
+            # Force the style to be reapplied
+            self.magnifyButton.style().unpolish(self.magnifyButton)
+            self.magnifyButton.style().polish(self.magnifyButton)
+            self.magnifyButton.update()
+        else:
+            self.logger.warning(f"Cannot update magnify button style: magnifyButton={hasattr(self, 'magnifyButton')}, enabled={hasattr(self, 'magnifying_glass_enabled')}")
+
     def _toggle_magnifying_glass(self, x, y):
         """Toggle the magnifying glass on/off when middle mouse button is pressed.
 
@@ -987,11 +1097,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             x (float): X coordinate where middle mouse was pressed
             y (float): Y coordinate where middle mouse was pressed
         """
-        self.logger.info(f"Middle mouse button pressed at ({x}, {y})")
         if hasattr(self, 'magnifying_glass'):
+            old_state = self.magnifying_glass.is_enabled()
             self.magnifying_glass.toggle(x, y)
             # Update the enabled flag to match the magnifying glass state
             self.magnifying_glass_enabled = self.magnifying_glass.is_enabled()
+            # Update button styling to reflect the state
+            self._update_magnify_button_style()
         else:
             self.logger.warning("Magnifying glass not available")
 

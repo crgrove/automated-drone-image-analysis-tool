@@ -7,20 +7,23 @@ functionality with non-blocking lazy loading.
 
 import math
 from PySide6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt, QSize, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QSize, QThread, QTimer, Signal, QObject
 from PySide6.QtGui import QIcon
 
 from core.controllers.viewer.thumbnails.ThumbnailLoader import ThumbnailLoader
 from core.services.LoggerService import LoggerService
 
 
-class ThumbnailController:
+class ThumbnailController(QObject):
     """
     Controller for managing thumbnail functionality.
     
     Handles thumbnail creation, loading, scrolling, and interaction
     with non-blocking lazy loading for better performance.
     """
+    
+    # Signal to request thumbnail loading
+    load_thumbnail_signal = Signal(int)
     
     def __init__(self, parent_viewer, logger=None):
         """
@@ -30,6 +33,7 @@ class ThumbnailController:
             parent_viewer: The main Viewer instance
             logger: Optional logger instance for error reporting
         """
+        super().__init__()
         self.parent = parent_viewer
         self.logger = logger or LoggerService()
         
@@ -122,8 +126,9 @@ class ThumbnailController:
         self.loader = ThumbnailLoader(self.parent.images)
         self.loader.moveToThread(self.loader_thread)
         
-        # Connect signals
-        self.loader.thumbnail_loaded.connect(self.on_thumbnail_loaded)
+        # Connect signals with queued connection to ensure UI updates on main thread
+        self.loader.thumbnail_loaded.connect(self.on_thumbnail_loaded, Qt.QueuedConnection)
+        self.load_thumbnail_signal.connect(self.loader.load_thumbnail, Qt.QueuedConnection)
         
         self.loader_thread.start()
     
@@ -305,8 +310,8 @@ class ThumbnailController:
         index = min(self.pending_indices)
         self.pending_indices.remove(index)
         
-        # Request loader to process this thumbnail
-        self.loader.load_thumbnail(index)
+        # Request loader to process this thumbnail using signal
+        self.load_thumbnail_signal.emit(index)
         
         # Continue with next if more pending
         if self.pending_indices:

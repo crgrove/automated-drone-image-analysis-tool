@@ -6,6 +6,7 @@
     <file alias="ADIAT.ico">icons/ADIAT.ico</file>
   </qresource>
   <qresource prefix="/icons">
+    <file alias="magnify.png">icons/dark_theme/magnify.png</file>
     <file alias="cancel.png">icons/dark_theme/cancel.png</file>
     <file alias="adjustments.png">icons/dark_theme/adjustments.png</file>
     <file alias="color.png">icons/dark_theme/color.png</file>
@@ -27,6 +28,7 @@
     <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
   </qresource>
   <qresource prefix="/icons/dark">
+    <file alias="magnify.png">icons/dark_theme/magnify.png</file>
     <file alias="adjustments.png">icons/dark_theme/adjustments.png</file>
     <file alias="cancel.png">icons/dark_theme/cancel.png</file>
     <file alias="color.png">icons/dark_theme/color.png</file>
@@ -48,6 +50,7 @@
     <file alias="zoom_out.png">icons/dark_theme/zoom_out.png</file>
   </qresource>
   <qresource prefix="/icons/light">
+    <file alias="magnify.png">icons/light_theme/magnify.png</file>
     <file alias="adjustments.png">icons/light_theme/adjustments.png</file>
     <file alias="ruler.png">icons/light_theme/ruler.png</file>
     <file alias="cancel.png">icons/light_theme/cancel.png</file>

@@ -27,7 +27,7 @@ class Ui_Viewer(object):
     def setupUi(self, Viewer):
         if not Viewer.objectName():
             Viewer.setObjectName(u"Viewer")
-        Viewer.resize(1040, 852)
+        Viewer.resize(1552, 951)
         icon = QIcon()
         icon.addFile(u":/ADIAT.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         Viewer.setWindowIcon(icon)
@@ -76,6 +76,14 @@ class Ui_Viewer(object):
 
         self.horizontalLayout_2.addWidget(self.highlightPixelsOfInterestCheckBox)
 
+        self.showAOIsCheckBox = QCheckBox(self.TitleWidget)
+        self.showAOIsCheckBox.setObjectName(u"showAOIsCheckBox")
+        font1 = QFont()
+        font1.setPointSize(9)
+        self.showAOIsCheckBox.setFont(font1)
+
+        self.horizontalLayout_2.addWidget(self.showAOIsCheckBox)
+
         self.horizontalSpacer_3 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer_3)
@@ -91,15 +99,25 @@ class Ui_Viewer(object):
 
         self.measureButton = QToolButton(self.TitleWidget)
         self.measureButton.setObjectName(u"measureButton")
-        font1 = QFont()
-        font1.setPointSize(10)
-        self.measureButton.setFont(font1)
+        font2 = QFont()
+        font2.setPointSize(10)
+        self.measureButton.setFont(font2)
         icon2 = QIcon()
         icon2.addFile(u":/icons/ruler.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.measureButton.setIcon(icon2)
         self.measureButton.setIconSize(QSize(25, 25))
 
         self.horizontalLayout_2.addWidget(self.measureButton)
+
+        self.magnifyButton = QToolButton(self.TitleWidget)
+        self.magnifyButton.setObjectName(u"magnifyButton")
+        self.magnifyButton.setToolTip("Toggle Magnifying Glass (Middle Mouse)")
+        icon3 = QIcon()
+        icon3.addFile(u":/icons/dark/icons/dark_theme/magnify.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.magnifyButton.setIcon(icon3)
+        self.magnifyButton.setIconSize(QSize(25, 25))
+
+        self.horizontalLayout_2.addWidget(self.magnifyButton)
 
         self.line_4 = QFrame(self.TitleWidget)
         self.line_4.setObjectName(u"line_4")
@@ -110,28 +128,28 @@ class Ui_Viewer(object):
 
         self.kmlButton = QToolButton(self.TitleWidget)
         self.kmlButton.setObjectName(u"kmlButton")
-        icon3 = QIcon()
-        icon3.addFile(u":/icons/map.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.kmlButton.setIcon(icon3)
+        icon4 = QIcon()
+        icon4.addFile(u":/icons/map.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.kmlButton.setIcon(icon4)
         self.kmlButton.setIconSize(QSize(25, 25))
 
         self.horizontalLayout_2.addWidget(self.kmlButton)
 
         self.pdfButton = QToolButton(self.TitleWidget)
         self.pdfButton.setObjectName(u"pdfButton")
-        icon4 = QIcon()
-        icon4.addFile(u":/icons/pdf.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.pdfButton.setIcon(icon4)
+        icon5 = QIcon()
+        icon5.addFile(u":/icons/pdf.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.pdfButton.setIcon(icon5)
         self.pdfButton.setIconSize(QSize(25, 25))
 
         self.horizontalLayout_2.addWidget(self.pdfButton)
 
         self.zipButton = QToolButton(self.TitleWidget)
         self.zipButton.setObjectName(u"zipButton")
-        self.zipButton.setFont(font1)
-        icon5 = QIcon()
-        icon5.addFile(u":/icons/zip.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.zipButton.setIcon(icon5)
+        self.zipButton.setFont(font2)
+        icon6 = QIcon()
+        icon6.addFile(u":/icons/zip.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.zipButton.setIcon(icon6)
         self.zipButton.setIconSize(QSize(25, 25))
 
         self.horizontalLayout_2.addWidget(self.zipButton)
@@ -150,9 +168,9 @@ class Ui_Viewer(object):
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.skipHidden.sizePolicy().hasHeightForWidth())
         self.skipHidden.setSizePolicy(sizePolicy1)
-        font2 = QFont()
-        font2.setPointSize(14)
-        self.skipHidden.setFont(font2)
+        font3 = QFont()
+        font3.setPointSize(14)
+        self.skipHidden.setFont(font3)
 
         self.horizontalLayout_2.addWidget(self.skipHidden)
 
@@ -202,9 +220,7 @@ class Ui_Viewer(object):
         sizePolicy4.setHeightForWidth(self.placeholderImage.sizePolicy().hasHeightForWidth())
         self.placeholderImage.setSizePolicy(sizePolicy4)
         self.placeholderImage.setMinimumSize(QSize(0, 0))
-        font3 = QFont()
-        font3.setPointSize(9)
-        self.placeholderImage.setFont(font3)
+        self.placeholderImage.setFont(font1)
 
         self.ImageLayout.addWidget(self.placeholderImage)
 
@@ -232,7 +248,7 @@ class Ui_Viewer(object):
 
         self.hideImageLabel = QLabel(self.centralwidget)
         self.hideImageLabel.setObjectName(u"hideImageLabel")
-        self.hideImageLabel.setFont(font1)
+        self.hideImageLabel.setFont(font2)
         self.hideImageLabel.setFrameShadow(QFrame.Plain)
         self.hideImageLabel.setMargin(0)
 
@@ -244,7 +260,7 @@ class Ui_Viewer(object):
 
         self.jumpToLabel = QLabel(self.centralwidget)
         self.jumpToLabel.setObjectName(u"jumpToLabel")
-        self.jumpToLabel.setFont(font1)
+        self.jumpToLabel.setFont(font2)
 
         self.ButtonLayout.addWidget(self.jumpToLabel)
 
@@ -262,20 +278,20 @@ class Ui_Viewer(object):
 
         self.previousImageButton = QPushButton(self.centralwidget)
         self.previousImageButton.setObjectName(u"previousImageButton")
-        self.previousImageButton.setFont(font1)
-        icon6 = QIcon()
-        icon6.addFile(u":/icons/previous.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.previousImageButton.setIcon(icon6)
+        self.previousImageButton.setFont(font2)
+        icon7 = QIcon()
+        icon7.addFile(u":/icons/previous.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.previousImageButton.setIcon(icon7)
 
         self.ButtonLayout.addWidget(self.previousImageButton)
 
         self.nextImageButton = QPushButton(self.centralwidget)
         self.nextImageButton.setObjectName(u"nextImageButton")
-        self.nextImageButton.setFont(font1)
+        self.nextImageButton.setFont(font2)
         self.nextImageButton.setLayoutDirection(Qt.RightToLeft)
-        icon7 = QIcon()
-        icon7.addFile(u":/icons/next.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.nextImageButton.setIcon(icon7)
+        icon8 = QIcon()
+        icon8.addFile(u":/icons/next.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.nextImageButton.setIcon(icon8)
 
         self.ButtonLayout.addWidget(self.nextImageButton)
 
@@ -299,7 +315,7 @@ class Ui_Viewer(object):
         self.thumbnailScrollArea.setWidgetResizable(True)
         self.scrollAreaWidgetContents = QWidget()
         self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
-        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 1020, 96))
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 1532, 96))
         sizePolicy8 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         sizePolicy8.setHorizontalStretch(0)
         sizePolicy8.setVerticalStretch(0)
@@ -329,7 +345,7 @@ class Ui_Viewer(object):
         sizePolicy9.setVerticalStretch(0)
         sizePolicy9.setHeightForWidth(self.statusBar.sizePolicy().hasHeightForWidth())
         self.statusBar.setSizePolicy(sizePolicy9)
-        self.statusBar.setFont(font1)
+        self.statusBar.setFont(font2)
 
         self.horizontalLayout_4.addWidget(self.statusBar)
 
@@ -349,6 +365,7 @@ class Ui_Viewer(object):
         self.fileNameLabel.setText(QCoreApplication.translate("Viewer", u"TextLabel", None))
         self.showOverlayCheckBox.setText(QCoreApplication.translate("Viewer", u"Show Overlay", None))
         self.highlightPixelsOfInterestCheckBox.setText(QCoreApplication.translate("Viewer", u"Highlight Pixels of Interest", None))
+        self.showAOIsCheckBox.setText(QCoreApplication.translate("Viewer", u"Show AOIs", None))
 #if QT_CONFIG(tooltip)
         self.adjustmentsButton.setToolTip(QCoreApplication.translate("Viewer", u"Adjust Image (Ctrl+H)", None))
 #endif // QT_CONFIG(tooltip)
@@ -359,6 +376,8 @@ class Ui_Viewer(object):
 #endif // QT_CONFIG(tooltip)
         self.measureButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.measureButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"ruler.png", None))
+        self.magnifyButton.setText(QCoreApplication.translate("Viewer", u"...", None))
+        self.magnifyButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"magnify.png", None))
 #if QT_CONFIG(tooltip)
         self.kmlButton.setToolTip(QCoreApplication.translate("Viewer", u"Generate KML", None))
 #endif // QT_CONFIG(tooltip)
