@@ -408,8 +408,11 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             image = self.images[self.current_image]
 
+            # Always sync the active thumbnail/index, even if widget not built yet
             if 'thumbnail' in image:
                 self.thumbnail_controller.set_active_thumbnail(image['thumbnail'])
+            else:
+                self.thumbnail_controller.set_active_index(self.current_image)
             
             # Use original image path if available (mask-based approach)
             # Fall back to path for legacy support
@@ -488,7 +491,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'], self.current_image)
 
             # Check again before resetting zoom
-            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
+            if not hasattr(self, 'main_image') or self.main_image is None or getattr(self.main_image, '_is_destroyed', True):
                 return
                 
             # Ensure the image is properly loaded before resetting zoom
@@ -496,7 +499,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                 return
                 
             # Reset zoom to fit image properly
-            self.main_image.resetZoom()
+            # Guard resetZoom against deleted C++ object
+            try:
+                self.main_image.resetZoom()
+            except RuntimeError:
+                return
             self.main_image.setFocus()
             self.hideImageToggle.setChecked(image['hidden'])
             self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
@@ -548,10 +555,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self.temperature_data = None
             # Connect signals only once
             if not hasattr(self, '_signals_connected'):
-            self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
-            self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
-            self.main_image.zoomChanged.connect(self._update_scale_bar)
+                self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
+                self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
+                self.main_image.zoomChanged.connect(self._update_scale_bar)
                 self._signals_connected = True
+            
             self._update_scale_bar(self.main_image.getZoom())
 
             # Update overlay with new image data - AFTER zoom reset so scene is properly set up
@@ -857,7 +865,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 if self.main_image.hasImage():
                     self.main_image.resetZoom()
                 else:
-                self.main_image.updateViewer()
+                    self.main_image.updateViewer()
 
 
     def _kmlButton_clicked(self):

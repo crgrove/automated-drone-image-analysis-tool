@@ -8,6 +8,15 @@ interaction functionality.
 import colorsys
 import numpy as np
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication
+try:
+    from shiboken6 import isValid as _qt_is_valid
+except Exception:
+    def _qt_is_valid(obj):
+        try:
+            _ = obj.metaObject()
+            return True
+        except Exception:
+            return False
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor
 
@@ -201,6 +210,8 @@ class AOIController:
         if not self.aoiListWidget:
             return
             
+        # Block signals during rebuild to avoid re-entrant updates while rapidly switching
+        self.aoiListWidget.blockSignals(True)
         self.aoiListWidget.clear()
         count = 0
         self.highlights = []
@@ -248,8 +259,16 @@ class AOIController:
             highlight.setObjectName(f"highlight{count}")
             highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
             highlight.aspectRatioMode = Qt.KeepAspectRatio
-            img = qimage2ndarray.array2qimage(crop_arr)
-            highlight.setImage(img)
+            # Safely set the image on the highlight viewer
+            try:
+                img = qimage2ndarray.array2qimage(crop_arr)
+                if _qt_is_valid(highlight):
+                    highlight.setImage(img)
+                else:
+                    continue
+            except RuntimeError:
+                # Highlight was deleted during rapid switching; skip
+                continue
             highlight.canZoom = False
             highlight.canPan = False
 
@@ -350,7 +369,12 @@ class AOIController:
             self.aoiListWidget.setItemWidget(listItem, container)
             self.aoiListWidget.setSpacing(5)
             self.highlights.append(highlight)
-            highlight.leftMouseButtonPressed.connect(self.area_of_interest_click)
+            # Safely connect if the source is still valid
+            if _qt_is_valid(highlight):
+                try:
+                    highlight.leftMouseButtonPressed.connect(self.area_of_interest_click)
+                except RuntimeError:
+                    pass
 
             # Store container reference
             self.aoi_containers.append(container)
@@ -364,6 +388,8 @@ class AOIController:
 
         if self.areaCountLabel:
             self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
+        # Re-enable signals after rebuild
+        self.aoiListWidget.blockSignals(False)
     
     def area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.

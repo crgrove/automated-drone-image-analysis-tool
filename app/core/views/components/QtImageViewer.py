@@ -153,7 +153,11 @@ class QtImageViewer(QGraphicsView):
         """
         if self._is_destroyed:
             return
-        new_zoom = self.transform().m11()        # isotropic, so x==y
+        try:
+            new_zoom = self.transform().m11()        # isotropic, so x==y
+        except RuntimeError:
+            self._is_destroyed = True
+            return
         if abs(new_zoom - self._zoom) > 1e-6:
             self._zoom = new_zoom
             if not self._is_destroyed:
@@ -190,15 +194,6 @@ class QtImageViewer(QGraphicsView):
             
         # Check again after super() call
         if self._is_destroyed:
-            return
-            
-        # Force the view to update and process events to ensure transformation is complete
-        try:
-            self.viewport().update()
-            QApplication.processEvents()
-        except RuntimeError:
-            # Widget was destroyed during processing
-            self._is_destroyed = True
             return
             
         # Now emit viewChanged after the view has been updated
@@ -520,12 +515,20 @@ class QtImageViewer(QGraphicsView):
     #  Qt events that might change zoom                                      #
     # ===================================================================== #
     def resizeEvent(self, ev):
-        super().resizeEvent(ev)
+        try:
+            super().resizeEvent(ev)
+        except RuntimeError:
+            self._is_destroyed = True
+            return
         if not self._is_destroyed:
             self.updateViewer()                       # recompute & emit
 
     def showEvent(self, ev):
-        super().showEvent(ev)
+        try:
+            super().showEvent(ev)
+        except RuntimeError:
+            self._is_destroyed = True
+            return
         if not self._is_destroyed:
             self.resetZoom()
 
