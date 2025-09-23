@@ -145,53 +145,10 @@ class HSVRangePickerWidget(QWidget):
         # Buttons row
         buttons_layout = QHBoxLayout()
         
-        # HSV Assistant button (icon button)
-        self.hsv_assistant_button = QToolButton()
-        self.hsv_assistant_button.setFixedSize(35, 35)
+        # HSV Assistant button - now a regular button like "Pick Screen Color"
+        self.hsv_assistant_button = QPushButton("Use Image")
+        self.hsv_assistant_button.setFixedHeight(35)
         self.hsv_assistant_button.setToolTip("HSV Color Range Assistant - Click to select colors from image")
-        
-        # Try to use an icon, fall back to text if not available
-        try:
-            # Try to use a built-in Qt icon for image/picture
-            from PySide6.QtWidgets import QStyle
-            icon = self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
-            if icon.isNull():
-                # If that doesn't work, try another icon
-                icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
-            
-            if not icon.isNull():
-                self.hsv_assistant_button.setIcon(icon)
-            else:
-                # Fall back to text symbol
-                self.hsv_assistant_button.setText("IMG")
-        except:
-            # If all else fails, use text
-            self.hsv_assistant_button.setText("IMG")
-        
-        self.hsv_assistant_button.setStyleSheet("""
-            QToolButton {
-                font-weight: bold;
-                color: #000000;  /* Black text */
-                background-color: #f0f0f0;
-                border: 1px solid #999;
-                border-radius: 3px;
-            }
-            QToolButton:hover {
-                color: #000000;  /* Keep text black on hover */
-                background-color: #e0e0e0;
-                border: 1px solid #333;  /* Darker border on hover */
-            }
-            QToolButton:pressed {
-                color: #000000;
-                background-color: #d0d0d0;
-            }
-            QToolTip {
-                background-color: #333333;  /* Dark background for tooltip */
-                color: #ffffff;  /* White text for tooltip */
-                border: 1px solid #555555;
-                padding: 2px;
-            }
-        """)
         self.hsv_assistant_button.clicked.connect(self.open_hsv_assistant)
         
         self.pick_screen_button = QPushButton("Pick Screen Color")
@@ -358,12 +315,12 @@ class HSVRangePickerWidget(QWidget):
         h_center = ranges['h_center'] / 179  # Convert from OpenCV to 0-1
         s_center = ranges['s_center'] / 255
         v_center = ranges['v_center'] / 255
-        
+
         # Set center color
         self.h = h_center
         self.s = s_center
         self.v = v_center
-        
+
         # Set ranges
         self.h_minus = ranges['h_minus']
         self.h_plus = ranges['h_plus']
@@ -371,8 +328,8 @@ class HSVRangePickerWidget(QWidget):
         self.s_plus = ranges['s_plus']
         self.v_minus = ranges['v_minus']
         self.v_plus = ranges['v_plus']
-        
-        # Update display
+
+        # Update display and check warnings
         self.update_display()
         self.emit_signals()
         
@@ -395,32 +352,57 @@ class HSVRangePickerWidget(QWidget):
         info_frame = QFrame()
         info_frame.setFrameStyle(QFrame.StyledPanel)
         info_frame.setStyleSheet("QFrame { background-color: #555555; border-radius: 8px; }")
-        
+
         info_layout = QGridLayout(info_frame)
         info_layout.setContentsMargins(20, 15, 20, 15)
-        
+
         # Labels
         labels = ["Center HSV:", "Hue Range:", "Sat Range:", "Val Range:"]
         self.info_labels = []
-        
+        self.warning_labels = []  # Store warning labels
+
         for i, label_text in enumerate(labels):
             label = QLabel(label_text)
             label.setFont(QFont("Arial", 10, QFont.Bold))
             label.setStyleSheet("QLabel { color: white; }")
-            
+
             value_label = QLabel()
             value_label.setFont(QFont("Courier", 10))
             value_label.setStyleSheet("QLabel { color: white; }")
-            
+
             info_layout.addWidget(label, i, 0)
             info_layout.addWidget(value_label, i, 1)
             self.info_labels.append(value_label)
-            
-        info_layout.setColumnStretch(1, 1)
-        
+
+            # Add warning labels for Hue, Sat, and Val ranges (to the right)
+            if i == 1:  # Hue Range
+                self.h_warning_label = QLabel("⚠ Too wide!")
+                self.h_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
+                self.h_warning_label.setVisible(False)
+                self.h_warning_label.setAlignment(Qt.AlignLeft)
+                info_layout.addWidget(self.h_warning_label, i, 2)
+                self.warning_labels.append(self.h_warning_label)
+            elif i == 2:  # Sat Range
+                self.s_warning_label = QLabel("⚠ Too low!")
+                self.s_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
+                self.s_warning_label.setVisible(False)
+                self.s_warning_label.setAlignment(Qt.AlignLeft)
+                info_layout.addWidget(self.s_warning_label, i, 2)
+                self.warning_labels.append(self.s_warning_label)
+            elif i == 3:  # Val Range
+                self.v_warning_label = QLabel("⚠ Too low!")
+                self.v_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
+                self.v_warning_label.setVisible(False)
+                self.v_warning_label.setAlignment(Qt.AlignLeft)
+                info_layout.addWidget(self.v_warning_label, i, 2)
+                self.warning_labels.append(self.v_warning_label)
+
+        info_layout.setColumnStretch(1, 0)  # Don't stretch column 1
+        info_layout.setColumnStretch(2, 1)  # Stretch column 2 instead
+
         # Update initial values
         self.update_info_panel()
-        
+
         return info_frame
         
     def on_hex_changed(self, hex_value):
@@ -482,12 +464,33 @@ class HSVRangePickerWidget(QWidget):
         if hasattr(self, 'info_labels') and self.info_labels:
             # Center HSV
             self.info_labels[0].setText(f"H: {int(self.h * 360)}°, S: {int(self.s * 100)}%, V: {int(self.v * 100)}%")
-            
+
             # Ranges
             self.info_labels[1].setText(f"-{int(self.h_minus * 360)}° / +{int(self.h_plus * 360)}°")
             self.info_labels[2].setText(f"-{int(self.s_minus * 100)}% / +{int(self.s_plus * 100)}%")
             self.info_labels[3].setText(f"-{int(self.v_minus * 100)}% / +{int(self.v_plus * 100)}%")
+
+            # Check and update warnings
+            self.check_range_warnings()
             
+    def check_range_warnings(self):
+        """Check and display warning labels based on range values."""
+        if not hasattr(self, 'h_warning_label'):
+            return
+
+        # Check Hue warning - if range is wider than 60 degrees total
+        # Convert to degrees and check if total range is more than 60 degrees
+        h_total_range_degrees = (self.h_minus + self.h_plus) * 360
+        self.h_warning_label.setVisible(h_total_range_degrees > 60)
+
+        # Check Saturation warning - if lower bound is in the bottom 25%
+        s_low = max(0, self.s - self.s_minus)
+        self.s_warning_label.setVisible(s_low < 0.25)
+
+        # Check Value warning - if lower bound is in the bottom 25%
+        v_low = max(0, self.v - self.v_minus)
+        self.v_warning_label.setVisible(v_low < 0.25)
+
     def emit_signals(self):
         """Emit change signals."""
         self.colorChanged.emit(self.h, self.s, self.v)
