@@ -89,6 +89,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.coordinate_controller = CoordinateController(self, self.logger)
         self.status_controller = StatusController(self, self.logger)
 
+        # Initialize GPS map controller
+        from core.controllers.viewer.gps import GPSMapController
+        self.gps_map_controller = GPSMapController(self, self.logger)
+
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
         self.is_thermal = (self.settings['thermal'] == 'True')
@@ -270,6 +274,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
             self.aoi_controller.toggle_aoi_flag()
+        if e.key() == Qt.Key_M and e.modifiers() == Qt.NoModifier:
+            # Show GPS map with 'M' key
+            self.gps_map_controller.show_map()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -425,6 +432,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.thumbnail_controller.set_active_thumbnail(image['thumbnail'])
             else:
                 self.thumbnail_controller.set_active_index(self.current_image)
+
+            # Update GPS map if it's open
+            self.gps_map_controller.update_current_image(self.current_image)
             
             # Use original image path if available (mask-based approach)
             # Fall back to path for legacy support
