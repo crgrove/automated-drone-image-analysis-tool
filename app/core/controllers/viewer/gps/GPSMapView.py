@@ -1,0 +1,759 @@
+"""
+GPSMapView - Custom QGraphicsView widget for GPS map visualization.
+
+This widget renders map tiles, GPS points, connection lines, and handles user interaction.
+"""
+
+import math
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem
+from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap
+from .MapTileLoader import MapTileLoader
+
+
+class GPSMapView(QGraphicsView):
+    """
+    Custom graphics view for displaying and interacting with GPS points on a map.
+
+    Renders map tiles, GPS locations as points, connects them chronologically,
+    and handles zoom/pan/click interactions.
+    """
+
+    # Signal emitted when a GPS point is clicked
+    point_clicked = Signal(int)
+
+    def __init__(self, parent=None):
+        """Initialize the GPS map view."""
+        super().__init__(parent)
+
+        # Create scene
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+
+        # View settings
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        # Allow scrollbars when needed for panning
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        # Map tile loader
+        self.tile_loader = MapTileLoader()
+        self.tile_loader.tile_loaded.connect(self.on_tile_loaded)
+
+        # Map tiles storage - keep tiles from all zoom levels
+        self.tile_items = {}  # Dictionary of (x, y, zoom): QGraphicsPixmapItem
+        self.all_tile_items = {}  # Cache all tiles ever loaded
+        self.current_zoom = 15  # Default zoom level
+
+        # GPS data storage
+        self.gps_data = []
+        self.point_items = []  # List of QGraphicsEllipseItem for each point
+        self.path_item = None  # Connection lines
+        self.current_image_index = -1
+        self.aoi_color = QColor(255, 140, 0)  # Default orange
+
+        # Map bounds
+        self.min_lat = None
+        self.max_lat = None
+        self.min_lon = None
+        self.max_lon = None
+
+        # Base zoom level (calculated from GPS bounds)
+        self.base_zoom = 10
+
+        # Map rotation
+        self.is_rotated = False
+        self.current_bearing = None
+
+        # Track zoom scale separately from rotation
+        self.zoom_scale = 1.0
+
+        # Tile loading timer
+        self.tile_timer = QTimer()
+        self.tile_timer.timeout.connect(self.load_visible_tiles)
+        self.tile_timer.setSingleShot(True)
+
+        # Performance optimization
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
+        self.setCacheMode(QGraphicsView.CacheModeFlag.CacheBackground)
+
+    def set_gps_data(self, gps_data, current_image_index, aoi_color=None):
+        """
+        Set GPS data and render the map.
+
+        Args:
+            gps_data: List of GPS data dictionaries
+            current_image_index: Index in gps_data list of currently selected image (can be None)
+            aoi_color: Color to use for highlighting current image
+        """
+        self.gps_data = gps_data
+        self.current_image_index = current_image_index if current_image_index is not None else -1
+        if aoi_color:
+            self.aoi_color = aoi_color
+
+        # Calculate bounds
+        self.calculate_bounds()
+
+        # Render map and points
+        self.render_map()
+
+    def calculate_bounds(self):
+        """Calculate the geographic bounds of all GPS points."""
+        if not self.gps_data:
+            return
+
+        lats = [d['latitude'] for d in self.gps_data]
+        lons = [d['longitude'] for d in self.gps_data]
+
+        self.min_lat = min(lats)
+        self.max_lat = max(lats)
+        self.min_lon = min(lons)
+        self.max_lon = max(lons)
+
+        # Add some padding (about 10%)
+        lat_padding = (self.max_lat - self.min_lat) * 0.1
+        lon_padding = (self.max_lon - self.min_lon) * 0.1
+
+        self.min_lat -= lat_padding
+        self.max_lat += lat_padding
+        self.min_lon -= lon_padding
+        self.max_lon += lon_padding
+
+    def lat_lon_to_scene(self, lat, lon):
+        """
+        Convert GPS coordinates to scene coordinates using Web Mercator projection.
+
+        Args:
+            lat: Latitude in degrees
+            lon: Longitude in degrees
+
+        Returns:
+            QPointF with scene coordinates
+        """
+        # Web Mercator projection
+        x = (lon + 180.0) / 360.0 * (256 * (2 ** self.current_zoom))
+
+        lat_rad = math.radians(lat)
+        mer_y = math.log(math.tan(lat_rad / 2 + math.pi / 4))
+        y = (1 - mer_y / math.pi) / 2 * (256 * (2 ** self.current_zoom))
+
+        return QPointF(x, y)
+
+    def scene_to_lat_lon(self, x, y):
+        """
+        Convert scene coordinates back to GPS coordinates.
+
+        Args:
+            x: Scene x coordinate
+            y: Scene y coordinate
+
+        Returns:
+            tuple: (lat, lon) in degrees
+        """
+        # Inverse Web Mercator projection
+        world_size = 256 * (2 ** self.current_zoom)
+
+        # Convert x to longitude
+        lon = x / world_size * 360.0 - 180.0
+
+        # Convert y to latitude
+        mer_y = (1 - y * 2 / world_size) * math.pi
+
+        # Clamp to prevent overflow
+        mer_y = max(-10, min(10, mer_y))
+
+        try:
+            lat_rad = math.atan(math.sinh(mer_y))
+            lat = math.degrees(lat_rad)
+        except (OverflowError, ValueError):
+            # Fallback for extreme values
+            lat = 85 if mer_y > 0 else -85
+
+        return lat, lon
+
+    def render_map(self):
+        """Render map tiles and GPS points."""
+        # Clear existing items
+        self.scene.clear()
+        self.point_items = []
+        # Don't clear tile_items here - keep them for caching
+
+        if not self.gps_data:
+            return
+
+        # Calculate appropriate zoom level
+        view_rect = self.viewport().rect()
+        self.base_zoom = self.tile_loader.calculate_zoom_for_bounds(
+            self.min_lat, self.max_lat, self.min_lon, self.max_lon,
+            view_rect.width(), view_rect.height()
+        )
+        self.current_zoom = self.base_zoom
+
+        # Set a large scene rect to allow panning beyond visible area
+        # This prevents the hard edge panning issue
+        world_size = 256 * (2 ** self.current_zoom)
+        self.scene.setSceneRect(-world_size/2, -world_size/2, world_size * 2, world_size * 2)
+
+        # Load initial tiles
+        self.load_visible_tiles()
+
+        # Draw GPS points and path
+        self.draw_gps_points()
+
+    def load_visible_tiles(self):
+        """Load map tiles for the visible area."""
+        if self.min_lat is None:
+            return
+
+        # Get visible bounds in scene coordinates with extra padding
+        view_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+
+        # Add significant padding to load tiles beyond immediate view
+        padding = 512  # Load tiles well beyond the edges
+        view_rect = view_rect.adjusted(-padding, -padding, padding, padding)
+
+        # Convert visible scene bounds back to lat/lon
+        top_left = view_rect.topLeft()
+        bottom_right = view_rect.bottomRight()
+
+        # Use our inverse projection method
+        visible_max_lat, visible_min_lon = self.scene_to_lat_lon(top_left.x(), top_left.y())
+        visible_min_lat, visible_max_lon = self.scene_to_lat_lon(bottom_right.x(), bottom_right.y())
+
+        # Ensure valid ranges
+        visible_min_lat = max(-85, min(85, visible_min_lat))
+        visible_max_lat = max(-85, min(85, visible_max_lat))
+        visible_min_lon = max(-180, min(180, visible_min_lon))
+        visible_max_lon = max(-180, min(180, visible_max_lon))
+
+        # Calculate tile range for visible area
+        min_tile_x, max_tile_y = self.tile_loader.lat_lon_to_tile(
+            visible_min_lat, visible_min_lon, self.current_zoom
+        )
+        max_tile_x, min_tile_y = self.tile_loader.lat_lon_to_tile(
+            visible_max_lat, visible_max_lon, self.current_zoom
+        )
+
+        # Add buffer (2 tiles in each direction for smoother panning)
+        buffer_tiles = 2
+        min_tile_x = max(0, min_tile_x - buffer_tiles)
+        min_tile_y = max(0, min_tile_y - buffer_tiles)
+        max_tile_x = min(2 ** self.current_zoom - 1, max_tile_x + buffer_tiles)
+        max_tile_y = min(2 ** self.current_zoom - 1, max_tile_y + buffer_tiles)
+
+        # Limit number of tiles to load (max 49 tiles - 7x7 grid)
+        tile_count = (max_tile_x - min_tile_x + 1) * (max_tile_y - min_tile_y + 1)
+        if tile_count > 49:
+            # Reduce range to fit within limit
+            center_x = (min_tile_x + max_tile_x) // 2
+            center_y = (min_tile_y + max_tile_y) // 2
+            range_limit = 3  # 7x7 grid
+            min_tile_x = max(0, center_x - range_limit)
+            max_tile_x = min(2 ** self.current_zoom - 1, center_x + range_limit)
+            min_tile_y = max(0, center_y - range_limit)
+            max_tile_y = min(2 ** self.current_zoom - 1, center_y + range_limit)
+
+        # Load tiles
+        for x in range(min_tile_x, max_tile_x + 1):
+            for y in range(min_tile_y, max_tile_y + 1):
+                key = (x, y, self.current_zoom)
+                if key not in self.tile_items:
+                    # Check if we have it in cache first (include source type)
+                    cache_key = (x, y, self.current_zoom, self.tile_loader.tile_source)
+                    if cache_key in self.all_tile_items:
+                        # Use cached tile
+                        lat, lon = self.tile_loader.tile_to_lat_lon(x, y, self.current_zoom)
+                        scene_pos = self.lat_lon_to_scene(lat, lon)
+
+                        tile_item = QGraphicsPixmapItem(self.all_tile_items[cache_key])
+                        tile_item.setPos(scene_pos)
+                        tile_item.setZValue(-100)
+                        self.scene.addItem(tile_item)
+                        self.tile_items[key] = tile_item
+                    else:
+                        # Load from network/disk
+                        self.tile_loader.load_tile(x, y, self.current_zoom)
+
+    def on_tile_loaded(self, x_tile, y_tile, zoom, pixmap):
+        """
+        Handle loaded tile.
+
+        Args:
+            x_tile, y_tile: Tile coordinates
+            zoom: Zoom level
+            pixmap: Tile image
+        """
+        key = (x_tile, y_tile, zoom)
+        # Include source type in cache key
+        cache_key = (x_tile, y_tile, zoom, self.tile_loader.tile_source)
+
+        # Store in global cache with source-specific key
+        if cache_key not in self.all_tile_items:
+            self.all_tile_items[cache_key] = pixmap
+
+        # Only add to scene if it's for current zoom level
+        if zoom != self.current_zoom:
+            return
+
+        if key in self.tile_items:
+            return  # Already in scene
+
+        # Calculate position
+        lat, lon = self.tile_loader.tile_to_lat_lon(x_tile, y_tile, zoom)
+        scene_pos = self.lat_lon_to_scene(lat, lon)
+
+        # Add tile to scene
+        tile_item = QGraphicsPixmapItem(pixmap)
+        tile_item.setPos(scene_pos)
+        tile_item.setZValue(-100)  # Put tiles in background
+        self.scene.addItem(tile_item)
+        self.tile_items[key] = tile_item
+
+    def draw_gps_points(self):
+        """Draw GPS points and connection lines."""
+        if not self.gps_data:
+            return
+
+        # Convert GPS coordinates to scene coordinates
+        points = []
+        for data in self.gps_data:
+            scene_point = self.lat_lon_to_scene(data['latitude'], data['longitude'])
+            points.append(scene_point)
+
+        # Draw connection lines (path)
+        if len(points) > 1:
+            path = QPainterPath()
+            path.moveTo(points[0])
+            for point in points[1:]:
+                path.lineTo(point)
+
+            self.path_item = QGraphicsPathItem(path)
+            # Use a thin line that won't scale with zoom
+            pen = QPen(QColor(255, 0, 0, 180), 1, Qt.PenStyle.SolidLine)  # Semi-transparent red
+            pen.setCosmetic(True)  # Cosmetic pen doesn't scale with zoom
+            self.path_item.setPen(pen)
+            self.path_item.setZValue(5)  # Above tiles, below points
+            self.scene.addItem(self.path_item)
+
+        # Draw GPS points
+        for i, (data, scene_point) in enumerate(zip(self.gps_data, points)):
+            # Determine point size and color
+            is_current = (i == self.current_image_index)
+            has_aoi = data.get('has_aoi', False)
+
+            if is_current:
+                # Current image - larger and in AOI color
+                size = 12
+                color = self.aoi_color
+                border_color = QColor(0, 0, 0)
+                border_width = 2
+                z_value = 20  # Bring to front
+            elif has_aoi:
+                # Has AOI - slightly larger
+                size = 8
+                color = QColor(0, 100, 255)  # Blue
+                border_color = QColor(0, 0, 0)
+                border_width = 1
+                z_value = 15
+            else:
+                # Regular point
+                size = 6
+                color = QColor(0, 255, 0)  # Green
+                border_color = QColor(0, 0, 0)
+                border_width = 1
+                z_value = 10
+
+            # Create point item centered at scene coordinates
+            point_item = QGraphicsEllipseItem(
+                -size/2,  # Center the item at origin
+                -size/2,
+                size, size
+            )
+            point_item.setPos(scene_point)  # Position at scene coordinates
+            point_item.setBrush(QBrush(color))
+            point_item.setPen(QPen(border_color, border_width))
+            point_item.setZValue(z_value)
+
+            # Make the item ignore transformations (maintain screen size)
+            point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+
+            # Store image index as data
+            point_item.setData(0, data['index'])
+
+            # Make clickable
+            point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
+            point_item.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            # Add tooltip
+            tooltip = f"{data['name']}\n"
+            tooltip += f"Image {data['index'] + 1}\n"
+            tooltip += f"Lat: {data['latitude']:.6f}\n"
+            tooltip += f"Lon: {data['longitude']:.6f}"
+            point_item.setToolTip(tooltip)
+
+            self.scene.addItem(point_item)
+            self.point_items.append(point_item)
+
+    def set_current_image(self, gps_list_index):
+        """
+        Update the currently highlighted image.
+
+        Args:
+            gps_list_index: Index in the gps_data list of the image to highlight
+        """
+        old_index = self.current_image_index
+        old_bearing = self.current_bearing
+        self.current_image_index = gps_list_index if gps_list_index is not None else -1
+
+        # Update current bearing (load lazily if needed)
+        if 0 <= self.current_image_index < len(self.gps_data):
+            # Check if bearing needs to be loaded
+            if self.gps_data[self.current_image_index].get('bearing') is None:
+                # Load bearing on demand
+                image_path = self.gps_data[self.current_image_index].get('image_path')
+                if image_path:
+                    bearing = self.get_image_bearing_lazy(image_path)
+                    self.gps_data[self.current_image_index]['bearing'] = bearing
+            self.current_bearing = self.gps_data[self.current_image_index].get('bearing', None)
+        else:
+            self.current_bearing = None
+
+        # If map is rotated and bearing changed, update rotation
+        if self.is_rotated and self.current_bearing != old_bearing:
+            if self.current_bearing is not None:
+                # Reset and apply new rotation
+                self.resetTransform()
+                self.rotate(-self.current_bearing)
+                # Reapply the zoom scale (tracked separately)
+                self.scale(self.zoom_scale, self.zoom_scale)
+
+        # Update point appearances
+        for i, item in enumerate(self.point_items):
+            is_current = (i == self.current_image_index)
+            has_aoi = self.gps_data[i].get('has_aoi', False) if i < len(self.gps_data) else False
+
+            if is_current:
+                # Highlight current point
+                size = 12
+                color = self.aoi_color
+                border_width = 2
+                z_value = 20
+            elif has_aoi:
+                # Has AOI
+                size = 8
+                color = QColor(0, 100, 255)
+                border_width = 1
+                z_value = 15
+            else:
+                # Regular point
+                size = 6
+                color = QColor(0, 255, 0)
+                border_width = 1
+                z_value = 10
+
+            # Update point appearance (items are centered at origin)
+            item.setRect(-size/2, -size/2, size, size)
+            item.setBrush(QBrush(color))
+            item.setPen(QPen(QColor(0, 0, 0), border_width))
+            item.setZValue(z_value)
+
+            # Center view on current point
+            if is_current:
+                self.centerOn(item.pos())
+
+    def get_image_bearing_lazy(self, image_path):
+        """
+        Extract bearing/yaw information from image (lazy loading).
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            float: Bearing in degrees (0-360), or None if not available
+        """
+        try:
+            from core.services.ImageService import ImageService
+            image_service = ImageService(image_path, '')
+            return image_service.get_drone_orientation()
+        except Exception:
+            return None
+
+    def set_tile_source(self, source):
+        """
+        Switch between map and satellite tile sources.
+
+        Args:
+            source: 'map' or 'satellite'
+        """
+        # Set the source in the tile loader
+        self.tile_loader.set_tile_source(source)
+
+        # Clear all tiles from scene
+        for item in list(self.tile_items.values()):
+            if isinstance(item, QGraphicsPixmapItem):
+                try:
+                    if item.scene() == self.scene:
+                        self.scene.removeItem(item)
+                except RuntimeError:
+                    pass
+        self.tile_items = {}
+
+        # Don't clear all_tile_items - keep memory cache for quick switching
+        # Just reload tiles with new source
+        self.load_visible_tiles()
+
+    def fit_all_points(self):
+        """Fit all GPS points in the view."""
+        if not self.point_items:
+            return
+
+        # Get the actual positions of all points (not bounding rect which ignores transformations)
+        min_x = float('inf')
+        max_x = float('-inf')
+        min_y = float('inf')
+        max_y = float('-inf')
+
+        for item in self.point_items:
+            pos = item.pos()  # Get actual scene position
+            min_x = min(min_x, pos.x())
+            max_x = max(max_x, pos.x())
+            min_y = min(min_y, pos.y())
+            max_y = max(max_y, pos.y())
+
+        # Create rect from actual positions
+        if min_x < float('inf'):
+            rect = QRectF(min_x, min_y, max_x - min_x, max_y - min_y)
+
+            # Add 10% padding
+            padding = max(rect.width(), rect.height()) * 0.1
+            rect.adjust(-padding, -padding, padding, padding)
+
+            # Fit to view
+            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+
+            # Schedule tile loading
+            self.tile_timer.start(100)
+
+    def zoom_in(self):
+        """Zoom in by a factor."""
+        self.scale(1.25, 1.25)
+        self.update_tile_zoom_level()  # Check if we need higher resolution tiles
+        self.tile_timer.start(300)  # Load new tiles after zoom
+
+    def zoom_out(self):
+        """Zoom out by a factor."""
+        self.scale(0.8, 0.8)
+        self.update_tile_zoom_level()  # Check if we need lower resolution tiles
+        self.tile_timer.start(300)  # Load new tiles after zoom
+
+    def pan(self, dx, dy):
+        """
+        Pan the view by the given amount.
+
+        Args:
+            dx: Horizontal pan amount
+            dy: Vertical pan amount
+        """
+        self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - dx)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().value() - dy)
+        self.tile_timer.start(500)  # Load new tiles after pan
+
+    def wheelEvent(self, event: QWheelEvent):
+        """Handle mouse wheel for zooming."""
+        # Get the zoom factor
+        zoom_in_factor = 1.15
+        zoom_out_factor = 0.85
+
+        # Calculate new zoom
+        if event.angleDelta().y() > 0:
+            zoom_factor = zoom_in_factor
+            self.zoom_scale *= zoom_in_factor
+        else:
+            zoom_factor = zoom_out_factor
+            self.zoom_scale *= zoom_out_factor
+
+        # Apply zoom (AnchorUnderMouse is already set in __init__)
+        self.scale(zoom_factor, zoom_factor)
+
+        # Load tiles immediately, then check if we need different resolution
+        self.tile_timer.start(100)
+
+        # Check if we need to change tile zoom level after a short delay
+        QTimer.singleShot(200, self.update_tile_zoom_level)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        """Handle mouse press events."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Check if clicking on a point
+            scene_pos = self.mapToScene(event.pos())
+
+            # Since points ignore transformations, we need to check differently
+            # Look for points near the click position
+            click_tolerance = 10  # Pixels
+
+            for item in self.point_items:
+                # Get the item's scene position
+                item_pos = item.pos()
+
+                # Convert both to view coordinates for accurate hit testing
+                item_view_pos = self.mapFromScene(item_pos)
+
+                # Check if click is within tolerance of the point
+                dx = event.pos().x() - item_view_pos.x()
+                dy = event.pos().y() - item_view_pos.y()
+                distance = math.sqrt(dx * dx + dy * dy)
+
+                if distance <= click_tolerance:
+                    # Get the image index from the item data
+                    image_index = item.data(0)
+                    if image_index is not None:
+                        self.point_clicked.emit(image_index)
+                        return
+
+        # Default behavior for panning
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        """Handle key press events for navigation."""
+        if event.key() == Qt.Key.Key_Home:
+            self.fit_all_points()
+        elif event.key() == Qt.Key.Key_R:
+            # Toggle rotation based on current image bearing
+            self.toggle_rotation()
+        else:
+            super().keyPressEvent(event)
+
+    def toggle_rotation(self):
+        """Toggle map rotation between north-up and bearing-aligned."""
+        # Store current center point
+        center_point = None
+        if self.current_image_index >= 0 and self.current_image_index < len(self.point_items):
+            center_point = self.point_items[self.current_image_index].pos()
+
+        if self.is_rotated:
+            # Reset to north-up
+            self.resetTransform()
+            self.is_rotated = False
+            # Reapply the zoom scale (not from transform which includes rotation)
+            self.scale(self.zoom_scale, self.zoom_scale)
+        else:
+            # Rotate to current image bearing if available
+            if self.current_bearing is not None:
+                # Reset and apply rotation
+                self.resetTransform()
+                # Rotate negative bearing to align map with drone heading
+                self.rotate(-self.current_bearing)
+                # Reapply the zoom scale
+                self.scale(self.zoom_scale, self.zoom_scale)
+                self.is_rotated = True
+
+        # Re-center on the current GPS point
+        if center_point is not None:
+            self.centerOn(center_point)
+
+    def update_tile_zoom_level(self):
+        """Update tile zoom level based on current view scale for better resolution."""
+        # Use the tracked zoom scale, not transform which includes rotation
+        scale_factor = self.zoom_scale
+
+        # Calculate the optimal tile zoom for current scale
+        # We want higher res tiles when zoomed in, lower res when zoomed out
+        if scale_factor > 1.5:
+            # Zoomed in - need higher resolution tiles
+            target_zoom = min(18, self.current_zoom + 1)
+        elif scale_factor < 0.67:
+            # Zoomed out - can use lower resolution tiles
+            target_zoom = max(1, self.current_zoom - 1)
+        else:
+            # Scale is reasonable for current tiles
+            return
+
+        # If zoom level changed, reload tiles but maintain view scale
+        if target_zoom != self.current_zoom:
+            # Store the current view center
+            view_center = self.mapToScene(self.viewport().rect().center())
+            view_center_lat, view_center_lon = self.scene_to_lat_lon(view_center.x(), view_center.y())
+
+            # Calculate zoom difference
+            zoom_diff = target_zoom - self.current_zoom
+            scale_adjustment = 2.0 ** zoom_diff
+
+            old_zoom = self.current_zoom
+            self.current_zoom = target_zoom
+
+            # Clear old tiles from scene only (keep in cache)
+            for item in list(self.tile_items.values()):
+                if isinstance(item, QGraphicsPixmapItem):
+                    try:
+                        if item.scene() == self.scene:
+                            self.scene.removeItem(item)
+                    except RuntimeError:
+                        pass
+            self.tile_items = {}
+
+            # Update scene rect for new zoom
+            world_size = 256 * (2 ** self.current_zoom)
+            self.scene.setSceneRect(-world_size/2, -world_size/2, world_size * 2, world_size * 2)
+
+            # Update GPS point positions for new zoom level
+            for i, point_item in enumerate(self.point_items):
+                if i < len(self.gps_data):
+                    data = self.gps_data[i]
+                    new_pos = self.lat_lon_to_scene(data['latitude'], data['longitude'])
+                    point_item.setPos(new_pos)
+
+            # Update path
+            if self.path_item:
+                try:
+                    if self.path_item.scene() == self.scene:
+                        self.scene.removeItem(self.path_item)
+                except RuntimeError:
+                    pass
+                self.draw_path_only()
+
+            # Adjust zoom scale tracking
+            self.zoom_scale = self.zoom_scale / scale_adjustment
+
+            # Reset transform and reapply rotation and scale
+            self.resetTransform()
+            if self.is_rotated and self.current_bearing is not None:
+                self.rotate(-self.current_bearing)
+            self.scale(self.zoom_scale, self.zoom_scale)
+
+            # Restore the view center to the same lat/lon position
+            new_center = self.lat_lon_to_scene(view_center_lat, view_center_lon)
+            self.centerOn(new_center)
+
+            # Load new tiles (will use cache if available)
+            self.load_visible_tiles()
+
+    def draw_path_only(self):
+        """Draw just the connection path between GPS points."""
+        if not self.gps_data or len(self.gps_data) < 2:
+            return
+
+        points = []
+        for data in self.gps_data:
+            scene_point = self.lat_lon_to_scene(data['latitude'], data['longitude'])
+            points.append(scene_point)
+
+        path = QPainterPath()
+        path.moveTo(points[0])
+        for point in points[1:]:
+            path.lineTo(point)
+
+        self.path_item = QGraphicsPathItem(path)
+        pen = QPen(QColor(255, 0, 0, 180), 1, Qt.PenStyle.SolidLine)
+        pen.setCosmetic(True)
+        self.path_item.setPen(pen)
+        self.path_item.setZValue(5)
+        self.scene.addItem(self.path_item)
+
+    def resizeEvent(self, event):
+        """Handle resize events."""
+        super().resizeEvent(event)
+        # Load tiles for new viewport
+        self.tile_timer.start(500)
