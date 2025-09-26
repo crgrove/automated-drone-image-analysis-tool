@@ -97,8 +97,20 @@ class GPSMapController(QObject):
                     # Extract timestamp from EXIF if available
                     timestamp = self.get_image_timestamp_from_exif(exif_data)
 
-                    # Check if image has AOIs
+                    # Check if image has AOIs and count them
                     has_aoi = 'areas_of_interest' in image and len(image['areas_of_interest']) > 0
+                    aoi_count = len(image.get('areas_of_interest', [])) if 'areas_of_interest' in image else 0
+
+                    # Check if image is hidden
+                    is_hidden = image.get('hidden', False)
+
+                    # Check if image has any flagged AOIs
+                    has_flagged = False
+                    if 'areas_of_interest' in image:
+                        for aoi in image['areas_of_interest']:
+                            if aoi.get('flagged', False):
+                                has_flagged = True
+                                break
 
                     # Don't extract bearing here - do it lazily when needed
                     self.gps_data.append({
@@ -108,6 +120,9 @@ class GPSMapController(QObject):
                         'timestamp': timestamp,
                         'name': image.get('name', f'Image {idx + 1}'),
                         'has_aoi': has_aoi,
+                        'aoi_count': aoi_count,
+                        'hidden': is_hidden,
+                        'has_flagged': has_flagged,
                         'bearing': None,  # Will be loaded on demand
                         'image_path': image['path']  # Store path for later bearing extraction
                     })

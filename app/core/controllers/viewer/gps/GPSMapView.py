@@ -5,9 +5,9 @@ This widget renders map tiles, GPS points, connection lines, and handles user in
 """
 
 import math
-from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QWidget, QLabel
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette
 from .MapTileLoader import MapTileLoader
 
 
@@ -79,6 +79,267 @@ class GPSMapView(QGraphicsView):
         # Performance optimization
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
         self.setCacheMode(QGraphicsView.CacheModeFlag.CacheBackground)
+
+        # Initialize compass rose overlay
+        self._init_compass_rose()
+
+    def _init_compass_rose(self):
+        """Initialize the compass rose overlay widget."""
+        # Initialize as None first
+        self.compass_container = None
+        self.compass_label = None
+
+    def _create_compass_rose(self):
+        """Create the compass rose overlay widget."""
+        if self.compass_container is not None:
+            # If already created, just ensure it's visible and raised
+            self.compass_container.setVisible(True)
+            self.compass_container.show()
+            self.compass_container.raise_()
+            self._position_compass()  # Reposition in case window size changed
+            return
+
+        # Check if viewport is ready and has size
+        vp = self.viewport()
+        if not vp or vp.width() == 0 or vp.height() == 0:
+            # Try again later if viewport not ready
+            QTimer.singleShot(50, self._create_compass_rose)
+            return
+
+        # Create compass rose container widget
+        self.compass_container = QWidget(vp)
+        self.compass_container.setFixedSize(70, 70)
+        self.compass_container.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.compass_container.setAttribute(Qt.WA_StyledBackground, True)
+        self.compass_container.setStyleSheet("""
+            QWidget {
+                background-color: rgba(0, 0, 0, 120);
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 50);
+            }
+        """)
+
+        # Create compass label
+        self.compass_label = QLabel(self.compass_container)
+        self.compass_label.setFixedSize(60, 60)
+        self.compass_label.move(5, 5)  # Center within container
+        self.compass_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Position in bottom-right corner
+        self._position_compass()
+
+        # Draw initial north-up compass (0 or current rotation)
+        rotation = self.current_bearing if self.is_rotated and self.current_bearing else 0
+        self._draw_compass_rose(rotation)
+
+        # Ensure the compass is visible and on top
+        self.compass_container.setVisible(True)
+        self.compass_container.show()
+        self.compass_container.raise_()
+
+    def _position_compass(self):
+        """Position the compass rose in the bottom-right corner."""
+        if not self.compass_container:
+            return
+
+        margin = 12
+        vp = self.viewport()
+        vp_width = vp.width()
+        vp_height = vp.height()
+
+        # Position in bottom-right corner
+        x = vp_width - self.compass_container.width() - margin
+        y = vp_height - self.compass_container.height() - margin
+
+        # Ensure minimum margins
+        x = max(margin, x)
+        y = max(margin, y)
+
+        self.compass_container.move(x, y)
+        self.compass_container.raise_()
+
+    def _ensure_compass_on_top(self):
+        """Ensure the compass rose stays on top of all other widgets."""
+        if self.compass_container and self.compass_container.isVisible():
+            self.compass_container.raise_()
+            # Also ensure it's visible
+            self.compass_container.show()
+
+    def _maintain_compass(self):
+        """Maintain compass visibility and position after view changes."""
+        if not self.compass_container:
+            # Create compass if it doesn't exist
+            self._create_compass_rose()
+        else:
+            # Reposition and ensure visibility
+            self._position_compass()
+            self.compass_container.setVisible(True)
+            self.compass_container.show()
+            self.compass_container.raise_()
+
+    def _get_ironbow_color(self, normalized):
+        """
+        Get Ironbow thermal palette color for normalized value.
+
+        Args:
+            normalized: Value from 0.0 to 1.0
+
+        Returns:
+            QColor representing the Ironbow color at that position
+        """
+        # Ironbow palette keypoints
+        # Position: (R, G, B)
+        keypoints = [
+            (0.0, (0, 0, 0)),        # Black
+            (0.13, (20, 11, 52)),    # Very dark blue
+            (0.25, (48, 22, 138)),   # Dark blue
+            (0.38, (86, 44, 162)),   # Purple-blue
+            (0.5, (128, 47, 142)),   # Purple
+            (0.63, (185, 50, 104)),  # Red-purple
+            (0.75, (231, 82, 64)),   # Red-orange
+            (0.88, (253, 155, 49)),  # Orange-yellow
+            (0.95, (254, 215, 102)), # Yellow
+            (1.0, (255, 254, 189))   # Light yellow-white
+        ]
+
+        # Find the two keypoints to interpolate between
+        for i in range(len(keypoints) - 1):
+            pos1, color1 = keypoints[i]
+            pos2, color2 = keypoints[i + 1]
+
+            if pos1 <= normalized <= pos2:
+                # Interpolate between the two colors
+                if pos2 - pos1 > 0:
+                    t = (normalized - pos1) / (pos2 - pos1)
+                else:
+                    t = 0
+
+                r = int(color1[0] + t * (color2[0] - color1[0]))
+                g = int(color1[1] + t * (color2[1] - color1[1]))
+                b = int(color1[2] + t * (color2[2] - color1[2]))
+
+                return QColor(r, g, b)
+
+        # Fallback (shouldn't happen with normalized values 0-1)
+        return QColor(255, 254, 189)  # Light yellow-white
+
+    def _draw_compass_rose(self, rotation_angle):
+        """
+        Draw the compass rose with the given rotation.
+
+        Args:
+            rotation_angle: Rotation angle in degrees (0 = north up)
+        """
+        # Make sure compass is created
+        if not self.compass_label:
+            return
+
+        # Create a 60x60 pixmap for the compass
+        size = 60
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.transparent)
+
+        p = QPainter(canvas)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        # Center point
+        cx = size / 2
+        cy = size / 2
+
+        # Draw compass rose
+        # Main arrow (north pointer)
+        arrow_length = 20
+        arrow_width = 6
+
+        # Save state and apply rotation
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(rotation_angle)
+
+        # Draw north arrow (red)
+        p.setPen(QPen(QColor(255, 0, 0), 2))
+        p.setBrush(QBrush(QColor(255, 0, 0)))
+        north_arrow = QPainterPath()
+        north_arrow.moveTo(0, -arrow_length)
+        north_arrow.lineTo(-arrow_width/2, 0)
+        north_arrow.lineTo(arrow_width/2, 0)
+        north_arrow.closeSubpath()
+        p.drawPath(north_arrow)
+
+        # Draw south arrow (white)
+        p.setPen(QPen(QColor(255, 255, 255), 2))
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        south_arrow = QPainterPath()
+        south_arrow.moveTo(0, arrow_length)
+        south_arrow.lineTo(-arrow_width/2, 0)
+        south_arrow.lineTo(arrow_width/2, 0)
+        south_arrow.closeSubpath()
+        p.drawPath(south_arrow)
+
+        # Draw east arrow (gray)
+        p.setPen(QPen(QColor(180, 180, 180), 1))
+        p.setBrush(QBrush(QColor(180, 180, 180)))
+        east_arrow = QPainterPath()
+        east_arrow.moveTo(arrow_length * 0.7, 0)
+        east_arrow.lineTo(0, -arrow_width/2 * 0.7)
+        east_arrow.lineTo(0, arrow_width/2 * 0.7)
+        east_arrow.closeSubpath()
+        p.drawPath(east_arrow)
+
+        # Draw west arrow (gray)
+        west_arrow = QPainterPath()
+        west_arrow.moveTo(-arrow_length * 0.7, 0)
+        west_arrow.lineTo(0, -arrow_width/2 * 0.7)
+        west_arrow.lineTo(0, arrow_width/2 * 0.7)
+        west_arrow.closeSubpath()
+        p.drawPath(west_arrow)
+
+        # Draw center circle
+        p.setPen(QPen(QColor(0, 0, 0), 2))
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        p.drawEllipse(QPointF(0, 0), 3, 3)
+
+        p.restore()
+
+        # Draw cardinal direction labels
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        p.setFont(font)
+
+        # Calculate label positions based on rotation
+        label_radius = 25
+        labels = [
+            ('N', 0),    # North
+            ('E', 90),   # East
+            ('S', 180),  # South
+            ('W', 270)   # West
+        ]
+
+        for label_text, base_angle in labels:
+            # Apply rotation to label position
+            angle_rad = math.radians(base_angle + rotation_angle - 90)  # -90 to convert from compass to math angles
+            label_x = cx + label_radius * math.cos(angle_rad)
+            label_y = cy + label_radius * math.sin(angle_rad)
+
+            # Draw label
+            fm = p.fontMetrics()
+            text_width = fm.horizontalAdvance(label_text)
+            text_height = fm.height()
+
+            # Determine text color based on direction
+            if label_text == 'N':
+                p.setPen(QPen(QColor(255, 0, 0)))  # Red for north
+            else:
+                p.setPen(QPen(QColor(255, 255, 255)))  # White for others
+
+            p.drawText(QPointF(label_x - text_width/2, label_y + text_height/4), label_text)
+
+        p.end()
+
+        # Set the pixmap to the label
+        self.compass_label.setPixmap(canvas)
 
     def set_gps_data(self, gps_data, current_image_index, aoi_color=None):
         """
@@ -277,6 +538,9 @@ class GPSMapView(QGraphicsView):
                         # Load from network/disk
                         self.tile_loader.load_tile(x, y, self.current_zoom)
 
+        # After loading all visible tiles, maintain compass
+        QTimer.singleShot(10, self._maintain_compass)
+
     def on_tile_loaded(self, x_tile, y_tile, zoom, pixmap):
         """
         Handle loaded tile.
@@ -312,6 +576,9 @@ class GPSMapView(QGraphicsView):
         self.scene.addItem(tile_item)
         self.tile_items[key] = tile_item
 
+        # Maintain compass after adding tiles
+        QTimer.singleShot(10, self._maintain_compass)
+
     def draw_gps_points(self):
         """Draw GPS points and connection lines."""
         if not self.gps_data:
@@ -332,7 +599,7 @@ class GPSMapView(QGraphicsView):
 
             self.path_item = QGraphicsPathItem(path)
             # Use a thin line that won't scale with zoom
-            pen = QPen(QColor(255, 0, 0, 180), 1, Qt.PenStyle.SolidLine)  # Semi-transparent red
+            pen = QPen(QColor(150, 150, 150, 120), 1, Qt.PenStyle.SolidLine)  # Semi-transparent grey
             pen.setCosmetic(True)  # Cosmetic pen doesn't scale with zoom
             self.path_item.setPen(pen)
             self.path_item.setZValue(5)  # Above tiles, below points
@@ -342,7 +609,9 @@ class GPSMapView(QGraphicsView):
         for i, (data, scene_point) in enumerate(zip(self.gps_data, points)):
             # Determine point size and color
             is_current = (i == self.current_image_index)
-            has_aoi = data.get('has_aoi', False)
+            is_hidden = data.get('hidden', False)
+            aoi_count = data.get('aoi_count', 0)
+            has_flagged = data.get('has_flagged', False)
 
             if is_current:
                 # Current image - larger and in AOI color
@@ -351,15 +620,29 @@ class GPSMapView(QGraphicsView):
                 border_color = QColor(0, 0, 0)
                 border_width = 2
                 z_value = 20  # Bring to front
-            elif has_aoi:
-                # Has AOI - slightly larger
+            elif is_hidden:
+                # Hidden image - light grey
+                size = 6
+                color = QColor(200, 200, 200)  # Light grey
+                border_color = QColor(150, 150, 150)
+                border_width = 1
+                z_value = 8
+            elif has_flagged:
+                # Flagged AOI - red point
+                size = 8
+                color = QColor(255, 0, 0)  # Red
+                border_color = QColor(0, 0, 0)  # Black
+                border_width = 1
+                z_value = 15  # Higher priority than regular points
+            elif aoi_count > 0:
+                # Has AOI - blue (original color)
                 size = 8
                 color = QColor(0, 100, 255)  # Blue
                 border_color = QColor(0, 0, 0)
                 border_width = 1
-                z_value = 15
+                z_value = 12
             else:
-                # Regular point
+                # Regular point - green (original color)
                 size = 6
                 color = QColor(0, 255, 0)  # Green
                 border_color = QColor(0, 0, 0)
@@ -390,6 +673,11 @@ class GPSMapView(QGraphicsView):
             # Add tooltip
             tooltip = f"{data['name']}\n"
             tooltip += f"Image {data['index'] + 1}\n"
+            if is_hidden:
+                tooltip += "Status: Hidden\n"
+            if has_flagged:
+                tooltip += "🚩 Has flagged AOIs\n"
+            tooltip += f"AOIs: {aoi_count}\n"
             tooltip += f"Lat: {data['latitude']:.6f}\n"
             tooltip += f"Lon: {data['longitude']:.6f}"
             point_item.setToolTip(tooltip)
@@ -429,40 +717,70 @@ class GPSMapView(QGraphicsView):
                 self.rotate(-self.current_bearing)
                 # Reapply the zoom scale (tracked separately)
                 self.scale(self.zoom_scale, self.zoom_scale)
+                # Update compass rose to show new rotation
+                self._create_compass_rose()  # Ensure compass exists
+                self._draw_compass_rose(self.current_bearing)
 
         # Update point appearances
         for i, item in enumerate(self.point_items):
             is_current = (i == self.current_image_index)
-            has_aoi = self.gps_data[i].get('has_aoi', False) if i < len(self.gps_data) else False
+            if i < len(self.gps_data):
+                data = self.gps_data[i]
+                is_hidden = data.get('hidden', False)
+                aoi_count = data.get('aoi_count', 0)
+                has_flagged = data.get('has_flagged', False)
+            else:
+                is_hidden = False
+                aoi_count = 0
+                has_flagged = False
 
             if is_current:
                 # Highlight current point
                 size = 12
                 color = self.aoi_color
+                border_color = QColor(0, 0, 0)
                 border_width = 2
                 z_value = 20
-            elif has_aoi:
-                # Has AOI
+            elif is_hidden:
+                # Hidden image - light grey
+                size = 6
+                color = QColor(200, 200, 200)
+                border_width = 1
+                border_color = QColor(150, 150, 150)
+                z_value = 8
+            elif has_flagged:
+                # Flagged AOI - red point
                 size = 8
-                color = QColor(0, 100, 255)
+                color = QColor(255, 0, 0)  # Red
+                border_color = QColor(0, 0, 0)  # Black
                 border_width = 1
                 z_value = 15
+            elif aoi_count > 0:
+                # Has AOI - blue
+                size = 8
+                color = QColor(0, 100, 255)  # Blue
+                border_color = QColor(0, 0, 0)
+                border_width = 1
+                z_value = 12
             else:
-                # Regular point
+                # Regular point - green
                 size = 6
-                color = QColor(0, 255, 0)
+                color = QColor(0, 255, 0)  # Green
+                border_color = QColor(0, 0, 0)
                 border_width = 1
                 z_value = 10
 
             # Update point appearance (items are centered at origin)
             item.setRect(-size/2, -size/2, size, size)
             item.setBrush(QBrush(color))
-            item.setPen(QPen(QColor(0, 0, 0), border_width))
+            item.setPen(QPen(border_color, border_width))
             item.setZValue(z_value)
 
             # Center view on current point
             if is_current:
                 self.centerOn(item.pos())
+                # Ensure compass stays visible and positioned after centering
+                QTimer.singleShot(10, self._maintain_compass)
 
     def get_image_bearing_lazy(self, image_path):
         """
@@ -537,17 +855,24 @@ class GPSMapView(QGraphicsView):
             # Schedule tile loading
             self.tile_timer.start(100)
 
+            # Maintain compass after fitting view
+            QTimer.singleShot(50, self._maintain_compass)
+
     def zoom_in(self):
         """Zoom in by a factor."""
         self.scale(1.25, 1.25)
+        self.zoom_scale *= 1.25  # Track zoom scale
         self.update_tile_zoom_level()  # Check if we need higher resolution tiles
         self.tile_timer.start(300)  # Load new tiles after zoom
+        QTimer.singleShot(10, self._maintain_compass)  # Maintain compass
 
     def zoom_out(self):
         """Zoom out by a factor."""
         self.scale(0.8, 0.8)
+        self.zoom_scale *= 0.8  # Track zoom scale
         self.update_tile_zoom_level()  # Check if we need lower resolution tiles
         self.tile_timer.start(300)  # Load new tiles after zoom
+        QTimer.singleShot(10, self._maintain_compass)  # Maintain compass
 
     def pan(self, dx, dy):
         """
@@ -583,6 +908,9 @@ class GPSMapView(QGraphicsView):
 
         # Check if we need to change tile zoom level after a short delay
         QTimer.singleShot(200, self.update_tile_zoom_level)
+
+        # Maintain compass after zoom
+        QTimer.singleShot(10, self._maintain_compass)
 
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse press events."""
@@ -628,6 +956,9 @@ class GPSMapView(QGraphicsView):
 
     def toggle_rotation(self):
         """Toggle map rotation between north-up and bearing-aligned."""
+        # Ensure compass is created
+        self._create_compass_rose()
+
         # Store current center point
         center_point = None
         if self.current_image_index >= 0 and self.current_image_index < len(self.point_items):
@@ -639,6 +970,8 @@ class GPSMapView(QGraphicsView):
             self.is_rotated = False
             # Reapply the zoom scale (not from transform which includes rotation)
             self.scale(self.zoom_scale, self.zoom_scale)
+            # Update compass rose to north-up
+            self._draw_compass_rose(0)
         else:
             # Rotate to current image bearing if available
             if self.current_bearing is not None:
@@ -649,6 +982,8 @@ class GPSMapView(QGraphicsView):
                 # Reapply the zoom scale
                 self.scale(self.zoom_scale, self.zoom_scale)
                 self.is_rotated = True
+                # Update compass rose to show rotation
+                self._draw_compass_rose(self.current_bearing)
 
         # Re-center on the current GPS point
         if center_point is not None:
@@ -730,6 +1065,9 @@ class GPSMapView(QGraphicsView):
             # Load new tiles (will use cache if available)
             self.load_visible_tiles()
 
+            # Maintain compass after zoom level change
+            QTimer.singleShot(50, self._maintain_compass)
+
     def draw_path_only(self):
         """Draw just the connection path between GPS points."""
         if not self.gps_data or len(self.gps_data) < 2:
@@ -752,8 +1090,15 @@ class GPSMapView(QGraphicsView):
         self.path_item.setZValue(5)
         self.scene.addItem(self.path_item)
 
+    def showEvent(self, event):
+        """Handle show event."""
+        super().showEvent(event)
+        # Don't create compass here - let the dialog handle it
+
     def resizeEvent(self, event):
         """Handle resize events."""
         super().resizeEvent(event)
         # Load tiles for new viewport
         self.tile_timer.start(500)
+        # Maintain compass after resize
+        self._maintain_compass()

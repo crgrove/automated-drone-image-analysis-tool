@@ -4,8 +4,8 @@ GPSMapDialog - Dialog window for displaying GPS map visualization.
 This dialog shows all image GPS locations as connected points on an interactive map.
 """
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-from PySide6.QtCore import Qt, Signal, QPointF
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox
+from PySide6.QtCore import Qt, Signal, QPointF, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from .GPSMapView import GPSMapView
 
@@ -59,7 +59,22 @@ class GPSMapDialog(QDialog):
         # Create and add map view
         self.map_view = GPSMapView(self)
         self.map_view.point_clicked.connect(self.on_point_clicked)
+
+        # Connect to tile error signals
+        self.map_view.tile_loader.tile_error.connect(self.on_tile_error)
+
+        # Status label for tile loading errors
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: orange; padding: 2px; font-size: 10px;")
+        self.status_label.setVisible(False)
+        layout.addWidget(self.status_label)
+
         layout.addWidget(self.map_view)
+
+        # Timer to auto-hide status messages
+        self.status_timer = QTimer()
+        self.status_timer.setSingleShot(True)
+        self.status_timer.timeout.connect(lambda: self.status_label.setVisible(False))
 
         # Add control buttons at bottom
         controls_layout = QHBoxLayout()
@@ -191,8 +206,33 @@ class GPSMapDialog(QDialog):
         self.current_image_index = gps_list_index
         self.map_view.set_current_image(gps_list_index)
 
+    def on_tile_error(self, error_msg):
+        """
+        Handle tile loading errors.
+
+        Args:
+            error_msg: Error message to display
+        """
+        # Show status message
+        self.status_label.setText(f"⚠ {error_msg}")
+        self.status_label.setVisible(True)
+
+        # Auto-hide after 10 seconds
+        self.status_timer.start(10000)
+
+        # For critical errors (rate limiting), also show a dialog
+        if "rate limit" in error_msg.lower() or "access denied" in error_msg.lower():
+            QMessageBox.warning(
+                self,
+                "Map Tile Loading Issue",
+                f"{error_msg}\n\nThe map will continue to work with cached tiles where available.",
+                QMessageBox.StandardButton.Ok
+            )
+
     def showEvent(self, event):
         """Handle dialog show event."""
         super().showEvent(event)
         # Fit all points when first shown
         self.map_view.fit_all_points()
+        # Create compass rose after dialog is shown
+        QTimer.singleShot(100, self.map_view._create_compass_rose)

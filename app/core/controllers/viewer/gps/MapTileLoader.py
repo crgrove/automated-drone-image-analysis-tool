@@ -8,7 +8,7 @@ import os
 import math
 import hashlib
 from pathlib import Path
-from PySide6.QtCore import QObject, Signal, QThread, QUrl
+from PySide6.QtCore import QObject, Signal, QThread, QUrl, QTimer
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PySide6.QtGui import QPixmap, QImage, QColor
 import tempfile
@@ -23,6 +23,9 @@ class MapTileLoader(QObject):
 
     # Signal emitted when a tile is loaded
     tile_loaded = Signal(int, int, int, QPixmap)  # x, y, zoom, pixmap
+
+    # Signal emitted when there's an error loading tiles
+    tile_error = Signal(str)  # error message
 
     def __init__(self):
         """Initialize the tile loader."""
@@ -43,6 +46,14 @@ class MapTileLoader(QObject):
 
         # Tile source type ('map' or 'satellite')
         self.tile_source = 'map'
+
+        # Error tracking
+        self.error_count = 0
+        self.max_errors_before_notify = 3
+        self.last_error_message = None
+        self.error_reset_timer = QTimer()
+        self.error_reset_timer.setSingleShot(True)
+        self.error_reset_timer.timeout.connect(self.reset_error_count)
 
     def lat_lon_to_tile(self, lat, lon, zoom):
         """
@@ -190,13 +201,22 @@ class MapTileLoader(QObject):
             if not pixmap.isNull():
                 self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
         else:
+            # Handle error
+            error_code = reply.error()
+            error_string = reply.errorString()
+            http_status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+
             # Check if we have a cached version from a previous session
             cache_path = self.cache_dir / f"{self.tile_source}_{zoom}_{x_tile}_{y_tile}.png"
             if cache_path.exists():
                 pixmap = QPixmap(str(cache_path))
                 if not pixmap.isNull():
                     self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
+                    # Don't count as error if we have cache
                     return
+
+            # Track errors and notify user if necessary
+            self._handle_tile_error(error_code, error_string, http_status)
 
             # Only show gray tile if no cache exists
             pixmap = QPixmap(self.tile_size, self.tile_size)
@@ -235,3 +255,51 @@ class MapTileLoader(QObject):
 
         # Clamp to valid range (0-19) and leave some margin
         return max(1, min(18, int(zoom) - 1))
+
+    def _handle_tile_error(self, error_code, error_string, http_status):
+        """
+        Handle tile download errors and notify user if necessary.
+
+        Args:
+            error_code: QNetworkReply error code
+            error_string: Error description string
+            http_status: HTTP status code if available
+        """
+        self.error_count += 1
+
+        # Reset error count after 30 seconds of no errors
+        self.error_reset_timer.stop()
+        self.error_reset_timer.start(30000)
+
+        # Determine error message based on status
+        if http_status == 429:
+            # Too Many Requests - rate limiting
+            error_msg = f"Map tile service rate limit exceeded. Please wait a moment before zooming/panning."
+        elif http_status == 403:
+            # Forbidden - possible usage policy violation
+            error_msg = f"Map tile access denied. This may be due to excessive usage or policy restrictions."
+        elif http_status == 503:
+            # Service Unavailable
+            error_msg = f"Map tile service is temporarily unavailable. Using cached tiles where available."
+        elif error_code == QNetworkReply.NetworkError.HostNotFoundError:
+            error_msg = f"Cannot connect to map tile server. Please check your internet connection."
+        elif error_code == QNetworkReply.NetworkError.TimeoutError:
+            error_msg = f"Map tile request timed out. The server may be slow or your connection may be unstable."
+        elif error_code == QNetworkReply.NetworkError.ConnectionRefusedError:
+            error_msg = f"Connection to map tile server was refused."
+        else:
+            # Generic error
+            error_msg = f"Failed to load some map tiles. Using cached tiles where available."
+
+        # Only emit error signal if we've hit the threshold and it's a different message
+        if self.error_count >= self.max_errors_before_notify:
+            if error_msg != self.last_error_message:
+                self.last_error_message = error_msg
+                self.tile_error.emit(error_msg)
+                # Reset count after notifying to avoid spam
+                self.error_count = 0
+
+    def reset_error_count(self):
+        """Reset the error count after a period of successful operations."""
+        self.error_count = 0
+        self.last_error_message = None
