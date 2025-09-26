@@ -10,6 +10,7 @@ from helpers.LocationInfo import LocationInfo
 from core.services.LoggerService import LoggerService
 import piexif
 from datetime import datetime
+import math
 
 
 class GPSMapController(QObject):
@@ -70,6 +71,9 @@ class GPSMapController(QObject):
         self.map_dialog.show()
         self.map_dialog.raise_()
         self.map_dialog.activateWindow()
+
+        # Show current AOI if one is selected
+        self.update_aoi_on_map()
 
     def extract_gps_data(self):
         """
@@ -220,8 +224,203 @@ class GPSMapController(QObject):
                     self.map_dialog.set_current_image(i)
                     break
 
+            # Clear AOI marker when switching images (will be re-added if AOI is selected)
+            self.map_dialog.update_aoi_marker(None, None)
+
     def close_map(self):
         """Close the GPS map window if it's open."""
         if self.map_dialog:
             self.map_dialog.close()
             self.map_dialog = None
+
+    def calculate_aoi_gps_coordinates(self, image_gps, aoi_center, image_center, gsd_cm, bearing_deg):
+        """
+        Calculate GPS coordinates for an AOI based on its pixel position.
+
+        Args:
+            image_gps: Dict with 'latitude' and 'longitude' of image center
+            aoi_center: Tuple (x, y) of AOI center in pixels
+            image_center: Tuple (width/2, height/2) of image center in pixels
+            gsd_cm: Ground sampling distance in centimeters
+            bearing_deg: Image bearing/yaw in degrees (0-360)
+
+        Returns:
+            Dict with 'latitude' and 'longitude' of the AOI, or None if calculation fails
+        """
+        try:
+            # Convert GSD from cm to meters
+            gsd_m = gsd_cm / 100.0
+
+            # Calculate pixel offset from image center
+            dx_pixels = aoi_center[0] - image_center[0]
+            dy_pixels = aoi_center[1] - image_center[1]
+
+            # Convert pixel offset to meters
+            # In image coordinates: X is right, Y is down
+            # We want: X (east), Y (north) in meters
+            dx_image = dx_pixels * gsd_m  # Right is positive
+            dy_image = dy_pixels * gsd_m  # Down is positive
+
+            # Convert bearing to radians
+            # Bearing is clockwise from north (0° = North, 90° = East, etc.)
+            # We need to use negative bearing to transform from image to world coordinates
+            # This matches how the map view rotates: self.rotate(-bearing)
+            bearing_rad = math.radians(-bearing_deg)
+
+            # Apply rotation to get world coordinates
+            # When bearing is 0 (north): image top points north
+            # When bearing is 90 (east): image top points east, image right points south
+            # The transformation from image to world coordinates uses -bearing:
+            # world_north = -image_y * cos(-bearing) + image_x * sin(-bearing)
+            # world_east = image_x * cos(-bearing) + image_y * sin(-bearing)
+
+            north_meters = -dy_image * math.cos(bearing_rad) + dx_image * math.sin(bearing_rad)
+            east_meters = dx_image * math.cos(bearing_rad) + dy_image * math.sin(bearing_rad)
+
+            # Convert meters offset to lat/lon degrees
+            # Approximate conversion (accurate for small distances)
+            lat = image_gps['latitude']
+            lon = image_gps['longitude']
+
+            # Earth radius in meters
+            earth_radius = 6371000
+
+            # Convert meters to degrees
+            delta_lat = north_meters / earth_radius * (180 / math.pi)
+            delta_lon = east_meters / (earth_radius * math.cos(math.radians(lat))) * (180 / math.pi)
+
+            # Calculate AOI GPS coordinates
+            aoi_lat = lat + delta_lat
+            aoi_lon = lon + delta_lon
+
+            return {
+                'latitude': aoi_lat,
+                'longitude': aoi_lon
+            }
+
+        except Exception as e:
+            self.logger.log(f"Error calculating AOI GPS coordinates: {e}")
+            return None
+
+    def get_current_aoi_gps(self):
+        """
+        Get GPS coordinates for the currently selected AOI.
+
+        Returns:
+            Dict with AOI GPS data including coordinates and metadata, or None
+        """
+        try:
+            # Check if we have a selected AOI
+            if not hasattr(self.parent, 'aoi_controller') or self.parent.aoi_controller.selected_aoi_index < 0:
+                return None
+
+            # Get current image data
+            current_image = self.parent.images[self.parent.current_image]
+
+            # Get AOI data
+            aoi_index = self.parent.aoi_controller.selected_aoi_index
+            if 'areas_of_interest' not in current_image or aoi_index >= len(current_image['areas_of_interest']):
+                return None
+
+            aoi = current_image['areas_of_interest'][aoi_index]
+
+            # Get image GPS coordinates
+            from helpers.MetaDataHelper import MetaDataHelper
+            exif_data = MetaDataHelper.get_exif_data_piexif(current_image['path'])
+            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
+
+            if not gps_coords:
+                return None
+
+            # Get image dimensions
+            from core.services.ImageService import ImageService
+            image_service = ImageService(current_image['path'], current_image.get('mask_path', ''))
+            img_array = image_service.img_array
+            height, width = img_array.shape[:2]
+
+            # Get bearing
+            bearing = image_service.get_drone_orientation()
+            if bearing is None:
+                bearing = 0  # Default to north if bearing not available
+
+            # Get GSD (Ground Sampling Distance)
+            gsd_value = self.parent.messages.get('GSD (cm/px)', None)
+            if gsd_value:
+                # Extract numeric value from string like "2.5 cm/px"
+                try:
+                    gsd_cm = float(gsd_value.split()[0])
+                except:
+                    gsd_cm = self.calculate_gsd_for_image(current_image['path'])
+                    if gsd_cm is None:
+                        return None
+            else:
+                # Try to calculate GSD if not in messages
+                gsd_cm = self.calculate_gsd_for_image(current_image['path'])
+                if gsd_cm is None:
+                    return None
+
+            # Calculate AOI GPS coordinates
+            aoi_gps = self.calculate_aoi_gps_coordinates(
+                gps_coords,
+                aoi['center'],
+                (width/2, height/2),
+                gsd_cm,
+                bearing
+            )
+
+            if not aoi_gps:
+                return None
+
+            # Add AOI metadata
+            aoi_gps['aoi_index'] = aoi_index
+            aoi_gps['pixel_area'] = aoi.get('area', 0)
+            aoi_gps['center_pixels'] = aoi['center']
+            aoi_gps['image_index'] = self.parent.current_image
+            aoi_gps['image_name'] = current_image.get('name', 'Unknown')
+
+            # Get color/temperature info if available
+            if hasattr(self.parent.aoi_controller, 'calculate_aoi_average_info'):
+                avg_info, _ = self.parent.aoi_controller.calculate_aoi_average_info(
+                    aoi,
+                    self.parent.is_thermal,
+                    self.parent.temperature_data,
+                    self.parent.temperature_unit
+                )
+                aoi_gps['avg_info'] = avg_info
+
+            return aoi_gps
+
+        except Exception as e:
+            self.logger.log(f"Error getting current AOI GPS: {e}")
+            return None
+
+    def calculate_gsd_for_image(self, image_path):
+        """
+        Calculate GSD for an image if not already available.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            GSD in cm/px or None if calculation fails
+        """
+        try:
+            from core.services.ImageService import ImageService
+            image_service = ImageService(image_path, '')
+
+            # Use the existing ImageService method to get average GSD
+            avg_gsd = image_service.get_average_gsd()
+            return avg_gsd
+
+        except Exception:
+            return None
+
+    def update_aoi_on_map(self):
+        """Update the AOI display on the map if it's open."""
+        if self.map_dialog and self.map_dialog.isVisible():
+            aoi_gps = self.get_current_aoi_gps()
+
+            # Get the identifier color from settings
+            identifier_color = self.parent.settings.get('identifier_color', [255, 255, 0])
+
+            self.map_dialog.update_aoi_marker(aoi_gps, identifier_color)

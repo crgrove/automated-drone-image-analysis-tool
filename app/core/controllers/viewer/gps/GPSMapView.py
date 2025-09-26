@@ -5,7 +5,7 @@ This widget renders map tiles, GPS points, connection lines, and handles user in
 """
 
 import math
-from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QWidget, QLabel
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem, QWidget, QLabel
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette
 from .MapTileLoader import MapTileLoader
@@ -54,6 +54,10 @@ class GPSMapView(QGraphicsView):
         self.path_item = None  # Connection lines
         self.current_image_index = -1
         self.aoi_color = QColor(255, 140, 0)  # Default orange
+
+        # AOI marker storage
+        self.aoi_marker = None  # Current AOI marker
+        self.aoi_data = None  # Current AOI metadata
 
         # Map bounds
         self.min_lat = None
@@ -437,9 +441,16 @@ class GPSMapView(QGraphicsView):
 
     def render_map(self):
         """Render map tiles and GPS points."""
+        # Store AOI data temporarily if present
+        temp_aoi_data = self.aoi_data
+        temp_aoi_color = None
+        if self.aoi_marker and self.aoi_marker.brush():
+            temp_aoi_color = self.aoi_marker.brush().color()
+
         # Clear existing items
         self.scene.clear()
         self.point_items = []
+        self.aoi_marker = None  # Reset reference since scene.clear() removed it
         # Don't clear tile_items here - keep them for caching
 
         if not self.gps_data:
@@ -463,6 +474,11 @@ class GPSMapView(QGraphicsView):
 
         # Draw GPS points and path
         self.draw_gps_points()
+
+        # Restore AOI marker if it was present
+        if temp_aoi_data and temp_aoi_color:
+            color_rgb = [temp_aoi_color.red(), temp_aoi_color.green(), temp_aoi_color.blue()]
+            self.set_aoi_marker(temp_aoi_data, color_rgb)
 
     def load_visible_tiles(self):
         """Load map tiles for the visible area."""
@@ -915,6 +931,18 @@ class GPSMapView(QGraphicsView):
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse press events."""
         if event.button() == Qt.MouseButton.LeftButton:
+            # Check if clicking on AOI marker first
+            if self.aoi_marker:
+                aoi_view_pos = self.mapFromScene(self.aoi_marker.pos())
+                dx = event.pos().x() - aoi_view_pos.x()
+                dy = event.pos().y() - aoi_view_pos.y()
+                distance = math.sqrt(dx * dx + dy * dy)
+
+                if distance <= 10:  # Click tolerance
+                    # Show AOI popup with copy button
+                    self.show_aoi_popup(event.globalPos())
+                    return
+
             # Check if clicking on a point
             scene_pos = self.mapToScene(event.pos())
 
@@ -943,6 +971,68 @@ class GPSMapView(QGraphicsView):
 
         # Default behavior for panning
         super().mousePressEvent(event)
+
+    def show_aoi_popup(self, global_pos):
+        """
+        Show a popup with AOI data and copy button.
+
+        Args:
+            global_pos: Global position for the popup
+        """
+        if not self.aoi_data:
+            return
+
+        from PySide6.QtWidgets import QMenu, QApplication
+
+        # Create popup menu
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2b2b2b;
+                border: 1px solid #555555;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 3px;
+            }
+            QMenu::item:selected {
+                background-color: #505050;
+            }
+        """)
+
+        # Add copy data action
+        copy_action = menu.addAction("Copy Data")
+        copy_action.triggered.connect(self.copy_aoi_data)
+
+        # Show menu at cursor position
+        menu.exec(global_pos)
+
+    def copy_aoi_data(self):
+        """Copy AOI data to clipboard."""
+        if not self.aoi_data:
+            return
+
+        from PySide6.QtWidgets import QApplication
+
+        # Format the data for clipboard (matching AOIController format)
+        clipboard_text = (
+            f"Image: {self.aoi_data['image_name']}\n"
+            f"AOI Coordinates: X={self.aoi_data['center_pixels'][0]}, Y={self.aoi_data['center_pixels'][1]}\n"
+            f"AOI Area: {self.aoi_data['pixel_area']:.0f} px\n"
+        )
+
+        # Add average info if available
+        if self.aoi_data.get('avg_info'):
+            clipboard_text += f"Average: {self.aoi_data['avg_info']}\n"
+
+        # Add GPS coordinates
+        clipboard_text += f"GPS Coordinates: {self.aoi_data['latitude']:.6f}, {self.aoi_data['longitude']:.6f}"
+
+        # Copy to clipboard
+        QApplication.clipboard().setText(clipboard_text)
 
     def keyPressEvent(self, event):
         """Handle key press events for navigation."""
@@ -1040,6 +1130,14 @@ class GPSMapView(QGraphicsView):
                     new_pos = self.lat_lon_to_scene(data['latitude'], data['longitude'])
                     point_item.setPos(new_pos)
 
+            # Update AOI marker position if present
+            if self.aoi_marker and self.aoi_data:
+                aoi_new_pos = self.lat_lon_to_scene(
+                    self.aoi_data['latitude'],
+                    self.aoi_data['longitude']
+                )
+                self.aoi_marker.setPos(aoi_new_pos)
+
             # Update path
             if self.path_item:
                 try:
@@ -1102,3 +1200,80 @@ class GPSMapView(QGraphicsView):
         self.tile_timer.start(500)
         # Maintain compass after resize
         self._maintain_compass()
+
+    def set_aoi_marker(self, aoi_gps_data, identifier_color):
+        """
+        Display an AOI marker on the map.
+
+        Args:
+            aoi_gps_data: Dict with AOI GPS data including:
+                - latitude: GPS latitude of the AOI
+                - longitude: GPS longitude of the AOI
+                - aoi_index: Index of the AOI
+                - pixel_area: Area of the AOI in pixels
+                - center_pixels: Pixel coordinates of AOI center
+                - image_index: Index of the source image
+                - image_name: Name of the source image
+                - avg_info: Average color/temperature info (optional)
+            identifier_color: List [r, g, b] for the marker color
+        """
+        # Remove existing AOI marker if present
+        if self.aoi_marker and self.aoi_marker in self.scene.items():
+            self.scene.removeItem(self.aoi_marker)
+            self.aoi_marker = None
+
+        if not aoi_gps_data:
+            self.aoi_data = None
+            return
+
+        # Store AOI data for click handling
+        self.aoi_data = aoi_gps_data
+
+        # Convert GPS to scene coordinates
+        scene_point = self.lat_lon_to_scene(
+            aoi_gps_data['latitude'],
+            aoi_gps_data['longitude']
+        )
+
+        # Create AOI marker - use a square to distinguish from image points
+        size = 14  # Slightly larger than image points
+        self.aoi_marker = QGraphicsRectItem(
+            -size/2,  # Center the item at origin
+            -size/2,
+            size, size
+        )
+        self.aoi_marker.setPos(scene_point)
+
+        # Set color from identifier_color
+        color = QColor(identifier_color[0], identifier_color[1], identifier_color[2])
+        self.aoi_marker.setBrush(QBrush(color))
+        self.aoi_marker.setPen(QPen(QColor(0, 0, 0), 2))  # Black border
+        self.aoi_marker.setZValue(25)  # Higher than all other points
+
+        # Make the marker ignore transformations (maintain screen size)
+        self.aoi_marker.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+
+        # Make clickable
+        self.aoi_marker.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
+        self.aoi_marker.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Store type identifier for click detection
+        self.aoi_marker.setData(0, 'aoi_marker')
+
+        # Add tooltip
+        tooltip = f"AOI from {aoi_gps_data['image_name']}\n"
+        tooltip += f"Pixel Position: X={aoi_gps_data['center_pixels'][0]}, Y={aoi_gps_data['center_pixels'][1]}\n"
+        tooltip += f"Area: {aoi_gps_data['pixel_area']:.0f} px\n"
+        if aoi_gps_data.get('avg_info'):
+            tooltip += f"{aoi_gps_data['avg_info']}\n"
+        tooltip += f"GPS: {aoi_gps_data['latitude']:.6f}, {aoi_gps_data['longitude']:.6f}"
+        self.aoi_marker.setToolTip(tooltip)
+
+        self.scene.addItem(self.aoi_marker)
+
+    def clear_aoi_marker(self):
+        """Remove the AOI marker from the map."""
+        if self.aoi_marker and self.aoi_marker in self.scene.items():
+            self.scene.removeItem(self.aoi_marker)
+            self.aoi_marker = None
+        self.aoi_data = None
