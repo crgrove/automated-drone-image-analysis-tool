@@ -338,6 +338,21 @@ class GPSMapController(QObject):
             img_array = image_service.img_array
             height, width = img_array.shape[:2]
 
+            # Check gimbal pitch angle - must be within 5 degrees of nadir
+            _, gimbal_pitch = image_service.get_gimbal_angles()
+            if gimbal_pitch is not None:
+                # Nadir is typically -90 degrees for most drones (camera pointing straight down)
+                # Allow range from -85 to -95 degrees (5 degree tolerance)
+                if not (-95 <= gimbal_pitch <= -85):
+                    # Show toast message about gimbal angle
+                    if hasattr(self.parent, 'status_controller'):
+                        self.parent.status_controller.show_toast(
+                            f"Gimbal angle not nadir ({gimbal_pitch:.1f}°). AOI GPS location not calculated.",
+                            4000,
+                            color="#FF9800"
+                        )
+                    return None
+
             # Get bearing
             bearing = image_service.get_drone_orientation()
             if bearing is None:
