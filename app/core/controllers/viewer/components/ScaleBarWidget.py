@@ -8,6 +8,7 @@ class ScaleBarWidget(QWidget):
     Draws a *fixed‑width* scale bar (default 120 px) and a text label that you
     can change at runtime with setLabel().
     """
+
     def __init__(self, parent=None, bar_px=120):
         super().__init__(parent)
         self._bar_px = bar_px

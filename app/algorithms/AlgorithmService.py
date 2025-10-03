@@ -58,7 +58,7 @@ class AlgorithmService:
 
     def collect_pixels_of_interest(self, mask):
         coords = np.argwhere(mask > 0)
-        return coords[:, [1, 0]] 
+        return coords[:, [1, 0]]
 
     def identify_areas_of_interest(self, img_or_shape, contours):
         """
@@ -89,7 +89,7 @@ class AlgorithmService:
         areas_of_interest = []
         temp_mask = np.zeros((height, width), dtype=np.uint8)
         base_contour_count = 0
-        
+
         # Store original detected pixels for each valid contour
         original_pixels_mask = np.zeros((height, width), dtype=np.uint8)
 
@@ -107,21 +107,21 @@ class AlgorithmService:
 
                 # Add to mask for later combining
                 cv2.circle(temp_mask, center, radius, 255, -1)
-                
+
                 # Also keep track of original pixels
                 original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
 
                 if not self.combine_aois:
                     # Store the contour points for drawing the boundary
                     contour_points = cnt.reshape(-1, 2).tolist()
-                    
+
                     # Get the detected pixels for this AOI
                     detected_pixels = np.argwhere(mask > 0)
                     detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
-                    
+
                     areas_of_interest.append({
-                        'center': center, 
-                        'radius': radius, 
+                        'center': center,
+                        'radius': radius,
                         'area': area,
                         'contour': contour_points,
                         'detected_pixels': detected_pixels_list
@@ -150,15 +150,15 @@ class AlgorithmService:
                 radius = int(radius)
                 # Store the contour points for drawing the boundary
                 contour_points = cnt.reshape(-1, 2).tolist()
-                
+
                 # Get the original detected pixels that belong to this combined AOI
                 aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
                 aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
                 aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
-                
+
                 areas_of_interest.append({
-                    'center': center, 
-                    'radius': radius, 
+                    'center': center,
+                    'radius': radius,
                     'area': area,
                     'contour': contour_points,
                     'detected_pixels': aoi_pixels_list
@@ -172,12 +172,12 @@ class AlgorithmService:
     def _construct_output_path(self, full_path, input_dir, output_dir):
         """
         Properly constructs an output path by replacing the input directory with the output directory.
-        
+
         Args:
             full_path (str): Full path to the input file
             input_dir (str): Input directory path
             output_dir (str): Output directory path
-            
+
         Returns:
             str: Properly constructed output path
         """
@@ -185,17 +185,17 @@ class AlgorithmService:
         full_path_obj = Path(full_path)
         input_dir_obj = Path(input_dir)
         output_dir_obj = Path(output_dir)
-        
+
         # Get the relative path from input_dir to the file
         try:
             relative_path = full_path_obj.relative_to(input_dir_obj)
         except ValueError:
             # If the file is not under input_dir, just use the filename
             relative_path = full_path_obj.name
-        
+
         # Construct the output path
         output_path = output_dir_obj / relative_path
-        
+
         return str(output_path)
 
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
@@ -332,10 +332,12 @@ class AlgorithmService:
         else:
             return int(segments ** .5), int(segments ** .5)
 
+
 class AnalysisResult:
     """Class representing the result of an image processing operation."""
 
-    def __init__(self, input_path=None, output_path=None, output_dir=None, areas_of_interest=None, base_contour_count=None, error_message=None):
+    def __init__(self, input_path=None, output_path=None, output_dir=None,
+                 areas_of_interest=None, base_contour_count=None, error_message=None):
         """
         Initializes an AnalysisResult with the given parameters.
 

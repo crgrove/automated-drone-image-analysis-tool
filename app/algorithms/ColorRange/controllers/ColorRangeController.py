@@ -47,15 +47,15 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         try:
             # Ensure custom colors are loaded
             custom_colors_service = get_custom_colors_service()
-            
+
             if self.selectedColor is not None:
                 color = QColorDialog.getColor(self.selectedColor)
             else:
                 color = QColorDialog.getColor()
-            
+
             # Sync custom colors after dialog closes
             custom_colors_service.sync_with_dialog()
-            
+
             if color.isValid():
                 self.selectedColor = color
                 self.update_colors()
@@ -95,11 +95,13 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         Populates options based on user-selected values.
 
         Returns:
-            dict: A dictionary containing selected options, including 'color_range', 'selected_color', and 'range_values'.
+            dict: A dictionary containing selected options, including 'color_range',
+                'selected_color', and 'range_values'.
         """
         options = dict()
         options['color_range'] = [self.lowerColor, self.upperColor]
-        options['selected_color'] = (self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue())
+        options['selected_color'] = (self.selectedColor.red(), self.selectedColor.green(),
+                                      self.selectedColor.blue())
         options['range_values'] = (self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value())
         return options
 

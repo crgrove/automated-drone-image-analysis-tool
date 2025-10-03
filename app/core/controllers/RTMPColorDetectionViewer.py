@@ -20,10 +20,10 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtCore import Qt, QTimer, Signal, QRect
 from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence, QPainter, QBrush, QPen
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
-                             QGroupBox, QGridLayout, QTextEdit, QSplitter,
-                             QColorDialog, QCheckBox, QComboBox, QProgressBar,
-                             QMessageBox, QStatusBar, QSlider, QFileDialog, QDialog)
+                               QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
+                               QGroupBox, QGridLayout, QTextEdit, QSplitter,
+                               QColorDialog, QCheckBox, QComboBox, QProgressBar,
+                               QMessageBox, QStatusBar, QSlider, QFileDialog, QDialog)
 
 from core.services.RTMPStreamService import StreamManager, StreamType
 from core.services.RealtimeColorDetectionService import RealtimeColorDetector, HSVConfig, Detection
@@ -653,7 +653,7 @@ class HSVControlWidget(QWidget):
         # Processing options
         options_group = QGroupBox("Processing Options")
         options_layout = QVBoxLayout(options_group)
-        
+
         # Processing resolution dropdown
         resolution_layout = QHBoxLayout()
         resolution_layout.addWidget(QLabel("Processing Resolution:"))
@@ -836,7 +836,7 @@ class HSVControlWidget(QWidget):
                 'v_minus': self.value_minus_spinbox.value() / 255,
                 'v_plus': self.value_plus_spinbox.value() / 255
             }
-        
+
         # Parse processing resolution
         processing_resolution = None
         resolution_text = self.resolution_combo.currentText()
@@ -880,7 +880,7 @@ class HSVControlWidget(QWidget):
                 'v_minus': self.value_minus_spinbox.value() / 255,
                 'v_plus': self.value_plus_spinbox.value() / 255
             }
-        
+
         # Parse processing resolution
         processing_resolution = None
         resolution_text = self.resolution_combo.currentText()

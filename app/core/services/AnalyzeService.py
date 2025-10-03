@@ -159,11 +159,11 @@ class AnalyzeService(QObject):
 
             # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
-            
+
             # Set the XML path before adding images so relative paths can be calculated
             file_path = os.path.join(self.output, "ADIAT_Data.xml")
             self.xmlService.xml_path = file_path
-            
+
             for img in self.images_with_aois:
                 self.xmlService.add_image_to_xml(img)
 
@@ -250,7 +250,7 @@ class AnalyzeService(QObject):
                 "aois": result.areas_of_interest
             }
             self.images_with_aois.append(image_data)
-            
+
             num_aois = len(result.areas_of_interest)
             self.sig_msg.emit(f'{num_aois} Areas of interest identified in ' + file_name)
 

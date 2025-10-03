@@ -10,8 +10,10 @@ from app.core.controllers.Perferences import Preferences
 from app.core.services.PdfGeneratorService import PdfGeneratorService
 from app.core.services.KMLGeneratorService import KMLGeneratorService
 
+
 def testVisible(main_window):
     assert main_window.isVisible()
+
 
 def testBasicEndToEnd(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
@@ -66,6 +68,7 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert len(viewer.aoiListWidget) != 0
     assert viewer.statusbar.currentMessage() != ""
 
+
 def testKMeans(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
@@ -88,6 +91,7 @@ def testKMeans(main_window, testData, qtbot):
     qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
+
 
 def testNormalizeHistogram(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
@@ -112,6 +116,7 @@ def testNormalizeHistogram(main_window, testData, qtbot):
     qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
+
 
 def testKmlCollection(main_window, testData, qtbot):
     # Prepare the main window as in your other tests
@@ -158,7 +163,7 @@ def testPdfGenerator(main_window, testData, qtbot):
     algorithmWidget.update_colors()
 
     with patch.object(QFileDialog, 'getSaveFileName', return_value=("/path/to/report.pdf", "pdf")), \
-         patch.object(PdfGeneratorService, 'generate_report', return_value=None) as mock_generate_pdf, \
+         patch.object(PdfGeneratorService, 'generate_report', return_value=None), \
          patch.object(QMessageBox, 'information') as mock_messagebox:
 
         # Ensure Viewer is initialized and ready

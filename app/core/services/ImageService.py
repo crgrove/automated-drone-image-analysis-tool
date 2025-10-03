@@ -373,7 +373,7 @@ class ImageService:
             cx, cy = aoi.get("center", (0, 0))
             r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
-            
+
             # Draw contour outline if available (this is the actual combined boundary)
             if "contour" in aoi and aoi["contour"] and len(aoi["contour"]) > 2:
                 # Convert contour points back to numpy array format for OpenCV
@@ -382,7 +382,7 @@ class ImageService:
                     contour = contour.reshape((-1, 1, 2))
                 # Draw contour with solid line
                 cv2.polylines(image_copy, [contour], True, bgr, thickness=2)
-                
+
                 # Also draw the minimum enclosing circle with dotted line for reference
                 if r > 0:
                     # Draw dotted circle by drawing small arcs
@@ -395,17 +395,17 @@ class ImageService:
                 cv2.circle(image_copy, center, r, bgr, thickness=2)
 
         return image_copy
-    
+
     def apply_mask_highlight(self, image_array, mask_path=None, identifier_color=(255, 0, 255), areas_of_interest=None):
         """
         Applies a mask overlay to highlight detected pixels.
- 
+
         Args:
             image_array (np.ndarray): The input image array in BGR format.
             mask_path (str, optional): Path to the mask file (.tif or .png). If None, uses self.mask_path.
             identifier_color (tuple): RGB color tuple for highlighting (uses Object Identifier color).
             areas_of_interest (list, optional): Not used currently, but kept for future filtering.
- 
+
         Returns:
             np.ndarray: The image array with mask applied.
         """
@@ -449,24 +449,24 @@ class ImageService:
             ).astype(np.uint8)
 
         return highlighted_image
-    
+
     def highlight_aoi_pixels(self, image_array, areas_of_interest, highlight_color=(255, 0, 255)):
         """
         Highlights detected pixels within areas of interest.
-        
+
         Args:
             image_array (np.ndarray): The input image array.
             areas_of_interest (list): List of AOI dictionaries with detected_pixels.
             highlight_color (tuple): RGB color tuple for highlighting (default: magenta).
-            
+
         Returns:
             np.ndarray: The image array with highlighted pixels.
         """
         highlighted_image = image_array.copy()
-        
+
         # Convert highlight color to numpy array
         highlight_color_array = np.array(highlight_color, dtype=np.uint8)
-        
+
         for aoi in areas_of_interest or []:
             if "detected_pixels" in aoi and aoi["detected_pixels"]:
                 for pixel in aoi["detected_pixels"]:
@@ -477,7 +477,7 @@ class ImageService:
                             # Convert from BGR to RGB for display if needed
                             if len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3:
                                 highlighted_image[y, x] = highlight_color_array
-                            
+
         return highlighted_image
 
     def highlight_pixels_of_interest(self, image_array, highlight_color=(255, 0, 255)):
@@ -510,7 +510,6 @@ class ImageService:
             # Parse the pixels of interest
             pixels_str = xmp_data[pixels_key]
             try:
-                import json
                 pixels_of_interest = json.loads(pixels_str)
             except (json.JSONDecodeError, TypeError):
                 return image_array

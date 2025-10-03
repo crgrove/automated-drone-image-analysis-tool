@@ -149,7 +149,7 @@ class GPSMapDialog(QDialog):
                 if 'areas_of_interest' in current_img and current_img['areas_of_interest']:
                     # Could extract actual AOI color if stored, for now use orange
                     return default_color
-        except:
+        except (KeyError, IndexError, TypeError):
             pass
 
         return default_color

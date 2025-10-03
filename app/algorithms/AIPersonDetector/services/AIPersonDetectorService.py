@@ -99,12 +99,12 @@ class AIPersonDetectorService(AlgorithmService):
                 if conf >= self.confidence:
                     # Fill the bounding box area with white (255)
                     mask[y_min:y_max, x_min:x_max] = 255
-            
+
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
-            
+
             # Store mask instead of duplicating image
             mask_path = None
             if areas_of_interest:
@@ -194,7 +194,7 @@ class AIPersonDetectorService(AlgorithmService):
                     sess_options=so,
                     providers=providers_cpu_only
                 )
-        
+
         try:
             return ort.InferenceSession(
                 self.model_path,

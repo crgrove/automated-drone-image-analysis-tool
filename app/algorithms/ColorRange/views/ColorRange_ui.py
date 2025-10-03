@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 
-################################################################################
-## Form generated from reading UI file 'ColorRange.ui'
-##
-## Created by: Qt User Interface Compiler version 6.9.2
-##
-## WARNING! All changes made in this file will be lost when recompiling UI file!
-################################################################################
+###############################################################################
+# Form generated from reading UI file 'ColorRange.ui'
+#
+# Created by: Qt User Interface Compiler version 6.9.2
+#
+# WARNING! All changes made in this file will be lost when recompiling UI file!
+###############################################################################
 
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
-    QMetaObject, QObject, QPoint, QRect,
+        QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
 from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
-    QFont, QFontDatabase, QGradient, QIcon,
+        QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QSpacerItem, QSpinBox,
+        QPushButton, QSizePolicy, QSpacerItem, QSpinBox,
     QVBoxLayout, QWidget)
 from . import resources_rc
 
@@ -162,9 +162,9 @@ class Ui_ColorRange(object):
         self.gSensitivityLabel.setText(QCoreApplication.translate("ColorRange", u"Green Range +/-", None))
         self.bSensitivityLabel.setText(QCoreApplication.translate("ColorRange", u"Blue Range +/-", None))
         self.colorRangeLabel.setText(QCoreApplication.translate("ColorRange", u"Color Range:", None))
-#if QT_CONFIG(whatsthis)
+# if QT_CONFIG(whatsthis)
         self.minColor.setWhatsThis("")
-#endif // QT_CONFIG(whatsthis)
+# endif // QT_CONFIG(whatsthis)
         self.viewRangeButton.setText(QCoreApplication.translate("ColorRange", u"View Range", None))
         self.viewRangeButton.setProperty(u"iconName", QCoreApplication.translate("ColorRange", u"eye.png", None))
     # retranslateUi

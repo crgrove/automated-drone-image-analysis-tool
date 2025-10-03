@@ -10,6 +10,7 @@ class StatusDict(UserDict):
         callback (Callable): Function to call when values are updated.
         key_order (list): Explicit order to maintain for dictionary keys.
     """
+
     def __init__(self, *args, callback=None, key_order=None, **kwargs):
         self.data = OrderedDict()  # Maintain explicit ordering
         super().__init__(*args, **kwargs)

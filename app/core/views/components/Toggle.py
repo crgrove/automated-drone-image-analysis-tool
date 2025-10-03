@@ -36,18 +36,17 @@ from PySide6.QtWidgets import QCheckBox
 from PySide6.QtGui import QColor, QBrush, QPaintEvent, QPen, QPainter
 
 
-
 class Toggle(QCheckBox):
 
     _transparent_pen = QPen(Qt.transparent)
     _light_grey_pen = QPen(Qt.lightGray)
 
     def __init__(self,
-        parent=None,
-        bar_color=Qt.gray,
-        checked_color="#00B0FF",
-        handle_color=Qt.white,
-        ):
+                 parent=None,
+                 bar_color=Qt.gray,
+                 checked_color="#00B0FF",
+                 handle_color=Qt.white,
+                 ):
         super().__init__(parent)
 
         # Save our properties on the object via self, so we can access them later
@@ -136,14 +135,13 @@ class Toggle(QCheckBox):
         self.update()
 
 
-
 class AnimatedToggle(Toggle):
 
     _transparent_pen = QPen(Qt.transparent)
     _light_grey_pen = QPen(Qt.lightGray)
 
     def __init__(self, *args, pulse_unchecked_color="#44999999",
-        pulse_checked_color="#4400B0EE", **kwargs):
+                 pulse_checked_color="#4400B0EE", **kwargs):
 
         self._pulse_radius = 0
 
@@ -164,8 +162,6 @@ class AnimatedToggle(Toggle):
 
         self._pulse_unchecked_animation = QBrush(QColor(pulse_unchecked_color))
         self._pulse_checked_animation = QBrush(QColor(pulse_checked_color))
-
-
 
     @Slot(int)
     def handle_state_change(self, value):

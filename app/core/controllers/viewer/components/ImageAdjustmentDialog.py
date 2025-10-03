@@ -115,7 +115,7 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
         width = qimage.width()
         height = qimage.height()
         ptr = qimage.bits()
-        
+
         # PySide6/Python 3.8+ compatibility: memoryview.setsize() was removed
         # Instead, we use the size directly from the QImage
         byte_count = qimage.sizeInBytes()

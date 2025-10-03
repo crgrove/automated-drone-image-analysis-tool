@@ -127,7 +127,7 @@ class MeasureDialog(QDialog):
 
         # Connect GSD input
         self.gsd_input.textChanged.connect(self.onGsdChanged)
-        
+
         # Connect to zoom changes to update item sizes
         self.image_viewer.zoomChanged.connect(self.onZoomChanged)
 
@@ -149,10 +149,10 @@ class MeasureDialog(QDialog):
                     self.calculateDistance()
         except ValueError:
             pass  # Invalid input, ignore
-    
+
     def onZoomChanged(self, zoom_level):
         """Handle zoom level changes to update item sizes.
-        
+
         Args:
             zoom_level: Current zoom level
         """
@@ -181,7 +181,7 @@ class MeasureDialog(QDialog):
             zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
             radius = self.fixed_point_radius / zoom
             pen_width = self.fixed_line_width / zoom
-            
+
             self.point1_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
             self.point1_item.setBrush(QColor(255, 0, 0))
             self.point1_item.setPen(QPen(QColor(255, 255, 255), pen_width))
@@ -201,7 +201,7 @@ class MeasureDialog(QDialog):
             zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
             radius = self.fixed_point_radius / zoom
             pen_width = self.fixed_line_width / zoom
-            
+
             self.point2_item = QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
             self.point2_item.setBrush(QColor(255, 0, 0))
             self.point2_item.setPen(QPen(QColor(255, 255, 255), pen_width))
@@ -231,7 +231,7 @@ class MeasureDialog(QDialog):
 
             zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
             pen_width = self.fixed_line_width / zoom
-            
+
             self.temp_line_item = QGraphicsLineItem(
                 self.first_point.x(), self.first_point.y(),
                 pos.x(), pos.y()
@@ -322,7 +322,7 @@ class MeasureDialog(QDialog):
         zoom = self.image_viewer.getZoom() if hasattr(self.image_viewer, 'getZoom') else 1.0
         radius = self.fixed_point_radius / zoom
         pen_width = self.fixed_line_width / zoom
-        
+
         # Update first point
         if self.point1_item and self.first_point:
             self.image_viewer.scene.removeItem(self.point1_item)
@@ -331,7 +331,7 @@ class MeasureDialog(QDialog):
             self.point1_item.setBrush(QColor(255, 0, 0))
             self.point1_item.setPen(QPen(QColor(255, 255, 255), pen_width))
             self.image_viewer.scene.addItem(self.point1_item)
-        
+
         # Update second point
         if self.point2_item and self.second_point:
             self.image_viewer.scene.removeItem(self.point2_item)
@@ -340,7 +340,7 @@ class MeasureDialog(QDialog):
             self.point2_item.setBrush(QColor(255, 0, 0))
             self.point2_item.setPen(QPen(QColor(255, 255, 255), pen_width))
             self.image_viewer.scene.addItem(self.point2_item)
-        
+
         # Update line
         if self.line_item and self.first_point and self.second_point:
             self.image_viewer.scene.removeItem(self.line_item)
@@ -350,7 +350,7 @@ class MeasureDialog(QDialog):
             )
             self.line_item.setPen(QPen(QColor(0, 255, 0), pen_width))
             self.image_viewer.scene.addItem(self.line_item)
-    
+
     def closeEvent(self, event):
         """Handle dialog close event."""
         # Disconnect signals

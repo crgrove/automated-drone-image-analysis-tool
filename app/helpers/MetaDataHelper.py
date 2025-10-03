@@ -264,8 +264,8 @@ class MetaDataHelper:
                         xmp_data[xmp_key] = value
                         # Also store with drone-dji namespace if it's a DJI field
                         if any(field in xmp_key for field in ['FlightYaw', 'FlightPitch', 'FlightRoll',
-                                                               'GimbalYaw', 'GimbalPitch', 'GimbalRoll',
-                                                               'RelativeAltitude', 'AbsoluteAltitude']):
+                                                              'GimbalYaw', 'GimbalPitch', 'GimbalRoll',
+                                                              'RelativeAltitude', 'AbsoluteAltitude']):
                             xmp_data[f'drone-dji:{xmp_key}'] = value
                     elif key.startswith('XMP-'):
                         # Handle namespaced XMP tags like "XMP-drone-dji:FlightYawDegree"

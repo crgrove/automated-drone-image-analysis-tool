@@ -107,7 +107,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
 
-
         # status‑bar helper
         self.messages = StatusDict(callback=self.status_controller.message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
@@ -172,22 +171,22 @@ class Viewer(QMainWindow, Ui_Viewer):
                 thread.requestInterruption()  # Optional: politely request interruption
                 thread.quit()
                 thread.wait()  # Wait until the thread has terminated
-        
+
         # Clean up magnifying glass controller
         if hasattr(self, 'magnifying_glass'):
             self.magnifying_glass.cleanup()
             # Reset button styling
             self.magnifying_glass_enabled = False
             self._update_magnify_button_style()
-        
+
         # Clean up overlay widget
         if hasattr(self, 'overlay'):
             self.overlay.cleanup()
-        
+
         # Clean up controllers
         if hasattr(self, 'thumbnail_controller'):
             self.thumbnail_controller.cleanup()
-            
+
         event.accept()
 
     def _add_Toggles(self):
@@ -212,7 +211,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle = Toggle()
         layout.replaceWidget(self.highlightPixelsOfInterestCheckBox, self.highlightPixelsToggle)
         self.highlightPixelsOfInterestCheckBox.deleteLater()
-        
+
         layout.insertWidget(layout.indexOf(self.showOverlayLabel) + 1, self.highlightPixelsToggle)
         self.highlightPixelsLabel = QLabel("Highlight Pixels of Interest")
         self.highlightPixelsLabel.setFont(font)
@@ -220,7 +219,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.highlightPixelsToggle.setChecked(False)
         self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
         self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (H or Ctrl+I)")
-        
+
         # Add draw AOI circle toggle
         self.showAOIsToggle = Toggle()
         layout.replaceWidget(self.showAOIsCheckBox, self.showAOIsToggle)
@@ -291,9 +290,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                     pass  # Not a valid image
         self.images = valid_images
 
-
-
-
     def _setupViewer(self):
         if len(self.images) == 0:
             self._show_no_images_message()
@@ -326,7 +322,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             """)
             self.flagFilterButton.setCheckable(True)
             self.flagFilterButton.clicked.connect(self.aoi_controller.toggle_flag_filter)
-            
+
             # Set the flag button in the AOI controller
             self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, self.flagFilterButton)
 
@@ -357,7 +353,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
 
-
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:
@@ -387,10 +382,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Initialize magnifying glass controller
             self.magnifying_glass = MagnifyingGlass(self.main_image, self.logger, self)
             self.magnifying_glass_enabled = False
-            
+
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
-            
+
             # Initialize export controllers
             self.kml_export = KMLExportController(self, self.logger)
             self.pdf_export = PDFExportController(self, self.logger)
@@ -435,7 +430,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Update GPS map if it's open
             self.gps_map_controller.update_current_image(self.current_image)
-            
+
             # Use original image path if available (mask-based approach)
             # Fall back to path for legacy support
             image_path = image.get('path', '')
@@ -451,7 +446,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             try:
                 image_service = ImageService(image_path, mask_path)
-            except Exception as e:
+            except Exception:
                 raise
 
             # Store reference to ImageService for later use
@@ -469,11 +464,10 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self.current_image_array = img_arr
                     else:
                         self.current_image_array = None
-                except Exception as e:
+                except Exception:
                     self.current_image_array = None
             else:
                 self.current_image_array = None
-
 
             # Draw AOI boundaries (circles or contours) if toggle is enabled
             if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
@@ -499,11 +493,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                     augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
 
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
-            
+
             # Critical section: check if widget is still valid before setting image
             if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
                 return
-                
+
             self.main_image.setImage(img)
             self.fileNameLabel.setText(image['name'])
 
@@ -515,11 +509,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Check again before resetting zoom
             if not hasattr(self, 'main_image') or self.main_image is None or getattr(self.main_image, '_is_destroyed', True):
                 return
-                
+
             # Ensure the image is properly loaded before resetting zoom
             if not self.main_image.hasImage():
                 return
-                
+
             # Reset zoom to fit image properly
             # Guard resetZoom against deleted C++ object
             try:
@@ -581,7 +575,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
                 self.main_image.zoomChanged.connect(self._update_scale_bar)
                 self._signals_connected = True
-            
+
             self._update_scale_bar(self.main_image.getZoom())
 
             # Update overlay with new image data - AFTER zoom reset so scene is properly set up
@@ -599,7 +593,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.logger.error(error_msg)
             self.logger.error(f"Traceback:\n{traceback.format_exc()}")
             print(f"\n{'='*60}")
-            print(f"ERROR IN VIEWER - _load_image()")
+            print("ERROR IN VIEWER - _load_image()")
             print(f"Image index: {self.current_image}")
             if image:
                 print(f"Image path: {image.get('path', 'N/A')}")
@@ -610,14 +604,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show error to user
             QMessageBox.critical(self, "Error Loading Image", error_msg)
 
-
-
     def _previousImageButton_clicked(self):
         """Navigates to the previous image in the list, skipping hidden images if applicable."""
         # Prevent race conditions by checking if viewer is still valid
         if not hasattr(self, 'main_image') or self.main_image is None:
             return
-            
+
         found = False
         for i in range(self.current_image - 1, -1, -1):
             if not self.show_hidden and self.images[i]['hidden']:
@@ -645,7 +637,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Prevent race conditions by checking if viewer is still valid
         if not hasattr(self, 'main_image') or self.main_image is None:
             return
-            
+
         found = False
         for i in range(self.current_image + 1, len(self.images)):
             if not self.show_hidden and self.images[i]['hidden']:
@@ -712,7 +704,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Get current direction and GSD to determine if overlay should be visible
             direction = None
             avg_gsd = None
-            
+
             # Try to get current values from messages
             gsd_text = self.messages.get("Estimated Average GSD")
             if gsd_text:
@@ -720,14 +712,14 @@ class Viewer(QMainWindow, Ui_Viewer):
                     avg_gsd = float(gsd_text.replace("cm/px", "").strip())
                 except Exception:
                     pass
-            
+
             direction_text = self.messages.get("Drone Orientation")
             if direction_text:
                 try:
                     direction = float(direction_text.replace("°", "").strip())
                 except Exception:
                     pass
-            
+
             self.overlay.update_visibility(state, direction, avg_gsd)
 
     def _highlight_pixels_change(self, state):
@@ -747,27 +739,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         # Simply reload the image with current settings
         self._reload_current_image_preserving_view()
-    
+
     def _reload_current_image_preserving_view(self):
         """Reloads the current image while preserving zoom and pan state.
-        
+
         This method respects both the draw AOI circle and highlight pixels toggles.
         """
         if not hasattr(self, 'main_image') or self.main_image is None:
             return
-            
+
         # Save the current zoom stack and viewport to preserve state
         saved_zoom_stack = self.main_image.zoomStack.copy() if self.main_image.zoomStack else []
         saved_transform = self.main_image.transform()
-        
-        # Save AOI list scroll position  
+
+        # Save AOI list scroll position
         aoi_scroll_pos = self.aoiListWidget.verticalScrollBar().value() if hasattr(self, 'aoiListWidget') else 0
-        
+
         # Reload just the image content without resetting view
         image = self.images[self.current_image]
         image_path = image.get('path', '')
         mask_path = image.get('mask_path', '')
-        
+
         # Load and process the image
         image_service = ImageService(image_path, mask_path)
 
@@ -775,14 +767,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Store the service reference to keep data alive
         self.current_image_service = image_service
         self.current_image_array = image_service.img_array
-        
+
         # Start with the base image or with circles based on toggle
         if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
             augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
         else:
             # Use reference instead of copy to avoid crash
             augmented_image = image_service.img_array
-        
+
         # Apply highlight if enabled (independent of circle drawing)
         if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
             if mask_path:
@@ -793,26 +785,25 @@ class Viewer(QMainWindow, Ui_Viewer):
                 )
             else:
                 augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
-        
+
         # Update the image without resetting the view
         img = QImage(qimage2ndarray.array2qimage(augmented_image))
-        
+
         # Temporarily block zoom stack updates
-        old_stack = self.main_image.zoomStack
         self.main_image.zoomStack = saved_zoom_stack
-        
+
         # Set the new image
         self.main_image.setImage(img)
-        
+
         # Restore the transform exactly
         self.main_image.setTransform(saved_transform)
-        
+
         # Restore zoom stack
         self.main_image.zoomStack = saved_zoom_stack
-        
+
         # Force emit zoom to update any UI elements
         self.main_image._emit_zoom_if_changed()
-        
+
         # Restore AOI list scroll position
         if hasattr(self, 'aoiListWidget') and aoi_scroll_pos > 0:
             self.aoiListWidget.verticalScrollBar().setValue(aoi_scroll_pos)
@@ -888,7 +879,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 else:
                     self.main_image.updateViewer()
 
-
     def _kmlButton_clicked(self):
         """Handles clicks on the Generate KML button to create a KML file."""
         if hasattr(self, 'kml_export'):
@@ -911,21 +901,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         ex, ey = min(img_arr.shape[1] - 1, endx), min(img_arr.shape[0] - 1, endy)
         return img_arr[sy:ey, sx:ex]
 
-
     def _pdfButton_clicked(self):
         """Handles clicks on the Generate PDF button."""
         if hasattr(self, 'pdf_export'):
             self.pdf_export.export_pdf(self.images, self.aoi_controller.flagged_aois)
-
 
     def _zipButton_clicked(self):
         """Handles clicks on the Generate Zip Bundle."""
         if hasattr(self, 'zip_export'):
             self.zip_export.export_zip(self.images)
 
-
     # ---------- coordinates popup ----------
-
 
     def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
         """Show context menu for AOI coordinate label with copy option.
@@ -1000,7 +986,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Show confirmation toast
         self.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
 
-
     def _magnifyButton_clicked(self):
         if self.main_image and self.main_image.hasImage():
             # Get center point of the image
@@ -1011,13 +996,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         else:
             self.logger.warning("No image available for magnifying glass")
 
-
     def _update_magnify_button_style(self):
         """Update the magnify button styling based on magnifying glass state."""
         if hasattr(self, 'magnifyButton') and hasattr(self, 'magnifying_glass_enabled'):
             # Set a property to track the active state
             self.magnifyButton.setProperty("magnifyActive", self.magnifying_glass_enabled)
-            
+
             if self.magnifying_glass_enabled:
                 # Active state - highlight the button with theme-aware colors
                 # Use a blue highlight similar to other active elements in the app
@@ -1091,13 +1075,16 @@ class Viewer(QMainWindow, Ui_Viewer):
                         }
                     """
                 self.magnifyButton.setStyleSheet(style)
-            
+
             # Force the style to be reapplied
             self.magnifyButton.style().unpolish(self.magnifyButton)
             self.magnifyButton.style().polish(self.magnifyButton)
             self.magnifyButton.update()
         else:
-            self.logger.warning(f"Cannot update magnify button style: magnifyButton={hasattr(self, 'magnifyButton')}, enabled={hasattr(self, 'magnifying_glass_enabled')}")
+            self.logger.warning(
+                f"Cannot update magnify button style: magnifyButton={hasattr(self, 'magnifyButton')}, "
+                f"enabled={hasattr(self, 'magnifying_glass_enabled')}"
+            )
 
     def _toggle_magnifying_glass(self, x, y):
         """Toggle the magnifying glass on/off when middle mouse button is pressed.
@@ -1107,7 +1094,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             y (float): Y coordinate where middle mouse was pressed
         """
         if hasattr(self, 'magnifying_glass'):
-            old_state = self.magnifying_glass.is_enabled()
             self.magnifying_glass.toggle(x, y)
             # Update the enabled flag to match the magnifying glass state
             self.magnifying_glass_enabled = self.magnifying_glass.is_enabled()
@@ -1127,7 +1113,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _update_scale_bar(self, zoom: float):
         """Update the scale bar through the overlay widget.
-        
+
         Args:
             zoom: Current zoom level
         """
@@ -1254,10 +1240,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
             self.measure_dialog.show()
 
-        # Update magnifying glass if enabled
-        if hasattr(self, 'magnifying_glass') and self.magnifying_glass.is_enabled():
-            self.magnifying_glass.update_position(pos)
-
     def _on_gsd_changed(self, gsd_value):
         """Updates the stored GSD value.
 
@@ -1281,8 +1263,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                 btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
                 btn.repaint()
 
-
     # Qt event filter for viewport resize events
+
     def eventFilter(self, obj, ev):
         # Overlay positioning is now handled automatically by the overlay widget
         return super().eventFilter(obj, ev)

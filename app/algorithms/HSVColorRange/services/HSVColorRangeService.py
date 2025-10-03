@@ -34,54 +34,60 @@ class HSVColorRangeService(AlgorithmService):
                 h_minus, h_plus = hsv_ranges['h_minus'], hsv_ranges['h_plus']
                 s_minus, s_plus = hsv_ranges['s_minus'], hsv_ranges['s_plus']
                 v_minus, v_plus = hsv_ranges['v_minus'], hsv_ranges['v_plus']
-                
+
                 # Calculate bounds in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
                 h_center = int(h * 179)
                 s_center = int(s * 255)
                 v_center = int(v * 255)
-                
+
                 h_low = max(0, h_center - int(h_minus * 179))
                 h_high = min(179, h_center + int(h_plus * 179))
                 s_low = max(0, s_center - int(s_minus * 255))
                 s_high = min(255, s_center + int(s_plus * 255))
                 v_low = max(0, v_center - int(v_minus * 255))
                 v_high = min(255, v_center + int(v_plus * 255))
-                
+
                 # Handle hue wrapping if necessary
                 if h_low > h_high:
-                    # Hue wraps around (e.g., 350° to 10°) 
-                    mask1 = cv2.inRange(hsv_image, 
-                                       np.array([h_low, s_low, v_low], dtype=np.uint8),
-                                       np.array([179, s_high, v_high], dtype=np.uint8))
+                    # Hue wraps around (e.g., 350° to 10°)
+                    mask1 = cv2.inRange(hsv_image,
+                                        np.array([h_low, s_low, v_low], dtype=np.uint8),
+                                        np.array([179, s_high, v_high], dtype=np.uint8))
                     mask2 = cv2.inRange(hsv_image,
-                                       np.array([0, s_low, v_low], dtype=np.uint8),
-                                       np.array([h_high, s_high, v_high], dtype=np.uint8))
+                                        np.array([0, s_low, v_low], dtype=np.uint8),
+                                        np.array([h_high, s_high, v_high], dtype=np.uint8))
                     mask = cv2.bitwise_or(mask1, mask2)
                 else:
                     lower_bound = np.array([h_low, s_low, v_low], dtype=np.uint8)
                     upper_bound = np.array([h_high, s_high, v_high], dtype=np.uint8)
                     mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
-                    
+
             # Check for old HSV window data (backward compatibility)
             elif 'hsv_window' in self.options:
                 hsv_window = self.options.get('hsv_window')
                 # Use precise HSV ranges from the old dialog format
-                lower_bound = np.array([hsv_window['h_min'] / 2, hsv_window['s_min'] * 255 / 100, hsv_window['v_min'] * 255 / 100], dtype=np.uint8)
-                upper_bound = np.array([hsv_window['h_max'] / 2, hsv_window['s_max'] * 255 / 100, hsv_window['v_max'] * 255 / 100], dtype=np.uint8)
-                
+                lower_bound = np.array([hsv_window['h_min'] / 2, hsv_window['s_min'] * 255 / 100,
+                                       hsv_window['v_min'] * 255 / 100], dtype=np.uint8)
+                upper_bound = np.array([hsv_window['h_max'] / 2, hsv_window['s_max'] * 255 / 100,
+                                       hsv_window['v_max'] * 255 / 100], dtype=np.uint8)
+
                 # Handle hue wrapping if necessary
                 if hsv_window['h_min'] > hsv_window['h_max']:
                     # Hue wraps around (e.g., 350° to 10°)
-                    mask1 = cv2.inRange(hsv_image, 
-                                       np.array([hsv_window['h_min'] / 2, hsv_window['s_min'] * 255 / 100, hsv_window['v_min'] * 255 / 100], dtype=np.uint8),
-                                       np.array([179, hsv_window['s_max'] * 255 / 100, hsv_window['v_max'] * 255 / 100], dtype=np.uint8))
+                    mask1 = cv2.inRange(hsv_image,
+                                        np.array([hsv_window['h_min'] / 2, hsv_window['s_min'] * 255 / 100,
+                                                 hsv_window['v_min'] * 255 / 100], dtype=np.uint8),
+                                        np.array([179, hsv_window['s_max'] * 255 / 100,
+                                                 hsv_window['v_max'] * 255 / 100], dtype=np.uint8))
                     mask2 = cv2.inRange(hsv_image,
-                                       np.array([0, hsv_window['s_min'] * 255 / 100, hsv_window['v_min'] * 255 / 100], dtype=np.uint8),
-                                       np.array([hsv_window['h_max'] / 2, hsv_window['s_max'] * 255 / 100, hsv_window['v_max'] * 255 / 100], dtype=np.uint8))
+                                        np.array([0, hsv_window['s_min'] * 255 / 100,
+                                                 hsv_window['v_min'] * 255 / 100], dtype=np.uint8),
+                                        np.array([hsv_window['h_max'] / 2, hsv_window['s_max'] * 255 / 100,
+                                                 hsv_window['v_max'] * 255 / 100], dtype=np.uint8))
                     mask = cv2.bitwise_or(mask1, mask2)
                 else:
                     mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
-                    
+
             else:
                 # Fallback to old method
                 hue_threshold = self.options.get('hue_threshold', 10)
@@ -101,21 +107,20 @@ class HSVColorRangeService(AlgorithmService):
                         mask = this_mask
                     else:
                         mask = cv2.bitwise_or(mask, this_mask)
-                        
+
             # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            
+
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img, contours)
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
-            
+
             # Store mask instead of duplicating image
             mask_path = None
             if areas_of_interest:
                 mask_path = self.store_mask(full_path, output_path, mask)
-            
+
             # Return the mask path instead of output image path
             return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
-
 
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")

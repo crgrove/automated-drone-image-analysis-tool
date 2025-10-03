@@ -8,7 +8,8 @@ import os
 import platform
 from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtCore import QThread, Slot, QSize, Qt
-from PySide6.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy, QAbstractButton
+from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
+                               QMessageBox, QSizePolicy, QAbstractButton)
 from core.views.MainWindow_ui import Ui_MainWindow
 
 from helpers.PickleHelper import PickleHelper
@@ -87,7 +88,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.rtmp_anomaly_viewer = None
         if hasattr(self, 'actionRTMPAnomalyDetection'):
             self.actionRTMPAnomalyDetection.triggered.connect(self._open_rtmp_anomaly_detection)
-        
+
         # Add RTMP Motion Detection functionality
         self.rtmp_motion_viewer = None
         if hasattr(self, 'actionRTMPMotionDetection'):
@@ -113,7 +114,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Loads and categorizes algorithms for selection in the algorithm combobox.
         """
         system = platform.system()
-        configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                                   'algorithms.conf')
+        configService = ConfigService(config_path)
         self.algorithms = configService.get_algorithms()
         algorithm_list = {}
         for algorithm in self.algorithms:
@@ -216,17 +219,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         min_val = self.minAreaSpinBox.value()
         max_val = self.maxAreaSpinBox.value()
-        
+
         # Only validate if value actually changed
         if min_val == self._minAreaOriginal:
             return
-            
+
         # Check if min is greater than or equal to max
         if min_val >= max_val and max_val > 0:
             new_max = min_val + 1
             self.maxAreaSpinBox.setValue(new_max)
             self._maxAreaOriginal = new_max  # Update the stored max value
-            
+
             # Notify user of the change
             QMessageBox.information(
                 self,
@@ -235,7 +238,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 f"(Minimum area must be less than maximum area)",
                 QMessageBox.Ok
             )
-        
+
         # Update stored original value
         self._minAreaOriginal = min_val
 
@@ -246,17 +249,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         min_val = self.minAreaSpinBox.value()
         max_val = self.maxAreaSpinBox.value()
-        
+
         # Only validate if value actually changed
         if max_val == self._maxAreaOriginal:
             return
-            
+
         # Check if max is less than or equal to min
         if max_val <= min_val and max_val > 0:
             new_min = max(0, max_val - 1)  # Ensure min doesn't go below 0
             self.minAreaSpinBox.setValue(new_min)
             self._minAreaOriginal = new_min  # Update the stored min value
-            
+
             # Notify user of the change
             QMessageBox.information(
                 self,
@@ -265,7 +268,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 f"(Maximum area must be greater than minimum area)",
                 QMessageBox.Ok
             )
-        
+
         # Update stored original value
         self._maxAreaOriginal = max_val
 
@@ -344,7 +347,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             position_format = self.settings_service.get_setting('PositionFormat')
             temperature_unit = self.settings_service.get_setting('TemperatureUnit')
             distance_unit = self.settings_service.get_setting('DistanceUnit')
-            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False, self.settings_service.get_setting('Theme'))
+            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False,
+                                 self.settings_service.get_setting('Theme'))
             self.viewer.show()
         else:
             self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")

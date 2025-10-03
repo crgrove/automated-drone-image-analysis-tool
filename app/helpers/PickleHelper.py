@@ -104,7 +104,7 @@ class PickleHelper:
                         else:
                             # If it's not a DataFrame, try to convert it
                             return pd.DataFrame(data)
-                    except:
+                    except (ValueError, TypeError):
                         # Return empty DataFrame if all else fails
                         return pd.DataFrame()
                 else:
@@ -139,17 +139,17 @@ class PickleHelper:
                         else:
                             # If it's not a DataFrame, try to convert it
                             return pd.DataFrame(data)
-                    except:
+                    except (ValueError, TypeError, KeyError):
                         # If all else fails, return a minimal default DataFrame
                         # This allows the app to continue running
                         return pd.DataFrame({
-                            'Attribute': ['Flight Yaw', 'Flight Pitch', 'Flight Roll', 
-                                        'Gimbal Yaw', 'Gimbal Pitch', 'Gimbal Roll',
-                                        'Relative Altitude'],
-                            'DJI': ['drone-dji:FlightYawDegree', 'drone-dji:FlightPitchDegree', 
-                                   'drone-dji:FlightRollDegree', 'drone-dji:GimbalYawDegree',
-                                   'drone-dji:GimbalPitchDegree', 'drone-dji:GimbalRollDegree',
-                                   'drone-dji:RelativeAltitude']
+                            'Attribute': ['Flight Yaw', 'Flight Pitch', 'Flight Roll',
+                                          'Gimbal Yaw', 'Gimbal Pitch', 'Gimbal Roll',
+                                          'Relative Altitude'],
+                            'DJI': ['drone-dji:FlightYawDegree', 'drone-dji:FlightPitchDegree',
+                                    'drone-dji:FlightRollDegree', 'drone-dji:GimbalYawDegree',
+                                    'drone-dji:GimbalPitchDegree', 'drone-dji:GimbalRollDegree',
+                                    'drone-dji:RelativeAltitude']
                         })
                 else:
                     raise

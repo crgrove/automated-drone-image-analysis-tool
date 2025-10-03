@@ -26,25 +26,25 @@ import qimage2ndarray
 class CoordinateController:
     """
     Controller for managing GPS coordinate and mapping functionality.
-    
+
     Handles coordinate display, sharing, mapping integration, and
     north-oriented image viewing.
     """
-    
+
     def __init__(self, parent_viewer, logger=None):
         """
         Initialize the coordinate controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
             logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
         self.logger = logger or LoggerService()
-        
+
         # Coordinate state
         self.current_decimal_coords = None
-    
+
     def on_coordinates_clicked(self, link):
         """Handle clicks on GPS coordinates in the status bar."""
         # Get coordinates from messages
@@ -54,7 +54,7 @@ class CoordinateController:
 
         # Show coordinates popup
         self.show_coordinates_popup(coord_text)
-    
+
     def show_coordinates_popup(self, coord_text):
         """Show a small popup with coordinate sharing options."""
         # Create popup widget
@@ -146,7 +146,7 @@ class CoordinateController:
 
         # Install a simple event filter to close popup when clicking outside
         popup.installEventFilter(self.create_simple_popup_filter(popup))
-    
+
     def create_simple_popup_filter(self, popup):
         """Create a simple event filter to close the popup when clicking outside."""
         class SimplePopupFilter(QObject):
@@ -162,7 +162,7 @@ class CoordinateController:
                 return False
 
         return SimplePopupFilter(popup)
-    
+
     def copy_coords_to_clipboard(self, coord_text=None):
         """Copy coordinates to clipboard."""
         if coord_text is None:
@@ -172,7 +172,7 @@ class CoordinateController:
             return
         QApplication.clipboard().setText(str(coord_text))
         self.parent._show_toast("Coordinates copied", 3000, color="#00C853")
-    
+
     def open_in_maps(self):
         """Open coordinates in Google Maps."""
         lat_lon = self.get_decimals_or_parse()
@@ -182,7 +182,7 @@ class CoordinateController:
         lat, lon = lat_lon
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
         QDesktopServices.openUrl(url)
-    
+
     def open_in_earth(self):
         """Open coordinates in Google Earth."""
         lat_lon = self.get_decimals_or_parse()
@@ -239,7 +239,7 @@ class CoordinateController:
             f.write(kml)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
-    
+
     def share_whatsapp(self):
         """Share coordinates via WhatsApp."""
         lat_lon = self.get_decimals_or_parse()
@@ -251,7 +251,7 @@ class CoordinateController:
         text = f"Coordinate: {lat}, {lon} — {maps}"
         wa_url = f"https://wa.me/?text={quote_plus(text)}"
         QDesktopServices.openUrl(QUrl(wa_url))
-    
+
     def share_telegram(self):
         """Share coordinates via Telegram."""
         lat_lon = self.get_decimals_or_parse()
@@ -262,7 +262,7 @@ class CoordinateController:
         maps = f"https://www.google.com/maps?q={lat},{lon}"
         tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}')}"
         QDesktopServices.openUrl(QUrl(tg_url))
-    
+
     def get_decimals_or_parse(self):
         """Get decimal coordinates from current state or parse from messages."""
         # Prefer decimal coords captured from EXIF
@@ -278,7 +278,7 @@ class CoordinateController:
             except Exception:
                 return None
         return None
-    
+
     def show_north_oriented_image(self):
         """Show a popup window with the current image rotated to true north based on bearing info."""
         try:
@@ -328,8 +328,8 @@ class CoordinateController:
 
             # Perform rotation
             rotated_img = cv2.warpAffine(img_array, M, (new_w, new_h),
-                                        borderMode=cv2.BORDER_CONSTANT,
-                                        borderValue=(128, 128, 128))
+                                         borderMode=cv2.BORDER_CONSTANT,
+                                         borderValue=(128, 128, 128))
 
             # Create popup window
             popup = QDialog(self.parent)
@@ -373,10 +373,10 @@ class CoordinateController:
         except Exception as e:
             self.logger.error(f"Error showing north-oriented image: {e}")
             self.parent._show_toast(f"Error: {str(e)}", 3000, color="#F44336")
-    
+
     def update_current_coordinates(self, decimal_coords):
         """Update the current decimal coordinates.
-        
+
         Args:
             decimal_coords: Tuple of (latitude, longitude) or None
         """

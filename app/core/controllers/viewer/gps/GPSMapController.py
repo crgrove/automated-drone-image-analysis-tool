@@ -364,7 +364,7 @@ class GPSMapController(QObject):
                 # Extract numeric value from string like "2.5 cm/px"
                 try:
                     gsd_cm = float(gsd_value.split()[0])
-                except:
+                except (ValueError, IndexError):
                     gsd_cm = self.calculate_gsd_for_image(current_image['path'])
                     if gsd_cm is None:
                         return None

@@ -48,7 +48,7 @@ class MatchedFilterService(AlgorithmService):
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
-            
+
             # Store mask instead of duplicating image
             mask_path = None
             if areas_of_interest:
@@ -57,7 +57,6 @@ class MatchedFilterService(AlgorithmService):
                 mask_path = self.store_mask(full_path, output_path, mask_255)
 
             return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
-
 
         except Exception as e:
             # Log and return an error if processing fails.

@@ -1,3 +1,4 @@
+import os
 from core.views.VideoParser_ui import Ui_VideoParser
 from PySide6.QtCore import QThread, Slot
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton

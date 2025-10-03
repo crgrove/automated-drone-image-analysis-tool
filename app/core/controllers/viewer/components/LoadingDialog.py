@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, QSize
 
 class LoadingDialog(QDialog):
     """Custom dialog for showing a loading spinner and message."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Generating Report")

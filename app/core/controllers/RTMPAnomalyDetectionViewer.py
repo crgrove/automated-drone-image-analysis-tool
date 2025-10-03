@@ -19,10 +19,10 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
-                             QGroupBox, QGridLayout, QTextEdit, QSplitter,
-                             QCheckBox, QComboBox, QProgressBar,
-                             QMessageBox, QStatusBar, QSlider, QFileDialog)
+                               QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
+                               QGroupBox, QGridLayout, QTextEdit, QSplitter,
+                               QCheckBox, QComboBox, QProgressBar,
+                               QMessageBox, QStatusBar, QSlider, QFileDialog)
 
 from core.services.RTMPStreamService import StreamManager, StreamType
 from core.services.RealtimeAnomalyDetectionService import RealtimeAnomalyDetector, AnomalyConfig, AnomalyDetection
@@ -295,7 +295,7 @@ class AnomalyControlWidget(QWidget):
         # Processing options
         options_group = QGroupBox("Processing Options")
         options_layout = QVBoxLayout(options_group)
-        
+
         # Resolution dropdown for processing
         resolution_layout = QHBoxLayout()
         resolution_layout.addWidget(QLabel("Processing Resolution:"))

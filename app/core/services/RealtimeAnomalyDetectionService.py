@@ -246,45 +246,45 @@ class RealtimeAnomalyDetector(QObject):
         fit the local spectral statistical model - like a pink shirt in natural scenery.
         """
         h, w, c = lab_frame.shape
-        
+
         if config.window_size <= 1:
             # Global RX anomaly detection for fastest performance
             return self._compute_global_rx_anomaly(lab_frame)
 
         # For better performance with local windows, use strided approach
         window_size = config.window_size if config.window_size % 2 == 1 else config.window_size + 1
-        
+
         # Use stride for faster processing (skip pixels)
         stride = max(1, window_size // 4)  # Adaptive stride based on window size
-        
+
         # Create sparse anomaly map
         sparse_h = (h + stride - 1) // stride
         sparse_w = (w + stride - 1) // stride
         sparse_anomaly_map = np.zeros((sparse_h, sparse_w), dtype=np.float32)
-        
+
         half_window = window_size // 2
         padded_frame = np.pad(lab_frame, ((half_window, half_window), (half_window, half_window), (0, 0)), mode='edge')
-        
+
         # Compute on sparse grid
         for i in range(sparse_h):
             for j in range(sparse_w):
                 y = min(i * stride, h - 1)
                 x = min(j * stride, w - 1)
-                
+
                 # Extract local window
                 window = padded_frame[y:y+window_size, x:x+window_size]
                 center_pixel = lab_frame[y, x]
-                
+
                 # Compute RX anomaly score
                 anomaly_score = self._compute_rx_score(center_pixel, window, config.distance_metric)
                 sparse_anomaly_map[i, j] = anomaly_score
-        
+
         # Upsample sparse map back to original size using fast interpolation
         if stride > 1:
             anomaly_map = cv2.resize(sparse_anomaly_map, (w, h), interpolation=cv2.INTER_LINEAR)
         else:
             anomaly_map = sparse_anomaly_map
-        
+
         # Normalize to [0, 1]
         if anomaly_map.max() > 0:
             anomaly_map = anomaly_map / anomaly_map.max()

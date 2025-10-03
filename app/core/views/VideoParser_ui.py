@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
 
-################################################################################
-## Form generated from reading UI file 'VideoParser.ui'
-##
-## Created by: Qt User Interface Compiler version 6.9.2
-##
-## WARNING! All changes made in this file will be lost when recompiling UI file!
-################################################################################
+###############################################################################
+# Form generated from reading UI file 'VideoParser.ui'
+#
+# Created by: Qt User Interface Compiler version 6.9.2
+#
+# WARNING! All changes made in this file will be lost when recompiling UI file!
+###############################################################################
 
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
-    QMetaObject, QObject, QPoint, QRect,
+        QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
 from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
-    QFont, QFontDatabase, QGradient, QIcon,
+        QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QDialog, QDoubleSpinBox, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+        QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem,
     QVBoxLayout, QWidget)
 from . import resources_rc
@@ -203,12 +203,14 @@ class Ui_VideoParser(object):
 
     def retranslateUi(self, VideoParser):
         VideoParser.setWindowTitle(QCoreApplication.translate("VideoParser", u"Video Parser", None))
-#if QT_CONFIG(tooltip)
+# if QT_CONFIG(tooltip)
         self.srtSelectLabel.setToolTip("")
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(whatsthis)
-        self.srtSelectLabel.setWhatsThis(QCoreApplication.translate("VideoParser", u"The SRT file contains timestamped information about the video file.  It is optional, but without it output images won't include location information.", None))
-#endif // QT_CONFIG(whatsthis)
+# endif // QT_CONFIG(tooltip)
+# if QT_CONFIG(whatsthis)
+        self.srtSelectLabel.setWhatsThis(QCoreApplication.translate(
+            "VideoParser", u"The SRT file contains timestamped information about the video file.  "
+                          u"It is optional, but without it output images won't include location information.", None))
+# endif // QT_CONFIG(whatsthis)
         self.srtSelectLabel.setText(QCoreApplication.translate("VideoParser", u"SRT File (optional): ", None))
         self.outputLabel.setText(QCoreApplication.translate("VideoParser", u"Output Folder:", None))
         self.outputSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))

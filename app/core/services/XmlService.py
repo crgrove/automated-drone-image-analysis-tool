@@ -89,7 +89,7 @@ class XmlService:
                     # Mask files are in the same directory as the XML file
                     xml_dir = os.path.dirname(self.xml_path)
                     mask_path = os.path.join(xml_dir, mask_path)
-                    
+
                 # Original image paths might be absolute or relative
                 if path:
                     # Convert forward slashes back to platform-specific separator
@@ -175,7 +175,6 @@ class XmlService:
         if img["path"] and img["path"].endswith('.tif'):
             # This is a mask file, store just the filename as mask_path
             # This avoids path duplication issues
-            mask_filename = os.path.basename(img["path"])
             image.set('mask_path', img["path"])
             # Store the original path as relative if possible
             if "original_path" in img:

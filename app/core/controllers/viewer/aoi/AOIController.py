@@ -28,37 +28,37 @@ import qimage2ndarray
 class AOIController:
     """
     Controller for managing Areas of Interest (AOI) functionality.
-    
+
     Handles AOI display, selection, flagging, filtering, and interaction
     including context menus and data copying.
     """
-    
+
     def __init__(self, parent_viewer, logger=None):
         """
         Initialize the AOI controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
             logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
         self.logger = logger or LoggerService()
-        
+
         # AOI state
         self.selected_aoi_index = -1
         self.flagged_aois = {}
         self.filter_flagged_only = False
         self.aoi_containers = []
         self.highlights = []
-        
+
         # UI elements (will be set by parent)
         self.aoiListWidget = None
         self.areaCountLabel = None
         self.flagFilterButton = None
-    
+
     def initialize_from_xml(self, images):
         """Load flagged AOI information from XML data.
-        
+
         Args:
             images: List of image data dictionaries
         """
@@ -73,10 +73,10 @@ class AOIController:
                             if img_idx not in self.flagged_aois:
                                 self.flagged_aois[img_idx] = set()
                             self.flagged_aois[img_idx].add(aoi_idx)
-    
+
     def set_ui_elements(self, aoi_list_widget, area_count_label, flag_filter_button):
         """Set references to UI elements.
-        
+
         Args:
             aoi_list_widget: The QListWidget for displaying AOIs
             area_count_label: The QLabel showing AOI count
@@ -85,7 +85,7 @@ class AOIController:
         self.aoiListWidget = aoi_list_widget
         self.areaCountLabel = area_count_label
         self.flagFilterButton = flag_filter_button
-    
+
     def calculate_aoi_average_info(self, area_of_interest, is_thermal, temperature_data, temperature_unit):
         """Calculate average color or temperature for an AOI.
 
@@ -199,7 +199,7 @@ class AOIController:
             return None, None
 
         return None, None
-    
+
     def load_areas_of_interest(self, augmented_image, areas_of_interest, image_index=None):
         """Load areas of interest thumbnails for a given image.
 
@@ -210,7 +210,7 @@ class AOIController:
         """
         if not self.aoiListWidget:
             return
-            
+
         # Block signals during rebuild to avoid re-entrant updates while rapidly switching
         self.aoiListWidget.blockSignals(True)
         self.aoiListWidget.clear()
@@ -275,9 +275,9 @@ class AOIController:
 
             # Calculate average color/temperature for the AOI
             avg_color_info, color_rgb = self.calculate_aoi_average_info(
-                area_of_interest, 
-                self.parent.is_thermal, 
-                self.parent.temperature_data, 
+                area_of_interest,
+                self.parent.is_thermal,
+                self.parent.temperature_data,
                 self.parent.temperature_unit
             )
 
@@ -391,7 +391,7 @@ class AOIController:
             self.areaCountLabel.setText(f"{count} {'Area' if count == 1 else 'Areas'} of Interest")
         # Re-enable signals after rebuild
         self.aoiListWidget.blockSignals(False)
-    
+
     def area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.
 
@@ -401,7 +401,7 @@ class AOIController:
             img (QtImageViewer): The clicked thumbnail image viewer.
         """
         self.parent.main_image.zoomToArea(img.center, 6)
-    
+
     def select_aoi(self, aoi_index, visible_index):
         """Select an AOI and update the visual selection.
 
@@ -426,7 +426,7 @@ class AOIController:
         # Update AOI on GPS map if available
         if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller:
             self.parent.gps_map_controller.update_aoi_on_map()
-    
+
     def update_aoi_selection_style(self, container, selected):
         """Update the visual style of an AOI container based on selection state.
 
@@ -452,7 +452,7 @@ class AOIController:
                 }
             """)
             container.repaint()
-    
+
     def save_flagged_aoi_to_xml(self, image_index, aoi_index, is_flagged):
         """Save the flagged status of an AOI to XML.
 
@@ -475,13 +475,13 @@ class AOIController:
                         try:
                             # Use the xml_service save method
                             self.parent.xml_service.save_xml_file(self.parent.xml_path)
-                        except Exception as e:
+                        except Exception:
                             pass
                     else:
                         pass
                 else:
                     pass
-    
+
     def toggle_aoi_flag(self):
         """Toggle the flag status of the currently selected AOI."""
         if self.selected_aoi_index < 0:
@@ -522,7 +522,7 @@ class AOIController:
                 self.update_aoi_selection_style(container, True)
                 break
         self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
-    
+
     def add_flag_button_to_layout(self):
         """Add the flag filter button to the layout after UI initialization."""
         try:
@@ -546,7 +546,7 @@ class AOIController:
                         self.flagFilterButton.show()
         except Exception as e:
             self.logger.error(f"Error adding flag button: {e}")
-    
+
     def toggle_flag_filter(self):
         """Toggle the flag filter on/off and refresh the AOI display."""
         self.filter_flagged_only = self.flagFilterButton.isChecked()
@@ -582,7 +582,7 @@ class AOIController:
         image = self.parent.images[self.parent.current_image]
         if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
             self.load_areas_of_interest(self.parent.current_image_array, image['areas_of_interest'], self.parent.current_image)
-    
+
     def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
         """Show context menu for AOI coordinate label with copy option.
 
@@ -621,7 +621,7 @@ class AOIController:
 
         # Show menu at cursor position
         menu.exec(global_pos)
-    
+
     def copy_aoi_data(self, center, pixel_area, avg_info=None):
         """Copy AOI data to clipboard including image name, coordinates, and GPS.
 

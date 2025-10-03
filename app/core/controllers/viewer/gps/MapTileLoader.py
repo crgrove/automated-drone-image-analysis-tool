@@ -274,22 +274,22 @@ class MapTileLoader(QObject):
         # Determine error message based on status
         if http_status == 429:
             # Too Many Requests - rate limiting
-            error_msg = f"Map tile service rate limit exceeded. Please wait a moment before zooming/panning."
+            error_msg = "Map tile service rate limit exceeded. Please wait a moment before zooming/panning."
         elif http_status == 403:
             # Forbidden - possible usage policy violation
-            error_msg = f"Map tile access denied. This may be due to excessive usage or policy restrictions."
+            error_msg = "Map tile access denied. This may be due to excessive usage or policy restrictions."
         elif http_status == 503:
             # Service Unavailable
-            error_msg = f"Map tile service is temporarily unavailable. Using cached tiles where available."
+            error_msg = "Map tile service is temporarily unavailable. Using cached tiles where available."
         elif error_code == QNetworkReply.NetworkError.HostNotFoundError:
-            error_msg = f"Cannot connect to map tile server. Please check your internet connection."
+            error_msg = "Cannot connect to map tile server. Please check your internet connection."
         elif error_code == QNetworkReply.NetworkError.TimeoutError:
-            error_msg = f"Map tile request timed out. The server may be slow or your connection may be unstable."
+            error_msg = "Map tile request timed out. The server may be slow or your connection may be unstable."
         elif error_code == QNetworkReply.NetworkError.ConnectionRefusedError:
-            error_msg = f"Connection to map tile server was refused."
+            error_msg = "Connection to map tile server was refused."
         else:
             # Generic error
-            error_msg = f"Failed to load some map tiles. Using cached tiles where available."
+            error_msg = "Failed to load some map tiles. Using cached tiles where available."
 
         # Only emit error signal if we've hit the threshold and it's a different message
         if self.error_count >= self.max_errors_before_notify:

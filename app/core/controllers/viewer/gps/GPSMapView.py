@@ -202,7 +202,7 @@ class GPSMapView(QGraphicsView):
             (0.63, (185, 50, 104)),  # Red-purple
             (0.75, (231, 82, 64)),   # Red-orange
             (0.88, (253, 155, 49)),  # Orange-yellow
-            (0.95, (254, 215, 102)), # Yellow
+            (0.95, (254, 215, 102)),  # Yellow
             (1.0, (255, 254, 189))   # Light yellow-white
         ]
 
@@ -708,7 +708,6 @@ class GPSMapView(QGraphicsView):
         Args:
             gps_list_index: Index in the gps_data list of the image to highlight
         """
-        old_index = self.current_image_index
         old_bearing = self.current_bearing
         self.current_image_index = gps_list_index if gps_list_index is not None else -1
 
@@ -944,8 +943,6 @@ class GPSMapView(QGraphicsView):
                     return
 
             # Check if clicking on a point
-            scene_pos = self.mapToScene(event.pos())
-
             # Since points ignore transformations, we need to check differently
             # Look for points near the click position
             click_tolerance = 10  # Pixels
@@ -1106,7 +1103,6 @@ class GPSMapView(QGraphicsView):
             zoom_diff = target_zoom - self.current_zoom
             scale_adjustment = 2.0 ** zoom_diff
 
-            old_zoom = self.current_zoom
             self.current_zoom = target_zoom
 
             # Clear old tiles from scene only (keep in cache)

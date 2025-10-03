@@ -17,31 +17,31 @@ from core.services.ImageService import ImageService
 class StatusController:
     """
     Controller for managing status bar and messaging functionality.
-    
+
     Handles status bar updates, toast messages, mouse position tracking,
     and scale bar functionality.
     """
-    
+
     def __init__(self, parent_viewer, logger=None):
         """
         Initialize the status controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
             logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
         self.logger = logger or LoggerService()
-        
+
         # UI elements (will be set by parent)
         self.statusBar = None
         self.toastLabel = None
         self.toastTimer = None
         self.messages = None
-    
+
     def set_ui_elements(self, status_bar, toast_label, toast_timer, messages):
         """Set references to UI elements.
-        
+
         Args:
             status_bar: The QStatusBar widget
             toast_label: The QLabel for toast messages
@@ -52,12 +52,12 @@ class StatusController:
         self.toastLabel = toast_label
         self.toastTimer = toast_timer
         self.messages = messages
-    
+
     def message_listener(self, key, value):
         """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
         if not self.statusBar:
             return
-            
+
         status_items = []
 
         # GPS Coordinates first (with hyperlink)
@@ -76,10 +76,10 @@ class StatusController:
             self.statusBar.setText(" | ".join(status_items))
         else:
             self.statusBar.setText("")
-    
+
     def show_toast(self, text: str, msec: int = 3000, color: str = "#00C853"):
         """Show a toast message.
-        
+
         Args:
             text: The message text to display
             msec: Duration in milliseconds
@@ -87,7 +87,7 @@ class StatusController:
         """
         if not self.toastLabel or not self.toastTimer:
             return
-            
+
         try:
             self.toastLabel.setText(text)
             self.toastLabel.setStyleSheet(
@@ -106,10 +106,10 @@ class StatusController:
             self.toastTimer.start(max(1, msec))
         except Exception:
             pass
-    
+
     def show_error(self, text):
         """Displays an error message box.
-        
+
         Args:
             text (str): Error message to display.
         """
@@ -119,13 +119,11 @@ class StatusController:
         msg.setWindowTitle("Error Loading Images")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
-    
+
     def show_no_images_message(self):
         """Displays an error message when there are no available images."""
         self.show_error("No active images available.")
-    
+
     def show_additional_images_message(self):
         """Displays an error message when there are no additional images."""
         self.show_error("No other images available.")
-    
-    
