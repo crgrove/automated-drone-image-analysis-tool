@@ -236,3 +236,16 @@ class GPSMapDialog(QDialog):
         self.map_view.fit_all_points()
         # Create compass rose after dialog is shown
         QTimer.singleShot(100, self.map_view._create_compass_rose)
+
+    def update_aoi_marker(self, aoi_gps_data, identifier_color):
+        """
+        Update the AOI marker on the map.
+
+        Args:
+            aoi_gps_data: Dict with AOI GPS data or None to clear
+            identifier_color: List [r, g, b] for the marker color
+        """
+        if aoi_gps_data:
+            self.map_view.set_aoi_marker(aoi_gps_data, identifier_color)
+        else:
+            self.map_view.clear_aoi_marker()

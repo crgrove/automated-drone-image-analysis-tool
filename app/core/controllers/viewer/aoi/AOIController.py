@@ -406,7 +406,7 @@ class AOIController:
         """Select an AOI and update the visual selection.
 
         Args:
-            aoi_index (int): Index of the AOI in the full list
+            aoi_index (int): Index of the AOI in the full list (-1 to deselect)
             visible_index (int): Index of the AOI in the visible containers list
         """
         # Clear ALL container styles first using the proper update method
@@ -417,11 +417,15 @@ class AOIController:
         self.selected_aoi_index = aoi_index
 
         # Apply selection style to the clicked container using the proper method
-        if visible_index >= 0 and visible_index < len(self.aoi_containers):
+        if aoi_index >= 0 and visible_index >= 0 and visible_index < len(self.aoi_containers):
             container = self.aoi_containers[visible_index]
             self.update_aoi_selection_style(container, True)
             container.update()
             container.repaint()
+
+        # Update AOI on GPS map if available
+        if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller:
+            self.parent.gps_map_controller.update_aoi_on_map()
     
     def update_aoi_selection_style(self, container, selected):
         """Update the visual style of an AOI container based on selection state.
@@ -650,4 +654,5 @@ class AOIController:
         QApplication.clipboard().setText(clipboard_text)
 
         # Show confirmation toast
-        self.parent._show_toast("AOI data copied", 2000, color="#00C853")
+        if hasattr(self.parent, 'status_controller'):
+            self.parent.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
