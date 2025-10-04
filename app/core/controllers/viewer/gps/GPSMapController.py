@@ -131,7 +131,7 @@ class GPSMapController(QObject):
                         'image_path': image['path']  # Store path for later bearing extraction
                     })
             except Exception as e:
-                self.logger.log(f"Could not extract GPS from image {idx}: {str(e)}")
+                self.logger.error(f"Could not extract GPS from image {idx}: {str(e)}")
 
         # Sort by timestamp if available
         self.gps_data.sort(key=lambda x: x['timestamp'] if x['timestamp'] else datetime.min)
@@ -162,7 +162,7 @@ class GPSMapController(QObject):
                     return datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
 
         except Exception as e:
-            self.logger.log(f"Could not extract timestamp: {str(e)}")
+            self.logger.error(f"Could not extract timestamp: {str(e)}")
 
         return None
 
@@ -196,7 +196,7 @@ class GPSMapController(QObject):
             bearing = image_service.get_drone_orientation()
             return bearing
         except Exception as e:
-            self.logger.log(f"Could not extract bearing: {str(e)}")
+            self.logger.error(f"Could not extract bearing: {str(e)}")
             return None
 
     def on_map_image_selected(self, image_index):
@@ -299,7 +299,7 @@ class GPSMapController(QObject):
             }
 
         except Exception as e:
-            self.logger.log(f"Error calculating AOI GPS coordinates: {e}")
+            self.logger.error(f"Error calculating AOI GPS coordinates: {e}")
             return None
 
     def get_current_aoi_gps(self):
@@ -339,7 +339,7 @@ class GPSMapController(QObject):
             height, width = img_array.shape[:2]
 
             # Check gimbal pitch angle - must be within 5 degrees of nadir
-            _, gimbal_pitch = image_service.get_gimbal_angles()
+            _, gimbal_pitch = image_service.get_gimbal_orientation()
             if gimbal_pitch is not None:
                 # Nadir is typically -90 degrees for most drones (camera pointing straight down)
                 # Allow range from -85 to -95 degrees (5 degree tolerance)
@@ -406,7 +406,7 @@ class GPSMapController(QObject):
             return aoi_gps
 
         except Exception as e:
-            self.logger.log(f"Error getting current AOI GPS: {e}")
+            self.logger.error(f"Error getting current AOI GPS: {e}")
             return None
 
     def calculate_gsd_for_image(self, image_path):

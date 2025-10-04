@@ -346,6 +346,28 @@ class AOIController:
                     flag_label.setToolTip("This AOI is flagged")
                     color_layout.addWidget(flag_label)
 
+                # Add document/comment icon (always visible)
+                user_comment = area_of_interest.get('user_comment', '')
+                comment_icon = QLabel("📝")
+                comment_icon.setCursor(Qt.PointingHandCursor)
+
+                # Style based on whether comment exists
+                if user_comment:
+                    comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
+                    # Show preview of comment (first 50 chars)
+                    preview = user_comment[:50] + "..." if len(user_comment) > 50 else user_comment
+                    comment_icon.setToolTip(f"Comment: {preview}\n(Click to edit)")
+                else:
+                    comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
+                    comment_icon.setToolTip("Add comment (click)")
+
+                # Make icon clickable - use lambda with default parameter to capture current AOI index
+                def make_comment_click_handler(aoi_idx):
+                    return lambda event: self.edit_aoi_comment(aoi_idx)
+
+                comment_icon.mousePressEvent = make_comment_click_handler(count)
+                color_layout.addWidget(comment_icon)
+
                 # Center the layout
                 color_layout.addStretch()
                 color_layout.insertStretch(0)
@@ -356,7 +378,7 @@ class AOIController:
             info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
             # Use default parameters to properly capture the current values
             info_widget.customContextMenuRequested.connect(
-                lambda pos, c=center, a=pixel_area, info=avg_color_info: self.show_aoi_context_menu(pos, info_widget, c, a, info)
+                lambda pos, c=center, a=pixel_area, info=avg_color_info, idx=count: self.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
             )
 
             # Add widgets to layout
@@ -482,6 +504,90 @@ class AOIController:
                 else:
                     pass
 
+    def save_aoi_comment_to_xml(self, image_index, aoi_index, comment):
+        """Save a user comment for an AOI to XML.
+
+        Args:
+            image_index (int): Index of the image
+            aoi_index (int): Index of the AOI within the image
+            comment (str): The user comment text
+        """
+        if hasattr(self.parent, 'images') and 0 <= image_index < len(self.parent.images):
+            image = self.parent.images[image_index]
+            if 'areas_of_interest' in image and 0 <= aoi_index < len(image['areas_of_interest']):
+                aoi = image['areas_of_interest'][aoi_index]
+                aoi['user_comment'] = comment
+
+                # Update the XML element if it exists
+                if 'xml' in aoi and aoi['xml'] is not None:
+                    if comment:
+                        aoi['xml'].set('user_comment', str(comment))
+                    else:
+                        # Remove attribute if comment is empty
+                        if 'user_comment' in aoi['xml'].attrib:
+                            del aoi['xml'].attrib['user_comment']
+
+                    # Save the XML file using the xml_service method
+                    if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+                        try:
+                            self.parent.xml_service.save_xml_file(self.parent.xml_path)
+                        except Exception:
+                            pass
+
+    def edit_aoi_comment(self, aoi_index):
+        """Open dialog to edit the comment for an AOI.
+
+        Args:
+            aoi_index (int): Index of the AOI to edit comment for
+        """
+        if aoi_index < 0:
+            return
+
+        # Get current image and AOI
+        image = self.parent.images[self.parent.current_image]
+        if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
+            return
+
+        aoi = image['areas_of_interest'][aoi_index]
+        current_comment = aoi.get('user_comment', '')
+
+        # Open comment dialog
+        from core.controllers.viewer.components.AOICommentDialog import AOICommentDialog
+        dialog = AOICommentDialog(self.parent, current_comment)
+
+        if dialog.exec():
+            # User clicked OK - save the comment
+            new_comment = dialog.get_comment()
+            self.save_aoi_comment_to_xml(self.parent.current_image, aoi_index, new_comment)
+
+            # Refresh the AOI display to update the icon
+            if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
+                # Save scroll position and selection
+                scroll_pos = self.aoiListWidget.verticalScrollBar().value()
+                selected_idx = self.selected_aoi_index
+
+                # Reload AOIs
+                self.load_areas_of_interest(
+                    self.parent.current_image_array,
+                    image['areas_of_interest'],
+                    self.parent.current_image
+                )
+
+                # Restore selection and scroll
+                self.selected_aoi_index = selected_idx
+                for container in self.aoi_containers:
+                    if container.property("aoi_index") == selected_idx:
+                        self.update_aoi_selection_style(container, True)
+                        break
+                self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
+
+            # Show confirmation toast
+            if hasattr(self.parent, 'status_controller'):
+                if new_comment:
+                    self.parent.status_controller.show_toast("Comment saved", 2000, color="#00C853")
+                else:
+                    self.parent.status_controller.show_toast("Comment cleared", 2000, color="#808080")
+
     def toggle_aoi_flag(self):
         """Toggle the flag status of the currently selected AOI."""
         if self.selected_aoi_index < 0:
@@ -502,6 +608,20 @@ class AOIController:
 
         # Save to XML
         self.save_flagged_aoi_to_xml(self.parent.current_image, self.selected_aoi_index, is_now_flagged)
+
+        # If AOI was just flagged, open comment dialog
+        if is_now_flagged:
+            image = self.parent.images[self.parent.current_image]
+            aoi = image['areas_of_interest'][self.selected_aoi_index]
+            current_comment = aoi.get('user_comment', '')
+
+            from core.controllers.viewer.components.AOICommentDialog import AOICommentDialog
+            dialog = AOICommentDialog(self.parent, current_comment)
+
+            if dialog.exec():
+                # User clicked OK - save the comment
+                new_comment = dialog.get_comment()
+                self.save_aoi_comment_to_xml(self.parent.current_image, self.selected_aoi_index, new_comment)
 
         # Save scroll position
         scroll_pos = self.aoiListWidget.verticalScrollBar().value()
@@ -583,7 +703,7 @@ class AOIController:
         if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
             self.load_areas_of_interest(self.parent.current_image_array, image['areas_of_interest'], self.parent.current_image)
 
-    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
+    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
         """Show context menu for AOI coordinate label with copy option.
 
         Args:
@@ -592,6 +712,7 @@ class AOIController:
             center: Tuple of (x, y) coordinates of the AOI center
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
+            aoi_index: Index of the AOI
         """
         menu = QMenu(label_widget)
 
@@ -614,7 +735,7 @@ class AOIController:
 
         # Add copy action
         copy_action = menu.addAction("Copy Data")
-        copy_action.triggered.connect(lambda: self.copy_aoi_data(center, pixel_area, avg_info))
+        copy_action.triggered.connect(lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index))
 
         # Get the current cursor position (global coordinates)
         global_pos = QCursor.pos()
@@ -622,13 +743,14 @@ class AOIController:
         # Show menu at cursor position
         menu.exec(global_pos)
 
-    def copy_aoi_data(self, center, pixel_area, avg_info=None):
+    def copy_aoi_data(self, center, pixel_area, avg_info=None, aoi_index=None):
         """Copy AOI data to clipboard including image name, coordinates, and GPS.
 
         Args:
             center: Tuple of (x, y) coordinates of the AOI center
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
+            aoi_index: Index of the AOI
         """
         # Get current image information
         image = self.parent.images[self.parent.current_image]
@@ -637,9 +759,21 @@ class AOIController:
         # Get GPS coordinates if available
         gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
 
+        # Get user comment if available
+        user_comment = ""
+        if aoi_index is not None and 'areas_of_interest' in image:
+            if aoi_index < len(image['areas_of_interest']):
+                aoi = image['areas_of_interest'][aoi_index]
+                user_comment = aoi.get('user_comment', '')
+
         # Format the data for clipboard
-        clipboard_text = (
-            f"Image: {image_name}\n"
+        clipboard_text = f"Image: {image_name}\n"
+
+        # Add user comment if present
+        if user_comment:
+            clipboard_text += f"User Comment: {user_comment}\n"
+
+        clipboard_text += (
             f"AOI Coordinates: X={center[0]}, Y={center[1]}\n"
             f"AOI Area: {pixel_area:.0f} px\n"
         )

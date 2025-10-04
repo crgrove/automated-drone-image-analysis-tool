@@ -35,6 +35,7 @@ from core.controllers.viewer.components.OverlayWidget import OverlayWidget
 from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
 from core.controllers.viewer.exports.ZipExportController import ZipExportController
+from core.controllers.viewer.exports.CalTopoExportController import CalTopoExportController
 
 from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
@@ -344,6 +345,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
             self.zipButton.clicked.connect(self._zipButton_clicked)
+            self.caltopoButton.clicked.connect(self._caltopoButton_clicked)
             self.measureButton.clicked.connect(self._open_measure_dialog)
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.magnifyButton.clicked.connect(self._magnifyButton_clicked)
@@ -390,6 +392,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.kml_export = KMLExportController(self, self.logger)
             self.pdf_export = PDFExportController(self, self.logger)
             self.zip_export = ZipExportController(self, self.logger)
+            self.caltopo_export = CalTopoExportController(self, self.logger)
 
             # Force the layout to update and ensure proper sizing
             self.ImageLayout.update()
@@ -910,6 +913,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Handles clicks on the Generate Zip Bundle."""
         if hasattr(self, 'zip_export'):
             self.zip_export.export_zip(self.images)
+
+    def _caltopoButton_clicked(self):
+        """Handles clicks on the Export to CalTopo button."""
+        if hasattr(self, 'caltopo_export'):
+            self.caltopo_export.export_to_caltopo(self.images, self.aoi_controller.flagged_aois)
 
     # ---------- coordinates popup ----------
 

@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
 
-###############################################################################
-# Form generated from reading UI file 'Viewer.ui'
-#
-# Created by: Qt User Interface Compiler version 6.9.2
-#
-# WARNING! All changes made in this file will be lost when recompiling UI file!
-###############################################################################
+################################################################################
+## Form generated from reading UI file 'Viewer.ui'
+##
+## Created by: Qt User Interface Compiler version 6.9.2
+##
+## WARNING! All changes made in this file will be lost when recompiling UI file!
+################################################################################
 
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
-        QMetaObject, QObject, QPoint, QRect,
+    QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
 from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
-        QCursor, QFont, QFontDatabase, QGradient,
+    QCursor, QFont, QFontDatabase, QGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsView,
-        QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QPushButton, QScrollArea,
     QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout,
     QWidget)
-from . import resources_rc
+import resources_rc
 
 class Ui_Viewer(object):
     def setupUi(self, Viewer):
@@ -55,7 +55,7 @@ class Ui_Viewer(object):
         font = QFont()
         font.setPointSize(16)
         self.fileNameLabel.setFont(font)
-        self.fileNameLabel.setTextInteractionFlags(Qt.LinksAccessibleByMouse | Qt.TextSelectableByKeyboard | Qt.TextSelectableByMouse)
+        self.fileNameLabel.setTextInteractionFlags(Qt.LinksAccessibleByMouse|Qt.TextSelectableByKeyboard|Qt.TextSelectableByMouse)
 
         self.horizontalLayout_2.addWidget(self.fileNameLabel)
 
@@ -111,7 +111,6 @@ class Ui_Viewer(object):
 
         self.magnifyButton = QToolButton(self.TitleWidget)
         self.magnifyButton.setObjectName(u"magnifyButton")
-        self.magnifyButton.setToolTip("Toggle Magnifying Glass (Middle Mouse)")
         icon3 = QIcon()
         icon3.addFile(u":/icons/dark/icons/dark_theme/magnify.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.magnifyButton.setIcon(icon3)
@@ -154,6 +153,15 @@ class Ui_Viewer(object):
 
         self.horizontalLayout_2.addWidget(self.zipButton)
 
+        self.caltopoButton = QToolButton(self.TitleWidget)
+        self.caltopoButton.setObjectName(u"caltopoButton")
+        icon7 = QIcon()
+        icon7.addFile(u":/icons/caltopo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.caltopoButton.setIcon(icon7)
+        self.caltopoButton.setIconSize(QSize(25, 25))
+
+        self.horizontalLayout_2.addWidget(self.caltopoButton)
+
         self.line = QFrame(self.TitleWidget)
         self.line.setObjectName(u"line")
         self.line.setFrameShape(QFrame.Shape.VLine)
@@ -189,7 +197,7 @@ class Ui_Viewer(object):
         sizePolicy2.setHeightForWidth(self.indexLabel.sizePolicy().hasHeightForWidth())
         self.indexLabel.setSizePolicy(sizePolicy2)
         self.indexLabel.setFont(font)
-        self.indexLabel.setAlignment(Qt.AlignRight | Qt.AlignTrailing | Qt.AlignVCenter)
+        self.indexLabel.setAlignment(Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
 
         self.horizontalLayout_2.addWidget(self.indexLabel)
 
@@ -279,9 +287,9 @@ class Ui_Viewer(object):
         self.previousImageButton = QPushButton(self.centralwidget)
         self.previousImageButton.setObjectName(u"previousImageButton")
         self.previousImageButton.setFont(font2)
-        icon7 = QIcon()
-        icon7.addFile(u":/icons/previous.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.previousImageButton.setIcon(icon7)
+        icon8 = QIcon()
+        icon8.addFile(u":/icons/previous.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.previousImageButton.setIcon(icon8)
 
         self.ButtonLayout.addWidget(self.previousImageButton)
 
@@ -289,9 +297,9 @@ class Ui_Viewer(object):
         self.nextImageButton.setObjectName(u"nextImageButton")
         self.nextImageButton.setFont(font2)
         self.nextImageButton.setLayoutDirection(Qt.RightToLeft)
-        icon8 = QIcon()
-        icon8.addFile(u":/icons/next.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.nextImageButton.setIcon(icon8)
+        icon9 = QIcon()
+        icon9.addFile(u":/icons/next.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.nextImageButton.setIcon(icon9)
 
         self.ButtonLayout.addWidget(self.nextImageButton)
 
@@ -366,33 +374,41 @@ class Ui_Viewer(object):
         self.showOverlayCheckBox.setText(QCoreApplication.translate("Viewer", u"Show Overlay", None))
         self.highlightPixelsOfInterestCheckBox.setText(QCoreApplication.translate("Viewer", u"Highlight Pixels of Interest", None))
         self.showAOIsCheckBox.setText(QCoreApplication.translate("Viewer", u"Show AOIs", None))
-# if QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
         self.adjustmentsButton.setToolTip(QCoreApplication.translate("Viewer", u"Adjust Image (Ctrl+H)", None))
-# endif // QT_CONFIG(tooltip)
+#endif // QT_CONFIG(tooltip)
         self.adjustmentsButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.adjustmentsButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"adjustments.png", None))
-# if QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
         self.measureButton.setToolTip(QCoreApplication.translate("Viewer", u"Measure Distance (Ctrl+M)", None))
-# endif // QT_CONFIG(tooltip)
+#endif // QT_CONFIG(tooltip)
         self.measureButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.measureButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"ruler.png", None))
+#if QT_CONFIG(tooltip)
+        self.magnifyButton.setToolTip(QCoreApplication.translate("Viewer", u"Toggle Magnifying Glass (Middle Mouse)", None))
+#endif // QT_CONFIG(tooltip)
         self.magnifyButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.magnifyButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"magnify.png", None))
-# if QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
         self.kmlButton.setToolTip(QCoreApplication.translate("Viewer", u"Generate KML", None))
-# endif // QT_CONFIG(tooltip)
+#endif // QT_CONFIG(tooltip)
         self.kmlButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.kmlButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"map.png", None))
-# if QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
         self.pdfButton.setToolTip(QCoreApplication.translate("Viewer", u"Generate PDF Report", None))
-# endif // QT_CONFIG(tooltip)
+#endif // QT_CONFIG(tooltip)
         self.pdfButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.pdfButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"pdf.png", None))
-# if QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
         self.zipButton.setToolTip(QCoreApplication.translate("Viewer", u"Generate Zip Bundle", None))
-# endif // QT_CONFIG(tooltip)
+#endif // QT_CONFIG(tooltip)
         self.zipButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.zipButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"zip.png", None))
+#if QT_CONFIG(tooltip)
+        self.caltopoButton.setToolTip(QCoreApplication.translate("Viewer", u"Export to CalTopo", None))
+#endif // QT_CONFIG(tooltip)
+        self.caltopoButton.setText(QCoreApplication.translate("Viewer", u"...", None))
+        self.caltopoButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"caltopo.png", None))
         self.skipHidden.setText(QCoreApplication.translate("Viewer", u"Skip Hidden", None))
         self.indexLabel.setText(QCoreApplication.translate("Viewer", u"TextLabel", None))
         self.areaCountLabel.setText(QCoreApplication.translate("Viewer", u"TextLabel", None))

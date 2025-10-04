@@ -122,6 +122,8 @@ class XmlService:
                         area_of_interest['detected_pixels'] = literal_eval(area_of_interest_xml.get('detected_pixels'))
                     # Always set flagged status (default to False if not present)
                     area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
+                    # Load user comment (default to empty string if not present)
+                    area_of_interest['user_comment'] = area_of_interest_xml.get('user_comment', '')
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -207,6 +209,9 @@ class XmlService:
             # Add flagged status if present
             if 'flagged' in area:
                 area_xml.set('flagged', str(area['flagged']))
+            # Save user comment if present
+            if 'user_comment' in area and area['user_comment']:
+                area_xml.set('user_comment', str(area['user_comment']))
             # Optionally save contour and detected_pixels if available
             # Note: These can be large, so we might want to make this configurable
             if 'contour' in area and area['contour']:
