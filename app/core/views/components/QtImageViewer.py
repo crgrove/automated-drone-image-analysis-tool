@@ -594,6 +594,30 @@ class QtImageViewer(QGraphicsView):
     def mousePressEvent(self, ev):
         if self._is_destroyed:
             return
+
+        # Check if we're in AOI creation mode (via parent window)
+        if (hasattr(self.window, 'aoi_creation_mode') and
+            self.window.aoi_creation_mode and
+            ev.button() == Qt.LeftButton):
+            # Start AOI creation
+            scene_pos = self.mapToScene(ev.position().toPoint())
+            self.window.aoi_creation_start = scene_pos
+            self.window.aoi_creation_current = scene_pos
+
+            # Create preview circle
+            from PySide6.QtGui import QPen, QColor
+            pen = QPen(QColor(*self.window.settings.get('identifier_color', [255, 0, 255])))
+            pen.setWidth(2)
+            pen.setCosmetic(True)
+
+            from PySide6.QtWidgets import QGraphicsEllipseItem
+            self.window.aoi_creation_preview_item = QGraphicsEllipseItem()
+            self.window.aoi_creation_preview_item.setPen(pen)
+            self.scene.addItem(self.window.aoi_creation_preview_item)
+
+            ev.accept()
+            return
+
         dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
         if ev.modifiers() & dummyMods:
             super().mousePressEvent(ev)
@@ -653,6 +677,38 @@ class QtImageViewer(QGraphicsView):
     def mouseReleaseEvent(self, ev):
         if self._is_destroyed:
             return
+
+        # Handle AOI creation completion
+        if (hasattr(self.window, 'aoi_creation_mode') and
+            self.window.aoi_creation_mode and
+            self.window.aoi_creation_start is not None and
+            ev.button() == Qt.LeftButton):
+
+            scene_pos = self.mapToScene(ev.position().toPoint())
+
+            # Calculate radius
+            dx = scene_pos.x() - self.window.aoi_creation_start.x()
+            dy = scene_pos.y() - self.window.aoi_creation_start.y()
+            radius = (dx**2 + dy**2)**0.5
+
+            # Only create AOI if radius is reasonable (at least 5 pixels)
+            if radius >= 5:
+                # Show confirmation dialog
+                from core.controllers.viewer.components.AOICreationDialog import AOICreationDialog
+                dialog = AOICreationDialog(self.window)
+
+                if dialog.exec():
+                    # User clicked Yes - create the AOI
+                    center_x = int(self.window.aoi_creation_start.x())
+                    center_y = int(self.window.aoi_creation_start.y())
+                    self.window.aoi_controller.create_aoi_from_circle(center_x, center_y, int(radius))
+
+            # Exit creation mode
+            self.window._exit_aoi_creation_mode()
+
+            ev.accept()
+            return
+
         dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
         if ev.modifiers() & dummyMods:
             super().mouseReleaseEvent(ev)
@@ -749,6 +805,34 @@ class QtImageViewer(QGraphicsView):
     def mouseMoveEvent(self, ev):
         if self._is_destroyed:
             return
+
+        # Update AOI creation preview circle
+        if (hasattr(self.window, 'aoi_creation_mode') and
+            self.window.aoi_creation_mode and
+            self.window.aoi_creation_start is not None and
+            self.window.aoi_creation_preview_item is not None):
+
+            scene_pos = self.mapToScene(ev.position().toPoint())
+            self.window.aoi_creation_current = scene_pos
+
+            # Calculate radius from start to current position
+            dx = scene_pos.x() - self.window.aoi_creation_start.x()
+            dy = scene_pos.y() - self.window.aoi_creation_start.y()
+            radius = (dx**2 + dy**2)**0.5
+
+            # Update preview circle
+            center_x = self.window.aoi_creation_start.x()
+            center_y = self.window.aoi_creation_start.y()
+            self.window.aoi_creation_preview_item.setRect(
+                center_x - radius,
+                center_y - radius,
+                radius * 2,
+                radius * 2
+            )
+
+            ev.accept()
+            return
+
         if self._isPanning:
             super().mouseMoveEvent(ev)
             if self.zoomStack:

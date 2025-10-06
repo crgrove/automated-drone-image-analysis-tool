@@ -134,6 +134,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Custom AGL altitude for images with negative altitude
         self.custom_agl_altitude_ft = None  # Store in feet as entered by user
 
+        # AOI creation mode state
+        self.aoi_creation_mode = False  # Whether user is in AOI creation mode
+        self.aoi_creation_start = None  # QPointF: Starting point of circle drag
+        self.aoi_creation_current = None  # QPointF: Current mouse position during drag
+        self.aoi_creation_preview_item = None  # QGraphicsEllipseItem: Preview circle being drawn
+
         # scale bar (will be used by overlay widget)
         self.scaleBar = ScaleBarWidget()
 
@@ -272,9 +278,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.highlightPixelsToggle.setChecked(not self.highlightPixelsToggle.isChecked())
             self._highlight_pixels_change(self.highlightPixelsToggle.isChecked())
         if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
-            # Toggle AOI circle drawing with 'C' key (no modifier)
-            self.showAOIsToggle.setChecked(not self.showAOIsToggle.isChecked())
-            self._draw_aoi_circle_change(self.showAOIsToggle.isChecked())
+            # Enter AOI creation mode with 'C' key (no modifier)
+            self._enter_aoi_creation_mode()
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self.coordinate_controller.show_north_oriented_image()
@@ -1386,6 +1391,38 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # set the icon from the correct prefix
                 btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
                 btn.repaint()
+
+    def _enter_aoi_creation_mode(self):
+        """Enter AOI creation mode - user can click and drag to draw a circle."""
+        if not hasattr(self, 'main_image') or self.main_image is None:
+            return
+
+        self.aoi_creation_mode = True
+        self.main_image.viewport().setCursor(Qt.CrossCursor)
+
+        # Show instruction toast
+        if hasattr(self, 'status_controller'):
+            self.status_controller.show_toast(
+                "AOI Creation Mode: Click and drag to draw circle",
+                3000,
+                color="#FFA500"
+            )
+
+    def _exit_aoi_creation_mode(self):
+        """Exit AOI creation mode and clean up."""
+        self.aoi_creation_mode = False
+        self.aoi_creation_start = None
+        self.aoi_creation_current = None
+
+        # Remove preview circle if it exists
+        if self.aoi_creation_preview_item is not None:
+            if hasattr(self, 'main_image') and self.main_image is not None:
+                self.main_image.scene.removeItem(self.aoi_creation_preview_item)
+            self.aoi_creation_preview_item = None
+
+        # Restore normal cursor
+        if hasattr(self, 'main_image') and self.main_image is not None:
+            self.main_image.viewport().setCursor(Qt.ArrowCursor)
 
     # Qt event filter for viewport resize events
 
