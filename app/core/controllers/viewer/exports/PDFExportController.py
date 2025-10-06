@@ -8,6 +8,7 @@ background processing and progress tracking.
 from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox
 from core.controllers.viewer.exports.PdfGenerationThread import PdfGenerationThread
 from core.controllers.viewer.components.LoadingDialog import LoadingDialog
+from core.controllers.viewer.components.PDFExportDialog import PDFExportDialog
 from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.LoggerService import LoggerService
 
@@ -45,6 +46,15 @@ class PDFExportController:
             bool: True if export was initiated successfully, False otherwise
         """
         try:
+            # Show settings dialog first
+            settings_dialog = PDFExportDialog(self.parent)
+            if settings_dialog.exec() != QDialog.Accepted:
+                return False  # User cancelled
+
+            # Get organization and search name from dialog
+            organization = settings_dialog.get_organization()
+            search_name = settings_dialog.get_search_name()
+
             # Open file dialog for PDF export
             file_name, _ = QFileDialog.getSaveFileName(
                 self.parent,
@@ -81,10 +91,14 @@ class PDFExportController:
                 self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
                 return False
 
+            # Create PDF generator with both all images and filtered images
+            pdf_generator = PdfGeneratorService(self.parent, organization=organization, search_name=search_name)
+
+            # Store all images for map generation
+            pdf_generator.all_images_for_map = original_images
+
             # Temporarily replace images with filtered version for PDF generation
             self.parent.images = filtered_images
-
-            pdf_generator = PdfGeneratorService(self.parent)
 
             # Create and show the loading dialog
             self.loading_dialog = LoadingDialog(self.parent)
