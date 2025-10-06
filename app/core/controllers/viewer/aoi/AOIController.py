@@ -7,7 +7,7 @@ interaction functionality.
 
 import colorsys
 import numpy as np
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView
 try:
     from shiboken6 import isValid as _qt_is_valid
 except Exception:
@@ -445,6 +445,12 @@ class AOIController:
             container.update()
             container.repaint()
 
+            # Scroll the AOI list to bring the selected item into view
+            if self.aoiListWidget and visible_index < self.aoiListWidget.count():
+                item = self.aoiListWidget.item(visible_index)
+                if item:
+                    self.aoiListWidget.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+
         # Update AOI on GPS map if available
         if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller:
             self.parent.gps_map_controller.update_aoi_on_map()
@@ -474,6 +480,57 @@ class AOIController:
                 }
             """)
             container.repaint()
+
+    def find_aoi_at_position(self, x, y):
+        """Find the AOI at the given cursor position.
+
+        Args:
+            x (int): X coordinate in image space
+            y (int): Y coordinate in image space
+
+        Returns:
+            tuple: (aoi_index, visible_index) if found, (-1, -1) otherwise
+        """
+        # Return if cursor is outside the image
+        if x < 0 or y < 0:
+            return (-1, -1)
+
+        # Get current image and its AOIs
+        if not hasattr(self.parent, 'images') or not hasattr(self.parent, 'current_image'):
+            return (-1, -1)
+
+        image = self.parent.images[self.parent.current_image]
+        if 'areas_of_interest' not in image:
+            return (-1, -1)
+
+        areas_of_interest = image['areas_of_interest']
+
+        # Get flagged AOIs for filtering
+        img_idx = self.parent.current_image
+        flagged_set = self.flagged_aois.get(img_idx, set())
+
+        # Track visible index (accounting for filtering)
+        visible_index = 0
+
+        # Check each AOI to see if cursor is within it
+        for aoi_index, aoi in enumerate(areas_of_interest):
+            # Skip if we're filtering and this AOI is not flagged
+            if self.filter_flagged_only and aoi_index not in flagged_set:
+                continue
+
+            # Get AOI center and radius
+            center = aoi['center']
+            radius = aoi.get('radius', 0)
+
+            # Check if cursor is within the AOI circle
+            cx, cy = center
+            distance_squared = (x - cx) ** 2 + (y - cy) ** 2
+            if distance_squared <= radius ** 2:
+                return (aoi_index, visible_index)
+
+            visible_index += 1
+
+        return (-1, -1)
 
     def save_flagged_aoi_to_xml(self, image_index, aoi_index, is_flagged):
         """Save the flagged status of an AOI to XML.
@@ -756,8 +813,8 @@ class AOIController:
         image = self.parent.images[self.parent.current_image]
         image_name = image.get('name', 'Unknown')
 
-        # Get GPS coordinates if available
-        gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
+        # Get image GPS coordinates if available
+        image_gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
 
         # Get user comment if available
         user_comment = ""
@@ -765,6 +822,9 @@ class AOIController:
             if aoi_index < len(image['areas_of_interest']):
                 aoi = image['areas_of_interest'][aoi_index]
                 user_comment = aoi.get('user_comment', '')
+
+        # Calculate AOI GPS coordinates
+        aoi_gps_coords = self.calculate_aoi_gps(aoi_index)
 
         # Format the data for clipboard
         clipboard_text = f"Image: {image_name}\n"
@@ -782,7 +842,8 @@ class AOIController:
         if avg_info:
             clipboard_text += f"Average: {avg_info}\n"
 
-        clipboard_text += f"GPS Coordinates: {gps_coords}"
+        clipboard_text += f"Image GPS Coordinates: {image_gps_coords}\n"
+        clipboard_text += f"AOI GPS Coordinates: {aoi_gps_coords}"
 
         # Copy to clipboard
         QApplication.clipboard().setText(clipboard_text)
@@ -790,3 +851,132 @@ class AOIController:
         # Show confirmation toast
         if hasattr(self.parent, 'status_controller'):
             self.parent.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
+
+    def calculate_aoi_gps(self, aoi_index):
+        """Calculate GPS coordinates for a specific AOI.
+
+        Args:
+            aoi_index: Index of the AOI
+
+        Returns:
+            String with formatted GPS coordinates or "N/A" if calculation fails
+        """
+        try:
+            if aoi_index is None or aoi_index < 0:
+                return "N/A"
+
+            # Get current image and AOI
+            image = self.parent.images[self.parent.current_image]
+            if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
+                return "N/A"
+
+            aoi = image['areas_of_interest'][aoi_index]
+
+            # Get image GPS coordinates
+            from helpers.MetaDataHelper import MetaDataHelper
+            from helpers.LocationInfo import LocationInfo
+            exif_data = MetaDataHelper.get_exif_data_piexif(image['path'])
+            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
+
+            if not gps_coords:
+                return "N/A"
+
+            # Get image dimensions and service
+            from core.services.ImageService import ImageService
+            image_service = ImageService(image['path'], image.get('mask_path', ''))
+            img_array = image_service.img_array
+            height, width = img_array.shape[:2]
+
+            # Check gimbal pitch angle - must be within 5 degrees of nadir
+            _, gimbal_pitch = image_service.get_gimbal_orientation()
+            if gimbal_pitch is not None:
+                # Nadir is typically -90 degrees (camera pointing straight down)
+                if not (-95 <= gimbal_pitch <= -85):
+                    return "N/A (gimbal not nadir)"
+
+            # Get bearing
+            # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
+            # For nadir shots (required by gimbal pitch check above), drone orientation is correct
+            bearing = image_service.get_drone_orientation()
+            if bearing is None:
+                bearing = 0  # Default to north if bearing not available
+
+            # Get GSD (Ground Sampling Distance) with custom altitude if available
+            custom_alt = self.parent.custom_agl_altitude_ft if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0 else None
+            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
+            if gsd_cm is None:
+                return "N/A (no GSD)"
+
+            # Use GPS map controller's calculation method if available
+            if hasattr(self.parent, 'gps_map_controller'):
+                aoi_gps = self.parent.gps_map_controller.calculate_aoi_gps_coordinates(
+                    gps_coords,
+                    aoi['center'],
+                    (width/2, height/2),
+                    gsd_cm,
+                    bearing
+                )
+
+                if aoi_gps and 'latitude' in aoi_gps and 'longitude' in aoi_gps:
+                    # Format based on parent's position format preference
+                    lat = aoi_gps['latitude']
+                    lon = aoi_gps['longitude']
+
+                    if hasattr(self.parent, 'position_format'):
+                        if self.parent.position_format == 'Decimal Degrees':
+                            return f"{lat:.6f}, {lon:.6f}"
+                        elif self.parent.position_format == 'Degrees Minutes Seconds':
+                            # Convert to DMS format
+                            lat_dms = self.decimal_to_dms(lat, is_latitude=True)
+                            lon_dms = self.decimal_to_dms(lon, is_latitude=False)
+                            return f"{lat_dms}, {lon_dms}"
+                        elif self.parent.position_format == 'Degrees Decimal Minutes':
+                            # Convert to DDM format
+                            lat_ddm = self.decimal_to_ddm(lat, is_latitude=True)
+                            lon_ddm = self.decimal_to_ddm(lon, is_latitude=False)
+                            return f"{lat_ddm}, {lon_ddm}"
+
+                    # Default to decimal degrees
+                    return f"{lat:.6f}, {lon:.6f}"
+
+            return "N/A"
+
+        except Exception as e:
+            self.logger.error(f"Error calculating AOI GPS: {e}")
+            return "N/A"
+
+    def decimal_to_dms(self, decimal, is_latitude):
+        """Convert decimal degrees to DMS format.
+
+        Args:
+            decimal: Decimal degrees
+            is_latitude: True for latitude, False for longitude
+
+        Returns:
+            String in DMS format
+        """
+        direction = 'N' if decimal >= 0 and is_latitude else 'S' if is_latitude else 'E' if decimal >= 0 else 'W'
+        decimal = abs(decimal)
+        degrees = int(decimal)
+        minutes_decimal = (decimal - degrees) * 60
+        minutes = int(minutes_decimal)
+        seconds = (minutes_decimal - minutes) * 60
+
+        return f"{degrees}°{minutes}'{seconds:.2f}\"{direction}"
+
+    def decimal_to_ddm(self, decimal, is_latitude):
+        """Convert decimal degrees to DDM format.
+
+        Args:
+            decimal: Decimal degrees
+            is_latitude: True for latitude, False for longitude
+
+        Returns:
+            String in DDM format
+        """
+        direction = 'N' if decimal >= 0 and is_latitude else 'S' if is_latitude else 'E' if decimal >= 0 else 'W'
+        decimal = abs(decimal)
+        degrees = int(decimal)
+        minutes = (decimal - degrees) * 60
+
+        return f"{degrees}°{minutes:.4f}'{direction}"

@@ -171,13 +171,13 @@ class CoordinateController:
         if not coord_text:
             return
         QApplication.clipboard().setText(str(coord_text))
-        self.parent._show_toast("Coordinates copied", 3000, color="#00C853")
+        self.parent.status_controller.show_toast("Coordinates copied", 3000, color="#00C853")
 
     def open_in_maps(self):
         """Open coordinates in Google Maps."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
@@ -187,7 +187,7 @@ class CoordinateController:
         """Open coordinates in Google Earth."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
 
         lat, lon = lat_lon
@@ -244,7 +244,7 @@ class CoordinateController:
         """Share coordinates via WhatsApp."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
         maps = f"https://www.google.com/maps?q={lat},{lon}"
@@ -256,7 +256,7 @@ class CoordinateController:
         """Share coordinates via Telegram."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent._show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
             return
         lat, lon = lat_lon
         maps = f"https://www.google.com/maps?q={lat},{lon}"
@@ -292,11 +292,12 @@ class CoordinateController:
 
             # Get the drone orientation (yaw/bearing)
             image_service = ImageService(image_path, mask_path)
+            # Use get_drone_orientation() to match the Drone Orientation shown in the status bar
             direction = image_service.get_drone_orientation()
 
             if direction is None:
                 # Show message that no bearing info is available
-                self.parent._show_toast("No bearing info available", 3000, color="#F44336")
+                self.parent.status_controller.show_toast("No bearing info available", 3000, color="#F44336")
                 return
 
             # Get the current image array
@@ -372,7 +373,7 @@ class CoordinateController:
 
         except Exception as e:
             self.logger.error(f"Error showing north-oriented image: {e}")
-            self.parent._show_toast(f"Error: {str(e)}", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(f"Error: {str(e)}", 3000, color="#F44336")
 
     def update_current_coordinates(self, decimal_coords):
         """Update the current decimal coordinates.

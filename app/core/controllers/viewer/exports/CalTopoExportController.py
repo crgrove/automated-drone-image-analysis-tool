@@ -200,7 +200,8 @@ class CalTopoExportController:
                 image_center = (width/2, height/2)
 
                 # Get bearing
-                bearing = image_service.get_drone_orientation()
+                # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
+                bearing = image_service.get_image_bearing()
                 if bearing is None:
                     bearing = 0  # Default to north
 

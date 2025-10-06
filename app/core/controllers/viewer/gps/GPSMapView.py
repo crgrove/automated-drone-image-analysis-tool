@@ -5,9 +5,9 @@ This widget renders map tiles, GPS points, connection lines, and handles user in
 """
 
 import math
-from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem, QWidget, QLabel
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsPolygonItem, QWidget, QLabel
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette, QPolygonF
 from .MapTileLoader import MapTileLoader
 
 
@@ -58,6 +58,9 @@ class GPSMapView(QGraphicsView):
         # AOI marker storage
         self.aoi_marker = None  # Current AOI marker
         self.aoi_data = None  # Current AOI metadata
+
+        # FOV (Field of View) box for current image
+        self.fov_box = None
 
         # Map bounds
         self.min_lat = None
@@ -451,6 +454,7 @@ class GPSMapView(QGraphicsView):
         self.scene.clear()
         self.point_items = []
         self.aoi_marker = None  # Reset reference since scene.clear() removed it
+        self.fov_box = None  # Reset reference since scene.clear() removed it
         # Don't clear tile_items here - keep them for caching
 
         if not self.gps_data:
@@ -797,6 +801,9 @@ class GPSMapView(QGraphicsView):
                 # Ensure compass stays visible and positioned after centering
                 QTimer.singleShot(10, self._maintain_compass)
 
+        # Update FOV box for current image
+        self.update_fov_box(self.current_image_index)
+
     def get_image_bearing_lazy(self, image_path):
         """
         Extract bearing/yaw information from image (lazy loading).
@@ -810,6 +817,7 @@ class GPSMapView(QGraphicsView):
         try:
             from core.services.ImageService import ImageService
             image_service = ImageService(image_path, '')
+            # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
             return image_service.get_drone_orientation()
         except Exception:
             return None
@@ -1273,3 +1281,136 @@ class GPSMapView(QGraphicsView):
             self.scene.removeItem(self.aoi_marker)
             self.aoi_marker = None
         self.aoi_data = None
+
+    def update_fov_box(self, image_index):
+        """
+        Update the Field of View box for the current image.
+
+        Args:
+            image_index: Index of the current image, or -1 to clear
+        """
+        # Clear existing FOV box
+        if self.fov_box and self.fov_box in self.scene.items():
+            self.scene.removeItem(self.fov_box)
+            self.fov_box = None
+
+        if image_index < 0 or image_index >= len(self.gps_data):
+            return
+
+        # Get current image data
+        current_data = self.gps_data[image_index]
+        image_lat = current_data['latitude']
+        image_lon = current_data['longitude']
+        image_path = current_data.get('image_path')
+
+        if not image_path:
+            return
+
+        # Try to calculate FOV dimensions
+        try:
+            from core.services.ImageService import ImageService
+
+            # Get the parent viewer's custom altitude if available
+            custom_alt = None
+            if hasattr(self, 'parent') and hasattr(self.parent(), 'parent') and hasattr(self.parent().parent(), 'custom_agl_altitude_ft'):
+                custom_alt = self.parent().parent().custom_agl_altitude_ft
+                if custom_alt and custom_alt <= 0:
+                    custom_alt = None
+
+            image_service = ImageService(image_path, '')
+
+            # Get GSD
+            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
+            if gsd_cm is None or gsd_cm <= 0:
+                return  # Can't calculate FOV without valid GSD
+
+            # Get image dimensions
+            img_array = image_service.img_array
+            if img_array is None:
+                return
+
+            height, width = img_array.shape[:2]
+
+            # Calculate image dimensions in meters
+            gsd_m = gsd_cm / 100.0
+            width_m = width * gsd_m
+            height_m = height * gsd_m
+
+            # Get drone orientation
+            bearing = current_data.get('bearing')
+            if bearing is None:
+                # Try to load bearing
+                bearing = self.get_image_bearing_lazy(image_path)
+                if bearing is None:
+                    bearing = 0
+
+            # Calculate the four corners of the image in GPS coordinates
+            # Corners in image space (centered at origin)
+            corners_image = [
+                (-width_m / 2, -height_m / 2),  # Top-left
+                (width_m / 2, -height_m / 2),   # Top-right
+                (width_m / 2, height_m / 2),    # Bottom-right
+                (-width_m / 2, height_m / 2)    # Bottom-left
+            ]
+
+            # Rotate corners by bearing and convert to GPS
+            bearing_rad = math.radians(-bearing)  # Negative for same rotation as map
+            cos_b = math.cos(bearing_rad)
+            sin_b = math.sin(bearing_rad)
+
+            corners_gps = []
+            earth_radius = 6371000  # meters
+
+            for x, y in corners_image:
+                # Rotate
+                x_rot = x * cos_b - y * sin_b
+                y_rot = x * sin_b + y * cos_b
+
+                # Convert to lat/lon offset
+                delta_lat = y_rot / earth_radius * (180 / math.pi)
+                delta_lon = x_rot / (earth_radius * math.cos(math.radians(image_lat))) * (180 / math.pi)
+
+                # Calculate corner GPS
+                corner_lat = image_lat + delta_lat
+                corner_lon = image_lon + delta_lon
+
+                # Convert to scene coordinates
+                scene_point = self.lat_lon_to_scene(corner_lat, corner_lon)
+                corners_gps.append(scene_point)
+
+            # Create polygon from corners
+            polygon = QPolygonF(corners_gps)
+
+            # Create FOV box
+            self.fov_box = QGraphicsPolygonItem(polygon)
+
+            # Style the FOV box
+            pen = QPen(QColor(0, 150, 255), 2)  # Blue outline
+            pen.setCosmetic(True)  # Keep line width constant regardless of zoom
+            self.fov_box.setPen(pen)
+
+            # Semi-transparent fill
+            brush = QBrush(QColor(0, 150, 255, 30))
+            self.fov_box.setBrush(brush)
+
+            self.fov_box.setZValue(5)  # Below points but above tiles
+
+            # Add tooltip
+            tooltip = f"Image FOV\n"
+            tooltip += f"Dimensions: {width}x{height} pixels\n"
+            tooltip += f"Ground Coverage: {width_m:.1f}m x {height_m:.1f}m\n"
+            tooltip += f"GSD: {gsd_cm:.2f} cm/px\n"
+            tooltip += f"Bearing: {bearing:.1f}°"
+            self.fov_box.setToolTip(tooltip)
+
+            self.scene.addItem(self.fov_box)
+
+        except Exception as e:
+            # Silently fail if we can't draw the FOV box
+            pass
+
+    def clear_fov_box(self):
+        """Remove the FOV box from the map."""
+        if self.fov_box and self.fov_box in self.scene.items():
+            self.scene.removeItem(self.fov_box)
+            self.fov_box = None

@@ -193,7 +193,8 @@ class GPSMapController(QObject):
         try:
             from core.services.ImageService import ImageService
             image_service = ImageService(image_path, '')
-            bearing = image_service.get_drone_orientation()
+            # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
+            bearing = image_service.get_image_bearing()
             return bearing
         except Exception as e:
             self.logger.error(f"Could not extract bearing: {str(e)}")
@@ -354,9 +355,14 @@ class GPSMapController(QObject):
                     return None
 
             # Get bearing
+            # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
+            # For nadir shots (required by gimbal pitch check above), drone orientation is correct
             bearing = image_service.get_drone_orientation()
             if bearing is None:
                 bearing = 0  # Default to north if bearing not available
+
+            # Get custom altitude if available
+            custom_alt = self.parent.custom_agl_altitude_ft if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0 else None
 
             # Get GSD (Ground Sampling Distance)
             gsd_value = self.parent.messages.get('GSD (cm/px)', None)
@@ -365,12 +371,12 @@ class GPSMapController(QObject):
                 try:
                     gsd_cm = float(gsd_value.split()[0])
                 except (ValueError, IndexError):
-                    gsd_cm = self.calculate_gsd_for_image(current_image['path'])
+                    gsd_cm = self.calculate_gsd_for_image(current_image['path'], custom_altitude_ft=custom_alt)
                     if gsd_cm is None:
                         return None
             else:
                 # Try to calculate GSD if not in messages
-                gsd_cm = self.calculate_gsd_for_image(current_image['path'])
+                gsd_cm = self.calculate_gsd_for_image(current_image['path'], custom_altitude_ft=custom_alt)
                 if gsd_cm is None:
                     return None
 
@@ -409,12 +415,13 @@ class GPSMapController(QObject):
             self.logger.error(f"Error getting current AOI GPS: {e}")
             return None
 
-    def calculate_gsd_for_image(self, image_path):
+    def calculate_gsd_for_image(self, image_path, custom_altitude_ft=None):
         """
         Calculate GSD for an image if not already available.
 
         Args:
             image_path: Path to the image file
+            custom_altitude_ft: Optional custom altitude in feet
 
         Returns:
             GSD in cm/px or None if calculation fails
@@ -424,7 +431,7 @@ class GPSMapController(QObject):
             image_service = ImageService(image_path, '')
 
             # Use the existing ImageService method to get average GSD
-            avg_gsd = image_service.get_average_gsd()
+            avg_gsd = image_service.get_average_gsd(custom_altitude_ft=custom_altitude_ft)
             return avg_gsd
 
         except Exception:
