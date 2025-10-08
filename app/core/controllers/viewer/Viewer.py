@@ -147,7 +147,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_images()
 
         # Set up UI elements for controllers
-        self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, None)  # flag button will be set later
+        self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel)  # sort/filter buttons will be set later
         self.thumbnail_controller.set_ui_elements(self.thumbnailLayout, self.thumbnailScrollArea)
         self.status_controller.set_ui_elements(self.statusBar, self._toastLabel, self._toastTimer, self.messages)
 
@@ -323,11 +323,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
 
-            # Create flag filter button and add it immediately
-            self.flagFilterButton = QPushButton("🚩 Filter")
-            self.flagFilterButton.setToolTip("Toggle filter to show only flagged AOIs")
-            self.flagFilterButton.setFixedSize(80, 30)
-            self.flagFilterButton.setStyleSheet("""
+            # Create sort button
+            self.sortButton = QPushButton("⬍ Sort")
+            self.sortButton.setToolTip("Sort AOIs by area, color, or position")
+            self.sortButton.setFixedSize(70, 30)
+            self.sortButton.setStyleSheet("""
                 QPushButton {
                     background-color: #404040;
                     color: white;
@@ -338,20 +338,31 @@ class Viewer(QMainWindow, Ui_Viewer):
                 QPushButton:hover {
                     background-color: #505050;
                 }
-                QPushButton:checked {
-                    background-color: #ff4444;
-                    border: 2px solid #ff0000;
+            """)
+            self.sortButton.clicked.connect(self.aoi_controller.open_sort_menu)
+
+            # Create filter button
+            self.filterButton = QPushButton("⊙ Filter")
+            self.filterButton.setToolTip("Filter AOIs by color and pixel area")
+            self.filterButton.setFixedSize(70, 30)
+            self.filterButton.setStyleSheet("""
+                QPushButton {
+                    background-color: #404040;
                     color: white;
-                    font-weight: bold;
+                    border: 1px solid #555;
+                    border-radius: 3px;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #505050;
                 }
             """)
-            self.flagFilterButton.setCheckable(True)
-            self.flagFilterButton.clicked.connect(self.aoi_controller.toggle_flag_filter)
+            self.filterButton.clicked.connect(self.aoi_controller.open_filter_dialog)
 
-            # Set the flag button in the AOI controller
-            self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, self.flagFilterButton)
+            # Set the buttons in the AOI controller
+            self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, self.sortButton, self.filterButton)
 
-            # Try multiple approaches to add the button
+            # Try multiple approaches to add the buttons
             # Approach 1: Add next to measureButton (which is visible in your screenshot)
             if hasattr(self, 'measureButton'):
                 parent = self.measureButton.parent()
@@ -359,12 +370,14 @@ class Viewer(QMainWindow, Ui_Viewer):
                     layout = parent.layout()
                     for i in range(layout.count()):
                         if layout.itemAt(i).widget() == self.measureButton:
-                            layout.insertWidget(i + 1, self.flagFilterButton)
-                            self.flagFilterButton.show()
+                            layout.insertWidget(i + 1, self.sortButton)
+                            layout.insertWidget(i + 2, self.filterButton)
+                            self.sortButton.show()
+                            self.filterButton.show()
                             break
 
             # Approach 2: Also try adding after nextImageButton
-            self.aoi_controller.add_flag_button_to_layout()
+            self.aoi_controller.add_sort_filter_buttons_to_layout()
 
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
