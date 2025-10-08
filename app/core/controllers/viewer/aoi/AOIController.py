@@ -980,3 +980,98 @@ class AOIController:
         minutes = (decimal - degrees) * 60
 
         return f"{degrees}°{minutes:.4f}'{direction}"
+
+    def create_aoi_from_circle(self, center_x, center_y, radius):
+        """Create a new AOI from a user-drawn circle.
+
+        Args:
+            center_x (int): X coordinate of circle center
+            center_y (int): Y coordinate of circle center
+            radius (int): Radius of the circle in pixels
+        """
+        import math
+        import colorsys
+        import xml.etree.ElementTree as ET
+
+        try:
+            # Get current image
+            if not hasattr(self.parent, 'images') or not hasattr(self.parent, 'current_image'):
+                return
+
+            image = self.parent.images[self.parent.current_image]
+
+            # Get pixel color at center point
+            if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
+                img_array = self.parent.current_image_array
+            else:
+                return
+
+            # Validate coordinates
+            height, width = img_array.shape[:2]
+            if not (0 <= center_y < height and 0 <= center_x < width):
+                self.logger.error(f"Center coordinates ({center_x}, {center_y}) out of bounds")
+                return
+
+            # Get RGB values at center
+            r, g, b = img_array[center_y, center_x]
+
+            # Convert to HSV to get hue
+            r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+            h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+
+            # Calculate area: 2/3 of the circle area
+            circle_area = math.pi * radius * radius
+            aoi_area = (2.0 / 3.0) * circle_area
+
+            # Create AOI dictionary
+            new_aoi = {
+                'center': (center_x, center_y),
+                'radius': radius,
+                'area': aoi_area,
+                'flagged': False,
+                'user_comment': ''
+            }
+
+            # Add to current image's areas of interest
+            if 'areas_of_interest' not in image:
+                image['areas_of_interest'] = []
+
+            image['areas_of_interest'].append(new_aoi)
+
+            # Create XML element and add to image XML
+            if 'xml' in image and image['xml'] is not None:
+                image_xml = image['xml']
+
+                # Create new area_of_interest XML element
+                aoi_xml = ET.SubElement(image_xml, 'area_of_interest')
+                aoi_xml.set('center', str((center_x, center_y)))
+                aoi_xml.set('radius', str(radius))
+                aoi_xml.set('area', str(aoi_area))
+                aoi_xml.set('flagged', 'False')
+
+                # Store reference to XML element
+                new_aoi['xml'] = aoi_xml
+
+                # Save XML file
+                if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+                    try:
+                        self.parent.xml_service.save_xml_file(self.parent.xml_path)
+                    except Exception as e:
+                        self.logger.error(f"Failed to save XML: {e}")
+
+            # Show success message with hue information
+            hue_degrees = int(h * 360)
+            if hasattr(self.parent, 'status_controller'):
+                self.parent.status_controller.show_toast(
+                    f"AOI created: Hue {hue_degrees}°, Area {aoi_area:.0f} px",
+                    3000,
+                    color="#00C853"
+                )
+
+            # Reload the image to display the new AOI
+            self.parent._load_image()
+
+        except Exception as e:
+            self.logger.error(f"Error creating AOI from circle: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
