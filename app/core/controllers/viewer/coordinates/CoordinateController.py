@@ -45,6 +45,9 @@ class CoordinateController:
         # Coordinate state
         self.current_decimal_coords = None
 
+        # North-oriented image popup window
+        self.north_oriented_popup = None
+
     def on_coordinates_clicked(self, link):
         """Handle clicks on GPS coordinates in the status bar."""
         # Get coordinates from messages
@@ -337,6 +340,9 @@ class CoordinateController:
             popup.setWindowTitle(f"North-Oriented View (Rotated {rotation_angle:.1f}°)")
             popup.setModal(False)  # Non-modal so user can still interact with main window
 
+            # Store reference for cleanup when viewer closes
+            self.north_oriented_popup = popup
+
             # Create layout
             layout = QVBoxLayout(popup)
 
@@ -382,3 +388,10 @@ class CoordinateController:
             decimal_coords: Tuple of (latitude, longitude) or None
         """
         self.current_decimal_coords = decimal_coords
+
+    def cleanup(self):
+        """Clean up resources when viewer is closing."""
+        # Close north-oriented image popup if it's open
+        if self.north_oriented_popup and self.north_oriented_popup.isVisible():
+            self.north_oriented_popup.close()
+            self.north_oriented_popup = None

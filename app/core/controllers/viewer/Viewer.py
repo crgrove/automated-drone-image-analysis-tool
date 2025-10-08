@@ -32,6 +32,7 @@ from core.controllers.viewer.components.MeasureDialog import MeasureDialog
 from core.controllers.viewer.components.MagnifyingGlass import MagnifyingGlass
 from core.controllers.viewer.components.OverlayWidget import OverlayWidget
 from core.controllers.viewer.components.UpscaleDialog import UpscaleDialog
+from core.controllers.viewer.components.HelpDialog import HelpDialog
 
 from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
@@ -76,6 +77,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
         self._add_Toggles()
+        self._add_help_button()
         # ---------------- settings / data ----------------
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
@@ -201,6 +203,18 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'thumbnail_controller'):
             self.thumbnail_controller.cleanup()
 
+        # Close GPS map window if open
+        if hasattr(self, 'gps_map_controller'):
+            self.gps_map_controller.close_map()
+
+        # Close north-oriented image window if open
+        if hasattr(self, 'coordinate_controller'):
+            self.coordinate_controller.cleanup()
+
+        # Close help dialog if open
+        if hasattr(self, 'help_dialog') and self.help_dialog:
+            self.help_dialog.close()
+
         event.accept()
 
     def _add_Toggles(self):
@@ -252,6 +266,59 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Session variable to store GSD value
         self.current_gsd = None
         self.measure_dialog = None
+
+    def _add_help_button(self):
+        """Add help button to the top right corner of the toolbar."""
+        from PySide6.QtWidgets import QToolButton
+        from PySide6.QtGui import QIcon
+        from PySide6.QtCore import QSize
+
+        # Create help button
+        self.helpButton = QToolButton(self.TitleWidget)
+        self.helpButton.setObjectName("helpButton")
+        self.helpButton.setText("?")
+        self.helpButton.setToolTip("View keyboard shortcuts and help")
+
+        # Style the help button
+        font = QFont()
+        font.setPointSize(14)
+        font.setBold(True)
+        self.helpButton.setFont(font)
+        self.helpButton.setFixedSize(30, 30)
+        self.helpButton.setStyleSheet("""
+            QToolButton {
+                background-color: #2196F3;
+                color: white;
+                border: 2px solid #1976D2;
+                border-radius: 15px;
+                font-weight: bold;
+            }
+            QToolButton:hover {
+                background-color: #1976D2;
+            }
+            QToolButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+
+        # Add to the layout at the end (far right)
+        layout = self.TitleWidget.layout()
+        layout.addWidget(self.helpButton)
+
+        # Connect to help dialog
+        self.helpButton.clicked.connect(self._show_help_dialog)
+
+        # Store reference to help dialog
+        self.help_dialog = None
+
+    def _show_help_dialog(self):
+        """Show the help dialog."""
+        if self.help_dialog is None:
+            self.help_dialog = HelpDialog(self)
+
+        self.help_dialog.show()
+        self.help_dialog.raise_()
+        self.help_dialog.activateWindow()
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
