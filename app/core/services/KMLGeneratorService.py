@@ -79,7 +79,8 @@ class KMLGeneratorService:
                 img_array = image_service.img_array
                 height, width = img_array.shape[:2]
                 image_center = (width/2, height/2)
-                bearing = image_service.get_drone_orientation() or 0
+                # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
+                bearing = image_service.get_image_bearing() or 0
                 gsd_cm = image_service.get_average_gsd()
 
                 # Check gimbal angle

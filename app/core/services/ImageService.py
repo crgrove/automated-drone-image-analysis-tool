@@ -137,6 +137,33 @@ class ImageService:
             yaw += 360
         return yaw, pitch
 
+    def get_image_bearing(self):
+        """
+        Calculate the actual bearing of the image, accounting for both drone and gimbal orientation.
+
+        For drones with gimbals, the image bearing is the combination of:
+        - Flight Yaw: Direction the drone body is pointing
+        - Gimbal Yaw: Direction the camera is pointing relative to the drone
+
+        Returns:
+            float or None: Image bearing in degrees (0-360), or None if unavailable.
+        """
+        # Get drone body heading
+        flight_yaw = self.get_drone_orientation()
+        if flight_yaw is None:
+            return None
+
+        # Get gimbal rotation
+        gimbal_yaw, _ = self.get_gimbal_orientation()
+
+        # If gimbal yaw is available, combine it with flight yaw
+        if gimbal_yaw is not None:
+            combined_bearing = (flight_yaw + gimbal_yaw) % 360
+            return combined_bearing
+
+        # Fall back to just flight yaw if gimbal data not available
+        return flight_yaw
+
     def get_camera_hfov(self):
         """Compute the camera's horizontal field of view in degrees.
 
@@ -156,9 +183,13 @@ class ImageService:
         hfov = 2 * math.atan(sensor_w / (2 * focal_length))
         return math.degrees(hfov)
 
-    def get_average_gsd(self):
+    def get_average_gsd(self, custom_altitude_ft=None):
         """
         Computes the estimated average Ground Sampling Distance (GSD).
+
+        Args:
+            custom_altitude_ft (float, optional): Custom altitude in feet to use instead of XMP data.
+                                                  Useful when XMP altitude is negative or incorrect.
 
         Returns:
             float or None: Average GSD in cm/pixel, or None if required data is missing.
@@ -177,8 +208,13 @@ class ImageService:
             return None
         focal_length = focal_length[0] / focal_length[1]
 
-        altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)
-        altitude_meters = float(altitude_meters) if altitude_meters else 100
+        # Use custom altitude if provided, otherwise get from XMP
+        if custom_altitude_ft is not None and custom_altitude_ft > 0:
+            # Convert feet to meters
+            altitude_meters = custom_altitude_ft / 3.28084
+        else:
+            altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)
+            altitude_meters = float(altitude_meters) if altitude_meters else 100
 
         tilt_angle = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
         tilt_angle = abs(float(tilt_angle)) if tilt_angle else 0

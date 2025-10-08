@@ -17,7 +17,7 @@ from urllib.parse import quote_plus
 from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush, QCursor
 from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
 from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog
 
 from core.views.components.Toggle import Toggle
 from core.views.Viewer_ui import Ui_Viewer
@@ -31,6 +31,7 @@ from core.controllers.viewer.components.LoadingDialog import LoadingDialog
 from core.controllers.viewer.components.MeasureDialog import MeasureDialog
 from core.controllers.viewer.components.MagnifyingGlass import MagnifyingGlass
 from core.controllers.viewer.components.OverlayWidget import OverlayWidget
+from core.controllers.viewer.components.UpscaleDialog import UpscaleDialog
 
 from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
@@ -126,6 +127,12 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # coordinates for sharing
         self.current_decimal_coords = None
+
+        # Track last mouse position for AOI selection
+        self.last_mouse_pos = QPoint(-1, -1)
+
+        # Custom AGL altitude for images with negative altitude
+        self.custom_agl_altitude_ft = None  # Store in feet as entered by user
 
         # scale bar (will be used by overlay widget)
         self.scaleBar = ScaleBarWidget()
@@ -271,12 +278,24 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self.coordinate_controller.show_north_oriented_image()
+        if e.key() == Qt.Key_F and e.modifiers() == Qt.ShiftModifier:
+            # Check if cursor is within an AOI (Shift+F to select AOI at cursor)
+            aoi_index, visible_index = self.aoi_controller.find_aoi_at_position(
+                self.last_mouse_pos.x(), self.last_mouse_pos.y()
+            )
+
+            # If an AOI is found at the cursor, select it
+            if aoi_index >= 0:
+                self.aoi_controller.select_aoi(aoi_index, visible_index)
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
             self.aoi_controller.toggle_aoi_flag()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.NoModifier:
             # Show GPS map with 'M' key
             self.gps_map_controller.show_map()
+        if e.key() == Qt.Key_E and e.modifiers() == Qt.NoModifier:
+            # Upscale currently visible portion with 'E' key
+            self._open_upscale_dialog()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -530,12 +549,19 @@ class Viewer(QMainWindow, Ui_Viewer):
             altitude = image_service.get_relative_altitude(self.distance_unit)
             if altitude:
                 self.messages['Relative Altitude'] = f"{altitude} {self.distance_unit}"
+
+                # Check for negative altitude and prompt for custom AGL
+                if altitude < 0 and self.custom_agl_altitude_ft is None:
+                    self._prompt_for_custom_agl_altitude()
             direction = image_service.get_drone_orientation()
             if direction is not None:
                 self.messages['Drone Orientation'] = f"{direction}°"
             else:
                 self.messages['Drone Orientation'] = None
-            avg_gsd = image_service.get_average_gsd()
+
+            # Calculate GSD with custom altitude if available
+            custom_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else None
+            avg_gsd = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
             if avg_gsd is not None:
                 self.messages['Estimated Average GSD'] = f"{avg_gsd}cm/px"
             else:
@@ -783,6 +809,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             if mask_path:
                 augmented_image = image_service.apply_mask_highlight(
                     augmented_image,
+                    mask_path,
                     self.settings['identifier_color'],
                     image['areas_of_interest']
                 )
@@ -850,6 +877,66 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         if self.main_image and adjusted_pixmap:
             self.main_image.setImage(adjusted_pixmap)
+
+    def _open_upscale_dialog(self):
+        """Extract visible portion of zoomed image and open upscale dialog."""
+        if self.main_image is None or not self.main_image.hasImage():
+            return
+
+        try:
+            # Get the currently visible viewport in scene coordinates
+            visible_rect = self.main_image.mapToScene(
+                self.main_image.viewport().rect()
+            ).boundingRect()
+
+            # Get the full image pixmap
+            pixmap = self.main_image.pixmap()
+            if pixmap is None:
+                return
+
+            # Convert QPixmap to QImage
+            qimage = pixmap.toImage()
+            width = qimage.width()
+            height = qimage.height()
+
+            # Convert to numpy array
+            import qimage2ndarray
+            full_image_array = qimage2ndarray.rgb_view(qimage)
+
+            # Crop to visible portion (convert scene coords to image coords)
+            # The scene coordinates should map directly to image pixels
+            x1 = max(0, int(visible_rect.left()))
+            y1 = max(0, int(visible_rect.top()))
+            x2 = min(width, int(visible_rect.right()))
+            y2 = min(height, int(visible_rect.bottom()))
+
+            # Ensure we have a valid region
+            if x2 <= x1 or y2 <= y1:
+                return
+
+            # Extract visible portion
+            visible_portion = full_image_array[y1:y2, x1:x2].copy()
+
+            # Open upscale dialog with the visible portion
+            dialog = UpscaleDialog(self, visible_portion, upscale_factor=2, current_level=1)
+            dialog.show()
+
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Missing Dependency",
+                "The qimage2ndarray module is required for the upscale feature.\n"
+                "Please install it using: pip install qimage2ndarray"
+            )
+        except Exception as e:
+            import traceback
+            print(f"Error opening upscale dialog: {e}")
+            print(traceback.format_exc())
+            QMessageBox.warning(
+                self,
+                "Upscale Error",
+                f"An error occurred while opening the upscale dialog:\n{str(e)}"
+            )
 
     def _skip_hidden_clicked(self, state):
         """Updates visibility setting for hidden images based on skipHidden checkbox.
@@ -1142,6 +1229,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             pos (QPoint): The current mouse position in image coordinates.
                          Will be (-1, -1) when cursor is outside the image.
         """
+        # Store the current mouse position for AOI selection
+        self.last_mouse_pos = pos
+
         # Clear previous cursor position message
         if "Cursor Position" in self.messages:
             self.messages["Cursor Position"] = None
@@ -1255,6 +1345,32 @@ class Viewer(QMainWindow, Ui_Viewer):
             gsd_value (float): The new GSD value in cm/px.
         """
         self.current_gsd = gsd_value
+
+    def _prompt_for_custom_agl_altitude(self):
+        """Prompt user for custom AGL altitude when negative altitude is detected."""
+        # Show warning dialog with input
+        altitude_ft, ok = QInputDialog.getDouble(
+            self,
+            "Negative Altitude Detected",
+            "WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in feet):",
+            100.0,     # Default value
+            0.1,       # Minimum value
+            10000.0,   # Maximum value
+            1          # Decimals
+        )
+
+        if ok and altitude_ft > 0:
+            # Store the custom altitude in feet
+            self.custom_agl_altitude_ft = altitude_ft
+            self.logger.info(f"Custom AGL altitude set to {altitude_ft} ft")
+
+            # Show confirmation toast
+            self.status_controller.show_toast(f"Custom AGL set to {altitude_ft} ft", 3000, color="#00C853")
+        else:
+            # User canceled - don't show dialog again for this session
+            # Set a flag value to indicate user chose to skip
+            self.custom_agl_altitude_ft = -1
+            self.logger.info("User declined to set custom AGL altitude")
 
     def _reapply_icons(self, theme):
         """

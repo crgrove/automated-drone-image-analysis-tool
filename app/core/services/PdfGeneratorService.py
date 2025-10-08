@@ -893,7 +893,8 @@ class PdfGeneratorService:
                 return None
 
             # Get bearing and GSD
-            bearing = image_service.get_drone_orientation() or 0
+            # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
+            bearing = image_service.get_image_bearing() or 0
             gsd_cm = image_service.get_average_gsd()
             if not gsd_cm:
                 return None
