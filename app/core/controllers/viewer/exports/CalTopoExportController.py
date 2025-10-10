@@ -200,10 +200,16 @@ class CalTopoExportController:
                 image_center = (width/2, height/2)
 
                 # Get bearing
-                # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
-                bearing = image_service.get_image_bearing()
+                # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
+                # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
+                bearing = image_service.get_drone_orientation()
                 if bearing is None:
                     bearing = 0  # Default to north
+
+                # Get custom altitude if viewer has one set
+                custom_alt = None
+                if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                    custom_alt = self.parent.custom_agl_altitude_ft
 
                 # Get GSD (try from parent viewer first)
                 gsd_cm = None
@@ -217,7 +223,7 @@ class CalTopoExportController:
 
                 # Calculate GSD if not available
                 if gsd_cm is None:
-                    gsd_cm = image_service.get_average_gsd()
+                    gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
 
                 # Check gimbal angle for accuracy
                 _, gimbal_pitch = image_service.get_gimbal_orientation()

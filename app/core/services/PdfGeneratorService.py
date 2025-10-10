@@ -893,9 +893,16 @@ class PdfGeneratorService:
                 return None
 
             # Get bearing and GSD
-            # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
-            bearing = image_service.get_image_bearing() or 0
-            gsd_cm = image_service.get_average_gsd()
+            # Use get_drone_orientation() for nadir shots (gimbal check above ensures nadir)
+            # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
+            bearing = image_service.get_drone_orientation() or 0
+
+            # Get custom altitude if viewer has one set
+            custom_alt = None
+            if hasattr(self.viewer, 'custom_agl_altitude_ft') and self.viewer.custom_agl_altitude_ft and self.viewer.custom_agl_altitude_ft > 0:
+                custom_alt = self.viewer.custom_agl_altitude_ft
+
+            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
             if not gsd_cm:
                 return None
 

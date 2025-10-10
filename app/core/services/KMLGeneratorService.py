@@ -9,11 +9,15 @@ from core.services.ImageService import ImageService
 class KMLGeneratorService:
     """Service to generate a KML file with placemarks for flagged AOIs."""
 
-    def __init__(self):
+    def __init__(self, custom_altitude_ft=None):
         """
         Initializes the KMLGeneratorService by creating a new KML document.
+
+        Args:
+            custom_altitude_ft: Optional custom altitude in feet to use for GSD calculations
         """
         self.kml = simplekml.Kml()
+        self.custom_altitude_ft = custom_altitude_ft
 
     def add_aoi_placemark(self, name, lat, lon, description, color_rgb=None):
         """
@@ -79,9 +83,10 @@ class KMLGeneratorService:
                 img_array = image_service.img_array
                 height, width = img_array.shape[:2]
                 image_center = (width/2, height/2)
-                # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
-                bearing = image_service.get_image_bearing() or 0
-                gsd_cm = image_service.get_average_gsd()
+                # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
+                # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
+                bearing = image_service.get_drone_orientation() or 0
+                gsd_cm = image_service.get_average_gsd(custom_altitude_ft=self.custom_altitude_ft)
 
                 # Check gimbal angle
                 _, gimbal_pitch = image_service.get_gimbal_orientation()

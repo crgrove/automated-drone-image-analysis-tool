@@ -73,7 +73,12 @@ class KMLExportController:
                             filtered_images.append(img_copy)
 
             if filtered_images:
-                kml_service = KMLGeneratorService()
+                # Get custom altitude if viewer has one set
+                custom_alt = None
+                if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                    custom_alt = self.parent.custom_agl_altitude_ft
+
+                kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
                 kml_service.generate_kml_export(filtered_images, file_name)
                 return True
             else:
