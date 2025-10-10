@@ -232,7 +232,7 @@ class GPSMapDialog(QDialog):
     def showEvent(self, event):
         """Handle dialog show event."""
         super().showEvent(event)
-        # Fit all points when first shown
+        # Fit all points when shown (viewport is now valid)
         self.map_view.fit_all_points()
         # Create compass rose after dialog is shown
         QTimer.singleShot(100, self.map_view._create_compass_rose)

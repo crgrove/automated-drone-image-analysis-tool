@@ -368,6 +368,10 @@ class GPSMapView(QGraphicsView):
         # Render map and points
         self.render_map()
 
+        # Initialize current image state (bearing, FOV, etc.)
+        if self.current_image_index >= 0:
+            self.set_current_image(self.current_image_index)
+
     def calculate_bounds(self):
         """Calculate the geographic bounds of all GPS points."""
         if not self.gps_data:
@@ -455,7 +459,9 @@ class GPSMapView(QGraphicsView):
         self.point_items = []
         self.aoi_marker = None  # Reset reference since scene.clear() removed it
         self.fov_box = None  # Reset reference since scene.clear() removed it
-        # Don't clear tile_items here - keep them for caching
+        # Clear tile_items since scene.clear() removed all tiles from scene
+        # Keep all_tile_items for caching the actual pixmap data
+        self.tile_items = {}
 
         if not self.gps_data:
             return
@@ -848,38 +854,144 @@ class GPSMapView(QGraphicsView):
 
     def fit_all_points(self):
         """Fit all GPS points in the view."""
-        if not self.point_items:
+        if not self.point_items or not self.gps_data:
             return
 
-        # Get the actual positions of all points (not bounding rect which ignores transformations)
+        # Calculate geographic bounds of all GPS points
+        lats = [d['latitude'] for d in self.gps_data]
+        lons = [d['longitude'] for d in self.gps_data]
+
+        min_lat = min(lats)
+        max_lat = max(lats)
+        min_lon = min(lons)
+        max_lon = max(lons)
+
+        # Add 10% padding
+        lat_padding = (max_lat - min_lat) * 0.1 or 0.001
+        lon_padding = (max_lon - min_lon) * 0.1 or 0.001
+
+        min_lat -= lat_padding
+        max_lat += lat_padding
+        min_lon -= lon_padding
+        max_lon += lon_padding
+
+        # Get viewport dimensions
+        viewport_rect = self.viewport().rect()
+        view_width = viewport_rect.width()
+        view_height = viewport_rect.height()
+
+        if view_width <= 0 or view_height <= 0:
+            return
+
+        # Calculate the optimal tile zoom level for these bounds
+        target_tile_zoom = self.tile_loader.calculate_zoom_for_bounds(
+            min_lat, max_lat, min_lon, max_lon,
+            view_width, view_height
+        )
+
+        # If tile zoom changed, we need to update the scene and reposition points
+        if target_tile_zoom != self.current_zoom:
+            self.current_zoom = target_tile_zoom
+
+            # Update scene rect for new zoom
+            world_size = 256 * (2 ** self.current_zoom)
+            self.scene.setSceneRect(-world_size/2, -world_size/2, world_size * 2, world_size * 2)
+
+            # Update GPS point positions for new zoom level
+            for i, point_item in enumerate(self.point_items):
+                if i < len(self.gps_data):
+                    data = self.gps_data[i]
+                    new_pos = self.lat_lon_to_scene(data['latitude'], data['longitude'])
+                    point_item.setPos(new_pos)
+
+            # Update AOI marker position if present
+            if self.aoi_marker and self.aoi_data:
+                aoi_new_pos = self.lat_lon_to_scene(
+                    self.aoi_data['latitude'],
+                    self.aoi_data['longitude']
+                )
+                self.aoi_marker.setPos(aoi_new_pos)
+
+            # Update FOV box if present
+            if self.fov_box and 0 <= self.current_image_index < len(self.gps_data):
+                self.update_fov_box(self.current_image_index)
+
+            # Update path
+            if self.path_item:
+                try:
+                    if self.path_item.scene() == self.scene:
+                        self.scene.removeItem(self.path_item)
+                except RuntimeError:
+                    pass
+                self.draw_path_only()
+
+            # Clear old tiles from scene
+            for item in list(self.tile_items.values()):
+                if isinstance(item, QGraphicsPixmapItem):
+                    try:
+                        if item.scene() == self.scene:
+                            self.scene.removeItem(item)
+                    except RuntimeError:
+                        pass
+            self.tile_items = {}
+
+        # Now calculate the scene coordinates at the new zoom level
         min_x = float('inf')
         max_x = float('-inf')
         min_y = float('inf')
         max_y = float('-inf')
 
         for item in self.point_items:
-            pos = item.pos()  # Get actual scene position
+            pos = item.pos()
             min_x = min(min_x, pos.x())
             max_x = max(max_x, pos.x())
             min_y = min(min_y, pos.y())
             max_y = max(max_y, pos.y())
 
-        # Create rect from actual positions
-        if min_x < float('inf'):
-            rect = QRectF(min_x, min_y, max_x - min_x, max_y - min_y)
+        if min_x >= float('inf'):
+            return
 
-            # Add 10% padding
-            padding = max(rect.width(), rect.height()) * 0.1
-            rect.adjust(-padding, -padding, padding, padding)
+        # Calculate center point
+        center_x = (min_x + max_x) / 2
+        center_y = (min_y + max_y) / 2
 
-            # Fit to view
-            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+        # Calculate required scene dimensions
+        scene_width = max_x - min_x
+        scene_height = max_y - min_y
 
-            # Schedule tile loading
-            self.tile_timer.start(100)
+        if scene_width <= 0 or scene_height <= 0:
+            # All points are at same location, just center on it with default zoom
+            self.resetTransform()
+            if self.is_rotated and self.current_bearing is not None:
+                self.rotate(-self.current_bearing)
+            self.zoom_scale = 1.0
+            self.scale(self.zoom_scale, self.zoom_scale)
+            self.centerOn(center_x, center_y)
+        else:
+            # Calculate zoom scale to fit points in viewport
+            # Account for 10% padding we added earlier
+            scale_x = view_width / (scene_width * 1.2)
+            scale_y = view_height / (scene_height * 1.2)
 
-            # Maintain compass after fitting view
-            QTimer.singleShot(50, self._maintain_compass)
+            # Use the smaller scale to ensure everything fits
+            target_scale = min(scale_x, scale_y)
+
+            # Reset transform and apply new zoom
+            self.resetTransform()
+            if self.is_rotated and self.current_bearing is not None:
+                self.rotate(-self.current_bearing)
+
+            self.zoom_scale = target_scale
+            self.scale(self.zoom_scale, self.zoom_scale)
+
+            # Center on the middle of all points
+            self.centerOn(center_x, center_y)
+
+        # Schedule tile loading
+        self.tile_timer.start(100)
+
+        # Maintain compass after fitting view
+        QTimer.singleShot(50, self._maintain_compass)
 
     def zoom_in(self):
         """Zoom in by a factor."""
@@ -908,6 +1020,7 @@ class GPSMapView(QGraphicsView):
         self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - dx)
         self.verticalScrollBar().setValue(self.verticalScrollBar().value() - dy)
         self.tile_timer.start(500)  # Load new tiles after pan
+        QTimer.singleShot(10, self._maintain_compass)  # Maintain compass
 
     def wheelEvent(self, event: QWheelEvent):
         """Handle mouse wheel for zooming."""
@@ -1196,6 +1309,12 @@ class GPSMapView(QGraphicsView):
         """Handle show event."""
         super().showEvent(event)
         # Don't create compass here - let the dialog handle it
+
+    def scrollContentsBy(self, dx, dy):
+        """Handle scrolling/panning events (including mouse drag)."""
+        super().scrollContentsBy(dx, dy)
+        # Maintain compass position when panning/dragging
+        QTimer.singleShot(10, self._maintain_compass)
 
     def resizeEvent(self, event):
         """Handle resize events."""
