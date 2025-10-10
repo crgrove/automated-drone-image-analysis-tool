@@ -367,6 +367,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_M and e.modifiers() == Qt.NoModifier:
             # Show GPS map with 'M' key
             self.gps_map_controller.show_map()
+        if e.key() == Qt.Key_O and e.modifiers() == Qt.ShiftModifier:
+            # Manual altitude override with 'Shift+O' key
+            self._manual_altitude_override()
+        if e.key() == Qt.Key_E and e.modifiers() == Qt.ShiftModifier:
+            # Export coverage extent KML with 'Shift+E' key
+            self._export_coverage_extent_kml()
         if e.key() == Qt.Key_E and e.modifiers() == Qt.NoModifier:
             # Upscale currently visible portion with 'E' key
             self._open_upscale_dialog()
@@ -1093,6 +1099,146 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'caltopo_export'):
             self.caltopo_export.export_to_caltopo(self.images, self.aoi_controller.flagged_aois)
 
+    def _export_coverage_extent_kml(self):
+        """Handles the export of coverage extent KML file for all images."""
+        try:
+            # Show confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                "Generate Coverage Extent KML",
+                "Generate a KML file showing the geographic coverage extent of all images?\n\n"
+                "This will create polygon(s) representing the area covered by all images. "
+                "Overlapping image areas will be merged into a single polygon.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # Show file save dialog
+            file_name, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Coverage Extent KML",
+                "",
+                "KML files (*.kml)"
+            )
+
+            if not file_name:  # User cancelled
+                return
+
+            # Create progress dialog
+            from core.controllers.viewer.components.CoverageExtentProgressDialog import CoverageExtentProgressDialog
+
+            progress_dialog = CoverageExtentProgressDialog(self, len(self.images))
+            progress_dialog.show()
+            QApplication.processEvents()  # Make dialog visible immediately
+
+            # Define progress callback
+            def update_progress(current, total, message):
+                progress_dialog.update_progress(current, total, message)
+                QApplication.processEvents()  # Keep UI responsive
+
+            # Define cancel check
+            def check_cancelled():
+                return progress_dialog.is_cancelled()
+
+            # Calculate coverage extents
+            from core.services.CoverageExtentService import CoverageExtentService
+
+            custom_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else None
+            coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
+            coverage_data = coverage_service.calculate_coverage_extents(
+                self.images,
+                progress_callback=update_progress,
+                cancel_check=check_cancelled
+            )
+
+            # Close progress dialog
+            progress_dialog.close()
+
+            # Check if operation was cancelled
+            if coverage_data.get('cancelled', False):
+                self.status_controller.show_toast("Coverage extent generation cancelled", 3000, color="#FF9800")
+                return
+
+            if coverage_data['image_count'] == 0:
+                self.status_controller.show_toast(
+                    "No valid images found for coverage extent calculation",
+                    3000,
+                    color="#F44336"
+                )
+                QMessageBox.warning(
+                    self,
+                    "Coverage Extent",
+                    f"Could not calculate coverage extent.\n\n"
+                    f"Images processed: {coverage_data['image_count']}\n"
+                    f"Images skipped: {coverage_data['skipped_count']}\n\n"
+                    f"Images may be skipped for the following reasons:\n"
+                    f"  • Missing GPS data in EXIF\n"
+                    f"  • No valid GSD (missing altitude/focal length)\n"
+                    f"  • Gimbal not nadir (must be -85° to -95°)"
+                )
+                return
+
+            # Generate KML file
+            from core.services.KMLGeneratorService import KMLGeneratorService
+
+            kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
+            kml_service.generate_coverage_extent_kml(coverage_data, file_name)
+
+            # Show success message with proper units
+            total_area_sqm = coverage_data['total_area_sqm']
+            num_polygons = len(coverage_data['polygons'])
+
+            # Honor user's distance unit preference
+            if self.distance_unit == 'ft':
+                # English units - use acres
+                total_area_acres = total_area_sqm / 4046.86  # 1 acre = 4046.86 m²
+                area_display = f"{total_area_acres:.2f} acres"
+                area_toast = f"{total_area_acres:.2f} acres"
+            else:
+                # Metric units - use km²
+                total_area_sqkm = total_area_sqm / 1_000_000
+                area_display = f"{total_area_sqkm:.3f} km²"
+                area_toast = f"{total_area_sqkm:.3f} km²"
+
+            self.status_controller.show_toast(
+                f"Coverage extent KML saved: {area_toast}",
+                4000,
+                color="#00C853"
+            )
+
+            # Build skip reasons explanation if any were skipped
+            skip_info = ""
+            if coverage_data['skipped_count'] > 0:
+                skip_info = (
+                    f"\n\nImages may be skipped for:\n"
+                    f"  • Missing GPS data\n"
+                    f"  • No valid GSD\n"
+                    f"  • Gimbal not nadir"
+                )
+
+            QMessageBox.information(
+                self,
+                "Coverage Extent KML Generated",
+                f"Coverage extent KML file created successfully!\n\n"
+                f"File: {file_name}\n"
+                f"Images processed: {coverage_data['image_count']}\n"
+                f"Images skipped: {coverage_data['skipped_count']}\n"
+                f"Coverage areas: {num_polygons}\n"
+                f"Total area: {area_display}{skip_info}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error generating coverage extent KML: {str(e)}")
+            self.status_controller.show_toast("Error generating coverage extent KML", 3000, color="#F44336")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to generate coverage extent KML:\n{str(e)}"
+            )
+
     # ---------- coordinates popup ----------
 
     def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
@@ -1435,29 +1581,66 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _prompt_for_custom_agl_altitude(self):
         """Prompt user for custom AGL altitude when negative altitude is detected."""
-        # Show warning dialog with input
-        altitude_ft, ok = QInputDialog.getDouble(
-            self,
+        self._show_altitude_override_dialog(
             "Negative Altitude Detected",
             "WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in feet):",
-            100.0,     # Default value
-            0.1,       # Minimum value
-            10000.0,   # Maximum value
-            1          # Decimals
+            auto_triggered=True
+        )
+
+    def _manual_altitude_override(self):
+        """Prompt user to manually override altitude for all images."""
+        # Get current altitude if set
+        current_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else 100.0
+
+        self._show_altitude_override_dialog(
+            "Override Altitude",
+            "Enter a custom AGL altitude to be used for GSD calculations for all images (in feet):",
+            auto_triggered=False,
+            default_value=current_alt
+        )
+
+    def _show_altitude_override_dialog(self, title, message, auto_triggered=True, default_value=100.0):
+        """
+        Show altitude override dialog and update custom altitude.
+
+        Args:
+            title: Dialog window title
+            message: Dialog message text
+            auto_triggered: If True, sets flag to -1 on cancel (don't show again). If False, allows cancellation.
+            default_value: Default altitude value to show
+        """
+        # Show dialog with input
+        altitude_ft, ok = QInputDialog.getDouble(
+            self,
+            title,
+            message,
+            default_value,  # Default value
+            0.1,            # Minimum value
+            10000.0,        # Maximum value
+            1               # Decimals
         )
 
         if ok and altitude_ft > 0:
             # Store the custom altitude in feet
+            old_altitude = self.custom_agl_altitude_ft
             self.custom_agl_altitude_ft = altitude_ft
             self.logger.info(f"Custom AGL altitude set to {altitude_ft} ft")
 
             # Show confirmation toast
             self.status_controller.show_toast(f"Custom AGL set to {altitude_ft} ft", 3000, color="#00C853")
+
+            # If altitude changed and we have a current image, reload it to update GSD
+            if old_altitude != altitude_ft and hasattr(self, 'current_image'):
+                self._load_image()
         else:
-            # User canceled - don't show dialog again for this session
-            # Set a flag value to indicate user chose to skip
-            self.custom_agl_altitude_ft = -1
-            self.logger.info("User declined to set custom AGL altitude")
+            if auto_triggered:
+                # User canceled automatic prompt - don't show dialog again for this session
+                # Set a flag value to indicate user chose to skip
+                self.custom_agl_altitude_ft = -1
+                self.logger.info("User declined to set custom AGL altitude")
+            else:
+                # User canceled manual override - just log it
+                self.logger.info("User canceled altitude override")
 
     def _apply_icons(self, theme):
         """

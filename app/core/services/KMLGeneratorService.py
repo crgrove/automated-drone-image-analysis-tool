@@ -219,3 +219,67 @@ class KMLGeneratorService:
                 )
 
         self.save_kml(output_path)
+
+    def generate_coverage_extent_kml(self, coverage_data: dict, output_path: str):
+        """
+        Generate KML file with polygons representing image coverage extents.
+
+        Args:
+            coverage_data (dict): Coverage data from CoverageExtentService with:
+                - 'polygons': List of polygon dicts with 'coordinates' and 'area_sqm'
+                - 'image_count': Number of images processed
+                - 'total_area_sqm': Total coverage area
+            output_path (str): The path to save the generated KML file.
+        """
+        polygons = coverage_data.get('polygons', [])
+        image_count = coverage_data.get('image_count', 0)
+        total_area_sqm = coverage_data.get('total_area_sqm', 0)
+
+        if not polygons:
+            return
+
+        # Add document-level description with both metric and English units
+        total_area_sqkm = total_area_sqm / 1_000_000
+        total_area_acres = total_area_sqm / 4046.86  # 1 acre = 4046.86 m²
+
+        self.kml.document.name = "Image Coverage Extent"
+        self.kml.document.description = (
+            f"Geographic coverage extent from {image_count} image(s)\n"
+            f"Total coverage area: {total_area_sqkm:.3f} km² ({total_area_acres:.2f} acres)\n"
+            f"Number of separate areas: {len(polygons)}"
+        )
+
+        # Create a polygon for each coverage area
+        for idx, polygon_data in enumerate(polygons):
+            coords = polygon_data['coordinates']
+            area_sqm = polygon_data['area_sqm']
+            area_sqkm = area_sqm / 1_000_000
+            area_acres = area_sqm / 4046.86
+
+            # Create polygon name
+            if len(polygons) == 1:
+                poly_name = "Coverage Extent"
+            else:
+                poly_name = f"Coverage Area {idx + 1}"
+
+            # Convert coordinates to KML format (lon, lat)
+            kml_coords = [(lon, lat) for lat, lon in coords]
+
+            # Create polygon
+            pol = self.kml.newpolygon(name=poly_name)
+            pol.outerboundaryis = kml_coords
+
+            # Set polygon description with both metric and English units
+            pol.description = (
+                f"Coverage area: {area_sqkm:.3f} km² ({area_acres:.2f} acres)\n"
+                f"Area in square meters: {area_sqm:.0f} m²\n"
+                f"Number of corners: {len(coords)}"
+            )
+
+            # Style the polygon
+            pol.style.linestyle.color = simplekml.Color.rgb(0, 100, 200)  # Dark blue outline
+            pol.style.linestyle.width = 2
+            pol.style.polystyle.color = simplekml.Color.changealphaint(100, simplekml.Color.rgb(0, 150, 255))  # Semi-transparent blue fill
+            pol.style.polystyle.outline = 1
+
+        self.save_kml(output_path)
