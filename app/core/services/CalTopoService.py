@@ -6,7 +6,10 @@ creation on CalTopo maps.
 """
 
 import json
+import os
 import requests
+import uuid
+import base64
 from PySide6.QtCore import QSettings
 
 
@@ -240,41 +243,120 @@ class CalTopoService:
 
         return success_count, total_count
 
-    def upload_photo_waypoint(self, map_id, photo_data):
+    def upload_photo_waypoint(self, map_id, photo_data, team_id, marker_id):
         """Upload a photo waypoint to a CalTopo map.
 
         Args:
             map_id (str): CalTopo map ID
             photo_data (dict): Photo data with 'lat', 'lon', 'title', 'image_path'
+            team_id (str): Team ID for service account permissions
+            marker_id (str): Marker ID to attach the photo to
 
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            # First create the marker
-            marker_payload = {
-                'type': 'Marker',
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [photo_data['lon'], photo_data['lat']]
-                },
-                'properties': {
-                    'title': photo_data.get('title', ''),
-                    'description': photo_data.get('description', ''),
-                    'class': 'Marker'
+            # Step 1: Create backend media object
+            media_id = str(uuid.uuid4())
+            
+            # Extract filename from image path
+            image_path = photo_data.get('image_path')
+            if not image_path:
+                print("Error: No image_path provided in photo_data")
+                return False
+                
+            filename = os.path.basename(image_path)
+            
+            media_metadata_payload = {
+                "properties": {
+                    "creator": team_id,
+                    "filename": filename
                 }
             }
-
-            # TODO: Implement photo upload once CalTopo photo API is confirmed
-            # This may require multipart form data with image file
-
-            response = self.session.post(
-                f"{self.CALTOPO_API_BASE}/map/{map_id}/Marker",
-                json=marker_payload,
+            
+            print(f"DEBUG CalTopo: Creating media object {media_id}")
+            media_response = self.session.post(
+                f"{self.CALTOPO_API_BASE}/media/{media_id}",
+                json=media_metadata_payload,
                 timeout=10
             )
+            
+            if media_response.status_code not in [200, 201]:
+                print(f"Error creating media object: {media_response.status_code} - {media_response.text}")
+                return False
 
-            return response.status_code in [200, 201]
+            # Step 2: Upload media data (base64 encoded image)
+            try:
+                with open(image_path, "rb") as img_file:
+                    base64_data = base64.b64encode(img_file.read()).decode()
+            except Exception as e:
+                print(f"Error reading image file {image_path}: {e}")
+                return False
+
+            media_data_payload = {"data": base64_data}
+            
+            print(f"DEBUG CalTopo: Uploading media data for {media_id}")
+            data_response = self.session.post(
+                f"{self.CALTOPO_API_BASE}/media/{media_id}/data",
+                json=media_data_payload,
+                timeout=30  # Longer timeout for image upload
+            )
+            
+            if data_response.status_code not in [200, 201]:
+                print(f"Error uploading media data: {data_response.status_code} - {data_response.text}")
+                return False
+
+            # Step 3: Attach media object to map as MapMediaObject
+            media_object_payload = {
+                "type": "Feature",
+                "id": None,
+                "geometry": None,
+                "properties": {
+                    "parentId": "Marker" + marker_id,
+                    "backendMediaId": media_id,
+                    "title": filename,
+                    "heading": None,
+                    "description": photo_data.get('description', ''),
+                    "marker-symbol": "aperture",
+                    "marker-color": "#FFFFFF",
+                    "marker-size": 1,
+                }
+            }
+            
+            # Get CSRF token for the request
+            csrf_token = self._get_csrf_token(map_id)
+            
+            # Prepare headers
+            headers = {
+                'Referer': f'{self.CALTOPO_BASE_URL}/m/{map_id}',
+                'Origin': self.CALTOPO_BASE_URL
+            }
+            
+            if csrf_token:
+                headers['X-CSRFToken'] = csrf_token
+                headers['X-XSRF-TOKEN'] = csrf_token
+            
+            # CalTopo expects form-urlencoded data with JSON as 'json' parameter
+            form_data = {
+                'json': json.dumps(media_object_payload)
+            }
+            
+            print(f"DEBUG CalTopo: Attaching media object to map {map_id}")
+            attach_response = self.session.post(
+                f"{self.CALTOPO_API_BASE}/map/{map_id}/MapMediaObject",
+                data=form_data,
+                headers=headers,
+                timeout=10
+            )
+            
+            print(f"DEBUG CalTopo: Attach response status: {attach_response.status_code}")
+            print(f"DEBUG CalTopo: Attach response text: {attach_response.text[:500] if attach_response.text else '(empty)'}")
+            
+            return attach_response.status_code in [200, 201]
+            
         except Exception as e:
             print(f"Error uploading photo waypoint: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+

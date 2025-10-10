@@ -1,4 +1,5 @@
 import os
+import qtawesome as qta
 from core.views.VideoParser_ui import Ui_VideoParser
 from PySide6.QtCore import QThread, Slot
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton
@@ -29,7 +30,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         self.outputSelectButton.clicked.connect(self._outputSelectButton_clicked)
         self.startButton.clicked.connect(self._startButton_clicked)
         self.cancelButton.clicked.connect(self._cancelButton_clicked)
-        self._reapply_icons(theme)
+        self._apply_icons(theme)
 
     def _videoSelectButton_clicked(self):
         """Handles the video file selection button click.
@@ -224,11 +225,18 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
-    def _reapply_icons(self, theme):
-        # decide which sub‑folder of your resources to use:
-        for btn in self.findChildren(QAbstractButton):
-            name = btn.property("iconName")
-            if name:
-                # set the icon from the correct prefix
-                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
-                btn.repaint()
+    def _apply_icons(self, theme):
+        """
+        Loads icon assets based on the currently selected theme.
+
+        Args:
+            theme (str): Name of the active theme used to resolve icon paths.
+        """
+        # Set icon color based on theme
+        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+
+        self.videoSelectButton.setIcon(qta.icon('fa6.file-video', color=icon_color))
+        self.srtSelectButton.setIcon(qta.icon('mdi.subtitles', color=icon_color))
+        self.outputSelectButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
+        self.startButton.setIcon(qta.icon('fa6s.play', color=icon_color))
+        self.cancelButton.setIcon(qta.icon('mdi.close-circle', color=icon_color))

@@ -1,3 +1,5 @@
+import qtawesome as qta
+
 from ast import literal_eval
 
 from algorithms.AlgorithmController import AlgorithmController
@@ -12,7 +14,7 @@ from PySide6.QtWidgets import QWidget, QColorDialog
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
     """Controller for the Matched Filter algorithm widget."""
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initializes the MatchedFilterController widget and sets up the UI.
 
@@ -21,6 +23,7 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
 
         Args:
             config (dict): Algorithm config information.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
@@ -31,6 +34,8 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         self.thresholdSlider.valueChanged.connect(self.update_threshold)
         self.colorButton.clicked.connect(self.color_button_clicked)
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
+
+        self._apply_icons(theme)
 
     def color_button_clicked(self):
         """
@@ -123,3 +128,17 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         if 'match_filter_threshold' in options:
             self.thresholdValueLabel.setText(str(options['match_filter_threshold']))
             self.thresholdSlider.setProperty("value", int(float(options['match_filter_threshold']) * 10))
+
+    def _apply_icons(self, theme):
+        """
+        Loads icon assets based on the currently selected theme.
+
+        Args:
+            theme (str): Name of the active theme used to resolve icon paths.
+        """
+        # Set icon color based on theme
+        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        
+        # Apply icons with theme-appropriate colors
+        self.colorButton.setIcon(qta.icon('fa6s.palette', color=icon_color))
+        self.viewRangeButton.setIcon(qta.icon('fa6s.eye', color=icon_color))

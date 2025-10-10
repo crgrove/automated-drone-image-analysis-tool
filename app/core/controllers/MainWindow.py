@@ -4,8 +4,8 @@ os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
-import os
 import platform
+import qtawesome as qta
 from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtCore import QThread, Slot, QSize, Qt
 from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
@@ -201,10 +201,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
         cls = globals()[self.activeAlgorithm['controller']]
-        self.algorithmWidget = cls(self.activeAlgorithm)
+        self.algorithmWidget = cls(self.activeAlgorithm, self.settings_service.get_setting('Theme'))
         self.verticalLayout_2.addWidget(self.algorithmWidget)
         self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
-        self._reapply_icons(self.settings_service.get_setting('Theme'))
 
     def _histogramCheckbox_change(self):
         """
@@ -682,10 +681,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         if theme == 'Light':
             self.theme.setup_theme("light")
-            self._reapply_icons("light")
+            self._apply_icons("Light")
         else:
             self.theme.setup_theme()
-            self._reapply_icons("dark")
+            self._apply_icons("Dark")
 
     def _show_area_validation_error(self, message):
         """
@@ -701,11 +700,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
-    def _reapply_icons(self, theme):
-        # decide which sub‑folder of your resources to use:
-        for btn in self.findChildren(QAbstractButton):
-            name = btn.property("iconName")
-            if name:
-                # set the icon from the correct prefix
-                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
-                btn.repaint()
+    def _apply_icons(self, theme):
+        """
+        Loads icon assets based on the currently selected theme.
+
+        Args:
+            theme (str): Name of the active theme used to resolve icon paths.
+        """
+        # Set icon color based on theme
+        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        
+        self.inputFolderButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
+        self.outputFolderButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
+        self.startButton.setIcon(qta.icon('fa6s.play', color=icon_color))
+        self.cancelButton.setIcon(qta.icon('mdi.close-circle', color=icon_color))
+        self.viewResultsButton.setIcon(qta.icon('fa6.images', color=icon_color))
+        self.histogramButton.setIcon(qta.icon('fa6.image', color=icon_color))
+        

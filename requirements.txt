@@ -17,3 +17,5 @@ PyExifTool
 reportlab
 onnxruntime-gpu==1.20.1
 tifffile
+requests
+qtawesome

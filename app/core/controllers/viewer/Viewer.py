@@ -11,6 +11,8 @@ import colorsys
 import numpy as np
 import tempfile
 import cv2
+import qtawesome as qta
+
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -114,7 +116,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Drone Orientation", "Estimated Average GSD",
                                               "Temperature", "Color Values"])
-        self._reapply_icons(self.theme)
+        self._apply_icons(self.theme)
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
 
         # toast (non intrusive) over statusBarWidget
@@ -1390,20 +1392,26 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.custom_agl_altitude_ft = -1
             self.logger.info("User declined to set custom AGL altitude")
 
-    def _reapply_icons(self, theme):
+    def _apply_icons(self, theme):
         """
-        Reloads icon assets based on the currently selected theme.
+        Loads icon assets based on the currently selected theme.
 
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        # decide which sub‑folder of your resources to use:
-        for btn in self.findChildren(QAbstractButton):
-            name = btn.property("iconName")
-            if name:
-                # set the icon from the correct prefix
-                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
-                btn.repaint()
+        # Set icon color based on theme
+        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        
+        # Apply icons with theme-appropriate colors
+        self.magnifyButton.setIcon(qta.icon('fa6s.magnifying-glass', color=icon_color))
+        self.kmlButton.setIcon(qta.icon('fa5s.map-marker-alt', color=icon_color))
+        self.pdfButton.setIcon(qta.icon('fa6s.file-pdf', color=icon_color))
+        self.zipButton.setIcon(qta.icon('fa5s.file-archive', color=icon_color))
+        self.caltopoButton.setIcon(qta.icon('fa6s.map', color=icon_color))
+        self.measureButton.setIcon(qta.icon('fa6s.ruler', color=icon_color))
+        self.adjustmentsButton.setIcon(qta.icon('fa6s.sliders', color=icon_color))
+        self.previousImageButton.setIcon(qta.icon('fa6s.arrow-left', color=icon_color))
+        self.nextImageButton.setIcon(qta.icon('fa6s.arrow-right', color=icon_color))
 
     def _enter_aoi_creation_mode(self):
         """Enter AOI creation mode - user can click and drag to draw a circle."""

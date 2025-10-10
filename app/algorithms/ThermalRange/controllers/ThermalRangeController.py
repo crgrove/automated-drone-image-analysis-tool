@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QWidget
 class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
     """Controller for the Thermal Range algorithm widget."""
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initializes the ThermalRangeController widget and sets up the UI.
 
@@ -17,6 +17,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
         Args:
             config (dict): Algorithm config information.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)

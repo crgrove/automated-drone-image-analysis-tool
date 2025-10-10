@@ -8,12 +8,13 @@ from PySide6.QtWidgets import QWidget
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
     """Controller for the Thermal Anomaly algorithm widget."""
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initializes the ThermalAnomalyController widget and sets up the UI.
 
         Args:
             config (dict): Algorithm config information.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)

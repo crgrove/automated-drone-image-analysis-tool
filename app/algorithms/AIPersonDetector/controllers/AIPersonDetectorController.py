@@ -17,12 +17,13 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
     Handles UI updates, configuration, and environment checks for GPU support.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initialize the controller and connect UI events.
 
         Args:
             config (dict): Configuration options for the algorithm controller.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)

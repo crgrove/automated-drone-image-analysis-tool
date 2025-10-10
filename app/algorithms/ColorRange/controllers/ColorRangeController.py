@@ -1,3 +1,5 @@
+import qtawesome as qta
+
 from ast import literal_eval
 
 from algorithms.AlgorithmController import AlgorithmController
@@ -15,7 +17,7 @@ from core.services.CustomColorsService import get_custom_colors_service
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
     """Controller for the Color Range algorithm widget."""
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initializes the ColorRangeController widget and sets up the UI.
 
@@ -23,6 +25,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
 
         Args:
             config (dict): Algorithm config information.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
@@ -36,6 +39,8 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         self.rRangeSpinBox.valueChanged.connect(self.update_colors)
         self.gRangeSpinBox.valueChanged.connect(self.update_colors)
         self.bRangeSpinBox.valueChanged.connect(self.update_colors)
+
+        self._apply_icons(theme)
 
     def color_button_clicked(self):
         """
@@ -131,3 +136,17 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             selected_color = literal_eval(options['selected_color'])
             self.selectedColor = QColor(selected_color[0], selected_color[1], selected_color[2])
             self.update_colors()
+
+    def _apply_icons(self, theme):
+        """
+        Loads icon assets based on the currently selected theme.
+
+        Args:
+            theme (str): Name of the active theme used to resolve icon paths.
+        """
+        # Set icon color based on theme
+        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        
+        # Apply icons with theme-appropriate colors
+        self.colorButton.setIcon(qta.icon('fa6s.palette', color=icon_color))
+        self.viewRangeButton.setIcon(qta.icon('fa6s.eye', color=icon_color))

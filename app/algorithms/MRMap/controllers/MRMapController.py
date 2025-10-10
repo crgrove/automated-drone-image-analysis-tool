@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QWidget
 class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
     """Controller for the RX Anomaly algorithm widget."""
 
-    def __init__(self, config):
+    def __init__(self, config, theme):
         """
         Initializes the MRMapController widget and sets up the UI.
 
@@ -15,6 +15,7 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
 
         Args:
             config (dict): Algorithm config information.
+            theme (str): Name of the active theme used to resolve icon paths.
         """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
