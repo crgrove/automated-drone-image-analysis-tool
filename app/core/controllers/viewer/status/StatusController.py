@@ -22,60 +22,42 @@ class StatusController:
     and scale bar functionality.
     """
 
-    def __init__(self, parent_viewer, logger=None):
+    def __init__(self, parent_viewer):
         """
         Initialize the status controller.
 
         Args:
             parent_viewer: The main Viewer instance
-            logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
-        self.logger = logger or LoggerService()
+        self.logger = LoggerService()  # Create our own logger
 
-        # UI elements (will be set by parent)
-        self.statusBar = None
-        self.toastLabel = None
-        self.toastTimer = None
-        self.messages = None
-
-    def set_ui_elements(self, status_bar, toast_label, toast_timer, messages):
-        """Set references to UI elements.
-
-        Args:
-            status_bar: The QStatusBar widget
-            toast_label: The QLabel for toast messages
-            toast_timer: The QTimer for toast auto-hide
-            messages: The StatusDict for message management
-        """
-        self.statusBar = status_bar
-        self.toastLabel = toast_label
-        self.toastTimer = toast_timer
-        self.messages = messages
 
     def message_listener(self, key, value):
         """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
-        if not self.statusBar:
+        status_bar = self.parent.statusBar
+        if not status_bar:
             return
 
         status_items = []
 
         # GPS Coordinates first (with hyperlink)
-        gps_value = self.messages.get("GPS Coordinates")
+        messages = self.parent.messages
+        gps_value = messages.get("GPS Coordinates")
         if gps_value:
             # Use the GPS coordinates as the href value so "Copy Link Location" copies the coordinates
             status_items.append(f'<a href="{gps_value}">GPS Coordinates: {gps_value}</a>')
 
         # Add all other messages
-        for k, v in self.messages.items():
+        for k, v in messages.items():
             if v is not None and k != "GPS Coordinates":
                 status_items.append(f"{k}: {v}")
 
         # Update status bar
         if status_items:
-            self.statusBar.setText(" | ".join(status_items))
+            status_bar.setText(" | ".join(status_items))
         else:
-            self.statusBar.setText("")
+            status_bar.setText("")
 
     def show_toast(self, text: str, msec: int = 3000, color: str = "#00C853"):
         """Show a toast message.
@@ -85,25 +67,27 @@ class StatusController:
             msec: Duration in milliseconds
             color: Background color for the toast
         """
-        if not self.toastLabel or not self.toastTimer:
+        toast_label = self.parent._toastLabel
+        toast_timer = self.parent._toastTimer
+        if not toast_label or not toast_timer:
             return
 
         try:
-            self.toastLabel.setText(text)
-            self.toastLabel.setStyleSheet(
+            toast_label.setText(text)
+            toast_label.setStyleSheet(
                 f"QLabel{{background-color:{color}; color:white; border-radius:6px; padding:6px 10px; font-weight:bold;}}"
             )
-            self.toastLabel.adjustSize()
+            toast_label.adjustSize()
             sb_w = self.parent.statusBarWidget.width()
             sb_h = self.parent.statusBarWidget.height()
-            tw = self.toastLabel.width()
-            th = self.toastLabel.height()
+            tw = toast_label.width()
+            th = toast_label.height()
             x = max(4, (sb_w - tw) // 2)
             y = max(2, (sb_h - th) // 2)
-            self.toastLabel.move(x, y)
-            self.toastLabel.raise_()
-            self.toastLabel.setVisible(True)
-            self.toastTimer.start(max(1, msec))
+            toast_label.move(x, y)
+            toast_label.raise_()
+            toast_label.setVisible(True)
+            toast_timer.start(max(1, msec))
         except Exception:
             pass
 

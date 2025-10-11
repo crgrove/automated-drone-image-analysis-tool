@@ -31,16 +31,15 @@ class CoordinateController:
     north-oriented image viewing.
     """
 
-    def __init__(self, parent_viewer, logger=None):
+    def __init__(self, parent_viewer):
         """
         Initialize the coordinate controller.
 
         Args:
             parent_viewer: The main Viewer instance
-            logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
-        self.logger = logger or LoggerService()
+        self.logger = LoggerService()  # Create our own logger
 
         # Coordinate state
         self.current_decimal_coords = None

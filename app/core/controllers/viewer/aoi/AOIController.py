@@ -1,8 +1,8 @@
 """
-AOIController - Handles Areas of Interest (AOI) management for the image viewer.
+AOIController - Handles Areas of Interest (AOI) business logic for the image viewer.
 
-This controller manages AOI selection, flagging, filtering, display, and
-interaction functionality.
+This controller manages AOI data, selection, flagging, filtering, and business logic.
+UI manipulation is handled by AOIUIComponent.
 """
 
 import colorsys
@@ -20,36 +20,31 @@ except Exception:
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor
 
-from core.views.components.QtImageViewer import QtImageViewer
 from core.services.LoggerService import LoggerService
-import qimage2ndarray
 
 
 class AOIController:
     """
-    Controller for managing Areas of Interest (AOI) functionality.
+    Controller for managing Areas of Interest (AOI) business logic.
 
-    Handles AOI display, selection, flagging, filtering, and interaction
-    including context menus and data copying.
+    Handles AOI data management, selection, flagging, filtering, and business logic.
+    UI manipulation is delegated to AOIUIComponent.
     """
 
-    def __init__(self, parent_viewer, logger=None):
+    def __init__(self, parent_viewer):
         """
         Initialize the AOI controller.
 
         Args:
             parent_viewer: The main Viewer instance
-            logger: Optional logger instance for error reporting
         """
         self.parent = parent_viewer
-        self.logger = logger or LoggerService()
+        self.logger = LoggerService()  # Create our own logger
 
         # AOI state
         self.selected_aoi_index = -1
         self.flagged_aois = {}
         self.filter_flagged_only = False
-        self.aoi_containers = []
-        self.highlights = []
 
         # Sort and filter state
         self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y'
@@ -59,11 +54,12 @@ class AOIController:
         self.filter_area_min = None  # Minimum pixel area for filtering
         self.filter_area_max = None  # Maximum pixel area for filtering
 
-        # UI elements (will be set by parent)
-        self.aoiListWidget = None
-        self.areaCountLabel = None
-        self.sortButton = None
-        self.filterButton = None
+        # Create UI component internally
+        from core.controllers.viewer.components.AOIUIComponent import AOIUIComponent
+        self.ui_component = AOIUIComponent(self)
+        
+        # Initialize sort combo box
+        self._initialize_sort_combo()
 
     def initialize_from_xml(self, images):
         """Load flagged AOI information from XML data.
@@ -83,19 +79,7 @@ class AOIController:
                                 self.flagged_aois[img_idx] = set()
                             self.flagged_aois[img_idx].add(aoi_idx)
 
-    def set_ui_elements(self, aoi_list_widget, area_count_label, sort_button=None, filter_button=None):
-        """Set references to UI elements.
 
-        Args:
-            aoi_list_widget: The QListWidget for displaying AOIs
-            area_count_label: The QLabel showing AOI count
-            sort_button: The QPushButton for sorting (optional)
-            filter_button: The QPushButton for filtering (optional)
-        """
-        self.aoiListWidget = aoi_list_widget
-        self.areaCountLabel = area_count_label
-        self.sortButton = sort_button
-        self.filterButton = filter_button
 
     def calculate_aoi_average_info(self, area_of_interest, is_thermal, temperature_data, temperature_unit):
         """Calculate average color or temperature for an AOI.
@@ -211,228 +195,15 @@ class AOIController:
 
         return None, None
 
-    def load_areas_of_interest(self, augmented_image, areas_of_interest, image_index=None):
-        """Load areas of interest thumbnails for a given image.
+    def load_areas_of_interest(self, augmented_image, areas_of_interest):
+        """Load areas of interest thumbnails for a given image (delegated to UI component).
 
         Args:
             augmented_image: The image array to create thumbnails from
             areas_of_interest: List of AOI dictionaries
-            image_index: Index of the current image (if None, uses parent.current_image)
         """
-        if not self.aoiListWidget:
-            return
-
-        # Block signals during rebuild to avoid re-entrant updates while rapidly switching
-        self.aoiListWidget.blockSignals(True)
-        self.aoiListWidget.clear()
-        self.highlights = []
-        self.aoi_containers = []  # Reset container list
-        self.selected_aoi_index = -1  # Reset selection
-
-        # Get flagged AOIs for this image
-        img_idx = image_index if image_index is not None else self.parent.current_image
-        flagged_set = self.flagged_aois.get(img_idx, set())
-
-        # Apply sorting and filtering
-        aois_with_indices = self.sort_aois_with_indices(areas_of_interest)
-        aois_with_indices = self.filter_aois_with_indices(aois_with_indices, img_idx)
-
-        # Keep track of total count before and after filtering
-        total_count = len(areas_of_interest)
-        filtered_count = len(aois_with_indices)
-
-        # Keep track of actual visible container index
-        visible_container_index = 0
-
-        # Load AOI thumbnails for filtered and sorted list
-        for original_index, area_of_interest in aois_with_indices:
-
-            # Create container widget for thumbnail and label
-            container = QWidget()
-            container.setProperty("aoi_index", original_index)  # Store original AOI index
-            container.setProperty("visible_index", visible_container_index)  # Store visible index
-            layout = QVBoxLayout(container)
-            layout.setSpacing(2)
-            layout.setContentsMargins(0, 0, 0, 0)
-
-            # Set up click handling for selection (use original index for selection)
-            def handle_click(event, idx=original_index, vis_idx=visible_container_index):
-                self.select_aoi(idx, vis_idx)
-                return QWidget.mousePressEvent(container, event)  # Call the original handler
-            container.mousePressEvent = handle_click
-
-            # Skip thumbnail creation if no image provided (deferred case)
-            if augmented_image is None:
-                continue
-
-            center = area_of_interest['center']
-            radius = area_of_interest['radius'] + 10
-            crop_arr = self.parent.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
-
-            # Create the image viewer
-            highlight = QtImageViewer(self.parent, container, center, True)
-            highlight.setObjectName(f"highlight{original_index}")
-            highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
-            highlight.aspectRatioMode = Qt.KeepAspectRatio
-            # Safely set the image on the highlight viewer
-            try:
-                img = qimage2ndarray.array2qimage(crop_arr)
-                if _qt_is_valid(highlight):
-                    highlight.setImage(img)
-                else:
-                    continue
-            except RuntimeError:
-                # Highlight was deleted during rapid switching; skip
-                continue
-            highlight.canZoom = False
-            highlight.canPan = False
-
-            # Calculate average color/temperature for the AOI
-            avg_color_info, color_rgb = self.calculate_aoi_average_info(
-                area_of_interest,
-                self.parent.is_thermal,
-                self.parent.temperature_data,
-                self.parent.temperature_unit
-            )
-
-            # Create coordinate label with pixel area
-            pixel_area = area_of_interest.get('area', 0)
-            coord_text = f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px"
-
-            # Create info widget container for both text and color square
-            info_widget = QWidget()
-            info_widget.setStyleSheet("""
-                QWidget {
-                    background-color: rgba(0, 0, 0, 150);
-                    border-radius: 2px;
-                }
-            """)
-            info_layout = QVBoxLayout(info_widget)
-            info_layout.setContentsMargins(4, 2, 4, 2)
-            info_layout.setSpacing(2)
-
-            # Create coordinate label
-            coord_label = QLabel(coord_text)
-            coord_label.setAlignment(Qt.AlignCenter)
-            coord_label.setStyleSheet("""
-                QLabel {
-                    color: white;
-                    font-size: 10px;
-                }
-            """)
-            info_layout.addWidget(coord_label)
-
-            # Add color/temperature information with color square if applicable
-            if avg_color_info:
-                # Create horizontal layout for color info
-                color_container = QWidget()
-                color_layout = QHBoxLayout(color_container)
-                color_layout.setContentsMargins(0, 0, 0, 0)
-                color_layout.setSpacing(4)
-
-                # Add color square if we have RGB values (not for temperature)
-                if color_rgb is not None:
-                    color_square = QLabel()
-                    color_square.setFixedSize(12, 12)
-                    color_square.setStyleSheet(f"""
-                        QLabel {{
-                            background-color: rgb({color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]});
-                            border: 1px solid white;
-                        }}
-                    """)
-                    color_layout.addWidget(color_square)
-
-                # Add text label
-                color_label = QLabel(avg_color_info)
-                color_label.setAlignment(Qt.AlignCenter)
-                color_label.setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 10px;
-                    }
-                """)
-                color_layout.addWidget(color_label)
-
-                # Add flag icon if this AOI is flagged
-                if original_index in flagged_set:
-                    flag_label = QLabel("🚩")
-                    flag_label.setStyleSheet("QLabel { color: red; font-size: 14px; font-weight: bold; }")
-                    flag_label.setToolTip("This AOI is flagged")
-                    color_layout.addWidget(flag_label)
-
-                # Add document/comment icon (always visible)
-                user_comment = area_of_interest.get('user_comment', '')
-                comment_icon = QLabel("📝")
-                comment_icon.setCursor(Qt.PointingHandCursor)
-
-                # Style based on whether comment exists
-                if user_comment:
-                    comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
-                    # Show preview of comment (first 50 chars)
-                    preview = user_comment[:50] + "..." if len(user_comment) > 50 else user_comment
-                    comment_icon.setToolTip(f"Comment: {preview}\n(Click to edit)")
-                else:
-                    comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
-                    comment_icon.setToolTip("Add comment (click)")
-
-                # Make icon clickable - use lambda with default parameter to capture current AOI index
-                def make_comment_click_handler(aoi_idx):
-                    return lambda event: self.edit_aoi_comment(aoi_idx)
-
-                comment_icon.mousePressEvent = make_comment_click_handler(original_index)
-                color_layout.addWidget(comment_icon)
-
-                # Center the layout
-                color_layout.addStretch()
-                color_layout.insertStretch(0)
-
-                info_layout.addWidget(color_container)
-
-            # Enable context menu for the info widget
-            info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-            # Use default parameters to properly capture the current values
-            info_widget.customContextMenuRequested.connect(
-                lambda pos, c=center, a=pixel_area, info=avg_color_info, idx=original_index: self.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
-            )
-
-            # Add widgets to layout
-            layout.addWidget(highlight)
-            layout.addWidget(info_widget)
-
-            # Create list item
-            listItem = QListWidgetItem()
-            listItem.setSizeHint(QSize(190, 210))  # Increased height to accommodate label
-            self.aoiListWidget.addItem(listItem)
-            self.aoiListWidget.setItemWidget(listItem, container)
-            self.aoiListWidget.setSpacing(5)
-            self.highlights.append(highlight)
-            # Safely connect if the source is still valid
-            if _qt_is_valid(highlight):
-                try:
-                    highlight.leftMouseButtonPressed.connect(self.area_of_interest_click)
-                except RuntimeError:
-                    pass
-
-            # Store container reference
-            self.aoi_containers.append(container)
-
-            # Apply selection style if this is the selected AOI
-            if original_index == self.selected_aoi_index:
-                self.update_aoi_selection_style(container, True)
-
-            visible_container_index += 1
-
-        # Update area count label with filter information
-        if self.areaCountLabel:
-            if filtered_count < total_count:
-                # Show filtered count vs total
-                self.areaCountLabel.setText(f"{filtered_count} of {total_count} {'Area' if total_count == 1 else 'Areas'}")
-            else:
-                # Show just the count
-                self.areaCountLabel.setText(f"{filtered_count} {'Area' if filtered_count == 1 else 'Areas'} of Interest")
-
-        # Re-enable signals after rebuild
-        self.aoiListWidget.blockSignals(False)
+        if self.ui_component:
+            self.ui_component.load_areas_of_interest(augmented_image, areas_of_interest)
 
     def area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.
@@ -451,55 +222,29 @@ class AOIController:
             aoi_index (int): Index of the AOI in the full list (-1 to deselect)
             visible_index (int): Index of the AOI in the visible containers list
         """
-        # Clear ALL container styles first using the proper update method
-        for i, container in enumerate(self.aoi_containers):
-            self.update_aoi_selection_style(container, False)
-
-        # Set new selection
+        # Set new selection (business logic)
         self.selected_aoi_index = aoi_index
 
-        # Apply selection style to the clicked container using the proper method
-        if aoi_index >= 0 and visible_index >= 0 and visible_index < len(self.aoi_containers):
-            container = self.aoi_containers[visible_index]
-            self.update_aoi_selection_style(container, True)
-            container.update()
-            container.repaint()
+        # Delegate UI updates to UI component
+        if self.ui_component:
+            # Clear ALL container styles first
+            for i, container in enumerate(self.ui_component.get_aoi_containers()):
+                self.ui_component.update_aoi_selection_style(container, False)
 
-            # Scroll the AOI list to bring the selected item into view
-            if self.aoiListWidget and visible_index < self.aoiListWidget.count():
-                item = self.aoiListWidget.item(visible_index)
-                if item:
-                    self.aoiListWidget.scrollToItem(item, QAbstractItemView.PositionAtCenter)
+            # Apply selection style to the clicked container
+            if aoi_index >= 0 and visible_index >= 0 and visible_index < len(self.ui_component.get_aoi_containers()):
+                container = self.ui_component.get_aoi_containers()[visible_index]
+                self.ui_component.update_aoi_selection_style(container, True)
+                container.update()
+                container.repaint()
+
+                # Scroll the AOI list to bring the selected item into view
+                self.ui_component.scroll_to_aoi(visible_index)
 
         # Update AOI on GPS map if available
         if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller:
             self.parent.gps_map_controller.update_aoi_on_map()
 
-    def update_aoi_selection_style(self, container, selected):
-        """Update the visual style of an AOI container based on selection state.
-
-        Args:
-            container (QWidget): The AOI container widget
-            selected (bool): Whether the container is selected
-        """
-        if selected:
-            # Get the current settings color for the selection (typically magenta/pink)
-            color = self.parent.settings.get('identifier_color', [255, 255, 0])
-            # Just change the background color, no border
-            container.setStyleSheet(f"""
-                QWidget {{
-                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 40);
-                    border-radius: 5px;
-                }}
-            """)
-        else:
-            # Explicitly set background to transparent to clear previous selection
-            container.setStyleSheet("""
-                QWidget {
-                    background-color: transparent;
-                }
-            """)
-            container.repaint()
 
     def find_aoi_at_position(self, x, y):
         """Find the AOI at the given cursor position.
@@ -709,7 +454,7 @@ class AOIController:
         # Refresh the AOI display to show/hide flag icon
         image = self.parent.images[self.parent.current_image]
         if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
-            self.load_areas_of_interest(self.parent.current_image_array, image['areas_of_interest'], self.parent.current_image)
+            self.load_areas_of_interest(self.parent.current_image_array, image['areas_of_interest'])
 
         # Restore selection and scroll position
         self.selected_aoi_index = selected_idx
@@ -719,34 +464,6 @@ class AOIController:
                 self.update_aoi_selection_style(container, True)
                 break
         self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
-
-    def add_sort_filter_buttons_to_layout(self):
-        """Add the sort and filter buttons to the layout after UI initialization."""
-        try:
-            # Get the parent widget of nextImageButton
-            parent = self.parent.nextImageButton.parent()
-            if parent:
-                layout = parent.layout()
-                if layout:
-                    # Find the position of nextImageButton
-                    next_button_index = -1
-                    for i in range(layout.count()):
-                        item = layout.itemAt(i)
-                        widget = item.widget() if item else None
-                        if widget == self.parent.nextImageButton:
-                            next_button_index = i
-                            break
-
-                    # Insert buttons right after next button
-                    if next_button_index >= 0:
-                        if self.sortButton:
-                            layout.insertWidget(next_button_index + 1, self.sortButton)
-                            self.sortButton.show()
-                        if self.filterButton:
-                            layout.insertWidget(next_button_index + 2, self.filterButton)
-                            self.filterButton.show()
-        except Exception as e:
-            self.logger.error(f"Error adding AOI control buttons: {e}")
 
     def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
         """Show context menu for AOI coordinate label with copy option.
@@ -1114,35 +831,8 @@ class AOIController:
         self.sort_method = method
         self.sort_color_hue = color_hue
 
-        # Update button appearance if available
-        if self.sortButton:
-            if method is None:
-                self.sortButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: #404040;
-                        color: white;
-                        border: 1px solid #555;
-                        border-radius: 3px;
-                        font-size: 12px;
-                    }
-                    QPushButton:hover {
-                        background-color: #505050;
-                    }
-                """)
-            else:
-                self.sortButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: rgba(100, 150, 255, 100);
-                        border: 2px solid #4488ff;
-                        border-radius: 3px;
-                        font-size: 12px;
-                        color: white;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: rgba(100, 150, 255, 150);
-                    }
-                """)
+        # Update combo box selection
+        self._update_combo_selection()
 
         # Refresh AOI display
         self.refresh_aoi_display()
@@ -1173,115 +863,77 @@ class AOIController:
             self.filter_area_max is not None
         ])
 
-        if self.filterButton:
-            if has_filters:
-                self.filterButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: rgba(100, 255, 150, 100);
-                        border: 2px solid #44ff88;
-                        border-radius: 3px;
-                        font-size: 12px;
-                        color: white;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: rgba(100, 255, 150, 150);
-                    }
-                """)
-            else:
-                self.filterButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: #404040;
-                        color: white;
-                        border: 1px solid #555;
-                        border-radius: 3px;
-                        font-size: 12px;
-                    }
-                    QPushButton:hover {
-                        background-color: #505050;
-                    }
-                """)
-
         # Refresh AOI display
         self.refresh_aoi_display()
 
     def refresh_aoi_display(self):
-        """Refresh the AOI display with current sort/filter settings."""
-        if not hasattr(self.parent, 'current_image') or not hasattr(self.parent, 'images'):
+        """Refresh the AOI display with current sort/filter settings (delegated to UI component)."""
+        if self.ui_component:
+            self.ui_component.refresh_aoi_display()
+
+    def _initialize_sort_combo(self):
+        """Initialize the sort combo box with options."""
+        if not hasattr(self.parent, 'aoiSortComboBox'):
             return
+            
+        combo = self.parent.aoiSortComboBox
+        
+        # Clear existing items
+        combo.clear()
+        
+        # Import QtAwesome for icons
+        import qtawesome as qta
+        
+        # Define sort options with their display text, data, and icons
+        sort_options = [
+            ("Default", None, qta.icon('fa6s.sort', color='#888888')),
+            ("Pixel Area (Smallest First)", 'area_asc', qta.icon('fa6s.arrow-up', color='#4CAF50')),
+            ("Pixel Area (Largest First)", 'area_desc', qta.icon('fa6s.arrow-down', color='#4CAF50')),
+            ("Left to Right", 'x', qta.icon('fa6s.arrow-right', color='#2196F3')),
+            ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3'))
+        ]
+        
+        # Add items dynamically
+        for text, data, icon in sort_options:
+            combo.addItem(icon, text, data)
+        
+        # Set current selection based on current sort method
+        if self.sort_method is None:
+            combo.setCurrentIndex(0)  # "Default"
+        else:
+            for i in range(combo.count()):
+                if combo.itemData(i) == self.sort_method:
+                    combo.setCurrentIndex(i)
+                    break
 
-        image = self.parent.images[self.parent.current_image]
-        if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
-            # Save scroll position and selection
-            scroll_pos = self.aoiListWidget.verticalScrollBar().value() if self.aoiListWidget else 0
-            selected_idx = self.selected_aoi_index
-
-            # Reload AOIs
-            self.load_areas_of_interest(
-                self.parent.current_image_array,
-                image.get('areas_of_interest', []),
-                self.parent.current_image
-            )
-
-            # Restore selection and scroll
-            self.selected_aoi_index = selected_idx
-            if self.aoiListWidget:
-                self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
-
-    def open_sort_menu(self):
-        """Open a menu to select sort method."""
-        from PySide6.QtWidgets import QMenu
-        from PySide6.QtGui import QCursor
-
-        menu = QMenu(self.parent)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2b2b2b;
-                border: 1px solid #555555;
-                color: white;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                border-radius: 3px;
-            }
-            QMenu::item:selected {
-                background-color: #505050;
-            }
-        """)
-
-        # Add sort options
-        action_area_asc = menu.addAction("📐 Pixel Area (Smallest First)")
-        action_area_desc = menu.addAction("📐 Pixel Area (Largest First)")
-        action_color = menu.addAction("🎨 Color Similarity...")
-        action_x = menu.addAction("↔️ Order X (Left to Right)")
-        action_y = menu.addAction("↕️ Order Y (Top to Bottom)")
-        menu.addSeparator()
-        action_clear = menu.addAction("❌ Clear Sort")
-
-        # Show menu at button position
-        action = menu.exec(QCursor.pos())
-
-        if action == action_area_asc:
-            self.set_sort_method('area_asc')
-        elif action == action_area_desc:
-            self.set_sort_method('area_desc')
-        elif action == action_color:
-            # Open color picker for color sorting
-            from PySide6.QtWidgets import QColorDialog
-            from PySide6.QtCore import Qt
-            color = QColorDialog.getColor(Qt.white, self.parent, "Select Target Color for Sorting")
-            if color.isValid():
-                h, s, v = color.getHsv()[0], color.getHsv()[1], color.getHsv()[2]
-                if h == -1:
-                    h = 0
-                self.set_sort_method('color', color_hue=h)
-        elif action == action_x:
-            self.set_sort_method('x')
-        elif action == action_y:
-            self.set_sort_method('y')
-        elif action == action_clear:
+    def on_sort_combo_changed(self, text):
+        """Handle sort combo box selection change."""
+        if not hasattr(self.parent, 'aoiSortComboBox'):
+            return
+            
+        combo = self.parent.aoiSortComboBox
+        current_data = combo.currentData()
+        
+        if current_data is None:
+            # "Default" selected - no sorting
             self.set_sort_method(None)
+        else:
+            # Other sort methods (area_asc, area_desc, x, y)
+            self.set_sort_method(current_data)
+    
+    def _update_combo_selection(self):
+        """Update combo box selection to match current sort method."""
+        if not hasattr(self.parent, 'aoiSortComboBox'):
+            return
+            
+        combo = self.parent.aoiSortComboBox
+        if self.sort_method is None:
+            combo.setCurrentIndex(0)  # "No Sort"
+        else:
+            for i in range(combo.count()):
+                if combo.itemData(i) == self.sort_method:
+                    combo.setCurrentIndex(i)
+                    break
 
     def open_filter_dialog(self):
         """Open the filter dialog."""

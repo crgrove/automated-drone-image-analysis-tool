@@ -45,12 +45,15 @@ from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
 from core.controllers.viewer.coordinates.CoordinateController import CoordinateController
 from core.controllers.viewer.status.StatusController import StatusController
+from core.controllers.viewer.gps.GPSMapController import GPSMapController
 
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
 from core.services.ImageService import ImageService
 from core.services.ThermalParserService import ThermalParserService
 from helpers.LocationInfo import LocationInfo
+
+from typing import List, Dict, Any, Optional
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -90,14 +93,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.settings, _ = self.xml_service.get_settings()
 
         # Initialize controllers
-        self.aoi_controller = AOIController(self, self.logger)
-        self.thumbnail_controller = ThumbnailController(self, self.logger)
-        self.coordinate_controller = CoordinateController(self, self.logger)
-        self.status_controller = StatusController(self, self.logger)
-
-        # Initialize GPS map controller
-        from core.controllers.viewer.gps import GPSMapController
-        self.gps_map_controller = GPSMapController(self, self.logger)
+        self.aoi_controller = AOIController(self)
+        self.thumbnail_controller = ThumbnailController(self)
+        self.coordinate_controller = CoordinateController(self)
+        self.status_controller = StatusController(self)
+        self.gps_map_controller = GPSMapController(self)
 
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
@@ -151,9 +151,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_images()
 
         # Set up UI elements for controllers
-        self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel)  # sort/filter buttons will be set later
-        self.thumbnail_controller.set_ui_elements(self.thumbnailLayout, self.thumbnailScrollArea)
-        self.status_controller.set_ui_elements(self.statusBar, self._toastLabel, self._toastTimer, self.messages)
+        # Controllers get UI elements directly from parent
 
         # Defer thumbnail initialization to avoid blocking with large datasets
         # Only initialize visible thumbnails first
@@ -398,61 +396,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
 
-            # Create sort button
-            self.sortButton = QPushButton("⬍ Sort")
-            self.sortButton.setToolTip("Sort AOIs by area, color, or position")
-            self.sortButton.setFixedSize(70, 30)
-            self.sortButton.setStyleSheet("""
-                QPushButton {
-                    background-color: #404040;
-                    color: white;
-                    border: 1px solid #555;
-                    border-radius: 3px;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #505050;
-                }
-            """)
-            self.sortButton.clicked.connect(self.aoi_controller.open_sort_menu)
-
-            # Create filter button
-            self.filterButton = QPushButton("⊙ Filter")
-            self.filterButton.setToolTip("Filter AOIs by color and pixel area")
-            self.filterButton.setFixedSize(70, 30)
-            self.filterButton.setStyleSheet("""
-                QPushButton {
-                    background-color: #404040;
-                    color: white;
-                    border: 1px solid #555;
-                    border-radius: 3px;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #505050;
-                }
-            """)
+            self.aoiSortComboBox.currentTextChanged.connect(self.aoi_controller.on_sort_combo_changed)
             self.filterButton.clicked.connect(self.aoi_controller.open_filter_dialog)
+        
 
             # Set the buttons in the AOI controller
-            self.aoi_controller.set_ui_elements(self.aoiListWidget, self.areaCountLabel, self.sortButton, self.filterButton)
-
-            # Try multiple approaches to add the buttons
-            # Approach 1: Add next to measureButton (which is visible in your screenshot)
-            if hasattr(self, 'measureButton'):
-                parent = self.measureButton.parent()
-                if parent and parent.layout():
-                    layout = parent.layout()
-                    for i in range(layout.count()):
-                        if layout.itemAt(i).widget() == self.measureButton:
-                            layout.insertWidget(i + 1, self.sortButton)
-                            layout.insertWidget(i + 2, self.filterButton)
-                            self.sortButton.show()
-                            self.filterButton.show()
-                            break
-
-            # Approach 2: Also try adding after nextImageButton
-            self.aoi_controller.add_sort_filter_buttons_to_layout()
 
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
@@ -539,7 +487,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Always sync the active thumbnail/index, even if widget not built yet
             if 'thumbnail' in image:
-                self.thumbnail_controller.set_active_thumbnail(image['thumbnail'])
+                if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
+                    self.thumbnail_controller.ui_component.set_active_thumbnail(image['thumbnail'])
             else:
                 self.thumbnail_controller.set_active_index(self.current_image)
 
@@ -619,7 +568,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             # For AOI thumbnails, we don't need to draw circles on the full image
             # Just pass the base image array - circles can be drawn on individual crops if needed
             # Use the base image array for AOI thumbnails (no need to process full image)
-            self.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'], self.current_image)
+            self.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
 
             # Check again before resetting zoom
             if not hasattr(self, 'main_image') or self.main_image is None or getattr(self.main_image, '_is_destroyed', True):
@@ -750,7 +699,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         if found:
             self._load_image()
-            self.thumbnail_controller.scroll_thumbnail_into_view()
+            if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
+                self.thumbnail_controller.ui_component.scroll_thumbnail_into_view()
         else:
             self._show_additional_images_message()
 
@@ -778,7 +728,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         if found:
             self._load_image()
-            self.thumbnail_controller.scroll_thumbnail_into_view()
+            if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
+                self.thumbnail_controller.ui_component.scroll_thumbnail_into_view()
         else:
             self._show_additional_images_message()
 
@@ -1044,7 +995,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.jumpToLine.text() != "":
             self.current_image = int(self.jumpToLine.text()) - 1
             self._load_image()
-            self.thumbnail_controller.scroll_thumbnail_into_view()
+            if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
+                self.thumbnail_controller.ui_component.scroll_thumbnail_into_view()
             self.jumpToLine.setText("")
 
     def resizeEvent(self, event):
@@ -1662,6 +1614,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.adjustmentsButton.setIcon(qta.icon('fa6s.sliders', color=icon_color))
         self.previousImageButton.setIcon(qta.icon('fa6s.arrow-left', color=icon_color))
         self.nextImageButton.setIcon(qta.icon('fa6s.arrow-right', color=icon_color))
+        self.filterButton.setIcon(qta.icon('fa6s.filter', color=icon_color))
 
     def _enter_aoi_creation_mode(self):
         """Enter AOI creation mode - user can click and drag to draw a circle."""

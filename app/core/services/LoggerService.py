@@ -49,6 +49,16 @@ class LoggerService:
         print(message)
         self.logger.info(message)
 
+    def debug(self, message):
+        """
+        Log a debug message.
+
+        Args:
+            message (str): The warning message to log.
+        """
+        print(message)
+        self.logger.debug(message)
+
     def warning(self, message):
         """
         Log a warning message.

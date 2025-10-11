@@ -16,11 +16,11 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsView,
-    QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QPushButton, QScrollArea,
-    QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout,
-    QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
+    QGraphicsView, QHBoxLayout, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QMainWindow, QPushButton,
+    QScrollArea, QSizePolicy, QSpacerItem, QToolButton,
+    QVBoxLayout, QWidget)
 from . import resources_rc
 
 class Ui_Viewer(object):
@@ -87,6 +87,19 @@ class Ui_Viewer(object):
         self.horizontalSpacer_3 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer_3)
+
+        self.filterButton = QToolButton(self.TitleWidget)
+        self.filterButton.setObjectName(u"filterButton")
+        self.filterButton.setIconSize(QSize(25, 25))
+
+        self.horizontalLayout_2.addWidget(self.filterButton)
+
+        self.line_5 = QFrame(self.TitleWidget)
+        self.line_5.setObjectName(u"line_5")
+        self.line_5.setFrameShape(QFrame.Shape.VLine)
+        self.line_5.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self.horizontalLayout_2.addWidget(self.line_5)
 
         self.adjustmentsButton = QToolButton(self.TitleWidget)
         self.adjustmentsButton.setObjectName(u"adjustmentsButton")
@@ -182,13 +195,6 @@ class Ui_Viewer(object):
 
         self.horizontalLayout_2.addWidget(self.skipHidden)
 
-        self.line_2 = QFrame(self.TitleWidget)
-        self.line_2.setObjectName(u"line_2")
-        self.line_2.setFrameShape(QFrame.Shape.VLine)
-        self.line_2.setFrameShadow(QFrame.Shadow.Sunken)
-
-        self.horizontalLayout_2.addWidget(self.line_2)
-
         self.indexLabel = QLabel(self.TitleWidget)
         self.indexLabel.setObjectName(u"indexLabel")
         sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
@@ -232,7 +238,25 @@ class Ui_Viewer(object):
 
         self.ImageLayout.addWidget(self.placeholderImage)
 
-        self.aoiListWidget = QListWidget(self.centralwidget)
+        self.aoiFrame = QFrame(self.centralwidget)
+        self.aoiFrame.setObjectName(u"aoiFrame")
+        self.aoiFrame.setFrameShape(QFrame.StyledPanel)
+        self.aoiFrame.setFrameShadow(QFrame.Sunken)
+        self.verticalLayout_2 = QVBoxLayout(self.aoiFrame)
+        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.aoiSortLabel = QLabel(self.aoiFrame)
+        self.aoiSortLabel.setObjectName(u"aoiSortLabel")
+        self.aoiSortLabel.setFont(font2)
+
+        self.verticalLayout_2.addWidget(self.aoiSortLabel)
+
+        self.aoiSortComboBox = QComboBox(self.aoiFrame)
+        self.aoiSortComboBox.setObjectName(u"aoiSortComboBox")
+        self.aoiSortComboBox.setFont(font2)
+
+        self.verticalLayout_2.addWidget(self.aoiSortComboBox)
+
+        self.aoiListWidget = QListWidget(self.aoiFrame)
         self.aoiListWidget.setObjectName(u"aoiListWidget")
         sizePolicy5 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         sizePolicy5.setHorizontalStretch(0)
@@ -240,8 +264,12 @@ class Ui_Viewer(object):
         sizePolicy5.setHeightForWidth(self.aoiListWidget.sizePolicy().hasHeightForWidth())
         self.aoiListWidget.setSizePolicy(sizePolicy5)
         self.aoiListWidget.setMinimumSize(QSize(250, 0))
+        self.aoiListWidget.setFrameShape(QFrame.NoFrame)
 
-        self.ImageLayout.addWidget(self.aoiListWidget)
+        self.verticalLayout_2.addWidget(self.aoiListWidget)
+
+
+        self.ImageLayout.addWidget(self.aoiFrame)
 
 
         self.verticalLayout.addLayout(self.ImageLayout)
@@ -375,6 +403,10 @@ class Ui_Viewer(object):
         self.highlightPixelsOfInterestCheckBox.setText(QCoreApplication.translate("Viewer", u"Highlight Pixels of Interest", None))
         self.showAOIsCheckBox.setText(QCoreApplication.translate("Viewer", u"Show AOIs", None))
 #if QT_CONFIG(tooltip)
+        self.filterButton.setToolTip(QCoreApplication.translate("Viewer", u"Filter AOIs by color and pixel area", None))
+#endif // QT_CONFIG(tooltip)
+        self.filterButton.setText("")
+#if QT_CONFIG(tooltip)
         self.adjustmentsButton.setToolTip(QCoreApplication.translate("Viewer", u"Adjust Image (Ctrl+H)", None))
 #endif // QT_CONFIG(tooltip)
         self.adjustmentsButton.setText(QCoreApplication.translate("Viewer", u"...", None))
@@ -412,6 +444,8 @@ class Ui_Viewer(object):
         self.skipHidden.setText(QCoreApplication.translate("Viewer", u"Skip Hidden", None))
         self.indexLabel.setText(QCoreApplication.translate("Viewer", u"TextLabel", None))
         self.areaCountLabel.setText(QCoreApplication.translate("Viewer", u"TextLabel", None))
+        self.aoiSortLabel.setText(QCoreApplication.translate("Viewer", u"Sort By", None))
+        self.aoiSortComboBox.setCurrentText("")
         self.hideImageCheckbox.setText(QCoreApplication.translate("Viewer", u"Hide Image", None))
         self.hideImageLabel.setText(QCoreApplication.translate("Viewer", u"Hide Image", None))
         self.jumpToLabel.setText(QCoreApplication.translate("Viewer", u"Jump To:", None))

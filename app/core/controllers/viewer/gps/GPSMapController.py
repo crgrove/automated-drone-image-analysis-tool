@@ -24,17 +24,16 @@ class GPSMapController(QObject):
     # Signal emitted when an image is selected from the map
     image_selected = Signal(int)
 
-    def __init__(self, parent_viewer, logger=None):
+    def __init__(self, parent_viewer):
         """
         Initialize the GPS map controller.
 
         Args:
             parent_viewer: The main Viewer instance
-            logger: Optional logger instance for error reporting
         """
         super().__init__()
         self.parent = parent_viewer
-        self.logger = logger or LoggerService()
+        self.logger = LoggerService()  # Create our own logger
         self.map_dialog = None
         self.gps_data = []
 
