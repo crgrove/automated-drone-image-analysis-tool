@@ -7,7 +7,6 @@ spectral
 piexif
 simplekml
 scikit-image
---ignore-requires-python
 pyqtdarktheme==2.1.0
 pillow
 pandas
@@ -19,3 +18,4 @@ onnxruntime-gpu==1.20.1
 tifffile
 requests
 qtawesome
+shapely

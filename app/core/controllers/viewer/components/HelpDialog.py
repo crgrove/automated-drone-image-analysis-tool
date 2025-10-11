@@ -205,6 +205,14 @@ class HelpDialog(QDialog):
                         <td>Upscale currently visible portion of image</td>
                     </tr>
                     <tr>
+                        <td>Shift + E</td>
+                        <td>Export coverage extent KML (generates polygons showing geographic area covered by all images)</td>
+                    </tr>
+                    <tr>
+                        <td>Shift + O</td>
+                        <td>Override altitude for all images (manually set custom AGL altitude for GSD calculations)</td>
+                    </tr>
+                    <tr>
                         <td>Ctrl + H</td>
                         <td>Open image adjustments dialog</td>
                     </tr>
