@@ -39,7 +39,7 @@ class ImageService:
             raise ValueError(f"Could not load image: {self.path}")
         self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    def get_relative_altitude(self, distance_unit):
+    def get_relative_altitude(self, distance_unit= 'm'):
         """
         Retrieves the drone's relative altitude from metadata.
 
@@ -99,70 +99,107 @@ class ImageService:
 
         return round(altitude * METERS_TO_FEET, 2) if distance_unit == 'ft' else altitude
 
-    def get_drone_orientation(self):
+    def get_camera_pitch(self):
         """
-        Retrieves the yaw orientation of the drone (0–360 degrees).
+        Get camera pitch angle (standard photogrammetry convention).
+        
+        Convention: -90° = nadir (straight down), 0° = horizontal, +90° = straight up.
 
         Returns:
-            float or None: Yaw in degrees, or None if unavailable.
+            float or None: Camera pitch in degrees (-90 to +90), or None if unavailable.
         """
         if self.xmp_data is None or self.drone_make is None:
             return None
 
-        yaw = MetaDataHelper.get_drone_xmp_attribute('Flight Yaw', self.drone_make, self.xmp_data)
-        if yaw is None:
-            return None
-
-        yaw = float(yaw)
-        return 360 + yaw if yaw < 0 else yaw
-
-    def get_gimbal_orientation(self):
-        """Retrieve gimbal yaw and pitch from XMP metadata.
-
-        Returns:
-            tuple: (yaw, pitch) in degrees or (None, None) if unavailable.
-        """
-        if self.xmp_data is None or self.drone_make is None:
-            return None, None
-
-        yaw = MetaDataHelper.get_drone_xmp_attribute('Gimbal Yaw', self.drone_make, self.xmp_data)
         pitch = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
+        if pitch is None:
+            return None
+        
         try:
-            yaw = float(yaw)
             pitch = float(pitch)
         except (TypeError, ValueError):
-            return None, None
+            return None
+        
+        # Normalize to [-180, 180] range
+        while pitch > 180:
+            pitch -= 360
+        while pitch < -180:
+            pitch += 360
+        
+        # For DJI drones, gimbal pitch is already in the correct convention
+        # (-90 = nadir, 0 = horizontal, +90 = up)
+        # For Autel, may need different handling (add if needed)
+        
+        return pitch
 
-        if yaw < 0:
-            yaw += 360
-        return yaw, pitch
-
-    def get_image_bearing(self):
-        """
-        Calculate the actual bearing of the image, accounting for both drone and gimbal orientation.
-
-        For drones with gimbals, the image bearing is the combination of:
-        - Flight Yaw: Direction the drone body is pointing
-        - Gimbal Yaw: Direction the camera is pointing relative to the drone
+    def get_gimbal_roll(self):
+        """Retrieve gimbal roll from XMP metadata.
 
         Returns:
-            float or None: Image bearing in degrees (0-360), or None if unavailable.
+            float or None: Roll in degrees, or None if unavailable.
         """
-        # Get drone body heading
-        flight_yaw = self.get_drone_orientation()
-        if flight_yaw is None:
+        if self.xmp_data is None or self.drone_make is None:
             return None
 
-        # Get gimbal rotation
-        gimbal_yaw, _ = self.get_gimbal_orientation()
+        roll = MetaDataHelper.get_drone_xmp_attribute('Gimbal Roll', self.drone_make, self.xmp_data)
+        try:
+            return float(roll)
+        except (TypeError, ValueError):
+            return None
 
-        # If gimbal yaw is available, combine it with flight yaw
-        if gimbal_yaw is not None:
-            combined_bearing = (flight_yaw + gimbal_yaw) % 360
-            return combined_bearing
+    def get_camera_yaw(self):
+        """
+        Get the camera yaw/bearing (direction the camera is pointing).
 
-        # Fall back to just flight yaw if gimbal data not available
-        return flight_yaw
+        For drones with gimbals that have independent yaw control:
+        - Gimbal Yaw represents the actual camera direction (preferred)
+        - Flight Yaw is the drone body direction (fallback)
+
+        Returns:
+            float or None: Camera yaw in degrees (0-360), or None if unavailable.
+        """
+        # Prefer gimbal yaw if available (actual camera direction)
+        if self.xmp_data is not None and self.drone_make is not None:
+            gimbal_yaw = MetaDataHelper.get_drone_xmp_attribute('Gimbal Yaw', self.drone_make, self.xmp_data)
+            if gimbal_yaw is not None:
+                try:
+                    yaw = float(gimbal_yaw)
+                    if yaw < 0:
+                        yaw += 360
+                    return yaw
+                except (TypeError, ValueError):
+                    pass
+        
+        # Fall back to flight yaw (drone body direction)
+        return self._get_drone_orientation()
+
+    def get_camera_intrinsics(self):
+        """
+        Get camera intrinsics for photogrammetric calculations.
+
+        Returns:
+            dict or None: Dictionary with 'focal_length_mm', 'sensor_width_mm', 'sensor_height_mm',
+                         or None if camera info is unavailable.
+        """
+        # Get focal length from EXIF
+        focal_length = self.exif_data["Exif"].get(piexif.ExifIFD.FocalLength)
+        if focal_length is None:
+            return None
+        focal_length_mm = focal_length[0] / focal_length[1]
+
+        # Get sensor size from camera database
+        camera_info = self._get_camera_info()
+        if camera_info is None or camera_info.empty:
+            return None
+
+        sensor_width_mm = float(camera_info['sensor_w'].iloc[0])
+        sensor_height_mm = float(camera_info['sensor_h'].iloc[0])
+
+        return {
+            'focal_length_mm': focal_length_mm,
+            'sensor_width_mm': sensor_width_mm,
+            'sensor_height_mm': sensor_height_mm
+        }
 
     def get_camera_hfov(self):
         """Compute the camera's horizontal field of view in degrees.
@@ -213,16 +250,22 @@ class ImageService:
             # Convert feet to meters
             altitude_meters = custom_altitude_ft / 3.28084
         else:
-            altitude_meters = MetaDataHelper.get_drone_xmp_attribute('AGL', self.drone_make, self.xmp_data)
-            altitude_meters = float(altitude_meters) if altitude_meters else 100
+            altitude_meters = self.get_relative_altitude()
+        
+        if altitude_meters is None:
+            return None
 
-        tilt_angle = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
-        tilt_angle = abs(float(tilt_angle)) if tilt_angle else 0
-        if not self._is_autel():
-            tilt_angle = 90 - tilt_angle
+        # Get camera pitch and convert to tilt angle from nadir
+        # Pitch: -90° = nadir, 0° = horizontal → Tilt: 0° = nadir, 90° = horizontal
+        pitch = self.get_camera_pitch()
+        if pitch is None:
+            tilt_angle = 0  # Assume nadir if not available
+        else:
+            tilt_angle = 90 + pitch
+            tilt_angle = max(0, min(90, tilt_angle))  # Clamp to [0, 90]
 
         if tilt_angle > 60:
-            return None
+            return None  # Too oblique for accurate GSD calculation
 
         camera_info = self._get_camera_info()
 
@@ -244,7 +287,7 @@ class ImageService:
         )
         return round(gsd_service.compute_average_gsd(), 2)
 
-    def get_position(self, position_format):
+    def get_position(self, position_format = 'Lat/Long - Decimal Degrees'):
         """
         Formats the GPS position based on the specified output format.
 
@@ -392,6 +435,25 @@ class ImageService:
                 (drones_df['Model (Exif)'] == model)
             ]
 
+    def _get_drone_orientation(self):
+        """
+        Retrieves the yaw orientation of the drone body (0–360 degrees).
+        
+        Private method - use get_camera_yaw() instead for the camera direction.
+
+        Returns:
+            float or None: Yaw in degrees, or None if unavailable.
+        """
+        if self.xmp_data is None or self.drone_make is None:
+            return None
+
+        yaw = MetaDataHelper.get_drone_xmp_attribute('Flight Yaw', self.drone_make, self.xmp_data)
+        if yaw is None:
+            return None
+
+        yaw = float(yaw)
+        return 360 + yaw if yaw < 0 else yaw
+        
     def circle_areas_of_interest(self, identifier_color, areas_of_interest):
         """
         Augments the image with contour outlines or circles for areas of interest.
@@ -431,87 +493,3 @@ class ImageService:
                 cv2.circle(image_copy, center, r, bgr, thickness=2)
 
         return image_copy
-
-    def apply_mask_highlight(self, image_array, mask_path=None, identifier_color=(255, 0, 255), areas_of_interest=None):
-        """
-        Applies a mask overlay to highlight detected pixels.
-
-        Args:
-            image_array (np.ndarray): The input image array in BGR format.
-            mask_path (str, optional): Path to the mask file (.tif or .png). If None, uses self.mask_path.
-            identifier_color (tuple): RGB color tuple for highlighting (uses Object Identifier color).
-            areas_of_interest (list, optional): Not used currently, but kept for future filtering.
-
-        Returns:
-            np.ndarray: The image array with mask applied.
-        """
-        # Use provided mask_path or fall back to self.mask_path
-        effective_mask_path = mask_path or self.mask_path
-        if not effective_mask_path or not os.path.exists(effective_mask_path):
-            return image_array
-
-        # Load the mask depending on format
-        if effective_mask_path.lower().endswith((".tif", ".tiff")):
-            # Read multi-band GeoTIFF and pull first band as mask
-            data = tifffile.imread(effective_mask_path)
-            if data.ndim == 3:  # (bands, height, width)
-                mask = data[0].astype(np.uint8)
-            else:
-                mask = data.astype(np.uint8)
-        else:
-            # Fallback: load grayscale PNG
-            mask = cv2.imread(effective_mask_path, cv2.IMREAD_GRAYSCALE)
-
-        if mask is None:
-            return image_array
-
-        # Resize mask if needed to match image dimensions
-        if mask.shape[:2] != image_array.shape[:2]:
-            mask = cv2.resize(mask, (image_array.shape[1], image_array.shape[0]), interpolation=cv2.INTER_NEAREST)
-
-        highlighted_image = image_array.copy()
-
-        # Apply the mask - blend highlight color with original image
-        # Image is in BGR format, identifier_color is RGB, so convert
-        bgr_color = np.array([int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0])], dtype=np.uint8)
-
-        # Create a blended overlay where mask pixels are highlighted
-        mask_indices = mask > 0
-        if np.any(mask_indices):
-            # Blend with 70% original image and 30% highlight color for visibility
-            alpha = 0.7  # Highlight strength
-            highlighted_image[mask_indices] = (
-                highlighted_image[mask_indices] * (1 - alpha) + bgr_color * alpha
-            ).astype(np.uint8)
-
-        return highlighted_image
-
-    def highlight_aoi_pixels(self, image_array, areas_of_interest, highlight_color=(255, 0, 255)):
-        """
-        Highlights detected pixels within areas of interest.
-
-        Args:
-            image_array (np.ndarray): The input image array.
-            areas_of_interest (list): List of AOI dictionaries with detected_pixels.
-            highlight_color (tuple): RGB color tuple for highlighting (default: magenta).
-
-        Returns:
-            np.ndarray: The image array with highlighted pixels.
-        """
-        highlighted_image = image_array.copy()
-
-        # Convert highlight color to numpy array
-        highlight_color_array = np.array(highlight_color, dtype=np.uint8)
-
-        for aoi in areas_of_interest or []:
-            if "detected_pixels" in aoi and aoi["detected_pixels"]:
-                for pixel in aoi["detected_pixels"]:
-                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                        x, y = int(pixel[0]), int(pixel[1])
-                        # Check bounds
-                        if 0 <= y < highlighted_image.shape[0] and 0 <= x < highlighted_image.shape[1]:
-                            # Convert from BGR to RGB for display if needed
-                            if len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3:
-                                highlighted_image[y, x] = highlight_color_array
-
-        return highlighted_image

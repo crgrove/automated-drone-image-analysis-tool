@@ -297,7 +297,7 @@ class PdfGeneratorService:
                 continue
 
             # Get image metadata
-            bearing = image_service.get_drone_orientation() or 0
+            bearing = image_service.get_camera_yaw() or 0
 
             # Get GPS and other metadata from original image
             gps_coords = LocationInfo.get_gps(full_path=original_path)
@@ -318,7 +318,7 @@ class PdfGeneratorService:
                     if not position_str:
                         position_str = "N/A"
                     agl_str = f"{original_image_service.get_relative_altitude(self.viewer.distance_unit)}{self.viewer.distance_unit}"
-                    orientation_str = f"{original_image_service.get_drone_orientation() or 0}°"
+                    orientation_str = f"{original_image_service.get_camera_yaw() or 0}°"
                     gsd_str = f"{original_image_service.get_average_gsd()}cm/px"
                 else:
                     # Fallback to existing values
@@ -875,58 +875,33 @@ class PdfGeneratorService:
         try:
             # Get original image path (not mask/thumbnail)
             original_path = img.get('original_path', img['path']) if 'original_path' in img else img['path']
-
-            # Get image GPS from original image
-            exif_data = MetaDataHelper.get_exif_data_piexif(original_path)
-            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
-            if not gps_coords:
-                return None
-
-            # Get image service from original image
-            image_service = ImageService(original_path, img.get('mask_path', ''))
-            img_array = image_service.img_array
-            height, width = img_array.shape[:2]
-
-            # Check gimbal pitch (must be nadir)
-            _, gimbal_pitch = image_service.get_gimbal_orientation()
-            if gimbal_pitch is not None and not (-95 <= gimbal_pitch <= -85):
-                return None
-
-            # Get bearing and GSD
-            # Use get_drone_orientation() for nadir shots (gimbal check above ensures nadir)
-            # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
-            bearing = image_service.get_drone_orientation() or 0
-
-            # Get custom altitude if viewer has one set
-            custom_alt = None
-            if hasattr(self.viewer, 'custom_agl_altitude_ft') and self.viewer.custom_agl_altitude_ft and self.viewer.custom_agl_altitude_ft > 0:
-                custom_alt = self.viewer.custom_agl_altitude_ft
-
-            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
-            if not gsd_cm:
-                return None
-
-            # Calculate offset from image center
-            gsd_m = gsd_cm / 100.0
-            dx_pixels = aoi['center'][0] - width / 2
-            dy_pixels = aoi['center'][1] - height / 2
-
-            dx_image = dx_pixels * gsd_m
-            dy_image = dy_pixels * gsd_m
-
-            bearing_rad = math.radians(-bearing)
-            north_meters = -dy_image * math.cos(bearing_rad) + dx_image * math.sin(bearing_rad)
-            east_meters = dx_image * math.cos(bearing_rad) + dy_image * math.sin(bearing_rad)
-
-            # Convert to lat/lon
-            earth_radius = 6371000
-            delta_lat = north_meters / earth_radius * (180 / math.pi)
-            delta_lon = east_meters / (earth_radius * math.cos(math.radians(gps_coords['latitude']))) * (180 / math.pi)
-
-            return {
-                'latitude': gps_coords['latitude'] + delta_lat,
-                'longitude': gps_coords['longitude'] + delta_lon
+            
+            # Create image dict for AOIService
+            image_dict = {
+                'path': original_path,
+                'mask_path': img.get('mask_path', '')
             }
+
+            # Use AOIService for GPS calculation
+            from core.services.AOIService import AOIService
+            aoi_service = AOIService(image_dict)
+
+            # Get custom altitude if available
+            custom_alt_ft = None
+            if hasattr(self.viewer, 'custom_agl_altitude_ft') and self.viewer.custom_agl_altitude_ft and self.viewer.custom_agl_altitude_ft > 0:
+                custom_alt_ft = self.viewer.custom_agl_altitude_ft
+
+            # Calculate AOI GPS coordinates using the convenience method
+            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft)
+
+            if result:
+                lat, lon = result
+                return {
+                    'latitude': lat,
+                    'longitude': lon
+                }
+
+            return None
 
         except Exception:
             return None

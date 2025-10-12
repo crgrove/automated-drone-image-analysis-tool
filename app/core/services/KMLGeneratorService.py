@@ -4,7 +4,7 @@ import numpy as np
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 from core.services.ImageService import ImageService
-
+from core.services.AOIService import AOIService
 
 class KMLGeneratorService:
     """Service to generate a KML file with placemarks for flagged AOIs."""
@@ -72,9 +72,8 @@ class KMLGeneratorService:
                 # Create ImageService to extract EXIF data
                 image_service = ImageService(image_path, image.get('mask_path', ''))
 
-                # Get GPS from EXIF data
-                exif_data = MetaDataHelper.get_exif_data_piexif(image_path)
-                image_gps = LocationInfo.get_gps(exif_data=exif_data)
+                # Get GPS from EXIF data as a dict (not formatted string)
+                image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
 
                 if not image_gps:
                     continue
@@ -82,23 +81,13 @@ class KMLGeneratorService:
                 # Get image dimensions and metadata
                 img_array = image_service.img_array
                 height, width = img_array.shape[:2]
-                image_center = (width/2, height/2)
-                # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
-                # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
-                bearing = image_service.get_drone_orientation() or 0
-                gsd_cm = image_service.get_average_gsd(custom_altitude_ft=self.custom_altitude_ft)
 
-                # Check gimbal angle
-                _, gimbal_pitch = image_service.get_gimbal_orientation()
-                is_nadir = True
-                if gimbal_pitch is not None:
-                    is_nadir = (-95 <= gimbal_pitch <= -85)
-
-            except Exception:
+            except Exception as e:
                 continue
 
             # Process each flagged AOI
             aois = image.get('areas_of_interest', [])
+            
             for aoi_idx, aoi in enumerate(aois):
                 # Only export flagged AOIs
                 if not aoi.get('flagged', False):
@@ -113,39 +102,23 @@ class KMLGeneratorService:
                 aoi_lon = image_gps['longitude']
                 gps_note = ""
 
-                # Try to calculate precise AOI GPS if conditions are met
-                if gsd_cm and is_nadir:
-                    try:
-                        from core.controllers.viewer.gps.GPSMapController import GPSMapController
-                        gps_controller = GPSMapController(None)
+                # Try to calculate precise AOI GPS using AOIService
+                try:
+                    aoi_service = AOIService(image)
 
-                        aoi_gps = gps_controller.calculate_aoi_gps_coordinates(
-                            image_gps,
-                            center,
-                            image_center,
-                            gsd_cm,
-                            bearing
-                        )
+                    # Use custom altitude if one was set during initialization
+                    custom_alt_ft = self.custom_altitude_ft
 
-                        if aoi_gps:
-                            aoi_lat = aoi_gps['latitude']
-                            aoi_lon = aoi_gps['longitude']
-                            gps_note = f"Precise AOI GPS (GSD: {gsd_cm:.2f} cm/px, Bearing: {bearing:.1f}°)\n"
-                        else:
-                            gps_note = "Image GPS (calculation failed)\n"
-                    except Exception:
-                        gps_note = "Image GPS (calculation error)\n"
-                else:
-                    # Missing required data - use image GPS
-                    reasons = []
-                    if not gsd_cm:
-                        reasons.append("no GSD")
-                    if not is_nadir and gimbal_pitch is not None:
-                        reasons.append(f"gimbal {gimbal_pitch:.1f}°")
-                    elif gimbal_pitch is None:
-                        reasons.append("no gimbal data")
+                    # Calculate AOI GPS coordinates using the convenience method
+                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
 
-                    gps_note = f"Image GPS ({', '.join(reasons) if reasons else 'missing data'})\n"
+                    if result:
+                        aoi_lat, aoi_lon = result
+                        gps_note = f"Precise AOI GPS (pinhole camera model)\n"
+                    else:
+                        gps_note = "Image GPS (calculation failed)\n"
+                except Exception as e:
+                    gps_note = f"Image GPS (calculation error: {type(e).__name__})\n"
 
                 # Calculate color information
                 color_info = ""

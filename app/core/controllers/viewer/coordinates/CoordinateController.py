@@ -197,7 +197,8 @@ class CoordinateController:
         image_path = image['path']
         mask_path = image.get('mask_path', '')
         image_service = ImageService(image_path, mask_path)
-        yaw, pitch = image_service.get_gimbal_orientation()
+        yaw = image_service.get_camera_yaw()
+        pitch = image_service.get_camera_pitch()
         altitude = image_service.get_asl_altitude('m')
         hfov = image_service.get_camera_hfov()
 
@@ -295,7 +296,7 @@ class CoordinateController:
             # Get the drone orientation (yaw/bearing)
             image_service = ImageService(image_path, mask_path)
             # Use get_drone_orientation() to match the Drone Orientation shown in the status bar
-            direction = image_service.get_drone_orientation()
+            direction = image_service.get_camera_yaw()
 
             if direction is None:
                 # Show message that no bearing info is available

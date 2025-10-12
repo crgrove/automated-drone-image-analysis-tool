@@ -824,7 +824,7 @@ class GPSMapView(QGraphicsView):
             from core.services.ImageService import ImageService
             image_service = ImageService(image_path, '')
             # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
-            return image_service.get_drone_orientation()
+            return image_service.get_camera_yaw()
         except Exception:
             return None
 

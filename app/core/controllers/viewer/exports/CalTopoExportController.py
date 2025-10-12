@@ -202,7 +202,7 @@ class CalTopoExportController:
                 # Get bearing
                 # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
                 # For nadir shots, drone body orientation determines ground orientation, not gimbal yaw
-                bearing = image_service.get_drone_orientation()
+                bearing = image_service.get_camera_yaw()
                 if bearing is None:
                     bearing = 0  # Default to north
 
@@ -226,7 +226,7 @@ class CalTopoExportController:
                     gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
 
                 # Check gimbal angle for accuracy
-                _, gimbal_pitch = image_service.get_gimbal_orientation()
+                gimbal_pitch = image_service.get_camera_pitch()
                 is_nadir = True
                 if gimbal_pitch is not None:
                     is_nadir = (-95 <= gimbal_pitch <= -85)
@@ -251,42 +251,26 @@ class CalTopoExportController:
                 aoi_lon = image_gps['longitude']
                 gps_note = ""
 
-                # Try to calculate precise AOI GPS if conditions are met
-                if gsd_cm and is_nadir:
-                    # All required data available and gimbal is nadir
-                    try:
-                        from core.controllers.viewer.gps.GPSMapController import GPSMapController
-                        gps_controller = GPSMapController(self.parent)
+                # Try to calculate precise AOI GPS using AOIService
+                try:
+                    from core.services.AOIService import AOIService
+                    aoi_service = AOIService(image)
 
-                        aoi_gps = gps_controller.calculate_aoi_gps_coordinates(
-                            image_gps,
-                            center,
-                            image_center,
-                            gsd_cm,
-                            bearing
-                        )
+                    # Get custom altitude if viewer has one set
+                    custom_alt_ft = None
+                    if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                        custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-                        if aoi_gps:
-                            aoi_lat = aoi_gps['latitude']
-                            aoi_lon = aoi_gps['longitude']
-                            gps_note = f"Precise AOI GPS (GSD: {gsd_cm:.2f} cm/px, Bearing: {bearing:.1f}°)\n"
-                        else:
-                            gps_note = "Image GPS (calculation failed)\n"
-                    except Exception as e:
-                        gps_note = f"Image GPS (calculation error: {str(e)[:30]})\n"
-                else:
-                    # Missing required data or gimbal not nadir - use image GPS
-                    reasons = []
-                    if not gsd_cm:
-                        reasons.append("no GSD")
-                    if not is_nadir and gimbal_pitch is not None:
-                        reasons.append(f"gimbal {gimbal_pitch:.1f}°")
-                    elif gimbal_pitch is None:
-                        reasons.append("no gimbal data")
-                    if not reasons:
-                        reasons.append("missing data")
+                    # Calculate AOI GPS coordinates using the convenience method
+                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
 
-                    gps_note = f"Image GPS ({', '.join(reasons)})\n"
+                    if result:
+                        aoi_lat, aoi_lon = result
+                        gps_note = f"Precise AOI GPS (pinhole camera model)\n"
+                    else:
+                        gps_note = "Image GPS (calculation failed)\n"
+                except Exception as e:
+                    gps_note = f"Image GPS (calculation error: {str(e)[:30]})\n"
 
                 # Get color information and extract RGB for marker icon directly from this image
                 # Use exact same logic as AOIController.calculate_aoi_average_info()

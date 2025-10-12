@@ -178,7 +178,7 @@ class CoverageExtentService:
             image_service = ImageService(image_path, image.get('mask_path', ''))
 
             # Check gimbal angle - must be nadir
-            _, gimbal_pitch = image_service.get_gimbal_orientation()
+            gimbal_pitch = image_service.get_camera_pitch()
             if gimbal_pitch is not None:
                 # Nadir is typically -90 degrees (camera pointing straight down)
                 # Allow range from -85 to -95 degrees (5 degree tolerance)
@@ -205,7 +205,7 @@ class CoverageExtentService:
             height_m = height * gsd_m
 
             # Get drone orientation (bearing)
-            bearing = image_service.get_drone_orientation()
+            bearing = image_service.get_camera_yaw()
             if bearing is None:
                 bearing = 0  # Default to north if bearing not available
 

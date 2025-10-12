@@ -7,6 +7,7 @@ UI manipulation is handled by AOIUIComponent.
 
 import colorsys
 import numpy as np
+import qtawesome as qta
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView
 try:
     from shiboken6 import isValid as _qt_is_valid
@@ -382,26 +383,9 @@ class AOIController:
             new_comment = dialog.get_comment()
             self.save_aoi_comment_to_xml(self.parent.current_image, aoi_index, new_comment)
 
-            # Refresh the AOI display to update the icon
-            if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
-                # Save scroll position and selection
-                scroll_pos = self.aoiListWidget.verticalScrollBar().value()
-                selected_idx = self.selected_aoi_index
-
-                # Reload AOIs
-                self.load_areas_of_interest(
-                    self.parent.current_image_array,
-                    image['areas_of_interest'],
-                    self.parent.current_image
-                )
-
-                # Restore selection and scroll
-                self.selected_aoi_index = selected_idx
-                for container in self.aoi_containers:
-                    if container.property("aoi_index") == selected_idx:
-                        self.update_aoi_selection_style(container, True)
-                        break
-                self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
+            # Refresh the AOI display to update the icon (UI component handles this)
+            if self.ui_component:
+                self.ui_component.refresh_aoi_display()
 
             # Show confirmation toast
             if hasattr(self.parent, 'status_controller'):
@@ -445,25 +429,12 @@ class AOIController:
                 new_comment = dialog.get_comment()
                 self.save_aoi_comment_to_xml(self.parent.current_image, self.selected_aoi_index, new_comment)
 
-        # Save scroll position
-        scroll_pos = self.aoiListWidget.verticalScrollBar().value()
-
         # Remember selected AOI index
         selected_idx = self.selected_aoi_index
 
-        # Refresh the AOI display to show/hide flag icon
-        image = self.parent.images[self.parent.current_image]
-        if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
-            self.load_areas_of_interest(self.parent.current_image_array, image['areas_of_interest'])
-
-        # Restore selection and scroll position
-        self.selected_aoi_index = selected_idx
-        # Find the container with the matching AOI index
-        for container in self.aoi_containers:
-            if container.property("aoi_index") == selected_idx:
-                self.update_aoi_selection_style(container, True)
-                break
-        self.aoiListWidget.verticalScrollBar().setValue(scroll_pos)
+        # Refresh the AOI display to show/hide flag icon (UI component handles this)
+        if self.ui_component:
+            self.ui_component.refresh_aoi_display()
 
     def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
         """Show context menu for AOI coordinate label with copy option.
@@ -577,114 +548,33 @@ class AOIController:
 
             aoi = image['areas_of_interest'][aoi_index]
 
-            # Get image GPS coordinates
-            from helpers.MetaDataHelper import MetaDataHelper
-            from helpers.LocationInfo import LocationInfo
-            exif_data = MetaDataHelper.get_exif_data_piexif(image['path'])
-            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
+            # Use AOIService for GPS calculation
+            from core.services.AOIService import AOIService
+            aoi_service = AOIService(image)
 
-            if not gps_coords:
-                return "N/A"
+            # Get custom altitude if available
+            custom_alt_ft = None
+            if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Get image dimensions and service
-            from core.services.ImageService import ImageService
-            image_service = ImageService(image['path'], image.get('mask_path', ''))
-            img_array = image_service.img_array
-            height, width = img_array.shape[:2]
+            # Calculate AOI GPS coordinates using the convenience method
+            result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
 
-            # Check gimbal pitch angle - must be within 5 degrees of nadir
-            _, gimbal_pitch = image_service.get_gimbal_orientation()
-            if gimbal_pitch is not None:
-                # Nadir is typically -90 degrees (camera pointing straight down)
-                if not (-95 <= gimbal_pitch <= -85):
-                    return "N/A (gimbal not nadir)"
+            if result:
+                lat, lon = result
 
-            # Get bearing
-            # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
-            # For nadir shots (required by gimbal pitch check above), drone orientation is correct
-            bearing = image_service.get_drone_orientation()
-            if bearing is None:
-                bearing = 0  # Default to north if bearing not available
+                # Get position format preference
+                position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
 
-            # Get GSD (Ground Sampling Distance) with custom altitude if available
-            custom_alt = self.parent.custom_agl_altitude_ft if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0 else None
-            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
-            if gsd_cm is None:
-                return "N/A (no GSD)"
-
-            # Use GPS map controller's calculation method if available
-            if hasattr(self.parent, 'gps_map_controller'):
-                aoi_gps = self.parent.gps_map_controller.calculate_aoi_gps_coordinates(
-                    gps_coords,
-                    aoi['center'],
-                    (width/2, height/2),
-                    gsd_cm,
-                    bearing
-                )
-
-                if aoi_gps and 'latitude' in aoi_gps and 'longitude' in aoi_gps:
-                    # Format based on parent's position format preference
-                    lat = aoi_gps['latitude']
-                    lon = aoi_gps['longitude']
-
-                    if hasattr(self.parent, 'position_format'):
-                        if self.parent.position_format == 'Decimal Degrees':
-                            return f"{lat:.6f}, {lon:.6f}"
-                        elif self.parent.position_format == 'Degrees Minutes Seconds':
-                            # Convert to DMS format
-                            lat_dms = self.decimal_to_dms(lat, is_latitude=True)
-                            lon_dms = self.decimal_to_dms(lon, is_latitude=False)
-                            return f"{lat_dms}, {lon_dms}"
-                        elif self.parent.position_format == 'Degrees Decimal Minutes':
-                            # Convert to DDM format
-                            lat_ddm = self.decimal_to_ddm(lat, is_latitude=True)
-                            lon_ddm = self.decimal_to_ddm(lon, is_latitude=False)
-                            return f"{lat_ddm}, {lon_ddm}"
-
-                    # Default to decimal degrees
-                    return f"{lat:.6f}, {lon:.6f}"
+                # Use LocationInfo for formatting
+                from helpers.LocationInfo import LocationInfo
+                return LocationInfo.format_coordinates(lat, lon, position_format)
 
             return "N/A"
 
         except Exception as e:
             self.logger.error(f"Error calculating AOI GPS: {e}")
             return "N/A"
-
-    def decimal_to_dms(self, decimal, is_latitude):
-        """Convert decimal degrees to DMS format.
-
-        Args:
-            decimal: Decimal degrees
-            is_latitude: True for latitude, False for longitude
-
-        Returns:
-            String in DMS format
-        """
-        direction = 'N' if decimal >= 0 and is_latitude else 'S' if is_latitude else 'E' if decimal >= 0 else 'W'
-        decimal = abs(decimal)
-        degrees = int(decimal)
-        minutes_decimal = (decimal - degrees) * 60
-        minutes = int(minutes_decimal)
-        seconds = (minutes_decimal - minutes) * 60
-
-        return f"{degrees}°{minutes}'{seconds:.2f}\"{direction}"
-
-    def decimal_to_ddm(self, decimal, is_latitude):
-        """Convert decimal degrees to DDM format.
-
-        Args:
-            decimal: Decimal degrees
-            is_latitude: True for latitude, False for longitude
-
-        Returns:
-            String in DDM format
-        """
-        direction = 'N' if decimal >= 0 and is_latitude else 'S' if is_latitude else 'E' if decimal >= 0 else 'W'
-        decimal = abs(decimal)
-        degrees = int(decimal)
-        minutes = (decimal - degrees) * 60
-
-        return f"{degrees}°{minutes:.4f}'{direction}"
 
     def calculate_hue_distance(self, hue1, hue2):
         """Calculate the circular distance between two hue values.
@@ -880,9 +770,6 @@ class AOIController:
         
         # Clear existing items
         combo.clear()
-        
-        # Import QtAwesome for icons
-        import qtawesome as qta
         
         # Define sort options with their display text, data, and icons
         sort_options = [

@@ -44,6 +44,7 @@ from core.controllers.viewer.exports.CalTopoExportController import CalTopoExpor
 from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
 from core.controllers.viewer.coordinates.CoordinateController import CoordinateController
+from core.controllers.viewer.image.ImageHighlightController import ImageHighlightController
 from core.controllers.viewer.status.StatusController import StatusController
 from core.controllers.viewer.gps.GPSMapController import GPSMapController
 
@@ -116,7 +117,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # status‑bar helper
         self.messages = StatusDict(callback=self.status_controller.message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
-                                              "Drone Orientation", "Estimated Average GSD",
+                                              "Gimbal Orientation", "Estimated Average GSD",
                                               "Temperature", "Color Values"])
         self._apply_icons(self.theme)
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
@@ -473,7 +474,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 return
 
             # Clear previous status
-            self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Drone Orientation'] = None
+            self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Gimbal Orientation'] = None
             self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
 
             # Hide magnifying glass when loading new image
@@ -546,7 +547,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 if mask_path:
                     # Use mask-based highlighting (new efficient approach)
                     # Pass the identifier color from settings to match AOI circle color
-                    augmented_image = image_service.apply_mask_highlight(
+                    augmented_image = ImageHighlightController.apply_mask_highlight(
                         augmented_image,
                         mask_path,
                         self.settings['identifier_color'],
@@ -554,7 +555,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                     )
                 else:
                     # Fall back to old method for backward compatibility
-                    augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
+                    augmented_image = ImageHighlightController.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
 
             img = QImage(qimage2ndarray.array2qimage(augmented_image))
 
@@ -595,11 +596,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # Check for negative altitude and prompt for custom AGL
                 if altitude < 0 and self.custom_agl_altitude_ft is None:
                     self._prompt_for_custom_agl_altitude()
-            direction = image_service.get_drone_orientation()
+            direction = image_service.get_camera_yaw()
             if direction is not None:
-                self.messages['Drone Orientation'] = f"{direction}°"
+                self.messages['Gimbal Orientation'] = f"{direction}°"
             else:
-                self.messages['Drone Orientation'] = None
+                self.messages['Gimbal Orientation'] = None
 
             # Calculate GSD with custom altitude if available
             custom_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else None
@@ -851,14 +852,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Apply highlight if enabled (independent of circle drawing)
         if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
             if mask_path:
-                augmented_image = image_service.apply_mask_highlight(
+                augmented_image = ImageHighlightController.apply_mask_highlight(
                     augmented_image,
                     mask_path,
                     self.settings['identifier_color'],
                     image['areas_of_interest']
                 )
             else:
-                augmented_image = image_service.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
+                augmented_image = ImageHighlightController.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
 
         # Update the image without resetting the view
         img = QImage(qimage2ndarray.array2qimage(augmented_image))
@@ -1190,81 +1191,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 "Error",
                 f"Failed to generate coverage extent KML:\n{str(e)}"
             )
-
-    # ---------- coordinates popup ----------
-
-    def _show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None):
-        """Show context menu for AOI coordinate label with copy option.
-
-        Args:
-            pos: Position where the context menu was requested (relative to label_widget)
-            label_widget: The QLabel widget that was right-clicked
-            center: Tuple of (x, y) coordinates of the AOI center
-            pixel_area: The area of the AOI in pixels
-            avg_info: Average color/temperature information string
-        """
-        menu = QMenu(label_widget)
-
-        # Style the menu to match the application theme
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2b2b2b;
-                border: 1px solid #555555;
-                color: white;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                border-radius: 3px;
-            }
-            QMenu::item:selected {
-                background-color: #505050;
-            }
-        """)
-
-        # Add copy action
-        copy_action = menu.addAction("Copy Data")
-        copy_action.triggered.connect(lambda: self._copy_aoi_data(center, pixel_area, avg_info))
-
-        # Get the current cursor position (global coordinates)
-        global_pos = QCursor.pos()
-
-        # Show menu at cursor position
-        menu.exec(global_pos)
-
-    def _copy_aoi_data(self, center, pixel_area, avg_info=None):
-        """Copy AOI data to clipboard including image name, coordinates, and GPS.
-
-        Args:
-            center: Tuple of (x, y) coordinates of the AOI center
-            pixel_area: The area of the AOI in pixels
-            avg_info: Average color/temperature information string
-        """
-        # Get current image information
-        image = self.images[self.current_image]
-        image_name = image.get('name', 'Unknown')
-
-        # Get GPS coordinates if available
-        gps_coords = self.messages.get('GPS Coordinates', 'N/A')
-
-        # Format the data for clipboard
-        clipboard_text = (
-            f"Image: {image_name}\n"
-            f"AOI Coordinates: X={center[0]}, Y={center[1]}\n"
-            f"AOI Area: {pixel_area:.0f} px\n"
-        )
-
-        # Add average info if available
-        if avg_info:
-            clipboard_text += f"Average: {avg_info}\n"
-
-        clipboard_text += f"GPS Coordinates: {gps_coords}"
-
-        # Copy to clipboard
-        QApplication.clipboard().setText(clipboard_text)
-
-        # Show confirmation toast
-        self.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
 
     def _magnifyButton_clicked(self):
         if self.main_image and self.main_image.hasImage():

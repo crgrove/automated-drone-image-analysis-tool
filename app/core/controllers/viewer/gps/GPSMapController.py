@@ -192,8 +192,8 @@ class GPSMapController(QObject):
         try:
             from core.services.ImageService import ImageService
             image_service = ImageService(image_path, '')
-            # Use get_image_bearing() which accounts for both Flight Yaw and Gimbal Yaw
-            bearing = image_service.get_image_bearing()
+            # Use get_camera_yaw() which accounts for both Flight Yaw and Gimbal Yaw
+            bearing = image_service.get_camera_yaw()
             return bearing
         except Exception as e:
             self.logger.error(f"Could not extract bearing: {str(e)}")
@@ -233,75 +233,6 @@ class GPSMapController(QObject):
             self.map_dialog.close()
             self.map_dialog = None
 
-    def calculate_aoi_gps_coordinates(self, image_gps, aoi_center, image_center, gsd_cm, bearing_deg):
-        """
-        Calculate GPS coordinates for an AOI based on its pixel position.
-
-        Args:
-            image_gps: Dict with 'latitude' and 'longitude' of image center
-            aoi_center: Tuple (x, y) of AOI center in pixels
-            image_center: Tuple (width/2, height/2) of image center in pixels
-            gsd_cm: Ground sampling distance in centimeters
-            bearing_deg: Image bearing/yaw in degrees (0-360)
-
-        Returns:
-            Dict with 'latitude' and 'longitude' of the AOI, or None if calculation fails
-        """
-        try:
-            # Convert GSD from cm to meters
-            gsd_m = gsd_cm / 100.0
-
-            # Calculate pixel offset from image center
-            dx_pixels = aoi_center[0] - image_center[0]
-            dy_pixels = aoi_center[1] - image_center[1]
-
-            # Convert pixel offset to meters
-            # In image coordinates: X is right, Y is down
-            # We want: X (east), Y (north) in meters
-            dx_image = dx_pixels * gsd_m  # Right is positive
-            dy_image = dy_pixels * gsd_m  # Down is positive
-
-            # Convert bearing to radians
-            # Bearing is clockwise from north (0° = North, 90° = East, etc.)
-            # We need to use negative bearing to transform from image to world coordinates
-            # This matches how the map view rotates: self.rotate(-bearing)
-            bearing_rad = math.radians(-bearing_deg)
-
-            # Apply rotation to get world coordinates
-            # When bearing is 0 (north): image top points north
-            # When bearing is 90 (east): image top points east, image right points south
-            # The transformation from image to world coordinates uses -bearing:
-            # world_north = -image_y * cos(-bearing) + image_x * sin(-bearing)
-            # world_east = image_x * cos(-bearing) + image_y * sin(-bearing)
-
-            north_meters = -dy_image * math.cos(bearing_rad) + dx_image * math.sin(bearing_rad)
-            east_meters = dx_image * math.cos(bearing_rad) + dy_image * math.sin(bearing_rad)
-
-            # Convert meters offset to lat/lon degrees
-            # Approximate conversion (accurate for small distances)
-            lat = image_gps['latitude']
-            lon = image_gps['longitude']
-
-            # Earth radius in meters
-            earth_radius = 6371000
-
-            # Convert meters to degrees
-            delta_lat = north_meters / earth_radius * (180 / math.pi)
-            delta_lon = east_meters / (earth_radius * math.cos(math.radians(lat))) * (180 / math.pi)
-
-            # Calculate AOI GPS coordinates
-            aoi_lat = lat + delta_lat
-            aoi_lon = lon + delta_lon
-
-            return {
-                'latitude': aoi_lat,
-                'longitude': aoi_lon
-            }
-
-        except Exception as e:
-            self.logger.error(f"Error calculating AOI GPS coordinates: {e}")
-            return None
-
     def get_current_aoi_gps(self):
         """
         Get GPS coordinates for the currently selected AOI.
@@ -324,77 +255,22 @@ class GPSMapController(QObject):
 
             aoi = current_image['areas_of_interest'][aoi_index]
 
-            # Get image GPS coordinates
-            from helpers.MetaDataHelper import MetaDataHelper
-            exif_data = MetaDataHelper.get_exif_data_piexif(current_image['path'])
-            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
-
-            if not gps_coords:
-                return None
-
-            # Get image dimensions
-            from core.services.ImageService import ImageService
-            image_service = ImageService(current_image['path'], current_image.get('mask_path', ''))
-            img_array = image_service.img_array
-            height, width = img_array.shape[:2]
-
-            # Check gimbal pitch angle - must be within 5 degrees of nadir
-            _, gimbal_pitch = image_service.get_gimbal_orientation()
-            if gimbal_pitch is not None:
-                # Nadir is typically -90 degrees for most drones (camera pointing straight down)
-                # Allow range from -85 to -95 degrees (5 degree tolerance)
-                if not (-95 <= gimbal_pitch <= -85):
-                    # Show toast message about gimbal angle
-                    if hasattr(self.parent, 'status_controller'):
-                        self.parent.status_controller.show_toast(
-                            f"Gimbal angle not nadir ({gimbal_pitch:.1f}°). AOI GPS location not calculated.",
-                            4000,
-                            color="#FF9800"
-                        )
-                    return None
-
-            # Get bearing
-            # Use get_drone_orientation() to match the Drone Orientation displayed in viewer
-            # For nadir shots (required by gimbal pitch check above), drone orientation is correct
-            bearing = image_service.get_drone_orientation()
-            if bearing is None:
-                bearing = 0  # Default to north if bearing not available
+            # Use AOIService for GPS calculation with metadata
+            from core.services.AOIService import AOIService
+            aoi_service = AOIService(current_image)
 
             # Get custom altitude if available
-            custom_alt = self.parent.custom_agl_altitude_ft if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0 else None
+            custom_alt_ft = None
+            if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Get GSD (Ground Sampling Distance)
-            gsd_value = self.parent.messages.get('GSD (cm/px)', None)
-            if gsd_value:
-                # Extract numeric value from string like "2.5 cm/px"
-                try:
-                    gsd_cm = float(gsd_value.split()[0])
-                except (ValueError, IndexError):
-                    gsd_cm = self.calculate_gsd_for_image(current_image['path'], custom_altitude_ft=custom_alt)
-                    if gsd_cm is None:
-                        return None
-            else:
-                # Try to calculate GSD if not in messages
-                gsd_cm = self.calculate_gsd_for_image(current_image['path'], custom_altitude_ft=custom_alt)
-                if gsd_cm is None:
-                    return None
-
-            # Calculate AOI GPS coordinates
-            aoi_gps = self.calculate_aoi_gps_coordinates(
-                gps_coords,
-                aoi['center'],
-                (width/2, height/2),
-                gsd_cm,
-                bearing
-            )
+            # Calculate AOI GPS coordinates with metadata using the convenience method
+            aoi_gps = aoi_service.get_aoi_gps_with_metadata(current_image, aoi, aoi_index, custom_alt_ft)
 
             if not aoi_gps:
                 return None
 
-            # Add AOI metadata
-            aoi_gps['aoi_index'] = aoi_index
-            aoi_gps['pixel_area'] = aoi.get('area', 0)
-            aoi_gps['center_pixels'] = aoi['center']
+            # Add additional viewer-specific metadata
             aoi_gps['image_index'] = self.parent.current_image
             aoi_gps['image_name'] = current_image.get('name', 'Unknown')
 

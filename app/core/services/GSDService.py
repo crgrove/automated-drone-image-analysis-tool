@@ -118,30 +118,55 @@ class GSDService:
         avg_gsd = np.mean(gsd_row)
         return avg_gsd
 
-    def ground_x(self, row, col):
+    def compute_average_gsd_between_points(self, row1, col1, row2, col2):
         """
-        Computes the X ground coordinate corresponding to a pixel in the image.
+        Computes the average GSD between two image points.
+        
+        Uses trapezoidal approximation: average of GSD at both endpoints.
+        This is more accurate than using GSD at just one point when GSD varies
+        across the image (e.g., oblique shots).
 
         Args:
-            row (int): The row index of the pixel.
-            col (int): The column index of the pixel.
+            row1 (float): Row coordinate of first point.
+            col1 (float): Column coordinate of first point.
+            row2 (float): Row coordinate of second point.
+            col2 (float): Column coordinate of second point.
 
         Returns:
-            float: The X coordinate on the ground (in meters).
+            float: Average GSD between the two points in centimeters.
         """
-        tilt = np.radians(self.title_angle)
-        cx = self.principalPoint[0]
-        cy = self.principalPoint[1]
-        x = (col - cx) * self.pel_size
-        y = (row - cy) * self.pel_size
+        gsd1 = self.compute_gsd(row1, col1)
+        gsd2 = self.compute_gsd(row2, col2)
+        return (gsd1 + gsd2) / 2.0
 
-        p_cam = np.array([x, y, -self.focal_length])
-        R = np.array([
-            [1, 0, 0],
-            [0, np.cos(tilt), -np.sin(tilt)],
-            [0, np.sin(tilt),  np.cos(tilt)],
-        ])
-        p_world = R @ p_cam
-        scale = self.altitude / -p_world[2]
-        ground_pos = p_world[:2] * scale
-        return ground_pos[0]
+    def compute_ground_distance(self, row1, col1, row2, col2):
+        """
+        Computes the ground distance between two image points accounting for variable GSD.
+        
+        For oblique imagery, GSD varies across the image, so this method uses the
+        average GSD between the two points for more accurate ground distance calculation.
+
+        Args:
+            row1 (float): Row coordinate of first point (typically image center).
+            col1 (float): Column coordinate of first point (typically image center).
+            row2 (float): Row coordinate of second point (e.g., AOI center).
+            col2 (float): Column coordinate of second point (e.g., AOI center).
+
+        Returns:
+            tuple: (ground_distance_x, ground_distance_y) in meters, where:
+                   - ground_distance_x: ground distance in the column (horizontal) direction
+                   - ground_distance_y: ground distance in the row (vertical) direction
+        """
+        # Get average GSD between the two points
+        avg_gsd_cm = self.compute_average_gsd_between_points(row1, col1, row2, col2)
+        avg_gsd_m = avg_gsd_cm / 100.0  # Convert to meters
+        
+        # Calculate pixel distances
+        pixel_offset_x = col2 - col1
+        pixel_offset_y = row2 - row1
+        
+        # Convert to ground distances using average GSD
+        ground_distance_x = pixel_offset_x * avg_gsd_m
+        ground_distance_y = pixel_offset_y * avg_gsd_m
+        
+        return (ground_distance_x, ground_distance_y)
