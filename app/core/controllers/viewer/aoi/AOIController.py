@@ -56,7 +56,7 @@ class AOIController:
         self.filter_area_max = None  # Maximum pixel area for filtering
 
         # Create UI component internally
-        from core.controllers.viewer.components.AOIUIComponent import AOIUIComponent
+        from core.controllers.viewer.aoi.AOIUIComponent import AOIUIComponent
         self.ui_component = AOIUIComponent(self)
         
         # Initialize sort combo box
@@ -375,7 +375,7 @@ class AOIController:
         current_comment = aoi.get('user_comment', '')
 
         # Open comment dialog
-        from core.views.viewer.components.AOICommentDialog import AOICommentDialog
+        from core.views.viewer.dialogs.AOICommentDialog import AOICommentDialog
         dialog = AOICommentDialog(self.parent, current_comment)
 
         if dialog.exec():
@@ -421,7 +421,7 @@ class AOIController:
             aoi = image['areas_of_interest'][self.selected_aoi_index]
             current_comment = aoi.get('user_comment', '')
 
-            from core.views.viewer.components.AOICommentDialog import AOICommentDialog
+            from core.views.viewer.dialogs.AOICommentDialog import AOICommentDialog
             dialog = AOICommentDialog(self.parent, current_comment)
 
             if dialog.exec():
@@ -435,6 +435,24 @@ class AOIController:
         # Refresh the AOI display to show/hide flag icon (UI component handles this)
         if self.ui_component:
             self.ui_component.refresh_aoi_display()
+        
+        # Update GPS map if it's open to reflect flagged status change
+        if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller.map_dialog:
+            if self.parent.gps_map_controller.map_dialog.isVisible():
+                # Re-extract GPS data to update has_flagged status
+                self.parent.gps_map_controller.extract_gps_data()
+                # Find the current image index in GPS data
+                current_gps_index = None
+                for i, data in enumerate(self.parent.gps_map_controller.gps_data):
+                    if data['index'] == self.parent.current_image:
+                        current_gps_index = i
+                        break
+                # Update the map with refreshed data
+                if current_gps_index is not None:
+                    self.parent.gps_map_controller.map_dialog.update_gps_data(
+                        self.parent.gps_map_controller.gps_data, 
+                        current_gps_index
+                    )
 
     def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
         """Show context menu for AOI coordinate label with copy option.
@@ -603,10 +621,15 @@ class AOIController:
         """
         try:
             # Calculate average color/hue for the AOI
+            # Get temperature data from thermal controller if available
+            temperature_data = None
+            if hasattr(self.parent, 'thermal_controller'):
+                temperature_data = self.parent.thermal_controller.temperature_data
+            
             avg_info, color_rgb = self.calculate_aoi_average_info(
                 aoi,
                 self.parent.is_thermal,
-                self.parent.temperature_data,
+                temperature_data,
                 self.parent.temperature_unit
             )
 
@@ -824,7 +847,7 @@ class AOIController:
 
     def open_filter_dialog(self):
         """Open the filter dialog."""
-        from core.views.viewer.components.AOIFilterDialog import AOIFilterDialog
+        from core.views.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
 
         # Get current filter settings
         current_filters = {
@@ -935,3 +958,35 @@ class AOIController:
             self.logger.error(f"Error creating AOI from circle: {e}")
             import traceback
             self.logger.error(traceback.format_exc())
+
+    def enter_creation_mode(self):
+        """Enter AOI creation mode - user can click and drag to draw a circle."""
+        if not hasattr(self.parent, 'main_image') or self.parent.main_image is None:
+            return
+
+        self.parent.aoi_creation_mode = True
+        self.parent.main_image.viewport().setCursor(Qt.CrossCursor)
+
+        # Show instruction toast
+        if hasattr(self.parent, 'status_controller'):
+            self.parent.status_controller.show_toast(
+                "AOI Creation Mode: Click and drag to draw circle",
+                3000,
+                color="#FFA500"
+            )
+
+    def exit_creation_mode(self):
+        """Exit AOI creation mode and clean up."""
+        self.parent.aoi_creation_mode = False
+        self.parent.aoi_creation_start = None
+        self.parent.aoi_creation_current = None
+
+        # Remove preview circle if it exists
+        if self.parent.aoi_creation_preview_item is not None:
+            if hasattr(self.parent, 'main_image') and self.parent.main_image is not None:
+                self.parent.main_image.scene.removeItem(self.parent.aoi_creation_preview_item)
+            self.parent.aoi_creation_preview_item = None
+
+        # Restore normal cursor
+        if hasattr(self.parent, 'main_image') and self.parent.main_image is not None:
+            self.parent.main_image.viewport().setCursor(Qt.ArrowCursor)

@@ -51,15 +51,29 @@ class KMLGeneratorService:
         """
         self.kml.save(path)
 
-    def generate_kml_export(self, images, output_path):
+    def generate_kml_export(self, images, output_path, progress_callback=None, cancel_check=None):
         """
         Generates KML file with placemarks for each flagged AOI.
 
         Args:
             images (list of dict): List of image metadata dictionaries with flagged AOIs.
             output_path (str): The path to save the generated KML file.
+            progress_callback: Optional callback function(current, total, message) for progress updates
+            cancel_check: Optional function that returns True if operation should be cancelled
         """
+        # Count total AOIs for progress tracking
+        total_aois = 0
+        for image in images:
+            if not image.get('hidden', False):
+                aois = image.get('areas_of_interest', [])
+                total_aois += sum(1 for aoi in aois if aoi.get('flagged', False))
+        
+        current_aoi_count = 0
+        
         for img_idx, image in enumerate(images):
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                return  # Exit early if cancelled
             # Skip hidden images
             if image.get('hidden', False):
                 continue
@@ -92,6 +106,19 @@ class KMLGeneratorService:
                 # Only export flagged AOIs
                 if not aoi.get('flagged', False):
                     continue
+                
+                # Update progress
+                current_aoi_count += 1
+                if progress_callback:
+                    progress_callback(
+                        current_aoi_count,
+                        total_aois,
+                        f"Processing {image_name} - AOI {aoi_idx + 1}..."
+                    )
+                
+                # Check for cancellation
+                if cancel_check and cancel_check():
+                    return  # Exit early if cancelled
 
                 center = aoi.get('center', [0, 0])
                 area = aoi.get('area', 0)

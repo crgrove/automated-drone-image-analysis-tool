@@ -231,14 +231,11 @@ class ThumbnailUIComponent:
         if viewport_width <= 200:  # Increased threshold - 100px is definitely too small
             # Load first 50 thumbnails as fallback to ensure screen is filled
             fallback_count = min(50, len(self.thumbnail_controller.parent.images))
-            self.logger.debug(f"Viewport too small (width={viewport_width}), loading fallback range: 0 to {fallback_count}")
             return 0, fallback_count
         
         start_index = max(0, int(bar.value() // slot_width))
         visible_count = max(1, math.ceil(viewport_width / slot_width) + 20)  # Increased buffer
         end_index = min(len(self.thumbnail_controller.parent.images), start_index + visible_count)
-        
-        self.logger.debug(f"Thumbnail range: start={start_index}, end={end_index}, viewport_width={viewport_width}, slot_width={slot_width}")
         
         return start_index, end_index
     
@@ -246,3 +243,4 @@ class ThumbnailUIComponent:
         """Clean up UI resources."""
         self.active_thumbnail = None
         self.active_index = None
+

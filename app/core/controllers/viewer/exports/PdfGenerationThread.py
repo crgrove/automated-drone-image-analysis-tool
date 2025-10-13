@@ -6,6 +6,7 @@ class PdfGenerationThread(QThread):
     finished = Signal()
     canceled = Signal()
     errorOccurred = Signal(str)
+    progressUpdated = Signal(int, int, str)  # current, total, message
 
     def __init__(self, pdf_generator, output_path):
         """Initializes the PdfGenerationThread.
@@ -27,7 +28,20 @@ class PdfGenerationThread(QThread):
         """
         try:
             if not self._is_canceled:
-                error_message = self.pdf_generator.generate_report(self.output_path)
+                # Define progress callback
+                def progress_callback(current, total, message):
+                    if not self._is_canceled:
+                        self.progressUpdated.emit(current, total, message)
+
+                # Define cancel check
+                def cancel_check():
+                    return self._is_canceled
+
+                error_message = self.pdf_generator.generate_report(
+                    self.output_path,
+                    progress_callback=progress_callback,
+                    cancel_check=cancel_check
+                )
                 if error_message:
                     self.errorOccurred.emit(error_message)  # Emit error if there's an error message
                 else:

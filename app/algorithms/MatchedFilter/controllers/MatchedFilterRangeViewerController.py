@@ -4,7 +4,7 @@ import spectral
 import pandas as pd
 
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
-from core.views.viewer.components.QtImageViewer import QtImageViewer
+from core.views.viewer.widgets.QtImageViewer import QtImageViewer
 
 from PySide6.QtGui import QImage
 from PySide6.QtCore import Qt, QSize

@@ -133,7 +133,7 @@ class AOIUIComponent:
             crop_arr = self.aoi_controller.parent.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
 
             # Create the image viewer
-            from core.views.viewer.components.QtImageViewer import QtImageViewer
+            from core.views.viewer.widgets.QtImageViewer import QtImageViewer
             highlight = QtImageViewer(self.aoi_controller.parent, container, center, True)
             highlight.setObjectName(f"highlight{original_index}")
             highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
@@ -152,10 +152,15 @@ class AOIUIComponent:
             highlight.canPan = False
 
             # Calculate average color/temperature for the AOI (business logic)
+            # Get temperature data from thermal controller if available
+            temperature_data = None
+            if hasattr(self.aoi_controller.parent, 'thermal_controller'):
+                temperature_data = self.aoi_controller.parent.thermal_controller.temperature_data
+            
             avg_color_info, color_rgb = self.aoi_controller.calculate_aoi_average_info(
                 area_of_interest,
                 self.aoi_controller.parent.is_thermal,
-                self.aoi_controller.parent.temperature_data,
+                temperature_data,
                 self.aoi_controller.parent.temperature_unit
             )
 

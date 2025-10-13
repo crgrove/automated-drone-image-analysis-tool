@@ -26,7 +26,7 @@
     ],
     [
       "resources/views/viewer/*.ui",
-      "app/core/views/viewer"
+      "app/core/views/viewer/ui"
     ],
     [
       "resources/views/algorithms/RXAnomaly.ui",

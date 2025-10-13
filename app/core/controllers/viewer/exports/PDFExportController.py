@@ -5,10 +5,10 @@ This controller manages the export of flagged AOIs to PDF format with
 background processing and progress tracking.
 """
 
-from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox, QApplication
 from core.controllers.viewer.exports.PdfGenerationThread import PdfGenerationThread
-from core.views.viewer.components.LoadingDialog import LoadingDialog
-from core.views.viewer.components.PDFExportDialog import PDFExportDialog
+from core.views.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
+from core.views.viewer.dialogs.PDFExportDialog import PDFExportDialog
 from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.LoggerService import LoggerService
 
@@ -32,7 +32,7 @@ class PDFExportController:
         self.parent = parent_widget
         self.logger = logger or LoggerService()
         self.pdf_thread = None
-        self.loading_dialog = None
+        self.progress_dialog = None
 
     def export_pdf(self, images, flagged_aois):
         """
@@ -100,8 +100,18 @@ class PDFExportController:
             # Temporarily replace images with filtered version for PDF generation
             self.parent.images = filtered_images
 
-            # Create and show the loading dialog
-            self.loading_dialog = LoadingDialog(self.parent)
+            # Count total flagged AOIs for progress dialog
+            total_aois = sum(len(img.get('areas_of_interest', [])) for img in filtered_images)
+
+            # Create and show the progress dialog
+            self.progress_dialog = ExportProgressDialog(
+                self.parent,
+                title="Generating PDF Report",
+                total_items=total_aois
+            )
+            self.progress_dialog.set_title("Generating PDF Report...")
+            
+            # Create PDF generation thread
             self.pdf_thread = PdfGenerationThread(pdf_generator, file_name)
 
             # Connect signals
@@ -114,11 +124,21 @@ class PDFExportController:
             self.pdf_thread.errorOccurred.connect(
                 lambda e: self._on_pdf_generation_error(e, original_images)
             )
+            self.pdf_thread.progressUpdated.connect(
+                self._on_progress_updated
+            )
+
+            # Connect cancel button to thread
+            self.progress_dialog.cancel_requested.connect(self.pdf_thread.cancel)
 
             self.pdf_thread.start()
 
-            # Show the loading dialog and handle cancellation
-            if self.loading_dialog.exec() == QDialog.Rejected:
+            # Show the progress dialog
+            self.progress_dialog.show()
+            QApplication.processEvents()  # Make dialog visible immediately
+
+            # Use exec to block until finished
+            if self.progress_dialog.exec() == QDialog.Rejected:
                 self.pdf_thread.cancel()
 
             return True
@@ -131,12 +151,18 @@ class PDFExportController:
             self._show_error(f"Failed to generate PDF file: {str(e)}")
             return False
 
+    def _on_progress_updated(self, current, total, message):
+        """Handles progress updates from the PDF generation thread."""
+        if self.progress_dialog:
+            self.progress_dialog.update_progress(current, total, message)
+            QApplication.processEvents()  # Keep UI responsive
+
     def _on_pdf_generation_finished(self, original_images=None):
         """Handles successful completion of PDF generation."""
         if original_images is not None:
             self.parent.images = original_images
-        if self.loading_dialog:
-            self.loading_dialog.accept()
+        if self.progress_dialog:
+            self.progress_dialog.accept()
         QMessageBox.information(self.parent, "Success", "PDF report generated successfully!")
 
     def _on_pdf_generation_cancelled(self, original_images=None):
@@ -146,16 +172,16 @@ class PDFExportController:
         if self.pdf_thread and self.pdf_thread.isRunning():
             self.pdf_thread.terminate()  # Forcefully terminate the thread
             self.pdf_thread.wait()      # Wait for the thread to terminate completely
-        # Close the loading dialog
-        if self.loading_dialog and self.loading_dialog.isVisible():
-            self.loading_dialog.reject()  # Close the dialog
+        # Close the progress dialog
+        if self.progress_dialog and self.progress_dialog.isVisible():
+            self.progress_dialog.reject()  # Close the dialog
 
     def _on_pdf_generation_error(self, error_message, original_images=None):
         """Handles errors during PDF generation."""
         if original_images is not None:
             self.parent.images = original_images
-        if self.loading_dialog and self.loading_dialog.isVisible():
-            self.loading_dialog.reject()  # Close the loading dialog
+        if self.progress_dialog and self.progress_dialog.isVisible():
+            self.progress_dialog.reject()  # Close the progress dialog
         self._show_error(f"PDF generation failed: {error_message}")
 
     def _show_toast(self, text, msec=3000, color="#00C853"):

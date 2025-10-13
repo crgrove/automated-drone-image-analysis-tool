@@ -22,31 +22,37 @@ from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem
 from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog
 
 from core.views.components.Toggle import Toggle
-from core.views.viewer.Viewer_ui import Ui_Viewer
-from core.views.viewer.components.QtImageViewer import QtImageViewer
+from core.views.viewer.ui.Viewer_ui import Ui_Viewer
+from core.views.viewer.widgets.QtImageViewer import QtImageViewer
 
 from core.controllers.viewer.status.StatusDict import StatusDict
 
-from core.controllers.viewer.components.ImageAdjustmentDialog import ImageAdjustmentDialog
-from core.views.viewer.components.ScaleBarWidget import ScaleBarWidget
-from core.views.viewer.components.LoadingDialog import LoadingDialog
-from core.controllers.viewer.components.MeasureDialog import MeasureDialog
-from core.controllers.viewer.components.MagnifyingGlass import MagnifyingGlass
-from core.views.viewer.components.OverlayWidget import OverlayWidget
-from core.controllers.viewer.components.UpscaleDialog import UpscaleDialog
-from core.views.viewer.components.HelpDialog import HelpDialog
+from core.views.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
+from core.views.viewer.widgets.ScaleBarWidget import ScaleBarWidget
+from core.views.viewer.dialogs.LoadingDialog import LoadingDialog
+from core.views.viewer.dialogs.MeasureDialog import MeasureDialog
+from core.controllers.viewer.MagnifyingGlass import MagnifyingGlass
+from core.views.viewer.widgets.OverlayWidget import OverlayWidget
+from core.views.viewer.dialogs.UpscaleDialog import UpscaleDialog
+from core.views.viewer.dialogs.HelpDialog import HelpDialog
+
+from core.controllers.viewer.UIStyleController import UIStyleController
+from core.controllers.viewer.ThermalDataController import ThermalDataController
+from core.controllers.viewer.PixelInfoController import PixelInfoController
+from core.controllers.viewer.image.ImageLoadController import ImageLoadController
+from core.controllers.viewer.AltitudeController import AltitudeController
 
 from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
 from core.controllers.viewer.exports.ZipExportController import ZipExportController
 from core.controllers.viewer.exports.CalTopoExportController import CalTopoExportController
+from core.controllers.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
 
 from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
-from core.controllers.viewer.coordinates.CoordinateController import CoordinateController
-from core.controllers.viewer.image.ImageHighlightController import ImageHighlightController
+from core.controllers.viewer.CoordinateController import CoordinateController
 from core.controllers.viewer.status.StatusController import StatusController
-from core.controllers.viewer.gps.GPSMapController import GPSMapController
+from core.controllers.viewer.GPSMapController import GPSMapController
 
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
@@ -83,7 +89,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
         self._add_Toggles()
-        self._add_help_button()
         # ---------------- settings / data ----------------
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
@@ -99,12 +104,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.coordinate_controller = CoordinateController(self)
         self.status_controller = StatusController(self)
         self.gps_map_controller = GPSMapController(self)
+        
+        self.ui_style_controller = UIStyleController(self, theme)
+        self.thermal_controller = ThermalDataController(self)
+        self.pixel_info_controller = PixelInfoController(self)
+        self.image_load_controller = ImageLoadController(self)
+        self.altitude_controller = AltitudeController(self)
 
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
         self.is_thermal = (self.settings['thermal'] == 'True')
         self.position_format = position_format
-        self.temperature_data = None
         self.current_image_array = None  # Cache for the current image RGB array
         self.current_image_service = None  # Keep reference to ImageService
 
@@ -119,7 +129,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Gimbal Orientation", "Estimated Average GSD",
                                               "Temperature", "Color Values"])
-        self._apply_icons(self.theme)
+        
+        # Apply icons
+        self._apply_icons()
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
 
         # toast (non intrusive) over statusBarWidget
@@ -135,9 +147,6 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # Track last mouse position for AOI selection
         self.last_mouse_pos = QPoint(-1, -1)
-
-        # Custom AGL altitude for images with negative altitude
-        self.custom_agl_altitude_ft = None  # Store in feet as entered by user
 
         # AOI creation mode state
         self.aoi_creation_mode = False  # Whether user is in AOI creation mode
@@ -221,96 +230,37 @@ class Viewer(QMainWindow, Ui_Viewer):
     def _add_Toggles(self):
         """Replaces checkboxs with a toggle button."""
         self.hideImageToggle = Toggle()
+        self.hideImageToggle.setContentsMargins(4, 0, 4, 0)
+        self.hideImageToggle.setFixedWidth(50)
         self.ButtonLayout.replaceWidget(self.hideImageCheckbox, self.hideImageToggle)
         self.hideImageCheckbox.deleteLater()
         self.hideImageToggle.clicked.connect(self._hide_image_change)
-        self.showOverlayToggle = Toggle()
-        layout = self.TitleWidget.layout()
-        layout.replaceWidget(self.showOverlayCheckBox, self.showOverlayToggle)
-        self.showOverlayCheckBox.deleteLater()
-        self.showOverlayLabel = QLabel("Show Overlay")
+        
+        # Get the main layout
+        layout = self.mainHeaderWidget.layout()
         font = QFont()
         font.setPointSize(10)
+        
+        # Show Overlay toggle with label
+        self.showOverlayToggle = Toggle()
+        self.showOverlayToggle.setContentsMargins(4, 0, 4, 0)
+        self.showOverlayToggle.setFixedWidth(50)
+        self.showOverlayLabel = QLabel("Show Overlay")
         self.showOverlayLabel.setFont(font)
-        layout.insertWidget(layout.indexOf(self.showOverlayToggle) + 1, self.showOverlayLabel)
+        
+        # Create container widget for toggle + label
+        showOverlayContainer = QWidget()
+        showOverlayLayout = QHBoxLayout(showOverlayContainer)
+        showOverlayLayout.setContentsMargins(0, 0, 0, 0)
+        showOverlayLayout.setSpacing(1)
+        showOverlayLayout.addWidget(self.showOverlayToggle)
+        showOverlayLayout.addWidget(self.showOverlayLabel)
+        
+        layout.replaceWidget(self.showOverlayCheckBox, showOverlayContainer)
+        self.showOverlayCheckBox.deleteLater()
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
-
-        # Add highlight pixels of interest toggle
-        self.highlightPixelsToggle = Toggle()
-        layout.replaceWidget(self.highlightPixelsOfInterestCheckBox, self.highlightPixelsToggle)
-        self.highlightPixelsOfInterestCheckBox.deleteLater()
-
-        layout.insertWidget(layout.indexOf(self.showOverlayLabel) + 1, self.highlightPixelsToggle)
-        self.highlightPixelsLabel = QLabel("Highlight Pixels of Interest")
-        self.highlightPixelsLabel.setFont(font)
-        layout.insertWidget(layout.indexOf(self.highlightPixelsToggle) + 1, self.highlightPixelsLabel)
-        self.highlightPixelsToggle.setChecked(False)
-        self.highlightPixelsToggle.clicked.connect(self._highlight_pixels_change)
-        self.highlightPixelsToggle.setToolTip("Highlight Pixels of Interest (H or Ctrl+I)")
-
-        # Add draw AOI circle toggle
-        self.showAOIsToggle = Toggle()
-        layout.replaceWidget(self.showAOIsCheckBox, self.showAOIsToggle)
-        self.showAOIsCheckBox.deleteLater()
-
-        layout.insertWidget(layout.indexOf(self.highlightPixelsLabel) + 1, self.showAOIsToggle)
-        self.drawAOICircleLabel = QLabel("Show AOIs")
-        self.drawAOICircleLabel.setFont(font)
-        layout.insertWidget(layout.indexOf(self.showAOIsToggle) + 1, self.drawAOICircleLabel)
-        self.showAOIsToggle.setChecked(True)  # Default to showing circles
-        self.showAOIsToggle.clicked.connect(self._draw_aoi_circle_change)
-        self.showAOIsToggle.setToolTip("Toggle AOI Circles (C)")
-
-        # Add measure button to toolbar
-
-        # Session variable to store GSD value
-        self.current_gsd = None
-        self.measure_dialog = None
-
-    def _add_help_button(self):
-        """Add help button to the top right corner of the toolbar."""
-        from PySide6.QtWidgets import QToolButton
-        from PySide6.QtGui import QIcon
-        from PySide6.QtCore import QSize
-
-        # Create help button
-        self.helpButton = QToolButton(self.TitleWidget)
-        self.helpButton.setObjectName("helpButton")
-        self.helpButton.setText("?")
-        self.helpButton.setToolTip("View keyboard shortcuts and help")
-
-        # Style the help button
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        self.helpButton.setFont(font)
-        self.helpButton.setFixedSize(30, 30)
-        self.helpButton.setStyleSheet("""
-            QToolButton {
-                background-color: #2196F3;
-                color: white;
-                border: 2px solid #1976D2;
-                border-radius: 15px;
-                font-weight: bold;
-            }
-            QToolButton:hover {
-                background-color: #1976D2;
-            }
-            QToolButton:pressed {
-                background-color: #0D47A1;
-            }
-        """)
-
-        # Add to the layout at the end (far right)
-        layout = self.TitleWidget.layout()
-        layout.addWidget(self.helpButton)
-
-        # Connect to help dialog
-        self.helpButton.clicked.connect(self._show_help_dialog)
-
-        # Store reference to help dialog
-        self.help_dialog = None
+        
 
     def _show_help_dialog(self):
         """Show the help dialog."""
@@ -340,11 +290,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
             self._open_measure_dialog()
         if e.key() == Qt.Key_I and e.modifiers() == Qt.ControlModifier:
-            self._highlight_pixels_change(not self.highlightPixelsToggle.isChecked())
+            self.showPOIsButton.setChecked(not self.showPOIsButton.isChecked())
+            self._update_show_pois_button_style()
+            self._highlight_pixels_change(self.showPOIsButton.isChecked())
         if e.key() == Qt.Key_H and e.modifiers() == Qt.NoModifier:
             # Toggle highlight pixels with 'H' key (no modifier)
-            self.highlightPixelsToggle.setChecked(not self.highlightPixelsToggle.isChecked())
-            self._highlight_pixels_change(self.highlightPixelsToggle.isChecked())
+            self.showPOIsButton.setChecked(not self.showPOIsButton.isChecked())
+            self._update_show_pois_button_style()
+            self._highlight_pixels_change(self.showPOIsButton.isChecked())
         if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
             # Enter AOI creation mode with 'C' key (no modifier)
             self._enter_aoi_creation_mode()
@@ -394,6 +347,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._show_no_images_message()
         else:
             self._load_initial_image()
+            self.helpButton.clicked.connect(self._show_help_dialog)
             self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
 
@@ -410,11 +364,43 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.measureButton.clicked.connect(self._open_measure_dialog)
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.magnifyButton.clicked.connect(self._magnifyButton_clicked)
-            # Initialize magnify button styling
+            self.GPSMapButton.clicked.connect(self._gps_map_button_clicked)
+            self.rotateImageButton.clicked.connect(self._rotate_image_button_clicked)
+            # Initialize button styling
             self._update_magnify_button_style()
+            self.ui_style_controller.update_adjustments_button_style()
+            self.ui_style_controller.update_measure_button_style()
+            self.ui_style_controller.update_gps_map_button_style()
+            self.ui_style_controller.update_rotate_image_button_style()
+            
+            # Connect the POIs button
+            if hasattr(self, 'showPOIsButton'):
+                self.showPOIsButton.clicked.connect(self._on_show_pois_clicked)
+                self.showPOIsButton.setToolTip("Show Pixels of Interest (H or Ctrl+I)")
+                # Initialize button styling
+                self._update_show_pois_button_style()
+            
+            # Connect the AOIs button
+            if hasattr(self, 'showAOIsButton'):
+                self.showAOIsButton.clicked.connect(self._on_show_aois_clicked)
+                self.showAOIsButton.setToolTip("Toggle AOI Circles (C)")
+                # Initialize button styling
+                self._update_show_aois_button_style()
+            
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
+
+                    # Session variable to store GSD value
+            self.current_gsd = None
+            self.measure_dialog = None
+            self.help_dialog = None
+            
+            # Dialog state tracking for button styling
+            self.adjustments_dialog_open = False
+            self.measure_dialog_open = False
+            self.gps_map_open = False
+            self.rotate_image_open = False
 
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
@@ -448,12 +434,16 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
+            
+            # Connect zoom changes to update scale bar
+            self.main_image.zoomChanged.connect(self._update_scale_bar)
 
             # Initialize export controllers
             self.kml_export = KMLExportController(self, self.logger)
             self.pdf_export = PDFExportController(self, self.logger)
             self.zip_export = ZipExportController(self, self.logger)
             self.caltopo_export = CalTopoExportController(self, self.logger)
+            self.coverage_extent_export = CoverageExtentExportController(self, self.logger)
 
             # Force the layout to update and ensure proper sizing
             self.ImageLayout.update()
@@ -461,220 +451,15 @@ class Viewer(QMainWindow, Ui_Viewer):
             QApplication.processEvents()
 
             # Load the image immediately - the widget should be properly sized now
-            self._load_image()
+            self.image_load_controller.load_image()
 
         except Exception as e:
             self.logger.error(e)
 
     def _load_image(self):
         """Loads the image at the current index along with areas of interest and GPS data."""
-        try:
-            # Prevent race conditions by checking if main_image is still valid
-            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
-                return
-
-            # Clear previous status
-            self.messages['GPS Coordinates'] = self.messages['Relative Altitude'] = self.messages['Gimbal Orientation'] = None
-            self.messages['Estimated Average GSD'] = self.messages['Temperature'] = None
-
-            # Hide magnifying glass when loading new image
-            if hasattr(self, 'magnifying_glass'):
-                self.magnifying_glass._hide()
-                # Update the enabled flag and button styling
-                self.magnifying_glass_enabled = self.magnifying_glass.is_enabled()
-                self._update_magnify_button_style()
-
-            image = self.images[self.current_image]
-
-            # Always sync the active thumbnail/index, even if widget not built yet
-            if 'thumbnail' in image:
-                if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
-                    self.thumbnail_controller.ui_component.set_active_thumbnail(image['thumbnail'])
-            else:
-                self.thumbnail_controller.set_active_index(self.current_image)
-
-            # Update GPS map if it's open
-            self.gps_map_controller.update_current_image(self.current_image)
-
-            # Use original image path if available (mask-based approach)
-            # Fall back to path for legacy support
-            image_path = image.get('path', '')
-            mask_path = image.get('mask_path', '')
-
-            # Load the original image
-            # Note: When using mask-based storage, image_path should already point to the original source image
-
-            # Check if file exists
-            if not os.path.exists(image_path):
-                self.logger.error(f"Image file does not exist: {image_path}")
-                return
-
-            try:
-                image_service = ImageService(image_path, mask_path)
-            except Exception:
-                raise
-
-            # Store reference to ImageService for later use
-            self.current_image_service = image_service
-
-            # Cache the image array for pixel value display - with better memory handling
-
-            has_img_array = hasattr(image_service, 'img_array')
-
-            if has_img_array:
-                try:
-                    img_arr = image_service.img_array
-                    if img_arr is not None:
-                        # Just store the reference, skip all the shape checking for now
-                        self.current_image_array = img_arr
-                    else:
-                        self.current_image_array = None
-                except Exception:
-                    self.current_image_array = None
-            else:
-                self.current_image_array = None
-
-            # Draw AOI boundaries (circles or contours) if toggle is enabled
-            if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
-                augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
-            else:
-                # Get the original image without circles
-                # Use reference instead of copy to avoid crash
-                augmented_image = image_service.img_array
-
-            # Highlight pixels of interest if toggle is enabled
-            if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
-                if mask_path:
-                    # Use mask-based highlighting (new efficient approach)
-                    # Pass the identifier color from settings to match AOI circle color
-                    augmented_image = ImageHighlightController.apply_mask_highlight(
-                        augmented_image,
-                        mask_path,
-                        self.settings['identifier_color'],
-                        image['areas_of_interest']
-                    )
-                else:
-                    # Fall back to old method for backward compatibility
-                    augmented_image = ImageHighlightController.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
-
-            img = QImage(qimage2ndarray.array2qimage(augmented_image))
-
-            # Critical section: check if widget is still valid before setting image
-            if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
-                return
-
-            self.main_image.setImage(img)
-            self.fileNameLabel.setText(image['name'])
-
-            # For AOI thumbnails, we don't need to draw circles on the full image
-            # Just pass the base image array - circles can be drawn on individual crops if needed
-            # Use the base image array for AOI thumbnails (no need to process full image)
-            self.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
-
-            # Check again before resetting zoom
-            if not hasattr(self, 'main_image') or self.main_image is None or getattr(self.main_image, '_is_destroyed', True):
-                return
-
-            # Ensure the image is properly loaded before resetting zoom
-            if not self.main_image.hasImage():
-                return
-
-            # Reset zoom to fit image properly
-            # Guard resetZoom against deleted C++ object
-            try:
-                self.main_image.resetZoom()
-            except RuntimeError:
-                return
-            self.main_image.setFocus()
-            self.hideImageToggle.setChecked(image['hidden'])
-            self.indexLabel.setText(f"Image {self.current_image + 1} of {len(self.images)}")
-
-            altitude = image_service.get_relative_altitude(self.distance_unit)
-            if altitude:
-                self.messages['Relative Altitude'] = f"{altitude} {self.distance_unit}"
-
-                # Check for negative altitude and prompt for custom AGL
-                if altitude < 0 and self.custom_agl_altitude_ft is None:
-                    self._prompt_for_custom_agl_altitude()
-            direction = image_service.get_camera_yaw()
-            if direction is not None:
-                self.messages['Gimbal Orientation'] = f"{direction}°"
-            else:
-                self.messages['Gimbal Orientation'] = None
-
-            # Calculate GSD with custom altitude if available
-            custom_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else None
-            avg_gsd = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
-            if avg_gsd is not None:
-                self.messages['Estimated Average GSD'] = f"{avg_gsd}cm/px"
-            else:
-                self.messages['Estimated Average GSD'] = None
-            position = image_service.get_position(self.position_format)
-            if position:
-                self.messages['GPS Coordinates'] = position
-            # also keep decimal coords for sharing/opening links
-            try:
-                gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
-                if gps and 'latitude' in gps and 'longitude' in gps:
-                    self.coordinate_controller.update_current_coordinates((gps['latitude'], gps['longitude']))
-                else:
-                    self.coordinate_controller.update_current_coordinates(None)
-            except Exception:
-                self.coordinate_controller.update_current_coordinates(None)
-            if self.is_thermal:
-                # First try to get thermal data from XMP metadata
-                self.temperature_data = image_service.get_thermal_data(self.temperature_unit)
-
-                # If no thermal data in XMP, try to parse it directly from the thermal image
-                if self.temperature_data is None:
-                    try:
-                        # Check if this is a thermal image file
-                        if image_path.lower().endswith(('.jpg', '.jpeg', '.rjpeg')):
-                            thermal_parser = ThermalParserService(dtype=np.float32)
-                            temperature_c, _ = thermal_parser.parse_file(image_path)
-
-                            # Convert to the desired unit
-                            if self.temperature_unit == 'F' and temperature_c is not None:
-                                self.temperature_data = temperature_c * 1.8 + 32.0
-                            else:
-                                self.temperature_data = temperature_c
-                    except Exception as e:
-                        self.logger.error(f"Failed to parse thermal data from image: {e}")
-                        self.temperature_data = None
-            # Connect signals only once
-            if not hasattr(self, '_signals_connected'):
-                self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
-                self.main_image.middleMouseButtonPressed.connect(self._toggle_magnifying_glass)
-                self.main_image.zoomChanged.connect(self._update_scale_bar)
-                self._signals_connected = True
-
-            self._update_scale_bar(self.main_image.getZoom())
-
-            # Update overlay with new image data - AFTER zoom reset so scene is properly set up
-            if hasattr(self, 'overlay'):
-                self.overlay.rotate_north_icon(direction)
-                self.overlay.update_visibility(
-                    self.showOverlayToggle.isChecked(),
-                    direction,
-                    avg_gsd
-                )
-                # Position the overlay after image is loaded and zoomed
-                self.overlay._place_overlay()
-        except Exception as e:
-            error_msg = f"Error loading image {self.current_image + 1}: {str(e)}"
-            self.logger.error(error_msg)
-            self.logger.error(f"Traceback:\n{traceback.format_exc()}")
-            print(f"\n{'='*60}")
-            print("ERROR IN VIEWER - _load_image()")
-            print(f"Image index: {self.current_image}")
-            if image:
-                print(f"Image path: {image.get('path', 'N/A')}")
-                print(f"Mask path: {image.get('mask_path', 'N/A')}")
-            print(f"Error: {str(e)}")
-            print(f"Traceback:\n{traceback.format_exc()}")
-            print(f"{'='*60}\n")
-            # Show error to user
-            QMessageBox.critical(self, "Error Loading Image", error_msg)
+        # Delegate to ImageLoadController
+        self.image_load_controller.load_image()
 
     def _previousImageButton_clicked(self):
         """Navigates to the previous image in the list, skipping hidden images if applicable."""
@@ -796,6 +581,16 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             self.overlay.update_visibility(state, direction, avg_gsd)
 
+    def _on_show_pois_clicked(self):
+        """Handle Show POIs button click - update styling and toggle highlight."""
+        self._update_show_pois_button_style()
+        self._highlight_pixels_change(self.showPOIsButton.isChecked())
+
+    def _on_show_aois_clicked(self):
+        """Handle Show AOIs button click - update styling and toggle circles."""
+        self._update_show_aois_button_style()
+        self._draw_aoi_circle_change(self.showAOIsButton.isChecked())
+
     def _highlight_pixels_change(self, state):
         """Toggles highlighting of pixels of interest.
 
@@ -819,69 +614,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         This method respects both the draw AOI circle and highlight pixels toggles.
         """
-        if not hasattr(self, 'main_image') or self.main_image is None:
-            return
-
-        # Save the current zoom stack and viewport to preserve state
-        saved_zoom_stack = self.main_image.zoomStack.copy() if self.main_image.zoomStack else []
-        saved_transform = self.main_image.transform()
-
-        # Save AOI list scroll position
-        aoi_scroll_pos = self.aoiListWidget.verticalScrollBar().value() if hasattr(self, 'aoiListWidget') else 0
-
-        # Reload just the image content without resetting view
-        image = self.images[self.current_image]
-        image_path = image.get('path', '')
-        mask_path = image.get('mask_path', '')
-
-        # Load and process the image
-        image_service = ImageService(image_path, mask_path)
-
-        # Update the cached image array - using reference to avoid crash
-        # Store the service reference to keep data alive
-        self.current_image_service = image_service
-        self.current_image_array = image_service.img_array
-
-        # Start with the base image or with circles based on toggle
-        if hasattr(self, 'showAOIsToggle') and self.showAOIsToggle.isChecked():
-            augmented_image = image_service.circle_areas_of_interest(self.settings['identifier_color'], image['areas_of_interest'])
-        else:
-            # Use reference instead of copy to avoid crash
-            augmented_image = image_service.img_array
-
-        # Apply highlight if enabled (independent of circle drawing)
-        if hasattr(self, 'highlightPixelsToggle') and self.highlightPixelsToggle.isChecked():
-            if mask_path:
-                augmented_image = ImageHighlightController.apply_mask_highlight(
-                    augmented_image,
-                    mask_path,
-                    self.settings['identifier_color'],
-                    image['areas_of_interest']
-                )
-            else:
-                augmented_image = ImageHighlightController.highlight_aoi_pixels(augmented_image, image['areas_of_interest'])
-
-        # Update the image without resetting the view
-        img = QImage(qimage2ndarray.array2qimage(augmented_image))
-
-        # Temporarily block zoom stack updates
-        self.main_image.zoomStack = saved_zoom_stack
-
-        # Set the new image
-        self.main_image.setImage(img)
-
-        # Restore the transform exactly
-        self.main_image.setTransform(saved_transform)
-
-        # Restore zoom stack
-        self.main_image.zoomStack = saved_zoom_stack
-
-        # Force emit zoom to update any UI elements
-        self.main_image._emit_zoom_if_changed()
-
-        # Restore AOI list scroll position
-        if hasattr(self, 'aoiListWidget') and aoi_scroll_pos > 0:
-            self.aoiListWidget.verticalScrollBar().setValue(aoi_scroll_pos)
+        # Delegate to ImageLoadController
+        self.image_load_controller.reload_image_preserving_view()
 
     def _open_image_adjustment_dialog(self):
         """Opens the image adjustment dialog for the current image."""
@@ -902,8 +636,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Connect the real-time adjustment signal
         dialog.imageAdjusted.connect(self._on_image_adjusted)
 
+        # Update button state to show dialog is open
+        self.adjustments_dialog_open = True
+        self.ui_style_controller.update_adjustments_button_style()
+
         # Show dialog
         result = dialog.exec()
+
+        # Update button state to show dialog is closed
+        self.adjustments_dialog_open = False
+        self.ui_style_controller.update_adjustments_button_style()
 
         # If user clicked Apply or OK, keep the adjustments
         if result == QDialog.Accepted:
@@ -1054,143 +796,8 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _export_coverage_extent_kml(self):
         """Handles the export of coverage extent KML file for all images."""
-        try:
-            # Show confirmation dialog
-            reply = QMessageBox.question(
-                self,
-                "Generate Coverage Extent KML",
-                "Generate a KML file showing the geographic coverage extent of all images?\n\n"
-                "This will create polygon(s) representing the area covered by all images. "
-                "Overlapping image areas will be merged into a single polygon.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-
-            if reply != QMessageBox.Yes:
-                return
-
-            # Show file save dialog
-            file_name, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save Coverage Extent KML",
-                "",
-                "KML files (*.kml)"
-            )
-
-            if not file_name:  # User cancelled
-                return
-
-            # Create progress dialog
-            from core.views.viewer.components.CoverageExtentProgressDialog import CoverageExtentProgressDialog
-
-            progress_dialog = CoverageExtentProgressDialog(self, len(self.images))
-            progress_dialog.show()
-            QApplication.processEvents()  # Make dialog visible immediately
-
-            # Define progress callback
-            def update_progress(current, total, message):
-                progress_dialog.update_progress(current, total, message)
-                QApplication.processEvents()  # Keep UI responsive
-
-            # Define cancel check
-            def check_cancelled():
-                return progress_dialog.is_cancelled()
-
-            # Calculate coverage extents
-            from core.services.CoverageExtentService import CoverageExtentService
-
-            custom_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else None
-            coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
-            coverage_data = coverage_service.calculate_coverage_extents(
-                self.images,
-                progress_callback=update_progress,
-                cancel_check=check_cancelled
-            )
-
-            # Close progress dialog
-            progress_dialog.close()
-
-            # Check if operation was cancelled
-            if coverage_data.get('cancelled', False):
-                self.status_controller.show_toast("Coverage extent generation cancelled", 3000, color="#FF9800")
-                return
-
-            if coverage_data['image_count'] == 0:
-                self.status_controller.show_toast(
-                    "No valid images found for coverage extent calculation",
-                    3000,
-                    color="#F44336"
-                )
-                QMessageBox.warning(
-                    self,
-                    "Coverage Extent",
-                    f"Could not calculate coverage extent.\n\n"
-                    f"Images processed: {coverage_data['image_count']}\n"
-                    f"Images skipped: {coverage_data['skipped_count']}\n\n"
-                    f"Images may be skipped for the following reasons:\n"
-                    f"  • Missing GPS data in EXIF\n"
-                    f"  • No valid GSD (missing altitude/focal length)\n"
-                    f"  • Gimbal not nadir (must be -85° to -95°)"
-                )
-                return
-
-            # Generate KML file
-            from core.services.KMLGeneratorService import KMLGeneratorService
-
-            kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
-            kml_service.generate_coverage_extent_kml(coverage_data, file_name)
-
-            # Show success message with proper units
-            total_area_sqm = coverage_data['total_area_sqm']
-            num_polygons = len(coverage_data['polygons'])
-
-            # Honor user's distance unit preference
-            if self.distance_unit == 'ft':
-                # English units - use acres
-                total_area_acres = total_area_sqm / 4046.86  # 1 acre = 4046.86 m²
-                area_display = f"{total_area_acres:.2f} acres"
-                area_toast = f"{total_area_acres:.2f} acres"
-            else:
-                # Metric units - use km²
-                total_area_sqkm = total_area_sqm / 1_000_000
-                area_display = f"{total_area_sqkm:.3f} km²"
-                area_toast = f"{total_area_sqkm:.3f} km²"
-
-            self.status_controller.show_toast(
-                f"Coverage extent KML saved: {area_toast}",
-                4000,
-                color="#00C853"
-            )
-
-            # Build skip reasons explanation if any were skipped
-            skip_info = ""
-            if coverage_data['skipped_count'] > 0:
-                skip_info = (
-                    f"\n\nImages may be skipped for:\n"
-                    f"  • Missing GPS data\n"
-                    f"  • No valid GSD\n"
-                    f"  • Gimbal not nadir"
-                )
-
-            QMessageBox.information(
-                self,
-                "Coverage Extent KML Generated",
-                f"Coverage extent KML file created successfully!\n\n"
-                f"File: {file_name}\n"
-                f"Images processed: {coverage_data['image_count']}\n"
-                f"Images skipped: {coverage_data['skipped_count']}\n"
-                f"Coverage areas: {num_polygons}\n"
-                f"Total area: {area_display}{skip_info}"
-            )
-
-        except Exception as e:
-            self.logger.error(f"Error generating coverage extent KML: {str(e)}")
-            self.status_controller.show_toast("Error generating coverage extent KML", 3000, color="#F44336")
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to generate coverage extent KML:\n{str(e)}"
-            )
+        # Delegate to CoverageExtentExportController
+        self.coverage_extent_export.export_coverage_extent_kml()
 
     def _magnifyButton_clicked(self):
         if self.main_image and self.main_image.hasImage():
@@ -1202,95 +809,30 @@ class Viewer(QMainWindow, Ui_Viewer):
         else:
             self.logger.warning("No image available for magnifying glass")
 
+    def _gps_map_button_clicked(self):
+        """Handle GPS Map button click."""
+        if hasattr(self, 'gps_map_controller'):
+            self.gps_map_controller.show_map()
+
+    def _rotate_image_button_clicked(self):
+        """Handle Rotate Image button click."""
+        if hasattr(self, 'coordinate_controller'):
+            self.coordinate_controller.show_north_oriented_image()
+
     def _update_magnify_button_style(self):
         """Update the magnify button styling based on magnifying glass state."""
-        if hasattr(self, 'magnifyButton') and hasattr(self, 'magnifying_glass_enabled'):
-            # Set a property to track the active state
-            self.magnifyButton.setProperty("magnifyActive", self.magnifying_glass_enabled)
+        # Delegate to UIStyleController
+        self.ui_style_controller.update_magnify_button_style()
 
-            if self.magnifying_glass_enabled:
-                # Active state - highlight the button with theme-aware colors
-                # Use a blue highlight similar to other active elements in the app
-                if hasattr(self, 'theme') and self.theme.lower() == 'light':
-                    # Light theme colors
-                    style = """
-                        QToolButton[magnifyActive="true"] {
-                            background-color: #4A90E2;
-                            border: 2px solid #357ABD;
-                            border-radius: 4px;
-                        }
-                        QToolButton[magnifyActive="true"]:hover {
-                            background-color: #5BA0F2;
-                            border: 2px solid #4A90E2;
-                        }
-                        QToolButton[magnifyActive="false"] {
-                            background-color: transparent;
-                            border: none;
-                        }
-                    """
-                else:
-                    # Dark theme colors (more muted but still visible)
-                    style = """
-                        QToolButton[magnifyActive="true"] {
-                            background-color: #5A7FB8;
-                            border: 2px solid #4A6B9A;
-                            border-radius: 4px;
-                        }
-                        QToolButton[magnifyActive="true"]:hover {
-                            background-color: #6A8FC8;
-                            border: 2px solid #5A7FB8;
-                        }
-                        QToolButton[magnifyActive="false"] {
-                            background-color: transparent;
-                            border: none;
-                        }
-                    """
-                self.magnifyButton.setStyleSheet(style)
-            else:
-                # Inactive state - use the same stylesheet but the property will make it use the inactive rules
-                if hasattr(self, 'theme') and self.theme.lower() == 'light':
-                    style = """
-                        QToolButton[magnifyActive="true"] {
-                            background-color: #4A90E2;
-                            border: 2px solid #357ABD;
-                            border-radius: 4px;
-                        }
-                        QToolButton[magnifyActive="true"]:hover {
-                            background-color: #5BA0F2;
-                            border: 2px solid #4A90E2;
-                        }
-                        QToolButton[magnifyActive="false"] {
-                            background-color: transparent;
-                            border: none;
-                        }
-                    """
-                else:
-                    style = """
-                        QToolButton[magnifyActive="true"] {
-                            background-color: #5A7FB8;
-                            border: 2px solid #4A6B9A;
-                            border-radius: 4px;
-                        }
-                        QToolButton[magnifyActive="true"]:hover {
-                            background-color: #6A8FC8;
-                            border: 2px solid #5A7FB8;
-                        }
-                        QToolButton[magnifyActive="false"] {
-                            background-color: transparent;
-                            border: none;
-                        }
-                    """
-                self.magnifyButton.setStyleSheet(style)
+    def _update_show_pois_button_style(self):
+        """Update the Show POIs button styling based on its checked state."""
+        # Delegate to UIStyleController
+        self.ui_style_controller.update_show_pois_button_style()
 
-            # Force the style to be reapplied
-            self.magnifyButton.style().unpolish(self.magnifyButton)
-            self.magnifyButton.style().polish(self.magnifyButton)
-            self.magnifyButton.update()
-        else:
-            self.logger.warning(
-                f"Cannot update magnify button style: magnifyButton={hasattr(self, 'magnifyButton')}, "
-                f"enabled={hasattr(self, 'magnifying_glass_enabled')}"
-            )
+    def _update_show_aois_button_style(self):
+        """Update the Show AOIs button styling based on its checked state."""
+        # Delegate to UIStyleController
+        self.ui_style_controller.update_show_aois_button_style()
 
     def _toggle_magnifying_glass(self, x, y):
         """Toggle the magnifying glass on/off when middle mouse button is pressed.
@@ -1343,88 +885,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Store the current mouse position for AOI selection
         self.last_mouse_pos = pos
 
-        # Clear previous cursor position message
-        if "Cursor Position" in self.messages:
-            self.messages["Cursor Position"] = None
-        # Clear previous color values message
-        if "Color Values" in self.messages:
-            self.messages["Color Values"] = None
-
-        if self.temperature_data is not None:
-            # Check if cursor is within valid image bounds
-            if pos.x() >= 0 and pos.y() >= 0:
-                shape = self.temperature_data.shape
-                # Ensure position is within temperature data array bounds
-                if (0 <= pos.y() < shape[0]) and (0 <= pos.x() < shape[1]):
-                    temp_value = self.temperature_data[pos.y()][pos.x()]
-                    # Format temperature with 1 decimal place for cleaner display
-                    temp_display = f"{temp_value:.1f}° {self.temperature_unit} at ({pos.x()}, {pos.y()})"
-                    self.messages["Temperature"] = temp_display
-                else:
-                    # Cursor is on image but outside temperature data bounds
-                    self.messages["Temperature"] = None
-            else:
-                # Cursor is outside the image
-                self.messages["Temperature"] = None
-        else:
-            # No temperature data available (non-thermal image)
-            self.messages["Temperature"] = None
-
-            # Display color values for non-thermal images only
-            # Check if this is actually a non-thermal algorithm
-            algorithm_name = self.settings.get('algorithm', '')
-            if algorithm_name not in ['ThermalRange', 'ThermalAnomaly']:
-                if pos.x() >= 0 and pos.y() >= 0:
-                    # Only show color values if cursor is on the image
-                    if hasattr(self, 'main_image') and self.main_image and self.main_image.hasImage():
-                        try:
-                            # Use cached image array if available
-                            if self.current_image_array is not None:
-                                img_array = self.current_image_array
-                            elif self.current_image_service is not None and hasattr(self.current_image_service, 'img_array'):
-                                # Use the stored ImageService reference
-                                img_array = self.current_image_service.img_array
-                            else:
-                                # Fallback: load image if both cache and service are missing
-                                image = self.images[self.current_image]
-                                image_path = image.get('path', '')
-                                mask_path = image.get('mask_path', '')
-                                image_service = ImageService(image_path, mask_path)
-                                img_array = image_service.img_array
-                                # Store reference instead of copying
-                                self.current_image_service = image_service
-                                self.current_image_array = img_array
-
-                            # Check bounds
-                            if (0 <= pos.y() < img_array.shape[0]) and (0 <= pos.x() < img_array.shape[1]):
-                                # Get RGB values at cursor position
-                                r, g, b = img_array[pos.y(), pos.x()]
-
-                                # Determine which values to display based on algorithm
-                                if algorithm_name in ['HSVColorRange', 'RXAnomaly', 'MRMap']:
-                                    # Display HSV values
-                                    # Convert RGB to HSV
-                                    r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
-                                    h, s, v = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
-
-                                    # Convert to standard ranges: H (0-360), S (0-100), V (0-100)
-                                    h_deg = int(h * 360)
-                                    s_pct = int(s * 100)
-                                    v_pct = int(v * 100)
-
-                                    color_display = f"H: {h_deg}°, S: {s_pct}%, V: {v_pct}% at ({pos.x()}, {pos.y()})"
-                                    self.messages["Color Values"] = color_display
-                                elif algorithm_name in ['ColorRange', 'MatchedFilter', 'AIPersonDetector']:
-                                    # Display RGB values
-                                    color_display = f"R: {r}, G: {g}, B: {b} at ({pos.x()}, {pos.y()})"
-                                    self.messages["Color Values"] = color_display
-                                else:
-                                    # Default to RGB for unknown algorithms
-                                    color_display = f"R: {r}, G: {g}, B: {b} at ({pos.x()}, {pos.y()})"
-                                    self.messages["Color Values"] = color_display
-                        except Exception as e:
-                            # Log error but don't show to user
-                            self.logger.error(f"Error getting pixel values: {e}")
+        # Delegate to PixelInfoController
+        self.pixel_info_controller.update_cursor_info(pos)
 
         # Update magnifying glass if enabled
         if hasattr(self, 'magnifying_glass_enabled') and self.magnifying_glass_enabled and pos.x() >= 0 and pos.y() >= 0:
@@ -1447,6 +909,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.measure_dialog is None or not self.measure_dialog.isVisible():
             self.measure_dialog = MeasureDialog(self, self.main_image, self.current_gsd, self.distance_unit)
             self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
+            
+            # Connect to dialog close event to update button state
+            self.measure_dialog.finished.connect(self._on_measure_dialog_closed)
+            
+            # Update button state to show dialog is open
+            self.measure_dialog_open = True
+            self.ui_style_controller.update_measure_button_style()
+            
             self.measure_dialog.show()
 
     def _on_gsd_changed(self, gsd_value):
@@ -1457,122 +927,51 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         self.current_gsd = gsd_value
 
+    def _on_measure_dialog_closed(self):
+        """Handle measure dialog close event."""
+        self.measure_dialog_open = False
+        self.ui_style_controller.update_measure_button_style()
+
     def _prompt_for_custom_agl_altitude(self):
         """Prompt user for custom AGL altitude when negative altitude is detected."""
-        self._show_altitude_override_dialog(
-            "Negative Altitude Detected",
-            "WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in feet):",
-            auto_triggered=True
-        )
+        # Delegate to AltitudeController
+        self.altitude_controller.prompt_for_custom_altitude(auto_triggered=True)
 
     def _manual_altitude_override(self):
         """Prompt user to manually override altitude for all images."""
-        # Get current altitude if set
-        current_alt = self.custom_agl_altitude_ft if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0 else 100.0
+        # Delegate to AltitudeController
+        self.altitude_controller.manual_altitude_override()
 
-        self._show_altitude_override_dialog(
-            "Override Altitude",
-            "Enter a custom AGL altitude to be used for GSD calculations for all images (in feet):",
-            auto_triggered=False,
-            default_value=current_alt
-        )
-
-    def _show_altitude_override_dialog(self, title, message, auto_triggered=True, default_value=100.0):
-        """
-        Show altitude override dialog and update custom altitude.
-
-        Args:
-            title: Dialog window title
-            message: Dialog message text
-            auto_triggered: If True, sets flag to -1 on cancel (don't show again). If False, allows cancellation.
-            default_value: Default altitude value to show
-        """
-        # Show dialog with input
-        altitude_ft, ok = QInputDialog.getDouble(
-            self,
-            title,
-            message,
-            default_value,  # Default value
-            0.1,            # Minimum value
-            10000.0,        # Maximum value
-            1               # Decimals
-        )
-
-        if ok and altitude_ft > 0:
-            # Store the custom altitude in feet
-            old_altitude = self.custom_agl_altitude_ft
-            self.custom_agl_altitude_ft = altitude_ft
-            self.logger.info(f"Custom AGL altitude set to {altitude_ft} ft")
-
-            # Show confirmation toast
-            self.status_controller.show_toast(f"Custom AGL set to {altitude_ft} ft", 3000, color="#00C853")
-
-            # If altitude changed and we have a current image, reload it to update GSD
-            if old_altitude != altitude_ft and hasattr(self, 'current_image'):
-                self._load_image()
-        else:
-            if auto_triggered:
-                # User canceled automatic prompt - don't show dialog again for this session
-                # Set a flag value to indicate user chose to skip
-                self.custom_agl_altitude_ft = -1
-                self.logger.info("User declined to set custom AGL altitude")
-            else:
-                # User canceled manual override - just log it
-                self.logger.info("User canceled altitude override")
-
-    def _apply_icons(self, theme):
-        """
-        Loads icon assets based on the currently selected theme.
-
-        Args:
-            theme (str): Name of the active theme used to resolve icon paths.
-        """
-        # Set icon color based on theme
-        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
-        
-        # Apply icons with theme-appropriate colors
-        self.magnifyButton.setIcon(qta.icon('fa6s.magnifying-glass', color=icon_color))
-        self.kmlButton.setIcon(qta.icon('fa5s.map-marker-alt', color=icon_color))
-        self.pdfButton.setIcon(qta.icon('fa6s.file-pdf', color=icon_color))
-        self.zipButton.setIcon(qta.icon('fa5s.file-archive', color=icon_color))
-        self.caltopoButton.setIcon(qta.icon('fa6s.map', color=icon_color))
-        self.measureButton.setIcon(qta.icon('fa6s.ruler', color=icon_color))
-        self.adjustmentsButton.setIcon(qta.icon('fa6s.sliders', color=icon_color))
-        self.previousImageButton.setIcon(qta.icon('fa6s.arrow-left', color=icon_color))
-        self.nextImageButton.setIcon(qta.icon('fa6s.arrow-right', color=icon_color))
-        self.filterButton.setIcon(qta.icon('fa6s.filter', color=icon_color))
 
     def _enter_aoi_creation_mode(self):
         """Enter AOI creation mode - user can click and drag to draw a circle."""
-        if not hasattr(self, 'main_image') or self.main_image is None:
-            return
-
-        self.aoi_creation_mode = True
-        self.main_image.viewport().setCursor(Qt.CrossCursor)
-
-        # Show instruction toast
-        if hasattr(self, 'status_controller'):
-            self.status_controller.show_toast(
-                "AOI Creation Mode: Click and drag to draw circle",
-                3000,
-                color="#FFA500"
-            )
+        # Delegate to AOIController
+        self.aoi_controller.enter_creation_mode()
 
     def _exit_aoi_creation_mode(self):
         """Exit AOI creation mode and clean up."""
-        self.aoi_creation_mode = False
-        self.aoi_creation_start = None
-        self.aoi_creation_current = None
+        # Delegate to AOIController
+        self.aoi_controller.exit_creation_mode()
 
-        # Remove preview circle if it exists
-        if self.aoi_creation_preview_item is not None:
-            if hasattr(self, 'main_image') and self.main_image is not None:
-                self.main_image.scene.removeItem(self.aoi_creation_preview_item)
-            self.aoi_creation_preview_item = None
-
-        # Restore normal cursor
-        if hasattr(self, 'main_image') and self.main_image is not None:
-            self.main_image.viewport().setCursor(Qt.ArrowCursor)
+    def _apply_icons(self):
+        """Apply themed icons to all buttons in the viewer."""
+        from helpers.IconHelper import IconHelper
+        
+        self.magnifyButton.setIcon(IconHelper.create_icon('fa6s.magnifying-glass', self.theme))
+        self.kmlButton.setIcon(IconHelper.create_icon('fa5s.map-marker-alt', self.theme))
+        self.pdfButton.setIcon(IconHelper.create_icon('fa6s.file-pdf', self.theme))
+        self.zipButton.setIcon(IconHelper.create_icon('fa5s.file-archive', self.theme))
+        self.caltopoButton.setIcon(IconHelper.create_icon('fa6s.map', self.theme))
+        self.measureButton.setIcon(IconHelper.create_icon('fa6s.ruler', self.theme))
+        self.adjustmentsButton.setIcon(IconHelper.create_icon('fa6s.sliders', self.theme))
+        self.previousImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-left', self.theme))
+        self.nextImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-right', self.theme))
+        self.filterButton.setIcon(IconHelper.create_icon('fa6s.filter', self.theme))
+        self.helpButton.setIcon(IconHelper.create_icon('fa6s.question', self.theme, options=[{'scale_factor': 1.5}]))
+        self.showPOIsButton.setIcon(IconHelper.create_icon('mdi.scatter-plot', self.theme))
+        self.showAOIsButton.setIcon(IconHelper.create_icon('fa6.circle', self.theme))
+        self.GPSMapButton.setIcon(IconHelper.create_icon('fa6s.map-location-dot', self.theme))
+        self.rotateImageButton.setIcon(IconHelper.create_icon('fa6s.compass', self.theme))
 
     # Qt event filter for viewport resize events
 

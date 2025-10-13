@@ -7,7 +7,7 @@ This dialog shows all image GPS locations as connected points on an interactive 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox
 from PySide6.QtCore import Qt, Signal, QPointF, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from .GPSMapView import GPSMapView
+from core.views.viewer.widgets.GPSMapView import GPSMapView
 
 
 class GPSMapDialog(QDialog):
@@ -234,8 +234,7 @@ class GPSMapDialog(QDialog):
         super().showEvent(event)
         # Fit all points when shown (viewport is now valid)
         self.map_view.fit_all_points()
-        # Create compass rose after dialog is shown
-        QTimer.singleShot(100, self.map_view._create_compass_rose)
+        # Compass will be created automatically in map view's resize/paint events
 
     def update_aoi_marker(self, aoi_gps_data, identifier_color):
         """

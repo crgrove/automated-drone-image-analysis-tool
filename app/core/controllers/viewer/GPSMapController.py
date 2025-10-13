@@ -51,7 +51,7 @@ class GPSMapController(QObject):
             return
 
         # Create and show the map dialog
-        from .GPSMapDialog import GPSMapDialog
+        from core.views.viewer.dialogs.GPSMapDialog import GPSMapDialog
 
         # Find the current image in the GPS data list
         current_gps_index = None
@@ -63,6 +63,8 @@ class GPSMapController(QObject):
         if self.map_dialog is None:
             self.map_dialog = GPSMapDialog(self.parent, self.gps_data, current_gps_index)
             self.map_dialog.image_selected.connect(self.on_map_image_selected)
+            # Connect to dialog close event to update button state
+            self.map_dialog.finished.connect(self.on_map_dialog_closed)
         else:
             # Update with latest data if dialog already exists
             self.map_dialog.update_gps_data(self.gps_data, current_gps_index)
@@ -70,6 +72,12 @@ class GPSMapController(QObject):
         self.map_dialog.show()
         self.map_dialog.raise_()
         self.map_dialog.activateWindow()
+
+        # Update button state to show map is open
+        if hasattr(self.parent, 'gps_map_open'):
+            self.parent.gps_map_open = True
+            if hasattr(self.parent, 'ui_style_controller'):
+                self.parent.ui_style_controller.update_gps_map_button_style()
 
         # Show current AOI if one is selected
         self.update_aoi_on_map()
@@ -233,6 +241,13 @@ class GPSMapController(QObject):
             self.map_dialog.close()
             self.map_dialog = None
 
+    def on_map_dialog_closed(self):
+        """Handle map dialog close event."""
+        if hasattr(self.parent, 'gps_map_open'):
+            self.parent.gps_map_open = False
+            if hasattr(self.parent, 'ui_style_controller'):
+                self.parent.ui_style_controller.update_gps_map_button_style()
+
     def get_current_aoi_gps(self):
         """
         Get GPS coordinates for the currently selected AOI.
@@ -241,19 +256,33 @@ class GPSMapController(QObject):
             Dict with AOI GPS data including coordinates and metadata, or None
         """
         try:
+            print(f"DEBUG: get_current_aoi_gps called")
+            
             # Check if we have a selected AOI
-            if not hasattr(self.parent, 'aoi_controller') or self.parent.aoi_controller.selected_aoi_index < 0:
+            has_aoi_controller = hasattr(self.parent, 'aoi_controller')
+            selected_index = self.parent.aoi_controller.selected_aoi_index if has_aoi_controller else -1
+            print(f"DEBUG: has_aoi_controller: {has_aoi_controller}, selected_aoi_index: {selected_index}")
+            
+            if not has_aoi_controller or selected_index < 0:
+                print(f"DEBUG: No AOI controller or no selected AOI")
                 return None
 
             # Get current image data
             current_image = self.parent.images[self.parent.current_image]
+            print(f"DEBUG: current_image index: {self.parent.current_image}")
 
             # Get AOI data
             aoi_index = self.parent.aoi_controller.selected_aoi_index
-            if 'areas_of_interest' not in current_image or aoi_index >= len(current_image['areas_of_interest']):
+            has_aois = 'areas_of_interest' in current_image
+            aoi_count = len(current_image.get('areas_of_interest', []))
+            print(f"DEBUG: has_aois: {has_aois}, aoi_count: {aoi_count}, aoi_index: {aoi_index}")
+            
+            if not has_aois or aoi_index >= aoi_count:
+                print(f"DEBUG: No AOIs in image or index out of range")
                 return None
 
             aoi = current_image['areas_of_interest'][aoi_index]
+            print(f"DEBUG: AOI data retrieved, center: {aoi.get('center', 'N/A')}")
 
             # Use AOIService for GPS calculation with metadata
             from core.services.AOIService import AOIService
@@ -263,11 +292,15 @@ class GPSMapController(QObject):
             custom_alt_ft = None
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
+            
+            print(f"DEBUG: custom_alt_ft: {custom_alt_ft}")
 
             # Calculate AOI GPS coordinates with metadata using the convenience method
             aoi_gps = aoi_service.get_aoi_gps_with_metadata(current_image, aoi, aoi_index, custom_alt_ft)
+            print(f"DEBUG: AOI GPS calculation result: {aoi_gps}")
 
             if not aoi_gps:
+                print(f"DEBUG: AOI GPS calculation returned None")
                 return None
 
             # Add additional viewer-specific metadata
@@ -276,18 +309,27 @@ class GPSMapController(QObject):
 
             # Get color/temperature info if available
             if hasattr(self.parent.aoi_controller, 'calculate_aoi_average_info'):
+                # Get temperature data from thermal controller if available
+                temperature_data = None
+                if hasattr(self.parent, 'thermal_controller'):
+                    temperature_data = self.parent.thermal_controller.temperature_data
+                
                 avg_info, _ = self.parent.aoi_controller.calculate_aoi_average_info(
                     aoi,
                     self.parent.is_thermal,
-                    self.parent.temperature_data,
+                    temperature_data,
                     self.parent.temperature_unit
                 )
                 aoi_gps['avg_info'] = avg_info
 
+            print(f"DEBUG: Final aoi_gps to return: lat={aoi_gps.get('latitude', 'N/A')}, lon={aoi_gps.get('longitude', 'N/A')}")
             return aoi_gps
 
         except Exception as e:
             self.logger.error(f"Error getting current AOI GPS: {e}")
+            print(f"DEBUG: Exception in get_current_aoi_gps: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def calculate_gsd_for_image(self, image_path, custom_altitude_ft=None):
@@ -314,10 +356,17 @@ class GPSMapController(QObject):
 
     def update_aoi_on_map(self):
         """Update the AOI display on the map if it's open."""
+        print(f"DEBUG: update_aoi_on_map called")
+        print(f"DEBUG: map_dialog exists: {self.map_dialog is not None}")
+        print(f"DEBUG: map_dialog visible: {self.map_dialog.isVisible() if self.map_dialog else 'N/A'}")
+        
         if self.map_dialog and self.map_dialog.isVisible():
             aoi_gps = self.get_current_aoi_gps()
+            print(f"DEBUG: aoi_gps returned: {aoi_gps}")
 
             # Get the identifier color from settings
             identifier_color = self.parent.settings.get('identifier_color', [255, 255, 0])
+            print(f"DEBUG: identifier_color: {identifier_color}")
 
             self.map_dialog.update_aoi_marker(aoi_gps, identifier_color)
+            print(f"DEBUG: update_aoi_marker called with aoi_gps={aoi_gps is not None}")

@@ -8,8 +8,8 @@ of flagged AOIs to CalTopo maps.
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
 from PySide6.QtCore import Qt, QEventLoop, QTimer
 from core.services.CalTopoService import CalTopoService
-from core.controllers.viewer.caltopo.CalTopoAuthDialog import CalTopoAuthDialog
-from core.controllers.viewer.caltopo.CalTopoMapDialog import CalTopoMapDialog
+from core.views.viewer.dialogs.CalTopoAuthDialog import CalTopoAuthDialog
+from core.views.viewer.dialogs.CalTopoMapDialog import CalTopoMapDialog
 from core.services.LoggerService import LoggerService
 from core.services.ImageService import ImageService
 from helpers.LocationInfo import LocationInfo

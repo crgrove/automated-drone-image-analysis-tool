@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QThread, Signal
 
-from core.views.viewer.components.QtImageViewer import QtImageViewer
+from core.views.viewer.widgets.QtImageViewer import QtImageViewer
 
 try:
     import qimage2ndarray

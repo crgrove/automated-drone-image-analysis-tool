@@ -1,7 +1,7 @@
 """
-ImageHighlightController - Handles highlighting of detected pixels and masks in images.
+ImageHighlightService - Service for highlighting detected pixels and masks in images.
 
-This controller provides functionality for overlaying highlights on images to visualize
+This service provides functionality for overlaying highlights on images to visualize
 detection results, including mask-based highlighting and pixel-based highlighting.
 """
 
@@ -11,9 +11,9 @@ import numpy as np
 import tifffile
 
 
-class ImageHighlightController:
+class ImageHighlightService:
     """
-    Controller for applying visual highlights to images for detection visualization.
+    Service for applying visual highlights to images for detection visualization.
     
     Handles both mask-based highlighting (efficient for large detection areas) and
     pixel-based highlighting (for individual detected pixels).

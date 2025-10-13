@@ -1,16 +1,17 @@
 """
-CoverageExtentProgressDialog - Progress dialog for coverage extent calculation.
+ExportProgressDialog - Generic progress dialog for export operations.
 
-Shows progress bar, status message, and cancel button during coverage extent generation.
+Shows progress bar, status message, and cancel button during export operations.
+Can be used for PDF exports, KML exports, and other export operations.
 """
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QProgressBar
 from PySide6.QtCore import Qt, Signal
 
 
-class CoverageExtentProgressDialog(QDialog):
+class ExportProgressDialog(QDialog):
     """
-    Progress dialog for coverage extent calculation.
+    Generic progress dialog for export operations.
 
     Displays progress bar showing percentage complete, status message,
     and cancel button to interrupt the operation.
@@ -19,28 +20,29 @@ class CoverageExtentProgressDialog(QDialog):
     # Signal emitted when user clicks cancel
     cancel_requested = Signal()
 
-    def __init__(self, parent=None, total_images=0):
+    def __init__(self, parent=None, title="Exporting", total_items=0):
         """
         Initialize the progress dialog.
 
         Args:
             parent: Parent widget
-            total_images: Total number of images to process
+            title: Title for the dialog window
+            total_items: Total number of items to process
         """
         super().__init__(parent)
-        self.setWindowTitle("Generating Coverage Extent")
+        self.setWindowTitle(title)
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setFixedSize(400, 150)
 
-        self.total_images = total_images
+        self.total_items = total_items
         self.cancelled = False
 
         # Layout
         layout = QVBoxLayout()
 
         # Title label
-        self.title_label = QLabel("Calculating coverage extent polygons...")
+        self.title_label = QLabel("Processing...")
         self.title_label.setAlignment(Qt.AlignCenter)
         font = self.title_label.font()
         font.setBold(True)
@@ -49,7 +51,7 @@ class CoverageExtentProgressDialog(QDialog):
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(total_images if total_images > 0 else 100)
+        self.progress_bar.setMaximum(total_items if total_items > 0 else 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
 
@@ -83,8 +85,8 @@ class CoverageExtentProgressDialog(QDialog):
         Update the progress bar and status message.
 
         Args:
-            current: Current number of images processed
-            total: Total number of images
+            current: Current number of items processed
+            total: Total number of items
             status_message: Optional status message to display
         """
         self.progress_bar.setMaximum(total)
@@ -93,7 +95,7 @@ class CoverageExtentProgressDialog(QDialog):
         if status_message:
             self.status_label.setText(status_message)
         else:
-            self.status_label.setText(f"Processing image {current} of {total}...")
+            self.status_label.setText(f"Processing item {current} of {total}...")
 
     def set_status(self, message):
         """
@@ -104,6 +106,15 @@ class CoverageExtentProgressDialog(QDialog):
         """
         self.status_label.setText(message)
 
+    def set_title(self, title):
+        """
+        Set the title label text.
+
+        Args:
+            title: Title text to display
+        """
+        self.title_label.setText(title)
+
     def is_cancelled(self):
         """
         Check if cancellation was requested.
@@ -112,3 +123,4 @@ class CoverageExtentProgressDialog(QDialog):
             bool: True if cancelled, False otherwise
         """
         return self.cancelled
+

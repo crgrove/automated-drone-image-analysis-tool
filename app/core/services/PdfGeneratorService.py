@@ -129,12 +129,14 @@ class PdfGeneratorService:
         self.doc = None
         self._initialize_styles()
 
-    def generate_report(self, output_path):
+    def generate_report(self, output_path, progress_callback=None, cancel_check=None):
         """
         Generate a PDF report of the analysis results.
 
         Args:
             output_path (str): The file path where the PDF should be saved.
+            progress_callback: Optional callback function(current, total, message) for progress updates
+            cancel_check: Optional function that returns True if operation should be cancelled
         """
         try:
             output_dir = os.path.dirname(output_path)
@@ -190,7 +192,7 @@ class PdfGeneratorService:
             self.story.append(Spacer(1, 20))
 
             # Add image details
-            self._add_image_details()
+            self._add_image_details(progress_callback=progress_callback, cancel_check=cancel_check)
 
             # Build the PDF
             self.doc.multiBuild(self.story)
@@ -262,14 +264,31 @@ class PdfGeneratorService:
 
         self.story.append(PageBreak())
 
-    def _add_image_details(self):
+    def _add_image_details(self, progress_callback=None, cancel_check=None):
         """
         Add detailed AOI pages to the report.
         Each flagged AOI gets its own page with zoomed views and metadata.
+        
+        Args:
+            progress_callback: Optional callback function(current, total, message) for progress updates
+            cancel_check: Optional function that returns True if operation should be cancelled
         """
         identifier_color = self.viewer.settings.get('identifier_color', (255, 255, 0))
 
+        # Count total flagged AOIs for progress tracking
+        total_flagged_aois = 0
         for img in self.viewer.images:
+            if not img.get('hidden', False):
+                flagged_aois = [aoi for aoi in img.get('areas_of_interest', []) if aoi.get('flagged', False)]
+                total_flagged_aois += len(flagged_aois)
+
+        current_aoi_count = 0
+
+        for img in self.viewer.images:
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                self.logger.info("PDF generation cancelled by user")
+                return
             if img.get('hidden', False):
                 continue
 
@@ -308,6 +327,20 @@ class PdfGeneratorService:
 
             # Process each flagged AOI
             for aoi_idx, aoi in enumerate(flagged_aois):
+                # Update progress
+                current_aoi_count += 1
+                if progress_callback:
+                    progress_callback(
+                        current_aoi_count,
+                        total_flagged_aois,
+                        f"Processing {img['name']} - AOI {aoi_idx + 1} of {len(flagged_aois)}..."
+                    )
+
+                # Check for cancellation before processing each AOI
+                if cancel_check and cancel_check():
+                    self.logger.info("PDF generation cancelled by user")
+                    return
+
                 # Get original source image path from the image name
                 original_source_path = self._find_original_image_from_name(img['name'])
                 if original_source_path and os.path.exists(original_source_path):

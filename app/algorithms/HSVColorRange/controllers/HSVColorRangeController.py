@@ -350,9 +350,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        # Set icon color based on theme
-        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        from helpers.IconHelper import IconHelper
         
-        # Apply icons with theme-appropriate colors
-        self.colorButton.setIcon(qta.icon('fa6s.palette', color=icon_color))
-        self.viewRangeButton.setIcon(qta.icon('fa6s.eye', color=icon_color))
+        self.colorButton.setIcon(IconHelper.create_icon('fa6s.palette', theme))
+        self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', theme))

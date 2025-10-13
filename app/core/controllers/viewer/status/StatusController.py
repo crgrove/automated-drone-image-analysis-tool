@@ -8,7 +8,7 @@ tracking, and scale bar functionality.
 import colorsys
 import numpy as np
 from PySide6.QtWidgets import QLabel, QMessageBox
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 
 from core.services.LoggerService import LoggerService
 from core.services.ImageService import ImageService

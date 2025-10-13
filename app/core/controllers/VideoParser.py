@@ -232,11 +232,10 @@ class VideoParser(QDialog, Ui_VideoParser):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        # Set icon color based on theme
-        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        from helpers.IconHelper import IconHelper
 
-        self.videoSelectButton.setIcon(qta.icon('fa6.file-video', color=icon_color))
-        self.srtSelectButton.setIcon(qta.icon('mdi.subtitles', color=icon_color))
-        self.outputSelectButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
-        self.startButton.setIcon(qta.icon('fa6s.play', color=icon_color))
-        self.cancelButton.setIcon(qta.icon('mdi.close-circle', color=icon_color))
+        self.videoSelectButton.setIcon(IconHelper.create_icon('fa6.file-video', theme))
+        self.srtSelectButton.setIcon(IconHelper.create_icon('mdi.subtitles', theme))
+        self.outputSelectButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
+        self.startButton.setIcon(IconHelper.create_icon('fa6s.play', theme))
+        self.cancelButton.setIcon(IconHelper.create_icon('mdi.close-circle', theme))

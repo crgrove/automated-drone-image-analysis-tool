@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QThread
 
-from core.views.viewer.components.QtImageViewer import QtImageViewer
+from core.views.viewer.widgets.QtImageViewer import QtImageViewer
 from core.services.ImageService import ImageService
 from core.services.LoggerService import LoggerService
 import qimage2ndarray
@@ -343,6 +343,15 @@ class CoordinateController:
             # Store reference for cleanup when viewer closes
             self.north_oriented_popup = popup
 
+            # Connect to dialog close event to update button state
+            popup.finished.connect(self.on_rotate_dialog_closed)
+
+            # Update button state to show window is open
+            if hasattr(self.parent, 'rotate_image_open'):
+                self.parent.rotate_image_open = True
+                if hasattr(self.parent, 'ui_style_controller'):
+                    self.parent.ui_style_controller.update_rotate_image_button_style()
+
             # Create layout
             layout = QVBoxLayout(popup)
 
@@ -388,6 +397,13 @@ class CoordinateController:
             decimal_coords: Tuple of (latitude, longitude) or None
         """
         self.current_decimal_coords = decimal_coords
+
+    def on_rotate_dialog_closed(self):
+        """Handle north-oriented image dialog close event."""
+        if hasattr(self.parent, 'rotate_image_open'):
+            self.parent.rotate_image_open = False
+            if hasattr(self.parent, 'ui_style_controller'):
+                self.parent.ui_style_controller.update_rotate_image_button_style()
 
     def cleanup(self):
         """Clean up resources when viewer is closing."""

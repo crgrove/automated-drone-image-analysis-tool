@@ -7,7 +7,7 @@ functionality with non-blocking lazy loading.
 
 import math
 from PySide6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QLabel
-from PySide6.QtCore import Qt, QSize, QThread, QTimer, Signal, QObject
+from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, QTimer
 from PySide6.QtGui import QIcon
 
 from core.controllers.viewer.thumbnails.ThumbnailLoader import ThumbnailLoader
@@ -37,7 +37,7 @@ class ThumbnailController(QObject):
         self.logger = LoggerService()  # Create our own logger
 
         # Create UI component internally
-        from core.controllers.viewer.components.ThumbnailUIComponent import ThumbnailUIComponent
+        from core.controllers.viewer.thumbnails.ThumbnailUIComponent import ThumbnailUIComponent
         self.ui_component = ThumbnailUIComponent(self)
 
         # Background loading

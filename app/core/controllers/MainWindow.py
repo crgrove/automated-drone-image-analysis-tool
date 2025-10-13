@@ -707,13 +707,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        # Set icon color based on theme
-        icon_color = 'lightgray' if theme == "Dark" else 'darkgray'
+        from helpers.IconHelper import IconHelper
         
-        self.inputFolderButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
-        self.outputFolderButton.setIcon(qta.icon('fa6.folder-open', color=icon_color))
-        self.startButton.setIcon(qta.icon('fa6s.play', color=icon_color))
-        self.cancelButton.setIcon(qta.icon('mdi.close-circle', color=icon_color))
-        self.viewResultsButton.setIcon(qta.icon('fa6.images', color=icon_color))
-        self.histogramButton.setIcon(qta.icon('fa6.image', color=icon_color))
+        self.inputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
+        self.outputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
+        self.startButton.setIcon(IconHelper.create_icon('fa6s.play', theme))
+        self.cancelButton.setIcon(IconHelper.create_icon('mdi.close-circle', theme))
+        self.viewResultsButton.setIcon(IconHelper.create_icon('fa6.images', theme))
+        self.histogramButton.setIcon(IconHelper.create_icon('fa6.image', theme))
         
