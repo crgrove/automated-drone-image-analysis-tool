@@ -375,7 +375,7 @@ class AOIController:
         current_comment = aoi.get('user_comment', '')
 
         # Open comment dialog
-        from core.controllers.viewer.components.AOICommentDialog import AOICommentDialog
+        from core.views.viewer.components.AOICommentDialog import AOICommentDialog
         dialog = AOICommentDialog(self.parent, current_comment)
 
         if dialog.exec():
@@ -421,7 +421,7 @@ class AOIController:
             aoi = image['areas_of_interest'][self.selected_aoi_index]
             current_comment = aoi.get('user_comment', '')
 
-            from core.controllers.viewer.components.AOICommentDialog import AOICommentDialog
+            from core.views.viewer.components.AOICommentDialog import AOICommentDialog
             dialog = AOICommentDialog(self.parent, current_comment)
 
             if dialog.exec():
@@ -824,7 +824,7 @@ class AOIController:
 
     def open_filter_dialog(self):
         """Open the filter dialog."""
-        from core.controllers.viewer.components.AOIFilterDialog import AOIFilterDialog
+        from core.views.viewer.components.AOIFilterDialog import AOIFilterDialog
 
         # Get current filter settings
         current_filters = {

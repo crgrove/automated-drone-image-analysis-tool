@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QThread
 
-from core.views.components.QtImageViewer import QtImageViewer
+from core.views.viewer.components.QtImageViewer import QtImageViewer
 from core.services.ImageService import ImageService
 from core.services.LoggerService import LoggerService
 import qimage2ndarray

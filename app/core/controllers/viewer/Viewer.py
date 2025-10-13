@@ -22,19 +22,19 @@ from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem
 from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog
 
 from core.views.components.Toggle import Toggle
-from core.views.Viewer_ui import Ui_Viewer
-from core.views.components.QtImageViewer import QtImageViewer
+from core.views.viewer.Viewer_ui import Ui_Viewer
+from core.views.viewer.components.QtImageViewer import QtImageViewer
 
 from core.controllers.viewer.status.StatusDict import StatusDict
 
 from core.controllers.viewer.components.ImageAdjustmentDialog import ImageAdjustmentDialog
-from core.controllers.viewer.components.ScaleBarWidget import ScaleBarWidget
-from core.controllers.viewer.components.LoadingDialog import LoadingDialog
+from core.views.viewer.components.ScaleBarWidget import ScaleBarWidget
+from core.views.viewer.components.LoadingDialog import LoadingDialog
 from core.controllers.viewer.components.MeasureDialog import MeasureDialog
 from core.controllers.viewer.components.MagnifyingGlass import MagnifyingGlass
-from core.controllers.viewer.components.OverlayWidget import OverlayWidget
+from core.views.viewer.components.OverlayWidget import OverlayWidget
 from core.controllers.viewer.components.UpscaleDialog import UpscaleDialog
-from core.controllers.viewer.components.HelpDialog import HelpDialog
+from core.views.viewer.components.HelpDialog import HelpDialog
 
 from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
@@ -1081,7 +1081,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 return
 
             # Create progress dialog
-            from core.controllers.viewer.components.CoverageExtentProgressDialog import CoverageExtentProgressDialog
+            from core.views.viewer.components.CoverageExtentProgressDialog import CoverageExtentProgressDialog
 
             progress_dialog = CoverageExtentProgressDialog(self, len(self.images))
             progress_dialog.show()

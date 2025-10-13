@@ -6,6 +6,10 @@
     ],
     [
       "resources/*.qrc",
+      "app/core/views/viewer"
+    ],
+    [
+      "resources/*.qrc",
       "app/algorithms/ColorRange/views"
     ],
     [
@@ -19,6 +23,10 @@
     [
       "resources/views/*.ui",
       "app/core/views/"
+    ],
+    [
+      "resources/views/viewer/*.ui",
+      "app/core/views/viewer"
     ],
     [
       "resources/views/algorithms/RXAnomaly.ui",

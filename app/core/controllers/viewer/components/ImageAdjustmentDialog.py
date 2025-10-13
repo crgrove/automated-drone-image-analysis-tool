@@ -20,7 +20,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QDialog
 
-from core.views.components.ImageAdjustmentDialog_ui import Ui_ImageAdjustmentDialog
+from core.views.viewer.components.ImageAdjustmentDialog_ui import Ui_ImageAdjustmentDialog
 
 
 class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):

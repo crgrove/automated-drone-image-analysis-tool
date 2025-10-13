@@ -7,8 +7,8 @@ background processing and progress tracking.
 
 from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox
 from core.controllers.viewer.exports.PdfGenerationThread import PdfGenerationThread
-from core.controllers.viewer.components.LoadingDialog import LoadingDialog
-from core.controllers.viewer.components.PDFExportDialog import PDFExportDialog
+from core.views.viewer.components.LoadingDialog import LoadingDialog
+from core.views.viewer.components.PDFExportDialog import PDFExportDialog
 from core.services.PdfGeneratorService import PdfGeneratorService
 from core.services.LoggerService import LoggerService
 

@@ -694,7 +694,7 @@ class QtImageViewer(QGraphicsView):
             # Only create AOI if radius is reasonable (at least 5 pixels)
             if radius >= 5:
                 # Show confirmation dialog
-                from core.controllers.viewer.components.AOICreationDialog import AOICreationDialog
+                from core.views.viewer.components.AOICreationDialog import AOICreationDialog
                 dialog = AOICreationDialog(self.window)
 
                 if dialog.exec():

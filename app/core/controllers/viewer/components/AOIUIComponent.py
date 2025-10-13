@@ -133,7 +133,7 @@ class AOIUIComponent:
             crop_arr = self.aoi_controller.parent.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
 
             # Create the image viewer
-            from core.views.components.QtImageViewer import QtImageViewer
+            from core.views.viewer.components.QtImageViewer import QtImageViewer
             highlight = QtImageViewer(self.aoi_controller.parent, container, center, True)
             highlight.setObjectName(f"highlight{original_index}")
             highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label

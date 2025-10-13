@@ -1,9 +1,9 @@
-"""PDFExportDialog - Dialog for collecting PDF export settings."""
+"""PDFExportDialog - Pure UI dialog for collecting PDF export settings."""
 
-import os
-import json
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout
 from PySide6.QtCore import Qt
+
+from core.services.PDFSettingsService import PDFSettingsService
 
 
 class PDFExportDialog(QDialog):
@@ -16,20 +16,9 @@ class PDFExportDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.config_path = self._get_config_path()
+        self.settings_service = PDFSettingsService()
         self.setupUi()
         self.load_settings()
-
-    def _get_config_path(self):
-        """Get the path to the PDF export config file.
-
-        Returns:
-            str: Path to the config JSON file
-        """
-        # Store config in user's home directory
-        config_dir = os.path.join(os.path.expanduser("~"), ".adiat")
-        os.makedirs(config_dir, exist_ok=True)
-        return os.path.join(config_dir, "pdf_export_settings.json")
 
     def setupUi(self):
         """Set up the dialog UI."""
@@ -86,28 +75,16 @@ class PDFExportDialog(QDialog):
 
     def load_settings(self):
         """Load previously saved settings from config file."""
-        try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
-                    settings = json.load(f)
-                    self.organization_input.setText(settings.get('organization', ''))
-                    self.search_name_input.setText(settings.get('search_name', ''))
-        except Exception:
-            # If loading fails, just use empty values
-            pass
+        settings = self.settings_service.load_settings()
+        self.organization_input.setText(settings.get('organization', ''))
+        self.search_name_input.setText(settings.get('search_name', ''))
 
     def save_settings(self):
         """Save current settings to config file."""
-        try:
-            settings = {
-                'organization': self.organization_input.text().strip(),
-                'search_name': self.search_name_input.text().strip()
-            }
-            with open(self.config_path, 'w') as f:
-                json.dump(settings, f, indent=2)
-        except Exception:
-            # If saving fails, just continue (settings won't persist)
-            pass
+        self.settings_service.save_settings(
+            self.organization_input.text(),
+            self.search_name_input.text()
+        )
 
     def get_organization(self):
         """Get the entered organization name.
@@ -124,3 +101,4 @@ class PDFExportDialog(QDialog):
             str: The search name
         """
         return self.search_name_input.text().strip()
+
