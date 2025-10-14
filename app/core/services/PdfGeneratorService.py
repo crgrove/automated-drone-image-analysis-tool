@@ -27,6 +27,7 @@ from helpers.LocationInfo import LocationInfo
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
 from core.services.ImageService import ImageService
+from core.services.AOIService import AOIService
 from helpers.MetaDataHelper import MetaDataHelper
 
 import traceback
@@ -422,7 +423,7 @@ class PdfGeneratorService:
                 metadata_lines.append(f"<b>AOI Pixel Area:</b> {aoi.get('area', 0):.0f}")
 
                 # Add average color info from displayed image (matching viewer behavior)
-                avg_color_info = self._get_aoi_average_info(display_img_array, aoi)
+                avg_color_info = self._get_aoi_average_info(img, aoi)
                 if avg_color_info:
                     metadata_lines.append(f"<b>Average Color:</b> {avg_color_info}")
 
@@ -929,8 +930,6 @@ class PdfGeneratorService:
                 'mask_path': img.get('mask_path', '')
             }
 
-            # Use AOIService for GPS calculation
-            from core.services.AOIService import AOIService
             aoi_service = AOIService(image_dict)
 
             # Get custom altitude if available
@@ -1179,61 +1178,25 @@ class PdfGeneratorService:
             self.logger.error(f"Error drawing connector line: {e}")
             return detail_img
 
-    def _get_aoi_average_info(self, img_array, aoi):
+    def _get_aoi_average_info(self, image, aoi):
         """
         Calculate average color information for an AOI.
 
         Args:
-            img_array: Image array in RGB format (from ImageService.img_array)
+            image: Image metadata dictionary
             aoi: AOI dictionary with center, radius, and optionally detected_pixels
 
         Returns:
             String with hue color info, or None
         """
         try:
-            center = aoi['center']
-            radius = aoi.get('radius', 0)
-            cx, cy = center
-
-            # Collect RGB values within the AOI
-            colors = []
-            shape = img_array.shape
-
-            # If we have detected pixels, use those (from AOI detection)
-            if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                for pixel in aoi['detected_pixels']:
-                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                        px, py = int(pixel[0]), int(pixel[1])
-                        if 0 <= py < shape[0] and 0 <= px < shape[1]:
-                            colors.append(img_array[py, px])
-            # Otherwise sample within the circle
-            else:
-                for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
-                    for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
-                        # Check if pixel is within circle
-                        if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                            colors.append(img_array[y, x])
-
-            if colors:
-                # Calculate average RGB (image is already in RGB format)
-                avg_rgb = np.mean(colors, axis=0).astype(int)
-
-                # Extract RGB values (already in RGB, not BGR)
-                r, g, b = int(avg_rgb[0]), int(avg_rgb[1]), int(avg_rgb[2])
-
-                # Convert to HSV to get hue
-                r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
-                h, _, _ = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
-
-                # Create full saturation and full value version (matching viewer behavior)
-                full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
-                full_sat_rgb = tuple(int(c * 255) for c in full_sat_rgb)
-
-                # Format as hex color for the swatch
-                color_hex = '#{:02x}{:02x}{:02x}'.format(*full_sat_rgb)
-
+            aoi_service = AOIService(image)
+            
+            color_result = aoi_service.get_aoi_representative_color(aoi)
+            if color_result:
                 # Return hue angle with color square (matching viewer display)
-                hue_degrees = int(h * 360)
+                color_hex = color_result['hex']
+                hue_degrees = color_result['hue_degrees']
                 return f"Hue: {hue_degrees}° {color_hex} <font color='{color_hex}'>■</font>"
 
             return None

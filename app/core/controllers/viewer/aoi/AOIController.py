@@ -22,7 +22,7 @@ from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor
 
 from core.services.LoggerService import LoggerService
-
+from core.services.AOIService import AOIService
 
 class AOIController:
     """
@@ -55,12 +55,43 @@ class AOIController:
         self.filter_area_min = None  # Minimum pixel area for filtering
         self.filter_area_max = None  # Maximum pixel area for filtering
 
+        # Cache for AOIService to avoid recreating for same image
+        self._cached_aoi_service = None
+        self._cached_image_index = None
+
         # Create UI component internally
         from core.controllers.viewer.aoi.AOIUIComponent import AOIUIComponent
         self.ui_component = AOIUIComponent(self)
         
         # Initialize sort combo box
         self._initialize_sort_combo()
+
+    def _get_aoi_service(self):
+        """
+        Get or create a cached AOIService for the current image.
+        
+        Returns:
+            AOIService instance for the current image, or None if no image is loaded
+        """
+        try:
+            current_image_idx = self.parent.current_image
+            
+            # Check if we can use cached service
+            if (self._cached_aoi_service is not None and 
+                self._cached_image_index == current_image_idx):
+                return self._cached_aoi_service
+            
+            # Create new service for current image
+            if current_image_idx < len(self.parent.images):
+                image = self.parent.images[current_image_idx]
+                self._cached_aoi_service = AOIService(image)
+                self._cached_image_index = current_image_idx
+                return self._cached_aoi_service
+            
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting AOIService: {e}")
+            return None
 
     def initialize_from_xml(self, images):
         """Load flagged AOI information from XML data.
@@ -133,61 +164,17 @@ class AOIController:
 
             # For non-thermal images, calculate average color
             else:
-                # Use the already-loaded image array instead of loading from disk
-                if hasattr(self.parent, 'current_image_array') and self.parent.current_image_array is not None:
-                    img_array = self.parent.current_image_array
-                else:
-                    # Fallback only if we don't have the cached image
-                    image = self.parent.images[self.parent.current_image]
-                    image_path = image.get('path', '')
-                    mask_path = image.get('mask_path', '')
-                    from core.services.ImageService import ImageService
-                    image_service = ImageService(image_path, mask_path)
-                    img_array = image_service.img_array
-
-                center = area_of_interest['center']
-                radius = area_of_interest.get('radius', 0)
-
-                # Collect RGB values within the AOI
-                colors = []
-                cx, cy = center
-                shape = img_array.shape
-
-                # If we have detected pixels, use those
-                if 'detected_pixels' in area_of_interest and area_of_interest['detected_pixels']:
-                    for pixel in area_of_interest['detected_pixels']:
-                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                            px, py = int(pixel[0]), int(pixel[1])
-                            if 0 <= py < shape[0] and 0 <= px < shape[1]:
-                                colors.append(img_array[py, px])
-                # Otherwise sample within the circle
-                else:
-                    for y in range(max(0, cy - radius), min(shape[0], cy + radius + 1)):
-                        for x in range(max(0, cx - radius), min(shape[1], cx + radius + 1)):
-                            # Check if pixel is within circle
-                            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                                colors.append(img_array[y, x])
-
-                if colors:
-                    # Calculate average RGB
-                    avg_rgb = np.mean(colors, axis=0).astype(int)
-
-                    # Convert to HSV for display (full saturation and value)
-                    # First normalize RGB to 0-1 range
-                    r, g, b = avg_rgb[0] / 255.0, avg_rgb[1] / 255.0, avg_rgb[2] / 255.0
-
-                    # Convert to HSV
-                    h, _, _ = colorsys.rgb_to_hsv(r, g, b)
-
-                    # Create full saturation and full value version
-                    full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
-                    full_sat_rgb = tuple(int(c * 255) for c in full_sat_rgb)
-
-                    # Format as hex color
-                    hex_color = '#{:02x}{:02x}{:02x}'.format(*full_sat_rgb)
-
+                # Use cached AOIService for current image
+                aoi_service = self._get_aoi_service()
+                if not aoi_service:
+                    return None, None
+                
+                color_result = aoi_service.get_aoi_representative_color(area_of_interest)
+                if color_result:
                     # Return hue angle, hex color, and RGB tuple for the color square
-                    hue_degrees = int(h * 360)
+                    hex_color = color_result['hex']
+                    hue_degrees = color_result['hue_degrees']
+                    full_sat_rgb = color_result['rgb']
                     return f"Hue: {hue_degrees}° {hex_color}", full_sat_rgb
 
         except Exception as e:
@@ -620,24 +607,20 @@ class AOIController:
             int: Hue value (0-360) or None if cannot be calculated
         """
         try:
-            # Calculate average color/hue for the AOI
-            # Get temperature data from thermal controller if available
-            temperature_data = None
-            if hasattr(self.parent, 'thermal_controller'):
-                temperature_data = self.parent.thermal_controller.temperature_data
+            # Only works for non-thermal images
+            if self.parent.is_thermal:
+                return None
             
-            avg_info, color_rgb = self.calculate_aoi_average_info(
-                aoi,
-                self.parent.is_thermal,
-                temperature_data,
-                self.parent.temperature_unit
-            )
-
-            # Extract hue from avg_info string (format: "Hue: 123° #rrggbb")
-            if avg_info and "Hue:" in avg_info:
-                hue_str = avg_info.split("Hue:")[1].split("°")[0].strip()
-                return int(hue_str)
-
+            # Use cached AOIService for current image
+            aoi_service = self._get_aoi_service()
+            if not aoi_service:
+                return None
+            
+            color_result = aoi_service.get_aoi_representative_color(aoi)
+            
+            if color_result:
+                return color_result['hue_degrees']
+            
             return None
         except Exception as e:
             self.logger.error(f"Error getting AOI hue: {e}")
@@ -828,6 +811,10 @@ class AOIController:
         if current_data is None:
             # "Default" selected - no sorting
             self.set_sort_method(None)
+        elif current_data == 'color':
+            # Color-based sorting - get reference color from settings
+            target_hue = self._get_reference_hue_from_settings()
+            self.set_sort_method(current_data, color_hue=target_hue)
         else:
             # Other sort methods (area_asc, area_desc, x, y)
             self.set_sort_method(current_data)
@@ -845,6 +832,46 @@ class AOIController:
                 if combo.itemData(i) == self.sort_method:
                     combo.setCurrentIndex(i)
                     break
+
+    def _get_reference_hue_from_settings(self):
+        """Extract reference hue from parent settings.
+        
+        Returns:
+            int: Hue value (0-360) or None if not available
+        """
+        try:
+            # Get selected_color from settings
+            if hasattr(self.parent, 'settings'):
+                options = self.parent.settings.get('options', {})
+                selected_color = options.get('selected_color')
+                
+                if selected_color:
+                    # selected_color could be a list/tuple [r, g, b] or a QColor
+                    if isinstance(selected_color, (list, tuple)) and len(selected_color) >= 3:
+                        # RGB tuple/list
+                        r, g, b = selected_color[0], selected_color[1], selected_color[2]
+                        # Normalize to 0-1 range
+                        r_norm = r / 255.0 if r > 1 else r
+                        g_norm = g / 255.0 if g > 1 else g
+                        b_norm = b / 255.0 if b > 1 else b
+                        # Convert to HSV and extract hue
+                        h, _, _ = colorsys.rgb_to_hsv(r_norm, g_norm, b_norm)
+                        return int(h * 360)
+                    else:
+                        # Try to treat as QColor
+                        try:
+                            from PySide6.QtGui import QColor
+                            if isinstance(selected_color, QColor):
+                                h, _, _, _ = selected_color.getHsv()
+                                return h
+                        except Exception:
+                            pass
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting reference hue from settings: {e}")
+            return None
 
     def open_filter_dialog(self):
         """Open the filter dialog."""

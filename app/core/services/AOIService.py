@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import colorsys
 from pathlib import Path
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
@@ -179,3 +180,76 @@ class AOIService:
             'pixel_area': aoi.get('area', 0),
             'center_pixels': aoi['center']
         }
+
+    def get_aoi_representative_color(self, aoi):
+        """
+        Calculate a representative color for an AOI.
+        
+        Returns a vibrant marker color based on the average hue of pixels within the AOI,
+        with full saturation and value for visibility on maps and exports.
+        
+        Args:
+            aoi (dict): AOI with 'center', 'radius', and optionally 'detected_pixels'
+            
+        Returns:
+            dict or None: {
+                'rgb': (r, g, b),           # Vibrant marker color (0-255)
+                'hex': '#rrggbb',           # Hex color string
+                'hue_degrees': int,         # Hue in degrees (0-360)
+                'avg_rgb': (r, g, b)        # Original average RGB
+            } or None if calculation fails
+        """
+        try:
+            img_array = self.image_service.img_array
+            height, width = img_array.shape[:2]
+            
+            center = aoi.get('center', [0, 0])
+            radius = aoi.get('radius', 0)
+            cx, cy = center
+            
+            # Collect RGB values within the AOI
+            colors = []
+            
+            # If we have detected pixels, use those
+            if 'detected_pixels' in aoi and aoi['detected_pixels']:
+                for pixel in aoi['detected_pixels']:
+                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                        px, py = int(pixel[0]), int(pixel[1])
+                        if 0 <= py < height and 0 <= px < width:
+                            colors.append(img_array[py, px])
+            # Otherwise sample within the circle
+            else:
+                for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
+                    for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
+                        if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                            colors.append(img_array[y, x])
+            
+            if not colors:
+                return None
+            
+            # Calculate average RGB
+            avg_rgb = np.mean(colors, axis=0).astype(int)
+            r, g, b = int(avg_rgb[0]), int(avg_rgb[1]), int(avg_rgb[2])
+            
+            # Convert to HSV
+            h, _, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            
+            # Create full saturation and full value version for vibrant marker
+            full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
+            marker_rgb = tuple(int(c * 255) for c in full_sat_rgb)
+            
+            # Format color info
+            hex_color = '#{:02x}{:02x}{:02x}'.format(*marker_rgb)
+            hue_degrees = int(h * 360)
+            
+            return {
+                'rgb': marker_rgb,
+                'hex': hex_color,
+                'hue_degrees': hue_degrees,
+                'avg_rgb': (r, g, b)
+            }
+            
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"AOIService: Failed to calculate AOI color - {e}")
+            return None

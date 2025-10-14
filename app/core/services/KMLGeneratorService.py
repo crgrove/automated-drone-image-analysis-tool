@@ -1,6 +1,4 @@
 import simplekml
-import colorsys
-import numpy as np
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 from core.services.ImageService import ImageService
@@ -33,14 +31,31 @@ class KMLGeneratorService:
         pnt = self.kml.newpoint(name=name, coords=[(lon, lat)])
         pnt.description = description
 
-        # Set icon color if provided
+        # Set icon color if provided using StyleMap for proper normal/highlight states
         if color_rgb:
             # KML uses ABGR format (Alpha, Blue, Green, Red) in hex
             r, g, b = color_rgb
             # Full opacity (FF) + BGR
             kml_color = f'ff{b:02x}{g:02x}{r:02x}'
-            pnt.style.iconstyle.color = kml_color
-            pnt.style.iconstyle.scale = 1.2
+            
+            # Create normal style
+            normal_style = simplekml.Style()
+            normal_style.iconstyle.color = kml_color
+            normal_style.iconstyle.scale = 1.2
+            normal_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png'
+            # Create highlight style (slightly larger and brighter)
+            highlight_style = simplekml.Style()
+            highlight_style.iconstyle.color = kml_color
+            highlight_style.iconstyle.scale = 1.5
+            highlight_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png'
+            
+            # Create StyleMap
+            style_map = simplekml.StyleMap()
+            style_map.normalstyle = normal_style
+            style_map.highlightstyle = highlight_style
+            
+            # Assign StyleMap to placemark
+            pnt.stylemap = style_map
 
     def save_kml(self, path):
         """
@@ -141,51 +156,20 @@ class KMLGeneratorService:
 
                     if result:
                         aoi_lat, aoi_lon = result
-                        gps_note = f"Precise AOI GPS (pinhole camera model)\n"
+                        gps_note = f"Estimated AOI GPS\n"
                     else:
                         gps_note = "Image GPS (calculation failed)\n"
                 except Exception as e:
                     gps_note = f"Image GPS (calculation error: {type(e).__name__})\n"
 
-                # Calculate color information
+                # Calculate color information using AOIService
                 color_info = ""
                 marker_rgb = None
                 try:
-                    # Collect RGB values within the AOI
-                    colors = []
-                    cx, cy = center
-
-                    # If we have detected pixels, use those
-                    if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                        for pixel in aoi['detected_pixels']:
-                            if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                                px, py = int(pixel[0]), int(pixel[1])
-                                if 0 <= py < height and 0 <= px < width:
-                                    colors.append(img_array[py, px])
-                    # Otherwise sample within the circle
-                    else:
-                        for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
-                            for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
-                                if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                                    colors.append(img_array[y, x])
-
-                    if colors:
-                        # Calculate average RGB
-                        avg_rgb = np.mean(colors, axis=0).astype(int)
-                        r, g, b = int(avg_rgb[0]), int(avg_rgb[1]), int(avg_rgb[2])
-
-                        # Convert to HSV
-                        h, _, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
-
-                        # Create full saturation and full value version
-                        full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
-                        marker_rgb = tuple(int(c * 255) for c in full_sat_rgb)
-
-                        # Format color info
-                        hex_color = '#{:02x}{:02x}{:02x}'.format(*marker_rgb)
-                        hue_degrees = int(h * 360)
-                        color_info = f"Color: Hue: {hue_degrees}° {hex_color}\n"
-
+                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    if color_result:
+                        marker_rgb = color_result['rgb']
+                        color_info = f"Color: Hue: {color_result['hue_degrees']}° {color_result['hex']}\n"
                 except Exception:
                     pass
 

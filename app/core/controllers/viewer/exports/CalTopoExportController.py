@@ -266,64 +266,20 @@ class CalTopoExportController:
 
                     if result:
                         aoi_lat, aoi_lon = result
-                        gps_note = f"Precise AOI GPS (pinhole camera model)\n"
+                        gps_note = f"Estimated AOI GPS\n"
                     else:
                         gps_note = "Image GPS (calculation failed)\n"
                 except Exception as e:
                     gps_note = f"Image GPS (calculation error: {str(e)[:30]})\n"
 
-                # Get color information and extract RGB for marker icon directly from this image
-                # Use exact same logic as AOIController.calculate_aoi_average_info()
+                # Get color information using AOIService
                 color_info = ""
                 marker_rgb = None
                 try:
-                    import colorsys
-                    import numpy as np
-
-                    # Calculate color directly from this image's data
-                    aoi_center = aoi.get('center', [0, 0])
-                    aoi_radius = aoi.get('radius', 0)
-                    cx, cy = aoi_center
-
-                    # Collect RGB values within the AOI
-                    colors = []
-
-                    # If we have detected pixels, use those
-                    if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                        for pixel in aoi['detected_pixels']:
-                            if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                                px, py = int(pixel[0]), int(pixel[1])
-                                if 0 <= py < height and 0 <= px < width:
-                                    colors.append(img_array[py, px])
-                    # Otherwise sample within the circle
-                    else:
-                        for y in range(max(0, cy - aoi_radius), min(height, cy + aoi_radius + 1)):
-                            for x in range(max(0, cx - aoi_radius), min(width, cx + aoi_radius + 1)):
-                                if (x - cx) ** 2 + (y - cy) ** 2 <= aoi_radius ** 2:
-                                    colors.append(img_array[y, x])
-
-                    if colors:
-                        # Calculate average RGB (using exact same logic as AOIController)
-                        avg_rgb = np.mean(colors, axis=0).astype(int)
-
-                        # Convert to HSV for display (full saturation and value)
-                        # First normalize RGB to 0-1 range
-                        r, g, b = avg_rgb[0] / 255.0, avg_rgb[1] / 255.0, avg_rgb[2] / 255.0
-
-                        # Convert to HSV
-                        h, _, _ = colorsys.rgb_to_hsv(r, g, b)
-
-                        # Create full saturation and full value version
-                        full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
-                        marker_rgb = tuple(int(c * 255) for c in full_sat_rgb)
-
-                        # Format as hex color
-                        hex_color = '#{:02x}{:02x}{:02x}'.format(*marker_rgb)
-
-                        # Return hue angle, hex color
-                        hue_degrees = int(h * 360)
-                        color_info = f"Color/Temp: Hue: {hue_degrees}° {hex_color}\n"
-
+                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    if color_result:
+                        marker_rgb = color_result['rgb']
+                        color_info = f"Color/Temp: Hue: {color_result['hue_degrees']}° {color_result['hex']}\n"
                 except Exception as e:
                     # If color calculation fails, continue without color
                     pass
