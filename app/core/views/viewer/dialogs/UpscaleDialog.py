@@ -152,7 +152,7 @@ class UpscaleDialog(QDialog):
     # Cache for loaded SR models
     _sr_models = {}
 
-    def __init__(self, parent=None, image_array=None, upscale_factor=2, current_level=1, upscale_method='auto'):
+    def __init__(self, parent=None, image_array=None, upscale_factor=2, current_level=1, upscale_method='auto', auto_upscale=False):
         """
         Initialize the upscale dialog.
 
@@ -162,6 +162,7 @@ class UpscaleDialog(QDialog):
             upscale_factor (int): Upscale multiplier per iteration (default 2x)
             current_level (int): Current upscale level (1 = original, 2 = 2x, 4 = 4x, etc.)
             upscale_method (str): 'auto', 'fast', 'balanced', or 'best'
+            auto_upscale (bool): If True, automatically upscale on open (default False for backwards compatibility)
         """
         super().__init__(parent)
 
@@ -187,6 +188,12 @@ class UpscaleDialog(QDialog):
 
         # Set initial size (will be adjusted after image is loaded)
         self.resize(1000, 800)
+        
+        # Auto-upscale if requested
+        if auto_upscale and image_array is not None:
+            # Use QTimer to defer upscaling until after the dialog is fully shown
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self._perform_initial_upscale)
 
     def _setup_ui(self):
         """Create the dialog UI components."""
@@ -318,6 +325,30 @@ class UpscaleDialog(QDialog):
         except Exception as e:
             print(f"Error extracting visible portion: {e}")
             return None
+
+    def _perform_initial_upscale(self):
+        """Perform the initial upscale in-place (not creating a new dialog)."""
+        if self.image_array is None or self.image_array.size == 0:
+            return
+        
+        try:
+            # Upscale the full image
+            upscaled_image = self._upscale_image(self.image_array, self.upscale_factor)
+            
+            # Update current level
+            self.current_level = self.current_level * self.upscale_factor
+            
+            # Update window title
+            self.setWindowTitle(f"Upscaled View - {self.current_level}x")
+            
+            # Display the upscaled image
+            self._display_image(upscaled_image)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Upscale Error",
+                f"Error during initial upscale: {str(e)}"
+            )
 
     def _on_upres_again_clicked(self):
         """Handle 'Upres Again' button click."""

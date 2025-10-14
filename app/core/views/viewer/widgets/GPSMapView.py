@@ -836,10 +836,24 @@ class GPSMapView(QGraphicsView):
         self.zoom_scale *= zoom_factor
         self.scale(zoom_factor, zoom_factor)
         
-        # Check tile zoom level after zoom completes
-        self._check_tile_zoom_level()
+        # Defer tile zoom level check to avoid performance hits during rapid scrolling
+        if hasattr(self, '_tile_zoom_timer'):
+            self._tile_zoom_timer.stop()
+        else:
+            self._tile_zoom_timer = QTimer(self)
+            self._tile_zoom_timer.setSingleShot(True)
+            self._tile_zoom_timer.timeout.connect(self._deferred_tile_check)
+        
+        # Start a short timer to check tile zoom after scrolling stops
+        self._tile_zoom_timer.start(150)  # Wait 150ms after last scroll
+        
+        # Still load visible tiles immediately for smooth experience
         self.load_visible_tiles()
 
+    def _deferred_tile_check(self):
+        """Deferred tile zoom level check after scrolling stops."""
+        self._check_tile_zoom_level()
+    
     def _check_tile_zoom_level(self):
         """Check if we need to change tile zoom level based on current scale."""
         if self.zoom_scale > 1.5:

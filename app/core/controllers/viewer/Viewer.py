@@ -435,8 +435,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
             
-            # Connect zoom changes to update scale bar
+            # Connect signals
             self.main_image.zoomChanged.connect(self._update_scale_bar)
+            self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
 
             # Initialize export controllers
             self.kml_export = KMLExportController(self, self.logger)
@@ -705,7 +706,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             visible_portion = full_image_array[y1:y2, x1:x2].copy()
 
             # Open upscale dialog with the visible portion
-            dialog = UpscaleDialog(self, visible_portion, upscale_factor=2, current_level=1)
+            # Note: The dialog will perform the initial upscale, so we start at level 1
+            # and it will immediately upscale to level 2 (or the specified factor)
+            dialog = UpscaleDialog(self, visible_portion, upscale_factor=2, current_level=1, auto_upscale=True)
             dialog.show()
 
         except ImportError:
@@ -973,8 +976,21 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.GPSMapButton.setIcon(IconHelper.create_icon('fa6s.map-location-dot', self.theme))
         self.rotateImageButton.setIcon(IconHelper.create_icon('fa6s.compass', self.theme))
 
-    # Qt event filter for viewport resize events
+    # Qt event filter for viewport resize events and middle mouse button
 
     def eventFilter(self, obj, ev):
+        """Event filter to handle middle mouse button clicks for magnifying glass."""
+        # Check if this is a mouse button press event on the main image viewport
+        if obj == self.main_image.viewport() and ev.type() == QEvent.MouseButtonPress:
+            if ev.button() == Qt.MiddleButton:
+                # Get mouse position in scene coordinates
+                view_pos = ev.pos()
+                scene_pos = self.main_image.mapToScene(view_pos)
+                
+                if self.main_image.hasImage():
+                    # Toggle magnifying glass at the clicked position
+                    self._toggle_magnifying_glass(scene_pos.x(), scene_pos.y())
+                    return True  # Event handled
+        
         # Overlay positioning is now handled automatically by the overlay widget
         return super().eventFilter(obj, ev)

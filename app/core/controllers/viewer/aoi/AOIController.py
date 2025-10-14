@@ -799,6 +799,7 @@ class AOIController:
             ("Default", None, qta.icon('fa6s.sort', color='#888888')),
             ("Pixel Area (Smallest First)", 'area_asc', qta.icon('fa6s.arrow-up', color='#4CAF50')),
             ("Pixel Area (Largest First)", 'area_desc', qta.icon('fa6s.arrow-down', color='#4CAF50')),
+            ("Color (Closest to Target)", 'color', qta.icon('fa6s.palette', color='#CCCCCC')),
             ("Left to Right", 'x', qta.icon('fa6s.arrow-right', color='#2196F3')),
             ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3'))
         ]

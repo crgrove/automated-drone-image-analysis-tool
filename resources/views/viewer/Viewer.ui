@@ -166,6 +166,9 @@ QToolButton:pressed {
           </item>
           <item>
            <widget class="QToolButton" name="showPOIsButton">
+            <property name="toolTip">
+             <string>Highlight Pixels of Interest(H)</string>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -185,6 +188,9 @@ QToolButton:pressed {
           </item>
           <item>
            <widget class="QToolButton" name="showAOIsButton">
+            <property name="toolTip">
+             <string>Show AOIs</string>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -211,6 +217,9 @@ QToolButton:pressed {
           </item>
           <item>
            <widget class="QToolButton" name="GPSMapButton">
+            <property name="toolTip">
+             <string>Map with Image Locations (M)</string>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -224,6 +233,9 @@ QToolButton:pressed {
           </item>
           <item>
            <widget class="QToolButton" name="rotateImageButton">
+            <property name="toolTip">
+             <string>North-Oriented View of Image (R)</string>
+            </property>
             <property name="text">
              <string/>
             </property>
