@@ -177,7 +177,7 @@ class GPSMapView(QGraphicsView):
 
     def _update_compass_rotation(self):
         """Update the compass rose to show current rotation."""
-        rotation = self.current_bearing if self.is_rotated and self.current_bearing else 0
+        rotation = -self.current_bearing if self.is_rotated and self.current_bearing else 0
         self._draw_compass_rose(rotation)
 
     def _draw_compass_rose(self, rotation_angle):
@@ -435,6 +435,12 @@ class GPSMapView(QGraphicsView):
         if temp_aoi_data and temp_aoi_color:
             color_rgb = [temp_aoi_color.red(), temp_aoi_color.green(), temp_aoi_color.blue()]
             self.set_aoi_marker(temp_aoi_data, color_rgb)
+        
+        # Ensure compass is in correct position after map render
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def load_visible_tiles(self):
         """Request tile loading with debouncing."""
@@ -643,6 +649,12 @@ class GPSMapView(QGraphicsView):
 
         # Update FOV box
         self.update_fov_box(self.current_image_index)
+        
+        # Ensure compass stays in correct position
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def _update_point_appearances(self):
         """Update the visual appearance of all GPS points."""
@@ -712,6 +724,12 @@ class GPSMapView(QGraphicsView):
 
         # Reload with new source
         self.load_visible_tiles()
+        
+        # Ensure compass is in correct position after tile source change
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def fit_all_points(self):
         """Fit all GPS points in the view."""
@@ -801,8 +819,11 @@ class GPSMapView(QGraphicsView):
         # Schedule tile loading
         self.load_visible_tiles()
         
-        # Ensure compass is created after fitting
+        # Ensure compass is in correct position after fitting
         self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def zoom_in(self):
         """Zoom in by a factor."""
@@ -810,6 +831,11 @@ class GPSMapView(QGraphicsView):
         self.zoom_scale *= 1.25
         self._check_tile_zoom_level()
         self.load_visible_tiles()
+        # Ensure compass stays in correct position
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def zoom_out(self):
         """Zoom out by a factor."""
@@ -817,6 +843,11 @@ class GPSMapView(QGraphicsView):
         self.zoom_scale *= 0.8
         self._check_tile_zoom_level()
         self.load_visible_tiles()
+        # Ensure compass stays in correct position
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def pan(self, dx, dy):
         """
@@ -829,6 +860,11 @@ class GPSMapView(QGraphicsView):
         self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - dx)
         self.verticalScrollBar().setValue(self.verticalScrollBar().value() - dy)
         self.load_visible_tiles()
+        # Ensure compass stays in correct position after pan
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def wheelEvent(self, event: QWheelEvent):
         """Handle mouse wheel for zooming."""
@@ -849,10 +885,21 @@ class GPSMapView(QGraphicsView):
         
         # Still load visible tiles immediately for smooth experience
         self.load_visible_tiles()
+        
+        # Ensure compass stays in correct position
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def _deferred_tile_check(self):
         """Deferred tile zoom level check after scrolling stops."""
         self._check_tile_zoom_level()
+        # Ensure compass is in correct position after zoom level changes
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
     
     def _check_tile_zoom_level(self):
         """Check if we need to change tile zoom level based on current scale."""
@@ -940,6 +987,12 @@ class GPSMapView(QGraphicsView):
 
         # Load new tiles
         self.load_visible_tiles()
+        
+        # Ensure compass stays in correct position after zoom level change
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def draw_path_only(self):
         """Draw just the connection path between GPS points."""
@@ -1077,6 +1130,12 @@ class GPSMapView(QGraphicsView):
         # Re-center
         if center_point is not None:
             self.centerOn(center_point)
+        
+        # Ensure compass stays in correct position after rotation
+        self._ensure_compass_created()
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def showEvent(self, event):
         """Handle show event."""
@@ -1092,6 +1151,14 @@ class GPSMapView(QGraphicsView):
         # Position it if it exists
         self._position_compass()
         self.load_visible_tiles()
+
+    def scrollContentsBy(self, dx, dy):
+        """Handle scroll events (called for ALL scrolling including drag-to-pan)."""
+        super().scrollContentsBy(dx, dy)
+        # Reposition compass after any scroll
+        if self.compass_container:
+            self._position_compass()
+            self.compass_container.raise_()
 
     def paintEvent(self, event):
         """Handle paint events."""
@@ -1149,6 +1216,10 @@ class GPSMapView(QGraphicsView):
         self.aoi_marker.setToolTip(tooltip)
 
         self.scene.addItem(self.aoi_marker)
+        
+        # Ensure compass stays on top after adding marker
+        if self.compass_container:
+            self.compass_container.raise_()
 
     def clear_aoi_marker(self):
         """Remove the AOI marker from the map."""
@@ -1266,6 +1337,10 @@ class GPSMapView(QGraphicsView):
             self.fov_box.setToolTip(tooltip)
 
             self.scene.addItem(self.fov_box)
+            
+            # Ensure compass stays on top after adding FOV box
+            if self.compass_container:
+                self.compass_container.raise_()
 
         except Exception:
             pass
