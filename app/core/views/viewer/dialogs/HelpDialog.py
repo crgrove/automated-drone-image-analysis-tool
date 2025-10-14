@@ -98,8 +98,7 @@ class HelpDialog(QDialog):
             'magnify': 'magnifyButton',
             'kml': 'kmlButton',
             'pdf': 'pdfButton',
-            'zip': 'zipButton',
-            'caltopo': 'caltopoButton'
+            'zip': 'zipButton'
         }
 
         for key, button_name in button_mapping.items():

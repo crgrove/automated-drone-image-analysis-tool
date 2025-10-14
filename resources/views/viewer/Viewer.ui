@@ -345,7 +345,7 @@ QToolButton:pressed {
           <item>
            <widget class="QToolButton" name="kmlButton">
             <property name="toolTip">
-             <string>Generate KML</string>
+             <string>Map Export (KML / CalTopo)</string>
             </property>
             <property name="styleSheet">
              <string notr="true">QToolButton {
@@ -455,43 +455,6 @@ QToolButton:pressed {
             </property>
             <property name="iconName" stdset="0">
              <string>zip.png</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QToolButton" name="caltopoButton">
-            <property name="toolTip">
-             <string>Export to CalTopo</string>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QToolButton {
-    border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 2px;
-}
-QToolButton:hover {
-    border: 1px solid #888;
-    background-color: rgba(136, 136, 136, 0.1);
-}
-QToolButton:pressed {
-    background-color: rgba(136, 136, 136, 0.2);
-}</string>
-            </property>
-            <property name="text">
-             <string>...</string>
-            </property>
-            <property name="icon">
-             <iconset>
-              <normaloff>:/icons/caltopo.png</normaloff>:/icons/caltopo.png</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>25</width>
-              <height>25</height>
-             </size>
-            </property>
-            <property name="iconName" stdset="0">
-             <string>caltopo.png</string>
             </property>
            </widget>
           </item>

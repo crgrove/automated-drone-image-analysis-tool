@@ -57,6 +57,38 @@ class KMLGeneratorService:
             # Assign StyleMap to placemark
             pnt.stylemap = style_map
 
+    def add_image_location_placemark(self, name, lat, lon, description):
+        """
+        Adds an image/drone location placemark to the KML document.
+
+        Args:
+            name (str): The name/label for the placemark (typically image name).
+            lat (float): Latitude of the point.
+            lon (float): Longitude of the point.
+            description (str): Description text for the placemark.
+        """
+        pnt = self.kml.newpoint(name=name, coords=[(lon, lat)])
+        pnt.description = description
+
+        # Use a camera/drone icon style
+        normal_style = simplekml.Style()
+        normal_style.iconstyle.color = simplekml.Color.yellow
+        normal_style.iconstyle.scale = 1.0
+        normal_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/camera.png'
+        
+        highlight_style = simplekml.Style()
+        highlight_style.iconstyle.color = simplekml.Color.yellow
+        highlight_style.iconstyle.scale = 1.3
+        highlight_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/camera.png'
+        
+        # Create StyleMap
+        style_map = simplekml.StyleMap()
+        style_map.normalstyle = normal_style
+        style_map.highlightstyle = highlight_style
+        
+        # Assign StyleMap to placemark
+        pnt.stylemap = style_map
+
     def save_kml(self, path):
         """
         Saves the KML document to a file.
@@ -203,6 +235,85 @@ class KMLGeneratorService:
                 )
 
         self.save_kml(output_path)
+
+    def generate_image_locations_kml(self, images, progress_callback=None, cancel_check=None):
+        """
+        Generates KML placemarks for drone/image locations.
+
+        Args:
+            images (list of dict): List of image metadata dictionaries.
+            progress_callback: Optional callback function(current, total, message) for progress updates
+            cancel_check: Optional function that returns True if operation should be cancelled
+        """
+        total_images = sum(1 for img in images if not img.get('hidden', False))
+        current_image_count = 0
+
+        for img_idx, image in enumerate(images):
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                return  # Exit early if cancelled
+
+            # Skip hidden images
+            if image.get('hidden', False):
+                continue
+
+            image_name = image.get('name', f'Image {img_idx + 1}')
+            image_path = image.get('path', '')
+
+            # Get image GPS coordinates
+            try:
+                # Create ImageService to extract EXIF data
+                image_service = ImageService(image_path, image.get('mask_path', ''))
+
+                # Get GPS from EXIF data
+                image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
+
+                if not image_gps:
+                    continue
+
+                # Get additional metadata for description
+                # Use custom altitude if provided, otherwise get from EXIF
+                if self.custom_altitude_ft is not None and self.custom_altitude_ft > 0:
+                    altitude = self.custom_altitude_ft
+                else:
+                    altitude = image_service.get_relative_altitude(distance_unit='ft')
+                
+                gimbal_pitch = image_service.get_camera_pitch()
+                gimbal_yaw = image_service.get_camera_yaw()
+
+                # Update progress
+                current_image_count += 1
+                if progress_callback:
+                    progress_callback(
+                        current_image_count,
+                        total_images,
+                        f"Processing {image_name}..."
+                    )
+
+                # Build description
+                description = f"Drone/Image Location\n"
+                description += f"Image: {image_name}\n"
+                description += f"GPS: {image_gps['latitude']:.6f}, {image_gps['longitude']:.6f}\n"
+
+                if altitude:
+                    description += f"Altitude: {altitude:.1f} ft AGL\n"
+                if gimbal_pitch is not None:
+                    description += f"Gimbal Pitch: {gimbal_pitch:.1f}°\n"
+                if gimbal_yaw is not None:
+                    description += f"Gimbal Yaw: {gimbal_yaw:.1f}°\n"
+
+                # Add placemark
+                self.add_image_location_placemark(
+                    image_name,
+                    image_gps['latitude'],
+                    image_gps['longitude'],
+                    description
+                )
+
+            except Exception as e:
+                # Silently continue on error - individual image location failures
+                # shouldn't stop the entire export
+                continue
 
     def generate_coverage_extent_kml(self, coverage_data: dict, output_path: str):
         """

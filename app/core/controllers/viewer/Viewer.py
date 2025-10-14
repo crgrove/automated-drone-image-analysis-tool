@@ -42,11 +42,11 @@ from core.controllers.viewer.PixelInfoController import PixelInfoController
 from core.controllers.viewer.image.ImageLoadController import ImageLoadController
 from core.controllers.viewer.AltitudeController import AltitudeController
 
-from core.controllers.viewer.exports.KMLExportController import KMLExportController
 from core.controllers.viewer.exports.PDFExportController import PDFExportController
 from core.controllers.viewer.exports.ZipExportController import ZipExportController
 from core.controllers.viewer.exports.CalTopoExportController import CalTopoExportController
 from core.controllers.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
+from core.controllers.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
 
 from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
@@ -360,7 +360,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.kmlButton.clicked.connect(self._kmlButton_clicked)
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
             self.zipButton.clicked.connect(self._zipButton_clicked)
-            self.caltopoButton.clicked.connect(self._caltopoButton_clicked)
             self.measureButton.clicked.connect(self._open_measure_dialog)
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.magnifyButton.clicked.connect(self._magnifyButton_clicked)
@@ -440,11 +439,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
 
             # Initialize export controllers
-            self.kml_export = KMLExportController(self, self.logger)
             self.pdf_export = PDFExportController(self, self.logger)
             self.zip_export = ZipExportController(self, self.logger)
             self.caltopo_export = CalTopoExportController(self, self.logger)
             self.coverage_extent_export = CoverageExtentExportController(self, self.logger)
+            self.unified_map_export = UnifiedMapExportController(self, self.logger)
 
             # Force the layout to update and ensure proper sizing
             self.ImageLayout.update()
@@ -761,9 +760,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                     self.main_image.updateViewer()
 
     def _kmlButton_clicked(self):
-        """Handles clicks on the Generate KML button to create a KML file."""
-        if hasattr(self, 'kml_export'):
-            self.kml_export.export_kml(self.images, self.aoi_controller.flagged_aois)
+        """Handles clicks on the Map Export button to show unified export options."""
+        if hasattr(self, 'unified_map_export'):
+            self.unified_map_export.show_export_dialog()
 
     def crop_image(self, img_arr, startx, starty, endx, endy):
         """Crops a portion of an image array.
@@ -792,10 +791,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'zip_export'):
             self.zip_export.export_zip(self.images)
 
-    def _caltopoButton_clicked(self):
-        """Handles clicks on the Export to CalTopo button."""
-        if hasattr(self, 'caltopo_export'):
-            self.caltopo_export.export_to_caltopo(self.images, self.aoi_controller.flagged_aois)
 
     def _export_coverage_extent_kml(self):
         """Handles the export of coverage extent KML file for all images."""
@@ -964,7 +959,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.kmlButton.setIcon(IconHelper.create_icon('fa5s.map-marker-alt', self.theme))
         self.pdfButton.setIcon(IconHelper.create_icon('fa6s.file-pdf', self.theme))
         self.zipButton.setIcon(IconHelper.create_icon('fa5s.file-archive', self.theme))
-        self.caltopoButton.setIcon(IconHelper.create_icon('fa6s.map', self.theme))
         self.measureButton.setIcon(IconHelper.create_icon('fa6s.ruler', self.theme))
         self.adjustmentsButton.setIcon(IconHelper.create_icon('fa6s.sliders', self.theme))
         self.previousImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-left', self.theme))

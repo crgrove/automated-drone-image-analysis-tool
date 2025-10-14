@@ -6,7 +6,7 @@
     ],
     [
       "resources/*.qrc",
-      "app/core/views/viewer"
+      "app/core/views/viewer/ui"
     ],
     [
       "resources/*.qrc",
