@@ -194,6 +194,11 @@ class PdfGeneratorService:
             # Add image details
             self._add_image_details(progress_callback=progress_callback, cancel_check=cancel_check)
 
+            # Update progress to show finalization
+            if progress_callback:
+                total_flagged_aois = self._count_flagged_aois()
+                progress_callback(total_flagged_aois, total_flagged_aois, "Finalizing Report...")
+
             # Build the PDF
             self.doc.multiBuild(self.story)
 
@@ -264,6 +269,19 @@ class PdfGeneratorService:
 
         self.story.append(PageBreak())
 
+    def _count_flagged_aois(self):
+        """Count total flagged AOIs across all non-hidden images.
+        
+        Returns:
+            int: Total number of flagged AOIs
+        """
+        total_flagged_aois = 0
+        for img in self.viewer.images:
+            if not img.get('hidden', False):
+                flagged_aois = [aoi for aoi in img.get('areas_of_interest', []) if aoi.get('flagged', False)]
+                total_flagged_aois += len(flagged_aois)
+        return total_flagged_aois
+
     def _add_image_details(self, progress_callback=None, cancel_check=None):
         """
         Add detailed AOI pages to the report.
@@ -276,11 +294,7 @@ class PdfGeneratorService:
         identifier_color = self.viewer.settings.get('identifier_color', (255, 255, 0))
 
         # Count total flagged AOIs for progress tracking
-        total_flagged_aois = 0
-        for img in self.viewer.images:
-            if not img.get('hidden', False):
-                flagged_aois = [aoi for aoi in img.get('areas_of_interest', []) if aoi.get('flagged', False)]
-                total_flagged_aois += len(flagged_aois)
+        total_flagged_aois = self._count_flagged_aois()
 
         current_aoi_count = 0
 
