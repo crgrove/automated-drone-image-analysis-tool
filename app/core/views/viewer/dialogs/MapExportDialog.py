@@ -140,3 +140,4 @@ class MapExportDialog(QDialog):
         """
         return self.include_coverage.isChecked()
 
+
