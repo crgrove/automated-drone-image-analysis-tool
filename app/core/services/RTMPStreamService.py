@@ -269,19 +269,25 @@ class RTMPStreamService(QThread):
                             time.sleep(0.1)  # Sleep while paused
                             continue
 
-                # Frame rate limiting (skip for HDMI capture to test maximum throughput)
+                # Frame rate limiting
                 if self.config.stream_type != StreamType.HDMI_CAPTURE:
-                    # For files, respect the video's original FPS
+                    # For files, limit to TARGET FPS (not video's native FPS!)
+                    # This prevents queue backup when video FPS > processing capability
                     target_interval = frame_interval
                     if self._is_file and self._video_fps > 0:
-                        target_interval = 1.0 / self._video_fps
+                        # CRITICAL FIX: Use MIN of video FPS and target FPS limit
+                        # If video is 60 FPS but we can only process 30 FPS, limit to 30 FPS
+                        effective_fps = min(self._video_fps, self.config.fps_limit)
+                        target_interval = 1.0 / effective_fps
 
                     if current_time - last_process_time < target_interval:
                         time.sleep(0.001)  # Small sleep to prevent excessive CPU usage
                         continue
 
-                # Read frame with timeout handling
+                # Read frame with timeout handling - TIME THIS (critical for high-res video profiling)
+                read_start = time.perf_counter()
                 ret, frame = self._cap.read()
+                read_time_ms = (time.perf_counter() - read_start) * 1000
 
                 if not ret or frame is None:
                     consecutive_errors += 1
@@ -302,6 +308,7 @@ class RTMPStreamService(QThread):
                     continue
 
                 # Performance optimization: resize if needed
+                resize_start = time.perf_counter()
                 try:
                     height, width = frame.shape[:2]
                     if width > self.config.resolution_limit[0] or height > self.config.resolution_limit[1]:
@@ -315,6 +322,7 @@ class RTMPStreamService(QThread):
                 except Exception as e:
                     self.logger.error(f"Error resizing frame: {e}")
                     continue
+                resize_time_ms = (time.perf_counter() - resize_start) * 1000
 
                 # Update performance metrics
                 self._update_fps_counter()
@@ -326,12 +334,25 @@ class RTMPStreamService(QThread):
                     self.videoPositionChanged.emit(current_time_in_video, self._total_duration)
 
                 # Make a copy of the frame to prevent memory issues
+                copy_start = time.perf_counter()
                 try:
                     frame_copy = frame.copy()
-                    # Emit frame for processing
-                    self.frameReady.emit(frame_copy, current_time, self._frame_number)
+                    copy_time_ms = (time.perf_counter() - copy_start) * 1000
+
+                    # Use perf_counter for consistent timing (not time.time())
+                    emit_timestamp = time.perf_counter()
+
+                    # Emit frame for processing with timing metadata attached
+                    self.frameReady.emit(frame_copy, emit_timestamp, self._frame_number)
                     self._frame_number += 1
                     last_process_time = current_time
+
+                    # Log detailed capture timing every 30 frames for profiling
+                    if self._frame_number % 30 == 0:
+                        total_capture = read_time_ms + resize_time_ms + copy_time_ms
+                        self.logger.debug(f"Capture profiling: read={read_time_ms:.1f}ms, "
+                                        f"resize={resize_time_ms:.1f}ms, copy={copy_time_ms:.1f}ms, "
+                                        f"total_capture={total_capture:.1f}ms")
                 except Exception as e:
                     self.logger.error(f"Error emitting frame: {e}")
                     continue
@@ -521,6 +542,7 @@ class StreamManager(QObject):
 
             # Create new configuration
             # Gradually increase FPS for HDMI capture testing
+            # For files, use 30 FPS target to prevent queue backup
             fps_limit = 35 if stream_type == StreamType.HDMI_CAPTURE else 30
 
             self._current_config = StreamConfig(
@@ -528,7 +550,7 @@ class StreamManager(QObject):
                 stream_type=stream_type,
                 reconnect_attempts=5,
                 buffer_size=1,  # Minimal buffering
-                fps_limit=fps_limit,
+                fps_limit=fps_limit,  # This is the TARGET processing FPS, not video FPS
                 resolution_limit=(1920, 1080)
             )
 

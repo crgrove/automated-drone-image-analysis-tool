@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
     QMainWindow, QMenu, QMenuBar, QPlainTextEdit,
     QPushButton, QSizePolicy, QSpacerItem, QSpinBox,
     QStatusBar, QVBoxLayout, QWidget)
-from . import resources_rc
+import resources_rc
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -47,9 +47,9 @@ class Ui_MainWindow(object):
         self.actionRTMPDetection = QAction(MainWindow)
         self.actionRTMPDetection.setObjectName(u"actionRTMPDetection")
         self.actionRTMPDetection.setFont(font)
-        self.actionRTMPAnomalyDetection = QAction(MainWindow)
-        self.actionRTMPAnomalyDetection.setObjectName(u"actionRTMPAnomalyDetection")
-        self.actionRTMPAnomalyDetection.setFont(font)
+        self.actionIntegratedDetection = QAction(MainWindow)
+        self.actionIntegratedDetection.setObjectName(u"actionIntegratedDetection")
+        self.actionIntegratedDetection.setFont(font)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
@@ -418,7 +418,7 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
         self.menuFile.addAction(self.actionRTMPDetection)
-        self.menuFile.addAction(self.actionRTMPAnomalyDetection)
+        self.menuFile.addAction(self.actionIntegratedDetection)
 
         self.retranslateUi(MainWindow)
 
@@ -435,7 +435,7 @@ class Ui_MainWindow(object):
         self.actionPreferences.setText(QCoreApplication.translate("MainWindow", u"Preferences", None))
         self.actionVideoParser.setText(QCoreApplication.translate("MainWindow", u"Video Parser", None))
         self.actionRTMPDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Color Detection", None))
-        self.actionRTMPAnomalyDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Anomaly Detection", None))
+        self.actionIntegratedDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Integrated Detection", None))
         self.outputFolderButton.setText(QCoreApplication.translate("MainWindow", u" Select", None))
         self.outputFolderButton.setProperty(u"iconName", QCoreApplication.translate("MainWindow", u"folder.png", None))
         self.inputFolderLabel.setText(QCoreApplication.translate("MainWindow", u"Input Folder:", None))
