@@ -3,12 +3,11 @@
 Demo script showing how to use RTMP streams with ADIAT viewers.
 
 This script demonstrates how to programmatically connect to RTMP streams
-using both Real-Time Color Detection and Real-Time Anomaly Detection viewers.
+using the Real-Time Color Detection viewer.
 
 Usage:
     python demo_rtmp_usage.py
     python demo_rtmp_usage.py --color rtmp://your-server:1935/live/stream
-    python demo_rtmp_usage.py --anomaly rtmp://your-server:1935/live/stream
 """
 
 import sys
@@ -25,20 +24,20 @@ from PyQt5.QtCore import QTimer
 def demo_color_detection(rtmp_url=None):
     """Demo Real-Time Color Detection with RTMP stream."""
     from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
-    
+
     app = QApplication(sys.argv)
     viewer = RTMPColorDetectionViewer()
-    
+
     # Configure for RTMP stream
     viewer.stream_controls.type_combo.setCurrentText("RTMP Stream")
-    
+
     if rtmp_url:
         # Set the RTMP URL
         viewer.stream_controls.url_input.setText(rtmp_url)
-        
+
         # Auto-connect after a short delay to let UI initialize
         QTimer.singleShot(1000, lambda: viewer.stream_controls.request_connect())
-        
+
         print(f"Connecting to RTMP stream: {rtmp_url}")
         print("Color Detection Viewer is now running...")
         print("Configure HSV color ranges in the UI to detect specific colors")
@@ -47,56 +46,23 @@ def demo_color_detection(rtmp_url=None):
         viewer.stream_controls.url_input.setText("rtmp://example.com:1935/live/stream")
         print("Color Detection Viewer opened in RTMP mode")
         print("Enter your RTMP URL and click Connect to start")
-    
-    viewer.show()
-    sys.exit(app.exec_())
 
-
-def demo_anomaly_detection(rtmp_url=None):
-    """Demo Real-Time Anomaly Detection with RTMP stream."""
-    from core.controllers.RTMPAnomalyDetectionViewer import RTMPAnomalyDetectionViewer
-    
-    app = QApplication(sys.argv)
-    viewer = RTMPAnomalyDetectionViewer()
-    
-    # Configure for RTMP stream
-    viewer.stream_controls.type_combo.setCurrentText("RTMP Stream")
-    
-    if rtmp_url:
-        # Set the RTMP URL
-        viewer.stream_controls.url_input.setText(rtmp_url)
-        
-        # Auto-connect after a short delay to let UI initialize
-        QTimer.singleShot(1000, lambda: viewer.stream_controls.request_connect())
-        
-        print(f"Connecting to RTMP stream: {rtmp_url}")
-        print("Anomaly Detection Viewer is now running...")
-        print("The system will learn normal patterns and detect anomalies")
-    else:
-        # Set example URL
-        viewer.stream_controls.url_input.setText("rtmp://example.com:1935/live/stream")
-        print("Anomaly Detection Viewer opened in RTMP mode")
-        print("Enter your RTMP URL and click Connect to start")
-    
     viewer.show()
     sys.exit(app.exec_())
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Demo RTMP stream usage with ADIAT viewers",
+        description="Demo RTMP stream usage with ADIAT Color Detection viewer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Open Color Detection viewer in RTMP mode (manual connection)
   python demo_rtmp_usage.py --color
-  
+
   # Auto-connect Color Detection to RTMP stream
   python demo_rtmp_usage.py --color rtmp://localhost:1935/live/stream
-  
-  # Auto-connect Anomaly Detection to RTMP stream  
-  python demo_rtmp_usage.py --anomaly rtmp://localhost:1935/live/stream
-  
+
   # Test with HTTP stream (also supported)
   python demo_rtmp_usage.py --color http://admin:password@192.168.1.100:8080/video
 
@@ -108,45 +74,33 @@ Common RTMP URLs:
   - IP Camera: rtmp://192.168.1.100:1935/live/cam1
         """
     )
-    
+
     parser.add_argument(
-        "--color", 
-        nargs='?', 
+        "--color",
+        nargs='?',
         const='',
         metavar="RTMP_URL",
         help="Launch Color Detection viewer with optional RTMP URL"
     )
-    
-    parser.add_argument(
-        "--anomaly", 
-        nargs='?', 
-        const='',
-        metavar="RTMP_URL",
-        help="Launch Anomaly Detection viewer with optional RTMP URL"
-    )
-    
+
     args = parser.parse_args()
-    
+
     # Check if no arguments provided
-    if args.color is None and args.anomaly is None:
+    if args.color is None:
         print("=" * 60)
         print("RTMP Stream Demo for ADIAT")
         print("=" * 60)
-        print("\nNo viewer specified. Use --color or --anomaly")
+        print("\nNo viewer specified. Use --color")
         print("\nExamples:")
         print("  python demo_rtmp_usage.py --color")
-        print("  python demo_rtmp_usage.py --anomaly rtmp://localhost:1935/live/stream")
+        print("  python demo_rtmp_usage.py --color rtmp://localhost:1935/live/stream")
         print("\nRun with -h for more help")
         return 1
-    
-    # Launch the appropriate viewer
-    if args.color is not None:
-        rtmp_url = args.color if args.color else None
-        demo_color_detection(rtmp_url)
-    elif args.anomaly is not None:
-        rtmp_url = args.anomaly if args.anomaly else None
-        demo_anomaly_detection(rtmp_url)
-    
+
+    # Launch the color detection viewer
+    rtmp_url = args.color if args.color else None
+    demo_color_detection(rtmp_url)
+
     return 0
 
 

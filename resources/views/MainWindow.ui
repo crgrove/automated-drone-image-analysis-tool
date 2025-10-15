@@ -716,7 +716,7 @@ color: rgb(228, 231, 235);</string>
     <addaction name="actionPreferences"/>
     <addaction name="actionVideoParser"/>
     <addaction name="actionRTMPDetection"/>
-    <addaction name="actionRTMPAnomalyDetection"/>
+    <addaction name="actionIntegratedDetection"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
@@ -760,9 +760,9 @@ color: rgb(228, 231, 235);</string>
     </font>
    </property>
   </action>
-  <action name="actionRTMPAnomalyDetection">
+  <action name="actionIntegratedDetection">
    <property name="text">
-    <string>Real-Time Anomaly Detection</string>
+    <string>Real-Time Integrated Detection</string>
    </property>
    <property name="font">
     <font>

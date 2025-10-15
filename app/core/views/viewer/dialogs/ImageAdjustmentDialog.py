@@ -18,12 +18,13 @@ import numpy as np
 import cv2
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QSlider, QLineEdit, QPushButton, QGroupBox
+)
 
-from core.views.viewer.ui.ImageAdjustmentDialog_ui import Ui_ImageAdjustmentDialog
 
-
-class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
+class ImageAdjustmentDialog(QDialog):
     """
     Dialog for real-time image adjustments including exposure, highlights, shadows, clarity, and radius.
 
@@ -42,7 +43,7 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
             original_pixmap (QPixmap): Original image to adjust
         """
         super().__init__(parent)
-        self.setupUi(self)
+        self._setup_ui()  # Create UI programmatically
 
         self.original_pixmap = original_pixmap
         self.original_image = None
@@ -74,6 +75,76 @@ class ImageAdjustmentDialog(QDialog, Ui_ImageAdjustmentDialog):
             'clarity': 0,
             'radius': 10
         }
+
+    def _setup_ui(self):
+        """Create UI widgets programmatically."""
+        self.setWindowTitle("Image Adjustment")
+        self.setModal(False)
+        self.resize(400, 400)
+
+        # Main layout
+        main_layout = QVBoxLayout(self)
+
+        # Create adjustment controls group
+        adjustments_group = QGroupBox("Adjustments")
+        grid_layout = QGridLayout()
+
+        # Helper function to create slider row
+        def create_slider_row(label_text, min_val, max_val, default_val, row):
+            # Label
+            label = QLabel(label_text)
+            grid_layout.addWidget(label, row, 0)
+
+            # Slider
+            slider = QSlider(Qt.Horizontal)
+            slider.setMinimum(min_val)
+            slider.setMaximum(max_val)
+            slider.setValue(default_val)
+            slider.setTickPosition(QSlider.TicksBelow)
+            slider.setTickInterval((max_val - min_val) // 10)
+            grid_layout.addWidget(slider, row, 1)
+
+            # Value input
+            value_input = QLineEdit()
+            value_input.setText(str(default_val))
+            value_input.setMaximumWidth(60)
+            grid_layout.addWidget(value_input, row, 2)
+
+            return slider, value_input
+
+        # Create sliders for each adjustment
+        self.exposureSlider, self.exposureValueInput = create_slider_row(
+            "Exposure:", -200, 200, 0, 0
+        )
+        self.highlightsSlider, self.highlightsValueInput = create_slider_row(
+            "Highlights:", -200, 200, 0, 1
+        )
+        self.shadowsSlider, self.shadowsValueInput = create_slider_row(
+            "Shadows:", -200, 200, 0, 2
+        )
+        self.claritySlider, self.clarityValueInput = create_slider_row(
+            "Clarity:", -200, 200, 0, 3
+        )
+        self.radiusSlider, self.radiusValueInput = create_slider_row(
+            "Radius:", 1, 100, 10, 4
+        )
+
+        adjustments_group.setLayout(grid_layout)
+        main_layout.addWidget(adjustments_group)
+
+        # Button layout
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        self.resetButton = QPushButton("Reset")
+        self.applyButton = QPushButton("Apply")
+        self.closeButton = QPushButton("Close")
+
+        button_layout.addWidget(self.resetButton)
+        button_layout.addWidget(self.applyButton)
+        button_layout.addWidget(self.closeButton)
+
+        main_layout.addLayout(button_layout)
 
     def _connect_signals(self):
         """Connect slider and button signals."""

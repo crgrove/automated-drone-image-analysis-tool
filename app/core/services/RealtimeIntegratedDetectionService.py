@@ -486,6 +486,10 @@ class IntegratedDetectionConfig:
     min_aspect_ratio: float = 0.2  # Minimum width/height ratio (exclude tall/thin objects)
     max_aspect_ratio: float = 5.0  # Maximum width/height ratio (exclude wide/flat objects)
 
+    # Detection clustering
+    enable_detection_clustering: bool = False  # Combine nearby detections into one
+    clustering_distance: float = 50.0  # Pixel distance threshold for clustering
+
     # Color exclusion (background learning)
     enable_color_exclusion: bool = False  # Enable color exclusion filtering
     excluded_hue_ranges: List[Tuple[float, float]] = field(default_factory=list)  # List of (hue_min, hue_max) ranges to exclude
@@ -1277,6 +1281,7 @@ class RealtimeIntegratedDetector(QObject):
     def _merge_detections(self, detections: List[Detection]) -> Detection:
         """
         Merge multiple overlapping detections into one.
+        Uses contours if available to calculate accurate merged bounds.
 
         Args:
             detections: List of detections to merge
@@ -1287,23 +1292,43 @@ class RealtimeIntegratedDetector(QObject):
         if len(detections) == 1:
             return detections[0]
 
-        # Find bounding box that encompasses all detections
-        min_x = min(d.bbox[0] for d in detections)
-        min_y = min(d.bbox[1] for d in detections)
-        max_x = max(d.bbox[0] + d.bbox[2] for d in detections)
-        max_y = max(d.bbox[1] + d.bbox[3] for d in detections)
+        # Collect all contours
+        contours_to_merge = [d.contour for d in detections if d.contour is not None]
 
-        merged_bbox = (min_x, min_y, max_x - min_x, max_y - min_y)
+        if contours_to_merge:
+            # Merge contours into a single contour array
+            merged_contour = np.vstack(contours_to_merge)
 
-        # Average centroid
-        avg_cx = int(np.mean([d.centroid[0] for d in detections]))
-        avg_cy = int(np.mean([d.centroid[1] for d in detections]))
+            # Calculate bounding box from merged contour
+            x, y, w, h = cv2.boundingRect(merged_contour)
+            merged_bbox = (x, y, w, h)
 
-        # Sum area
-        total_area = sum(d.area for d in detections)
+            # Calculate centroid from merged contour
+            M = cv2.moments(merged_contour)
+            if M["m00"] > 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+            else:
+                cx, cy = x + w // 2, y + h // 2
 
-        # Average confidence
-        avg_confidence = np.mean([d.confidence for d in detections])
+            # Calculate actual area from merged contour
+            total_area = cv2.contourArea(merged_contour)
+
+        else:
+            # Fallback: no contours available, use bbox union
+            min_x = min(d.bbox[0] for d in detections)
+            min_y = min(d.bbox[1] for d in detections)
+            max_x = max(d.bbox[0] + d.bbox[2] for d in detections)
+            max_y = max(d.bbox[1] + d.bbox[3] for d in detections)
+
+            merged_bbox = (min_x, min_y, max_x - min_x, max_y - min_y)
+            cx = int(np.mean([d.centroid[0] for d in detections]))
+            cy = int(np.mean([d.centroid[1] for d in detections]))
+            total_area = sum(d.area for d in detections)
+            merged_contour = None
+
+        # Max confidence (higher confidence wins)
+        max_confidence = max(d.confidence for d in detections)
 
         # Use timestamp from first detection
         timestamp = detections[0].timestamp
@@ -1317,12 +1342,13 @@ class RealtimeIntegratedDetector(QObject):
 
         return Detection(
             bbox=merged_bbox,
-            centroid=(avg_cx, avg_cy),
+            centroid=(cx, cy),
             area=total_area,
-            confidence=avg_confidence,
+            confidence=max_confidence,
             detection_type=detection_type,
             timestamp=timestamp,
-            metadata={'merged_from': len(detections)}
+            contour=merged_contour,
+            metadata={'merged_from': len(detections), 'clustered': True}
         )
 
     def _apply_temporal_voting(self, current_detections: List[Detection],
@@ -1371,6 +1397,66 @@ class RealtimeIntegratedDetector(QObject):
                 voted_detections.append(current_det)
 
         return voted_detections
+
+    def _apply_detection_clustering(self, detections: List[Detection], config: IntegratedDetectionConfig) -> List[Detection]:
+        """
+        Task A1: Cluster nearby detections based on centroid distance.
+
+        Combines detections within clustering_distance pixels into single detections.
+        Uses contour-based merging for accurate bounds.
+
+        Args:
+            detections: List of detections to cluster
+            config: Detection configuration
+
+        Returns:
+            List of clustered detections
+        """
+        if not config.enable_detection_clustering or len(detections) == 0:
+            return detections
+
+        # Track which detections have been assigned to a cluster
+        processed = [False] * len(detections)
+        clustered_detections = []
+
+        for i, det1 in enumerate(detections):
+            if processed[i]:
+                continue
+
+            # Start a new cluster with this detection
+            cluster = [det1]
+            processed[i] = True
+
+            # Find all detections within clustering distance
+            cx1, cy1 = det1.centroid
+
+            for j in range(i + 1, len(detections)):
+                if processed[j]:
+                    continue
+
+                det2 = detections[j]
+                cx2, cy2 = det2.centroid
+
+                # Calculate Euclidean distance between centroids
+                distance = np.sqrt((cx2 - cx1) ** 2 + (cy2 - cy1) ** 2)
+
+                # If within clustering distance, add to cluster
+                if distance <= config.clustering_distance:
+                    cluster.append(det2)
+                    processed[j] = True
+
+            # Merge the cluster into a single detection
+            if len(cluster) > 1:
+                merged = self._merge_detections(cluster)
+                # Mark as clustered in metadata
+                merged.metadata['clustered'] = True
+                merged.metadata['cluster_size'] = len(cluster)
+                clustered_detections.append(merged)
+            else:
+                # Single detection, keep as-is
+                clustered_detections.append(det1)
+
+        return clustered_detections
 
     def _apply_aspect_ratio_filter(self, detections: List[Detection], config: IntegratedDetectionConfig) -> List[Detection]:
         """
@@ -1655,6 +1741,9 @@ class RealtimeIntegratedDetector(QObject):
         # Apply temporal voting to reduce flicker (works with any detection source)
         detections = self._apply_temporal_voting(detections, config)
 
+        # Task A: Apply detection clustering to combine nearby detections
+        detections = self._apply_detection_clustering(detections, config)
+
         # Task A: Apply false positive reduction filters
         detections = self._apply_aspect_ratio_filter(detections, config)
         detections = self._apply_color_exclusion_filter(detections, processing_frame, config)
@@ -1758,13 +1847,25 @@ class RealtimeIntegratedDetector(QObject):
                     cv2.drawContours(annotated_frame, [scaled_contour], -1, color, 2)
 
                 # Draw shape based on render_shape
-                if config.render_shape == 0:  # Box
+                if config.render_shape == 0:  # Box (uses contour bounds if available)
+                    # Box already uses contour-based bounding box from detection
                     cv2.rectangle(annotated_frame, (x_scaled, y_scaled),
                                 (x_scaled + w_scaled, y_scaled + h_scaled), color, 2)
                     # Add small centroid marker
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
-                elif config.render_shape == 1:  # Circle
-                    radius = max(5, int(np.sqrt(detection.area) * render_inverse_scale / 2))
+                elif config.render_shape == 1:  # Circle (exceeds contour by 50%)
+                    # Calculate radius based on contour if available
+                    if detection.contour is not None:
+                        # Use minimum enclosing circle for the contour
+                        # Scale contour to render resolution first
+                        scaled_contour = (detection.contour * render_inverse_scale).astype(np.int32)
+                        (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
+                        # Expand by 50% to exceed contour
+                        radius = max(5, int(contour_radius * 1.5))
+                    else:
+                        # Fallback: estimate from area and expand by 50%
+                        base_radius = np.sqrt(detection.area) * render_inverse_scale / 2
+                        radius = max(5, int(base_radius * 1.5))
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), radius, color, 2)
                 elif config.render_shape == 2:  # Dot (small filled circle at centroid)
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 5, color, -1)
