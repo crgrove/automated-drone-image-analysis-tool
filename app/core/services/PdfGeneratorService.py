@@ -112,7 +112,7 @@ class PDFDocTemplate(BaseDocTemplate):
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
 
-    def __init__(self, viewer, organization="", search_name=""):
+    def __init__(self, viewer, organization="", search_name="", images=None, include_images_without_flagged_aois=False):
         """
         Initialize the PDF generator service.
 
@@ -120,12 +120,16 @@ class PdfGeneratorService:
             viewer: Reference to the viewer instance for accessing necessary data and methods.
             organization: Organization name for the report
             search_name: Search/mission name for the report
+            images: List of images to include in the PDF (if None, will use viewer.images)
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs
         """
 
         self.logger = LoggerService()
         self.viewer = viewer
         self.organization = organization if organization else "[ORGANIZATION]"
         self.search_name = search_name if search_name else "Analysis"
+        self.include_images_without_flagged_aois = include_images_without_flagged_aois
+        self.images = images  # Store the images to use for PDF generation
         self.story = []
         self.doc = None
         self._initialize_styles()
@@ -147,7 +151,7 @@ class PdfGeneratorService:
                 raise PermissionError(f"Output directory {output_dir} is not writable")
 
             # Validate images before starting
-            for img in self.viewer.images:
+            for img in (self.images or self.viewer.images):
                 if not os.path.exists(img['path']):
                     raise FileNotFoundError(f"Image not found: {img['path']}")
 
@@ -183,14 +187,16 @@ class PdfGeneratorService:
                 self.story.append(map_img)
                 self.story.append(Spacer(1, 20))
 
-            # Add TOC
-            toc = self._create_toc()
-            self.story.append(toc)
+            # Add page break after title page content
             self.story.append(PageBreak())
 
             # Add algorithm settings section
             self._add_algorithm_settings()
             self.story.append(Spacer(1, 20))
+
+            # Add Images section header
+            self.story.append(Paragraph(f"Images ({len(self.images)})", self.h2))
+            self.story.append(Spacer(1, 10))
 
             # Add image details
             self._add_image_details(progress_callback=progress_callback, cancel_check=cancel_check)
@@ -199,6 +205,26 @@ class PdfGeneratorService:
             if progress_callback:
                 total_flagged_aois = self._count_flagged_aois()
                 progress_callback(total_flagged_aois, total_flagged_aois, "Finalizing Report...")
+
+            # Add TOC after all content is generated
+            toc = self._create_toc()
+            
+            # Find the index of the first PageBreak (which marks the end of the title page)
+            first_page_break_idx = -1
+            for i, flowable in enumerate(self.story):
+                if isinstance(flowable, PageBreak):
+                    first_page_break_idx = i
+                    break
+            
+            if first_page_break_idx != -1:
+                # Insert TOC and a PageBreak immediately after the first PageBreak
+                self.story.insert(first_page_break_idx + 1, toc)
+                self.story.insert(first_page_break_idx + 2, PageBreak())
+            else:
+                # Fallback if no PageBreak was found (shouldn't happen with current logic)
+                self.logger.error("No PageBreak found after title page content. Inserting TOC at beginning.")
+                self.story.insert(0, toc)
+                self.story.insert(1, PageBreak())
 
             # Build the PDF
             self.doc.multiBuild(self.story)
@@ -271,17 +297,17 @@ class PdfGeneratorService:
         self.story.append(PageBreak())
 
     def _count_flagged_aois(self):
-        """Count total flagged AOIs across all non-hidden images.
+        """Count total AOIs to process across all non-hidden images.
         
         Returns:
-            int: Total number of flagged AOIs
+            int: Total number of AOIs to process
         """
-        total_flagged_aois = 0
-        for img in self.viewer.images:
+        total_aois = 0
+        for img in (self.images):
             if not img.get('hidden', False):
-                flagged_aois = [aoi for aoi in img.get('areas_of_interest', []) if aoi.get('flagged', False)]
-                total_flagged_aois += len(flagged_aois)
-        return total_flagged_aois
+                # Count AOIs (already filtered by controller)
+                total_aois += len(img.get('areas_of_interest', []))
+        return total_aois
 
     def _add_image_details(self, progress_callback=None, cancel_check=None):
         """
@@ -299,7 +325,7 @@ class PdfGeneratorService:
 
         current_aoi_count = 0
 
-        for img in self.viewer.images:
+        for img in (self.images):
             # Check for cancellation
             if cancel_check and cancel_check():
                 self.logger.info("PDF generation cancelled by user")
@@ -307,8 +333,10 @@ class PdfGeneratorService:
             if img.get('hidden', False):
                 continue
 
-            # Only process images with flagged AOIs
-            flagged_aois = [aoi for aoi in img.get('areas_of_interest', []) if aoi.get('flagged', False)]
+            # Get AOIs for this image (already filtered by controller)
+            flagged_aois = img.get('areas_of_interest', [])
+            
+            # Skip if no AOIs (shouldn't happen with controller filtering, but safety check)
             if not flagged_aois:
                 continue
 
@@ -340,6 +368,15 @@ class PdfGeneratorService:
             orientation_str = f"{bearing}°"
             gsd_str = f"{image_service.get_average_gsd()}cm/px"
 
+            # Add image header once per image (not per AOI)
+            self.story.append(Paragraph(img['name'], self.h3))
+            
+            # Add metadata as separate paragraph
+            metadata_text = f"GPS Coordinates: {position_str} (camera's position, not ground location) | "
+            metadata_text += f"AGL: {agl_str} | Drone Orientation: {orientation_str} | Estimated Average GSD: {gsd_str}"
+            self.story.append(Paragraph(metadata_text, self.styles['Normal']))
+            self.story.append(Spacer(1, 10))
+
             # Process each flagged AOI
             for aoi_idx, aoi in enumerate(flagged_aois):
                 # Update progress
@@ -355,29 +392,6 @@ class PdfGeneratorService:
                 if cancel_check and cancel_check():
                     self.logger.info("PDF generation cancelled by user")
                     return
-
-                # Get original source image path from the image name
-                original_source_path = self._find_original_image_from_name(img['name'])
-                if original_source_path and os.path.exists(original_source_path):
-                    # Re-load metadata from original source using same method as viewer
-                    original_image_service = ImageService(original_source_path, '')
-                    # Use get_position just like the viewer does
-                    position_str = original_image_service.get_position(self.viewer.position_format)
-                    if not position_str:
-                        position_str = "N/A"
-                    agl_str = f"{original_image_service.get_relative_altitude(self.viewer.distance_unit)}{self.viewer.distance_unit}"
-                    orientation_str = f"{original_image_service.get_camera_yaw() or 0}°"
-                    gsd_str = f"{original_image_service.get_average_gsd()}cm/px"
-                else:
-                    # Fallback to existing values
-                    position_str = position_str if position_str != "N/A" else position_str
-
-                # Create header with metadata
-                header_text = f"<b>{img['name']}</b><br/>"
-                header_text += f"GPS Coordinates: {position_str} (camera's position, not ground location) | "
-                header_text += f"AGL: {agl_str} | Drone Orientation: {orientation_str} | Estimated Average GSD: {gsd_str}"
-                self.story.append(Paragraph(header_text, self.styles['Normal']))
-                self.story.append(Spacer(1, 10))
 
                 # Create 0x (full image, north-up) - top half, edge to edge
                 full_img, full_aoi_pos = self._create_full_rotated_image(
@@ -440,108 +454,6 @@ class PdfGeneratorService:
                 # Page break between AOIs
                 self.story.append(PageBreak())
 
-    def _add_full_image(self, img):
-        """
-        Add a resized full image to the report.
-
-        Args:
-            img (dict): The image data including path and metadata.
-        """
-        try:
-            image = cv2.imread(img['path'])
-            if image is None:
-                self.logger.error(f"Failed to load image: {img['path']}")
-                return
-
-            # Get the original dimensions
-            original_height, original_width = image.shape[:2]
-
-            # Define the maximum width
-            max_width = 400
-
-            # Check if the width needs resizing
-            if original_width > max_width:
-                scaling_factor = max_width / original_width
-                new_width = max_width
-                new_height = int(original_height * scaling_factor)
-                resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            else:
-                resized_image = image
-
-            _, buffer = cv2.imencode('.jpg', resized_image)
-            image_bytes = BytesIO(buffer)
-
-            img_obj = Image(image_bytes, hAlign="CENTER")
-            self.story.append(img_obj)
-        except Exception as e:
-            self.logger.error(f"Error processing image {img['path']}: {str(e)}")
-
-    def _add_areas_of_interest(self, img):
-        """
-        Add areas of interest to the report.
-
-        Args:
-            img (dict): The image data including areas of interest.
-        """
-        self.story.append(Paragraph("Areas of Interest", self.h4))
-        visible_aois = [aoi for aoi in img['areas_of_interest'] if not aoi.get('hidden', False)]
-        data = []
-        num_columns = 4
-        num_rows = (len(visible_aois) + num_columns - 1) // num_columns
-
-        for i in range(num_rows):
-            row = []
-            for j in range(num_columns):
-                aoi_index = i * num_columns + j
-                if aoi_index < len(visible_aois):
-                    aoi = visible_aois[aoi_index]
-                    try:
-                        img_arr = cv2.imread(img['path'])
-                        if img_arr is None:
-                            self.logger.error(f"Failed to load image for AOI: {img['path']}")
-                            continue
-
-                        x, y = aoi['center']
-                        radius = aoi['radius'] + 10
-
-                        sx, sy = max(0, x - radius), max(0, y - radius)
-                        ex, ey = min(img_arr.shape[1] - 1, x + radius), min(img_arr.shape[0] - 1, y + radius)
-
-                        cropped = img_arr[sy:ey, sx:ex]
-
-                        thumbnail_size = (120, 120)
-                        cropped_resized = cv2.resize(cropped, thumbnail_size, interpolation=cv2.INTER_AREA)
-                        _, buffer = cv2.imencode('.jpg', cropped_resized)
-                        image_bytes = BytesIO(buffer)
-
-                        img_obj = Image(image_bytes)
-                        img_obj.hAlign = 'CENTER'
-
-                        coord_paragraph = Paragraph(f"X:{x}, Y:{y}", ParagraphStyle('Normal', alignment=1))
-                        container = Table([[img_obj], [coord_paragraph]], colWidths=[1.5 * inch])
-                        container.setStyle(TableStyle([
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')
-                        ]))
-                        row.append(container)
-                    except Exception as e:
-                        self.logger.error(f"Error creating AOI thumbnail: {str(e)}")
-                else:
-                    row.append(None)
-
-            data.append(row)
-
-        table = Table(data, colWidths=[2 * inch] * num_columns, spaceBefore=20, hAlign='LEFT')
-        table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 20)
-        ]))
-        self.story.append(table)
 
     def _initialize_styles(self):
         """Initialize paragraph styles for the document."""
@@ -589,10 +501,7 @@ class PdfGeneratorService:
             gps_locations = []
             identifier_color = self.viewer.settings.get('identifier_color', (255, 255, 0))
 
-            # Get ALL images (use all_images_for_map if available, otherwise filtered images)
-            all_images = getattr(self, 'all_images_for_map', self.viewer.images)
-
-            for idx, img in enumerate(all_images):
+            for idx, img in enumerate(self.images):
                 # Include hidden images in the map
 
                 # Get GPS coords from original image path
@@ -693,37 +602,37 @@ class PdfGeneratorService:
             cv2.putText(map_img, 'N', (arrow_x - 10, arrow_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
 
             # Add title with white background
-            title_text = 'GPS Overview Map'
+            title_text = 'Overview Map'
             (text_width, text_height), baseline = cv2.getTextSize(title_text, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 2)
             cv2.rectangle(map_img, (10, 10), (30 + text_width, 50 + text_height), (255, 255, 255), -1)
             cv2.rectangle(map_img, (10, 10), (30 + text_width, 50 + text_height), (0, 0, 0), 2)
-            cv2.putText(map_img, title_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
+            cv2.putText(map_img, title_text, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
 
             # Add legend with white background
             legend_x, legend_y_start = 20, img_height - 120
             cv2.rectangle(map_img, (legend_x - 10, legend_y_start - 10),
-                         (350, img_height - 20), (255, 255, 255), -1)
+                         (450, img_height - 20), (255, 255, 255), -1)
             cv2.rectangle(map_img, (legend_x - 10, legend_y_start - 10),
-                         (350, img_height - 20), (0, 0, 0), 2)
+                         (450, img_height - 20), (0, 0, 0), 2)
 
-            legend_y = legend_y_start
+            legend_y = legend_y_start +10
             cv2.circle(map_img, (legend_x + 20, legend_y), 12, (0, 100, 255), -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 14, (0, 0, 0), 2)
-            cv2.putText(map_img, 'Images with flagged AOIs', (legend_x + 40, legend_y + 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            cv2.putText(map_img, 'Images with flagged AOIs', (legend_x + 44, legend_y + 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
-            legend_y += 30
+            legend_y += 35
             cv2.circle(map_img, (legend_x + 20, legend_y), 8, (100, 100, 100), -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 10, (255, 255, 255), 2)
-            cv2.putText(map_img, 'Images without flagged AOIs', (legend_x + 40, legend_y + 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            cv2.putText(map_img, 'Images without flagged AOIs', (legend_x + 44, legend_y + 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
-            legend_y += 30
+            legend_y += 35
             color_bgr = (identifier_color[2], identifier_color[1], identifier_color[0])
             cv2.circle(map_img, (legend_x + 20, legend_y), 8, color_bgr, -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 10, (0, 0, 0), 2)
-            cv2.putText(map_img, 'Flagged AOI locations', (legend_x + 40, legend_y + 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            cv2.putText(map_img, 'Flagged AOI locations', (legend_x + 44, legend_y + 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
             # Encode to bytes
             _, buffer = cv2.imencode('.jpg', map_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
@@ -1089,94 +998,7 @@ class PdfGeneratorService:
             self.logger.error(f"Error creating zoomed AOI image: {e}")
             return None, None
 
-    def _create_context_image(self, img_array, aoi, bearing, identifier_color):
-        """
-        Create a 3x zoomed context image from the full original image.
 
-        Args:
-            img_array: Original full image array
-            aoi: AOI dictionary
-            bearing: Drone bearing for north rotation
-            identifier_color: RGB tuple for AOI circle
-
-        Returns:
-            Tuple of (context_image_array, aoi_position_in_context)
-        """
-        try:
-            # First rotate the full image
-            rotated_img = self._rotate_image_north_up(img_array, bearing)
-            height, width = img_array.shape[:2]
-            rot_height, rot_width = rotated_img.shape[:2]
-
-            # Transform AOI center to rotated coordinates
-            transformed_center = self._transform_aoi_center(aoi['center'], bearing, width, height)
-            x, y = transformed_center
-            radius = aoi['radius']
-
-            # Calculate crop for 3x zoom (larger area showing context)
-            crop_radius = radius * 3
-
-            # Calculate crop bounds
-            sx = max(0, x - crop_radius)
-            sy = max(0, y - crop_radius)
-            ex = min(rot_width, x + crop_radius)
-            ey = min(rot_height, y + crop_radius)
-
-            # Crop the image
-            cropped = rotated_img[sy:ey, sx:ex].copy()
-
-            # Calculate AOI position in cropped image
-            aoi_x_in_crop = x - sx
-            aoi_y_in_crop = y - sy
-
-            # Draw AOI circle
-            color_bgr = (identifier_color[2], identifier_color[1], identifier_color[0])
-            cv2.circle(cropped, (aoi_x_in_crop, aoi_y_in_crop), radius, color_bgr, 3)
-
-            return cropped, (aoi_x_in_crop, aoi_y_in_crop)
-
-        except Exception as e:
-            self.logger.error(f"Error creating context image: {e}")
-            return None, None
-
-    def _draw_connector_line_to_target(self, detail_img, detail_aoi_pos, context_aoi_pos):
-        """
-        Draw a connector line from detail image pointing towards the AOI in context image.
-
-        Args:
-            detail_img: Detail/closeup image array
-            detail_aoi_pos: (x, y) position of AOI in detail image
-            context_aoi_pos: (x, y) position of AOI in context image (for direction)
-
-        Returns:
-            Image with connector line drawn
-        """
-        try:
-            h, w = detail_img.shape[:2]
-
-            # Start from the AOI center in the detail image
-            start_pt = detail_aoi_pos
-
-            # Arrow should point upward (towards the 0x image which is above on the page)
-            # Calculate angle based on horizontal position difference
-            # Since context image spans full width above, point generally upward
-            arrow_length = 80
-
-            # Point straight up or slightly angled based on position
-            end_x = start_pt[0]
-            end_y = max(5, start_pt[1] - arrow_length)
-
-            end_pt = (end_x, end_y)
-
-            # Draw arrow from AOI towards top
-            cv2.arrowedLine(detail_img, start_pt, end_pt,
-                           (255, 0, 255), 3, tipLength=0.3)
-
-            return detail_img
-
-        except Exception as e:
-            self.logger.error(f"Error drawing connector line: {e}")
-            return detail_img
 
     def _get_aoi_average_info(self, image, aoi):
         """
@@ -1203,37 +1025,6 @@ class PdfGeneratorService:
 
         except Exception as e:
             self.logger.error(f"Error calculating average color: {e}")
-            return None
-
-    def _find_original_image_from_name(self, image_name):
-        """
-        Find the original source image path from the image name.
-
-        Args:
-            image_name: Name of the image (e.g., "JTDE-1-0_I_20250611145701_1626_V.JPG")
-
-        Returns:
-            Path to original image or None
-        """
-        try:
-            # Get the settings to find input directory
-            if hasattr(self.viewer, 'settings'):
-                input_dir = self.viewer.settings.get('input_dir', '')
-                if input_dir and os.path.exists(input_dir):
-                    # Try to find the image in the input directory
-                    potential_path = os.path.join(input_dir, image_name)
-                    if os.path.exists(potential_path):
-                        return potential_path
-
-                    # Try recursive search if not found directly
-                    for root, dirs, files in os.walk(input_dir):
-                        if image_name in files:
-                            return os.path.join(root, image_name)
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Error finding original image: {e}")
             return None
 
     def _create_composite_with_connectors(self, full_img, full_aoi_pos, medium_img, medium_aoi_pos, closeup_img, closeup_aoi_pos, aoi_radius):

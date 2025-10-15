@@ -1,6 +1,6 @@
 """PDFExportDialog - Pure UI dialog for collecting PDF export settings."""
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout, QCheckBox
 from PySide6.QtCore import Qt
 
 from core.services.PDFSettingsService import PDFSettingsService
@@ -49,6 +49,19 @@ class PDFExportDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        # Options section
+        options_label = QLabel("Export Options:")
+        options_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(options_label)
+
+        # Include images without flagged AOIs checkbox
+        self.include_images_without_flagged_aois = QCheckBox("Include images without flagged AOIs")
+        self.include_images_without_flagged_aois.setToolTip(
+            "When checked, all images will be included in the PDF report, even if they don't have any flagged AOIs. "
+            "When unchecked, only images with flagged AOIs will be included."
+        )
+        layout.addWidget(self.include_images_without_flagged_aois)
+
         # Buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton("OK")
@@ -78,12 +91,14 @@ class PDFExportDialog(QDialog):
         settings = self.settings_service.load_settings()
         self.organization_input.setText(settings.get('organization', ''))
         self.search_name_input.setText(settings.get('search_name', ''))
+        self.include_images_without_flagged_aois.setChecked(settings.get('include_images_without_flagged_aois', False))
 
     def save_settings(self):
         """Save current settings to config file."""
         self.settings_service.save_settings(
             self.organization_input.text(),
-            self.search_name_input.text()
+            self.search_name_input.text(),
+            self.include_images_without_flagged_aois.isChecked()
         )
 
     def get_organization(self):
@@ -101,4 +116,12 @@ class PDFExportDialog(QDialog):
             str: The search name
         """
         return self.search_name_input.text().strip()
+
+    def get_include_images_without_flagged_aois(self):
+        """Get whether to include images without flagged AOIs.
+
+        Returns:
+            bool: True if images without flagged AOIs should be included
+        """
+        return self.include_images_without_flagged_aois.isChecked()
 

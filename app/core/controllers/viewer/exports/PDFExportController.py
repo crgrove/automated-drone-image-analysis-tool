@@ -108,9 +108,10 @@ class PDFExportController:
             if settings_dialog.exec() != QDialog.Accepted:
                 return False  # User cancelled
 
-            # Get organization and search name from dialog
+            # Get settings from dialog
             organization = settings_dialog.get_organization()
             search_name = settings_dialog.get_search_name()
+            include_images_without_flagged_aois = settings_dialog.get_include_images_without_flagged_aois()
 
             # Open file dialog for PDF export
             file_name, _ = QFileDialog.getSaveFileName(
@@ -123,39 +124,52 @@ class PDFExportController:
             if not file_name:  # User cancelled
                 return False
 
-            # Filter images to only include those with flagged AOIs
+            # Filter images based on user preference
             original_images = images
             filtered_images = []
 
             for idx, img in enumerate(images):
                 if not img.get("hidden", False):
+                    # Create a copy of the image data
+                    img_copy = img.copy()
                     # Check if this image has flagged AOIs
-                    if idx in flagged_aois and flagged_aois[idx]:
-                        # Create a copy of the image data with only flagged AOIs
-                        img_copy = img.copy()
+                    has_flagged_aois = idx in flagged_aois and len(flagged_aois[idx]) > 0
+                    
+                    if has_flagged_aois:
+                        # This image has flagged AOIs - filter to only include flagged ones
                         flagged_indices = flagged_aois[idx]
                         filtered_aois = [
                             aoi for i, aoi in enumerate(img['areas_of_interest'])
                             if i in flagged_indices
                         ]
                         img_copy['areas_of_interest'] = filtered_aois
-
-                        # Only include image if it has flagged AOIs
-                        if filtered_aois:
+                        
+                        # Always include images with flagged AOIs
+                        filtered_images.append(img_copy)
+                    else:
+                        # This image has NO flagged AOIs
+                        if include_images_without_flagged_aois:
+                            # Include image with ALL its AOIs
                             filtered_images.append(img_copy)
 
             if not filtered_images:
-                self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
+                if include_images_without_flagged_aois:
+                    self._show_toast("No images to include in PDF", 3000, color="#F44336")
+                else:
+                    self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
                 return False
 
-            # Create PDF generator with both all images and filtered images
-            pdf_generator = PdfGeneratorService(self.parent, organization=organization, search_name=search_name)
+            # Create PDF generator with filtered images
+            pdf_generator = PdfGeneratorService(
+                self.parent, 
+                organization=organization, 
+                search_name=search_name,
+                images=filtered_images,
+                include_images_without_flagged_aois=include_images_without_flagged_aois,
+            )
 
             # Store all images for map generation
             pdf_generator.all_images_for_map = original_images
-
-            # Temporarily replace images with filtered version for PDF generation
-            self.parent.images = filtered_images
 
             # Count total flagged AOIs for progress dialog
             total_aois = sum(len(img.get('areas_of_interest', [])) for img in filtered_images)
@@ -182,15 +196,9 @@ class PDFExportController:
             self.pdf_thread = PdfGenerationThread(pdf_generator, file_name)
 
             # Connect signals
-            self.pdf_thread.success.connect(
-                lambda: self._on_pdf_generation_finished(original_images)
-            )
-            self.pdf_thread.canceled.connect(
-                lambda: self._on_pdf_generation_cancelled(original_images)
-            )
-            self.pdf_thread.errorOccurred.connect(
-                lambda e: self._on_pdf_generation_error(e, original_images)
-            )
+            self.pdf_thread.success.connect(self._on_pdf_generation_finished)
+            self.pdf_thread.canceled.connect(self._on_pdf_generation_cancelled)
+            self.pdf_thread.errorOccurred.connect(self._on_pdf_generation_error)
             self.pdf_thread.progressUpdated.connect(
                 self._on_progress_updated
             )
@@ -211,9 +219,6 @@ class PDFExportController:
             return True
 
         except Exception as e:
-            # Restore original images in case of error
-            if 'original_images' in locals():
-                self.parent.images = original_images
             self.logger.error(f"Error generating PDF file: {str(e)}")
             self._show_error(f"Failed to generate PDF file: {str(e)}")
             return False
@@ -224,18 +229,14 @@ class PDFExportController:
             self.progress_dialog.update_progress(current, total, message)
             QApplication.processEvents()  # Keep UI responsive
 
-    def _on_pdf_generation_finished(self, original_images=None):
+    def _on_pdf_generation_finished(self):
         """Handles successful completion of PDF generation."""
-        if original_images is not None:
-            self.parent.images = original_images
         if self.progress_dialog:
             self.progress_dialog.accept()
         QMessageBox.information(self.parent, "Success", "PDF report generated successfully!")
 
-    def _on_pdf_generation_cancelled(self, original_images=None):
+    def _on_pdf_generation_cancelled(self):
         """Handles cancellation of PDF generation."""
-        if original_images is not None:
-            self.parent.images = original_images
         if self.pdf_thread and self.pdf_thread.isRunning():
             self.pdf_thread.terminate()  # Forcefully terminate the thread
             self.pdf_thread.wait()      # Wait for the thread to terminate completely
@@ -243,10 +244,8 @@ class PDFExportController:
         if self.progress_dialog and self.progress_dialog.isVisible():
             self.progress_dialog.reject()  # Close the dialog
 
-    def _on_pdf_generation_error(self, error_message, original_images=None):
+    def _on_pdf_generation_error(self, error_message):
         """Handles errors during PDF generation."""
-        if original_images is not None:
-            self.parent.images = original_images
         if self.progress_dialog and self.progress_dialog.isVisible():
             self.progress_dialog.reject()  # Close the progress dialog
         self._show_error(f"PDF generation failed: {error_message}")
