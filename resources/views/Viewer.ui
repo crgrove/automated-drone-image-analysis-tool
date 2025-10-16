@@ -6,19 +6,25 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1040</width>
-    <height>893</height>
+    <width>1552</width>
+    <height>951</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Automated Drone Image Analysis Tool :: Viewer - Sponsored by TEXSAR</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>../icons/ADIAT.ico</normaloff>../icons/ADIAT.ico</iconset>
+   <iconset resource="../resources.qrc">
+    <normaloff>:/ADIAT.ico</normaloff>:/ADIAT.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>6</number>
+    </property>
+    <property name="bottomMargin">
+     <number>9</number>
+    </property>
     <item>
      <widget class="QWidget" name="TitleWidget" native="true">
       <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -39,6 +45,12 @@
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
+         <property name="minimumSize">
+          <size>
+           <width>10</width>
+           <height>0</height>
+          </size>
+         </property>
          <property name="font">
           <font>
            <pointsize>16</pointsize>
@@ -49,6 +61,133 @@
          </property>
          <property name="textInteractionFlags">
           <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="showOverlayCheckBox">
+         <property name="text">
+          <string>Show Overlay</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="highlightPixelsOfInterestCheckBox">
+         <property name="text">
+          <string>Highlight Pixels of Interest</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="showAOIsCheckBox">
+         <property name="font">
+          <font>
+           <pointsize>9</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Show AOIs</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QToolButton" name="adjustmentsButton">
+         <property name="toolTip">
+          <string>Adjust Image (Ctrl+H)</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="../resources.qrc">
+           <normaloff>:/icons/dark/adjustments.png</normaloff>:/icons/dark/adjustments.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>25</width>
+           <height>25</height>
+          </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>adjustments.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="measureButton">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Measure Distance (Ctrl+M)</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="../resources.qrc">
+           <normaloff>:/icons/ruler.png</normaloff>:/icons/ruler.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>25</width>
+           <height>25</height>
+          </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>ruler.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="magnifyButton">
+         <property name="toolTip">
+          <string>Toggle Magnifying Glass (Middle Mouse)</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="../resources.qrc">
+           <normaloff>:/icons/dark/icons/dark_theme/magnify.png</normaloff>:/icons/dark/icons/dark_theme/magnify.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>25</width>
+           <height>25</height>
+          </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>magnify.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line_4">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
          </property>
         </widget>
        </item>
@@ -70,6 +209,9 @@
            <height>25</height>
           </size>
          </property>
+         <property name="iconName" stdset="0">
+          <string>map.png</string>
+         </property>
         </widget>
        </item>
        <item>
@@ -89,6 +231,9 @@
            <width>25</width>
            <height>25</height>
           </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>pdf.png</string>
          </property>
         </widget>
        </item>
@@ -114,6 +259,32 @@
            <width>25</width>
            <height>25</height>
           </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>zip.png</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="caltopoButton">
+         <property name="toolTip">
+          <string>Export to CalTopo</string>
+         </property>
+         <property name="text">
+          <string>...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="../resources.qrc">
+           <normaloff>:/icons/caltopo.png</normaloff>:/icons/caltopo.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>25</width>
+           <height>25</height>
+          </size>
+         </property>
+         <property name="iconName" stdset="0">
+          <string>caltopo.png</string>
          </property>
         </widget>
        </item>
@@ -219,7 +390,7 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>650</height>
+          <height>0</height>
          </size>
         </property>
         <property name="font">
@@ -250,7 +421,7 @@
     <item>
      <layout class="QHBoxLayout" name="ButtonLayout">
       <property name="spacing">
-       <number>6</number>
+       <number>8</number>
       </property>
       <item>
        <widget class="QCheckBox" name="hideImageCheckbox">
@@ -338,6 +509,9 @@
          <iconset resource="../resources.qrc">
           <normaloff>:/icons/previous.png</normaloff>:/icons/previous.png</iconset>
         </property>
+        <property name="iconName" stdset="0">
+         <string>previous.png</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -356,6 +530,9 @@
         <property name="icon">
          <iconset resource="../resources.qrc">
           <normaloff>:/icons/next.png</normaloff>:/icons/next.png</iconset>
+        </property>
+        <property name="iconName" stdset="0">
+         <string>next.png</string>
         </property>
        </widget>
       </item>
@@ -408,7 +585,7 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>1020</width>
+         <width>1532</width>
          <height>96</height>
         </rect>
        </property>
@@ -438,14 +615,31 @@
       </widget>
      </widget>
     </item>
+    <item>
+     <widget class="QWidget" name="statusBarWidget" native="true">
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
+       <item>
+        <widget class="QLabel" name="statusBar">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
    </layout>
-  </widget>
-  <widget class="QStatusBar" name="statusbar">
-   <property name="font">
-    <font>
-     <pointsize>10</pointsize>
-    </font>
-   </property>
   </widget>
   <action name="actionOpen">
    <property name="text">

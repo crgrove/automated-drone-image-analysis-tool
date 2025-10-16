@@ -4,7 +4,7 @@ import cv2
 import math
 import traceback
 
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 from collections import deque
 
@@ -60,16 +60,20 @@ class MRMapService(AlgorithmService):
             # Identify anomalous pixels
             pixel_anom = (0 < bin_counts) & (bin_counts < self.threshold)
 
-            contours = self._getMRMapsContours(pixel_anom)
+            mask, contours = self._getMRMapsContours(pixel_anom)
 
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
+            # Identify contours in the masked image
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-            # Generate the output path and store the processed image.
-            output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+            output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            # Store mask instead of duplicating image
+            mask_path = None
+            if areas_of_interest:
+                mask_path = self.store_mask(full_path, output_path, mask)
+
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # print(traceback.format_exc())
@@ -105,7 +109,7 @@ class MRMapService(AlgorithmService):
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-        return contours
+        return mask, contours
 
     def _find_connected_pixels(self, pixel_anom, visited, start_x, start_y, width, height):
         queue = deque([(start_x, start_y)])

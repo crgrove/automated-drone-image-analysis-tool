@@ -27,8 +27,11 @@
         <string> Pick Color</string>
        </property>
        <property name="icon">
-        <iconset resource="MatchedFilter.qrc">
+        <iconset resource="../../resources.qrc">
          <normaloff>:/icons/color.png</normaloff>:/icons/color.png</iconset>
+       </property>
+       <property name="iconName" stdset="0">
+        <string>color.png</string>
        </property>
       </widget>
      </item>
@@ -137,8 +140,11 @@
         <string>View Range</string>
        </property>
        <property name="icon">
-        <iconset resource="MatchedFilter.qrc">
+        <iconset resource="../../resources.qrc">
          <normaloff>:/icons/eye.png</normaloff>:/icons/eye.png</iconset>
+       </property>
+       <property name="iconName" stdset="0">
+        <string>eye.png</string>
        </property>
       </widget>
      </item>
@@ -147,7 +153,7 @@
   </layout>
  </widget>
  <resources>
-  <include location="MatchedFilter.qrc"/>
+  <include location="../../resources.qrc"/>
  </resources>
  <connections/>
 </ui>

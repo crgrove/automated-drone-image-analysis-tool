@@ -23,7 +23,7 @@
   </property>
   <property name="windowIcon">
    <iconset resource="../resources.qrc">
-    <normaloff>:/icons/ADIAT.ico</normaloff>:/icons/ADIAT.ico</iconset>
+    <normaloff>:/ADIAT.ico</normaloff>:/ADIAT.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="sizePolicy">
@@ -61,8 +61,11 @@
             <string> Select</string>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
+            <iconset resource="../resources.qrc">
+             <normaloff>:/icons/folder.png</normaloff>:/icons/folder.png</iconset>
+           </property>
+           <property name="iconName" stdset="0">
+            <string>folder.png</string>
            </property>
           </widget>
          </item>
@@ -113,8 +116,11 @@
             <string> Select</string>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/icons/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
+            <iconset resource="../resources.qrc">
+             <normaloff>:/icons/folder.png</normaloff>:/icons/folder.png</iconset>
+           </property>
+           <property name="iconName" stdset="0">
+            <string>folder.png</string>
            </property>
           </widget>
          </item>
@@ -428,6 +434,9 @@
                      <iconset resource="../resources.qrc">
                       <normaloff>:/icons/image.png</normaloff>:/icons/image.png</iconset>
                     </property>
+                    <property name="iconName" stdset="0">
+                     <string>image.png</string>
+                    </property>
                    </widget>
                   </item>
                  </layout>
@@ -605,6 +614,9 @@ color: rgb(228, 231, 235);</string>
          <iconset resource="../resources.qrc">
           <normaloff>:/icons/cancel.png</normaloff>:/icons/cancel.png</iconset>
         </property>
+        <property name="iconName" stdset="0">
+         <string>cancel.png</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -646,6 +658,9 @@ color: rgb(228, 231, 235);</string>
         </property>
         <property name="default">
          <bool>false</bool>
+        </property>
+        <property name="iconName" stdset="0">
+         <string>search</string>
         </property>
        </widget>
       </item>
@@ -704,12 +719,14 @@ color: rgb(228, 231, 235);</string>
     <addaction name="actionLoadFile"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionVideoParser"/>
+    <addaction name="actionRTMPDetection"/>
+    <addaction name="actionRTMPAnomalyDetection"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
   <action name="actionLoadFile">
    <property name="text">
-    <string>Load File</string>
+    <string>Load Results File</string>
    </property>
    <property name="font">
     <font>
@@ -730,6 +747,26 @@ color: rgb(228, 231, 235);</string>
   <action name="actionVideoParser">
    <property name="text">
     <string>Video Parser</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionRTMPDetection">
+   <property name="text">
+    <string>Real-Time Color Detection</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionRTMPAnomalyDetection">
+   <property name="text">
+    <string>Real-Time Anomaly Detection</string>
    </property>
    <property name="font">
     <font>

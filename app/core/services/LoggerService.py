@@ -39,6 +39,16 @@ class LoggerService:
         self.logger.addHandler(stdoutHandler)
         self.logger.addHandler(fileHandler)
 
+    def info(self, message):
+        """
+        Log a info message.
+
+        Args:
+            message (str): The info message to log.
+        """
+        print(message)
+        self.logger.info(message)
+
     def warning(self, message):
         """
         Log a warning message.
@@ -46,6 +56,7 @@ class LoggerService:
         Args:
             message (str): The warning message to log.
         """
+        print(message)
         self.logger.warning(message)
 
     def error(self, message):
@@ -55,5 +66,5 @@ class LoggerService:
         Args:
             message (str): The error message to log.
         """
-        print(traceback.format_exc())
+        print(message)
         self.logger.error(message)

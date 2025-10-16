@@ -1,19 +1,22 @@
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ThermalAnomaly.views.ThermalAnomaly_ui import Ui_ThermalAnomaly
 from core.services.SettingsService import SettingsService
 
-from PyQt5.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 
 class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
     """Controller for the Thermal Anomaly algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the ThermalAnomalyController widget and sets up the UI.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ThermalAnomaly', True)
+        AlgorithmController.__init__(self, config)
         self.settings_service = SettingsService()
         self.setupUi(self)
 

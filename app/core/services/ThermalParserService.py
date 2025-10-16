@@ -28,7 +28,8 @@ class ThermalParserService:
         'M3TD',
         'M30T',
         'H30T',
-        'M4T'
+        'M4T',
+        'M4TD'
     ]
 
     AUTEL_MODELS = [
@@ -58,15 +59,24 @@ class ThermalParserService:
         Returns:
             tuple[str, str]: Camera model name and platform ('FLIR', 'DJI', 'AUTEL', or 'None').
         """
-        camera_model = meta_fields.get('CameraModel', meta_fields.get('Model'))
+        camera_model = meta_fields.get('CameraModel', meta_fields.get('Model', '')).strip()
+
+        # Normalize for easier matching
+        cam_upper = camera_model.upper()
+
+        # Explicit lists first
         if camera_model in self.FLIR_MODELS:
             return camera_model, 'FLIR'
         elif camera_model in self.DJI_MODELS:
             return camera_model, 'DJI'
         elif camera_model in self.AUTEL_MODELS:
             return camera_model, 'AUTEL'
-        else:
-            return 'Not Supported', 'None'
+
+        # Fallback rules
+        if "FLIR" in cam_upper or "BOSON" in cam_upper or "SKYDIO" in cam_upper:
+            return camera_model, "FLIR"
+
+        return camera_model if camera_model else "Not Supported", "None"
 
     def parse_file(self, full_path: str, palette: str = "White Hot"):
         """
@@ -118,7 +128,7 @@ class ThermalParserService:
                 temps = parser.temperatures(filepath_image=full_path, **kwargs)
                 img = parser.image(temps, palette)
                 return temps, img
-            except Exception as e:
+            except Exception:
                 raise Exception("Invalid image file")
 
         elif platform == 'DJI':
@@ -135,7 +145,7 @@ class ThermalParserService:
                 kwargs['image_width'] = int(meta_fields['ImageWidth'])
             if 'emissivity' in kwargs:
                 kwargs['emissivity'] /= 100
-            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD', 'M4T']:
+            if camera_model in ['MAVIC2-ENTERPRISE-ADVANCED', 'ZH20N', 'M3T', 'M30T', 'H30T', 'M3TD', 'M4T', 'M4TD']:
                 kwargs['m2ea_mode'] = True
 
             try:

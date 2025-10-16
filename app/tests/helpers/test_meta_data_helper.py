@@ -140,9 +140,9 @@ def test_get_xmp_data(example_image_path):
         mock_file.assert_called_once_with(example_image_path, 'rb')
 
 
-def test_set_xmp_data(example_image_path, example_destination_path):
+def test_embed_xmp(example_image_path, example_destination_path):
     xmp_data = MetaDataHelper.get_xmp_data(example_image_path)
-    MetaDataHelper.set_xmp_data(example_destination_path, xmp_data)
+    MetaDataHelper.embed_xmp(xmp_data, example_destination_path)
 
 
 def test_add_gps_data(example_image_path):

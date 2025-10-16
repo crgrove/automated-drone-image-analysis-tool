@@ -1,18 +1,25 @@
+# Set environment variable to avoid numpy._core issues - MUST be first
+import os
+os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
 from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
 import os
 import platform
-from PyQt5.QtGui import QColor, QFont
-from PyQt5.QtCore import QThread, pyqtSlot, QSize, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QColorDialog, QFileDialog, QMessageBox, QSizePolicy
-
+from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtCore import QThread, Slot, QSize, Qt
+from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
+                               QMessageBox, QSizePolicy, QAbstractButton)
 from core.views.MainWindow_ui import Ui_MainWindow
 
-from helpers.ColorUtils import ColorUtils
+from helpers.PickleHelper import PickleHelper
 
-from core.controllers.Viewer import Viewer
+from core.controllers.viewer.Viewer import Viewer
 from core.controllers.Perferences import Preferences
 from core.controllers.VideoParser import VideoParser
+from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
+from core.controllers.RTMPAnomalyDetectionViewer import RTMPAnomalyDetectionViewer
+from core.controllers.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
 
 from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
@@ -25,6 +32,8 @@ from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeCon
 from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
 from algorithms.MRMap.controllers.MRMapController import MRMapController
+from algorithms.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
+from algorithms.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
 from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
@@ -44,6 +53,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.logger = LoggerService()
         QMainWindow.__init__(self)
         self.theme = theme
+
         self.setupUi(self)
         self.__threads = []
         self.images = None
@@ -53,6 +63,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.KMeansWidget.setVisible(False)
         self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
         self._load_algorithms()
+
+        self.results_path = ''
+        self.settings_service = SettingsService()
+        self._set_defaults(version)
 
         # Setting up GUI element connections
         self.identifierColorButton.clicked.connect(self._identifierButton_clicked)
@@ -64,17 +78,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionLoadFile.triggered.connect(self._open_load_file)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
+
+        # Add RTMP Color Detection functionality
+        self.rtmp_viewer = None
+        if hasattr(self, 'actionRTMPDetection'):
+            self.actionRTMPDetection.triggered.connect(self._open_rtmp_detection)
+
+        # Add RTMP Anomaly Detection functionality
+        self.rtmp_anomaly_viewer = None
+        if hasattr(self, 'actionRTMPAnomalyDetection'):
+            self.actionRTMPAnomalyDetection.triggered.connect(self._open_rtmp_anomaly_detection)
+
+        # Add RTMP Motion Detection functionality
+        self.rtmp_motion_viewer = None
+        if hasattr(self, 'actionRTMPMotionDetection'):
+            self.actionRTMPMotionDetection.triggered.connect(self._open_rtmp_motion_detection)
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
-        self.minAreaSpinBox.valueChanged.connect(self._minAreaSpinBox_change)
-        self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_change)
+        # Connect to editingFinished instead of valueChanged for deferred validation
+        self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
+        self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
+        # Store original values to detect actual changes
+        self._minAreaOriginal = self.minAreaSpinBox.value()
+        self._maxAreaOriginal = self.maxAreaSpinBox.value()
         self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
         self.histogramButton.clicked.connect(self._histogramButton_clicked)
         self.kMeansCheckbox.stateChanged.connect(self._kMeansCheckbox_change)
-
-        self.results_path = ''
-        self.settings_service = SettingsService()
-        self._set_defaults()
 
         # Store previous valid values
         self._previous_min_area = self.minAreaSpinBox.value()
@@ -85,7 +114,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Loads and categorizes algorithms for selection in the algorithm combobox.
         """
         system = platform.system()
-        configService = ConfigService(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'algorithms.conf'))
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                                   'algorithms.conf')
+        configService = ConfigService(config_path)
         self.algorithms = configService.get_algorithms()
         algorithm_list = {}
         for algorithm in self.algorithms:
@@ -132,6 +163,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.inputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.inputFolderLine.setText(directory.replace('/', '\\'))
             self.settings_service.set_setting('InputFolder', pathlib.Path(directory).parent.__str__())
 
     def _outputFolderButton_clicked(self):
@@ -143,6 +176,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.outputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.outputFolderLine.setText(directory.replace('/', '\\'))
             self.settings_service.set_setting('OutputFolder', pathlib.Path(directory).parent.__str__())
 
     def _histogramButton_clicked(self):
@@ -153,6 +188,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
         if filename:
             self.histogramLine.setText(filename)
+            if os.name == 'nt':
+                self.histogramLine.setText(filename.replace('/', '\\'))
 
     def _algorithmComboBox_changed(self):
         """
@@ -164,9 +201,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
         cls = globals()[self.activeAlgorithm['controller']]
-        self.algorithmWidget = cls()
+        self.algorithmWidget = cls(self.activeAlgorithm)
         self.verticalLayout_2.addWidget(self.algorithmWidget)
         self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
+        self._reapply_icons(self.settings_service.get_setting('Theme'))
 
     def _histogramCheckbox_change(self):
         """
@@ -174,19 +212,65 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.HistogramImgWidget.setVisible(self.histogramCheckbox.isChecked())
 
-    def _minAreaSpinBox_change(self):
+    def _minAreaSpinBox_editingFinished(self):
         """
-        Verifies that the min area spinbox value is still smaller than the max spinbox value and, if not, updates the max spinbox value
+        Validates min area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the max area needs to be adjusted.
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
-            self.maxAreaSpinBox.setValue(self.minAreaSpinBox.value()+1)
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
 
-    def _maxAreaSpinBox_change(self):
+        # Only validate if value actually changed
+        if min_val == self._minAreaOriginal:
+            return
+
+        # Check if min is greater than or equal to max
+        if min_val >= max_val and max_val > 0:
+            new_max = min_val + 1
+            self.maxAreaSpinBox.setValue(new_max)
+            self._maxAreaOriginal = new_max  # Update the stored max value
+
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Maximum area has been adjusted to {new_max} pixels to maintain valid range.\n"
+                f"(Minimum area must be less than maximum area)",
+                QMessageBox.Ok
+            )
+
+        # Update stored original value
+        self._minAreaOriginal = min_val
+
+    def _maxAreaSpinBox_editingFinished(self):
         """
-        Verifies that the max area spinbox value is still larger than the min spinbox value and, if not, updates the min spinbox value
+        Validates max area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the min area needs to be adjusted.
         """
-        if self.minAreaSpinBox.value() >= self.maxAreaSpinBox.value() and self.maxAreaSpinBox.value() > 0:
-            self.minAreaSpinBox.setValue(self.maxAreaSpinBox.value()-1)
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
+
+        # Only validate if value actually changed
+        if max_val == self._maxAreaOriginal:
+            return
+
+        # Check if max is less than or equal to min
+        if max_val <= min_val and max_val > 0:
+            new_min = max(0, max_val - 1)  # Ensure min doesn't go below 0
+            self.minAreaSpinBox.setValue(new_min)
+            self._minAreaOriginal = new_min  # Update the stored min value
+
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Minimum area has been adjusted to {new_min} pixels to maintain valid range.\n"
+                f"(Maximum area must be greater than minimum area)",
+                QMessageBox.Ok
+            )
+
+        # Update stored original value
+        self._maxAreaOriginal = max_val
 
     def _kMeansCheckbox_change(self):
         """
@@ -227,7 +311,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
-                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, self.algorithmWidget.is_thermal, options,
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options,
                 self.maxAreaSpinBox.value()
             )
 
@@ -263,7 +347,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             position_format = self.settings_service.get_setting('PositionFormat')
             temperature_unit = self.settings_service.get_setting('TemperatureUnit')
             distance_unit = self.settings_service.get_setting('DistanceUnit')
-            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False)
+            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False,
+                                 self.settings_service.get_setting('Theme'))
             self.viewer.show()
         else:
             self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
@@ -278,7 +363,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.outputWindow.appendPlainText(text)
 
-    @pyqtSlot()
+    @Slot()
     def _show_aois_limit_warning(self):
         """
         Displays a warning that the maximum number of areas of interest has been exceeded.
@@ -288,10 +373,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(f"Area of Interest Limit ({self.settings_service.get_setting('MaxAOIs')}) exceeded. Continue?")
         msg.setWindowTitle("Area of Interest Limit Exceeded")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        if msg.exec_() == QMessageBox.No:
+        if msg.exec() == QMessageBox.No:
             self._cancelButton_clicked()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_worker_msg(self, text):
         """
         Logs a message from the worker thread.
@@ -301,7 +386,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self._add_log_entry(text)
 
-    @pyqtSlot(int, int, str)
+    @Slot(int, int, str)
     def _on_worker_done(self, id, images_with_aois, xml_path):
         """
         Finalizes the UI upon completion of the analysis process.
@@ -336,7 +421,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(text)
         msg.setWindowTitle("Error")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def _open_load_file(self):
         """
@@ -389,14 +474,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxProcessesSpinBox.setValue(settings['num_processes'])
         if 'min_area' in settings:
             self.minAreaSpinBox.setValue(int(settings['min_area']))
+            self._minAreaOriginal = int(settings['min_area'])
         if 'max_area' in settings:
             self.maxAreaSpinBox.setValue(int(settings['max_area']))
+            self._maxAreaOriginal = int(settings['max_area'])
         if 'hist_ref_path' in settings:
-            self.histogramCheckbox.setChecked(True)
-            self.histogramLine.setText(settings['hist_ref_path'])
+            if settings['hist_ref_path'] != "":
+                self.histogramCheckbox.setChecked(True)
+                self.histogramLine.setText(settings['hist_ref_path'])
         if 'kmeans_clusters' in settings:
-            self.kMeansCheckbox.setChecked(True)
-            self.clustersSpinBox.setValue(settings['kmeans_clusters'])
+            if settings['kmeans_clusters'] != 0:
+                self.kMeansCheckbox.setChecked(True)
+                self.clustersSpinBox.setValue(settings['kmeans_clusters'])
         if 'algorithm' in settings:
             self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
             self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
@@ -416,8 +505,59 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         Opens the Video Parser dialog.
         """
-        parser = VideoParser()
-        parser.exec_()
+        parser = VideoParser(self.settings_service.get_setting('Theme'))
+        parser.exec()
+
+    def _open_rtmp_detection(self):
+        """
+        Opens the Real-Time RTMP Color Detection viewer.
+        """
+        try:
+            if self.rtmp_viewer is None or not self.rtmp_viewer.isVisible():
+                self.rtmp_viewer = RTMPColorDetectionViewer(self)
+                self.rtmp_viewer.show()
+                self.logger.info("RTMP Color Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_viewer.raise_()
+                self.rtmp_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Color Detection viewer:\n{str(e)}")
+
+    def _open_rtmp_anomaly_detection(self):
+        """
+        Opens the Real-Time RTMP Anomaly Detection viewer.
+        """
+        try:
+            if self.rtmp_anomaly_viewer is None or not self.rtmp_anomaly_viewer.isVisible():
+                self.rtmp_anomaly_viewer = RTMPAnomalyDetectionViewer(self)
+                self.rtmp_anomaly_viewer.show()
+                self.logger.info("RTMP Anomaly Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_anomaly_viewer.raise_()
+                self.rtmp_anomaly_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP anomaly viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Anomaly Detection viewer:\n{str(e)}")
+
+    def _open_rtmp_motion_detection(self):
+        """
+        Opens the Real-Time RTMP Motion Detection viewer with dual-mode support.
+        """
+        try:
+            if self.rtmp_motion_viewer is None or not self.rtmp_motion_viewer.isVisible():
+                self.rtmp_motion_viewer = RTMPMotionDetectionViewer(self)
+                self.rtmp_motion_viewer.show()
+                self.logger.info("RTMP Motion Detection viewer opened")
+            else:
+                # Bring existing viewer to front
+                self.rtmp_motion_viewer.raise_()
+                self.rtmp_motion_viewer.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening RTMP motion viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open RTMP Motion Detection viewer:\n{str(e)}")
 
     def closeEvent(self, event):
         """
@@ -468,17 +608,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.viewResultsButton.setStyleSheet("")
             self.viewResultsButton.setEnabled(False)
 
-    def _set_defaults(self):
+    def _set_defaults(self, version):
         """
         Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
         """
         min_area = self.settings_service.get_setting('MinObjectArea')
         if isinstance(min_area, int):
             self.minAreaSpinBox.setValue(min_area)
+            self._minAreaOriginal = min_area
 
         max_area = self.settings_service.get_setting('MaxObjectArea')
         if isinstance(max_area, int):
             self.maxAreaSpinBox.setValue(max_area)
+            self._maxAreaOriginal = max_area
 
         max_processes = self.settings_service.get_setting('MaxProcesses')
         if isinstance(max_processes, int):
@@ -515,6 +657,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.settings_service.set_setting('Theme', 'Dark')
             theme = 'Dark'
         self.update_theme(theme)
+        try:
+            current_version = self.settings_service.get_setting('app_version')
+            if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
+                self.settings_service.set_setting('app_version', version)
+                PickleHelper.copy_pickle('drones.pkl')
+            else:
+                current_version_int = PickleHelper.version_to_int(current_version)
+                new_version_int = PickleHelper.version_to_int(version)
+                if new_version_int > current_version_int:
+                    self.settings_service.set_setting('app_version', version)
+                    PickleHelper.copy_pickle('drones.pkl')
+            if PickleHelper.get_xmp_mapping() is None:
+                PickleHelper.copy_pickle('xmp.pkl')
+        except Exception as e:
+            self.logger.error(e)
 
     def update_theme(self, theme):
         """
@@ -523,7 +680,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             theme (str): 'Light' or 'Dark'
         """
-        self.theme.setup_theme("light" if theme == 'Light' else "dark")
+        if theme == 'Light':
+            self.theme.setup_theme("light")
+            self._reapply_icons("light")
+        else:
+            self.theme.setup_theme()
+            self._reapply_icons("dark")
 
     def _show_area_validation_error(self, message):
         """
@@ -537,4 +699,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg.setText(message)
         msg.setWindowTitle("Invalid Value")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
+
+    def _reapply_icons(self, theme):
+        # decide which sub‑folder of your resources to use:
+        for btn in self.findChildren(QAbstractButton):
+            name = btn.property("iconName")
+            if name:
+                # set the icon from the correct prefix
+                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
+                btn.repaint()

@@ -5,7 +5,7 @@ import spectral
 from scipy.stats import chi2
 import traceback
 
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 
 
@@ -43,7 +43,11 @@ class RXAnomalyService(AlgorithmService):
             AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
         """
         try:
-            masks = pieces = self.split_image(img, self.segments)
+            # Convert to CIE LAB color space for more perceptually uniform analysis
+            lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+            # Split the LAB image into segments for RX processing
+            masks = pieces = self.split_image(lab_img, self.segments)
             for x in range(len(pieces)):
                 for y in range(len(pieces[x])):
                     rx_values = spectral.rx(pieces[x][y])
@@ -53,14 +57,16 @@ class RXAnomalyService(AlgorithmService):
 
             # Find contours of the identified areas and circle areas of interest.
             contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
-            # Generate the output path and store the processed image.
-            output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+            output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            # Store mask instead of duplicating image
+            mask_path = None
+            if areas_of_interest:
+                mask_path = self.store_mask(full_path, output_path, combined_mask)
+
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # print(traceback.format_exc())

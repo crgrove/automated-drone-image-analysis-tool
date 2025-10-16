@@ -6,9 +6,9 @@ import pandas as pd
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
 from core.views.components.QtImageViewer import QtImageViewer
 
-from PyQt5.QtGui import QImage
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtWidgets import QDialog, QFrame
+from PySide6.QtGui import QImage
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtWidgets import QDialog, QFrame
 
 
 class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
@@ -93,25 +93,18 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
             x_range (int): The height of the palette.
             y_range (int): The width of the palette.
             multiplier (int): Determines the size of the palette.
-            saturation (int): The saturation value for the HSL palette.
+            saturation (int): The saturation level for the palette.
 
         Returns:
             numpy.ndarray: An HSL palette with the given saturation.
         """
         img = np.zeros((x_range, y_range, 3), np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
-
-        height_scale = 255 / max(x_range / multiplier, 1)
-        length_scale = 255 / max(y_range / multiplier, 1)
-
         for x in range(x_range):
             for y in range(y_range):
-                height = round((x / multiplier) * height_scale, 0)
-                length = round((y / multiplier) * length_scale, 0)
-                height = min(max(height, 0), 255)
-                length = min(max(length, 0), 255)
+                height = min(max(round(x / multiplier, 0), 0), 255)
+                length = min(max(round(y / multiplier, 0), 0), 255)
                 img[x, y] = [height, length, saturation]
-
         return cv2.cvtColor(img, cv2.COLOR_HLS2BGR)
 
     def populate_image(self, img, selected):

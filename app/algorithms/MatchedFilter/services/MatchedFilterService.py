@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import spectral
 from core.services.LoggerService import LoggerService
-from algorithms.Algorithm import AlgorithmService, AnalysisResult
+from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 
 
 class MatchedFilterService(AlgorithmService):
@@ -43,16 +43,20 @@ class MatchedFilterService(AlgorithmService):
             scores = spectral.matched_filter(img, np.array([self.match_color[2], self.match_color[1], self.match_color[0]], dtype=np.uint8))
             mask = np.uint8((1 * (scores > self.threshold)))
 
-            # Find contours of the identified areas and circle areas of interest.
+            # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            augmented_image, areas_of_interest, base_contour_count = self.circle_areas_of_interest(img, contours)
 
-            # Generate the output path and store the processed image.
-            output_path = full_path.replace(input_dir, output_dir)
-            if augmented_image is not None:
-                self.store_image(full_path, output_path, augmented_image)
+            areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+            output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
-            return AnalysisResult(full_path, output_path, output_dir, areas_of_interest, base_contour_count)
+            # Store mask instead of duplicating image
+            mask_path = None
+            if areas_of_interest:
+                # Convert mask to 0-255 range for storage
+                mask_255 = mask * 255
+                mask_path = self.store_mask(full_path, output_path, mask_255)
+
+            return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
             # Log and return an error if processing fails.

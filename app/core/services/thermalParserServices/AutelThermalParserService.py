@@ -3,6 +3,7 @@ from ctypes import Structure, c_float, c_int, c_uint16, c_char_p, c_char, CDLL, 
 import cv2
 from typing import List
 import os
+import sys
 
 
 # Define the data structures
@@ -133,4 +134,12 @@ class AutelThermalImageParser:
         Returns:
             str: Path to the Autel DLL file.
         """
-        return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'external/autel/AutelBridge.dll')
+        # Determine the base path based on whether we're running from a PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            # Running from a PyInstaller bundle
+            app_root = sys._MEIPASS
+        else:
+            # Running from source code
+            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+        return os.path.join(app_root, 'external/autel/AutelBridge.dll')

@@ -1,27 +1,31 @@
 from ast import literal_eval
 
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.ColorRange.views.ColorRange_ui import Ui_ColorRange
 from algorithms.ColorRange.controllers.ColorRangeRangeViewerController import ColorRangeRangeViewer
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget, QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QColorDialog
 
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
+from core.services.CustomColorsService import get_custom_colors_service
 
 
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
     """Controller for the Color Range algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the ColorRangeController widget and sets up the UI.
 
         Connects UI elements like color selection button and range spin boxes to their respective event handlers.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'ColorRange', False)
+        AlgorithmController.__init__(self, config)
         self.logger = LoggerService()
         self.setupUi(self)
         self.selectedColor = None
@@ -41,11 +45,19 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         the selected color if a valid color is chosen.
         """
         try:
+            # Ensure custom colors are loaded
+            custom_colors_service = get_custom_colors_service()
+
             if self.selectedColor is not None:
-                self.selectedColor = QColorDialog().getColor(self.selectedColor)
+                color = QColorDialog.getColor(self.selectedColor)
             else:
-                self.selectedColor = QColorDialog().getColor()
-            if self.selectedColor.isValid():
+                color = QColorDialog.getColor()
+
+            # Sync custom colors after dialog closes
+            custom_colors_service.sync_with_dialog()
+
+            if color.isValid():
+                self.selectedColor = color
                 self.update_colors()
         except Exception as e:
             self.logger.error(e)
@@ -68,7 +80,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         """
         if self.selectedColor is not None:
             rgb = [self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue()]
-            self.lowerColor, self.upperColor = ColorUtils.get_color_range(
+            self.lowerColor, self.upperColor = ColorUtils.get_rgb_color_range(
                 rgb, self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value()
             )
             hex_lower = '#%02x%02x%02x' % self.lowerColor
@@ -83,11 +95,13 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         Populates options based on user-selected values.
 
         Returns:
-            dict: A dictionary containing selected options, including 'color_range', 'selected_color', and 'range_values'.
+            dict: A dictionary containing selected options, including 'color_range',
+                'selected_color', and 'range_values'.
         """
         options = dict()
         options['color_range'] = [self.lowerColor, self.upperColor]
-        options['selected_color'] = (self.selectedColor.red(), self.selectedColor.green(), self.selectedColor.blue())
+        options['selected_color'] = (self.selectedColor.red(), self.selectedColor.green(),
+                                      self.selectedColor.blue())
         options['range_values'] = (self.rRangeSpinBox.value(), self.gRangeSpinBox.value(), self.bRangeSpinBox.value())
         return options
 

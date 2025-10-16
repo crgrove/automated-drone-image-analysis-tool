@@ -1,6 +1,9 @@
+import os
 from core.views.VideoParser_ui import Ui_VideoParser
-from PyQt5.QtCore import QThread, pyqtSlot
-from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PySide6.QtCore import QThread, Slot
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox, QAbstractButton
+from PySide6.QtGui import QIcon
+
 
 from core.services.LoggerService import LoggerService
 from core.services.VideoParserService import VideoParserService
@@ -14,7 +17,7 @@ class VideoParser(QDialog, Ui_VideoParser):
     the UI based on process events.
     """
 
-    def __init__(self):
+    def __init__(self, theme):
         """Initializes the VideoParser dialog."""
         QDialog.__init__(self)
         self.setupUi(self)
@@ -26,6 +29,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         self.outputSelectButton.clicked.connect(self._outputSelectButton_clicked)
         self.startButton.clicked.connect(self._startButton_clicked)
         self.cancelButton.clicked.connect(self._cancelButton_clicked)
+        self._reapply_icons(theme)
 
     def _videoSelectButton_clicked(self):
         """Handles the video file selection button click.
@@ -36,6 +40,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a Video File")
         if filename:
             self.videoSelectLine.setText(filename)
+            if os.name == 'nt':
+                self.videoSelectLine.setText(filename.replace('/', '\\'))
 
     def _srtSelectButton_clicked(self):
         """Handles the subtitle (SRT) file selection button click.
@@ -46,6 +52,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         filename, _ = QFileDialog.getOpenFileName(self, "Select a SRT file", filter="SRT (*.srt)")
         if filename:
             self.srtSelectLine.setText(filename)
+            if os.name == 'nt':
+                self.srtSelectLine.setText(filename.replace('/', '\\'))
 
     def _outputSelectButton_clicked(self):
         """Handles the output directory selection button click.
@@ -58,6 +66,8 @@ class VideoParser(QDialog, Ui_VideoParser):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", initial_dir, QFileDialog.ShowDirsOnly)
         if directory:
             self.outputLine.setText(directory)
+            if os.name == 'nt':
+                self.outputLine.setText(directory.replace('/', '\\'))
 
     def _startButton_clicked(self):
         """Handles the start button click to begin video parsing.
@@ -135,7 +145,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         else:
             event.accept()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def _on_worker_msg(self, text):
         """Slot to handle log messages from the worker thread.
 
@@ -146,7 +156,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         """
         self._add_log_entry(text)
 
-    @pyqtSlot(int, int)
+    @Slot(int, int)
     def _on_worker_done(self, id, image_count):
         """Slot to handle the completion signal from the worker thread.
 
@@ -212,4 +222,13 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg.setText(text)
         msg.setWindowTitle("Error Starting Processing")
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
+
+    def _reapply_icons(self, theme):
+        # decide which sub‑folder of your resources to use:
+        for btn in self.findChildren(QAbstractButton):
+            name = btn.property("iconName")
+            if name:
+                # set the icon from the correct prefix
+                btn.setIcon(QIcon(f":/icons/{theme.lower()}/{name}"))
+                btn.repaint()

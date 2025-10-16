@@ -1,26 +1,29 @@
 from ast import literal_eval
 
-from algorithms.Algorithm import AlgorithmController
+from algorithms.AlgorithmController import AlgorithmController
 from algorithms.MatchedFilter.views.MatchedFilter_ui import Ui_MatchedFilter
 from algorithms.MatchedFilter.controllers.MatchedFilterRangeViewerController import MatchedFilterRangeViewer
 from core.services.LoggerService import LoggerService
 
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget, QColorDialog
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QColorDialog
 
 
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
     """Controller for the Matched Filter algorithm widget."""
 
-    def __init__(self):
+    def __init__(self, config):
         """
         Initializes the MatchedFilterController widget and sets up the UI.
 
         Connects UI elements like threshold slider and color selection button
         to their respective event handlers.
+
+        Args:
+            config (dict): Algorithm config information.
         """
         QWidget.__init__(self)
-        AlgorithmController.__init__(self, 'MatchedFilter', False)
+        AlgorithmController.__init__(self, config)
         self.logger = LoggerService()
         self.setupUi(self)
         self.viewRangeButton.hide()
@@ -38,10 +41,11 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         """
         try:
             if self.selectedColor is not None:
-                self.selectedColor = QColorDialog().getColor(self.selectedColor)
+                color = QColorDialog.getColor(self.selectedColor)
             else:
-                self.selectedColor = QColorDialog().getColor()
-            if self.selectedColor.isValid():
+                color = QColorDialog.getColor()
+            if color.isValid():
+                self.selectedColor = color
                 self.update_colors()
         except Exception as e:
             self.logger.error(e)
