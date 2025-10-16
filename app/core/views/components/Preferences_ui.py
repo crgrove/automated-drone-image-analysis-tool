@@ -226,27 +226,125 @@ class Ui_Preferences(object):
 
     def retranslateUi(self, Preferences):
         Preferences.setWindowTitle(QCoreApplication.translate("Preferences", u"Preferences", None))
+#if QT_CONFIG(tooltip)
+        self.label.setToolTip(QCoreApplication.translate("Preferences", u"Select the application theme appearance.\n"
+"Changes the overall color scheme and visual style.", None))
+#endif // QT_CONFIG(tooltip)
         self.label.setText(QCoreApplication.translate("Preferences", u"Theme:", None))
         self.themeComboBox.setItemText(0, QCoreApplication.translate("Preferences", u"Light", None))
         self.themeComboBox.setItemText(1, QCoreApplication.translate("Preferences", u"Dark", None))
 
+#if QT_CONFIG(tooltip)
+        self.themeComboBox.setToolTip(QCoreApplication.translate("Preferences", u"Choose the application theme:\n"
+"\u2022 Light: Bright theme with light backgrounds and dark text\n"
+"\u2022 Dark: Dark theme with dark backgrounds and light text\n"
+"Changes apply immediately to all windows.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.maxAOIsLabel.setToolTip(QCoreApplication.translate("Preferences", u"Warning threshold for total AOIs detected across all images.\n"
+"Prompts user when this limit is reached during processing.", None))
+#endif // QT_CONFIG(tooltip)
         self.maxAOIsLabel.setText(QCoreApplication.translate("Preferences", u"Max Areas of Interest: ", None))
+#if QT_CONFIG(tooltip)
+        self.maxAOIsSpinBox.setToolTip(QCoreApplication.translate("Preferences", u"Set the warning threshold for total AOIs detected during processing.\n"
+"\u2022 Range: 0 to 1000\n"
+"\u2022 Default: 100\n"
+"When this number of AOIs is detected across all images:\n"
+"\u2022 UI displays a warning message\n"
+"\u2022 User can cancel processing, adjust settings, and rerun\n"
+"\u2022 If no action taken, detection continues automatically\n"
+"Use lower values to catch high detection counts early.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.AOIRadiusLabel.setToolTip(QCoreApplication.translate("Preferences", u"Radius for combining neighboring AOIs into single detections.\n"
+"AOIs within this distance are merged together.", None))
+#endif // QT_CONFIG(tooltip)
         self.AOIRadiusLabel.setText(QCoreApplication.translate("Preferences", u"Area of Interest Circle Radius(px):", None))
+#if QT_CONFIG(tooltip)
+        self.AOIRadiusSpinBox.setToolTip(QCoreApplication.translate("Preferences", u"Set the radius for combining nearby AOIs during detection.\n"
+"\u2022 Range: 0 to 100 pixels\n"
+"\u2022 Default: 25 pixels\n"
+"When AOIs are within this radius of each other:\n"
+"\u2022 They are combined into a single AOI\n"
+"\u2022 Process repeats until no neighbors remain within radius\n"
+"\u2022 Larger values: Combines more distant detections (fewer total AOIs)\n"
+"\u2022 Smaller values: Keeps detections separate (more individual AOIs)\n"
+"Use to consolidate clustered detections into single objects.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.positionFormatLabel.setToolTip(QCoreApplication.translate("Preferences", u"Format for displaying geographic coordinates throughout the application.\n"
+"Affects how GPS locations are shown in the viewer and exports.", None))
+#endif // QT_CONFIG(tooltip)
         self.positionFormatLabel.setText(QCoreApplication.translate("Preferences", u"Coordinate System:", None))
         self.positionFormatComboBox.setItemText(0, QCoreApplication.translate("Preferences", u"Lat/Long - Decimal Degrees", None))
         self.positionFormatComboBox.setItemText(1, QCoreApplication.translate("Preferences", u"Lat/Long - Degrees, Minutes, Seconds", None))
         self.positionFormatComboBox.setItemText(2, QCoreApplication.translate("Preferences", u"UTM", None))
 
+#if QT_CONFIG(tooltip)
+        self.positionFormatComboBox.setToolTip(QCoreApplication.translate("Preferences", u"Select the geographic coordinate display format:\n"
+"\u2022 Lat/Long - Decimal Degrees: 34.123456, -118.987654 (most common, easy to use)\n"
+"\u2022 Lat/Long - Degrees, Minutes, Seconds: 34\u00b0 7' 24.4416\" N, 118\u00b0 59' 15.5424\" W (traditional navigation)\n"
+"\u2022 UTM: Universal Transverse Mercator grid system with zone, easting, northing (military, surveying)\n"
+"This setting affects coordinate display in the viewer, exports, and overlays.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.temperatureLabel.setToolTip(QCoreApplication.translate("Preferences", u"Unit for displaying temperature measurements from thermal imagery.\n"
+"Used when analyzing thermal images from thermal cameras.", None))
+#endif // QT_CONFIG(tooltip)
         self.temperatureLabel.setText(QCoreApplication.translate("Preferences", u"Temperature Unit:", None))
         self.temperatureComboBox.setItemText(0, QCoreApplication.translate("Preferences", u"Fahrenheit", None))
         self.temperatureComboBox.setItemText(1, QCoreApplication.translate("Preferences", u"Celsius", None))
 
+#if QT_CONFIG(tooltip)
+        self.temperatureComboBox.setToolTip(QCoreApplication.translate("Preferences", u"Select the temperature unit for thermal image analysis:\n"
+"\u2022 Fahrenheit (\u00b0F): Imperial temperature scale (US standard)\n"
+"  - Water freezes at 32\u00b0F, boils at 212\u00b0F\n"
+"\u2022 Celsius (\u00b0C): Metric temperature scale (international standard)\n"
+"  - Water freezes at 0\u00b0C, boils at 100\u00b0C\n"
+"Applies to thermal camera data display and analysis results.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.distanceLabel.setToolTip(QCoreApplication.translate("Preferences", u"Unit for displaying distance and altitude measurements.\n"
+"Used for drone altitude, object distances, and spatial calculations.", None))
+#endif // QT_CONFIG(tooltip)
         self.distanceLabel.setText(QCoreApplication.translate("Preferences", u"Distance Unit:", None))
         self.distanceComboBox.setItemText(0, QCoreApplication.translate("Preferences", u"Meters", None))
         self.distanceComboBox.setItemText(1, QCoreApplication.translate("Preferences", u"Feet", None))
 
+#if QT_CONFIG(tooltip)
+        self.distanceComboBox.setToolTip(QCoreApplication.translate("Preferences", u"Select the distance unit for measurements:\n"
+"\u2022 Meters (m): Metric distance unit (international standard)\n"
+"  - 1 meter = 3.281 feet\n"
+"  - Used for altitude, GSD, and distance calculations\n"
+"\u2022 Feet (ft): Imperial distance unit (US standard)\n"
+"  - 1 foot = 0.3048 meters\n"
+"  - Common in US aviation and surveying\n"
+"Applies to altitude displays, GSD calculations, and distance measurements.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.droneSensorLabel.setToolTip(QCoreApplication.translate("Preferences", u"Version of the current drone sensor configuration file.\n"
+"Contains camera specifications, sensor dimensions, and focal length data for different drone models.", None))
+#endif // QT_CONFIG(tooltip)
         self.droneSensorLabel.setText(QCoreApplication.translate("Preferences", u"Drone Sensor File Version:", None))
+#if QT_CONFIG(tooltip)
+        self.dronSensorVersionLabel.setToolTip(QCoreApplication.translate("Preferences", u"Currently loaded drone sensor file version number.\n"
+"The sensor file defines camera parameters for accurate GSD and AOI calculations.", None))
+#endif // QT_CONFIG(tooltip)
         self.dronSensorVersionLabel.setText(QCoreApplication.translate("Preferences", u"TextLabel", None))
+#if QT_CONFIG(tooltip)
+        self.droneSensorButton.setToolTip(QCoreApplication.translate("Preferences", u"Replace the current drone sensor configuration file.\n"
+"Allows updating to a newer version or custom sensor specifications.\n"
+"Required file format: JSON with drone models, sensors, focal lengths, and dimensions.\n"
+"Use this when:\n"
+"\u2022 New drone models are available\n"
+"\u2022 Sensor specifications need updating\n"
+"\u2022 Custom camera configurations are needed\n"
+"Backup existing file before replacing.", None))
+#endif // QT_CONFIG(tooltip)
         self.droneSensorButton.setText(QCoreApplication.translate("Preferences", u"Replace", None))
+#if QT_CONFIG(tooltip)
+        self.buttonBox.setToolTip(QCoreApplication.translate("Preferences", u"Close the Preferences window.\n"
+"All changes are saved automatically when modified.", None))
+#endif // QT_CONFIG(tooltip)
     # retranslateUi
 

@@ -41,6 +41,11 @@
             <pointsize>9</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Path to the video file to extract frames from.
+Supported formats: MP4, AVI, MOV, MKV, and other common video formats.
+Click the Select button to browse for a video file.</string>
+          </property>
           <property name="readOnly">
            <bool>true</bool>
           </property>
@@ -54,7 +59,9 @@
            </font>
           </property>
           <property name="toolTip">
-           <string/>
+           <string>SRT subtitle file containing GPS telemetry and timestamp data.
+Optional: Provides location information for extracted frames.
+Without SRT file, frames will have no GPS metadata.</string>
           </property>
           <property name="whatsThis">
            <string>The SRT file contains timestamped information about the video file.  It is optional, but without it output images won't include location information.</string>
@@ -71,6 +78,10 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Destination folder where extracted frame images will be saved.
+Each frame is saved as a separate image file with timestamp information.</string>
+          </property>
           <property name="text">
            <string>Output Folder:</string>
           </property>
@@ -83,6 +94,11 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Path to the output folder for extracted frame images.
+All frames will be saved in this directory with sequential naming.
+Click the Select button to choose a different folder.</string>
+          </property>
           <property name="readOnly">
            <bool>true</bool>
           </property>
@@ -94,6 +110,10 @@
            <font>
             <pointsize>10</pointsize>
            </font>
+          </property>
+          <property name="toolTip">
+           <string>Browse for output folder to save extracted frames.
+Opens a folder selection dialog.</string>
           </property>
           <property name="text">
            <string>Select</string>
@@ -117,6 +137,10 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Select the source video file to parse.
+Video will be split into individual frame images.</string>
+          </property>
           <property name="text">
            <string>Video File:</string>
           </property>
@@ -128,6 +152,10 @@
            <font>
             <pointsize>10</pointsize>
            </font>
+          </property>
+          <property name="toolTip">
+           <string>Browse for video file to extract frames from.
+Opens a file selection dialog for video files (MP4, AVI, MOV, etc.).</string>
           </property>
           <property name="text">
            <string>Select</string>
@@ -144,6 +172,12 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Path to the optional SRT subtitle file with GPS telemetry data.
+SRT files contain timestamp and location information for video frames.
+If provided, extracted frames will include GPS metadata (latitude, longitude, altitude).
+Can be left empty if location data is not needed.</string>
+          </property>
           <property name="readOnly">
            <bool>true</bool>
           </property>
@@ -155,6 +189,11 @@
            <font>
             <pointsize>10</pointsize>
            </font>
+          </property>
+          <property name="toolTip">
+           <string>Browse for optional SRT subtitle file containing GPS telemetry.
+SRT files are commonly created by DJI drones and other video recording devices.
+Opens a file selection dialog for SRT files.</string>
           </property>
           <property name="text">
            <string>Select</string>
@@ -175,6 +214,11 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Time interval between extracted frames.
+Determines how frequently frames are captured from the video.
+Smaller intervals = More frames extracted (larger output)</string>
+          </property>
           <property name="text">
            <string>Time Interval (seconds):</string>
           </property>
@@ -186,6 +230,14 @@
            <font>
             <pointsize>10</pointsize>
            </font>
+          </property>
+          <property name="toolTip">
+           <string>Set the time interval in seconds between frame extractions.
+• Range: 0.1 to unlimited seconds
+• Default: 5.0 seconds (extracts 1 frame every 5 seconds)
+• Lower values: More frames extracted (e.g., 0.5s = 2 frames per second)
+• Higher values: Fewer frames extracted (e.g., 10s = 1 frame every 10 seconds)
+Recommendation: 3-5 seconds for most drone footage analysis</string>
           </property>
           <property name="decimals">
            <number>1</number>
@@ -244,6 +296,15 @@
          <bold>true</bold>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Start extracting frames from the video file.
+Requirements:
+• Video file must be selected
+• Output folder must be selected
+• Time interval must be set (default: 5 seconds)
+The process will extract frames at the specified interval and save them as images.
+If SRT file is provided, GPS metadata will be embedded in the extracted frames.</string>
+       </property>
        <property name="layoutDirection">
         <enum>Qt::LeftToRight</enum>
        </property>
@@ -285,6 +346,12 @@ color: rgb(228, 231, 235);</string>
          <bold>true</bold>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Cancel the frame extraction process.
+Stops the operation immediately and returns to the ready state.
+Any frames already extracted will be saved in the output folder.
+Click to abort the current parsing operation.</string>
+       </property>
        <property name="styleSheet">
         <string notr="true"/>
        </property>
@@ -324,6 +391,16 @@ color: rgb(228, 231, 235);</string>
       <font>
        <pointsize>12</pointsize>
       </font>
+     </property>
+     <property name="toolTip">
+      <string>Progress and status output window.
+Displays real-time information during frame extraction:
+• Current frame being processed
+• Frame timestamps and numbers
+• GPS coordinates (if SRT file is provided)
+• Progress percentage and completion status
+• Any errors or warnings encountered
+Shows total frames extracted when complete.</string>
      </property>
      <property name="readOnly">
       <bool>true</bool>

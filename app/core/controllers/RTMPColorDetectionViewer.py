@@ -441,19 +441,25 @@ class VideoTimelineWidget(QWidget):
         # Jump to beginning button
         self.beginning_btn = QPushButton("⟸")
         self.beginning_btn.setFixedSize(28, 28)  # Slightly smaller
-        self.beginning_btn.setToolTip("Jump to beginning")
+        self.beginning_btn.setToolTip("Jump to beginning of video.\n"
+                                       "Keyboard shortcut: Home key\n"
+                                       "Resets video to first frame")
         timeline_layout.addWidget(self.beginning_btn)
 
         # Play/Pause button
         self.play_pause_btn = QPushButton("⏸")
         self.play_pause_btn.setFixedSize(35, 28)  # Slightly smaller
-        self.play_pause_btn.setToolTip("Play/Pause (Space)")
+        self.play_pause_btn.setToolTip("Play/Pause video playback.\n"
+                                        "Keyboard shortcut: Space bar\n"
+                                        "Detection continues even when paused")
         timeline_layout.addWidget(self.play_pause_btn)
 
         # Jump to end button
         self.end_btn = QPushButton("⟹")
         self.end_btn.setFixedSize(28, 28)  # Slightly smaller
-        self.end_btn.setToolTip("Jump to end")
+        self.end_btn.setToolTip("Jump to end of video.\n"
+                                "Keyboard shortcut: End key\n"
+                                "Seeks to last frame")
         timeline_layout.addWidget(self.end_btn)
 
         # Timeline slider
@@ -462,13 +468,17 @@ class VideoTimelineWidget(QWidget):
         self.timeline_slider.setMaximum(1000)  # Use 0-1000 for better precision
         self.timeline_slider.setValue(0)
         self.timeline_slider.setFixedHeight(20)  # Fixed height for compactness
-        self.timeline_slider.setToolTip("Timeline - Click to seek")
+        self.timeline_slider.setToolTip("Video timeline scrubber.\n"
+                                        "• Click to jump to specific position\n"
+                                        "• Drag to scrub through video\n"
+                                        "Only available for file playback sources")
         timeline_layout.addWidget(self.timeline_slider, 1)
 
         # Time display
         self.time_label = QLabel("00:00 / 00:00")
         self.time_label.setMinimumWidth(80)  # Slightly smaller
         self.time_label.setStyleSheet("QLabel { font-family: monospace; font-size: 11px; }")
+        self.time_label.setToolTip("Current playback position / Total video duration (MM:SS format)")
         timeline_layout.addWidget(self.time_label)
 
         layout.addLayout(timeline_layout)
@@ -573,11 +583,15 @@ class HSVControlWidget(QWidget):
 
         # Color selection group
         color_group = QGroupBox("Color Selection")
+        color_group.setToolTip("Select the target color to detect in the video stream")
         color_layout = QHBoxLayout(color_group)
 
         # Color picker button
         self.color_button = QPushButton(" Pick Color")
         self.color_button.setMinimumHeight(30)
+        self.color_button.setToolTip("Open the advanced HSV color picker to select target color.\n"
+                                      "Features visual HSV range preview and live image testing.\n"
+                                      "Click to interactively choose colors from video frames.")
         color_layout.addWidget(self.color_button)
 
         # Color sample display
@@ -585,12 +599,16 @@ class HSVControlWidget(QWidget):
         self.color_sample.setMinimumSize(50, 30)
         self.color_sample.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
         self.color_sample.setStyleSheet("background-color: red")
+        self.color_sample.setToolTip("Currently selected target color for detection.\n"
+                                      "This swatch shows the exact color being searched for in the video stream.")
         color_layout.addWidget(self.color_sample)
 
         color_layout.addStretch()
 
         # HSV threshold controls
         threshold_group = QGroupBox("HSV Thresholds")
+        threshold_group.setToolTip("Fine-tune color detection by adjusting HSV (Hue, Saturation, Value) ranges.\n"
+                                    "Wider ranges detect more color variations but may include false positives.")
         threshold_layout = QGridLayout(threshold_group)
 
         # Hue threshold
@@ -599,11 +617,22 @@ class HSVControlWidget(QWidget):
         self.hue_minus_spinbox = QSpinBox()
         self.hue_minus_spinbox.setRange(0, 179)
         self.hue_minus_spinbox.setValue(20)
+        self.hue_minus_spinbox.setToolTip("Lower hue threshold (0-179).\n"
+                                          "Hue represents the color on the color wheel:\n"
+                                          "• Red: 0-10, 170-179 • Orange: 10-25\n"
+                                          "• Yellow: 25-35 • Green: 35-85\n"
+                                          "• Cyan: 85-95 • Blue: 95-130\n"
+                                          "• Purple: 130-155 • Pink: 155-170\n"
+                                          "Lower values = wider color matching")
         threshold_layout.addWidget(self.hue_minus_spinbox, 0, 2)
         threshold_layout.addWidget(QLabel("+"), 0, 3)
         self.hue_plus_spinbox = QSpinBox()
         self.hue_plus_spinbox.setRange(0, 179)
         self.hue_plus_spinbox.setValue(20)
+        self.hue_plus_spinbox.setToolTip("Upper hue threshold (0-179).\n"
+                                         "Defines how much variation in color hue to accept.\n"
+                                         "Higher values = wider color matching range\n"
+                                         "Tip: Use asymmetric ranges for better precision")
         threshold_layout.addWidget(self.hue_plus_spinbox, 0, 4)
 
         # Saturation threshold
@@ -612,11 +641,21 @@ class HSVControlWidget(QWidget):
         self.saturation_minus_spinbox = QSpinBox()
         self.saturation_minus_spinbox.setRange(0, 255)
         self.saturation_minus_spinbox.setValue(50)
+        self.saturation_minus_spinbox.setToolTip("Lower saturation threshold (0-255).\n"
+                                                  "Saturation is the color intensity/purity:\n"
+                                                  "• 0: Gray/white (no color)\n"
+                                                  "• 128: Moderate color intensity\n"
+                                                  "• 255: Pure, vivid color\n"
+                                                  "Lower values include more washed-out colors")
         threshold_layout.addWidget(self.saturation_minus_spinbox, 1, 2)
         threshold_layout.addWidget(QLabel("+"), 1, 3)
         self.saturation_plus_spinbox = QSpinBox()
         self.saturation_plus_spinbox.setRange(0, 255)
         self.saturation_plus_spinbox.setValue(50)
+        self.saturation_plus_spinbox.setToolTip("Upper saturation threshold (0-255).\n"
+                                                 "Defines range of acceptable color intensity.\n"
+                                                 "Higher values include more vivid colors\n"
+                                                 "Tip: Decrease for muted/pastel colors")
         threshold_layout.addWidget(self.saturation_plus_spinbox, 1, 4)
 
         # Value threshold
@@ -625,15 +664,26 @@ class HSVControlWidget(QWidget):
         self.value_minus_spinbox = QSpinBox()
         self.value_minus_spinbox.setRange(0, 255)
         self.value_minus_spinbox.setValue(50)
+        self.value_minus_spinbox.setToolTip("Lower value/brightness threshold (0-255).\n"
+                                            "Value represents brightness/lightness:\n"
+                                            "• 0: Black (darkest)\n"
+                                            "• 128: Medium brightness\n"
+                                            "• 255: White (brightest)\n"
+                                            "Lower values include darker shades")
         threshold_layout.addWidget(self.value_minus_spinbox, 2, 2)
         threshold_layout.addWidget(QLabel("+"), 2, 3)
         self.value_plus_spinbox = QSpinBox()
         self.value_plus_spinbox.setRange(0, 255)
         self.value_plus_spinbox.setValue(50)
+        self.value_plus_spinbox.setToolTip("Upper value/brightness threshold (0-255).\n"
+                                           "Defines range of acceptable brightness.\n"
+                                           "Higher values include brighter shades\n"
+                                           "Tip: Adjust for lighting conditions")
         threshold_layout.addWidget(self.value_plus_spinbox, 2, 4)
 
         # Area constraints
         area_group = QGroupBox("Detection Constraints")
+        area_group.setToolTip("Filter detections by size to eliminate noise and focus on relevant objects")
         area_layout = QGridLayout(area_group)
 
         # Minimum area
@@ -641,6 +691,11 @@ class HSVControlWidget(QWidget):
         self.min_area_spinbox = QSpinBox()
         self.min_area_spinbox.setRange(1, 100000)
         self.min_area_spinbox.setValue(100)
+        self.min_area_spinbox.setToolTip("Minimum detection size in pixels (1-100,000).\n"
+                                         "Objects smaller than this will be filtered out.\n"
+                                         "Use to eliminate noise and small false positives.\n"
+                                         "Example: 100 = 10x10 pixel minimum object\n"
+                                         "Tip: Increase to focus on larger objects")
         area_layout.addWidget(self.min_area_spinbox, 0, 1)
 
         # Maximum area
@@ -648,19 +703,33 @@ class HSVControlWidget(QWidget):
         self.max_area_spinbox = QSpinBox()
         self.max_area_spinbox.setRange(100, 1000000)
         self.max_area_spinbox.setValue(50000)
+        self.max_area_spinbox.setToolTip("Maximum detection size in pixels (100-1,000,000).\n"
+                                         "Objects larger than this will be filtered out.\n"
+                                         "Use to eliminate large false positives or background.\n"
+                                         "Example: 50,000 = approximately 223x223 pixels\n"
+                                         "Tip: Decrease to focus on smaller objects")
         area_layout.addWidget(self.max_area_spinbox, 1, 1)
 
         # Processing options
         options_group = QGroupBox("Processing Options")
+        options_group.setToolTip("Configure video processing performance and detection display options")
         options_layout = QVBoxLayout(options_group)
 
         # Processing resolution dropdown
         resolution_layout = QHBoxLayout()
         resolution_layout.addWidget(QLabel("Processing Resolution:"))
         self.resolution_combo = QComboBox()
-        self.resolution_combo.addItems(["Original", "640x480", "1280x720", "1920x1080"])
+        self.resolution_combo.addItems(["Original", "640x360", "640x480", "960x540", "1280x720", "1280x960", "1920x1080"])
         self.resolution_combo.setCurrentText("Original")
-        self.resolution_combo.setToolTip("Downsample video for faster multi-color detection")
+        self.resolution_combo.setToolTip("Video processing resolution:\n"
+                                          "• Original: Process at native resolution (highest quality, slowest)\n"
+                                          "• 640x360: 360p - Very fast, minimal quality\n"
+                                          "• 640x480: VGA - Good for testing and fast performance\n"
+                                          "• 960x540: 540p (qHD) - Good speed with decent quality\n"
+                                          "• 1280x720: 720p HD - Balance of speed and quality\n"
+                                          "• 1280x960: 960p - High quality with 4:3 aspect ratio\n"
+                                          "• 1920x1080: 1080p Full HD - Near-original quality\n"
+                                          "Lower resolutions improve FPS but may miss small objects")
         resolution_layout.addWidget(self.resolution_combo)
         resolution_layout.addStretch()
         options_layout.addLayout(resolution_layout)
@@ -673,29 +742,57 @@ class HSVControlWidget(QWidget):
         self.confidence_slider.setValue(0)  # Default: show all detections
         self.confidence_slider.setTickPosition(QSlider.TicksBelow)
         self.confidence_slider.setTickInterval(10)
+        self.confidence_slider.setToolTip("Filter detections by confidence score (0-100%).\n"
+                                          "• 0%: Show all detections (default)\n"
+                                          "• 25%: Filter weak matches\n"
+                                          "• 50%: Show medium+ confidence only\n"
+                                          "• 75%+: Show high confidence only\n"
+                                          "Higher values reduce false positives but may miss valid detections")
         confidence_layout.addWidget(self.confidence_slider, 0, 1)
 
         self.confidence_label = QLabel("0%")
         self.confidence_label.setStyleSheet("QLabel { font-weight: bold; color: white; }")
+        self.confidence_label.setToolTip("Current confidence threshold percentage")
         confidence_layout.addWidget(self.confidence_label, 0, 2)
 
         # Confidence description
         self.confidence_desc = QLabel("Show all detections")
         self.confidence_desc.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        self.confidence_desc.setToolTip("Description of current confidence filter behavior")
         confidence_layout.addWidget(self.confidence_desc, 1, 0, 1, 3)
 
         options_layout.addLayout(confidence_layout)
 
         self.morphology_checkbox = QCheckBox("Enable Morphological Filtering")
         self.morphology_checkbox.setChecked(True)
+        self.morphology_checkbox.setToolTip("Apply morphological operations to clean up detections.\n"
+                                            "Uses opening (erosion + dilation) to:\n"
+                                            "• Remove small noise and artifacts\n"
+                                            "• Smooth detection boundaries\n"
+                                            "• Fill small holes in detected regions\n"
+                                            "Recommended: Enabled for cleaner results")
         options_layout.addWidget(self.morphology_checkbox)
 
         self.gpu_checkbox = QCheckBox("Enable GPU Acceleration")
         self.gpu_checkbox.setChecked(False)
+        self.gpu_checkbox.setToolTip("Use GPU for accelerated image processing (requires CUDA).\n"
+                                     "Benefits:\n"
+                                     "• Significantly faster processing for high-resolution video\n"
+                                     "• Better performance with multiple color targets\n"
+                                     "Requirements:\n"
+                                     "• NVIDIA GPU with CUDA support\n"
+                                     "• OpenCV compiled with CUDA support\n"
+                                     "Note: May not provide benefit for low-resolution streams")
         options_layout.addWidget(self.gpu_checkbox)
 
         self.show_labels_checkbox = QCheckBox("Show Detection Labels")
         self.show_labels_checkbox.setChecked(True)
+        self.show_labels_checkbox.setToolTip("Display detection information on video overlay.\n"
+                                             "Shows:\n"
+                                             "• Detection ID numbers\n"
+                                             "• Area size in pixels\n"
+                                             "• Confidence scores\n"
+                                             "Disable for cleaner video display with bounding boxes only")
         options_layout.addWidget(self.show_labels_checkbox)
 
         # Add all groups to main layout
@@ -841,10 +938,16 @@ class HSVControlWidget(QWidget):
         processing_resolution = None
         resolution_text = self.resolution_combo.currentText()
         if resolution_text != "Original":
-            if resolution_text == "640x480":
+            if resolution_text == "640x360":
+                processing_resolution = (640, 360)
+            elif resolution_text == "640x480":
                 processing_resolution = (640, 480)
+            elif resolution_text == "960x540":
+                processing_resolution = (960, 540)
             elif resolution_text == "1280x720":
                 processing_resolution = (1280, 720)
+            elif resolution_text == "1280x960":
+                processing_resolution = (1280, 960)
             elif resolution_text == "1920x1080":
                 processing_resolution = (1920, 1080)
 
@@ -885,10 +988,16 @@ class HSVControlWidget(QWidget):
         processing_resolution = None
         resolution_text = self.resolution_combo.currentText()
         if resolution_text != "Original":
-            if resolution_text == "640x480":
+            if resolution_text == "640x360":
+                processing_resolution = (640, 360)
+            elif resolution_text == "640x480":
                 processing_resolution = (640, 480)
+            elif resolution_text == "960x540":
+                processing_resolution = (960, 540)
             elif resolution_text == "1280x720":
                 processing_resolution = (1280, 720)
+            elif resolution_text == "1280x960":
+                processing_resolution = (1280, 960)
             elif resolution_text == "1920x1080":
                 processing_resolution = (1920, 1080)
 
@@ -926,6 +1035,7 @@ class StreamControlWidget(QWidget):
 
         # Connection group
         connection_group = QGroupBox("Stream Connection")
+        connection_group.setToolTip("Configure and connect to video source (file, HDMI capture, or RTMP stream)")
         connection_layout = QGridLayout(connection_group)
 
         # Stream URL with browse button for files
@@ -935,11 +1045,16 @@ class StreamControlWidget(QWidget):
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Click to browse for video file...")
         self.url_input.setText("")  # Default empty for file selection
+        self.url_input.setToolTip("Enter or browse for the video source:\n"
+                                   "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
+                                   "• HDMI Capture: Enter device index (0, 1, 2, etc.)\n"
+                                   "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)")
         url_layout.addWidget(self.url_input, 1)
 
         self.browse_button = QPushButton("Browse...")
         self.browse_button.setVisible(True)  # Visible by default since File is default
-        self.browse_button.setToolTip("Browse for video file")
+        self.browse_button.setToolTip("Open file browser to select a video file for analysis.\n"
+                                       "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM")
         url_layout.addWidget(self.browse_button)
 
         connection_layout.addLayout(url_layout, 0, 1)
@@ -948,15 +1063,23 @@ class StreamControlWidget(QWidget):
         connection_layout.addWidget(QLabel("Stream Type:"), 1, 0)
         self.type_combo = QComboBox()
         self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
+        self.type_combo.setToolTip("Select the type of video source:\n"
+                                    "• File: Pre-recorded video file with timeline controls\n"
+                                    "• HDMI Capture: Live capture from HDMI capture device\n"
+                                    "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
         connection_layout.addWidget(self.type_combo, 1, 1)
 
         # Connection buttons
         button_layout = QHBoxLayout()
         self.connect_button = QPushButton("Connect")
         self.connect_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
+        self.connect_button.setToolTip("Connect to the specified video source and begin processing.\n"
+                                        "Color detection will start automatically upon successful connection.")
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }")
         self.disconnect_button.setEnabled(False)
+        self.disconnect_button.setToolTip("Disconnect from the current video source and stop processing.\n"
+                                           "Any active recording will be stopped automatically.")
 
         button_layout.addWidget(self.connect_button)
         button_layout.addWidget(self.disconnect_button)
@@ -964,14 +1087,26 @@ class StreamControlWidget(QWidget):
         # Status display
         self.status_label = QLabel("Status: Disconnected")
         self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+        self.status_label.setToolTip("Current connection status:\n"
+                                      "• Disconnected: No active video source\n"
+                                      "• Connected: Streaming and processing video\n"
+                                      "• Error: Connection problem or stream interrupted")
 
         # Performance display
         performance_group = QGroupBox("Performance")
+        performance_group.setToolTip("Real-time performance metrics for video processing and color detection")
         performance_layout = QGridLayout(performance_group)
 
         self.fps_label = QLabel("FPS: --")
+        self.fps_label.setToolTip("Frames per second being processed from the video stream.\n"
+                                   "Lower FPS may indicate system load or slow stream.")
         self.latency_label = QLabel("Processing: -- ms")
+        self.latency_label.setToolTip("Time in milliseconds to process each frame including color detection.\n"
+                                       "Lower values indicate better real-time performance.\n"
+                                       "Target: <50ms for smooth real-time detection")
         self.detections_label = QLabel("Detections: --")
+        self.detections_label.setToolTip("Number of color matches found in the current frame.\n"
+                                          "Adjust HSV thresholds and area constraints to refine detections.")
 
         performance_layout.addWidget(self.fps_label, 0, 0)
         performance_layout.addWidget(self.latency_label, 0, 1)
@@ -1096,6 +1231,17 @@ class RTMPColorDetectionViewer(QMainWindow):
         self.setWindowTitle("ADIAT - Real-Time Color Detection")
         self.setMinimumSize(1200, 800)
 
+        # Set custom tooltip styling - light blue background with black text
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
         # Central widget with splitter
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1108,11 +1254,24 @@ class RTMPColorDetectionViewer(QMainWindow):
         video_layout = QVBoxLayout(video_widget)
 
         self.video_display = VideoDisplayWidget()
+        self.video_display.setToolTip("Live video stream with color detection visualization.\n"
+                                       "Detected objects are highlighted with:\n"
+                                       "• Green bounding boxes around matches\n"
+                                       "• Detection ID and area labels (if enabled)\n"
+                                       "• Confidence scores for each detection\n"
+                                       "The display automatically scales to fit the window")
         video_layout.addWidget(self.video_display, 1)  # Give video display stretch factor of 1
 
         # Timeline controls (for file playback) - fixed size, no stretch
         self.timeline_widget = VideoTimelineWidget()
         self.timeline_widget.setMaximumHeight(80)  # Limit timeline height
+        self.timeline_widget.setToolTip("Video playback controls (for file sources only).\n"
+                                        "Keyboard shortcuts:\n"
+                                        "• Space: Play/Pause\n"
+                                        "• Left Arrow: Skip back 10 seconds\n"
+                                        "• Right Arrow: Skip forward 10 seconds\n"
+                                        "• Home: Jump to beginning\n"
+                                        "• End: Jump to end")
         video_layout.addWidget(self.timeline_widget, 0)  # No stretch - stays compact
 
         # Detection info panel - fixed size, no stretch
@@ -1121,6 +1280,13 @@ class RTMPColorDetectionViewer(QMainWindow):
         info_panel.setMinimumHeight(150)  # Prevent shrinking too much
         info_panel.setReadOnly(True)
         info_panel.setPlaceholderText("Detection information will appear here...")
+        info_panel.setToolTip("Detailed detection information panel.\n"
+                              "Shows for each detection:\n"
+                              "• Detection number and position (x, y coordinates)\n"
+                              "• Size dimensions (width × height in pixels)\n"
+                              "• Total area in pixels\n"
+                              "• Confidence score (0.0-1.0)\n"
+                              "Displays up to 5 detections at a time")
         video_layout.addWidget(info_panel, 0)  # No stretch - stays fixed size
         self.info_panel = info_panel
 
@@ -1156,14 +1322,22 @@ class RTMPColorDetectionViewer(QMainWindow):
     def _create_recording_controls(self) -> QWidget:
         """Create recording control widget."""
         group = QGroupBox("Recording")
+        group.setToolTip("Record video stream with detection annotations to file")
         layout = QVBoxLayout(group)
 
         # Recording buttons
         button_layout = QHBoxLayout()
         self.start_recording_btn = QPushButton("Start Recording")
         self.start_recording_btn.setStyleSheet("QPushButton { background-color: #ff4444; color: white; font-weight: bold; }")
+        self.start_recording_btn.setToolTip("Start recording the video stream with detection overlays.\n"
+                                            "Recordings are saved to the ./recordings directory.\n"
+                                            "File format: MP4 with H.264 codec\n"
+                                            "Note: Connect to stream before recording")
         self.stop_recording_btn = QPushButton("Stop Recording")
         self.stop_recording_btn.setEnabled(False)
+        self.stop_recording_btn.setToolTip("Stop the current recording and save to file.\n"
+                                           "The file path will be displayed in the status label.\n"
+                                           "Recording includes all detection annotations and labels")
 
         button_layout.addWidget(self.start_recording_btn)
         button_layout.addWidget(self.stop_recording_btn)
@@ -1171,9 +1345,14 @@ class RTMPColorDetectionViewer(QMainWindow):
         # Recording status
         self.recording_status = QLabel("Status: Not Recording")
         self.recording_status.setStyleSheet("QLabel { color: gray; }")
+        self.recording_status.setToolTip("Current recording status and output file path")
 
         # Recording info
         self.recording_info = QLabel("Duration: --")
+        self.recording_info.setToolTip("Recording statistics:\n"
+                                       "• Duration: Total recording time in seconds\n"
+                                       "• FPS: Recording frame rate\n"
+                                       "• Frames: Total frames written to file")
 
         layout.addLayout(button_layout)
         layout.addWidget(self.recording_status)

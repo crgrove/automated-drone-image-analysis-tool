@@ -205,17 +205,100 @@ class Ui_HSVColorRange(object):
 
     def retranslateUi(self, HSVColorRange):
         HSVColorRange.setWindowTitle(QCoreApplication.translate("HSVColorRange", u"Form", None))
+#if QT_CONFIG(tooltip)
+        self.colorButton.setToolTip(QCoreApplication.translate("HSVColorRange", u"Select a target color from an image to detect.\n"
+"Opens a color picker that allows you to:\n"
+"\u2022 Load an image from the input folder\n"
+"\u2022 Click on pixels to sample colors\n"
+"\u2022 Automatically calculates HSV values\n"
+"\u2022 Sets Hue, Saturation, and Value ranges\n"
+"The selected color becomes the center of your HSV detection range.\n"
+"Adjust the +/- range values to capture color variations.", None))
+#endif // QT_CONFIG(tooltip)
         self.colorButton.setText(QCoreApplication.translate("HSVColorRange", u" Pick Color", None))
         self.colorButton.setProperty(u"iconName", QCoreApplication.translate("HSVColorRange", u"color.png", None))
+#if QT_CONFIG(tooltip)
+        self.colorSample.setToolTip(QCoreApplication.translate("HSVColorRange", u"Visual preview of the currently selected target color.\n"
+"Shows the center color of your HSV detection range.\n"
+"The actual detection will match colors within the specified +/- ranges around this color.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.hueSensitivityLabel.setToolTip(QCoreApplication.translate("HSVColorRange", u"Hue range tolerance for color detection.\n"
+"Hue represents the actual color (red, green, blue, etc.) on a 0-179 scale.\n"
+"Adjust the -/+ values to allow variation in the color hue.", None))
+#endif // QT_CONFIG(tooltip)
         self.hueSensitivityLabel.setText(QCoreApplication.translate("HSVColorRange", u"Hue Range", None))
         self.hueMinusLabel.setText(QCoreApplication.translate("HSVColorRange", u"-", None))
+#if QT_CONFIG(tooltip)
+        self.hueMinusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Lower hue range tolerance.\n"
+"\u2022 Range: 0 to 179\n"
+"\u2022 Default: 20\n"
+"Subtracts from the target hue value to define the lower bound.\n"
+"Lower values = stricter color matching, higher values = more color variation accepted.\n"
+"Example: Target hue 100, minus 20 = detects hues from 80-100.", None))
+#endif // QT_CONFIG(tooltip)
         self.huePlusLabel.setText(QCoreApplication.translate("HSVColorRange", u"+", None))
+#if QT_CONFIG(tooltip)
+        self.huePlusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Upper hue range tolerance.\n"
+"\u2022 Range: 0 to 179\n"
+"\u2022 Default: 20\n"
+"Adds to the target hue value to define the upper bound.\n"
+"Lower values = stricter color matching, higher values = more color variation accepted.\n"
+"Example: Target hue 100, plus 20 = detects hues from 100-120.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.saturationSensitivityLabel.setToolTip(QCoreApplication.translate("HSVColorRange", u"Saturation range tolerance for color detection.\n"
+"Saturation represents color intensity (0=gray, 255=fully saturated) on a 0-255 scale.\n"
+"Adjust the -/+ values to allow variation in color intensity.", None))
+#endif // QT_CONFIG(tooltip)
         self.saturationSensitivityLabel.setText(QCoreApplication.translate("HSVColorRange", u"Saturation Range", None))
         self.saturationMinusLabel.setText(QCoreApplication.translate("HSVColorRange", u"-", None))
+#if QT_CONFIG(tooltip)
+        self.saturationMinusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Lower saturation range tolerance.\n"
+"\u2022 Range: 0 to 255\n"
+"\u2022 Default: 50\n"
+"Subtracts from the target saturation value to define the lower bound.\n"
+"Lower values = requires vivid colors, higher values = accepts faded/washed out colors.\n"
+"Example: Target saturation 150, minus 50 = detects saturations from 100-150.", None))
+#endif // QT_CONFIG(tooltip)
         self.saturationPlusLabel.setText(QCoreApplication.translate("HSVColorRange", u"+", None))
+#if QT_CONFIG(tooltip)
+        self.saturationPlusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Upper saturation range tolerance.\n"
+"\u2022 Range: 0 to 255\n"
+"\u2022 Default: 50\n"
+"Adds to the target saturation value to define the upper bound.\n"
+"Lower values = requires exact saturation, higher values = accepts more saturated colors.\n"
+"Example: Target saturation 150, plus 50 = detects saturations from 150-200.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.valueSensitivityLabel.setToolTip(QCoreApplication.translate("HSVColorRange", u"Value (brightness) range tolerance for color detection.\n"
+"Value represents brightness (0=black, 255=bright) on a 0-255 scale.\n"
+"Adjust the -/+ values to allow variation in brightness.", None))
+#endif // QT_CONFIG(tooltip)
         self.valueSensitivityLabel.setText(QCoreApplication.translate("HSVColorRange", u"Value Range", None))
         self.valueMinusLabel.setText(QCoreApplication.translate("HSVColorRange", u"-", None))
+#if QT_CONFIG(tooltip)
+        self.valueMinusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Lower value (brightness) range tolerance.\n"
+"\u2022 Range: 0 to 255\n"
+"\u2022 Default: 50\n"
+"Subtracts from the target brightness value to define the lower bound.\n"
+"Lower values = requires bright pixels, higher values = accepts darker pixels.\n"
+"Example: Target value 200, minus 50 = detects brightness from 150-200.", None))
+#endif // QT_CONFIG(tooltip)
         self.valuePlusLabel.setText(QCoreApplication.translate("HSVColorRange", u"+", None))
+#if QT_CONFIG(tooltip)
+        self.valuePlusSpinBox.setToolTip(QCoreApplication.translate("HSVColorRange", u"Upper value (brightness) range tolerance.\n"
+"\u2022 Range: 0 to 255\n"
+"\u2022 Default: 50\n"
+"Adds to the target brightness value to define the upper bound.\n"
+"Lower values = requires exact brightness, higher values = accepts brighter pixels.\n"
+"Example: Target value 200, plus 50 = detects brightness from 200-250.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.viewRangeButton.setToolTip(QCoreApplication.translate("HSVColorRange", u"Opens the Range Viewer window to:\n"
+"- See the range of colors that will be searched for in the image analysis.\n"
+"Use this to see what colors are going to be detected and optimize the color ranges before processing.", None))
+#endif // QT_CONFIG(tooltip)
         self.viewRangeButton.setText(QCoreApplication.translate("HSVColorRange", u"View Range", None))
         self.viewRangeButton.setProperty(u"iconName", QCoreApplication.translate("HSVColorRange", u"eye.png", None))
     # retranslateUi

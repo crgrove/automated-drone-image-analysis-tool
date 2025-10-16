@@ -25,6 +25,18 @@ class VideoParser(QDialog, Ui_VideoParser):
         self.__threads = []
         self.running = False
         self.logger = LoggerService()
+
+        # Set custom tooltip styling - light blue background with black text
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
         self.videoSelectButton.clicked.connect(self._videoSelectButton_clicked)
         self.srtSelectButton.clicked.connect(self._srtSelectButton_clicked)
         self.outputSelectButton.clicked.connect(self._outputSelectButton_clicked)

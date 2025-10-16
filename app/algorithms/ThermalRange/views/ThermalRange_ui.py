@@ -101,8 +101,50 @@ class Ui_ThermalRange(object):
 
     def retranslateUi(self, ThermalRange):
         ThermalRange.setWindowTitle(QCoreApplication.translate("ThermalRange", u"Form", None))
+#if QT_CONFIG(tooltip)
+        self.minTempLabel.setToolTip(QCoreApplication.translate("ThermalRange", u"Minimum temperature threshold for detection in thermal images.\n"
+"\u2022 Range: -30\u00b0C to 50\u00b0C\n"
+"\u2022 Default: 35\u00b0C\n"
+"Defines the lower bound of the temperature detection range:\n"
+"\u2022 Lower values: INCREASE detections - accepts cooler objects\n"
+"\u2022 Higher values: DECREASE detections - only warmer objects detected\n"
+"Combined with Maximum Temp to create a detection range (e.g., 35-40\u00b0C for human body temperature).", None))
+#endif // QT_CONFIG(tooltip)
         self.minTempLabel.setText(QCoreApplication.translate("ThermalRange", u"Minimum Temp (\u00b0C)", None))
+#if QT_CONFIG(tooltip)
+        self.minTempSpinBox.setToolTip(QCoreApplication.translate("ThermalRange", u"Set the minimum temperature for detection in Celsius.\n"
+"\u2022 Range: -30\u00b0C to 50\u00b0C\n"
+"\u2022 Default: 35\u00b0C\n"
+"Pixels with temperatures at or above this threshold will be detected.\n"
+"\u2022 Lower values: Detect cooler objects (more detections)\n"
+"\u2022 Higher values: Only detect warmer objects (fewer detections)\n"
+"Note: Temperature displayed in Celsius, converted based on Preferences setting.\n"
+"Use for finding objects within a specific temperature range (e.g., people 35-40\u00b0C).", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.maxTempLabel.setToolTip(QCoreApplication.translate("ThermalRange", u"Maximum temperature threshold for detection in thermal images.\n"
+"\u2022 Range: -30\u00b0C to 93\u00b0C\n"
+"\u2022 Default: 40\u00b0C\n"
+"Defines the upper bound of the temperature detection range:\n"
+"\u2022 Lower values: DECREASE detections - only cooler objects detected\n"
+"\u2022 Higher values: INCREASE detections - accepts warmer objects\n"
+"Combined with Minimum Temp to create a detection range (e.g., 35-40\u00b0C for human body temperature).", None))
+#endif // QT_CONFIG(tooltip)
         self.maxTempLabel.setText(QCoreApplication.translate("ThermalRange", u"Maximum Temp (\u00b0C)", None))
+#if QT_CONFIG(tooltip)
+        self.maxTempSpinBox.setToolTip(QCoreApplication.translate("ThermalRange", u"Set the maximum temperature for detection in Celsius.\n"
+"\u2022 Range: -30\u00b0C to 93\u00b0C\n"
+"\u2022 Default: 40\u00b0C\n"
+"Pixels with temperatures at or below this threshold will be detected.\n"
+"\u2022 Lower values: Only detect cooler objects (fewer detections)\n"
+"\u2022 Higher values: Detect warmer objects (more detections)\n"
+"Note: Temperature displayed in Celsius, converted based on Preferences setting.\n"
+"Detection occurs for pixels between minimum and maximum temperatures (inclusive).", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.colorMapLabel.setToolTip(QCoreApplication.translate("ThermalRange", u"Color palette for visualizing thermal imagery.\n"
+"Converts temperature data to colors for easier interpretation.", None))
+#endif // QT_CONFIG(tooltip)
         self.colorMapLabel.setText(QCoreApplication.translate("ThermalRange", u"Color Map: ", None))
         self.colorMapComboBox.setItemText(0, QCoreApplication.translate("ThermalRange", u"White Hot", None))
         self.colorMapComboBox.setItemText(1, QCoreApplication.translate("ThermalRange", u"Black Hot", None))
@@ -110,5 +152,15 @@ class Ui_ThermalRange(object):
         self.colorMapComboBox.setItemText(3, QCoreApplication.translate("ThermalRange", u"Hot (Fulgurite)", None))
         self.colorMapComboBox.setItemText(4, QCoreApplication.translate("ThermalRange", u"Jet (Rainbow2)", None))
 
+#if QT_CONFIG(tooltip)
+        self.colorMapComboBox.setToolTip(QCoreApplication.translate("ThermalRange", u"Select the color palette for thermal image visualization:\n"
+"\u2022 White Hot: Hot areas appear white, cold areas appear black (traditional)\n"
+"\u2022 Black Hot: Hot areas appear black, cold areas appear white (inverted)\n"
+"\u2022 Inferno (Iron Red): Red/yellow for hot, dark for cold (high contrast)\n"
+"\u2022 Hot (Fulgurite): Yellow/red gradient (vivid colors)\n"
+"\u2022 Jet (Rainbow2): Rainbow colors from blue (cold) to red (hot)\n"
+"The color map only affects visualization, not detection results.\n"
+"Choose based on image content and personal preference for best visibility.", None))
+#endif // QT_CONFIG(tooltip)
     # retranslateUi
 

@@ -133,6 +133,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Apply icons
         self._apply_icons()
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
+        self.statusBar.setToolTip("Image metadata and information.\nClick on GPS Coordinates to copy, share, or open in mapping applications.")
 
         # toast (non intrusive) over statusBarWidget
         self._toastLabel = QLabel(self.statusBarWidget)

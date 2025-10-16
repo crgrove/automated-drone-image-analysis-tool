@@ -25,6 +25,15 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Number of segments to divide each image into for analysis.
+The RX algorithm analyzes each segment independently to detect local anomalies.
+Performance impact:
+• Higher number of segments: INCREASES processing time (more segments to analyze)
+• Lower number of segments: DECREASES processing time (fewer segments to analyze)
+• 1 segment: Fastest processing (analyzes whole image once)
+Higher segment counts improve detection in images with varying backgrounds.</string>
+         </property>
          <property name="text">
           <string>Image Segments:</string>
          </property>
@@ -48,6 +57,16 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Select the number of segments to divide each image into.
+• Options: 1, 2, 4, 6, 9, 16, 25, 36 segments
+• Default: 1 (analyze entire image as one segment)
+The RX Anomaly algorithm uses statistical analysis to detect unusual pixels:
+• 1 segment: Analyzes the whole image at once (best for small images)
+• More segments: Analyzes local regions independently (better for large images)
+Higher segment counts improve detection in images with varying backgrounds.
+Recommended: 4-9 segments for typical drone imagery.</string>
          </property>
          <item>
           <property name="text">
@@ -114,6 +133,15 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Detection sensitivity for anomaly detection.
+• Range: 1 to 10
+• Default: 5
+Controls how statistically different a pixel must be from the background to be detected:
+• Lower values (1-3): DECREASE detections - less sensitive, only detects strong anomalies
+• Higher values (7-10): INCREASE detections - more sensitive, detects subtle anomalies
+Higher sensitivity finds more potential targets but may include noise/false positives.</string>
+         </property>
          <property name="text">
           <string>Sensitivity:</string>
          </property>
@@ -126,6 +154,17 @@
          </property>
          <property name="maximum">
           <number>10</number>
+         </property>
+         <property name="toolTip">
+          <string>Adjust the detection sensitivity for anomaly detection.
+• Range: 1 to 10
+• Default: 5
+The RX algorithm uses statistical analysis to find pixels that differ from the background:
+• Lower values (1-3): Less sensitive, only detects strong anomalies (fewer false positives)
+• Medium values (4-6): Balanced detection (recommended for most cases)
+• Higher values (7-10): More sensitive, detects subtle anomalies (more detections, may include noise)
+Anomalies are pixels that are statistically different from the surrounding background.
+Use lower sensitivity for clean images, higher for finding subtle targets.</string>
          </property>
          <property name="pageStep">
           <number>1</number>
@@ -161,6 +200,10 @@
            <weight>75</weight>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Current sensitivity level for anomaly detection.
+Displays the value selected on the sensitivity slider (1-10).</string>
          </property>
          <property name="text">
           <string>5</string>
