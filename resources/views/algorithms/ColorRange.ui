@@ -23,6 +23,16 @@
          <pointsize>10</pointsize>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Select a target color from an image to detect using RGB color space.
+Opens a color picker that allows you to:
+• Load an image from the input folder
+• Click on pixels to sample colors
+• Automatically calculates RGB values
+• Sets Red, Green, and Blue range tolerances
+The selected color becomes the center of your RGB detection range.
+Adjust the +/- range values to capture color variations.</string>
+       </property>
        <property name="text">
         <string> Pick Color</string>
        </property>
@@ -57,6 +67,11 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Red channel tolerance for RGB color detection.
+Defines how much variation in the red channel value is acceptable.
+Adjust to allow more or less red color variation.</string>
+         </property>
          <property name="text">
           <string>Red Range +/-</string>
          </property>
@@ -68,6 +83,15 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Red channel range tolerance (+/-).
+• Range: 0 to 255
+• Default: 50
+Creates a range around the target red value by adding and subtracting this amount.
+• Lower values: Strict red matching (narrow range)
+• Higher values: Loose red matching (wide range)
+Example: Target red 150, range 50 = detects red values from 100-200.</string>
          </property>
          <property name="maximum">
           <number>255</number>
@@ -97,6 +121,11 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Green channel tolerance for RGB color detection.
+Defines how much variation in the green channel value is acceptable.
+Adjust to allow more or less green color variation.</string>
+         </property>
          <property name="text">
           <string>Green Range +/-</string>
          </property>
@@ -108,6 +137,15 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Green channel range tolerance (+/-).
+• Range: 0 to 255
+• Default: 50
+Creates a range around the target green value by adding and subtracting this amount.
+• Lower values: Strict green matching (narrow range)
+• Higher values: Loose green matching (wide range)
+Example: Target green 100, range 50 = detects green values from 50-150.</string>
          </property>
          <property name="maximum">
           <number>255</number>
@@ -137,6 +175,11 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Blue channel tolerance for RGB color detection.
+Defines how much variation in the blue channel value is acceptable.
+Adjust to allow more or less blue color variation.</string>
+         </property>
          <property name="text">
           <string>Blue Range +/-</string>
          </property>
@@ -148,6 +191,15 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Blue channel range tolerance (+/-).
+• Range: 0 to 255
+• Default: 50
+Creates a range around the target blue value by adding and subtracting this amount.
+• Lower values: Strict blue matching (narrow range)
+• Higher values: Loose blue matching (wide range)
+Example: Target blue 80, range 50 = detects blue values from 30-130.</string>
          </property>
          <property name="maximum">
           <number>255</number>
@@ -170,6 +222,10 @@
          <pointsize>10</pointsize>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Visual preview of the RGB color detection range.
+Shows the minimum, center, and maximum colors that will be detected.</string>
+       </property>
        <property name="text">
         <string>Color Range:</string>
        </property>
@@ -179,6 +235,11 @@
       <widget class="QFrame" name="minColor">
        <property name="whatsThis">
         <string/>
+       </property>
+       <property name="toolTip">
+        <string>Minimum color in the detection range.
+Shows the darkest/lowest RGB values that will be detected.
+Calculated by subtracting the range values from the target color.</string>
        </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
@@ -190,6 +251,11 @@
      </item>
      <item>
       <widget class="QFrame" name="midColor">
+       <property name="toolTip">
+        <string>Center/target color for detection.
+Shows the exact RGB color that was selected.
+This is the middle of your detection range.</string>
+       </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -200,6 +266,11 @@
      </item>
      <item>
       <widget class="QFrame" name="maxColor">
+       <property name="toolTip">
+        <string>Maximum color in the detection range.
+Shows the brightest/highest RGB values that will be detected.
+Calculated by adding the range values to the target color.</string>
+       </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -220,6 +291,11 @@
         <font>
          <pointsize>10</pointsize>
         </font>
+       </property>
+       <property name="toolTip">
+        <string>Opens the Range Viewer window to:
+- See the range of colors that will be searched for in the image analysis.
+Use this to see what colors are going to be detected and optimize the color ranges before processing.</string>
        </property>
        <property name="text">
         <string>View Range</string>

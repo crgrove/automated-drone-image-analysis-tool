@@ -23,6 +23,10 @@
          <pointsize>10</pointsize>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Confidence threshold for AI person detection.
+Controls the minimum confidence level required to report a person detection.</string>
+       </property>
        <property name="text">
         <string>Confidence Threshold</string>
        </property>
@@ -35,6 +39,17 @@
        </property>
        <property name="maximum">
         <number>100</number>
+       </property>
+       <property name="toolTip">
+        <string>Adjust the confidence threshold for person detection.
+• Range: 0% to 100% (slider -1 to 100, -1 displays as 0%)
+• Default: 50%
+The AI model assigns a confidence score to each person detection:
+• Lower values (0-30%): Accept low-confidence detections (more detections, more false positives)
+• Medium values (31-60%): Balanced detection (recommended for most cases)
+• Higher values (61-100%): Only accept high-confidence detections (fewer detections, fewer false positives)
+Confidence represents the AI model's certainty that a detected object is a person.
+Start with 50% and adjust based on your accuracy requirements.</string>
        </property>
        <property name="pageStep">
         <number>1</number>
@@ -62,6 +77,11 @@
          <bold>true</bold>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Current confidence threshold percentage.
+Displays the value selected on the confidence slider (0-100%).
+Detections below this confidence level will be filtered out.</string>
+       </property>
        <property name="text">
         <string>50</string>
        </property>
@@ -75,6 +95,13 @@
       <font>
        <pointsize>9</pointsize>
       </font>
+     </property>
+     <property name="toolTip">
+      <string>GPU status and availability information.
+Shows whether GPU acceleration is available for AI person detection.
+• GPU Available: AI detection will use GPU for faster processing
+• CPU Only: AI detection will use CPU (slower but still functional)
+GPU acceleration significantly improves processing speed for AI models.</string>
      </property>
      <property name="text">
       <string>GPU Label</string>

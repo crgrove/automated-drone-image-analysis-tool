@@ -216,6 +216,7 @@ class AOIUIComponent:
                 border-radius: 2px;
             }
         """)
+        info_widget.setToolTip("AOI Information\nRight-click to copy data to clipboard")
         info_layout = QVBoxLayout(info_widget)
         info_layout.setContentsMargins(4, 2, 4, 2)
         info_layout.setSpacing(2)
@@ -277,12 +278,11 @@ class AOIUIComponent:
             # Style based on whether comment exists
             if user_comment:
                 comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
-                # Show preview of comment (first 50 chars)
-                preview = user_comment[:50] + "..." if len(user_comment) > 50 else user_comment
-                comment_icon.setToolTip(f"Comment: {preview}\n(Click to edit)")
+                # Show full comment in tooltip
+                comment_icon.setToolTip(f"Comment:\n{user_comment}\n\nClick to edit comment")
             else:
                 comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
-                comment_icon.setToolTip("Add comment (click)")
+                comment_icon.setToolTip("No comment yet.\nClick to add a comment for this AOI.\n\nUse comments to note important details, observations,\nor actions needed for this detection.")
 
             # Make icon clickable - use lambda with default parameter to capture current AOI index
             def make_comment_click_handler(aoi_idx):

@@ -204,21 +204,98 @@ class Ui_VideoParser(object):
     def retranslateUi(self, VideoParser):
         VideoParser.setWindowTitle(QCoreApplication.translate("VideoParser", u"Video Parser", None))
 #if QT_CONFIG(tooltip)
-        self.srtSelectLabel.setToolTip("")
+        self.videoSelectLine.setToolTip(QCoreApplication.translate("VideoParser", u"Path to the video file to extract frames from.\n"
+"Supported formats: MP4, AVI, MOV, MKV, and other common video formats.\n"
+"Click the Select button to browse for a video file.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.srtSelectLabel.setToolTip(QCoreApplication.translate("VideoParser", u"SRT subtitle file containing GPS telemetry and timestamp data.\n"
+"Optional: Provides location information for extracted frames.\n"
+"Without SRT file, frames will have no GPS metadata.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(whatsthis)
         self.srtSelectLabel.setWhatsThis(QCoreApplication.translate("VideoParser", u"The SRT file contains timestamped information about the video file.  It is optional, but without it output images won't include location information.", None))
 #endif // QT_CONFIG(whatsthis)
         self.srtSelectLabel.setText(QCoreApplication.translate("VideoParser", u"SRT File (optional): ", None))
+#if QT_CONFIG(tooltip)
+        self.outputLabel.setToolTip(QCoreApplication.translate("VideoParser", u"Destination folder where extracted frame images will be saved.\n"
+"Each frame is saved as a separate image file with timestamp information.", None))
+#endif // QT_CONFIG(tooltip)
         self.outputLabel.setText(QCoreApplication.translate("VideoParser", u"Output Folder:", None))
+#if QT_CONFIG(tooltip)
+        self.outputLine.setToolTip(QCoreApplication.translate("VideoParser", u"Path to the output folder for extracted frame images.\n"
+"All frames will be saved in this directory with sequential naming.\n"
+"Click the Select button to choose a different folder.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.outputSelectButton.setToolTip(QCoreApplication.translate("VideoParser", u"Browse for output folder to save extracted frames.\n"
+"Opens a folder selection dialog.", None))
+#endif // QT_CONFIG(tooltip)
         self.outputSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))
         self.outputSelectButton.setProperty(u"iconName", QCoreApplication.translate("VideoParser", u"folder.png", None))
+#if QT_CONFIG(tooltip)
+        self.videoSelectLabel.setToolTip(QCoreApplication.translate("VideoParser", u"Select the source video file to parse.\n"
+"Video will be split into individual frame images.", None))
+#endif // QT_CONFIG(tooltip)
         self.videoSelectLabel.setText(QCoreApplication.translate("VideoParser", u"Video File:", None))
+#if QT_CONFIG(tooltip)
+        self.videoSelectButton.setToolTip(QCoreApplication.translate("VideoParser", u"Browse for video file to extract frames from.\n"
+"Opens a file selection dialog for video files (MP4, AVI, MOV, etc.).", None))
+#endif // QT_CONFIG(tooltip)
         self.videoSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))
+#if QT_CONFIG(tooltip)
+        self.srtSelectLine.setToolTip(QCoreApplication.translate("VideoParser", u"Path to the optional SRT subtitle file with GPS telemetry data.\n"
+"SRT files contain timestamp and location information for video frames.\n"
+"If provided, extracted frames will include GPS metadata (latitude, longitude, altitude).\n"
+"Can be left empty if location data is not needed.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.srtSelectButton.setToolTip(QCoreApplication.translate("VideoParser", u"Browse for optional SRT subtitle file containing GPS telemetry.\n"
+"SRT files are commonly created by DJI drones and other video recording devices.\n"
+"Opens a file selection dialog for SRT files.", None))
+#endif // QT_CONFIG(tooltip)
         self.srtSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))
+#if QT_CONFIG(tooltip)
+        self.timeLabel.setToolTip(QCoreApplication.translate("VideoParser", u"Time interval between extracted frames.\n"
+"Determines how frequently frames are captured from the video.\n"
+"Smaller intervals = More frames extracted (larger output)", None))
+#endif // QT_CONFIG(tooltip)
         self.timeLabel.setText(QCoreApplication.translate("VideoParser", u"Time Interval (seconds):", None))
+#if QT_CONFIG(tooltip)
+        self.timespinBox.setToolTip(QCoreApplication.translate("VideoParser", u"Set the time interval in seconds between frame extractions.\n"
+"\u2022 Range: 0.1 to unlimited seconds\n"
+"\u2022 Default: 5.0 seconds (extracts 1 frame every 5 seconds)\n"
+"\u2022 Lower values: More frames extracted (e.g., 0.5s = 2 frames per second)\n"
+"\u2022 Higher values: Fewer frames extracted (e.g., 10s = 1 frame every 10 seconds)\n"
+"Recommendation: 3-5 seconds for most drone footage analysis", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.startButton.setToolTip(QCoreApplication.translate("VideoParser", u"Start extracting frames from the video file.\n"
+"Requirements:\n"
+"\u2022 Video file must be selected\n"
+"\u2022 Output folder must be selected\n"
+"\u2022 Time interval must be set (default: 5 seconds)\n"
+"The process will extract frames at the specified interval and save them as images.\n"
+"If SRT file is provided, GPS metadata will be embedded in the extracted frames.", None))
+#endif // QT_CONFIG(tooltip)
         self.startButton.setText(QCoreApplication.translate("VideoParser", u"Start", None))
+#if QT_CONFIG(tooltip)
+        self.cancelButton.setToolTip(QCoreApplication.translate("VideoParser", u"Cancel the frame extraction process.\n"
+"Stops the operation immediately and returns to the ready state.\n"
+"Any frames already extracted will be saved in the output folder.\n"
+"Click to abort the current parsing operation.", None))
+#endif // QT_CONFIG(tooltip)
         self.cancelButton.setText(QCoreApplication.translate("VideoParser", u" Cancel", None))
         self.cancelButton.setProperty(u"iconName", QCoreApplication.translate("VideoParser", u"cancel.png", None))
+#if QT_CONFIG(tooltip)
+        self.outputWindow.setToolTip(QCoreApplication.translate("VideoParser", u"Progress and status output window.\n"
+"Displays real-time information during frame extraction:\n"
+"\u2022 Current frame being processed\n"
+"\u2022 Frame timestamps and numbers\n"
+"\u2022 GPS coordinates (if SRT file is provided)\n"
+"\u2022 Progress percentage and completion status\n"
+"\u2022 Any errors or warnings encountered\n"
+"Shows total frames extracted when complete.", None))
+#endif // QT_CONFIG(tooltip)
     # retranslateUi
 

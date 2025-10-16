@@ -23,6 +23,18 @@ class Preferences(QDialog, Ui_Preferences):
         super().__init__()
         self.parent = parent
         self.setupUi(self)
+
+        # Set custom tooltip styling - light blue background with black text
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
         self._load_settings()
         self._connect_signals()
 
