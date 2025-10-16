@@ -8,7 +8,10 @@ It works in conjunction with AOIController which handles the business logic.
 
 import colorsys
 import numpy as np
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView
+import qimage2ndarray
+import qtawesome as qta
+
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QFrame
 try:
     from shiboken6 import isValid as _qt_is_valid
 except Exception:
@@ -22,7 +25,8 @@ from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor
 
 from core.services.LoggerService import LoggerService
-import qimage2ndarray
+from core.views.viewer.widgets.QtImageViewer import QtImageViewer
+
 
 
 class AOIUIComponent:
@@ -57,6 +61,17 @@ class AOIUIComponent:
         aoi_list_widget = self.aoi_controller.parent.aoiListWidget
         if not aoi_list_widget:
             return
+
+        # Ensure the list widget itself does not manage selection/focus styles
+        # We control AOI selection visuals manually
+        try:
+            aoi_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+            aoi_list_widget.setFocusPolicy(Qt.NoFocus)
+            aoi_list_widget.setUniformItemSizes(True)
+            # Lock the width to prevent layout jitter (matches UI minimum)
+            aoi_list_widget.setFixedWidth(max(250, aoi_list_widget.minimumWidth()))
+        except Exception:
+            pass
 
         # Block signals during rebuild to avoid re-entrant updates while rapidly switching
         aoi_list_widget.blockSignals(True)
@@ -112,11 +127,16 @@ class AOIUIComponent:
                 return None
             # Create container widget for thumbnail and label
             container = QWidget()
+            container.setObjectName("AOIItemContainer")
             container.setProperty("aoi_index", original_index)  # Store original AOI index
             container.setProperty("visible_index", visible_container_index)  # Store visible index
             layout = QVBoxLayout(container)
-            layout.setSpacing(2)
-            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(4)
+            layout.setContentsMargins(6, 6, 6, 6)
+            # Base border around each list item container
+            container.setStyleSheet(
+                "#AOIItemContainer { border: 1px solid #666; border-radius: 4px; background-color: transparent; }"
+            )
 
             # Set up click handling for selection (use original index for selection)
             def handle_click(event, idx=original_index, vis_idx=visible_container_index):
@@ -133,11 +153,16 @@ class AOIUIComponent:
             crop_arr = self.aoi_controller.parent.crop_image(augmented_image, center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius)
 
             # Create the image viewer
-            from core.views.viewer.widgets.QtImageViewer import QtImageViewer
+
             highlight = QtImageViewer(self.aoi_controller.parent, container, center, True)
             highlight.setObjectName(f"highlight{original_index}")
-            highlight.setMinimumSize(QSize(190, 190))  # Reduced height to make room for label
+            highlight.setMinimumSize(QSize(180, 180))  # Reduced height to make room for label
             highlight.aspectRatioMode = Qt.KeepAspectRatio
+            # Remove default QFrame border around QGraphicsView
+            try:
+                highlight.setFrameShape(QFrame.NoFrame)
+            except Exception:
+                pass
             # Safely set the image on the highlight viewer
             try:
                 img = qimage2ndarray.array2qimage(crop_arr)
@@ -168,16 +193,18 @@ class AOIUIComponent:
             pixel_area = area_of_interest.get('area', 0)
             coord_text = f"X: {center[0]}, Y: {center[1]} | Area: {pixel_area:.0f} px"
 
-            # Create info widget container for both text and color square
-            info_widget = self._create_info_widget(coord_text, avg_color_info, color_rgb, original_index, flagged_set, area_of_interest)
+            # Create separate top and bottom info bars
+            top_info_widget = self._create_top_info_widget(coord_text, original_index, area_of_interest)
+            bottom_info_widget = self._create_bottom_info_widget(avg_color_info, color_rgb, original_index, flagged_set, area_of_interest)
 
-            # Add widgets to layout
+            # Add widgets directly to the container layout: top bar, image, bottom bar
+            layout.addWidget(top_info_widget)
             layout.addWidget(highlight)
-            layout.addWidget(info_widget)
+            layout.addWidget(bottom_info_widget)
 
             # Create list item
             listItem = QListWidgetItem()
-            listItem.setSizeHint(QSize(190, 210))  # Increased height to accommodate label
+            listItem.setSizeHint(QSize(190, 250))  # Slightly increased height for two info bars
             aoi_list_widget.addItem(listItem)
             aoi_list_widget.setItemWidget(listItem, container)
             aoi_list_widget.setSpacing(5)
@@ -195,20 +222,8 @@ class AOIUIComponent:
             self.logger.error(f"Error creating AOI container: {e}")
             return None
 
-    def _create_info_widget(self, coord_text, avg_color_info, color_rgb, original_index, flagged_set, area_of_interest):
-        """Create the info widget for an AOI container.
-
-        Args:
-            coord_text: Coordinate text to display
-            avg_color_info: Average color/temperature information
-            color_rgb: RGB tuple for color display
-            original_index: Original AOI index
-            flagged_set: Set of flagged AOI indices
-            area_of_interest: AOI dictionary
-
-        Returns:
-            QWidget: The created info widget
-        """
+    def _create_top_info_widget(self, coord_text, original_index, area_of_interest):
+        """Create the top info bar showing coordinates and area."""
         info_widget = QWidget()
         info_widget.setStyleSheet("""
             QWidget {
@@ -217,11 +232,10 @@ class AOIUIComponent:
             }
         """)
         info_widget.setToolTip("AOI Information\nRight-click to copy data to clipboard")
-        info_layout = QVBoxLayout(info_widget)
+        info_layout = QHBoxLayout(info_widget)
         info_layout.setContentsMargins(4, 2, 4, 2)
         info_layout.setSpacing(2)
 
-        # Create coordinate label
         coord_label = QLabel(coord_text)
         coord_label.setAlignment(Qt.AlignCenter)
         coord_label.setStyleSheet("""
@@ -232,27 +246,42 @@ class AOIUIComponent:
         """)
         info_layout.addWidget(coord_label)
 
-        # Add color/temperature information with color square if applicable
+        # Enable context menu for the info widget
+        info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        info_widget.customContextMenuRequested.connect(
+            lambda pos, c=area_of_interest['center'], a=area_of_interest.get('area', 0), info=None, idx=original_index: self.aoi_controller.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
+        )
+
+        return info_widget
+
+    def _create_bottom_info_widget(self, avg_color_info, color_rgb, original_index, flagged_set, area_of_interest):
+        """Create the bottom info bar showing color/temperature info and actions."""
+        info_widget = QWidget()
+        info_widget.setStyleSheet("""
+            QWidget {
+                background-color: rgba(0, 0, 0, 150);
+                border-radius: 2px;
+            }
+        """)
+        info_widget.setToolTip("AOI Information\nRight-click to copy data to clipboard")
+        info_layout = QHBoxLayout(info_widget)
+        info_layout.setContentsMargins(4, 2, 4, 2)
+        info_layout.setSpacing(4)
+
+        # Optional color square
+        if color_rgb is not None:
+            color_square = QLabel()
+            color_square.setFixedSize(12, 12)
+            color_square.setStyleSheet(f"""
+                QLabel {{
+                    background-color: rgb({color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]});
+                    border: 1px solid white;
+                }}
+            """)
+            info_layout.addWidget(color_square)
+
+        # Optional info text
         if avg_color_info:
-            # Create horizontal layout for color info
-            color_container = QWidget()
-            color_layout = QHBoxLayout(color_container)
-            color_layout.setContentsMargins(0, 0, 0, 0)
-            color_layout.setSpacing(4)
-
-            # Add color square if we have RGB values (not for temperature)
-            if color_rgb is not None:
-                color_square = QLabel()
-                color_square.setFixedSize(12, 12)
-                color_square.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: rgb({color_rgb[0]}, {color_rgb[1]}, {color_rgb[2]});
-                        border: 1px solid white;
-                    }}
-                """)
-                color_layout.addWidget(color_square)
-
-            # Add text label
             color_label = QLabel(avg_color_info)
             color_label.setAlignment(Qt.AlignCenter)
             color_label.setStyleSheet("""
@@ -261,45 +290,45 @@ class AOIUIComponent:
                     font-size: 10px;
                 }
             """)
-            color_layout.addWidget(color_label)
+            info_layout.addWidget(color_label)
 
-            # Add flag icon if this AOI is flagged
-            if original_index in flagged_set:
-                flag_label = QLabel("🚩")
-                flag_label.setStyleSheet("QLabel { color: red; font-size: 14px; font-weight: bold; }")
-                flag_label.setToolTip("This AOI is flagged")
-                color_layout.addWidget(flag_label)
+        # Stretch between info and action icons
+        info_layout.addStretch()
 
-            # Add document/comment icon (always visible)
-            user_comment = area_of_interest.get('user_comment', '')
-            comment_icon = QLabel("📝")
-            comment_icon.setCursor(Qt.PointingHandCursor)
+        # Flag icon (always visible)
+        is_flagged = original_index in flagged_set
+        flag_color = '#FF7043' if is_flagged else '#808080'
+        flag_icon = qta.icon('fa6s.flag', color=flag_color)
+        flag_label = QLabel()
+        flag_label.setCursor(Qt.PointingHandCursor)
+        flag_label.setToolTip("Unflag AOI" if is_flagged else "Flag AOI")
+        flag_label.setPixmap(flag_icon.pixmap(16, 16))
 
-            # Style based on whether comment exists
-            if user_comment:
-                comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
-                # Show full comment in tooltip
-                comment_icon.setToolTip(f"Comment:\n{user_comment}\n\nClick to edit comment")
-            else:
-                comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
-                comment_icon.setToolTip("No comment yet.\nClick to add a comment for this AOI.\n\nUse comments to note important details, observations,\nor actions needed for this detection.")
+        def make_flag_click_handler(aoi_idx):
+            return lambda event: self.aoi_controller.toggle_aoi_flag_by_index(aoi_idx)
 
-            # Make icon clickable - use lambda with default parameter to capture current AOI index
-            def make_comment_click_handler(aoi_idx):
-                return lambda event: self.aoi_controller.edit_aoi_comment(aoi_idx)
+        flag_label.mousePressEvent = make_flag_click_handler(original_index)
+        info_layout.addWidget(flag_label)
 
-            comment_icon.mousePressEvent = make_comment_click_handler(original_index)
-            color_layout.addWidget(comment_icon)
+        # Comment icon (always visible)
+        user_comment = area_of_interest.get('user_comment', '')
+        comment_icon = QLabel("📝")
+        comment_icon.setCursor(Qt.PointingHandCursor)
+        if user_comment:
+            comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
+            comment_icon.setToolTip(f"Comment:\n{user_comment}\n\nClick to edit comment")
+        else:
+            comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
+            comment_icon.setToolTip("No comment yet.\nClick to add a comment for this AOI.\n\nUse comments to note important details, observations,\nor actions needed for this detection.")
 
-            # Center the layout
-            color_layout.addStretch()
-            color_layout.insertStretch(0)
+        def make_comment_click_handler(aoi_idx):
+            return lambda event: self.aoi_controller.edit_aoi_comment(aoi_idx)
 
-            info_layout.addWidget(color_container)
+        comment_icon.mousePressEvent = make_comment_click_handler(original_index)
+        info_layout.addWidget(comment_icon)
 
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-        # Use default parameters to properly capture the current values
         info_widget.customContextMenuRequested.connect(
             lambda pos, c=area_of_interest['center'], a=area_of_interest.get('area', 0), info=avg_color_info, idx=original_index: self.aoi_controller.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
         )
@@ -332,20 +361,14 @@ class AOIUIComponent:
         if selected:
             # Get the current settings color for the selection (typically magenta/pink)
             color = self.aoi_controller.parent.settings.get('identifier_color', [255, 255, 0])
-            # Just change the background color, no border
-            container.setStyleSheet(f"""
-                QWidget {{
-                    background-color: rgba({color[0]}, {color[1]}, {color[2]}, 40);
-                    border-radius: 5px;
-                }}
-            """)
+            container.setStyleSheet(
+                f"#AOIItemContainer {{ border: 1px solid #666; border-radius: 5px; background-color: rgba({color[0]}, {color[1]}, {color[2]}, 40); }}"
+            )
         else:
-            # Explicitly set background to transparent to clear previous selection
-            container.setStyleSheet("""
-                QWidget {
-                    background-color: transparent;
-                }
-            """)
+            # Transparent background but keep the border
+            container.setStyleSheet(
+                "#AOIItemContainer { border: 1px solid #666; border-radius: 5px; background-color: transparent; }"
+            )
             container.repaint()
 
     def scroll_to_aoi(self, visible_index):

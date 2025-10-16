@@ -385,6 +385,17 @@ class AOIController:
         """Toggle the flag status of the currently selected AOI."""
         if self.selected_aoi_index < 0:
             return
+        # Delegate to index-based toggle (suppresses comment dialog)
+        self.toggle_aoi_flag_by_index(self.selected_aoi_index)
+
+    def toggle_aoi_flag_by_index(self, aoi_index):
+        """Toggle the flag status of the specified AOI without launching dialogs.
+
+        Args:
+            aoi_index (int): Index of the AOI to toggle
+        """
+        if aoi_index is None or aoi_index < 0:
+            return
 
         # Get or create flagged set for current image
         if self.parent.current_image not in self.flagged_aois:
@@ -393,31 +404,14 @@ class AOIController:
         flagged_set = self.flagged_aois[self.parent.current_image]
 
         # Toggle flag status
-        is_now_flagged = self.selected_aoi_index not in flagged_set
+        is_now_flagged = aoi_index not in flagged_set
         if is_now_flagged:
-            flagged_set.add(self.selected_aoi_index)
+            flagged_set.add(aoi_index)
         else:
-            flagged_set.remove(self.selected_aoi_index)
+            flagged_set.remove(aoi_index)
 
         # Save to XML
-        self.save_flagged_aoi_to_xml(self.parent.current_image, self.selected_aoi_index, is_now_flagged)
-
-        # If AOI was just flagged, open comment dialog
-        if is_now_flagged:
-            image = self.parent.images[self.parent.current_image]
-            aoi = image['areas_of_interest'][self.selected_aoi_index]
-            current_comment = aoi.get('user_comment', '')
-
-            from core.views.viewer.dialogs.AOICommentDialog import AOICommentDialog
-            dialog = AOICommentDialog(self.parent, current_comment)
-
-            if dialog.exec():
-                # User clicked OK - save the comment
-                new_comment = dialog.get_comment()
-                self.save_aoi_comment_to_xml(self.parent.current_image, self.selected_aoi_index, new_comment)
-
-        # Remember selected AOI index
-        selected_idx = self.selected_aoi_index
+        self.save_flagged_aoi_to_xml(self.parent.current_image, aoi_index, is_now_flagged)
 
         # Refresh the AOI display to show/hide flag icon (UI component handles this)
         if self.ui_component:
