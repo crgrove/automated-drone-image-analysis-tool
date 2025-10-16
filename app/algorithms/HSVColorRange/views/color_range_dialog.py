@@ -87,10 +87,6 @@ class ColorRangeDialog(QDialog):
         self.color_picker = HSVRangePickerWidget()
         picker_layout.addWidget(self.color_picker)
 
-        # Add custom colors section
-        custom_colors_widget = self.create_custom_colors_widget()
-        picker_layout.addWidget(custom_colors_widget)
-
         content_layout.addWidget(picker_group)
 
         # Right side - Preview (if image provided)
@@ -115,6 +111,11 @@ class ColorRangeDialog(QDialog):
         self.original_label.setStyleSheet("QLabel { background-color: black; border: 1px solid gray; }")
         self.original_label.setMinimumSize(300, 225)
         self.original_label.setScaledContents(True)
+        self.original_label.setToolTip(
+            "Original image preview.\n"
+            "Shows the unmodified input image for reference.\n"
+            "Use this to compare with the filtered result below."
+        )
 
         # Processed image
         self.processed_label = QLabel("Filtered Result")
@@ -122,9 +123,21 @@ class ColorRangeDialog(QDialog):
         self.processed_label.setStyleSheet("QLabel { background-color: black; border: 1px solid gray; }")
         self.processed_label.setMinimumSize(300, 225)
         self.processed_label.setScaledContents(True)
+        self.processed_label.setToolTip(
+            "Filtered result preview.\n"
+            "Shows pixels that match your current HSV color range settings.\n"
+            "Updates in real-time as you adjust the color and range values.\n"
+            "Matching pixels are shown, non-matching pixels appear black."
+        )
 
         # Show mask option
         self.show_mask_cb = QCheckBox("Show mask only")
+        self.show_mask_cb.setToolTip(
+            "Toggle between masked color result and grayscale mask.\n"
+            "• Unchecked (default): Shows the original image with matching colors visible\n"
+            "• Checked: Shows a black and white mask where white = matching pixels\n"
+            "Use the mask view to clearly see which pixels are being detected."
+        )
         self.show_mask_cb.toggled.connect(self.on_preview_option_changed)
 
         preview_layout.addWidget(QLabel("Original:"))
@@ -147,6 +160,11 @@ class ColorRangeDialog(QDialog):
         # Test button (if image available)
         if self.original_image is not None:
             self.test_button = QPushButton("Test on Image")
+            self.test_button.setToolTip(
+                "Test current HSV range settings on the loaded image.\n"
+                "Manually triggers a preview update to see detection results.\n"
+                "Preview updates automatically as you adjust settings."
+            )
             self.test_button.clicked.connect(self.update_preview)
             button_layout.addWidget(self.test_button)
 
@@ -154,9 +172,18 @@ class ColorRangeDialog(QDialog):
 
         # Standard dialog buttons
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setToolTip(
+            "Cancel color selection.\n"
+            "Discards all changes and closes the dialog without applying the color range."
+        )
         self.cancel_button.clicked.connect(self.reject)
 
         self.ok_button = QPushButton("OK")
+        self.ok_button.setToolTip(
+            "Apply color selection.\n"
+            "Saves the current HSV color range settings and closes the dialog.\n"
+            "The selected color range will be used for image analysis."
+        )
         self.ok_button.clicked.connect(self.accept)
         self.ok_button.setDefault(True)
 

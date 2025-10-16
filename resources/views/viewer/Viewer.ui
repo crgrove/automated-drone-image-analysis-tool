@@ -146,6 +146,12 @@ QToolButton:pressed {
           </item>
           <item>
            <widget class="QCheckBox" name="showOverlayCheckBox">
+            <property name="toolTip">
+             <string>Toggle the detection overlay on the image.
+When enabled, shows processed image with detected objects highlighted.
+When disabled, shows the original unprocessed image.
+Use to compare original image with detection results.</string>
+            </property>
             <property name="text">
              <string>Show Overlay</string>
             </property>
@@ -478,6 +484,12 @@ QToolButton:pressed {
               <pointsize>14</pointsize>
              </font>
             </property>
+            <property name="toolTip">
+             <string>Skip hidden images when navigating.
+When enabled, Previous/Next buttons will skip over images marked as hidden.
+Use to focus on images that haven't been reviewed or marked for exclusion.
+Keyboard shortcut: H to hide/unhide current image</string>
+            </property>
             <property name="text">
              <string>Skip Hidden</string>
             </property>
@@ -641,6 +653,15 @@ QToolButton:pressed {
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Sort Areas of Interest (AOIs) in the list.
+Choose how to order the detected objects:
+• Pixel Area: Sort by size (largest to smallest)
+• Distance: Sort by distance from image center or reference point
+• Color: Group by similar colors
+• Detection Order: Original order from analysis
+Sorting helps prioritize review of larger or closer objects.</string>
+           </property>
            <property name="currentText">
             <string/>
            </property>
@@ -677,6 +698,13 @@ QToolButton:pressed {
       </property>
       <item>
        <widget class="QCheckBox" name="hideImageCheckbox">
+        <property name="toolTip">
+         <string>Mark current image as hidden.
+Hidden images can be excluded from reports, exports, and navigation.
+Use to remove images with false positives or no relevant detections.
+When "Skip Hidden" is enabled, hidden images are skipped during navigation.
+Keyboard shortcut: H</string>
+        </property>
         <property name="text">
          <string>Hide Image</string>
         </property>
@@ -691,6 +719,11 @@ QToolButton:pressed {
         </property>
         <property name="frameShadow">
          <enum>QFrame::Plain</enum>
+        </property>
+        <property name="toolTip">
+         <string>Displays the name of the currently hidden image.
+When an image is marked as hidden, its filename appears here.
+Hidden images are excluded from navigation when "Skip Hidden" is enabled.</string>
         </property>
         <property name="text">
          <string>Hide Image</string>
@@ -720,6 +753,11 @@ QToolButton:pressed {
           <pointsize>10</pointsize>
          </font>
         </property>
+        <property name="toolTip">
+         <string>Jump directly to a specific image number.
+Enter an image number and press Enter to navigate instantly.
+Useful for reviewing specific images or returning to a noted location.</string>
+        </property>
         <property name="text">
          <string>Jump To:</string>
         </property>
@@ -744,6 +782,11 @@ QToolButton:pressed {
           <width>50</width>
           <height>16777215</height>
          </size>
+        </property>
+        <property name="toolTip">
+         <string>Enter an image number (1 to total) and press Enter.
+Quickly navigate to any image in the analysis results.
+Example: Type "25" and press Enter to jump to image #25</string>
         </property>
        </widget>
       </item>

@@ -33,6 +33,11 @@
           <pointsize>16</pointsize>
          </font>
         </property>
+        <property name="toolTip">
+         <string>Selected images for viewing.
+Shows images that you've chosen to view in the range viewer.
+Click on images below to add or remove them from this section.</string>
+        </property>
         <property name="text">
          <string>Selected</string>
         </property>
@@ -66,6 +71,11 @@
          <font>
           <pointsize>16</pointsize>
          </font>
+        </property>
+        <property name="toolTip">
+         <string>Available images for viewing.
+Shows all images from the input folder that are available to select.
+Click on images to move them to the Selected section above.</string>
         </property>
         <property name="text">
          <string>Unselected</string>

@@ -83,7 +83,17 @@ class Ui_ColorRangeViewer(object):
 
     def retranslateUi(self, ColorRangeViewer):
         ColorRangeViewer.setWindowTitle(QCoreApplication.translate("ColorRangeViewer", u"Color Range Viewer", None))
+#if QT_CONFIG(tooltip)
+        self.selectedLabel.setToolTip(QCoreApplication.translate("ColorRangeViewer", u"Selected images for viewing.\n"
+"Shows images that you've chosen to view in the range viewer.\n"
+"Click on images below to add or remove them from this section.", None))
+#endif // QT_CONFIG(tooltip)
         self.selectedLabel.setText(QCoreApplication.translate("ColorRangeViewer", u"Selected", None))
+#if QT_CONFIG(tooltip)
+        self.label.setToolTip(QCoreApplication.translate("ColorRangeViewer", u"Available images for viewing.\n"
+"Shows all images from the input folder that are available to select.\n"
+"Click on images to move them to the Selected section above.", None))
+#endif // QT_CONFIG(tooltip)
         self.label.setText(QCoreApplication.translate("ColorRangeViewer", u"Unselected", None))
     # retranslateUi
 

@@ -44,6 +44,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Select the application theme appearance.
+Changes the overall color scheme and visual style.</string>
+           </property>
            <property name="text">
             <string>Theme:</string>
            </property>
@@ -55,6 +59,12 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Choose the application theme:
+• Light: Bright theme with light backgrounds and dark text
+• Dark: Dark theme with dark backgrounds and light text
+Changes apply immediately to all windows.</string>
            </property>
            <item>
             <property name="text">
@@ -93,6 +103,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Warning threshold for total AOIs detected across all images.
+Prompts user when this limit is reached during processing.</string>
+           </property>
            <property name="text">
             <string>Max Areas of Interest: </string>
            </property>
@@ -104,6 +118,16 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Set the warning threshold for total AOIs detected during processing.
+• Range: 0 to 1000
+• Default: 100
+When this number of AOIs is detected across all images:
+• UI displays a warning message
+• User can cancel processing, adjust settings, and rerun
+• If no action taken, detection continues automatically
+Use lower values to catch high detection counts early.</string>
            </property>
            <property name="maximum">
             <number>1000</number>
@@ -126,6 +150,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Radius for combining neighboring AOIs into single detections.
+AOIs within this distance are merged together.</string>
+           </property>
            <property name="text">
             <string>Area of Interest Circle Radius(px):</string>
            </property>
@@ -137,6 +165,17 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Set the radius for combining nearby AOIs during detection.
+• Range: 0 to 100 pixels
+• Default: 25 pixels
+When AOIs are within this radius of each other:
+• They are combined into a single AOI
+• Process repeats until no neighbors remain within radius
+• Larger values: Combines more distant detections (fewer total AOIs)
+• Smaller values: Keeps detections separate (more individual AOIs)
+Use to consolidate clustered detections into single objects.</string>
            </property>
            <property name="maximum">
             <number>100</number>
@@ -159,6 +198,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Format for displaying geographic coordinates throughout the application.
+Affects how GPS locations are shown in the viewer and exports.</string>
+           </property>
            <property name="text">
             <string>Coordinate System:</string>
            </property>
@@ -170,6 +213,13 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the geographic coordinate display format:
+• Lat/Long - Decimal Degrees: 34.123456, -118.987654 (most common, easy to use)
+• Lat/Long - Degrees, Minutes, Seconds: 34° 7' 24.4416" N, 118° 59' 15.5424" W (traditional navigation)
+• UTM: Universal Transverse Mercator grid system with zone, easting, northing (military, surveying)
+This setting affects coordinate display in the viewer, exports, and overlays.</string>
            </property>
            <item>
             <property name="text">
@@ -201,6 +251,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Unit for displaying temperature measurements from thermal imagery.
+Used when analyzing thermal images from thermal cameras.</string>
+           </property>
            <property name="text">
             <string>Temperature Unit:</string>
            </property>
@@ -212,6 +266,14 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the temperature unit for thermal image analysis:
+• Fahrenheit (°F): Imperial temperature scale (US standard)
+  - Water freezes at 32°F, boils at 212°F
+• Celsius (°C): Metric temperature scale (international standard)
+  - Water freezes at 0°C, boils at 100°C
+Applies to thermal camera data display and analysis results.</string>
            </property>
            <item>
             <property name="text">
@@ -238,6 +300,10 @@
              <pointsize>10</pointsize>
             </font>
            </property>
+           <property name="toolTip">
+            <string>Unit for displaying distance and altitude measurements.
+Used for drone altitude, object distances, and spatial calculations.</string>
+           </property>
            <property name="text">
             <string>Distance Unit:</string>
            </property>
@@ -249,6 +315,16 @@
             <font>
              <pointsize>10</pointsize>
             </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the distance unit for measurements:
+• Meters (m): Metric distance unit (international standard)
+  - 1 meter = 3.281 feet
+  - Used for altitude, GSD, and distance calculations
+• Feet (ft): Imperial distance unit (US standard)
+  - 1 foot = 0.3048 meters
+  - Common in US aviation and surveying
+Applies to altitude displays, GSD calculations, and distance measurements.</string>
            </property>
            <item>
             <property name="text">
@@ -286,6 +362,10 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Version of the current drone sensor configuration file.
+Contains camera specifications, sensor dimensions, and focal length data for different drone models.</string>
+          </property>
           <property name="text">
            <string>Drone Sensor File Version:</string>
           </property>
@@ -310,6 +390,10 @@
            <font>
             <pointsize>10</pointsize>
            </font>
+          </property>
+          <property name="toolTip">
+           <string>Currently loaded drone sensor file version number.
+The sensor file defines camera parameters for accurate GSD and AOI calculations.</string>
           </property>
           <property name="text">
            <string>TextLabel</string>
@@ -339,6 +423,16 @@
             <pointsize>10</pointsize>
            </font>
           </property>
+          <property name="toolTip">
+           <string>Replace the current drone sensor configuration file.
+Allows updating to a newer version or custom sensor specifications.
+Required file format: JSON with drone models, sensors, focal lengths, and dimensions.
+Use this when:
+• New drone models are available
+• Sensor specifications need updating
+• Custom camera configurations are needed
+Backup existing file before replacing.</string>
+          </property>
           <property name="text">
            <string>Replace</string>
           </property>
@@ -358,6 +452,10 @@
       <font>
        <pointsize>10</pointsize>
       </font>
+     </property>
+     <property name="toolTip">
+      <string>Close the Preferences window.
+All changes are saved automatically when modified.</string>
      </property>
      <property name="orientation">
       <enum>Qt::Orientation::Horizontal</enum>

@@ -130,12 +130,42 @@ class Ui_ThermalAnomaly(object):
 
     def retranslateUi(self, ThermalAnomaly):
         ThermalAnomaly.setWindowTitle(QCoreApplication.translate("ThermalAnomaly", u"Form", None))
+#if QT_CONFIG(tooltip)
+        self.typeLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Type of thermal anomaly to detect in thermal imagery.\n"
+"Determines whether to find hot spots, cold spots, or both.", None))
+#endif // QT_CONFIG(tooltip)
         self.typeLabel.setText(QCoreApplication.translate("ThermalAnomaly", u"Anomaly Type:", None))
         self.anomalyTypeComboBox.setItemText(0, QCoreApplication.translate("ThermalAnomaly", u"Above or Below Mean", None))
         self.anomalyTypeComboBox.setItemText(1, QCoreApplication.translate("ThermalAnomaly", u"Above Mean", None))
         self.anomalyTypeComboBox.setItemText(2, QCoreApplication.translate("ThermalAnomaly", u"Below Mean", None))
 
+#if QT_CONFIG(tooltip)
+        self.anomalyTypeComboBox.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Select the type of thermal anomaly to detect:\n"
+"\u2022 Above or Below Mean: Detects both hot and cold anomalies (default)\n"
+"\u2022 Above Mean: Only detects hot spots (temperatures above average)\n"
+"\u2022 Below Mean: Only detects cold spots (temperatures below average)\n"
+"The algorithm compares each pixel's temperature to the mean temperature of its segment.\n"
+"Use \"Above Mean\" for finding heat sources, \"Below Mean\" for cold objects.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.thersholdLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Temperature threshold for detecting thermal anomalies.\n"
+"Measured in standard deviations from the mean temperature.", None))
+#endif // QT_CONFIG(tooltip)
         self.thersholdLabel.setText(QCoreApplication.translate("ThermalAnomaly", u"Anomaly Threshold:", None))
+#if QT_CONFIG(tooltip)
+        self.anomalySpinBox.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Set the anomaly detection threshold in standard deviations.\n"
+"\u2022 Range: 0 to 7 standard deviations\n"
+"\u2022 Default: 4\n"
+"Defines how different a temperature must be from the mean to be detected:\n"
+"\u2022 Lower values (1-2): Very sensitive, detects subtle temperature differences (more detections)\n"
+"\u2022 Medium values (3-5): Balanced detection (recommended for most cases)\n"
+"\u2022 Higher values (6-7): Only detects extreme temperature differences (fewer detections)\n"
+"Example: Value of 4 detects pixels 4 standard deviations above/below mean temperature.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.colorMapLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Color palette for visualizing thermal imagery.\n"
+"Converts temperature data to colors for easier interpretation.", None))
+#endif // QT_CONFIG(tooltip)
         self.colorMapLabel.setText(QCoreApplication.translate("ThermalAnomaly", u"Color Map: ", None))
         self.colorMapComboBox.setItemText(0, QCoreApplication.translate("ThermalAnomaly", u"White Hot", None))
         self.colorMapComboBox.setItemText(1, QCoreApplication.translate("ThermalAnomaly", u"Black Hot", None))
@@ -143,6 +173,25 @@ class Ui_ThermalAnomaly(object):
         self.colorMapComboBox.setItemText(3, QCoreApplication.translate("ThermalAnomaly", u"Hot (Fulgurite)", None))
         self.colorMapComboBox.setItemText(4, QCoreApplication.translate("ThermalAnomaly", u"Jet (Rainbow2)", None))
 
+#if QT_CONFIG(tooltip)
+        self.colorMapComboBox.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Select the color palette for thermal image visualization:\n"
+"\u2022 White Hot: Hot areas appear white, cold areas appear black (traditional)\n"
+"\u2022 Black Hot: Hot areas appear black, cold areas appear white (inverted)\n"
+"\u2022 Inferno (Iron Red): Red/yellow for hot, dark for cold (high contrast)\n"
+"\u2022 Hot (Fulgurite): Yellow/red gradient (vivid colors)\n"
+"\u2022 Jet (Rainbow2): Rainbow colors from blue (cold) to red (hot)\n"
+"The color map only affects visualization, not detection results.\n"
+"Choose based on image content and personal preference for best visibility.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.segmentsLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Number of segments to divide each thermal image into for analysis.\n"
+"Each segment is analyzed independently for local thermal anomalies.\n"
+"Performance impact:\n"
+"\u2022 Higher number of segments: INCREASES processing time (more segments to analyze)\n"
+"\u2022 Lower number of segments: DECREASES processing time (fewer segments to analyze)\n"
+"\u2022 1 segment: Fastest processing (analyzes whole image once)\n"
+"Higher segment counts improve detection in scenes with temperature gradients.", None))
+#endif // QT_CONFIG(tooltip)
         self.segmentsLabel.setText(QCoreApplication.translate("ThermalAnomaly", u"Image Segments:", None))
         self.segmentsComboBox.setItemText(0, QCoreApplication.translate("ThermalAnomaly", u"1", None))
         self.segmentsComboBox.setItemText(1, QCoreApplication.translate("ThermalAnomaly", u"2", None))
@@ -153,5 +202,15 @@ class Ui_ThermalAnomaly(object):
         self.segmentsComboBox.setItemText(6, QCoreApplication.translate("ThermalAnomaly", u"25", None))
         self.segmentsComboBox.setItemText(7, QCoreApplication.translate("ThermalAnomaly", u"36", None))
 
+#if QT_CONFIG(tooltip)
+        self.segmentsComboBox.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Select the number of segments to divide each thermal image into.\n"
+"\u2022 Options: 1, 2, 4, 6, 9, 16, 25, 36 segments\n"
+"\u2022 Default: 1 (analyze entire image as one segment)\n"
+"The algorithm calculates mean temperature for each segment independently:\n"
+"\u2022 1 segment: Global temperature analysis (best for uniform scenes)\n"
+"\u2022 More segments: Local temperature analysis (better for varying backgrounds)\n"
+"Higher segment counts improve detection in scenes with temperature gradients.\n"
+"Recommended: 4-9 segments for typical thermal drone imagery.", None))
+#endif // QT_CONFIG(tooltip)
     # retranslateUi
 

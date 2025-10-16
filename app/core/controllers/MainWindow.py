@@ -6,8 +6,8 @@ from core.views.components.GroupedComboBox import GroupedComboBox
 import pathlib
 import platform
 import qtawesome as qta
-from PySide6.QtGui import QColor, QFont, QIcon
-from PySide6.QtCore import QThread, Slot, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
+from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
 from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
                                QMessageBox, QSizePolicy, QAbstractButton)
 from core.views.MainWindow_ui import Ui_MainWindow
@@ -55,6 +55,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.theme = theme
 
         self.setupUi(self)
+
+        # Set custom tooltip styling - light blue background with black text
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
         self.__threads = []
         self.images = None
         self.algorithmWidget = None
@@ -93,6 +105,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.integrated_viewer = None
         if hasattr(self, 'actionIntegratedDetection'):
             self.actionIntegratedDetection.triggered.connect(self._open_integrated_detection)
+
+        # Add Help menu items
+        if hasattr(self, 'actionHelp'):
+            self.actionHelp.triggered.connect(self._open_help)
+        if hasattr(self, 'actionCommunityHelp'):
+            self.actionCommunityHelp.triggered.connect(self._open_community_help)
 
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
@@ -144,6 +162,44 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         font = QFont()
         font.setPointSize(10)
         self.algorithmComboBox.setFont(font)
+
+        # Set comprehensive tooltip for algorithm selection
+        self.algorithmComboBox.setToolTip(
+            "Select the detection algorithm for your image analysis task:\n"
+            "\n"
+            "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
+            "  • Best for: Colored objects in varying lighting conditions\n"
+            "  • Limitation: Requires color tuning, not for camouflaged objects\n"
+            "\n"
+            "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
+            "  • Best for: Basic color detection in controlled lighting\n"
+            "  • Limitation: Sensitive to lighting changes\n"
+            "\n"
+            "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
+            "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
+            "  • Limitation: May detect natural anomalies, slower with more segments\n"
+            "\n"
+            "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
+            "  • Best for: Night searches, detecting people/animals by body heat\n"
+            "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
+            "\n"
+            "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
+            "  • Best for: Human detection with thermal camera (known body temp)\n"
+            "  • Limitation: Requires thermal camera, must know target temperature\n"
+            "\n"
+            "MATCHED FILTER: Matches targets using color signature from sample\n"
+            "  • Best for: Specific known objects when you have a target sample\n"
+            "  • Limitation: Requires reference image, not for unknown targets\n"
+            "\n"
+            "MR MAP: Multi-resolution detection for objects of varying sizes\n"
+            "  • Best for: Complex scenes with unknown target sizes\n"
+            "  • Limitation: Slower processing, more false positives\n"
+            "\n"
+            "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
+            "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
+            "  • Limitation: Only detects people, slower processing"
+        )
+
         self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
 
     def _identifierButton_clicked(self):
@@ -558,6 +614,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.logger.error(f"Error opening Integrated Detection viewer: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Integrated Detection viewer:\n{str(e)}")
+
+    def _open_help(self):
+        """
+        Opens the Help documentation URL in the default browser.
+        """
+        try:
+            url = QUrl("https://www.texsar.org/automated-drone-image-analysis-tool/")
+            QDesktopServices.openUrl(url)
+            self.logger.info("Help documentation opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Help URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+
+    def _open_community_help(self):
+        """
+        Opens the Community Help Discord URL in the default browser.
+        """
+        try:
+            url = QUrl("https://discord.gg/UWxu9Dk8")
+            QDesktopServices.openUrl(url)
+            self.logger.info("Community Help Discord opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Community Help URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
 
     def closeEvent(self, event):
         """
