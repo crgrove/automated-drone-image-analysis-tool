@@ -437,6 +437,7 @@ class IntegratedDetectionConfig:
     motion_threshold: int = 25  # Threshold for frame diff
     blur_kernel_size: int = 5  # Gaussian blur kernel (odd number)
     morphology_kernel_size: int = 3  # Morphology kernel (odd number)
+    enable_morphology: bool = True  # Enable morphological filtering (noise reduction)
 
     # Step 3: Persistence filter parameters
     persistence_frames: int = 3  # Total frames in window (M)
@@ -467,6 +468,7 @@ class IntegratedDetectionConfig:
     color_quantization_bits: int = 5  # Bits per channel (5 = 32^3 = 32,768 bins, faster than 6-bit)
     color_rarity_percentile: float = 20.0  # Mark colors below this percentile as rare
     color_min_detection_area: int = 50  # Minimum area for color anomalies
+    color_max_detection_area: int = 50000  # Maximum area for color anomalies
     use_tile_analysis: bool = False  # Analyze per-tile (4x4 grid) for local rarity
 
     # Hue expansion for color detections
@@ -646,9 +648,10 @@ class RealtimeIntegratedDetector(QObject):
         _, binary_mask = cv2.threshold(diff, config.motion_threshold, 255, cv2.THRESH_BINARY)
 
         # Vectorized morphology operations (remove noise)
-        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, morph_kernel)
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, morph_kernel)
+        if config.enable_morphology:
+            morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+            binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, morph_kernel)
+            binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, morph_kernel)
 
         # Find contours (optimized OpenCV operation, no Python loops)
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -722,9 +725,10 @@ class RealtimeIntegratedDetector(QObject):
             _, fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
 
         # Morphology to clean up noise
-        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
+        if config.enable_morphology:
+            morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
+            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
 
         # Find contours
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -789,9 +793,10 @@ class RealtimeIntegratedDetector(QObject):
             _, fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
 
         # Morphology to clean up noise
-        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
+        if config.enable_morphology:
+            morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
+            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
 
         # Find contours
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1020,9 +1025,10 @@ class RealtimeIntegratedDetector(QObject):
         rare_mask = cv2.resize(rare_mask_small, (w_orig, h_orig), interpolation=cv2.INTER_NEAREST)
 
         # Morphology to clean up noise (on full-size mask for better accuracy)
-        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
-        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_OPEN, morph_kernel)
-        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_CLOSE, morph_kernel)
+        if config.enable_morphology:
+            morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+            rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_OPEN, morph_kernel)
+            rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_CLOSE, morph_kernel)
 
         # Step 5: Extract contours (at full processing resolution)
         contours, _ = cv2.findContours(rare_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1036,7 +1042,7 @@ class RealtimeIntegratedDetector(QObject):
             area = cv2.contourArea(contour)
 
             # Filter by area
-            if area < config.color_min_detection_area or area > config.max_detection_area:
+            if area < config.color_min_detection_area or area > config.color_max_detection_area:
                 continue
 
             x, y, w_box, h_box = cv2.boundingRect(contour)
@@ -1102,7 +1108,7 @@ class RealtimeIntegratedDetector(QObject):
                 expanded = self._expand_detection_by_hue(frame_hsv, detection, config.hue_expansion_range)
 
                 # Re-check area filter after expansion
-                if expanded.area >= config.color_min_detection_area and expanded.area <= config.max_detection_area:
+                if expanded.area >= config.color_min_detection_area and expanded.area <= config.color_max_detection_area:
                     expanded_detections.append(expanded)
 
             detections = expanded_detections

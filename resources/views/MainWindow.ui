@@ -1165,19 +1165,20 @@ Ideal for live drone feeds and real-time monitoring applications.</string>
   </action>
   <action name="actionIntegratedDetection">
    <property name="text">
-    <string>Real-Time Integrated Detection</string>
+    <string>Real-Time Anomaly Detection</string>
    </property>
    <property name="toolTip">
-    <string>Open the Real-Time Integrated Detection window for advanced live analysis.
-Combines multiple detection algorithms for comprehensive real-time analysis.
+    <string>Open the Real-Time Anomaly Detection window for advanced live analysis.
+Combines multiple detection algorithms for comprehensive real-time anomaly detection.
 Features:
-• Multiple detection algorithms running simultaneously
+• Motion detection with background subtraction
+• Color quantization anomaly detection
 • Advanced streaming video processing
-• Integrated detection result fusion
+• Detection fusion and temporal filtering
 • Real-time performance optimization
 • Multi-threaded processing for better performance
 • Enhanced detection accuracy through algorithm combination
-Designed for complex real-time detection scenarios requiring multiple analysis methods.</string>
+Designed for detecting unusual objects, movement, and colors in real-time video streams.</string>
    </property>
    <property name="font">
     <font>
