@@ -1378,11 +1378,11 @@ class HSVControlWidget(QWidget):
         perf_group.setToolTip("Configure performance optimizations")
         perf_layout = QVBoxLayout(perf_group)
 
-        self.threaded_capture_checkbox = QCheckBox("Use Threaded Capture (30-200% FPS boost)")
+        self.threaded_capture_checkbox = QCheckBox("Use Threaded Capture")
         self.threaded_capture_checkbox.setChecked(False)
         self.threaded_capture_checkbox.setToolTip("Enables background video decoding in a separate thread.\n"
                                                    "Allows processing to happen in parallel with video capture.\n"
-                                                   "Provides 30-200% FPS boost especially for high-resolution videos (2K/4K).\n"
+                                                   "Improves performance especially for high-resolution videos (2K/4K).\n"
                                                    "Highly recommended for all video sources. No downsides.")
         perf_layout.addWidget(self.threaded_capture_checkbox)
 

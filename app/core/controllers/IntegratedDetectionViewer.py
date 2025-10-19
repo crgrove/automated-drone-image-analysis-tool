@@ -618,24 +618,30 @@ class IntegratedDetectionControlWidget(QWidget):
         preset_layout.addWidget(QLabel("Preset:"))
         self.resolution_preset = QComboBox()
 
-        # Common 16:9 resolutions
+        # Common 16:9 resolutions (matching Real-Time Color Detection)
         self.resolution_presets = {
-            "360p (640x360)": (640, 360),
-            "480p (854x480)": (854, 480),
-            "540p (960x540)": (960, 540),
-            "720p (1280x720)": (1280, 720),
-            "900p (1600x900)": (1600, 900),
-            "1080p (1920x1080)": (1920, 1080),
-            "1440p (2560x1440)": (2560, 1440),
-            "Custom": None
+            "Original": None,  # Use video's native resolution
+            "426x240": (426, 240),
+            "640x360": (640, 360),
+            "960x540": (960, 540),
+            "1280x720": (1280, 720),
+            "1600x900": (1600, 900),
+            "1920x1080": (1920, 1080),
+            "2560x1440": (2560, 1440),
+            "3200x1800": (3200, 1800),
+            "3840x2160": (3840, 2160),
+            "5120x2880": (5120, 2880),
+            "7680x4320": (7680, 4320),
+            "Custom": "custom"  # Special marker for custom resolution
         }
 
         for preset in self.resolution_presets.keys():
             self.resolution_preset.addItem(preset)
 
-        self.resolution_preset.setCurrentText("720p (1280x720)")
+        self.resolution_preset.setCurrentText("1280x720")
         self.resolution_preset.setToolTip("Select a preset resolution for processing. Lower resolutions are faster but less detailed.\n"
-                                         "720p provides excellent balance between speed and detection accuracy.\n"
+                                         "'Original' uses the video's native resolution (no downsampling).\n"
+                                         "720p (1280x720) provides excellent balance between speed and detection accuracy.\n"
                                          "Select 'Custom' to manually set width and height.")
         preset_layout.addWidget(self.resolution_preset)
         res_layout.addLayout(preset_layout)
@@ -665,11 +671,11 @@ class IntegratedDetectionControlWidget(QWidget):
         perf_group = QGroupBox("Performance Options")
         perf_layout = QVBoxLayout(perf_group)
 
-        self.threaded_capture = QCheckBox("Use Threaded Capture (30-200% FPS boost)")
+        self.threaded_capture = QCheckBox("Use Threaded Capture")
         self.threaded_capture.setChecked(True)  # Default ON
         self.threaded_capture.setToolTip("Enables background video decoding in a separate thread.\n"
                                         "Allows processing to happen in parallel with video capture.\n"
-                                        "Provides 30-200% FPS boost especially for high-resolution videos (2K/4K).\n"
+                                        "Improves performance especially for high-resolution videos (2K/4K).\n"
                                         "Highly recommended for all video sources. No downsides.")
         perf_layout.addWidget(self.threaded_capture)
 
@@ -680,6 +686,14 @@ class IntegratedDetectionControlWidget(QWidget):
                                                  "Example: Processing at 720p but video is 4K - renders at 720p then upscales.\n"
                                                  "Recommended: ON for high-res videos, OFF for native 720p or lower.")
         perf_layout.addWidget(self.render_at_processing_res)
+
+        self.enable_morphology = QCheckBox("Enable Morphological Filtering")
+        self.enable_morphology.setChecked(True)  # Default ON (current behavior)
+        self.enable_morphology.setToolTip("Applies morphological operations (opening/closing) to reduce noise in detection masks.\n"
+                                          "Removes small noise artifacts and fills small holes in detections.\n"
+                                          "Provides ~5-10% speed boost when disabled, but increases false positives.\n"
+                                          "Recommended: ON for most use cases (default), OFF only for very clean video.")
+        perf_layout.addWidget(self.enable_morphology)
 
         layout.addWidget(perf_group)
         layout.addStretch()
@@ -939,6 +953,17 @@ class IntegratedDetectionControlWidget(QWidget):
                                                  "Higher values = only larger colored regions, less noise.\n"
                                                  "Recommended: 15 for person detection, 50 for vehicles.")
         quant_layout.addWidget(self.color_min_detection_area, 2, 1)
+
+        quant_layout.addWidget(QLabel("Max Area (px):"), 3, 0)
+        self.color_max_detection_area = QSpinBox()
+        self.color_max_detection_area.setRange(100, 1000000)
+        self.color_max_detection_area.setValue(50000)
+        self.color_max_detection_area.setToolTip("Maximum detection area for color anomalies in pixels (100-1000000).\n"
+                                                 "Filters out very large color patches (false positives, large objects).\n"
+                                                 "Lower values = only detect smaller colored objects.\n"
+                                                 "Higher values = allow larger colored regions.\n"
+                                                 "Recommended: 50000 for general use, 10000 for small objects only.")
+        quant_layout.addWidget(self.color_max_detection_area, 3, 1)
 
         layout.addWidget(quant_group)
 
@@ -1382,9 +1407,13 @@ class IntegratedDetectionControlWidget(QWidget):
             self.processing_height.setEnabled(False)
 
             resolution = self.resolution_presets.get(preset_name)
-            if resolution:
+            # Handle "Original" (None) and other presets
+            if resolution and resolution != "custom":
                 self.processing_width.setValue(resolution[0])
                 self.processing_height.setValue(resolution[1])
+            elif preset_name == "Original":
+                # "Original" means no downsampling - values don't matter, will be ignored
+                pass
 
         self.emit_config()
 
@@ -1431,9 +1460,19 @@ class IntegratedDetectionControlWidget(QWidget):
                 hue_max = min(179, hue_cv + tolerance_cv)
                 excluded_hue_ranges.append((hue_min, hue_max))
 
+        # Handle "Original" resolution preset (no downsampling)
+        current_preset = self.resolution_preset.currentText()
+        if current_preset == "Original":
+            # Use very large values so no downsampling occurs
+            processing_width = 99999
+            processing_height = 99999
+        else:
+            processing_width = self.processing_width.value()
+            processing_height = self.processing_height.value()
+
         config = {
-            'processing_width': self.processing_width.value(),
-            'processing_height': self.processing_height.value(),
+            'processing_width': processing_width,
+            'processing_height': processing_height,
             'use_threaded_capture': self.threaded_capture.isChecked(),
             'render_at_processing_res': self.render_at_processing_res.isChecked(),
 
@@ -1444,6 +1483,7 @@ class IntegratedDetectionControlWidget(QWidget):
             'max_detection_area': self.max_detection_area.value(),
             'blur_kernel_size': self.blur_kernel_size.value(),
             'morphology_kernel_size': self.morphology_kernel_size.value(),
+            'enable_morphology': self.enable_morphology.isChecked(),
             'persistence_frames': self.persistence_frames.value(),
             'persistence_threshold': self.persistence_threshold.value(),
             'bg_history': self.bg_history.value(),
@@ -1456,6 +1496,7 @@ class IntegratedDetectionControlWidget(QWidget):
             'color_quantization_bits': self.color_quantization_bits.value(),
             'color_rarity_percentile': float(self.color_rarity_percentile.value()),
             'color_min_detection_area': self.color_min_detection_area.value(),
+            'color_max_detection_area': self.color_max_detection_area.value(),
             'enable_hue_expansion': self.enable_hue_expansion.isChecked(),
             'hue_expansion_range': self.hue_expansion_range.value(),
 
@@ -1490,6 +1531,8 @@ class StreamControlWidget(QWidget):
 
     connectRequested = Signal(str, str)
     disconnectRequested = Signal()
+    startRecordingRequested = Signal()
+    stopRecordingRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1566,11 +1609,49 @@ class StreamControlWidget(QWidget):
         performance_layout.addWidget(self.latency_label, 0, 1)
         performance_layout.addWidget(self.detections_label, 1, 0)
 
+        # Recording group
+        recording_group = QGroupBox("Recording")
+        recording_layout = QVBoxLayout(recording_group)
+
+        # Recording buttons
+        recording_button_layout = QHBoxLayout()
+        self.start_recording_btn = QPushButton("Start Recording")
+        self.start_recording_btn.setStyleSheet("QPushButton { background-color: #ff4444; color: white; font-weight: bold; }")
+        self.start_recording_btn.setToolTip("Start recording the video stream with detection overlays.\n"
+                                            "Recordings are saved to the ./recordings directory.\n"
+                                            "File format: MP4 with H.264 codec\n"
+                                            "Note: Connect to stream before recording")
+        self.stop_recording_btn = QPushButton("Stop Recording")
+        self.stop_recording_btn.setEnabled(False)
+        self.stop_recording_btn.setToolTip("Stop the current recording and save to file.\n"
+                                           "The file path will be displayed in the status label.\n"
+                                           "Recording includes all detection annotations and labels")
+
+        recording_button_layout.addWidget(self.start_recording_btn)
+        recording_button_layout.addWidget(self.stop_recording_btn)
+
+        # Recording status
+        self.recording_status = QLabel("Status: Not Recording")
+        self.recording_status.setStyleSheet("QLabel { color: gray; }")
+        self.recording_status.setToolTip("Current recording status and output file path")
+
+        # Recording info
+        self.recording_info = QLabel("Duration: --")
+        self.recording_info.setToolTip("Recording statistics:\n"
+                                       "• Duration: Total recording time in seconds\n"
+                                       "• FPS: Recording frame rate\n"
+                                       "• Frames: Total frames written to file")
+
+        recording_layout.addLayout(recording_button_layout)
+        recording_layout.addWidget(self.recording_status)
+        recording_layout.addWidget(self.recording_info)
+
         # Add to main layout
         layout.addWidget(connection_group)
         layout.addLayout(button_layout)
         layout.addWidget(self.status_label)
         layout.addWidget(performance_group)
+        layout.addWidget(recording_group)
         layout.addStretch()
 
     def connect_signals(self):
@@ -1580,6 +1661,8 @@ class StreamControlWidget(QWidget):
         self.type_combo.currentTextChanged.connect(self.on_stream_type_changed)
         self.browse_button.clicked.connect(self.browse_for_file)
         self.url_input.mousePressEvent = self.on_url_input_clicked
+        self.start_recording_btn.clicked.connect(self.startRecordingRequested.emit)
+        self.stop_recording_btn.clicked.connect(self.stopRecordingRequested.emit)
 
     def on_stream_type_changed(self, stream_type: str):
         """Handle stream type selection changes."""
@@ -1826,7 +1909,7 @@ class IntegratedDetectionViewer(QMainWindow):
 
     def setup_ui(self):
         """Setup the main user interface."""
-        self.setWindowTitle("ADIAT - Real-Time Integrated Detection")
+        self.setWindowTitle("ADIAT - Real-Time Anomaly Detection")
         self.setMinimumSize(1400, 900)
 
         # Set tooltip stylesheet for better readability
@@ -1910,11 +1993,17 @@ class IntegratedDetectionViewer(QMainWindow):
         # UI control signals
         self.stream_controls.connectRequested.connect(self.connect_to_stream)
         self.stream_controls.disconnectRequested.connect(self.disconnect_from_stream)
+        self.stream_controls.startRecordingRequested.connect(self.start_recording)
+        self.stream_controls.stopRecordingRequested.connect(self.stop_recording)
         self.integrated_controls.configChanged.connect(self.update_detection_config)
 
         # Playback control signals
         self.playback_controls.playPauseClicked.connect(self.on_play_pause_clicked)
         self.playback_controls.seekRequested.connect(self.on_seek_requested)
+
+        # Recording manager signals
+        self.recording_manager.recordingStateChanged.connect(self.on_recording_state_changed)
+        self.recording_manager.recordingStats.connect(self.on_recording_stats)
 
     def connect_to_stream(self, url: str, stream_type_str: str):
         """Connect to stream."""
@@ -1962,6 +2051,7 @@ class IntegratedDetectionViewer(QMainWindow):
                 max_detection_area=config_dict['max_detection_area'],
                 blur_kernel_size=config_dict['blur_kernel_size'],
                 morphology_kernel_size=config_dict['morphology_kernel_size'],
+                enable_morphology=config_dict['enable_morphology'],
                 persistence_frames=config_dict['persistence_frames'],
                 persistence_threshold=config_dict['persistence_threshold'],
                 bg_history=config_dict['bg_history'],
@@ -1974,6 +2064,7 @@ class IntegratedDetectionViewer(QMainWindow):
                 color_quantization_bits=config_dict['color_quantization_bits'],
                 color_rarity_percentile=config_dict['color_rarity_percentile'],
                 color_min_detection_area=config_dict['color_min_detection_area'],
+                color_max_detection_area=config_dict['color_max_detection_area'],
                 enable_hue_expansion=config_dict['enable_hue_expansion'],
                 hue_expansion_range=config_dict['hue_expansion_range'],
 
@@ -2029,6 +2120,13 @@ class IntegratedDetectionViewer(QMainWindow):
 
             # Store current frame
             self.current_frame = frame.copy()
+
+            # Update stream resolution
+            try:
+                height, width = frame.shape[:2]
+                self.stream_resolution = (width, height)
+            except Exception as e:
+                self.logger.error(f"Resolution update failed: {e}")
 
             # Process through integrated detector
             detection_start = time.perf_counter()
@@ -2095,6 +2193,13 @@ class IntegratedDetectionViewer(QMainWindow):
 
     def on_frame_processed(self, annotated_frame: np.ndarray, detections: List[Detection], metrics):
         """Handle frame processing completion."""
+        # Add frame to recording if active
+        if self.is_recording:
+            try:
+                self.recording_manager.add_frame(annotated_frame, time.time())
+            except Exception as e:
+                self.logger.error(f"Recording failed: {e}")
+
         # Update info panel
         if detections:
             info_text = f"Detection Results ({len(detections)} found):\n"
@@ -2110,6 +2215,49 @@ class IntegratedDetectionViewer(QMainWindow):
     def on_performance_update(self, stats: Dict[str, Any]):
         """Handle performance statistics updates."""
         self.stream_controls.update_performance(stats)
+
+    def start_recording(self):
+        """Start video recording."""
+        if not self.stream_manager.is_connected():
+            QMessageBox.warning(self, "No Stream", "Please connect to a stream before recording.")
+            return
+
+        success = self.recording_manager.start_recording(
+            self.stream_resolution,
+            f"integrated_detection_{int(time.time())}"
+        )
+
+        if success:
+            self.is_recording = True
+            self.stream_controls.start_recording_btn.setEnabled(False)
+            self.stream_controls.stop_recording_btn.setEnabled(True)
+            self.logger.info("Recording started")
+        else:
+            QMessageBox.critical(self, "Recording Error", "Failed to start recording.")
+
+    def stop_recording(self):
+        """Stop video recording."""
+        self.recording_manager.stop_recording()
+        self.is_recording = False
+        self.stream_controls.start_recording_btn.setEnabled(True)
+        self.stream_controls.stop_recording_btn.setEnabled(False)
+        self.logger.info("Recording stopped")
+
+    def on_recording_state_changed(self, is_recording: bool, path_or_message: str):
+        """Handle recording state changes."""
+        if is_recording:
+            self.stream_controls.recording_status.setText("Status: Recording")
+            self.stream_controls.recording_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+        else:
+            self.stream_controls.recording_status.setText(f"Status: {path_or_message}")
+            self.stream_controls.recording_status.setStyleSheet("QLabel { color: gray; }")
+
+    def on_recording_stats(self, stats: Dict[str, Any]):
+        """Handle recording statistics updates."""
+        duration = stats.get('duration', 0)
+        fps = stats.get('recording_fps', 0)
+        frames = stats.get('frames_recorded', 0)
+        self.stream_controls.recording_info.setText(f"Duration: {duration:.1f}s | FPS: {fps:.1f} | Frames: {frames}")
 
     def on_connection_changed(self, connected: bool, message: str):
         """Handle connection status changes."""

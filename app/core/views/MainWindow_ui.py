@@ -486,18 +486,19 @@ class Ui_MainWindow(object):
 "\u2022 Detection statistics and performance metrics\n"
 "Ideal for live drone feeds and real-time monitoring applications.", None))
 #endif // QT_CONFIG(tooltip)
-        self.actionIntegratedDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Integrated Detection", None))
+        self.actionIntegratedDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Anomaly Detection", None))
 #if QT_CONFIG(tooltip)
-        self.actionIntegratedDetection.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Real-Time Integrated Detection window for advanced live analysis.\n"
-"Combines multiple detection algorithms for comprehensive real-time analysis.\n"
+        self.actionIntegratedDetection.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Real-Time Anomaly Detection window for advanced live analysis.\n"
+"Combines multiple detection algorithms for comprehensive real-time anomaly detection.\n"
 "Features:\n"
-"\u2022 Multiple detection algorithms running simultaneously\n"
+"\u2022 Motion detection with background subtraction\n"
+"\u2022 Color quantization anomaly detection\n"
 "\u2022 Advanced streaming video processing\n"
-"\u2022 Integrated detection result fusion\n"
+"\u2022 Detection fusion and temporal filtering\n"
 "\u2022 Real-time performance optimization\n"
 "\u2022 Multi-threaded processing for better performance\n"
 "\u2022 Enhanced detection accuracy through algorithm combination\n"
-"Designed for complex real-time detection scenarios requiring multiple analysis methods.", None))
+"Designed for detecting unusual objects, movement, and colors in real-time video streams.", None))
 #endif // QT_CONFIG(tooltip)
         self.actionHelp.setText(QCoreApplication.translate("MainWindow", u"Manual", None))
 #if QT_CONFIG(tooltip)

@@ -101,7 +101,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if hasattr(self, 'actionRTMPMotionDetection'):
             self.actionRTMPMotionDetection.triggered.connect(self._open_rtmp_motion_detection)
 
-        # Add Integrated Detection functionality
+        # Add Anomaly Detection functionality
         self.integrated_viewer = None
         if hasattr(self, 'actionIntegratedDetection'):
             self.actionIntegratedDetection.triggered.connect(self._open_integrated_detection)
@@ -600,20 +600,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _open_integrated_detection(self):
         """
-        Opens the Real-Time Integrated Detection viewer.
+        Opens the Real-Time Anomaly Detection viewer.
         """
         try:
             if self.integrated_viewer is None or not self.integrated_viewer.isVisible():
                 self.integrated_viewer = IntegratedDetectionViewer(self)
                 self.integrated_viewer.show()
-                self.logger.info("Integrated Detection viewer opened")
+                self.logger.info("Anomaly Detection viewer opened")
             else:
                 # Bring existing viewer to front
                 self.integrated_viewer.raise_()
                 self.integrated_viewer.activateWindow()
         except Exception as e:
-            self.logger.error(f"Error opening Integrated Detection viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Integrated Detection viewer:\n{str(e)}")
+            self.logger.error(f"Error opening Anomaly Detection viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Anomaly Detection viewer:\n{str(e)}")
 
     def _open_help(self):
         """
