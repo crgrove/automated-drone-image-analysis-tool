@@ -200,6 +200,10 @@ class HelpDialog(QDialog):
                         <td>Enter AOI creation mode</td>
                     </tr>
                     <tr>
+                        <td>G</td>
+                        <td>Toggle between Gallery View (all images) and Single Image View</td>
+                    </tr>
+                    <tr>
                         <td>E</td>
                         <td>Upscale currently visible portion of image</td>
                     </tr>

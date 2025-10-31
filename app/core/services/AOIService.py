@@ -11,13 +11,19 @@ from core.services.LoggerService import LoggerService
 class AOIService:
     """Provides geospatial utilities for Areas of Interest (AOIs) in drone imagery."""
 
-    def __init__(self, image):
+    def __init__(self, image, img_array=None):
         """
         Args:
             image (dict): Image metadata dict (must include 'path', optionally 'mask_path', etc.)
+            img_array (np.ndarray, optional): Pre-loaded image array (RGB format).
+                                              If provided, avoids reloading from disk.
         """
         self.logger = LoggerService()
-        self.image_service = ImageService(image['path'], image.get('mask_path', ''))
+        self.image_service = ImageService(
+            image['path'],
+            image.get('mask_path', ''),
+            img_array=img_array
+        )
 
     def estimate_aoi_gps(self, image, aoi, agl_override_m=None):
         """

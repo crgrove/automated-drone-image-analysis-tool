@@ -165,7 +165,7 @@ class BackfillCacheService(QObject):
         Generate thumbnails and color info for all AOIs in an image.
 
         Args:
-            img: Loaded image array
+            img: Loaded image array (BGR format from cv2.imread)
             image_path: Path to the source image
             image_data: Image dictionary from XML
             areas_of_interest: List of AOI dictionaries
@@ -176,8 +176,11 @@ class BackfillCacheService(QObject):
             Number of AOIs processed
         """
         try:
-            # Create AOIService for color calculation
-            aoi_service = AOIService(image_data)
+            # Convert BGR to RGB for AOIService (avoids reloading image)
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            # Create AOIService for color calculation with pre-loaded image
+            aoi_service = AOIService(image_data, img_array=img_rgb)
 
             cached_count = 0
 

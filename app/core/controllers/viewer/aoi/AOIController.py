@@ -8,7 +8,7 @@ UI manipulation is handled by AOIUIComponent.
 import colorsys
 import numpy as np
 import qtawesome as qta
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QColorDialog
 try:
     from shiboken6 import isValid as _qt_is_valid
 except Exception:
@@ -19,7 +19,7 @@ except Exception:
         except Exception:
             return False
 from PySide6.QtCore import Qt, QSize, QPoint
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QColor
 
 from core.services.LoggerService import LoggerService
 from core.services.AOIService import AOIService
@@ -826,17 +826,23 @@ class AOIController:
         """Handle sort combo box selection change."""
         if not hasattr(self.parent, 'aoiSortComboBox'):
             return
-            
+
         combo = self.parent.aoiSortComboBox
         current_data = combo.currentData()
-        
+
         if current_data is None:
             # "Default" selected - no sorting
             self.set_sort_method(None)
         elif current_data == 'color':
-            # Color-based sorting - get reference color from settings
-            target_hue = self._get_reference_hue_from_settings()
-            self.set_sort_method(current_data, color_hue=target_hue)
+            # Color-based sorting - show color picker to let user choose target color
+            target_hue = self._show_color_picker_for_sort()
+
+            if target_hue is not None:
+                # User selected a color
+                self.set_sort_method(current_data, color_hue=target_hue)
+            else:
+                # User cancelled - revert to previous sort method
+                self._update_combo_selection()
         else:
             # Other sort methods (area_asc, area_desc, x, y)
             self.set_sort_method(current_data)
@@ -857,7 +863,7 @@ class AOIController:
 
     def _get_reference_hue_from_settings(self):
         """Extract reference hue from parent settings.
-        
+
         Returns:
             int: Hue value (0-360) or None if not available
         """
@@ -866,7 +872,7 @@ class AOIController:
             if hasattr(self.parent, 'settings'):
                 options = self.parent.settings.get('options', {})
                 selected_color = options.get('selected_color')
-                
+
                 if selected_color:
                     # selected_color could be a list/tuple [r, g, b] or a QColor
                     if isinstance(selected_color, (list, tuple)) and len(selected_color) >= 3:
@@ -882,17 +888,64 @@ class AOIController:
                     else:
                         # Try to treat as QColor
                         try:
-                            from PySide6.QtGui import QColor
                             if isinstance(selected_color, QColor):
                                 h, _, _, _ = selected_color.getHsv()
                                 return h
                         except Exception:
                             pass
-            
+
             return None
-            
+
         except Exception as e:
             self.logger.error(f"Error extracting reference hue from settings: {e}")
+            return None
+
+    def _show_color_picker_for_sort(self):
+        """Show color picker dialog for user to select target color for sorting.
+
+        Returns:
+            int: Hue value (0-360) or None if user cancelled
+        """
+        try:
+            # Try to get initial color from current sort_color_hue or settings
+            initial_color = QColor(Qt.white)
+
+            # Check if we have a current sort color hue
+            if self.sort_color_hue is not None:
+                # Convert hue to RGB for color dialog
+                r, g, b = colorsys.hsv_to_rgb(self.sort_color_hue / 360.0, 1.0, 1.0)
+                initial_color = QColor(int(r * 255), int(g * 255), int(b * 255))
+            else:
+                # Try to get from settings as fallback
+                settings_hue = self._get_reference_hue_from_settings()
+                if settings_hue is not None:
+                    r, g, b = colorsys.hsv_to_rgb(settings_hue / 360.0, 1.0, 1.0)
+                    initial_color = QColor(int(r * 255), int(g * 255), int(b * 255))
+
+            # Open color dialog
+            color = QColorDialog.getColor(
+                initial_color,
+                self.parent,
+                "Select Target Color for Sorting",
+                QColorDialog.DontUseNativeDialog  # Use Qt dialog for consistency
+            )
+
+            if color.isValid():
+                # Convert to HSV and extract hue
+                h, s, v = color.getHsv()[0], color.getHsv()[1], color.getHsv()[2]
+                # Qt hue is 0-359 (-1 for achromatic), we want 0-360
+                if h == -1:
+                    h = 0
+
+                self.logger.info(f"User selected color for sorting: Hue {h}°")
+                return h
+            else:
+                # User cancelled
+                self.logger.info("User cancelled color selection for sorting")
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error showing color picker for sort: {e}")
             return None
 
     def open_filter_dialog(self):

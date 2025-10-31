@@ -6,6 +6,7 @@ lazy loading and efficient rendering of large datasets.
 """
 
 from PySide6.QtCore import QAbstractListModel, Qt, QModelIndex, QSize, QThread, Signal, Slot
+from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QPixmap, QIcon, QImage, QColor
 import numpy as np
 import qimage2ndarray
@@ -24,6 +25,11 @@ class AOIGalleryModel(QAbstractListModel):
     Supports virtual scrolling, lazy thumbnail loading, and efficient rendering
     of large datasets (1000+ AOIs).
     """
+
+    # Signals for color calculation progress
+    color_calc_progress = Signal(int, int)  # (current, total)
+    color_calc_message = Signal(str)  # status message
+    color_calc_complete = Signal()  # calculation complete
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,6 +69,9 @@ class AOIGalleryModel(QAbstractListModel):
         self.color_cache_service: Optional[ColorCacheService] = None
         self.dataset_dir: Optional[Path] = None
 
+        # Cancellation flag for color calculation
+        self._cancel_color_calc = False
+
     def set_viewer(self, viewer):
         """Set reference to the parent viewer."""
         self.viewer = viewer
@@ -82,10 +91,13 @@ class AOIGalleryModel(QAbstractListModel):
             # Initialize color cache service if cache directory exists
             if color_cache_dir.exists():
                 self.color_cache_service = ColorCacheService(cache_dir=str(color_cache_dir))
+                self.color_cache_service.load_cache_file()  # Load existing cached colors
                 self.logger.info(f"Using per-dataset color cache from {color_cache_dir}")
             else:
-                self.logger.debug(f"No color cache found at {color_cache_dir}, will calculate on-demand")
-                self.color_cache_service = None
+                # Create cache directory for future use
+                color_cache_dir.mkdir(parents=True, exist_ok=True)
+                self.color_cache_service = ColorCacheService(cache_dir=str(color_cache_dir))
+                self.logger.info(f"Created color cache directory at {color_cache_dir}")
 
             # Update thumbnail loader with dataset cache directory
             if thumbnail_cache_dir.exists():
@@ -122,12 +134,14 @@ class AOIGalleryModel(QAbstractListModel):
         """Handle batch complete signal."""
         self.logger.debug(f"Loaded {count} thumbnails")
 
-    def set_aoi_items(self, items):
+    def set_aoi_items(self, items, skip_color_calc=False, preserve_color_cache=False):
         """
         Set the AOI items to display.
 
         Args:
             items: List of (image_index, aoi_index, aoi_data) tuples
+            skip_color_calc: If True, skip automatic color calculation (for manual threading)
+            preserve_color_cache: If True, keep existing color cache (for filtering/sorting same dataset)
         """
         self.beginResetModel()
 
@@ -135,7 +149,10 @@ class AOIGalleryModel(QAbstractListModel):
         self.aoi_items = items
         self.thumbnail_cache.clear()
         self.thumbnail_loader.clear_queue()
-        self._color_info_cache.clear()
+
+        # Only clear color cache if not preserving it (i.e., loading a completely new dataset)
+        if not preserve_color_cache:
+            self._color_info_cache.clear()
 
         # Rebuild index mappings for O(1) lookups
         self.row_to_aoi.clear()
@@ -148,8 +165,9 @@ class AOIGalleryModel(QAbstractListModel):
 
         self.endResetModel()
 
-        # Pre-calculate color information for all AOIs in background
-        self._precalculate_color_info()
+        # Pre-calculate color information for all AOIs (if not skipped)
+        if not skip_color_calc:
+            self._precalculate_color_info()
 
         # Start loading visible thumbnails
         self._queue_visible_thumbnails()
@@ -406,9 +424,17 @@ class AOIGalleryModel(QAbstractListModel):
             if area:
                 lines.append(f"Area: {area:.0f} px²")
 
+            # Add color information (hue degrees and hex color)
+            color_info = self._get_color_info(image_idx, aoi_idx)
+            if color_info:
+                hue_degrees = color_info.get('hue_degrees')
+                hex_color = color_info.get('hex')
+                if hue_degrees is not None and hex_color:
+                    lines.append(f"Hue: {hue_degrees}° ({hex_color})")
+
             confidence = aoi_data.get('confidence')
             if confidence is not None:
-                lines.append(f"Confidence: {confidence:.1%}")
+                lines.append(f"Confidence: {confidence:.1f}%")
 
             flagged = aoi_data.get('flagged', False)
             if flagged:
@@ -483,18 +509,37 @@ class AOIGalleryModel(QAbstractListModel):
         Pre-calculate color information for all AOIs to avoid expensive calculations during scrolling.
 
         Checks per-dataset cache first, only calculates if not cached.
+        Emits progress signals for UI updates.
         """
         if not self.viewer or not self.aoi_items:
             return
 
-        self.logger.info(f"Loading color info for {len(self.aoi_items)} AOIs...")
+        total_aois = len(self.aoi_items)
+        self.logger.info(f"Loading color info for {total_aois} AOIs...")
+        self.color_calc_message.emit(f"Loading color information for {total_aois} AOIs...")
 
         try:
             cached_count = 0
             calculated_count = 0
+            self._cancel_color_calc = False
 
-            for img_idx, aoi_idx, aoi_data in self.aoi_items:
+            for idx, (img_idx, aoi_idx, aoi_data) in enumerate(self.aoi_items):
+                # Check for cancellation
+                if self._cancel_color_calc:
+                    self.logger.info("Color calculation cancelled")
+                    self.color_calc_message.emit("Calculation cancelled")
+                    return
+
                 cache_key = (img_idx, aoi_idx)
+                current_progress = idx + 1
+
+                # Emit progress every 10 items or on last item
+                if current_progress % 10 == 0 or current_progress == total_aois:
+                    self.color_calc_progress.emit(current_progress, total_aois)
+                    status = f"Processing AOI {current_progress}/{total_aois} (Cached: {cached_count}, Calculated: {calculated_count})"
+                    self.color_calc_message.emit(status)
+                    # Process events to keep UI responsive
+                    QApplication.processEvents()
 
                 # First, try to get from per-dataset cache
                 if self.color_cache_service and img_idx < len(self.viewer.images):
@@ -523,28 +568,70 @@ class AOIGalleryModel(QAbstractListModel):
                         self._aoi_service_cache[img_idx] = AOIService(image)
 
                 aoi_service = self._aoi_service_cache.get(img_idx)
-                if aoi_service:
+                if aoi_service and img_idx < len(self.viewer.images):
                     # Calculate color info
                     color_result = aoi_service.get_aoi_representative_color(aoi_data)
                     if color_result:
-                        self._color_info_cache[cache_key] = {
+                        color_info = {
                             'rgb': color_result['rgb'],
                             'hex': color_result['hex'],
                             'hue_degrees': color_result['hue_degrees']
                         }
+                        # Store in memory cache
+                        self._color_info_cache[cache_key] = color_info
                         calculated_count += 1
+
+                        # Save to persistent cache for next time
+                        if self.color_cache_service:
+                            try:
+                                image = self.viewer.images[img_idx]
+                                image_path = image.get('path', '')
+                                if image_path:
+                                    self.color_cache_service.save_color_info(image_path, aoi_data, color_info)
+                            except Exception as e:
+                                self.logger.debug(f"Could not save color to cache: {e}")
                     else:
                         self._color_info_cache[cache_key] = None
                 else:
                     self._color_info_cache[cache_key] = None
 
+            # Complete - save cache to disk if we calculated any new colors
+            if calculated_count > 0 and self.color_cache_service:
+                try:
+                    self.color_calc_message.emit("Saving color cache to disk...")
+                    self.color_cache_service.save_cache_file()
+                    self.logger.info(f"Saved {calculated_count} newly calculated colors to cache")
+                except Exception as e:
+                    self.logger.error(f"Error saving color cache: {e}")
+
             if cached_count > 0:
-                self.logger.info(f"Loaded {cached_count} colors from cache, calculated {calculated_count}")
+                completion_msg = f"Loaded {cached_count} colors from cache, calculated {calculated_count}"
+                self.logger.info(completion_msg)
+                self.color_calc_message.emit(completion_msg)
             else:
-                self.logger.info(f"Calculated {calculated_count} colors (no cache available)")
+                completion_msg = f"Calculated {calculated_count} colors (no cache available)"
+                self.logger.info(completion_msg)
+                self.color_calc_message.emit(completion_msg)
+
+            # Force a refresh of all items to show the color swatches
+            if self.aoi_items:
+                self.dataChanged.emit(
+                    self.index(0, 0),
+                    self.index(len(self.aoi_items) - 1, 0),
+                    [Qt.UserRole]  # UserRole contains color_info
+                )
+
+            self.color_calc_complete.emit()
 
         except Exception as e:
-            self.logger.error(f"Error loading color info: {e}")
+            error_msg = f"Error loading color info: {e}"
+            self.logger.error(error_msg)
+            self.color_calc_message.emit(error_msg)
+            self.color_calc_complete.emit()
+
+    def cancel_color_calculation(self):
+        """Cancel the ongoing color calculation."""
+        self._cancel_color_calc = True
 
     def _get_color_info(self, image_idx, aoi_idx):
         """

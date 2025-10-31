@@ -7,6 +7,9 @@ for displaying AOIs from all loaded images.
 
 import colorsys
 import numpy as np
+from PySide6.QtCore import QThread, QTimer
+from PySide6.QtWidgets import QProgressDialog, QApplication
+from PySide6.QtCore import Qt
 from core.services.LoggerService import LoggerService
 from core.services.AOIService import AOIService
 from .AOIGalleryModel import AOIGalleryModel
@@ -57,6 +60,9 @@ class GalleryController:
         # Cache for AOIService instances per image
         self._aoi_service_cache = {}
 
+        # Progress dialog for color calculation
+        self.color_calc_progress_dialog = None
+
     def create_gallery_widget(self, parent=None):
         """
         Create the gallery widget.
@@ -76,9 +82,12 @@ class GalleryController:
         Load and display AOIs from all images in the gallery.
 
         This flattens all AOIs from all loaded images and applies global
-        filtering and sorting.
+        filtering and sorting. Color calculation is done in background thread
+        with progress dialog.
         """
         try:
+            self.logger.debug("===== load_all_aois() called =====")
+
             if not self.parent or not hasattr(self.parent, 'images'):
                 self.logger.warning("No images available to load AOIs")
                 return
@@ -90,10 +99,172 @@ class GalleryController:
 
             # Collect all AOIs from all images
             all_aois = self._collect_all_aois()
+            self.logger.debug(f"Collected {len(all_aois)} AOIs")
 
-            # Pre-calculate color info for all AOIs BEFORE sorting/filtering
-            # This ensures cached colors are available during filter/sort operations
-            self.model.set_aoi_items(all_aois)  # Temporarily set all items to trigger color calculation
+            # Set items without triggering color calculation
+            self.model.set_aoi_items(all_aois, skip_color_calc=True)
+            self.logger.debug("Set AOI items in model")
+
+            # Start color calculation in background with progress dialog
+            self._start_color_calculation_with_progress(all_aois)
+
+        except Exception as e:
+            self.logger.error(f"Error loading AOIs in gallery: {e}")
+
+    def _start_color_calculation_with_progress(self, all_aois):
+        """
+        Start color calculation with progress dialog.
+
+        Uses main thread but processEvents() to keep UI responsive.
+
+        Args:
+            all_aois: List of all AOI tuples to process
+        """
+        try:
+            self.logger.debug("===== _start_color_calculation_with_progress() called =====")
+
+            # Disconnect any existing signal connections first
+            self._disconnect_color_calc_signals()
+
+            # Close any existing progress dialog
+            if self.color_calc_progress_dialog:
+                self.logger.debug("Closing existing progress dialog")
+                self.color_calc_progress_dialog.close()
+                self.color_calc_progress_dialog = None
+
+            # Get parent widget - use the main viewer window
+            parent_widget = self.parent if self.parent else None
+
+            # Create progress dialog
+            self.logger.debug("Creating new progress dialog")
+            self.color_calc_progress_dialog = QProgressDialog(
+                "Initializing gallery view...",
+                "Cancel",
+                0, 100,
+                parent_widget
+            )
+
+            if not self.color_calc_progress_dialog:
+                raise ValueError("Failed to create progress dialog")
+
+            self.color_calc_progress_dialog.setWindowTitle("Loading Gallery")
+            self.color_calc_progress_dialog.setWindowModality(Qt.WindowModal)
+            self.color_calc_progress_dialog.setMinimumDuration(0)  # Show immediately
+            self.color_calc_progress_dialog.setAutoClose(True)
+            self.color_calc_progress_dialog.setAutoReset(False)
+
+            # Connect cancel button
+            self.color_calc_progress_dialog.canceled.connect(self._on_color_calc_cancelled)
+
+            # Connect model signals to progress dialog
+            self.model.color_calc_progress.connect(self._on_color_calc_progress)
+            self.model.color_calc_message.connect(self._on_color_calc_message)
+            self.model.color_calc_complete.connect(self._on_color_calc_complete)
+
+            # Explicitly show the dialog and process events to ensure it's visible
+            self.color_calc_progress_dialog.show()
+            QApplication.processEvents()
+
+            # Use QTimer to defer color calculation to next event loop cycle
+            # This allows the progress dialog to display before calculation starts
+            QTimer.singleShot(50, self.model._precalculate_color_info)
+
+        except Exception as e:
+            self.logger.error(f"Error starting color calculation: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            # Cleanup
+            self._disconnect_color_calc_signals()
+            if self.color_calc_progress_dialog:
+                self.color_calc_progress_dialog.close()
+                self.color_calc_progress_dialog = None
+            # Fallback: calculate synchronously without dialog
+            self.model._precalculate_color_info()
+            self._finalize_gallery_load()
+
+    def _on_color_calc_progress(self, current, total):
+        """Handle color calculation progress update."""
+        if self.color_calc_progress_dialog and not self.color_calc_progress_dialog.wasCanceled():
+            percent = int((current / total) * 100) if total > 0 else 0
+            self.color_calc_progress_dialog.setValue(percent)
+            # Process events to keep dialog responsive
+            QApplication.processEvents()
+
+    def _on_color_calc_message(self, message):
+        """Handle color calculation status message."""
+        if self.color_calc_progress_dialog and not self.color_calc_progress_dialog.wasCanceled():
+            self.color_calc_progress_dialog.setLabelText(message)
+            # Process events to keep dialog responsive
+            QApplication.processEvents()
+
+    def _disconnect_color_calc_signals(self):
+        """Disconnect all color calculation signal connections."""
+        try:
+            # Disconnect model signals
+            try:
+                self.model.color_calc_progress.disconnect(self._on_color_calc_progress)
+            except:
+                pass
+            try:
+                self.model.color_calc_message.disconnect(self._on_color_calc_message)
+            except:
+                pass
+            try:
+                self.model.color_calc_complete.disconnect(self._on_color_calc_complete)
+            except:
+                pass
+
+            # Disconnect dialog signals
+            if self.color_calc_progress_dialog:
+                try:
+                    self.color_calc_progress_dialog.canceled.disconnect(self._on_color_calc_cancelled)
+                except:
+                    pass
+        except Exception as e:
+            self.logger.debug(f"Error disconnecting signals: {e}")
+
+    def _on_color_calc_complete(self):
+        """Handle color calculation completion."""
+        try:
+            self.logger.debug("===== _on_color_calc_complete() called =====")
+
+            # Disconnect signals first
+            self._disconnect_color_calc_signals()
+
+            # Close progress dialog
+            if self.color_calc_progress_dialog:
+                self.logger.debug("Closing progress dialog (complete)")
+                self.color_calc_progress_dialog.setValue(100)
+                self.color_calc_progress_dialog.close()
+                self.color_calc_progress_dialog = None
+
+            # Finalize gallery load (apply sorting/filtering)
+            self._finalize_gallery_load()
+
+        except Exception as e:
+            self.logger.error(f"Error completing color calculation: {e}")
+
+    def _on_color_calc_cancelled(self):
+        """Handle color calculation cancellation."""
+        self.logger.info("===== Color calculation cancelled by user =====")
+        self.model.cancel_color_calculation()
+
+        # Disconnect signals
+        self._disconnect_color_calc_signals()
+
+        # Close progress dialog
+        if self.color_calc_progress_dialog:
+            self.logger.debug("Closing progress dialog (cancelled)")
+            self.color_calc_progress_dialog.close()
+            self.color_calc_progress_dialog = None
+
+    def _finalize_gallery_load(self):
+        """Finalize gallery load by applying sorting and filtering."""
+        try:
+            self.logger.debug("===== _finalize_gallery_load() called =====")
+
+            # Get current items
+            all_aois = list(self.model.aoi_items)
 
             # Apply sorting (using cached colors)
             sorted_aois = self._sort_aois_global(all_aois)
@@ -101,8 +272,8 @@ class GalleryController:
             # Apply filtering (using cached colors)
             filtered_aois = self._filter_aois_global(sorted_aois)
 
-            # Update model with filtered results
-            self.model.set_aoi_items(filtered_aois)
+            # Update model with filtered results (skip color calc and preserve color cache)
+            self.model.set_aoi_items(filtered_aois, skip_color_calc=True, preserve_color_cache=True)
 
             # Update count label in UI
             if self.ui_component:
@@ -111,7 +282,7 @@ class GalleryController:
             self.logger.info(f"Loaded {len(filtered_aois)} AOIs in gallery (from {len(all_aois)} total)")
 
         except Exception as e:
-            self.logger.error(f"Error loading AOIs in gallery: {e}")
+            self.logger.error(f"Error finalizing gallery load: {e}")
 
     def _collect_all_aois(self):
         """

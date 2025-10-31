@@ -22,9 +22,9 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.thumbnail_size = QSize(180, 180)
         self.item_spacing = 10
-        self.overlay_height = 90  # Space for text overlay (increased for more info)
         # Cache the size hint for consistency and performance
-        self._cached_size_hint = QSize(190, 280)
+        # Only thumbnail + spacing, no text overlay needed
+        self._cached_size_hint = QSize(190, 190)
 
     def sizeHint(self, option, index):
         """Return the size hint for each item."""
@@ -57,13 +57,6 @@ class AOIGalleryDelegate(QStyledItemDelegate):
                 self.thumbnail_size.height()
             )
 
-            overlay_rect = QRect(
-                option.rect.left() + self.item_spacing // 2,
-                thumbnail_rect.bottom(),
-                self.thumbnail_size.width(),
-                self.overlay_height
-            )
-
             # Draw selection highlight if selected
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, QColor(100, 150, 255, 50))
@@ -92,10 +85,6 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             painter.setPen(QPen(QColor(100, 100, 100), 1))
             painter.drawRect(thumbnail_rect)
 
-            # Draw overlay background (semi-transparent)
-            overlay_bg = QColor(30, 30, 30, 230)
-            painter.fillRect(overlay_rect, overlay_bg)
-
             # Draw flagged indicator
             flagged = aoi_data.get('flagged', False)
             if flagged:
@@ -112,64 +101,24 @@ class AOIGalleryDelegate(QStyledItemDelegate):
                 painter.setPen(QPen(QColor(255, 255, 255), 2))
                 painter.drawText(comment_rect, Qt.AlignCenter, "💬")
 
-            # Draw detailed overlay information (matching single-image view)
-            painter.setPen(QPen(QColor(255, 255, 255)))
-            font = painter.font()
-            font.setPointSize(9)
-            painter.setFont(font)
-            fm = QFontMetrics(font)
-
-            text_rect = overlay_rect.adjusted(5, 5, -5, -5)
-            y_offset = text_rect.top()
-
-            # Line 1: Image name and AOI number (from text variable)
-            if text:
-                lines = text.split('\n')
-                if lines:
-                    elided_text = fm.elidedText(lines[0], Qt.ElideRight, text_rect.width())
-                    painter.drawText(text_rect.left(), y_offset + fm.ascent(), elided_text)
-                    y_offset += fm.height() + 2
-
-            # Line 2: Coordinates and Area
-            center = aoi_data.get('center', (0, 0))
-            area = aoi_data.get('area', 0)
-            coord_text = f"X: {center[0]}, Y: {center[1]} | Area: {area:.0f} px"
-            font_small = QFont(font)
-            font_small.setPointSize(8)
-            painter.setFont(font_small)
-            fm_small = QFontMetrics(font_small)
-            elided_coord = fm_small.elidedText(coord_text, Qt.ElideRight, text_rect.width() - 50)
-            painter.drawText(text_rect.left(), y_offset + fm_small.ascent(), elided_coord)
-
-            # Confidence score on same line (right aligned)
-            confidence = aoi_data.get('confidence')
-            if confidence is not None:
-                conf_text = f"{confidence:.0f}%"
-                conf_color = self._get_confidence_color(confidence / 100.0)
-                painter.setPen(QPen(conf_color))
-                painter.drawText(text_rect.right() - 35, y_offset + fm_small.ascent(), conf_text)
-                painter.setPen(QPen(QColor(255, 255, 255)))
-
-            y_offset += fm_small.height() + 3
-
-            # Line 3: Color swatch + Hue and Hex
-            color_info = user_data.get('color_info')  # Will need to add this to model
+            # Draw color swatch indicator (bottom-left corner of thumbnail)
+            color_info = user_data.get('color_info')
             if color_info:
-                # Draw color swatch
-                swatch_size = 12
-                swatch_rect = QRect(text_rect.left(), y_offset - 2, swatch_size, swatch_size)
                 color_rgb = color_info.get('rgb')
                 if color_rgb:
+                    # 12x12 pixel swatch in bottom-left corner
+                    swatch_size = 12
+                    swatch_rect = QRect(
+                        thumbnail_rect.left() + 5,
+                        thumbnail_rect.bottom() - swatch_size - 5,
+                        swatch_size,
+                        swatch_size
+                    )
+                    # Draw fully opaque color swatch
                     painter.fillRect(swatch_rect, QColor(color_rgb[0], color_rgb[1], color_rgb[2]))
+                    # Draw white border (1px)
                     painter.setPen(QPen(QColor(255, 255, 255), 1))
                     painter.drawRect(swatch_rect)
-                    painter.setPen(QPen(QColor(255, 255, 255)))
-
-                # Draw hue and hex text
-                hue_degrees = color_info.get('hue_degrees', 0)
-                hex_color = color_info.get('hex', '#000000')
-                color_text = f"Hue: {hue_degrees}° {hex_color}"
-                painter.drawText(text_rect.left() + swatch_size + 4, y_offset + fm_small.ascent(), color_text)
 
         except Exception as e:
             # Fallback to default rendering on error
@@ -250,7 +199,7 @@ class GalleryUIComponent:
         self.gallery_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Set fixed grid size for consistent columns
-        self.gallery_view.setGridSize(QSize(200, 290))  # Width, Height (thumbnail + overlay + spacing)
+        self.gallery_view.setGridSize(QSize(200, 200))  # Width, Height (thumbnail + spacing)
 
         # Set custom delegate
         delegate = AOIGalleryDelegate(self.gallery_view)
