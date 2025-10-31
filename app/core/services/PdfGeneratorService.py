@@ -436,6 +436,17 @@ class PdfGeneratorService:
 
                 metadata_lines.append(f"<b>AOI Pixel Area:</b> {aoi.get('area', 0):.0f}")
 
+                # Add confidence score if available
+                if 'confidence' in aoi:
+                    confidence = aoi['confidence']
+                    score_type = aoi.get('score_type', 'unknown')
+                    raw_score = aoi.get('raw_score', 0)
+                    score_method = aoi.get('score_method', 'mean')
+                    metadata_lines.append(
+                        f"<b>Confidence Score:</b> {confidence:.1f}% "
+                        f"({score_type}, raw: {raw_score:.3f} {score_method})"
+                    )
+
                 # Add average color info from displayed image (matching viewer behavior)
                 avg_color_info = self._get_aoi_average_info(img, aoi)
                 if avg_color_info:

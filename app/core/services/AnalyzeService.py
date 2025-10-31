@@ -35,7 +35,8 @@ class AnalyzeService(QObject):
     sig_done = Signal(int, int, str)
 
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
-                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options, max_area):
+                 max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options, max_area,
+                 processing_resolution=1.0):
         """
         Initialize the AnalyzeService with parameters for processing images.
 
@@ -54,6 +55,8 @@ class AnalyzeService(QObject):
             kmeans_clusters (int): Number of clusters (colors) to retain in the image.
             options (dict): Additional algorithm-specific options.
             max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
+            processing_resolution (float): Percentage to scale images (0.1 to 1.0).
+                1.0 means process at original resolution (no scaling).
         """
         self.logger = LoggerService()
         self.xmlService = XmlService()
@@ -66,6 +69,7 @@ class AnalyzeService(QObject):
         self.options = options
         self.min_area = min_area
         self.max_area = max_area
+        self.processing_resolution = processing_resolution
         self.aoi_radius = aoi_radius
         self.num_processes = num_processes
         self.max_aois = max_aois
@@ -115,7 +119,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit(f"Processing {self.ttl_images} files")
 
             self._completed_images = 0
-            self._last_progress_percent = 0
+            self._total_aois = 0
 
             # Process each image using multiprocessing
             for file in image_files:
@@ -145,13 +149,17 @@ class AnalyzeService(QObject):
                                 self.output,
                                 self.hist_ref_path,
                                 self.kmeans_clusters,
-                                self.is_thermal
+                                self.is_thermal,
+                                self.processing_resolution
                             ),
                             callback=self._process_complete
                         )
                     else:
                         self.ttl_images -= 1
                         self.sig_msg.emit(f"Skipping {file} :: File is not an image")
+
+            # Notify that images are queued and processing has started
+            self.sig_msg.emit(f"All {self.ttl_images} images queued, processing started...")
 
             # Close the pool and ensure all processes are done
             self.pool.close()
@@ -170,6 +178,7 @@ class AnalyzeService(QObject):
             self.xmlService.save_xml_file(file_path)
             ttl_time = round(time.time() - start_time, 3)
             self.sig_done.emit(self.__id, len(self.images_with_aois), file_path)
+            self.sig_msg.emit(f"{len(self.images_with_aois)} images with {self._total_aois} areas of interest identified")
             self.sig_msg.emit(f"Total Processing Time: {ttl_time} seconds")
             self.sig_msg.emit(f"Total Images Processed: {self.ttl_images}")
 
@@ -179,7 +188,7 @@ class AnalyzeService(QObject):
 
     @staticmethod
     def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
-                     thermal):
+                     thermal, processing_resolution=1.0):
         """
         Process a single image using the selected algorithm and settings.
 
@@ -196,6 +205,7 @@ class AnalyzeService(QObject):
             hist_ref_path (str): Path to the histogram reference image.
             kmeans_clusters (int): Number of clusters (colors) to retain in the image.
             thermal (bool): Whether this is a thermal image algorithm.
+            processing_resolution (float): Percentage to scale images (0.1 to 1.0). 1.0 = no scaling.
 
         Returns:
             tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
@@ -203,7 +213,32 @@ class AnalyzeService(QObject):
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         if img is None:
             raise ValueError(f"Could not load image: {full_path}")
-        # img = cv2.resize(img, (4000, 3000))
+
+        # Store original image for thumbnail generation (before scaling)
+        original_img = img.copy()
+
+        # Store original dimensions for coordinate transformation
+        original_height, original_width = img.shape[:2]
+        scale_factor = 1.0
+
+        # Apply percentage-based resolution scaling if specified
+        if processing_resolution is not None and processing_resolution < 1.0:
+            scale_factor = processing_resolution
+            new_width = int(original_width * scale_factor)
+            new_height = int(original_height * scale_factor)
+
+            # Ensure minimum dimensions of at least 10 pixels
+            if new_width >= 10 and new_height >= 10:
+                # Use INTER_AREA for best quality when downscaling
+                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+                # Scale area thresholds to match processing resolution (area scales by factor²)
+                min_area = int(min_area * scale_factor * scale_factor)
+                max_area = int(max_area * scale_factor * scale_factor) if max_area > 0 else 0
+            else:
+                # Image too small to scale, process at original resolution
+                scale_factor = 1.0
+
         try:
             if not thermal:
                 # Apply histogram normalization if a reference image is provided
@@ -221,7 +256,37 @@ class AnalyzeService(QObject):
             # Instantiate the algorithm class and process the image
             cls = globals()[algorithm['service']]
             instance = cls(identifier_color, min_area, max_area, aoi_radius, algorithm['combine_overlapping_aois'], options)
-            return instance.process_image(img, full_path, input_dir, output_dir)
+            instance.set_scale_factor(scale_factor)  # Pass scale factor to algorithm for coordinate transformation
+            result = instance.process_image(img, full_path, input_dir, output_dir)
+
+            # Generate main image thumbnail (using original resolution image)
+            try:
+                AnalyzeService._generate_main_image_thumbnail(original_img, full_path, output_dir)
+            except Exception as thumb_error:
+                logger = LoggerService()
+                logger.warning(f"Main thumbnail generation failed for {full_path}: {thumb_error}")
+
+            # Generate thumbnail and color cache for detected AOIs (using original resolution image)
+            if result and result.areas_of_interest:
+                try:
+                    filename = os.path.basename(full_path)
+                    logger = LoggerService()
+                    logger.info(f"Generating {len(result.areas_of_interest)} thumbnails for {filename}...")
+
+                    # Call cache generation with original (unscaled) image for best quality thumbnails
+                    instance.generate_aoi_cache(
+                        img=original_img,
+                        image_path=full_path,
+                        areas_of_interest=result.areas_of_interest,
+                        output_dir=output_dir
+                    )
+                except Exception as cache_error:
+                    # Don't fail detection if cache generation fails
+                    logger = LoggerService()
+                    logger.warning(f"Cache generation failed for {full_path}: {cache_error}")
+
+            return result
+
         except Exception as e:
             logger = LoggerService()
             logger.error(e)
@@ -241,6 +306,10 @@ class AnalyzeService(QObject):
         if result.error_message is not None:
             self.sig_msg.emit("Unable to process " + file_name + " :: " + result.error_message)
             return
+        # Update progress counters
+        self._completed_images += 1
+        percent_complete = int(100 * self._completed_images / self.ttl_images)
+
         # Add successfully processed image to results
         if result.areas_of_interest:
             # Include original path for mask-based approach
@@ -252,7 +321,8 @@ class AnalyzeService(QObject):
             self.images_with_aois.append(image_data)
 
             num_aois = len(result.areas_of_interest)
-            self.sig_msg.emit(f'{num_aois} Areas of interest identified in ' + file_name)
+            self._total_aois += num_aois
+            self.sig_msg.emit(f'{num_aois} Areas of interest identified in {file_name} ({percent_complete}%)')
 
             # Guard against None and ensure integers for comparison
             if (result.base_contour_count is not None
@@ -263,13 +333,7 @@ class AnalyzeService(QObject):
                 self.sig_aois.emit()
                 self.max_aois_limit_exceeded = True
         else:
-            self.sig_msg.emit('No areas of interest identified in ' + file_name)
-
-        self._completed_images += 1
-        percent_complete = int(100 * self._completed_images / self.ttl_images)
-        if percent_complete >= self._last_progress_percent + 10:
-            self.sig_msg.emit(f"Processing Progress: {percent_complete}% complete")
-            self._last_progress_percent = percent_complete - (percent_complete % 10)
+            self.sig_msg.emit(f'No areas of interest identified in {file_name} ({percent_complete}%)')
 
     @Slot()
     def process_cancel(self):
@@ -279,6 +343,53 @@ class AnalyzeService(QObject):
         self.cancelled = True
         self.sig_msg.emit("--- Cancelling Image Processing ---")
         self.pool.terminate()
+
+    @staticmethod
+    def _generate_main_image_thumbnail(img, image_path, output_dir):
+        """
+        Generate a thumbnail for the main image to speed up viewer loading.
+
+        Args:
+            img: Original image array (before any scaling)
+            image_path: Path to the source image
+            output_dir: Output directory where thumbnail folder will be created
+        """
+        try:
+            from PIL import Image as PILImage
+
+            # Create thumbnail directory
+            thumb_dir = Path(output_dir) / '.image_thumbnails'
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate filename using basename only (portable across machines)
+            # Drone images have unique filenames, so this is safe
+            import hashlib
+            filename = os.path.basename(image_path)
+            path_hash = hashlib.md5(filename.encode()).hexdigest()
+            thumb_filename = f"{path_hash}.jpg"
+            thumb_path = thumb_dir / thumb_filename
+
+            # Convert to RGB if needed
+            if len(img.shape) == 2:
+                # Grayscale
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            elif img.shape[2] == 4:
+                # RGBA to RGB
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
+            else:
+                # BGR to RGB
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            # Create PIL Image and resize to thumbnail size (100x56)
+            pil_img = PILImage.fromarray(img_rgb)
+            pil_img.thumbnail((100, 56), PILImage.Resampling.LANCZOS)
+
+            # Save as JPEG with good quality
+            pil_img.save(thumb_path, 'JPEG', quality=85, optimize=True)
+
+        except Exception as e:
+            # Don't fail processing if thumbnail generation fails
+            pass
 
     def _setup_output_dir(self):
         """

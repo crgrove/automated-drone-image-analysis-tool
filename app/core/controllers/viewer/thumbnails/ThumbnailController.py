@@ -44,6 +44,9 @@ class ThumbnailController(QObject):
         self.loader_thread = None
         self.loader = None
 
+        # Alternative cache directory (set by viewer if user provides one)
+        self.alternative_cache_dir = None
+
         # Loading queue management
         self.pending_indices = set()
         self.load_timer = QTimer()
@@ -69,8 +72,16 @@ class ThumbnailController(QObject):
         if self.loader_thread is not None:
             return
 
+        # Get results directory - prefer alternative cache dir if provided
+        results_dir = None
+        if self.alternative_cache_dir:
+            results_dir = self.alternative_cache_dir
+        elif hasattr(self.parent, 'xml_path') and self.parent.xml_path:
+            import os
+            results_dir = os.path.dirname(self.parent.xml_path)
+
         self.loader_thread = QThread()
-        self.loader = ThumbnailLoader(self.parent.images)
+        self.loader = ThumbnailLoader(self.parent.images, results_dir=results_dir)
         self.loader.moveToThread(self.loader_thread)
 
         # Connect signals with queued connection to ensure UI updates on main thread
@@ -143,12 +154,30 @@ class ThumbnailController(QObject):
             self.ui_component.cleanup()
 
     def _request_thumbnail(self, index):
-        """Request a thumbnail to be loaded."""
+        """Request a thumbnail to be loaded, or load immediately if cached."""
         if not self.loader or index in self.pending_indices or index in self.loader.loaded_indices:
             return
         if index < 0 or index >= len(self.parent.images):
             return
 
+        # Check if thumbnail is cached - if so, load it immediately (fast)
+        image_path = self.parent.images[index].get('path', '')
+        if image_path and self.loader.is_cached(image_path):
+            try:
+                # Load from cache on main thread (safe - just reading a cached file)
+                cached_pixmap = self.loader._load_cached_thumbnail(image_path)
+                if cached_pixmap:
+                    icon = QIcon(cached_pixmap)
+                    self.loader.loaded_indices.add(index)
+                    # Notify UI component directly
+                    if self.ui_component:
+                        self.ui_component.on_thumbnail_loaded(index, icon)
+                    return  # Don't queue it
+            except Exception as e:
+                # If loading from cache failed, fall through to background loading
+                self.logger.error(f"Error loading cached thumbnail: {e}")
+
+        # Not cached - queue for background loading
         self.pending_indices.add(index)
         if not self.load_timer.isActive():
             self.load_timer.start(1)  # Start processing immediately

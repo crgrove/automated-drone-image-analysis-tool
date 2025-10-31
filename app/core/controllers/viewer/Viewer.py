@@ -19,7 +19,7 @@ from urllib.parse import quote_plus
 from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush, QCursor
 from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
 from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog
+from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog, QStackedWidget, QProgressDialog
 
 from core.views.components.Toggle import Toggle
 from core.views.viewer.ui.Viewer_ui import Ui_Viewer
@@ -35,6 +35,8 @@ from core.controllers.viewer.MagnifyingGlass import MagnifyingGlass
 from core.views.viewer.widgets.OverlayWidget import OverlayWidget
 from core.views.viewer.dialogs.UpscaleDialog import UpscaleDialog
 from core.views.viewer.dialogs.HelpDialog import HelpDialog
+from core.views.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
+from core.views.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
 
 from core.controllers.viewer.UIStyleController import UIStyleController
 from core.controllers.viewer.ThermalDataController import ThermalDataController
@@ -49,6 +51,7 @@ from core.controllers.viewer.exports.CoverageExtentExportController import Cover
 from core.controllers.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
 
 from core.controllers.viewer.aoi.AOIController import AOIController
+from core.controllers.viewer.gallery.GalleryController import GalleryController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
 from core.controllers.viewer.CoordinateController import CoordinateController
 from core.controllers.viewer.status.StatusController import StatusController
@@ -58,6 +61,8 @@ from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
 from core.services.ImageService import ImageService
 from core.services.ThermalParserService import ThermalParserService
+from core.services.SettingsService import SettingsService
+from core.services.BackfillCacheService import BackfillCacheService
 from helpers.LocationInfo import LocationInfo
 
 from typing import List, Dict, Any, Optional
@@ -93,13 +98,33 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
         self.images = self.xml_service.get_images()
+
+        # Validate and fix paths if needed
+        if not self._validate_and_fix_paths():
+            # User cancelled folder selection - show error and close viewer
+            QMessageBox.critical(self, "Load Results Failed",
+                                "Cannot load results without valid image and mask locations.\n\n"
+                                "The viewer will now close.")
+            QTimer.singleShot(0, self.close)  # Close after __init__ completes
+            return
+
+        # Initialize settings service for reviewer name
+        self.settings_service = SettingsService()
+
+        # Ensure review metadata exists (capture reviewer name if needed)
+        self._ensure_review_metadata()
+
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
         self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
         self.settings, _ = self.xml_service.get_settings()
 
+        # Store alternative cache directory (set by _check_and_prompt_for_caches)
+        self.alternative_cache_dir = None
+
         # Initialize controllers
         self.aoi_controller = AOIController(self)
+        self.gallery_controller = GalleryController(self)
         self.thumbnail_controller = ThumbnailController(self)
         self.coordinate_controller = CoordinateController(self)
         self.status_controller = StatusController(self)
@@ -123,6 +148,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.show_hidden = show_hidden
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
+
+        # Set up gallery mode toggle
+        self.gallery_mode = False  # Start in single-image mode
+        # Defer gallery setup until after viewer is fully initialized
+        self.gallery_widget = None
+        self._gallery_setup_pending = True
 
         # status‑bar helper
         self.messages = StatusDict(callback=self.status_controller.message_listener,
@@ -214,6 +245,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'thumbnail_controller'):
             self.thumbnail_controller.cleanup()
 
+        # Clean up gallery controller
+        if hasattr(self, 'gallery_controller'):
+            self.gallery_controller.clear_cache()
+            if hasattr(self.gallery_controller, 'model'):
+                self.gallery_controller.model.cleanup()
+
         # Close GPS map window if open
         if hasattr(self, 'gps_map_controller'):
             self.gps_map_controller.close_map()
@@ -236,19 +273,19 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.ButtonLayout.replaceWidget(self.hideImageCheckbox, self.hideImageToggle)
         self.hideImageCheckbox.deleteLater()
         self.hideImageToggle.clicked.connect(self._hide_image_change)
-        
+
         # Get the main layout
         layout = self.mainHeaderWidget.layout()
         font = QFont()
         font.setPointSize(10)
-        
+
         # Show Overlay toggle with label
         self.showOverlayToggle = Toggle()
         self.showOverlayToggle.setContentsMargins(4, 0, 4, 0)
         self.showOverlayToggle.setFixedWidth(50)
         self.showOverlayLabel = QLabel("Show Overlay")
         self.showOverlayLabel.setFont(font)
-        
+
         # Create container widget for toggle + label
         showOverlayContainer = QWidget()
         showOverlayLayout = QHBoxLayout(showOverlayContainer)
@@ -256,12 +293,364 @@ class Viewer(QMainWindow, Ui_Viewer):
         showOverlayLayout.setSpacing(1)
         showOverlayLayout.addWidget(self.showOverlayToggle)
         showOverlayLayout.addWidget(self.showOverlayLabel)
-        
+
         layout.replaceWidget(self.showOverlayCheckBox, showOverlayContainer)
         self.showOverlayCheckBox.deleteLater()
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
-        
+
+    def _setup_gallery_mode_ui(self):
+        """Set up the gallery mode toggle and stacked widget for AOI display."""
+        try:
+            # Check that required UI elements exist
+            if not hasattr(self, 'aoiFrame') or not self.aoiFrame:
+                self.logger.error("aoiFrame not found, cannot set up gallery")
+                return
+
+            if not hasattr(self, 'aoiListWidget') or not self.aoiListWidget:
+                self.logger.error("aoiListWidget not found, cannot set up gallery")
+                return
+
+            if not hasattr(self, 'aoiSortLabel') or not self.aoiSortLabel:
+                self.logger.error("aoiSortLabel not found, cannot set up gallery")
+                return
+
+            # Get the aoiFrame layout
+            aoi_frame_layout = self.aoiFrame.layout()
+            if not aoi_frame_layout:
+                self.logger.error("aoiFrame layout not found")
+                return
+
+            # Check if the parent widget is visible - if not, defer creation
+            if not self.isVisible():
+                self.logger.debug("Parent widget not visible yet, deferring gallery widget creation")
+                return
+
+            # Create gallery widget with aoiFrame as parent (safer than layout manipulation)
+            self.gallery_widget = self.gallery_controller.create_gallery_widget(self.aoiFrame)
+
+            # Start hidden - will be sized when shown
+            self.gallery_widget.setVisible(False)
+            self.gallery_widget.hide()
+
+            # Raise aoiListWidget to front initially (single-image mode)
+            self.aoiListWidget.raise_()
+
+            # Don't pre-load gallery data yet - images haven't been loaded
+            # This will be done after images are loaded
+
+            # Create toggle button for switching modes
+            self.gallery_mode_toggle_btn = QPushButton()
+            self.gallery_mode_toggle_btn.setText("🖼️ Gallery View")
+            self.gallery_mode_toggle_btn.setToolTip("Switch to Gallery View (all images)")
+            self.gallery_mode_toggle_btn.setCheckable(True)
+            self.gallery_mode_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #404040;
+                    color: white;
+                    border: 1px solid #666;
+                    border-radius: 4px;
+                    padding: 5px 10px;
+                    font-size: 10pt;
+                }
+                QPushButton:checked {
+                    background-color: #2196F3;
+                    border: 1px solid #1976D2;
+                }
+                QPushButton:hover {
+                    background-color: #505050;
+                }
+                QPushButton:checked:hover {
+                    background-color: #1976D2;
+                }
+            """)
+            self.gallery_mode_toggle_btn.clicked.connect(self._toggle_gallery_mode)
+
+            # Create "Generate Cache" button for regenerating caches on old datasets
+            self.generate_cache_btn = QPushButton()
+            self.generate_cache_btn.setText("🔄 Generate Cache")
+            self.generate_cache_btn.setToolTip("Regenerate thumbnail and color caches for this dataset")
+            self.generate_cache_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #404040;
+                    color: white;
+                    border: 1px solid #666;
+                    border-radius: 4px;
+                    padding: 5px 10px;
+                    font-size: 10pt;
+                }
+                QPushButton:hover {
+                    background-color: #505050;
+                }
+                QPushButton:pressed {
+                    background-color: #303030;
+                }
+            """)
+            self.generate_cache_btn.clicked.connect(self._generate_cache)
+
+            # Add toggle button after the sort combo box
+            sort_combo_index = -1
+            for i in range(aoi_frame_layout.count()):
+                item = aoi_frame_layout.itemAt(i)
+                if item and item.widget() == self.aoiSortComboBox:
+                    sort_combo_index = i
+                    break
+
+            if sort_combo_index >= 0:
+                aoi_frame_layout.insertWidget(sort_combo_index + 1, self.gallery_mode_toggle_btn)
+                aoi_frame_layout.insertWidget(sort_combo_index + 2, self.generate_cache_btn)
+
+            self.logger.info("Gallery mode UI setup complete")
+
+        except Exception as e:
+            self.logger.error(f"Error setting up gallery mode UI: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    def _toggle_gallery_mode(self):
+        """Toggle between single-image and gallery view modes."""
+        try:
+            # Make sure gallery is set up - try to create it if it doesn't exist
+            if not self.gallery_widget:
+                # Ensure we're visible before creating widgets
+                if not self.isVisible():
+                    self.logger.warning("Cannot create gallery widget - viewer not visible")
+                    return
+
+                self._setup_gallery_mode_ui()
+
+                # Check if it was created successfully
+                if not self.gallery_widget:
+                    self.logger.error("Failed to create gallery widget")
+                    return
+
+                self._gallery_setup_pending = False
+                if hasattr(self, 'gallery_controller'):
+                    self.gallery_controller.sync_filters_from_aoi_controller()
+                    self.gallery_controller.load_all_aois()
+
+            if not self.gallery_widget:
+                self.logger.warning("Gallery widget not available")
+                return
+
+            self.gallery_mode = not self.gallery_mode
+
+            if self.gallery_mode:
+                # Switch to gallery view
+                self.gallery_mode_toggle_btn.setText("📄 Single Image View")
+                self.gallery_mode_toggle_btn.setToolTip("Switch to Single Image View")
+
+                # Expand aoiFrame to accommodate grid layout (5+ columns)
+                # Store original width if not already stored
+                if not hasattr(self, '_original_aoi_frame_width'):
+                    self._original_aoi_frame_width = self.aoiFrame.minimumWidth()
+
+                # Set wider minimum width for gallery grid (5 columns * 210px ≈ 1100px)
+                self.aoiFrame.setMinimumWidth(1100)
+                self.aoiFrame.setMaximumWidth(1400)  # Allow some expansion
+
+                # Gallery widget fills the frame width
+                frame_rect = self.aoiFrame.rect()
+                aoi_list_rect = self.aoiListWidget.geometry()
+
+                self.gallery_widget.setGeometry(
+                    5,  # Small margin
+                    aoi_list_rect.y(),
+                    frame_rect.width() - 10,
+                    aoi_list_rect.height()
+                )
+
+                # Show gallery and raise it to front
+                self.gallery_widget.setVisible(True)
+                self.gallery_widget.show()
+                self.gallery_widget.raise_()
+
+                # Only sync if filters have changed
+                if hasattr(self, '_last_filter_sync'):
+                    # Check if filters have changed since last sync
+                    current_filters = (
+                        self.aoi_controller.filter_flagged_only,
+                        self.aoi_controller.filter_color_hue,
+                        self.aoi_controller.filter_color_range,
+                        self.aoi_controller.filter_area_min,
+                        self.aoi_controller.filter_area_max,
+                        self.aoi_controller.sort_method,
+                        self.aoi_controller.sort_color_hue
+                    )
+                    if current_filters != self._last_filter_sync:
+                        self.gallery_controller.sync_filters_from_aoi_controller()
+                        self.gallery_controller.load_all_aois()
+                        self._last_filter_sync = current_filters
+                else:
+                    # First time - do sync
+                    self.gallery_controller.sync_filters_from_aoi_controller()
+                    self.gallery_controller.load_all_aois()
+                    self._last_filter_sync = (
+                        self.aoi_controller.filter_flagged_only,
+                        self.aoi_controller.filter_color_hue,
+                        self.aoi_controller.filter_color_range,
+                        self.aoi_controller.filter_area_min,
+                        self.aoi_controller.filter_area_max,
+                        self.aoi_controller.sort_method,
+                        self.aoi_controller.sort_color_hue
+                    )
+
+                self.logger.info("Switched to gallery view mode")
+
+            else:
+                # Switch to single-image view
+                self.gallery_mode_toggle_btn.setText("🖼️ Gallery View")
+                self.gallery_mode_toggle_btn.setToolTip("Switch to Gallery View (all images)")
+
+                # Restore original aoiFrame width for single-column display
+                if hasattr(self, '_original_aoi_frame_width'):
+                    self.aoiFrame.setMinimumWidth(self._original_aoi_frame_width)
+                    self.aoiFrame.setMaximumWidth(400)  # Reasonable max for single column
+
+                # Raise single-image list to front, keep gallery in background
+                self.aoiListWidget.raise_()
+
+                # Don't destroy gallery widget - keep it cached for fast switching
+                # Just hide it
+                self.gallery_widget.hide()
+
+                self.logger.info("Switched to single-image view mode")
+
+        except Exception as e:
+            self.logger.error(f"Error toggling gallery mode: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    def _generate_cache(self):
+        """Generate thumbnail and color caches for this dataset."""
+        try:
+            if not hasattr(self, 'xml_path') or not self.xml_path:
+                QMessageBox.warning(
+                    self,
+                    "No Dataset",
+                    "No dataset is currently loaded."
+                )
+                return
+
+            # Confirm with user
+            reply = QMessageBox.question(
+                self,
+                "Generate Cache",
+                "This will regenerate thumbnail and color caches for all AOIs in this dataset.\n\n"
+                "This may take a few minutes depending on the dataset size.\n\n"
+                "Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # Create progress dialog
+            self.cache_progress_dialog = QProgressDialog(
+                "Initializing cache generation...",
+                "Cancel",
+                0,
+                100,
+                self
+            )
+            self.cache_progress_dialog.setWindowTitle("Generating Cache")
+            self.cache_progress_dialog.setWindowModality(Qt.WindowModal)
+            self.cache_progress_dialog.setMinimumDuration(0)
+            self.cache_progress_dialog.setValue(0)
+
+            # Create backfill service
+            self.backfill_service = BackfillCacheService()
+
+            # Connect signals
+            self.backfill_service.progress_message.connect(
+                lambda msg: self.cache_progress_dialog.setLabelText(msg)
+            )
+            self.backfill_service.progress_percent.connect(
+                lambda percent: self.cache_progress_dialog.setValue(percent)
+            )
+            self.backfill_service.complete.connect(self._on_cache_generation_complete)
+            self.backfill_service.error.connect(self._on_cache_generation_error)
+
+            # Connect cancel button
+            self.cache_progress_dialog.canceled.connect(self.backfill_service.cancel)
+
+            # Start cache generation in background thread
+            from PySide6.QtCore import QThread
+
+            self.cache_thread = QThread()
+            self.backfill_service.moveToThread(self.cache_thread)
+
+            # Start thread and trigger regeneration
+            self.cache_thread.started.connect(
+                lambda: self.backfill_service.regenerate_cache(self.xml_path)
+            )
+            self.cache_thread.start()
+
+            self.logger.info("Started cache generation")
+
+        except Exception as e:
+            self.logger.error(f"Error starting cache generation: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to start cache generation:\n{e}"
+            )
+
+    def _on_cache_generation_complete(self, total_images: int, total_aois: int):
+        """Handle cache generation completion."""
+        try:
+            # Stop thread
+            if hasattr(self, 'cache_thread'):
+                self.cache_thread.quit()
+                self.cache_thread.wait()
+
+            # Close progress dialog
+            if hasattr(self, 'cache_progress_dialog'):
+                self.cache_progress_dialog.close()
+
+            # Show completion message
+            QMessageBox.information(
+                self,
+                "Cache Generated",
+                f"Cache generation complete!\n\n"
+                f"Processed {total_images} images with {total_aois} AOIs.\n\n"
+                f"The gallery will now load much faster."
+            )
+
+            # Reload gallery if in gallery mode to show cached results
+            if self.gallery_mode and hasattr(self, 'gallery_controller'):
+                self.gallery_controller.model.set_dataset_directory(self.xml_path)
+                self.gallery_controller.load_all_aois()
+
+            self.logger.info(f"Cache generation complete: {total_images} images, {total_aois} AOIs")
+
+        except Exception as e:
+            self.logger.error(f"Error handling cache completion: {e}")
+
+    def _on_cache_generation_error(self, error_msg: str):
+        """Handle cache generation error."""
+        try:
+            # Stop thread
+            if hasattr(self, 'cache_thread'):
+                self.cache_thread.quit()
+                self.cache_thread.wait()
+
+            # Close progress dialog
+            if hasattr(self, 'cache_progress_dialog'):
+                self.cache_progress_dialog.close()
+
+            # Show error message
+            QMessageBox.critical(
+                self,
+                "Cache Generation Error",
+                f"An error occurred during cache generation:\n\n{error_msg}"
+            )
+
+            self.logger.error(f"Cache generation error: {error_msg}")
+
+        except Exception as e:
+            self.logger.error(f"Error handling cache error: {e}")
 
     def _show_help_dialog(self):
         """Show the help dialog."""
@@ -271,6 +660,36 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.help_dialog.show()
         self.help_dialog.raise_()
         self.help_dialog.activateWindow()
+
+    def showEvent(self, event):
+        """Handle the show event - widget is now visible."""
+        super().showEvent(event)
+
+        # If gallery setup was pending and we're now visible, we can prepare it
+        # but don't actually create it until the user needs it
+        if self._gallery_setup_pending and hasattr(self, 'gallery_controller'):
+            # Just mark that we're ready to create the gallery when needed
+            self.logger.debug("Viewer is now visible, gallery can be created when needed")
+
+    def resizeEvent(self, event):
+        """Handle resize event - keep gallery widget sized correctly."""
+        super().resizeEvent(event)
+
+        # If gallery widget exists and is visible (in gallery mode), update its geometry
+        if (hasattr(self, 'gallery_widget') and self.gallery_widget and
+            hasattr(self, 'aoiListWidget') and hasattr(self, 'gallery_mode') and
+            self.gallery_mode and self.gallery_widget.isVisible()):
+
+            # Fill frame width for responsive grid display
+            frame_rect = self.aoiFrame.rect()
+            aoi_list_rect = self.aoiListWidget.geometry()
+
+            self.gallery_widget.setGeometry(
+                5,
+                aoi_list_rect.y(),
+                frame_rect.width() - 10,
+                aoi_list_rect.height()
+            )
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
@@ -286,6 +705,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._hide_image_change(True)
         if e.key() == Qt.Key_Up or e.key() == Qt.Key_U:
             self._hide_image_change(False)
+        if e.key() == Qt.Key_G and e.modifiers() == Qt.NoModifier:
+            # Toggle gallery mode with 'G' key
+            self._toggle_gallery_mode()
         if e.key() == Qt.Key_H and e.modifiers() == Qt.ControlModifier:
             self._open_image_adjustment_dialog()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
@@ -347,7 +769,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if len(self.images) == 0:
             self._show_no_images_message()
         else:
+            # Check for caches and prompt user if missing
+            self._check_and_prompt_for_caches()
+
             self._load_initial_image()
+
+            # Don't set up gallery here - defer until first use
+            # Gallery will be created when user first toggles to gallery mode
+
             self.helpButton.clicked.connect(self._show_help_dialog)
             self.previousImageButton.clicked.connect(self._previousImageButton_clicked)
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
@@ -395,12 +824,102 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.current_gsd = None
             self.measure_dialog = None
             self.help_dialog = None
-            
+
             # Dialog state tracking for button styling
             self.adjustments_dialog_open = False
             self.measure_dialog_open = False
             self.gps_map_open = False
             self.rotate_image_open = False
+
+    def _check_and_prompt_for_caches(self):
+        """
+        Check if cache directories exist, and if not, prompt user to locate them.
+
+        Returns:
+            bool: True if caches are available (found or user declined), False if user wants to retry
+        """
+        try:
+            # Get the expected cache directory from xml_path
+            results_dir = Path(self.xml_path).parent
+            thumbnail_cache_dir = results_dir / '.thumbnails'
+            image_thumbnail_cache_dir = results_dir / '.image_thumbnails'
+            color_cache_dir = results_dir / '.color_cache'
+
+            # Check which caches are missing
+            missing_caches = []
+            if not thumbnail_cache_dir.exists():
+                missing_caches.append('AOI thumbnails')
+            if not image_thumbnail_cache_dir.exists():
+                missing_caches.append('Image thumbnails')
+            if not color_cache_dir.exists():
+                missing_caches.append('Color cache')
+
+            # If all caches exist, no need to prompt
+            if not missing_caches:
+                return True
+
+            # Show dialog to prompt user
+            dialog = CacheLocationDialog(self, missing_caches)
+            result = dialog.exec()
+
+            if result == QDialog.Accepted:
+                # User selected a cache folder
+                selected_path = dialog.get_selected_path()
+                if selected_path:
+                    # Store for use by all controllers
+                    self.alternative_cache_dir = str(selected_path)
+                    # Update cache paths for all controllers
+                    self._update_cache_paths(selected_path)
+                    self.logger.info(f"Using cache from: {selected_path}")
+                    return True
+
+            # User declined - proceed without cache
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error checking caches: {e}")
+            return True  # Continue anyway
+
+    def _update_cache_paths(self, cache_dir: Path):
+        """
+        Update cache directory paths for all controllers to use an alternative location.
+
+        Args:
+            cache_dir: Path to the directory containing cache subdirectories
+        """
+        try:
+            from core.services.ColorCacheService import ColorCacheService
+
+            # Update gallery controller's model cache paths
+            if hasattr(self, 'gallery_controller') and self.gallery_controller:
+                model = self.gallery_controller.model
+
+                # Update color cache service
+                color_cache_path = cache_dir / '.color_cache'
+                if color_cache_path.exists():
+                    model.color_cache_service = ColorCacheService(cache_dir=str(color_cache_path))
+                    model.dataset_dir = cache_dir  # Update the dataset dir reference
+                    self.logger.info(f"Using color cache from: {color_cache_path}")
+
+                # Update thumbnail loader cache path
+                thumbnail_cache_path = cache_dir / '.thumbnails'
+                if thumbnail_cache_path.exists() and hasattr(model, 'thumbnail_loader'):
+                    model.thumbnail_loader.set_dataset_cache_dir(str(thumbnail_cache_path))
+                    self.logger.info(f"Using AOI thumbnail cache from: {thumbnail_cache_path}")
+
+            # Update thumbnail controller for main image thumbnails
+            if hasattr(self, 'thumbnail_controller') and self.thumbnail_controller:
+                image_thumbnail_path = cache_dir / '.image_thumbnails'
+                if image_thumbnail_path.exists():
+                    # Store the alternative cache path for thumbnail loader to use
+                    self.thumbnail_controller.alternative_cache_dir = str(cache_dir)
+                    # If loader is already created, update it
+                    if hasattr(self.thumbnail_controller, 'loader') and self.thumbnail_controller.loader:
+                        self.thumbnail_controller.loader.results_dir = str(cache_dir)
+                    self.logger.info(f"Using image thumbnail cache from: {image_thumbnail_path}")
+
+        except Exception as e:
+            self.logger.error(f"Error updating cache paths: {e}")
 
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
@@ -952,10 +1471,234 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Delegate to AOIController
         self.aoi_controller.exit_creation_mode()
 
+    def _ensure_review_metadata(self):
+        """Ensure review metadata exists in the XML, prompt user for name if needed."""
+        import uuid
+        from datetime import datetime
+
+        review_meta = self.xml_service.get_review_metadata()
+
+        if not review_meta or not review_meta.get('review_id'):
+            # Get reviewer name from settings or prompt
+            reviewer_name = self.settings_service.get_setting('ReviewerName', '')
+
+            if not reviewer_name:
+                dialog = ReviewerNameDialog(self, reviewer_name)
+                if dialog.exec() == QDialog.Accepted:
+                    reviewer_name = dialog.get_reviewer_name()
+                    if dialog.remember_name():
+                        self.settings_service.set_setting('ReviewerName', reviewer_name)
+                else:
+                    reviewer_name = "Unknown Reviewer"
+
+            # Generate unique review ID
+            review_id = str(uuid.uuid4())
+            review_date = datetime.now().isoformat()
+
+            # Add to XML
+            self.xml_service.add_review_metadata(review_id, reviewer_name, review_date)
+            self.xml_service.save_xml_file(self.xml_path)
+
+            self.current_reviewer = reviewer_name
+            self.current_review_id = review_id
+        else:
+            self.current_reviewer = review_meta.get('reviewer_name', 'Unknown')
+            self.current_review_id = review_meta.get('review_id')
+
+        # Update reviewer display in status bar
+        self._update_reviewer_display()
+
+    def _update_reviewer_display(self):
+        """Update the reviewer name display in the UI."""
+        # This will be displayed in the title bar or a label
+        # For now, just log it
+        self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
+
+    def _validate_and_fix_paths(self):
+        """
+        Validate that all image and mask paths exist. Prompt user to select folders if missing.
+
+        Returns:
+            bool: True if all paths are valid or were fixed, False if user cancelled.
+        """
+        missing_images = []
+        missing_masks = []
+
+        # Check which images and masks are missing
+        for image in self.images:
+            image_path = image.get('path', '')
+            mask_path = image.get('mask_path', '')
+
+            if image_path and not os.path.exists(image_path):
+                missing_images.append({
+                    'image': image,
+                    'filename': os.path.basename(image_path)
+                })
+
+            if mask_path and not os.path.exists(mask_path):
+                missing_masks.append({
+                    'image': image,
+                    'filename': os.path.basename(mask_path)
+                })
+
+        # Prompt for source images folder if any are missing
+        if missing_images:
+            if not self._prompt_for_source_folder(missing_images):
+                return False  # User cancelled
+
+        # Prompt for masks folder if any are missing
+        if missing_masks:
+            if not self._prompt_for_mask_folder(missing_masks):
+                return False  # User cancelled
+
+        return True
+
+    def _prompt_for_source_folder(self, missing_images):
+        """
+        Prompt user to select folder containing source images.
+
+        Args:
+            missing_images (list): List of dicts with 'image' and 'filename' keys.
+
+        Returns:
+            bool: True if successful, False if user cancelled.
+        """
+        # Build message with list of missing files
+        file_list = '\n'.join([f"  • {item['filename']}" for item in missing_images[:10]])
+        if len(missing_images) > 10:
+            file_list += f"\n  ... and {len(missing_images) - 10} more"
+
+        message = (f"{len(missing_images)} source image(s) not found at expected locations:\n\n"
+                   f"{file_list}\n\n"
+                   f"Please select the folder containing the source images.")
+
+        # Show informative message
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setWindowTitle("Source Images Not Found")
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        msg_box.setDefaultButton(QMessageBox.Ok)
+
+        if msg_box.exec() != QMessageBox.Ok:
+            return False
+
+        # Open folder selection dialog
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Source Images Folder",
+            "",
+            QFileDialog.ShowDirsOnly
+        )
+
+        if not folder:
+            return False  # User cancelled
+
+        # Update paths for files found in the selected folder
+        files_found = 0
+        still_missing = []
+
+        for item in missing_images:
+            filename = item['filename']
+            new_path = os.path.join(folder, filename)
+
+            if os.path.exists(new_path):
+                item['image']['path'] = new_path
+                files_found += 1
+            else:
+                still_missing.append(filename)
+
+        # Report results
+        if still_missing:
+            still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
+            if len(still_missing) > 10:
+                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
+
+            QMessageBox.warning(
+                self,
+                "Some Images Still Missing",
+                f"Found {files_found} of {len(missing_images)} images.\n\n"
+                f"Still missing:\n{still_missing_list}"
+            )
+            return False
+
+        return True
+
+    def _prompt_for_mask_folder(self, missing_masks):
+        """
+        Prompt user to select folder containing detection masks.
+
+        Args:
+            missing_masks (list): List of dicts with 'image' and 'filename' keys.
+
+        Returns:
+            bool: True if successful, False if user cancelled.
+        """
+        # Build message with list of missing files
+        file_list = '\n'.join([f"  • {item['filename']}" for item in missing_masks[:10]])
+        if len(missing_masks) > 10:
+            file_list += f"\n  ... and {len(missing_masks) - 10} more"
+
+        message = (f"{len(missing_masks)} detection mask(s) not found at expected locations:\n\n"
+                   f"{file_list}\n\n"
+                   f"Please select the folder containing the mask files.")
+
+        # Show informative message
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setWindowTitle("Detection Masks Not Found")
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        msg_box.setDefaultButton(QMessageBox.Ok)
+
+        if msg_box.exec() != QMessageBox.Ok:
+            return False
+
+        # Open folder selection dialog
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Masks Folder",
+            "",
+            QFileDialog.ShowDirsOnly
+        )
+
+        if not folder:
+            return False  # User cancelled
+
+        # Update paths for files found in the selected folder
+        files_found = 0
+        still_missing = []
+
+        for item in missing_masks:
+            filename = item['filename']
+            new_path = os.path.join(folder, filename)
+
+            if os.path.exists(new_path):
+                item['image']['mask_path'] = new_path
+                files_found += 1
+            else:
+                still_missing.append(filename)
+
+        # Report results
+        if still_missing:
+            still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
+            if len(still_missing) > 10:
+                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
+
+            QMessageBox.warning(
+                self,
+                "Some Masks Still Missing",
+                f"Found {files_found} of {len(missing_masks)} masks.\n\n"
+                f"Still missing:\n{still_missing_list}"
+            )
+            return False
+
+        return True
+
     def _apply_icons(self):
         """Apply themed icons to all buttons in the viewer."""
         from helpers.IconHelper import IconHelper
-        
+
         self.magnifyButton.setIcon(IconHelper.create_icon('fa6s.magnifying-glass', self.theme))
         self.kmlButton.setIcon(IconHelper.create_icon('fa5s.map-marker-alt', self.theme))
         self.pdfButton.setIcon(IconHelper.create_icon('fa6s.file-pdf', self.theme))

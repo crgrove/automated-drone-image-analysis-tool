@@ -66,6 +66,11 @@ class MRMapService(AlgorithmService):
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+
+            # Add confidence scores to AOIs based on bin counts (rarity scores)
+            if areas_of_interest:
+                areas_of_interest = self._add_confidence_scores(areas_of_interest, bin_counts, mask)
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image
@@ -157,6 +162,76 @@ class MRMapService(AlgorithmService):
             rect1[3] < rect2[1] or  # rect1 bottom < rect2 top
             rect1[1] > rect2[3]     # rect1 top > rect2 bottom
         )
+
+    def _add_confidence_scores(self, areas_of_interest, bin_counts, mask):
+        """
+        Adds confidence scores to AOIs based on histogram bin counts (rarity scores).
+        Lower bin count = rarer color = higher confidence.
+
+        Args:
+            areas_of_interest (list): List of AOI dictionaries
+            bin_counts (numpy.ndarray): Histogram bin counts for each pixel
+            mask (numpy.ndarray): Binary detection mask
+
+        Returns:
+            list: AOIs with added confidence scores
+        """
+        # Get all bin counts from detected pixels to find max for normalization
+        detected_bin_counts = bin_counts[mask > 0]
+        if len(detected_bin_counts) == 0:
+            return areas_of_interest
+
+        max_bin_count = np.max(detected_bin_counts)
+        min_bin_count = np.min(detected_bin_counts)
+        bin_range = max_bin_count - min_bin_count if max_bin_count > min_bin_count else 1.0
+
+        # Add confidence to each AOI
+        for aoi in areas_of_interest:
+            detected_pixels = aoi.get('detected_pixels', [])
+            if len(detected_pixels) > 0:
+                # Extract bin counts for this AOI's pixels
+                # NOTE: detected_pixels are in ORIGINAL resolution, but bin_counts are in PROCESSING resolution
+                # Need to transform coordinates back to processing resolution for lookup
+                aoi_bin_counts = []
+                for pixel in detected_pixels:
+                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
+
+                    # Transform back to processing resolution
+                    if self.scale_factor != 1.0:
+                        x = int(x_orig * self.scale_factor)
+                        y = int(y_orig * self.scale_factor)
+                    else:
+                        x, y = x_orig, y_orig
+
+                    if 0 <= y < bin_counts.shape[0] and 0 <= x < bin_counts.shape[1]:
+                        aoi_bin_counts.append(bin_counts[y, x])
+
+                if len(aoi_bin_counts) > 0:
+                    # Calculate mean bin count for this AOI
+                    mean_bin_count = np.mean(aoi_bin_counts)
+
+                    # Normalize to 0-100 scale (INVERTED: lower bin count = rarer = higher confidence)
+                    normalized_score = ((max_bin_count - mean_bin_count) / bin_range) * 100.0
+
+                    # Add confidence fields to AOI
+                    aoi['confidence'] = round(normalized_score, 1)
+                    aoi['score_type'] = 'rarity'
+                    aoi['raw_score'] = round(float(mean_bin_count), 3)
+                    aoi['score_method'] = 'mean'
+                else:
+                    # No valid pixels, set low confidence
+                    aoi['confidence'] = 0.0
+                    aoi['score_type'] = 'rarity'
+                    aoi['raw_score'] = 0.0
+                    aoi['score_method'] = 'mean'
+            else:
+                # No detected pixels, set low confidence
+                aoi['confidence'] = 0.0
+                aoi['score_type'] = 'rarity'
+                aoi['raw_score'] = 0.0
+                aoi['score_method'] = 'mean'
+
+        return areas_of_interest
 
 
 class Histogram:

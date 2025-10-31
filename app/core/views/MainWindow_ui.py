@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
     QMainWindow, QMenu, QMenuBar, QPlainTextEdit,
     QPushButton, QSizePolicy, QSpacerItem, QSpinBox,
     QStatusBar, QVBoxLayout, QWidget)
-from . import resources_rc
+import resources_rc
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -50,6 +50,9 @@ class Ui_MainWindow(object):
         self.actionIntegratedDetection = QAction(MainWindow)
         self.actionIntegratedDetection.setObjectName(u"actionIntegratedDetection")
         self.actionIntegratedDetection.setFont(font)
+        self.actionCoordinator = QAction(MainWindow)
+        self.actionCoordinator.setObjectName(u"actionCoordinator")
+        self.actionCoordinator.setFont(font)
         self.actionHelp = QAction(MainWindow)
         self.actionHelp.setObjectName(u"actionHelp")
         self.actionHelp.setFont(font)
@@ -156,11 +159,23 @@ class Ui_MainWindow(object):
         self.maxAreaSpinBox.setObjectName(u"maxAreaSpinBox")
         self.maxAreaSpinBox.setFont(font)
         self.maxAreaSpinBox.setMinimum(0)
-        self.maxAreaSpinBox.setMaximum(1999)
+        self.maxAreaSpinBox.setMaximum(99999)
         self.maxAreaSpinBox.setSingleStep(1)
         self.maxAreaSpinBox.setValue(0)
 
         self.GeneralLayout.addWidget(self.maxAreaSpinBox)
+
+        self.processingResolutionLabel = QLabel(self.GlobalOptionsFrame)
+        self.processingResolutionLabel.setObjectName(u"processingResolutionLabel")
+        self.processingResolutionLabel.setFont(font)
+
+        self.GeneralLayout.addWidget(self.processingResolutionLabel)
+
+        self.processingResolutionCombo = QComboBox(self.GlobalOptionsFrame)
+        self.processingResolutionCombo.setObjectName(u"processingResolutionCombo")
+        self.processingResolutionCombo.setFont(font)
+
+        self.GeneralLayout.addWidget(self.processingResolutionCombo)
 
         self.generalHorizontalSpacer1 = QSpacerItem(48, 43, QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
 
@@ -428,6 +443,7 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionVideoParser)
         self.menuFile.addAction(self.actionRTMPDetection)
         self.menuFile.addAction(self.actionIntegratedDetection)
+        self.menuFile.addAction(self.actionCoordinator)
         self.menuHelp.addAction(self.actionHelp)
         self.menuHelp.addAction(self.actionCommunityHelp)
 
@@ -500,6 +516,21 @@ class Ui_MainWindow(object):
 "\u2022 Enhanced detection accuracy through algorithm combination\n"
 "Designed for detecting unusual objects, movement, and colors in real-time video streams.", None))
 #endif // QT_CONFIG(tooltip)
+        self.actionCoordinator.setText(QCoreApplication.translate("MainWindow", u"Search Coordinator", None))
+#if QT_CONFIG(tooltip)
+        self.actionCoordinator.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Search Coordinator window for managing multi-batch review projects.\n"
+"Features:\n"
+"\u2022 Create and manage search projects with multiple batches\n"
+"\u2022 Track reviewer progress across multiple image sets\n"
+"\u2022 Consolidate review results from multiple reviewers\n"
+"\u2022 View dashboard with search status and metrics\n"
+"\u2022 Export consolidated results\n"
+"\u2022 Manage batch assignments and reviewer coordination\n"
+"Ideal for large-scale searches with multiple reviewers and image batches.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(shortcut)
+        self.actionCoordinator.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Shift+C", None))
+#endif // QT_CONFIG(shortcut)
         self.actionHelp.setText(QCoreApplication.translate("MainWindow", u"Manual", None))
 #if QT_CONFIG(tooltip)
         self.actionHelp.setToolTip(QCoreApplication.translate("MainWindow", u"Open the online help documentation in your web browser.\n"
@@ -570,7 +601,7 @@ class Ui_MainWindow(object):
         self.maxAreaLabel.setText(QCoreApplication.translate("MainWindow", u"Max Object Area (px):", None))
 #if QT_CONFIG(tooltip)
         self.maxAreaSpinBox.setToolTip(QCoreApplication.translate("MainWindow", u"Set the maximum object area in pixels for detection filtering.\n"
-"\u2022 Range: 0 to 1999 pixels\n"
+"\u2022 Range: 0 to 99999 pixels\n"
 "\u2022 Default: 0 (None - no maximum filter applied)\n"
 "\u2022 Special value: 0 displays as \"None\"\n"
 "Objects larger than this threshold will be filtered out and not detected.\n"
@@ -580,6 +611,26 @@ class Ui_MainWindow(object):
 "Use to exclude very large false positive detections like shadows or terrain features.", None))
 #endif // QT_CONFIG(tooltip)
         self.maxAreaSpinBox.setSpecialValueText(QCoreApplication.translate("MainWindow", u"None", None))
+#if QT_CONFIG(tooltip)
+        self.processingResolutionLabel.setToolTip(QCoreApplication.translate("MainWindow", u"Resolution at which images are processed.\n"
+"Lower resolutions = faster processing but may miss small objects.", None))
+#endif // QT_CONFIG(tooltip)
+        self.processingResolutionLabel.setText(QCoreApplication.translate("MainWindow", u"Processing Resolution:", None))
+#if QT_CONFIG(tooltip)
+        self.processingResolutionCombo.setToolTip(QCoreApplication.translate("MainWindow", u"Select processing resolution as percentage of original image size:\n"
+"\u2022 100%: Original resolution (no scaling, highest quality, slowest)\n"
+"\u2022 75%: High quality (~56% of pixels, ~1.8x faster)\n"
+"\u2022 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED\n"
+"\u2022 33%: Fast processing (~11% of pixels, ~9x faster)\n"
+"\u2022 25%: Very fast (6% of pixels, ~16x faster)\n"
+"\u2022 10%: Ultra fast (1% of pixels, ~100x faster)\n"
+"\n"
+"Percentage scaling preserves original aspect ratio.\n"
+"Works with any image size, orientation, or aspect ratio.\n"
+"\n"
+"Min/Max Area values are always specified in original resolution.\n"
+"All results are returned in original resolution coordinates.", None))
+#endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.identifierColor.setToolTip(QCoreApplication.translate("MainWindow", u"Color used to mark and identify detected objects in output images.\n"
 "Click the color button to select a different color.", None))

@@ -200,12 +200,20 @@ class UnifiedMapExportThread(QThread):
                             if user_comment:
                                 description = f'"{user_comment}"\n\n'
                             
+                            # Add confidence info if available
+                            confidence_info = ""
+                            if 'confidence' in aoi:
+                                confidence = aoi['confidence']
+                                score_type = aoi.get('score_type', 'unknown')
+                                confidence_info = f"Confidence: {confidence:.1f}% ({score_type})\n"
+
                             description += (
                                 f"Flagged AOI from {image_name}\n"
                                 f"{gps_note}"
                                 f"AOI Index: {aoi_idx + 1}\n"
                                 f"Center: ({center[0]}, {center[1]})\n"
                                 f"Area: {area:.0f} pixels\n"
+                                f"{confidence_info}"
                                 f"{color_info}"
                             )
                             
