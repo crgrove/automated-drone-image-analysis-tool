@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QGroupBox, QSlider, QSpinBox,
-                               QCheckBox, QColorDialog)
+                               QCheckBox, QColorDialog, QLineEdit, QDoubleSpinBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 import colorsys
@@ -11,7 +11,7 @@ import colorsys
 class AOIFilterDialog(QDialog):
     """Dialog for setting color and pixel area filters for AOIs."""
 
-    def __init__(self, parent, current_filters=None):
+    def __init__(self, parent, current_filters=None, temperature_unit='C', is_thermal=False):
         """Initialize the filter dialog.
 
         Args:
@@ -21,8 +21,13 @@ class AOIFilterDialog(QDialog):
                 'color_range': int (degrees) or None,
                 'area_min': float or None,
                 'area_max': float or None,
-                'flagged_only': bool or None
+                'flagged_only': bool or None,
+                'comment_filter': str or None,
+                'temperature_min': float or None,
+                'temperature_max': float or None
             }
+            temperature_unit: Temperature unit ('F' or 'C') for display
+            is_thermal: Whether dataset has thermal data
         """
         super().__init__(parent)
 
@@ -35,6 +40,11 @@ class AOIFilterDialog(QDialog):
         self.area_min = current_filters.get('area_min', None)
         self.area_max = current_filters.get('area_max', None)
         self.flagged_only = current_filters.get('flagged_only', False)
+        self.comment_filter = current_filters.get('comment_filter', None)
+        self.temperature_min = current_filters.get('temperature_min', None)
+        self.temperature_max = current_filters.get('temperature_max', None)
+        self.temperature_unit = temperature_unit
+        self.is_thermal = is_thermal
 
         self.setupUi()
 
@@ -49,7 +59,7 @@ class AOIFilterDialog(QDialog):
         layout = QVBoxLayout()
 
         # Instructions
-        instructions = QLabel("Filter Areas of Interest by flagged status, color, and/or pixel area:")
+        instructions = QLabel("Filter Areas of Interest by flagged status, comments, color, and/or pixel area:")
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
@@ -67,6 +77,40 @@ class AOIFilterDialog(QDialog):
 
         flagged_group.setLayout(flagged_layout)
         layout.addWidget(flagged_group)
+
+        # ===== Comment Filter Group =====
+        comment_group = QGroupBox("Comment Filter")
+        comment_layout = QVBoxLayout()
+
+        # Enable comment filter checkbox
+        self.comment_filter_enabled = QCheckBox("Enable Comment Filter")
+        self.comment_filter_enabled.setChecked(self.comment_filter is not None and self.comment_filter != "")
+        self.comment_filter_enabled.toggled.connect(self.on_comment_filter_toggled)
+        comment_layout.addWidget(self.comment_filter_enabled)
+
+        # Comment pattern input
+        pattern_layout = QHBoxLayout()
+        pattern_layout.addWidget(QLabel("Pattern:"))
+
+        self.comment_pattern_input = QLineEdit()
+        self.comment_pattern_input.setPlaceholderText("e.g., *work* or crack* or *damage")
+        if self.comment_filter:
+            self.comment_pattern_input.setText(self.comment_filter)
+        pattern_layout.addWidget(self.comment_pattern_input)
+
+        comment_layout.addLayout(pattern_layout)
+
+        # Info labels
+        info_label1 = QLabel("Use * as wildcard for any characters (case-insensitive)")
+        info_label1.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
+        comment_layout.addWidget(info_label1)
+
+        info_label2 = QLabel("Only AOIs with non-empty comments matching the pattern will be shown")
+        info_label2.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
+        comment_layout.addWidget(info_label2)
+
+        comment_group.setLayout(comment_layout)
+        layout.addWidget(comment_group)
 
         # ===== Color Filter Group =====
         color_group = QGroupBox("Color Filter")
@@ -168,6 +212,74 @@ class AOIFilterDialog(QDialog):
         area_group.setLayout(area_layout)
         layout.addWidget(area_group)
 
+        # ===== Temperature Filter Group =====
+        temp_group = QGroupBox("Temperature Filter")
+        temp_layout = QVBoxLayout()
+
+        # Enable temperature filter checkbox
+        self.temperature_filter_enabled = QCheckBox("Enable Temperature Filter")
+        self.temperature_filter_enabled.setChecked(self.temperature_min is not None or self.temperature_max is not None)
+        self.temperature_filter_enabled.toggled.connect(self.on_temperature_filter_toggled)
+        temp_layout.addWidget(self.temperature_filter_enabled)
+
+        # Temperature unit suffix
+        temp_suffix = f" °{self.temperature_unit}"
+
+        # Min temperature
+        min_temp_layout = QHBoxLayout()
+        min_temp_layout.addWidget(QLabel(f"Minimum Temperature ({self.temperature_unit}):"))
+
+        self.min_temp_spin = QDoubleSpinBox()
+        self.min_temp_spin.setMinimum(-273.15 if self.temperature_unit == 'C' else -459.67)
+        self.min_temp_spin.setMaximum(1000 if self.temperature_unit == 'C' else 1832)
+        self.min_temp_spin.setDecimals(1)
+        # Convert from Celsius to user's unit for display
+        if self.temperature_min is not None:
+            if self.temperature_unit == 'F':
+                self.min_temp_spin.setValue(self.temperature_min * 1.8 + 32.0)
+            else:
+                self.min_temp_spin.setValue(self.temperature_min)
+        else:
+            self.min_temp_spin.setValue(-50 if self.temperature_unit == 'C' else -58)
+        self.min_temp_spin.setSuffix(temp_suffix)
+        min_temp_layout.addWidget(self.min_temp_spin)
+        min_temp_layout.addStretch()
+
+        temp_layout.addLayout(min_temp_layout)
+
+        # Max temperature
+        max_temp_layout = QHBoxLayout()
+        max_temp_layout.addWidget(QLabel(f"Maximum Temperature ({self.temperature_unit}):"))
+
+        self.max_temp_spin = QDoubleSpinBox()
+        self.max_temp_spin.setMinimum(-273.15 if self.temperature_unit == 'C' else -459.67)
+        self.max_temp_spin.setMaximum(1000 if self.temperature_unit == 'C' else 1832)
+        self.max_temp_spin.setDecimals(1)
+        # Convert from Celsius to user's unit for display
+        if self.temperature_max is not None:
+            if self.temperature_unit == 'F':
+                self.max_temp_spin.setValue(self.temperature_max * 1.8 + 32.0)
+            else:
+                self.max_temp_spin.setValue(self.temperature_max)
+        else:
+            self.max_temp_spin.setValue(200 if self.temperature_unit == 'C' else 392)
+        self.max_temp_spin.setSuffix(temp_suffix)
+        max_temp_layout.addWidget(self.max_temp_spin)
+        max_temp_layout.addStretch()
+
+        temp_layout.addLayout(max_temp_layout)
+
+        # Info label
+        if not self.is_thermal:
+            info_label = QLabel("Temperature filtering unavailable (no thermal data)")
+            info_label.setStyleSheet("QLabel { color: #F44336; font-size: 9pt; font-weight: bold; }")
+            temp_layout.addWidget(info_label)
+            # Disable temperature filter controls
+            self.temperature_filter_enabled.setEnabled(False)
+
+        temp_group.setLayout(temp_layout)
+        layout.addWidget(temp_group)
+
         # Spacer
         layout.addStretch()
 
@@ -194,8 +306,10 @@ class AOIFilterDialog(QDialog):
         self.setLayout(layout)
 
         # Update initial UI state
+        self.on_comment_filter_toggled(self.comment_filter_enabled.isChecked())
         self.on_color_filter_toggled(self.color_filter_enabled.isChecked())
         self.on_area_filter_toggled(self.area_filter_enabled.isChecked())
+        self.on_temperature_filter_toggled(self.temperature_filter_enabled.isChecked())
         self.update_color_preview()
 
     def select_color(self):
@@ -250,11 +364,23 @@ class AOIFilterDialog(QDialog):
         self.min_area_spin.setEnabled(checked)
         self.max_area_spin.setEnabled(checked)
 
+    def on_temperature_filter_toggled(self, checked):
+        """Enable/disable temperature filter controls."""
+        self.min_temp_spin.setEnabled(checked)
+        self.max_temp_spin.setEnabled(checked)
+
+    def on_comment_filter_toggled(self, checked):
+        """Enable/disable comment filter controls."""
+        self.comment_pattern_input.setEnabled(checked)
+
     def clear_all_filters(self):
         """Clear all filter settings."""
         self.flagged_filter_enabled.setChecked(False)
+        self.comment_filter_enabled.setChecked(False)
+        self.comment_pattern_input.clear()
         self.color_filter_enabled.setChecked(False)
         self.area_filter_enabled.setChecked(False)
+        self.temperature_filter_enabled.setChecked(False)
         self.color_hue = None
         self.update_color_preview()
 
@@ -264,17 +390,44 @@ class AOIFilterDialog(QDialog):
         Returns:
             dict: Filter settings {
                 'flagged_only': bool,
+                'comment_filter': str or None,
                 'color_hue': int or None,
                 'color_range': int or None,
                 'area_min': float or None,
-                'area_max': float or None
+                'area_max': float or None,
+                'temperature_min': float or None (in Celsius),
+                'temperature_max': float or None (in Celsius)
             }
         """
+        # Get comment filter pattern if enabled and not empty
+        comment_pattern = None
+        if self.comment_filter_enabled.isChecked():
+            pattern_text = self.comment_pattern_input.text().strip()
+            if pattern_text:
+                comment_pattern = pattern_text
+
+        # Get temperature filter values (convert to Celsius for internal storage)
+        temp_min = None
+        temp_max = None
+        if self.temperature_filter_enabled.isChecked():
+            temp_min_value = self.min_temp_spin.value()
+            temp_max_value = self.max_temp_spin.value()
+            # Convert from user's unit to Celsius
+            if self.temperature_unit == 'F':
+                temp_min = (temp_min_value - 32.0) / 1.8
+                temp_max = (temp_max_value - 32.0) / 1.8
+            else:
+                temp_min = temp_min_value
+                temp_max = temp_max_value
+
         filters = {
             'flagged_only': self.flagged_filter_enabled.isChecked(),
+            'comment_filter': comment_pattern,
             'color_hue': self.color_hue if self.color_filter_enabled.isChecked() else None,
             'color_range': self.color_range if self.color_filter_enabled.isChecked() else None,
             'area_min': float(self.min_area_spin.value()) if self.area_filter_enabled.isChecked() else None,
-            'area_max': float(self.max_area_spin.value()) if self.area_filter_enabled.isChecked() else None
+            'area_max': float(self.max_area_spin.value()) if self.area_filter_enabled.isChecked() else None,
+            'temperature_min': temp_min,
+            'temperature_max': temp_max
         }
         return filters

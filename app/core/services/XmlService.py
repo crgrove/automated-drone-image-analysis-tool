@@ -134,6 +134,9 @@ class XmlService:
                         area_of_interest['raw_score'] = float(area_of_interest_xml.get('raw_score'))
                     if area_of_interest_xml.get('score_method'):
                         area_of_interest['score_method'] = area_of_interest_xml.get('score_method')
+                    # Load temperature data if present (for thermal datasets)
+                    if area_of_interest_xml.get('temperature'):
+                        area_of_interest['temperature'] = float(area_of_interest_xml.get('temperature'))
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -211,6 +214,7 @@ class XmlService:
             image.set('path', img["path"])
         image.set('hidden', "False")
 
+        temp_count = 0  # Track AOIs with temperature data
         for area in img["aois"]:
             area_xml = ET.SubElement(image, 'areas_of_interest')
             area_xml.set('center', str(area['center']))
@@ -231,6 +235,10 @@ class XmlService:
                 area_xml.set('raw_score', str(area['raw_score']))
             if 'score_method' in area:
                 area_xml.set('score_method', str(area['score_method']))
+            # Save temperature data if present (for thermal datasets)
+            if 'temperature' in area and area['temperature'] is not None:
+                area_xml.set('temperature', str(area['temperature']))
+                temp_count += 1
             # Optionally save contour and detected_pixels if available
             # Note: These can be large, so we might want to make this configurable
             if 'contour' in area and area['contour']:
@@ -240,6 +248,10 @@ class XmlService:
                 # Full pixel data is preserved in the image XMP metadata
                 if len(area['detected_pixels']) <= 100:
                     area_xml.set('detected_pixels', str(area['detected_pixels']))
+
+        # Debug logging for temperature save
+        if temp_count > 0:
+            self.logger.debug(f"Saved {temp_count} AOIs with temperature data for image {img.get('path', 'unknown')}")
 
     def save_xml_file(self, path):
         """

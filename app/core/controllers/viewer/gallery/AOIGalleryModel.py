@@ -15,6 +15,7 @@ from typing import Dict, Tuple, Optional
 from core.services.LoggerService import LoggerService
 from core.services.AOIService import AOIService
 from core.services.ColorCacheService import ColorCacheService
+from core.services.TemperatureCacheService import TemperatureCacheService
 from .ThumbnailLoader import ThumbnailLoader
 
 
@@ -67,6 +68,13 @@ class AOIGalleryModel(QAbstractListModel):
 
         # Color cache service for per-dataset cached colors
         self.color_cache_service: Optional[ColorCacheService] = None
+
+        # Temperature info cache: {(image_idx, aoi_idx): temperature_celsius}
+        self._temperature_info_cache: Dict[Tuple[int, int], Optional[float]] = {}
+
+        # Temperature cache service for per-dataset cached temperatures
+        self.temperature_cache_service: Optional[TemperatureCacheService] = None
+
         self.dataset_dir: Optional[Path] = None
 
         # Cancellation flag for color calculation
@@ -98,6 +106,18 @@ class AOIGalleryModel(QAbstractListModel):
                 color_cache_dir.mkdir(parents=True, exist_ok=True)
                 self.color_cache_service = ColorCacheService(cache_dir=str(color_cache_dir))
                 self.logger.info(f"Created color cache directory at {color_cache_dir}")
+
+            # Initialize temperature cache service
+            temperature_cache_dir = self.dataset_dir / '.temperature_cache'
+            if temperature_cache_dir.exists():
+                self.temperature_cache_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
+                self.temperature_cache_service.load_cache_file()  # Load existing cached temperatures
+                self.logger.info(f"Using per-dataset temperature cache from {temperature_cache_dir}")
+            else:
+                # Create cache directory for future use
+                temperature_cache_dir.mkdir(parents=True, exist_ok=True)
+                self.temperature_cache_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
+                self.logger.info(f"Created temperature cache directory at {temperature_cache_dir}")
 
             # Update thumbnail loader with dataset cache directory
             if thumbnail_cache_dir.exists():
@@ -153,6 +173,7 @@ class AOIGalleryModel(QAbstractListModel):
         # Only clear color cache if not preserving it (i.e., loading a completely new dataset)
         if not preserve_color_cache:
             self._color_info_cache.clear()
+            self._temperature_info_cache.clear()
 
         # Rebuild index mappings for O(1) lookups
         self.row_to_aoi.clear()
@@ -168,6 +189,9 @@ class AOIGalleryModel(QAbstractListModel):
         # Pre-calculate color information for all AOIs (if not skipped)
         if not skip_color_calc:
             self._precalculate_color_info()
+
+        # Pre-load temperature information for all AOIs (from cache)
+        self._precalculate_temperature_info()
 
         # Start loading visible thumbnails
         self._queue_visible_thumbnails()
@@ -432,6 +456,21 @@ class AOIGalleryModel(QAbstractListModel):
                 if hue_degrees is not None and hex_color:
                     lines.append(f"Hue: {hue_degrees}° ({hex_color})")
 
+            # Add temperature information (for thermal datasets)
+            temp_info = self._get_temperature_info(image_idx, aoi_idx)
+            if temp_info is not None:
+                # Get temperature unit from viewer settings
+                temp_unit = 'C'
+                if self.viewer and hasattr(self.viewer, 'temperature_unit'):
+                    temp_unit = self.viewer.temperature_unit
+
+                # Convert temperature if needed
+                if temp_unit == 'F':
+                    temp_display = (temp_info * 1.8) + 32.0
+                    lines.append(f"Temperature: {temp_display:.1f}°F")
+                else:
+                    lines.append(f"Temperature: {temp_info:.1f}°C")
+
             confidence = aoi_data.get('confidence')
             if confidence is not None:
                 lines.append(f"Confidence: {confidence:.1f}%")
@@ -633,6 +672,52 @@ class AOIGalleryModel(QAbstractListModel):
         """Cancel the ongoing color calculation."""
         self._cancel_color_calc = True
 
+    def _precalculate_temperature_info(self):
+        """
+        Pre-load temperature information for all AOIs from cache.
+
+        Temperature values are already calculated during analysis and stored in the cache.
+        This method loads them into memory for fast tooltip access.
+        """
+        if not self.viewer or not self.aoi_items or not self.temperature_cache_service:
+            return
+
+        total_aois = len(self.aoi_items)
+        loaded_count = 0
+
+        self.logger.info(f"Loading temperature info for {total_aois} AOIs...")
+
+        try:
+            for img_idx, aoi_idx, aoi_data in self.aoi_items:
+                cache_key = (img_idx, aoi_idx)
+
+                # Get from per-dataset temperature cache
+                if img_idx < len(self.viewer.images):
+                    image = self.viewer.images[img_idx]
+                    image_path = image.get('path', '')
+                    xml_path = image.get('xml_path', '')
+
+                    # Store xml_path temporarily in aoi_data for cache lookups
+                    aoi_data_with_xml = aoi_data.copy()
+                    if xml_path:
+                        aoi_data_with_xml['_xml_path'] = xml_path
+
+                    cached_temp = self.temperature_cache_service.get_temperature(image_path, aoi_data_with_xml)
+
+                    if cached_temp is not None:
+                        self._temperature_info_cache[cache_key] = cached_temp
+                        loaded_count += 1
+                    else:
+                        self._temperature_info_cache[cache_key] = None
+                else:
+                    self._temperature_info_cache[cache_key] = None
+
+            if loaded_count > 0:
+                self.logger.info(f"Loaded {loaded_count} temperatures from cache")
+
+        except Exception as e:
+            self.logger.error(f"Error loading temperature info: {e}")
+
     def _get_color_info(self, image_idx, aoi_idx):
         """
         Get color information for an AOI from cache.
@@ -647,3 +732,18 @@ class AOIGalleryModel(QAbstractListModel):
         # Return cached color info (already pre-calculated)
         cache_key = (image_idx, aoi_idx)
         return self._color_info_cache.get(cache_key)
+
+    def _get_temperature_info(self, image_idx, aoi_idx):
+        """
+        Get temperature information for an AOI from cache.
+
+        Args:
+            image_idx: Index of the image containing the AOI
+            aoi_idx: Index of the AOI within the image
+
+        Returns:
+            float: Temperature in Celsius, or None if not available
+        """
+        # Return cached temperature info (already pre-calculated)
+        cache_key = (image_idx, aoi_idx)
+        return self._temperature_info_cache.get(cache_key)

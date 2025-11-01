@@ -272,6 +272,7 @@ class AlgorithmService:
         try:
             from core.services.ThumbnailCacheService import ThumbnailCacheService
             from core.services.ColorCacheService import ColorCacheService
+            from core.services.TemperatureCacheService import TemperatureCacheService
             from core.services.AOIService import AOIService
 
             if not areas_of_interest:
@@ -280,15 +281,19 @@ class AlgorithmService:
             # Set up cache directories
             thumbnail_cache_dir = Path(output_dir) / '.thumbnails'
             color_cache_dir = Path(output_dir) / '.color_cache'
+            temperature_cache_dir = Path(output_dir) / '.temperature_cache'
             thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
             color_cache_dir.mkdir(parents=True, exist_ok=True)
+            temperature_cache_dir.mkdir(parents=True, exist_ok=True)
 
             # Initialize cache services
             thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
             color_service = ColorCacheService(cache_dir=str(color_cache_dir))
+            temperature_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
 
-            # Load existing cache file to avoid overwriting colors from other processes
+            # Load existing cache files to avoid overwriting data from other processes
             color_service.load_cache_file()
+            temperature_service.load_cache_file()
 
             # Create AOIService for color calculation
             image_data = {
@@ -350,6 +355,10 @@ class AlgorithmService:
                         }
                         color_service.save_color_info(image_path, aoi, color_info)
 
+                    # Cache temperature information if present (for thermal datasets)
+                    if 'temperature' in aoi and aoi['temperature'] is not None:
+                        temperature_service.save_temperature(image_path, aoi, aoi['temperature'])
+
                 except Exception as e:
                     # Log error but continue processing other AOIs
                     print(f"Error caching AOI at {center}: {e}")
@@ -357,6 +366,9 @@ class AlgorithmService:
 
             # Save color cache to disk
             color_service.save_cache_file()
+
+            # Save temperature cache to disk (for thermal datasets)
+            temperature_service.save_cache_file()
 
         except Exception as e:
             # Don't fail the entire detection if cache generation fails

@@ -140,6 +140,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
         self.is_thermal = (self.settings['thermal'] == 'True')
+
+        # Refresh sort combo now that is_thermal is set and AOI data is loaded
+        self.aoi_controller.refresh_sort_combo()
+
         self.position_format = position_format
         self.current_image_array = None  # Cache for the current image RGB array
         self.current_image_service = None  # Keep reference to ImageService

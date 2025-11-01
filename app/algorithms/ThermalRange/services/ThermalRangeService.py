@@ -52,6 +52,48 @@ class ThermalRangeService(AlgorithmService):
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+
+            # Extract average temperature from detected pixels for each AOI
+            temps_extracted = 0
+            if areas_of_interest:
+                for aoi in areas_of_interest:
+                    detected_pixels = aoi.get('detected_pixels', [])
+
+                    if len(detected_pixels) > 0:
+                        # Extract temperatures for all detected pixels
+                        temps = []
+                        for pixel in detected_pixels:
+                            x_orig, y_orig = int(pixel[0]), int(pixel[1])
+
+                            # Transform to processing resolution if needed
+                            if self.scale_factor != 1.0:
+                                x = int(x_orig * self.scale_factor)
+                                y = int(y_orig * self.scale_factor)
+                            else:
+                                x, y = x_orig, y_orig
+
+                            # Bounds check and extract temperature
+                            if 0 <= y < temperature_c.shape[0] and 0 <= x < temperature_c.shape[1]:
+                                temps.append(temperature_c[y, x])
+
+                        if len(temps) > 0:
+                            # Calculate mean temperature across all detected pixels
+                            temp_value = float(np.mean(temps))
+                            aoi['temperature'] = temp_value
+                            temps_extracted += 1
+                            # Debug: Log first few temperatures
+                            if temps_extracted <= 3:
+                                self.logger.debug(f"AOI at {aoi['center']}: avg temperature={temp_value:.2f}°C (from {len(temps)} pixels)")
+                        else:
+                            aoi['temperature'] = None
+                            self.logger.warning(f"AOI at {aoi['center']}: all detected pixels out of bounds")
+                    else:
+                        # Fallback: no detected pixels (shouldn't happen in normal flow)
+                        aoi['temperature'] = None
+                        self.logger.warning(f"AOI at {aoi['center']}: no detected pixels available")
+
+                self.logger.info(f"Extracted temperature for {temps_extracted}/{len(areas_of_interest)} AOIs from {full_path}")
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image (with temperature data for thermal)
