@@ -21,23 +21,30 @@ from helpers.LocationInfo import LocationInfo
 class ImageService:
     """Service to calculate various drone and image attributes based on metadata."""
 
-    def __init__(self, path, mask_path=None):
+    def __init__(self, path, mask_path=None, img_array=None):
         """
         Initializes the ImageService by extracting Exif and XMP metadata.
 
         Args:
             path (str): The file path to the image.
             mask_path (str, optional): Path to the mask file containing thermal metadata.
+            img_array (np.ndarray, optional): Pre-loaded image array (RGB format).
+                                              If provided, skips loading from disk.
         """
         self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
         self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
         self.mask_path = mask_path
-        img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise ValueError(f"Could not load image: {self.path}")
-        self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # Use pre-loaded array if provided, otherwise load from disk
+        if img_array is not None:
+            self.img_array = img_array
+        else:
+            img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise ValueError(f"Could not load image: {self.path}")
+            self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def get_relative_altitude(self, distance_unit= 'm'):
         """
