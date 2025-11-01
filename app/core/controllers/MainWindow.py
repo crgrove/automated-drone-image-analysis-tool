@@ -20,6 +20,7 @@ from core.controllers.VideoParser import VideoParser
 from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
 from core.controllers.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
 from core.controllers.IntegratedDetectionViewer import IntegratedDetectionViewer
+from core.controllers.CoordinatorWindow import CoordinatorWindow
 
 from core.services.LoggerService import LoggerService
 from core.services.AnalyzeService import AnalyzeService
@@ -78,6 +79,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.results_path = ''
         self.settings_service = SettingsService()
+
+        # Initialize processing resolution presets (percentage-based for aspect ratio preservation)
+        self.resolution_presets = {
+            "100%": 1.0,
+            "75%": 0.75,
+            "50%": 0.50,
+            "33%": 0.33,
+            "25%": 0.25,
+            "10%": 0.10
+        }
+
+        # Populate processing resolution combo box (widget now created from .ui file)
+        for preset_name in self.resolution_presets.keys():
+            self.processingResolutionCombo.addItem(preset_name)
+
         self._set_defaults(version)
 
         # Setting up GUI element connections
@@ -106,6 +122,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if hasattr(self, 'actionIntegratedDetection'):
             self.actionIntegratedDetection.triggered.connect(self._open_integrated_detection)
 
+        # Add Coordinator functionality
+        self.coordinator_window = None
+        if hasattr(self, 'actionCoordinator'):
+            self.actionCoordinator.triggered.connect(self._open_coordinator)
+
         # Add Help menu items
         if hasattr(self, 'actionHelp'):
             self.actionHelp.triggered.connect(self._open_help)
@@ -120,6 +141,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Store original values to detect actual changes
         self._minAreaOriginal = self.minAreaSpinBox.value()
         self._maxAreaOriginal = self.maxAreaSpinBox.value()
+
+        # Connect signal for processing resolution changes
+        self.processingResolutionCombo.currentTextChanged.connect(self._processingResolutionCombo_changed)
+
         self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
         self.histogramButton.clicked.connect(self._histogramButton_clicked)
         self.kMeansCheckbox.stateChanged.connect(self._kMeansCheckbox_change)
@@ -328,6 +353,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Update stored original value
         self._maxAreaOriginal = max_val
 
+    def _processingResolutionCombo_changed(self):
+        """
+        Handles processing resolution combo box changes.
+        Saves the new setting.
+        """
+        resolution_text = self.processingResolutionCombo.currentText()
+        self.settings_service.set_setting('ProcessingResolution', resolution_text)
+
     def _kMeansCheckbox_change(self):
         """
         Shows or hides the number of clusters spinbox for kMeans Clustering based on checkbox state.
@@ -360,15 +393,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.settings_service.set_setting('MaxObjectArea', self.maxAreaSpinBox.value())
             self.settings_service.set_setting('IdentifierColor', self.identifierColor)
             self.settings_service.set_setting('MaxProcesses', self.maxProcessesSpinBox.value())
+            self.settings_service.set_setting('ProcessingResolution', self.processingResolutionCombo.currentText())
 
             max_aois = self.settings_service.get_setting('MaxAOIs')
             aoi_radius = self.settings_service.get_setting('AOIRadius')
+
+            # Get processing resolution percentage from combo box
+            resolution_text = self.processingResolutionCombo.currentText()
+            processing_resolution = self.resolution_presets.get(resolution_text, 1.0)
 
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
                 max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options,
-                self.maxAreaSpinBox.value()
+                self.maxAreaSpinBox.value(), processing_resolution
             )
 
             thread = QThread()
@@ -615,6 +653,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.logger.error(f"Error opening Anomaly Detection viewer: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Anomaly Detection viewer:\n{str(e)}")
 
+    def _open_coordinator(self):
+        """
+        Opens the Search Coordinator window for managing multi-batch review projects.
+        """
+        try:
+            if self.coordinator_window is None or not self.coordinator_window.isVisible():
+                self.coordinator_window = CoordinatorWindow(
+                    self.settings_service.get_setting('Theme')
+                )
+                self.coordinator_window.show()
+                self.logger.info("Coordinator window opened")
+            else:
+                # Bring existing window to front
+                self.coordinator_window.raise_()
+                self.coordinator_window.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening Coordinator: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Search Coordinator:\n{str(e)}")
+
     def _open_help(self):
         """
         Opens the Help documentation URL in the default browser.
@@ -701,6 +758,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if isinstance(max_area, int):
             self.maxAreaSpinBox.setValue(max_area)
             self._maxAreaOriginal = max_area
+
+        processing_resolution = self.settings_service.get_setting('ProcessingResolution')
+        if isinstance(processing_resolution, str) and processing_resolution in self.resolution_presets:
+            self.processingResolutionCombo.setCurrentText(processing_resolution)
+        else:
+            # Set default to 50% (balanced quality and speed)
+            self.processingResolutionCombo.setCurrentText("50%")
+            self.settings_service.set_setting('ProcessingResolution', "50%")
 
         max_processes = self.settings_service.get_setting('MaxProcesses')
         if isinstance(max_processes, int):

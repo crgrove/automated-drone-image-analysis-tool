@@ -233,6 +233,14 @@ class AOIController:
         if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller:
             self.parent.gps_map_controller.update_aoi_on_map()
 
+        # Sync selection to gallery (if it exists)
+        if hasattr(self.parent, 'gallery_controller'):
+            # Only sync if actually in gallery mode to avoid unnecessary work
+            if hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode:
+                self.parent.gallery_controller.sync_selection_from_aoi_controller(
+                    self.parent.current_image, aoi_index
+                )
+
 
     def find_aoi_at_position(self, x, y):
         """Find the AOI at the given cursor position.
@@ -645,6 +653,16 @@ class AOIController:
                 # Sort by pixel area, largest first
                 aois_with_indices.sort(key=lambda x: x[1].get('area', 0), reverse=True)
 
+            elif self.sort_method == 'confidence_asc':
+                # Sort by confidence, lowest first
+                # Put AOIs without confidence at the end
+                aois_with_indices.sort(key=lambda x: x[1].get('confidence', -1))
+
+            elif self.sort_method == 'confidence_desc':
+                # Sort by confidence, highest first
+                # Put AOIs without confidence at the end
+                aois_with_indices.sort(key=lambda x: x[1].get('confidence', -1), reverse=True)
+
             elif self.sort_method == 'color':
                 # Sort by hue distance from target color
                 if self.sort_color_hue is not None:
@@ -727,6 +745,10 @@ class AOIController:
         # Refresh AOI display
         self.refresh_aoi_display()
 
+        # Always sync to gallery (it's kept alive)
+        if hasattr(self.parent, 'gallery_controller'):
+            self.parent.gallery_controller.set_sort_method(method, color_hue)
+
     def set_filters(self, filters):
         """Set filter settings for AOIs.
 
@@ -756,6 +778,10 @@ class AOIController:
         # Refresh AOI display
         self.refresh_aoi_display()
 
+        # Always sync to gallery (it's kept alive)
+        if hasattr(self.parent, 'gallery_controller'):
+            self.parent.gallery_controller.set_filters(filters)
+
     def refresh_aoi_display(self):
         """Refresh the AOI display with current sort/filter settings (delegated to UI component)."""
         if self.ui_component:
@@ -776,6 +802,8 @@ class AOIController:
             ("Default", None, qta.icon('fa6s.sort', color='#888888')),
             ("Pixel Area (Smallest First)", 'area_asc', qta.icon('fa6s.arrow-up', color='#4CAF50')),
             ("Pixel Area (Largest First)", 'area_desc', qta.icon('fa6s.arrow-down', color='#4CAF50')),
+            ("Confidence (Highest First)", 'confidence_desc', qta.icon('fa6s.star', color='#FFD700')),
+            ("Confidence (Lowest First)", 'confidence_asc', qta.icon('fa6s.star-half-stroke', color='#FFD700')),
             ("Color (Closest to Target)", 'color', qta.icon('fa6s.palette', color='#CCCCCC')),
             ("Left to Right", 'x', qta.icon('fa6s.arrow-right', color='#2196F3')),
             ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3'))

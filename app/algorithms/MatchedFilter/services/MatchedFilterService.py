@@ -47,6 +47,11 @@ class MatchedFilterService(AlgorithmService):
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+
+            # Add confidence scores to AOIs based on matched filter scores
+            if areas_of_interest:
+                areas_of_interest = self._add_confidence_scores(areas_of_interest, scores, mask)
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image
@@ -62,3 +67,72 @@ class MatchedFilterService(AlgorithmService):
             # Log and return an error if processing fails.
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))
+
+    def _add_confidence_scores(self, areas_of_interest, filter_scores, mask):
+        """
+        Adds confidence scores to AOIs based on matched filter correlation values.
+
+        Args:
+            areas_of_interest (list): List of AOI dictionaries
+            filter_scores (numpy.ndarray): Matched filter scores for each pixel
+            mask (numpy.ndarray): Binary detection mask
+
+        Returns:
+            list: AOIs with added confidence scores
+        """
+        # Get all filter scores from detected pixels to find max for normalization
+        detected_scores = filter_scores[mask > 0]
+        if len(detected_scores) == 0:
+            return areas_of_interest
+
+        max_score = np.max(detected_scores)
+        min_score = np.min(detected_scores)
+        score_range = max_score - min_score if max_score > min_score else 1.0
+
+        # Add confidence to each AOI
+        for aoi in areas_of_interest:
+            detected_pixels = aoi.get('detected_pixels', [])
+            if len(detected_pixels) > 0:
+                # Extract filter scores for this AOI's pixels
+                # NOTE: detected_pixels are in ORIGINAL resolution, but filter_scores are in PROCESSING resolution
+                # Need to transform coordinates back to processing resolution for lookup
+                aoi_scores = []
+                for pixel in detected_pixels:
+                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
+
+                    # Transform back to processing resolution
+                    if self.scale_factor != 1.0:
+                        x = int(x_orig * self.scale_factor)
+                        y = int(y_orig * self.scale_factor)
+                    else:
+                        x, y = x_orig, y_orig
+
+                    if 0 <= y < filter_scores.shape[0] and 0 <= x < filter_scores.shape[1]:
+                        aoi_scores.append(filter_scores[y, x])
+
+                if len(aoi_scores) > 0:
+                    # Calculate mean filter score for this AOI
+                    mean_score = np.mean(aoi_scores)
+
+                    # Normalize to 0-100 scale (higher score = better match = higher confidence)
+                    normalized_score = ((mean_score - min_score) / score_range) * 100.0
+
+                    # Add confidence fields to AOI
+                    aoi['confidence'] = round(normalized_score, 1)
+                    aoi['score_type'] = 'match'
+                    aoi['raw_score'] = round(float(mean_score), 3)
+                    aoi['score_method'] = 'mean'
+                else:
+                    # No valid pixels, set low confidence
+                    aoi['confidence'] = 0.0
+                    aoi['score_type'] = 'match'
+                    aoi['raw_score'] = 0.0
+                    aoi['score_method'] = 'mean'
+            else:
+                # No detected pixels, set low confidence
+                aoi['confidence'] = 0.0
+                aoi['score_type'] = 'match'
+                aoi['raw_score'] = 0.0
+                aoi['score_method'] = 'mean'
+
+        return areas_of_interest

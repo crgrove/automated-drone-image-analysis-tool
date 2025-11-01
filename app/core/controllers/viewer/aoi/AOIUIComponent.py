@@ -11,7 +11,7 @@ import numpy as np
 import qimage2ndarray
 import qtawesome as qta
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QFrame
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QFrame, QProgressBar
 try:
     from shiboken6 import isValid as _qt_is_valid
 except Exception:
@@ -21,7 +21,7 @@ except Exception:
             return True
         except Exception:
             return False
-from PySide6.QtCore import Qt, QSize, QPoint
+from PySide6.QtCore import Qt, QSize, QPoint, QTimer
 from PySide6.QtGui import QCursor
 
 from core.services.LoggerService import LoggerService
@@ -45,10 +45,16 @@ class AOIUIComponent:
         """
         self.aoi_controller = aoi_controller
         self.logger = LoggerService()  # Create our own logger
-        
+
         # UI state
         self.aoi_containers = []
         self.highlights = []
+
+        # Batch loading state
+        self.batch_timer = QTimer()
+        self.batch_timer.timeout.connect(self._process_next_batch)
+        self.batch_loading_state = None  # Stores state during batch loading
+        self.batch_progress_widget = None  # Progress indicator widget
 
 
     def load_areas_of_interest(self, augmented_image, areas_of_interest):
@@ -61,6 +67,11 @@ class AOIUIComponent:
         aoi_list_widget = self.aoi_controller.parent.aoiListWidget
         if not aoi_list_widget:
             return
+
+        # Cancel any ongoing batch loading
+        if self.batch_timer.isActive():
+            self.batch_timer.stop()
+            self._remove_progress_widget()
 
         # Ensure the list widget itself does not manage selection/focus styles
         # We control AOI selection visuals manually
@@ -91,21 +102,23 @@ class AOIUIComponent:
         total_count = len(areas_of_interest)
         filtered_count = len(aois_with_indices)
 
-        # Keep track of actual visible container index
-        visible_container_index = 0
-
-        # Load AOI thumbnails for filtered and sorted list
-        for original_index, area_of_interest in aois_with_indices:
-            container = self._create_aoi_container(original_index, visible_container_index, area_of_interest, augmented_image, flagged_set)
-            if container:
-                self.aoi_containers.append(container)
-                visible_container_index += 1
-
         # Update area count label with filter information
         self._update_count_label(filtered_count, total_count)
 
         # Re-enable signals after rebuild
         aoi_list_widget.blockSignals(False)
+
+        # If we have many AOIs, use batch loading to keep UI responsive
+        if filtered_count > 100:
+            self._start_batch_loading(aois_with_indices, augmented_image, flagged_set)
+        else:
+            # For small counts, load synchronously (fast enough)
+            visible_container_index = 0
+            for original_index, area_of_interest in aois_with_indices:
+                container = self._create_aoi_container(original_index, visible_container_index, area_of_interest, augmented_image, flagged_set)
+                if container:
+                    self.aoi_containers.append(container)
+                    visible_container_index += 1
 
     def _create_aoi_container(self, original_index, visible_container_index, area_of_interest, augmented_image, flagged_set):
         """Create a single AOI container widget.
@@ -231,7 +244,16 @@ class AOIUIComponent:
                 border-radius: 2px;
             }
         """)
-        info_widget.setToolTip("AOI Information\nRight-click to copy data to clipboard")
+
+        # Build tooltip with confidence info if available
+        tooltip_text = "AOI Information\nRight-click to copy data to clipboard"
+        if 'confidence' in area_of_interest and 'score_type' in area_of_interest:
+            score_type = area_of_interest.get('score_type', '')
+            raw_score = area_of_interest.get('raw_score', 0)
+            score_method = area_of_interest.get('score_method', 'mean')
+            tooltip_text += f"\n\nScore Type: {score_type}\nRaw Score: {raw_score} ({score_method})"
+
+        info_widget.setToolTip(tooltip_text)
         info_layout = QHBoxLayout(info_widget)
         info_layout.setContentsMargins(4, 2, 4, 2)
         info_layout.setSpacing(2)
@@ -245,6 +267,41 @@ class AOIUIComponent:
             }
         """)
         info_layout.addWidget(coord_label)
+
+        # Add confidence display if available
+        if 'confidence' in area_of_interest:
+            confidence = area_of_interest['confidence']
+
+            # Add a separator
+            separator = QLabel("|")
+            separator.setStyleSheet("QLabel { color: #666; font-size: 10px; }")
+            info_layout.addWidget(separator)
+
+            # Confidence icon with color based on value
+            if confidence >= 75:
+                conf_color = '#4CAF50'  # Green for high confidence
+                conf_icon = '⭐'
+            elif confidence >= 50:
+                conf_color = '#FFD700'  # Gold for medium-high confidence
+                conf_icon = '⭐'
+            elif confidence >= 25:
+                conf_color = '#FFA500'  # Orange for medium-low confidence
+                conf_icon = '⭐'
+            else:
+                conf_color = '#FF6B6B'  # Red for low confidence
+                conf_icon = '⭐'
+
+            # Confidence label
+            conf_label = QLabel(f"{conf_icon} {confidence:.1f}%")
+            conf_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {conf_color};
+                    font-size: 10px;
+                    font-weight: bold;
+                }}
+            """)
+            conf_label.setToolTip(f"Confidence Score: {confidence:.1f}%")
+            info_layout.addWidget(conf_label)
 
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -409,6 +466,140 @@ class AOIUIComponent:
             aoi_list_widget.clear()
         self.aoi_containers = []
         self.highlights = []
+
+    def _start_batch_loading(self, aois_with_indices, augmented_image, flagged_set):
+        """
+        Start batch loading of AOI containers.
+
+        Args:
+            aois_with_indices: List of (original_index, aoi_data) tuples
+            augmented_image: Image array for thumbnails
+            flagged_set: Set of flagged AOI indices
+        """
+        # Initialize batch loading state
+        self.batch_loading_state = {
+            'aois_with_indices': aois_with_indices,
+            'augmented_image': augmented_image,
+            'flagged_set': flagged_set,
+            'current_index': 0,
+            'visible_container_index': 0,
+            'total_count': len(aois_with_indices),
+            'batch_size': 50  # Process 50 items per batch
+        }
+
+        # Show progress widget
+        self._show_progress_widget()
+
+        # Start batch timer (10ms intervals for responsive UI)
+        self.batch_timer.start(10)
+
+        self.logger.info(f"Starting batch loading of {len(aois_with_indices)} AOIs...")
+
+    def _process_next_batch(self):
+        """Process the next batch of AOI containers."""
+        if not self.batch_loading_state:
+            return
+
+        state = self.batch_loading_state
+        start_idx = state['current_index']
+        end_idx = min(start_idx + state['batch_size'], state['total_count'])
+
+        # Process batch
+        for i in range(start_idx, end_idx):
+            original_index, area_of_interest = state['aois_with_indices'][i]
+            container = self._create_aoi_container(
+                original_index,
+                state['visible_container_index'],
+                area_of_interest,
+                state['augmented_image'],
+                state['flagged_set']
+            )
+            if container:
+                self.aoi_containers.append(container)
+                state['visible_container_index'] += 1
+
+        # Update progress
+        state['current_index'] = end_idx
+        progress_percent = int((end_idx / state['total_count']) * 100)
+        self._update_progress_widget(progress_percent, end_idx, state['total_count'])
+
+        # Check if done
+        if end_idx >= state['total_count']:
+            self._finish_batch_loading()
+
+    def _finish_batch_loading(self):
+        """Finish batch loading and cleanup."""
+        self.batch_timer.stop()
+        self._remove_progress_widget()
+        self.batch_loading_state = None
+        self.logger.info("Batch loading complete")
+
+    def _show_progress_widget(self):
+        """Show a progress indicator at the top of the AOI list."""
+        aoi_list_widget = self.aoi_controller.parent.aoiListWidget
+        if not aoi_list_widget:
+            return
+
+        # Create progress widget
+        progress_container = QWidget()
+        layout = QVBoxLayout(progress_container)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        label = QLabel("Loading AOIs...")
+        label.setStyleSheet("color: white; font-size: 11pt;")
+
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        progress_bar.setValue(0)
+        progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #666;
+                border-radius: 3px;
+                background-color: #2d2d2d;
+                text-align: center;
+                color: white;
+            }
+            QProgressBar::chunk {
+                background-color: #2196F3;
+            }
+        """)
+
+        layout.addWidget(label)
+        layout.addWidget(progress_bar)
+
+        # Add to list as first item
+        item = QListWidgetItem(aoi_list_widget)
+        item.setSizeHint(progress_container.sizeHint())
+        aoi_list_widget.setItemWidget(item, progress_container)
+
+        # Store reference
+        self.batch_progress_widget = {
+            'item': item,
+            'container': progress_container,
+            'label': label,
+            'progress_bar': progress_bar
+        }
+
+    def _update_progress_widget(self, percent, current, total):
+        """Update the progress widget."""
+        if not self.batch_progress_widget:
+            return
+
+        self.batch_progress_widget['label'].setText(f"Loading AOIs... ({current}/{total})")
+        self.batch_progress_widget['progress_bar'].setValue(percent)
+
+    def _remove_progress_widget(self):
+        """Remove the progress widget."""
+        if not self.batch_progress_widget:
+            return
+
+        aoi_list_widget = self.aoi_controller.parent.aoiListWidget
+        if aoi_list_widget:
+            row = aoi_list_widget.row(self.batch_progress_widget['item'])
+            if row >= 0:
+                aoi_list_widget.takeItem(row)
+
+        self.batch_progress_widget = None
 
     def refresh_aoi_display(self):
         """Refresh the AOI display with current sort/filter settings."""

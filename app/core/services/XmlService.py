@@ -102,7 +102,8 @@ class XmlService:
 
                 image = {
                     'xml': image_xml,
-                    'path': path,  # Original image path
+                    'path': path,  # Current/resolved image path
+                    'xml_path': image_xml.get('path'),  # Original path from XML (for legacy cache lookups)
                     'mask_path': mask_path,  # Mask file path (if using new approach)
                     'hidden': image_xml.get('hidden') == "True" if image_xml.get('hidden') else False
                 }
@@ -124,6 +125,15 @@ class XmlService:
                     area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
                     # Load user comment (default to empty string if not present)
                     area_of_interest['user_comment'] = area_of_interest_xml.get('user_comment', '')
+                    # Load confidence scoring data if present
+                    if area_of_interest_xml.get('confidence'):
+                        area_of_interest['confidence'] = float(area_of_interest_xml.get('confidence'))
+                    if area_of_interest_xml.get('score_type'):
+                        area_of_interest['score_type'] = area_of_interest_xml.get('score_type')
+                    if area_of_interest_xml.get('raw_score'):
+                        area_of_interest['raw_score'] = float(area_of_interest_xml.get('raw_score'))
+                    if area_of_interest_xml.get('score_method'):
+                        area_of_interest['score_method'] = area_of_interest_xml.get('score_method')
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -212,6 +222,15 @@ class XmlService:
             # Save user comment if present
             if 'user_comment' in area and area['user_comment']:
                 area_xml.set('user_comment', str(area['user_comment']))
+            # Save confidence scoring data if present
+            if 'confidence' in area:
+                area_xml.set('confidence', str(area['confidence']))
+            if 'score_type' in area:
+                area_xml.set('score_type', str(area['score_type']))
+            if 'raw_score' in area:
+                area_xml.set('raw_score', str(area['raw_score']))
+            if 'score_method' in area:
+                area_xml.set('score_method', str(area['score_method']))
             # Optionally save contour and detected_pixels if available
             # Note: These can be large, so we might want to make this configurable
             if 'contour' in area and area['contour']:
@@ -236,3 +255,70 @@ class XmlService:
 
         with open(path, "wb") as fh:
             mydata.write(fh)
+
+    def get_review_metadata(self):
+        """
+        Get review metadata from the XML file.
+
+        Returns:
+            dict: Dictionary containing review_id, reviewer_name, and review_date, or None if not present.
+        """
+        root = self.xml.getroot()
+        review_meta_xml = root.find("review_metadata")
+
+        if review_meta_xml is not None:
+            return {
+                'review_id': review_meta_xml.get('review_id', ''),
+                'reviewer_name': review_meta_xml.get('reviewer_name', ''),
+                'review_date': review_meta_xml.get('review_date', '')
+            }
+
+        return None
+
+    def add_review_metadata(self, review_id, reviewer_name, review_date):
+        """
+        Add or update review metadata in the XML document.
+
+        Args:
+            review_id (str): Unique identifier for this review session (UUID).
+            reviewer_name (str): Name of the reviewer.
+            review_date (str): ISO format date/time of the review.
+        """
+        try:
+            root = self.xml.getroot()
+            review_meta_xml = root.find("review_metadata")
+
+            if review_meta_xml is None:
+                # Create new review_metadata element as first child
+                review_meta_xml = ET.Element("review_metadata")
+                root.insert(0, review_meta_xml)
+
+            # Set attributes
+            review_meta_xml.set('review_id', review_id)
+            review_meta_xml.set('reviewer_name', reviewer_name)
+            review_meta_xml.set('review_date', review_date)
+
+        except Exception as e:
+            self.logger.error(f"Error adding review metadata: {e}")
+
+    def ensure_review_id(self):
+        """
+        Ensure a review_id exists in the XML. Generate one if not present.
+
+        Returns:
+            str: The review_id (existing or newly generated).
+        """
+        import uuid
+        from datetime import datetime
+
+        review_meta = self.get_review_metadata()
+
+        if review_meta and review_meta.get('review_id'):
+            return review_meta['review_id']
+
+        # Generate new review ID
+        review_id = str(uuid.uuid4())
+        review_date = datetime.now().isoformat()
+        self.add_review_metadata(review_id, '', review_date)
+
+        return review_id

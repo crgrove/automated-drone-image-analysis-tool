@@ -492,4 +492,36 @@ class ImageService:
                 # Fallback to circle if no contour data (for backward compatibility)
                 cv2.circle(image_copy, center, r, bgr, thickness=2)
 
+            # Add confidence label if available
+            if "confidence" in aoi:
+                confidence = aoi["confidence"]
+                # Position label above the AOI circle
+                label_pos = (int(cx - r), int(cy - r - 10))
+                # Ensure label stays within image bounds
+                label_pos = (max(5, label_pos[0]), max(20, label_pos[1]))
+
+                # Create confidence text
+                conf_text = f"{confidence:.1f}%"
+
+                # Choose text color based on confidence level
+                if confidence >= 75:
+                    text_color = (0, 255, 0)  # Green (BGR) for high confidence
+                elif confidence >= 50:
+                    text_color = (0, 215, 255)  # Gold (BGR) for medium-high confidence
+                elif confidence >= 25:
+                    text_color = (0, 165, 255)  # Orange (BGR) for medium-low confidence
+                else:
+                    text_color = (107, 107, 255)  # Red (BGR) for low confidence
+
+                # Draw text background for better visibility
+                (text_width, text_height), baseline = cv2.getTextSize(conf_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                cv2.rectangle(image_copy,
+                             (label_pos[0] - 2, label_pos[1] - text_height - 2),
+                             (label_pos[0] + text_width + 2, label_pos[1] + baseline + 2),
+                             (0, 0, 0), -1)  # Black background
+
+                # Draw confidence text
+                cv2.putText(image_copy, conf_text, label_pos,
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 2)
+
         return image_copy

@@ -249,7 +249,7 @@ Objects larger than this will be ignored.</string>
               </property>
               <property name="toolTip">
                <string>Set the maximum object area in pixels for detection filtering.
-• Range: 0 to 1999 pixels
+• Range: 0 to 99999 pixels
 • Default: 0 (None - no maximum filter applied)
 • Special value: 0 displays as "None"
 Objects larger than this threshold will be filtered out and not detected.
@@ -265,13 +265,53 @@ Use to exclude very large false positive detections like shadows or terrain feat
                <number>0</number>
               </property>
               <property name="maximum">
-               <number>1999</number>
+               <number>99999</number>
               </property>
               <property name="singleStep">
                <number>1</number>
               </property>
               <property name="value">
                <number>0</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="processingResolutionLabel">
+              <property name="font">
+               <font>
+                <pointsize>10</pointsize>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>Resolution at which images are processed.
+Lower resolutions = faster processing but may miss small objects.</string>
+              </property>
+              <property name="text">
+               <string>Processing Resolution:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="processingResolutionCombo">
+              <property name="font">
+               <font>
+                <pointsize>10</pointsize>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>Select processing resolution as percentage of original image size:
+• 100%: Original resolution (no scaling, highest quality, slowest)
+• 75%: High quality (~56% of pixels, ~1.8x faster)
+• 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED
+• 33%: Fast processing (~11% of pixels, ~9x faster)
+• 25%: Very fast (6% of pixels, ~16x faster)
+• 10%: Ultra fast (1% of pixels, ~100x faster)
+
+Percentage scaling preserves original aspect ratio.
+Works with any image size, orientation, or aspect ratio.
+
+Min/Max Area values are always specified in original resolution.
+All results are returned in original resolution coordinates.</string>
               </property>
              </widget>
             </item>
@@ -1072,6 +1112,7 @@ Use to monitor processing progress and troubleshoot issues.</string>
     <addaction name="actionVideoParser"/>
     <addaction name="actionRTMPDetection"/>
     <addaction name="actionIntegratedDetection"/>
+    <addaction name="actionCoordinator"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -1184,6 +1225,30 @@ Designed for detecting unusual objects, movement, and colors in real-time video 
     <font>
      <pointsize>10</pointsize>
     </font>
+   </property>
+  </action>
+  <action name="actionCoordinator">
+   <property name="text">
+    <string>Search Coordinator</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Search Coordinator window for managing multi-batch review projects.
+Features:
+• Create and manage search projects with multiple batches
+• Track reviewer progress across multiple image sets
+• Consolidate review results from multiple reviewers
+• View dashboard with search status and metrics
+• Export consolidated results
+• Manage batch assignments and reviewer coordination
+Ideal for large-scale searches with multiple reviewers and image batches.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+C</string>
    </property>
   </action>
   <action name="actionHelp">

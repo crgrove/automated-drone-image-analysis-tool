@@ -30,6 +30,8 @@ def main():
 
 
 if __name__ == "__main__":
-    faulthandler.enable()
+    # Enable faulthandler only if stderr is available (avoid issues in packaged apps)
+    if sys.stderr is not None:
+        faulthandler.enable()
     freeze_support()
     main()

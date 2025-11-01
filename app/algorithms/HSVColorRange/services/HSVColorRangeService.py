@@ -108,10 +108,19 @@ class HSVColorRangeService(AlgorithmService):
                     else:
                         mask = cv2.bitwise_or(mask, this_mask)
 
+            # Calculate HSV distance for confidence scoring
+            # Only calculate for detected pixels to save computation
+            hsv_distances = self._calculate_hsv_distances(hsv_image, self.target_color_hsv, mask)
+
             # Identify contours in the masked image
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img, contours)
+
+            # Add confidence scores to AOIs based on HSV distance
+            if areas_of_interest:
+                areas_of_interest = self._add_confidence_scores(areas_of_interest, hsv_distances, mask)
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image
@@ -125,3 +134,112 @@ class HSVColorRangeService(AlgorithmService):
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))
+
+    def _calculate_hsv_distances(self, hsv_image, target_hsv, mask):
+        """
+        Calculate HSV distance from each pixel to the target color.
+        Only calculates for detected pixels (where mask > 0).
+
+        Args:
+            hsv_image (numpy.ndarray): Image in HSV color space
+            target_hsv (numpy.ndarray): Target HSV color [H, S, V]
+            mask (numpy.ndarray): Binary detection mask
+
+        Returns:
+            numpy.ndarray: Distance values for each pixel (same shape as mask)
+        """
+        # Initialize distance array
+        distances = np.zeros(hsv_image.shape[:2], dtype=np.float32)
+
+        # Extract HSV channels
+        h, s, v = hsv_image[:, :, 0], hsv_image[:, :, 1], hsv_image[:, :, 2]
+        target_h, target_s, target_v = target_hsv
+
+        # Calculate hue distance (circular, 0-179 in OpenCV)
+        # Use circular distance for hue
+        h_diff = np.abs(h.astype(np.float32) - float(target_h))
+        h_diff = np.minimum(h_diff, 179 - h_diff)  # Circular distance
+        h_dist = h_diff / 179.0  # Normalize to 0-1
+
+        # Calculate saturation and value distances (linear, 0-255)
+        s_dist = np.abs(s.astype(np.float32) - float(target_s)) / 255.0
+        v_dist = np.abs(v.astype(np.float32) - float(target_v)) / 255.0
+
+        # Combined Euclidean distance in HSV space
+        # Weight hue more heavily as it's the primary discriminator
+        distances = np.sqrt(2.0 * h_dist**2 + s_dist**2 + v_dist**2)
+
+        # Only keep distances for detected pixels
+        distances = distances * (mask > 0)
+
+        return distances
+
+    def _add_confidence_scores(self, areas_of_interest, hsv_distances, mask):
+        """
+        Adds confidence scores to AOIs based on HSV color distances.
+        Lower distance = better color match = higher confidence.
+
+        Args:
+            areas_of_interest (list): List of AOI dictionaries
+            hsv_distances (numpy.ndarray): HSV distance values for each pixel
+            mask (numpy.ndarray): Binary detection mask
+
+        Returns:
+            list: AOIs with added confidence scores
+        """
+        # Get all distances from detected pixels to find max for normalization
+        detected_distances = hsv_distances[mask > 0]
+        if len(detected_distances) == 0:
+            return areas_of_interest
+
+        max_distance = np.max(detected_distances)
+        min_distance = np.min(detected_distances)
+        distance_range = max_distance - min_distance if max_distance > min_distance else 1.0
+
+        # Add confidence to each AOI
+        for aoi in areas_of_interest:
+            detected_pixels = aoi.get('detected_pixels', [])
+            if len(detected_pixels) > 0:
+                # Extract distances for this AOI's pixels
+                # NOTE: detected_pixels are in ORIGINAL resolution, but hsv_distances are in PROCESSING resolution
+                # Need to transform coordinates back to processing resolution for lookup
+                aoi_distances = []
+                for pixel in detected_pixels:
+                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
+
+                    # Transform back to processing resolution
+                    if self.scale_factor != 1.0:
+                        x = int(x_orig * self.scale_factor)
+                        y = int(y_orig * self.scale_factor)
+                    else:
+                        x, y = x_orig, y_orig
+
+                    if 0 <= y < hsv_distances.shape[0] and 0 <= x < hsv_distances.shape[1]:
+                        aoi_distances.append(hsv_distances[y, x])
+
+                if len(aoi_distances) > 0:
+                    # Calculate mean distance for this AOI
+                    mean_distance = np.mean(aoi_distances)
+
+                    # Normalize to 0-100 scale (INVERTED: lower distance = better match = higher confidence)
+                    normalized_score = ((max_distance - mean_distance) / distance_range) * 100.0
+
+                    # Add confidence fields to AOI
+                    aoi['confidence'] = round(normalized_score, 1)
+                    aoi['score_type'] = 'color_distance'
+                    aoi['raw_score'] = round(float(mean_distance), 3)
+                    aoi['score_method'] = 'mean'
+                else:
+                    # No valid pixels, set low confidence
+                    aoi['confidence'] = 0.0
+                    aoi['score_type'] = 'color_distance'
+                    aoi['raw_score'] = 0.0
+                    aoi['score_method'] = 'mean'
+            else:
+                # No detected pixels, set low confidence
+                aoi['confidence'] = 0.0
+                aoi['score_type'] = 'color_distance'
+                aoi['raw_score'] = 0.0
+                aoi['score_method'] = 'mean'
+
+        return areas_of_interest

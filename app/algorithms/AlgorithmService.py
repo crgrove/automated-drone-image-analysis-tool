@@ -38,6 +38,47 @@ class AlgorithmService:
         self.combine_aois = combine_aois
         self.options = options
         self.is_thermal = is_thermal
+        self.scale_factor = 1.0  # Default: no scaling
+
+    def set_scale_factor(self, scale_factor):
+        """
+        Sets the scale factor for coordinate transformation from processing to original resolution.
+
+        Args:
+            scale_factor (float): The scale factor used when downscaling the image for processing.
+        """
+        self.scale_factor = scale_factor
+
+    def transform_to_original_coords(self, x, y):
+        """
+        Transforms coordinates from processing resolution back to original resolution.
+
+        Args:
+            x (float): X coordinate in processing resolution.
+            y (float): Y coordinate in processing resolution.
+
+        Returns:
+            tuple[int, int]: (x, y) coordinates in original resolution.
+        """
+        if self.scale_factor == 1.0:
+            return int(x), int(y)
+        inverse_scale = 1.0 / self.scale_factor
+        return int(x * inverse_scale), int(y * inverse_scale)
+
+    def transform_contour_to_original(self, contour):
+        """
+        Transforms a contour from processing resolution back to original resolution.
+
+        Args:
+            contour (numpy.ndarray): Contour in processing resolution.
+
+        Returns:
+            numpy.ndarray: Contour scaled to original resolution.
+        """
+        if self.scale_factor == 1.0:
+            return contour
+        inverse_scale = 1.0 / self.scale_factor
+        return (contour * inverse_scale).astype(np.int32)
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -70,7 +111,18 @@ class AlgorithmService:
 
         Returns:
             tuple: (areas_of_interest, base_contour_count)
-                - areas_of_interest (list): Final list of AOIs after optional combining.
+                - areas_of_interest (list): Final list of AOI dictionaries with structure:
+                    {
+                        'center': (x, y),              # Tuple of pixel coordinates
+                        'radius': int,                  # Radius in pixels
+                        'area': float,                  # Pixel area
+                        'contour': [[x, y], ...],      # List of contour points
+                        'detected_pixels': [[x, y], ...], # List of detected pixel coordinates
+                        'confidence': float (optional), # 0-100 normalized confidence score
+                        'score_type': str (optional),   # 'anomaly', 'match', 'rarity', 'color_distance'
+                        'raw_score': float (optional),  # Algorithm-specific raw value
+                        'score_method': str (optional)  # 'mean', 'max', 'median'
+                    }
                 - base_contour_count (int): Count of original valid contours before combining.
         """
         if len(contours) == 0:
@@ -112,17 +164,34 @@ class AlgorithmService:
                 original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
 
                 if not self.combine_aois:
-                    # Store the contour points for drawing the boundary
-                    contour_points = cnt.reshape(-1, 2).tolist()
+                    # Transform coordinates to original resolution
+                    orig_center = self.transform_to_original_coords(center[0], center[1])
+                    orig_radius = int(radius / self.scale_factor)
+                    orig_area = int(area / (self.scale_factor * self.scale_factor))
 
-                    # Get the detected pixels for this AOI
+                    # Store the contour points for drawing the boundary (transformed)
+                    if self.scale_factor != 1.0:
+                        cnt_transformed = self.transform_contour_to_original(cnt)
+                        contour_points = cnt_transformed.reshape(-1, 2).tolist()
+                    else:
+                        contour_points = cnt.reshape(-1, 2).tolist()
+
+                    # Get the detected pixels for this AOI (transformed)
                     detected_pixels = np.argwhere(mask > 0)
-                    detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
+                    if len(detected_pixels) > 0:
+                        if self.scale_factor != 1.0:
+                            inverse_scale = 1.0 / self.scale_factor
+                            detected_pixels_transformed = (detected_pixels[:, [1, 0]] * inverse_scale).astype(int)
+                            detected_pixels_list = detected_pixels_transformed.tolist()
+                        else:
+                            detected_pixels_list = detected_pixels[:, [1, 0]].tolist()
+                    else:
+                        detected_pixels_list = []
 
                     areas_of_interest.append({
-                        'center': center,
-                        'radius': radius,
-                        'area': area,
+                        'center': orig_center,
+                        'radius': orig_radius,
+                        'area': orig_area,
                         'contour': contour_points,
                         'detected_pixels': detected_pixels_list
                     })
@@ -148,18 +217,36 @@ class AlgorithmService:
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius)
-                # Store the contour points for drawing the boundary
-                contour_points = cnt.reshape(-1, 2).tolist()
 
-                # Get the original detected pixels that belong to this combined AOI
+                # Transform coordinates to original resolution
+                orig_center = self.transform_to_original_coords(center[0], center[1])
+                orig_radius = int(radius / self.scale_factor)
+                orig_area = int(area / (self.scale_factor * self.scale_factor))
+
+                # Store the contour points for drawing the boundary (transformed)
+                if self.scale_factor != 1.0:
+                    cnt_transformed = self.transform_contour_to_original(cnt)
+                    contour_points = cnt_transformed.reshape(-1, 2).tolist()
+                else:
+                    contour_points = cnt.reshape(-1, 2).tolist()
+
+                # Get the original detected pixels that belong to this combined AOI (transformed)
                 aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
                 aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
-                aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
+                if len(aoi_pixels) > 0:
+                    if self.scale_factor != 1.0:
+                        inverse_scale = 1.0 / self.scale_factor
+                        aoi_pixels_transformed = (aoi_pixels[:, [1, 0]] * inverse_scale).astype(int)
+                        aoi_pixels_list = aoi_pixels_transformed.tolist()
+                    else:
+                        aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist()
+                else:
+                    aoi_pixels_list = []
 
                 areas_of_interest.append({
-                    'center': center,
-                    'radius': radius,
-                    'area': area,
+                    'center': orig_center,
+                    'radius': orig_radius,
+                    'area': orig_area,
                     'contour': contour_points,
                     'detected_pixels': aoi_pixels_list
                 })
@@ -168,6 +255,112 @@ class AlgorithmService:
         areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
 
         return areas_of_interest, base_contour_count
+
+    def generate_aoi_cache(self, img: np.ndarray, image_path: str, areas_of_interest: list, output_dir: str) -> None:
+        """
+        Generate and cache thumbnails and color information for all AOIs.
+
+        Called after process_image() while the image is still in memory, allowing for efficient
+        thumbnail extraction without reloading the image from disk.
+
+        Args:
+            img: The image array (already in memory from detection)
+            image_path: Path to the source image file
+            areas_of_interest: List of AOI dictionaries from detection
+            output_dir: Output directory where cache folders will be created
+        """
+        try:
+            from core.services.ThumbnailCacheService import ThumbnailCacheService
+            from core.services.ColorCacheService import ColorCacheService
+            from core.services.AOIService import AOIService
+
+            if not areas_of_interest:
+                return
+
+            # Set up cache directories
+            thumbnail_cache_dir = Path(output_dir) / '.thumbnails'
+            color_cache_dir = Path(output_dir) / '.color_cache'
+            thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
+            color_cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # Initialize cache services
+            thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
+            color_service = ColorCacheService(cache_dir=str(color_cache_dir))
+
+            # Load existing cache file to avoid overwriting colors from other processes
+            color_service.load_cache_file()
+
+            # Create AOIService for color calculation
+            image_data = {
+                'path': image_path,
+                'is_thermal': self.is_thermal
+            }
+            aoi_service = AOIService(image_data)
+
+            # Process each AOI
+            for aoi in areas_of_interest:
+                try:
+                    # Extract thumbnail from in-memory image
+                    center = aoi.get('center')
+                    radius = aoi.get('radius', 50)
+
+                    if not center:
+                        continue
+
+                    cx, cy = center
+                    crop_radius = radius + 10  # Add padding
+
+                    # Calculate crop bounds
+                    height, width = img.shape[:2]
+                    x1 = max(0, int(cx - crop_radius))
+                    y1 = max(0, int(cy - crop_radius))
+                    x2 = min(width, int(cx + crop_radius))
+                    y2 = min(height, int(cy + crop_radius))
+
+                    # Extract region from in-memory image
+                    thumbnail_region = img[y1:y2, x1:x2]
+
+                    if thumbnail_region.size == 0:
+                        continue
+
+                    # Resize to target thumbnail size
+                    thumbnail_resized = cv2.resize(thumbnail_region, (180, 180), interpolation=cv2.INTER_LANCZOS4)
+
+                    # Convert to RGB if needed (some algorithms work in different color spaces)
+                    if len(thumbnail_resized.shape) == 2:
+                        # Grayscale
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_GRAY2RGB)
+                    elif thumbnail_resized.shape[2] == 4:
+                        # RGBA
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGRA2RGB)
+                    else:
+                        # BGR to RGB
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGR2RGB)
+
+                    # Save thumbnail to dataset cache
+                    thumbnail_service.save_thumbnail_from_array(image_path, aoi, thumbnail_rgb, thumbnail_cache_dir)
+
+                    # Calculate and cache color information
+                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    if color_result:
+                        color_info = {
+                            'rgb': color_result['rgb'],
+                            'hex': color_result['hex'],
+                            'hue_degrees': color_result['hue_degrees']
+                        }
+                        color_service.save_color_info(image_path, aoi, color_info)
+
+                except Exception as e:
+                    # Log error but continue processing other AOIs
+                    print(f"Error caching AOI at {center}: {e}")
+                    continue
+
+            # Save color cache to disk
+            color_service.save_cache_file()
+
+        except Exception as e:
+            # Don't fail the entire detection if cache generation fails
+            print(f"Error generating AOI cache: {e}")
 
     def _construct_output_path(self, full_path, input_dir, output_dir):
         """

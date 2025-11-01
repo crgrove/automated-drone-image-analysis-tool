@@ -97,6 +97,10 @@ class ImageLoadController:
             # Load AOIs
             self.parent.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
 
+            # Notify gallery controller that image has loaded (for thumbnail generation)
+            if hasattr(self.parent, 'gallery_controller'):
+                self.parent.gallery_controller.on_image_loaded(self.parent.current_image)
+
             # Reset zoom
             self._reset_zoom_if_valid()
 
