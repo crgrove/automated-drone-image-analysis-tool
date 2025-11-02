@@ -324,7 +324,8 @@ class ZipExportController:
 
         # Load image and render augmentations
         try:
-            image_service = ImageService(src_path, img.get('mask_path', ''))
+            calculated_bearing = img.get('bearing', None)
+            image_service = ImageService(src_path, img.get('mask_path', ''), calculated_bearing=calculated_bearing)
             augmented = image_service.img_array
             if show_aois:
                 augmented = image_service.circle_areas_of_interest(identifier_color, img.get('areas_of_interest', []))

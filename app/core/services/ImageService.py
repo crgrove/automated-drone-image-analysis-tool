@@ -21,7 +21,7 @@ from helpers.LocationInfo import LocationInfo
 class ImageService:
     """Service to calculate various drone and image attributes based on metadata."""
 
-    def __init__(self, path, mask_path=None, img_array=None):
+    def __init__(self, path, mask_path=None, img_array=None, calculated_bearing=None):
         """
         Initializes the ImageService by extracting Exif and XMP metadata.
 
@@ -30,12 +30,15 @@ class ImageService:
             mask_path (str, optional): Path to the mask file containing thermal metadata.
             img_array (np.ndarray, optional): Pre-loaded image array (RGB format).
                                               If provided, skips loading from disk.
+            calculated_bearing (float, optional): Calculated bearing in degrees [0, 360).
+                                                 Used as fallback if EXIF bearing is missing.
         """
         self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
         self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
         self.mask_path = mask_path
+        self.calculated_bearing = calculated_bearing
 
         # Use pre-loaded array if provided, otherwise load from disk
         if img_array is not None:
@@ -158,9 +161,10 @@ class ImageService:
         """
         Get the camera yaw/bearing (direction the camera is pointing).
 
-        For drones with gimbals that have independent yaw control:
-        - Gimbal Yaw represents the actual camera direction (preferred)
-        - Flight Yaw is the drone body direction (fallback)
+        Priority order:
+        1. Gimbal Yaw (actual camera direction) - most accurate
+        2. Flight Yaw (drone body direction) - fallback from EXIF
+        3. Calculated Bearing (from track/GPS) - fallback from bearing recovery
 
         Returns:
             float or None: Camera yaw in degrees (0-360), or None if unavailable.
@@ -176,9 +180,17 @@ class ImageService:
                     return yaw
                 except (TypeError, ValueError):
                     pass
-        
+
         # Fall back to flight yaw (drone body direction)
-        return self._get_drone_orientation()
+        flight_yaw = self._get_drone_orientation()
+        if flight_yaw is not None:
+            return flight_yaw
+
+        # Final fallback: use calculated bearing if available
+        if self.calculated_bearing is not None:
+            return self.calculated_bearing
+
+        return None
 
     def get_camera_intrinsics(self):
         """
