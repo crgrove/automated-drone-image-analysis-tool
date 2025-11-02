@@ -34,7 +34,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
         Returns:
             dict: A dictionary containing option names and values, including
-            'minTemp', 'maxTemp', and 'colorMap'.
+            'minTemp' and 'maxTemp'.
         """
         options = dict()
         if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
@@ -44,7 +44,6 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
             options['minTemp'] = int(self.minTempSpinBox.value())
             options['maxTemp'] = int(self.maxTempSpinBox.value())
 
-        options['colorMap'] = self.colorMapComboBox.currentText()
         return options
 
     def update_min_temp(self):
@@ -82,7 +81,7 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
 
         Args:
             options (dict): The options to use to set UI attributes, including
-            'minTemp', 'maxTemp', and 'colorMap'.
+            'minTemp' and 'maxTemp'.
         """
         if self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit':
             if 'minTemp' in options:
@@ -94,7 +93,6 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
                 self.minTempSpinBox.setValue(int(float(options['minTemp'])))
             if 'maxTemp' in options:
                 self.maxTempSpinBox.setValue(int(float(options['maxTemp'])))
-        self.colorMapComboBox.setCurrentText(options['colorMap'])
 
     def convert_temperature_ranges(self):
         """

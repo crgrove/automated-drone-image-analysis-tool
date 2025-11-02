@@ -15,9 +15,8 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel,
-    QSizePolicy, QSpacerItem, QSpinBox, QVBoxLayout,
-    QWidget)
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QSizePolicy,
+    QSpacerItem, QSpinBox, QVBoxLayout, QWidget)
 
 class Ui_ThermalRange(object):
     def setupUi(self, ThermalRange):
@@ -69,23 +68,6 @@ class Ui_ThermalRange(object):
         self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer_2)
-
-        self.colorMapLabel = QLabel(ThermalRange)
-        self.colorMapLabel.setObjectName(u"colorMapLabel")
-        self.colorMapLabel.setFont(font)
-
-        self.horizontalLayout_3.addWidget(self.colorMapLabel)
-
-        self.colorMapComboBox = QComboBox(ThermalRange)
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.setObjectName(u"colorMapComboBox")
-        self.colorMapComboBox.setFont(font)
-
-        self.horizontalLayout_3.addWidget(self.colorMapComboBox)
 
 
         self.horizontalLayout_4.addLayout(self.horizontalLayout_3)
@@ -140,27 +122,6 @@ class Ui_ThermalRange(object):
 "\u2022 Higher values: Detect warmer objects (more detections)\n"
 "Note: Temperature displayed in Celsius, converted based on Preferences setting.\n"
 "Detection occurs for pixels between minimum and maximum temperatures (inclusive).", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(tooltip)
-        self.colorMapLabel.setToolTip(QCoreApplication.translate("ThermalRange", u"Color palette for visualizing thermal imagery.\n"
-"Converts temperature data to colors for easier interpretation.", None))
-#endif // QT_CONFIG(tooltip)
-        self.colorMapLabel.setText(QCoreApplication.translate("ThermalRange", u"Color Map: ", None))
-        self.colorMapComboBox.setItemText(0, QCoreApplication.translate("ThermalRange", u"White Hot", None))
-        self.colorMapComboBox.setItemText(1, QCoreApplication.translate("ThermalRange", u"Black Hot", None))
-        self.colorMapComboBox.setItemText(2, QCoreApplication.translate("ThermalRange", u"Inferno (Iron Red)", None))
-        self.colorMapComboBox.setItemText(3, QCoreApplication.translate("ThermalRange", u"Hot (Fulgurite)", None))
-        self.colorMapComboBox.setItemText(4, QCoreApplication.translate("ThermalRange", u"Jet (Rainbow2)", None))
-
-#if QT_CONFIG(tooltip)
-        self.colorMapComboBox.setToolTip(QCoreApplication.translate("ThermalRange", u"Select the color palette for thermal image visualization:\n"
-"\u2022 White Hot: Hot areas appear white, cold areas appear black (traditional)\n"
-"\u2022 Black Hot: Hot areas appear black, cold areas appear white (inverted)\n"
-"\u2022 Inferno (Iron Red): Red/yellow for hot, dark for cold (high contrast)\n"
-"\u2022 Hot (Fulgurite): Yellow/red gradient (vivid colors)\n"
-"\u2022 Jet (Rainbow2): Rainbow colors from blue (cold) to red (hot)\n"
-"The color map only affects visualization, not detection results.\n"
-"Choose based on image content and personal preference for best visibility.", None))
 #endif // QT_CONFIG(tooltip)
     # retranslateUi
 

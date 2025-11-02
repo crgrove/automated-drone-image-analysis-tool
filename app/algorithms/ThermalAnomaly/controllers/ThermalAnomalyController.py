@@ -27,13 +27,12 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 
         Returns:
             dict: A dictionary containing the selected option values, including
-            'threshold', 'type', and 'colorMap'.
+            'threshold' and 'type'.
         """
         options = dict()
         options['threshold'] = int(self.anomalySpinBox.value())
         options['segments'] = int(self.segmentsComboBox.currentText())
         options['type'] = self.anomalyTypeComboBox.currentText()
-        options['colorMap'] = self.colorMapComboBox.currentText()
         return options
 
     def validate(self):
@@ -51,11 +50,11 @@ class ThermalAnomalyController(QWidget, Ui_ThermalAnomaly, AlgorithmController):
 
         Args:
             options (dict): The options to use to set UI attributes, including
-            'threshold', 'type', and 'colorMap'.
+            'threshold' and 'type'.
         """
         if 'threshold' in options:
             self.anomalySpinBox.setValue(int(options['threshold']))
         if 'segments' in options:
             self.segmentsComboBox.setCurrentText(str(options['segments']))
-        self.anomalyTypeComboBox.setCurrentText(options['type'])
-        self.colorMapComboBox.setCurrentText(options['colorMap'])
+        if 'type' in options:
+            self.anomalyTypeComboBox.setCurrentText(options['type'])
