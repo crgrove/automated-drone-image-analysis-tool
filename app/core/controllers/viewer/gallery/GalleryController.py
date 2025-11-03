@@ -617,30 +617,116 @@ class GalleryController:
             needs_load = (self.parent.current_image != image_idx)
             if needs_load:
                 self.parent.current_image = image_idx
+                
+                # Connect to viewChanged signal BEFORE loading to avoid missing the signal
+                # Note: viewChanged fires twice during load_image():
+                # 1. From setImage() -> updateViewer() (zoom stack not reset yet)
+                # 2. From resetZoom() -> updateViewer() (zoom stack cleared)
+                # We need to wait for the second one (after resetZoom) to ensure zoom stack is clear
+                zoom_handler = None
+                zoom_executed = False
+                view_changed_count = 0
+                
+                def zoom_when_ready():
+                    nonlocal zoom_executed, view_changed_count
+                    view_changed_count += 1
+                    
+                    # Check if _recursion_guard is set - if so, updateViewer() is still running
+                    # and zoomToArea() will return early. We need to wait for it to complete.
+                    recursion_guard_active = False
+                    if (hasattr(self.parent, 'main_image') and 
+                        self.parent.main_image and 
+                        hasattr(self.parent.main_image, '_recursion_guard')):
+                        recursion_guard_active = self.parent.main_image._recursion_guard
+                    
+                    # Don't try to zoom if recursion guard is active - zoomToArea() will return early
+                    if recursion_guard_active:
+                        return
+                    
+                    # Check if zoom stack is empty (meaning resetZoom has been called)
+                    # This ensures we only zoom after the resetZoom viewChanged signal
+                    zoom_stack_cleared = False
+                    if (hasattr(self.parent, 'main_image') and 
+                        self.parent.main_image and 
+                        hasattr(self.parent.main_image, 'zoomStack')):
+                        zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
+                    
+                    # Only zoom if:
+                    # 1. We haven't zoomed yet
+                    # 2. Image is loaded
+                    # 3. Recursion guard is not active (updateViewer completed)
+                    # 4. Zoom stack is cleared (resetZoom has been called)
+                    if (not zoom_executed and 
+                        hasattr(self.parent, 'main_image') and 
+                        self.parent.main_image and 
+                        self.parent.main_image.hasImage() and
+                        not recursion_guard_active and
+                        zoom_stack_cleared):
+                        zoom_executed = True
+                        self._zoom_to_aoi(aoi_data)
+                        # Disconnect after first call
+                        if zoom_handler:
+                            try:
+                                self.parent.main_image.viewChanged.disconnect(zoom_handler)
+                            except:
+                                pass
+                
+                # Connect to viewChanged signal BEFORE loading (critical for race condition)
+                if hasattr(self.parent, 'main_image') and self.parent.main_image:
+                    try:
+                        self.parent.main_image.viewChanged.connect(zoom_when_ready)
+                        zoom_handler = zoom_when_ready
+                    except Exception as e:
+                        self.logger.debug(f"Could not connect to viewChanged: {e}")
+                
+                # Now load the image - this will emit viewChanged signals which our handler will catch
                 if hasattr(self.parent, '_load_image'):
                     self.parent._load_image()
-
-            # 2. Zoom to the AOI in the image viewer
-            # If we loaded a new image, wait for it to be ready, otherwise zoom immediately
-            if needs_load:
-                # Connect to viewChanged signal to zoom once image is loaded and displayed
-                def zoom_when_ready():
+                
+                # Check if image is ready and zoom stack is cleared but signal handler hasn't executed
+                # Only check if zoom hasn't already executed via the signal
+                if (not zoom_executed and
+                    hasattr(self.parent, 'main_image') and 
+                    self.parent.main_image and 
+                    self.parent.main_image.hasImage()):
+                    # Check if recursion guard is active - if so, wait for signal handler
+                    recursion_guard_active = False
+                    if hasattr(self.parent.main_image, '_recursion_guard'):
+                        recursion_guard_active = self.parent.main_image._recursion_guard
+                    
+                    # Check if zoom stack is cleared (resetZoom has been called)
+                    zoom_stack_cleared = False
+                    if hasattr(self.parent.main_image, 'zoomStack'):
+                        zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
+                    
+                    # Only zoom if recursion guard is not active and zoom stack is cleared
+                    if not recursion_guard_active and zoom_stack_cleared:
+                        # Disconnect the signal handler to prevent double-zoom
+                        if zoom_handler:
+                            try:
+                                self.parent.main_image.viewChanged.disconnect(zoom_handler)
+                            except:
+                                pass
+                        # Zoom directly since image is ready and zoom is reset
+                        zoom_executed = True
+                        self._zoom_to_aoi(aoi_data)
+                elif not zoom_handler:
+                    # Couldn't connect to signal, try zooming directly if image is ready and zoom is reset
                     if (hasattr(self.parent, 'main_image') and 
                         self.parent.main_image and 
                         self.parent.main_image.hasImage()):
-                        self._zoom_to_aoi(aoi_data)
-                        # Disconnect after first call
-                        try:
-                            self.parent.main_image.viewChanged.disconnect(zoom_when_ready)
-                        except:
-                            pass
-                
-                # Connect to viewChanged signal (emitted when image is displayed)
-                if hasattr(self.parent, 'main_image') and self.parent.main_image:
-                    self.parent.main_image.viewChanged.connect(zoom_when_ready)
-                else:
-                    # Fallback: try zooming directly
-                    self._zoom_to_aoi(aoi_data)
+                        # Check if recursion guard is active
+                        recursion_guard_active = False
+                        if hasattr(self.parent.main_image, '_recursion_guard'):
+                            recursion_guard_active = self.parent.main_image._recursion_guard
+                        
+                        # Check if zoom stack is cleared before zooming
+                        zoom_stack_cleared = False
+                        if hasattr(self.parent.main_image, 'zoomStack'):
+                            zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
+                        
+                        if not recursion_guard_active and zoom_stack_cleared:
+                            self._zoom_to_aoi(aoi_data)
             else:
                 # Same image - zoom immediately
                 self._zoom_to_aoi(aoi_data)
