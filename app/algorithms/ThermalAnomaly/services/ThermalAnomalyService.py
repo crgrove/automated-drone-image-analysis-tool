@@ -22,14 +22,13 @@ class ThermalAnomalyService(AlgorithmService):
             max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'threshold', 'type', and 'colorMap'.
+            options (dict): Additional algorithm-specific options, including 'threshold' and 'type'.
         """
         self.logger = LoggerService()
         super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.threshold = options['threshold']
         self.segments = options['segments']
         self.direction = options['type']
-        self.color_map = options['colorMap']
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -47,7 +46,7 @@ class ThermalAnomalyService(AlgorithmService):
         try:
             # Parse the thermal image and retrieve temperature data.
             thermal = ThermalParserService(dtype=np.float32)
-            temperature_c, thermal_img = thermal.parse_file(full_path, self.color_map)
+            temperature_c, thermal_img = thermal.parse_file(full_path)
             masks = temperature_c_pieces = self.split_image(temperature_c, self.segments)
             for x in range(len(temperature_c_pieces)):
                 for y in range(len(temperature_c_pieces[x])):

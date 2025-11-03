@@ -187,19 +187,20 @@ class GPSMapController(QObject):
         exif_data = MetaDataHelper.get_exif_data_piexif(image_path)
         return self.get_image_timestamp_from_exif(exif_data)
 
-    def get_image_bearing(self, image_path):
+    def get_image_bearing(self, image_path, calculated_bearing=None):
         """
         Extract bearing/yaw information from image.
 
         Args:
             image_path: Path to the image file
+            calculated_bearing: Optional calculated bearing from XML (degrees)
 
         Returns:
             float: Bearing in degrees (0-360), or None if not available
         """
         try:
             from core.services.ImageService import ImageService
-            image_service = ImageService(image_path, '')
+            image_service = ImageService(image_path, '', calculated_bearing=calculated_bearing)
             # Use get_camera_yaw() which accounts for both Flight Yaw and Gimbal Yaw
             bearing = image_service.get_camera_yaw()
             return bearing

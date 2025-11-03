@@ -64,23 +64,6 @@ class Ui_ThermalAnomaly(object):
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer)
 
-        self.colorMapLabel = QLabel(ThermalAnomaly)
-        self.colorMapLabel.setObjectName(u"colorMapLabel")
-        self.colorMapLabel.setFont(font)
-
-        self.horizontalLayout_3.addWidget(self.colorMapLabel)
-
-        self.colorMapComboBox = QComboBox(ThermalAnomaly)
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.addItem("")
-        self.colorMapComboBox.setObjectName(u"colorMapComboBox")
-        self.colorMapComboBox.setFont(font)
-
-        self.horizontalLayout_3.addWidget(self.colorMapComboBox)
-
 
         self.horizontalLayout_4.addLayout(self.horizontalLayout_3)
 
@@ -161,27 +144,6 @@ class Ui_ThermalAnomaly(object):
 "\u2022 Medium values (3-5): Balanced detection (recommended for most cases)\n"
 "\u2022 Higher values (6-7): Only detects extreme temperature differences (fewer detections)\n"
 "Example: Value of 4 detects pixels 4 standard deviations above/below mean temperature.", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(tooltip)
-        self.colorMapLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Color palette for visualizing thermal imagery.\n"
-"Converts temperature data to colors for easier interpretation.", None))
-#endif // QT_CONFIG(tooltip)
-        self.colorMapLabel.setText(QCoreApplication.translate("ThermalAnomaly", u"Color Map: ", None))
-        self.colorMapComboBox.setItemText(0, QCoreApplication.translate("ThermalAnomaly", u"White Hot", None))
-        self.colorMapComboBox.setItemText(1, QCoreApplication.translate("ThermalAnomaly", u"Black Hot", None))
-        self.colorMapComboBox.setItemText(2, QCoreApplication.translate("ThermalAnomaly", u"Inferno (Iron Red)", None))
-        self.colorMapComboBox.setItemText(3, QCoreApplication.translate("ThermalAnomaly", u"Hot (Fulgurite)", None))
-        self.colorMapComboBox.setItemText(4, QCoreApplication.translate("ThermalAnomaly", u"Jet (Rainbow2)", None))
-
-#if QT_CONFIG(tooltip)
-        self.colorMapComboBox.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Select the color palette for thermal image visualization:\n"
-"\u2022 White Hot: Hot areas appear white, cold areas appear black (traditional)\n"
-"\u2022 Black Hot: Hot areas appear black, cold areas appear white (inverted)\n"
-"\u2022 Inferno (Iron Red): Red/yellow for hot, dark for cold (high contrast)\n"
-"\u2022 Hot (Fulgurite): Yellow/red gradient (vivid colors)\n"
-"\u2022 Jet (Rainbow2): Rainbow colors from blue (cold) to red (hot)\n"
-"The color map only affects visualization, not detection results.\n"
-"Choose based on image content and personal preference for best visibility.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.segmentsLabel.setToolTip(QCoreApplication.translate("ThermalAnomaly", u"Number of segments to divide each thermal image into for analysis.\n"

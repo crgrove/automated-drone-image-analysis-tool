@@ -64,6 +64,7 @@ class ImageLoadController:
             # Load image service
             image_path = image.get('path', '')
             mask_path = image.get('mask_path', '')
+            calculated_bearing = image.get('bearing', None)  # Get calculated bearing if available
 
             # Check if file exists
             if not os.path.exists(image_path):
@@ -71,7 +72,7 @@ class ImageLoadController:
                 return
 
             try:
-                image_service = ImageService(image_path, mask_path)
+                image_service = ImageService(image_path, mask_path, calculated_bearing=calculated_bearing)
             except Exception:
                 raise
 
@@ -137,9 +138,10 @@ class ImageLoadController:
         image = self.parent.images[self.parent.current_image]
         image_path = image.get('path', '')
         mask_path = image.get('mask_path', '')
+        calculated_bearing = image.get('bearing', None)  # Get calculated bearing if available
 
         # Load and process the image
-        image_service = ImageService(image_path, mask_path)
+        image_service = ImageService(image_path, mask_path, calculated_bearing=calculated_bearing)
 
         # Update the cached image array
         self.parent.current_image_service = image_service

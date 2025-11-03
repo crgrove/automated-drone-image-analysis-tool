@@ -115,66 +115,6 @@ Example: Value of 4 detects pixels 4 standard deviations above/below mean temper
          </property>
         </spacer>
        </item>
-       <item>
-        <widget class="QLabel" name="colorMapLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Color palette for visualizing thermal imagery.
-Converts temperature data to colors for easier interpretation.</string>
-         </property>
-         <property name="text">
-          <string>Color Map: </string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="colorMapComboBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Select the color palette for thermal image visualization:
-• White Hot: Hot areas appear white, cold areas appear black (traditional)
-• Black Hot: Hot areas appear black, cold areas appear white (inverted)
-• Inferno (Iron Red): Red/yellow for hot, dark for cold (high contrast)
-• Hot (Fulgurite): Yellow/red gradient (vivid colors)
-• Jet (Rainbow2): Rainbow colors from blue (cold) to red (hot)
-The color map only affects visualization, not detection results.
-Choose based on image content and personal preference for best visibility.</string>
-         </property>
-         <item>
-          <property name="text">
-           <string>White Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Black Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Inferno (Iron Red)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Hot (Fulgurite)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Jet (Rainbow2)</string>
-          </property>
-         </item>
-        </widget>
-       </item>
       </layout>
      </item>
     </layout>

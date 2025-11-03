@@ -184,7 +184,8 @@ class CalTopoExportController:
             # Get image GPS coordinates and metadata
             try:
                 # Create ImageService to extract EXIF data
-                image_service = ImageService(image_path, image.get('mask_path', ''))
+                calculated_bearing = image.get('bearing', None)
+                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=calculated_bearing)
 
                 # Get GPS from EXIF data
                 from helpers.MetaDataHelper import MetaDataHelper

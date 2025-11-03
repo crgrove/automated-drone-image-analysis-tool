@@ -19,3 +19,5 @@ tifffile
 requests
 qtawesome
 shapely
+fastkml>=2.0.0
+gpxpy>=1.5.0

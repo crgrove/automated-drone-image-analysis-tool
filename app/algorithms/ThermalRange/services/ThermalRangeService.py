@@ -18,13 +18,12 @@ class ThermalRangeService(AlgorithmService):
             max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'minTemp', 'maxTemp', and 'colorMap'.
+            options (dict): Additional algorithm-specific options, including 'minTemp' and 'maxTemp'.
         """
         self.logger = LoggerService()
         super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.min_temp = options['minTemp']
         self.max_temp = options['maxTemp']
-        self.color_map = options['colorMap']
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -43,7 +42,7 @@ class ThermalRangeService(AlgorithmService):
         try:
             # Create an instance of ThermalParserService and parse the thermal image.
             thermal = ThermalParserService(dtype=np.float32)
-            temperature_c, thermal_img = thermal.parse_file(full_path, self.color_map)
+            temperature_c, thermal_img = thermal.parse_file(full_path)
 
             # Create a mask to identify areas within the specified temperature range.
             mask = np.uint8(1 * ((temperature_c > self.min_temp) & (temperature_c < self.max_temp)))

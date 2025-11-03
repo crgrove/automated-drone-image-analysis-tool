@@ -125,7 +125,8 @@ class UnifiedMapExportThread(QThread):
                     
                     try:
                         # Create ImageService to extract EXIF data
-                        image_service = ImageService(image_path, image.get('mask_path', ''))
+                        calculated_bearing = image.get('bearing', None)
+                        image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=calculated_bearing)
                         
                         # Get GPS from EXIF data
                         image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)

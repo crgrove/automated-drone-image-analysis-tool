@@ -37,6 +37,7 @@ from core.views.viewer.dialogs.UpscaleDialog import UpscaleDialog
 from core.views.viewer.dialogs.HelpDialog import HelpDialog
 from core.views.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
 from core.views.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
+from core.views.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
 
 from core.controllers.viewer.UIStyleController import UIStyleController
 from core.controllers.viewer.ThermalDataController import ThermalDataController
@@ -64,6 +65,7 @@ from core.services.ThermalParserService import ThermalParserService
 from core.services.SettingsService import SettingsService
 from core.services.BackfillCacheService import BackfillCacheService
 from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 
 from typing import List, Dict, Any, Optional
 
@@ -196,6 +198,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # ---- load everything ----
         self._load_images()
+
+        # Check for missing bearings and offer recovery
+        self._check_and_recover_bearings()
 
         # Set up UI elements for controllers
         # Controllers get UI elements directly from parent
@@ -914,6 +919,87 @@ class Viewer(QMainWindow, Ui_Viewer):
                 except (UnidentifiedImageError, OSError):
                     pass  # Not a valid image
         self.images = valid_images
+
+    def _check_and_recover_bearings(self):
+        """Check if images are missing bearings and offer recovery options."""
+        from datetime import datetime
+        import piexif
+
+        # Check how many images are missing bearings
+        images_missing_bearings = []
+
+        # Quick check: do ANY images have bearing in XML?
+        # If all have bearings, skip recovery entirely
+        any_has_xml_bearing = any(img.get('bearing') is not None for img in self.images)
+
+        if any_has_xml_bearing:
+            # Some images have bearings already, skip recovery
+            self.logger.info("Bearing data found in XML, skipping recovery")
+            return
+
+        # No XML bearings found - check if first image has bearing in EXIF data
+        # Use the same logic as the "Gimbal Orientation" display in the viewer
+        if len(self.images) > 0:
+            first_image_path = self.images[0]['path']
+            try:
+                # Create ImageService WITHOUT calculated_bearing to check EXIF/XMP only
+                # This uses the same logic as the "Gimbal Orientation" display
+                image_service = ImageService(first_image_path, calculated_bearing=None)
+
+                # get_camera_yaw() checks Gimbal Yaw first, then Flight Yaw, then calculated_bearing
+                # Since we passed calculated_bearing=None, it only checks EXIF/XMP data
+                camera_yaw = image_service.get_camera_yaw()
+
+                if camera_yaw is not None:
+                    self.logger.info(f"First image has gimbal orientation in EXIF ({camera_yaw}°), skipping recovery")
+                    return
+                else:
+                    self.logger.info("First image does not have gimbal orientation in EXIF, showing recovery dialog")
+            except Exception as e:
+                self.logger.warning(f"Could not check first image EXIF for bearing: {e}")
+                # Continue to show recovery dialog if EXIF check fails
+
+        # No XML bearings found - prepare lightweight image list for dialog
+        # The actual GPS/timestamp extraction happens in the calculation service
+        self.logger.info(f"No bearing data in XML, preparing recovery for {len(self.images)} images")
+
+        for image in self.images:
+            # Just add the image path - GPS/timestamp will be extracted during calculation
+            images_missing_bearings.append({
+                'path': image['path'],
+                'lat': None,  # Will be extracted during calculation
+                'lon': None,  # Will be extracted during calculation
+                'timestamp': None  # Will be extracted during calculation
+            })
+
+        # Show recovery dialog immediately (no slow EXIF check needed)
+        if len(images_missing_bearings) > 0:
+            self.logger.info(f"Found {len(images_missing_bearings)}/{len(self.images)} images missing bearings")
+
+            # Show bearing recovery dialog
+            dialog = BearingRecoveryDialog(self, images_missing_bearings)
+            result = dialog.exec()
+
+            if result == QDialog.Accepted:
+                # Get results and save to XML
+                bearing_results = dialog.get_results()
+
+                if bearing_results:
+                    # Update XML with calculated bearings
+                    updated_count = self.xml_service.set_multiple_bearings(bearing_results)
+
+                    # Save XML file
+                    self.xml_service.save_xml_file(self.xml_path)
+
+                    # Reload images to get updated bearing data
+                    self.images = self.xml_service.get_images()
+
+                    # Re-run _load_images to add 'name' field and validate paths
+                    self._load_images()
+
+                    self.logger.info(f"Saved {updated_count} calculated bearings to XML")
+        else:
+            self.logger.info("All images have bearing information")
 
     def _setupViewer(self):
         if len(self.images) == 0:
