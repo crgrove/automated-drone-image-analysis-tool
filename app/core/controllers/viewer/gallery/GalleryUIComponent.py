@@ -8,7 +8,7 @@ and visual rendering of AOIs from all loaded images.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                 QListView, QPushButton, QFrame, QAbstractItemView,
                                 QStyledItemDelegate, QStyle, QStyleOptionViewItem)
-from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex
+from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent, QObject
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon
 import qtawesome as qta
 
@@ -136,7 +136,7 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             return QColor(255, 100, 50)  # Orange/Red
 
 
-class GalleryUIComponent:
+class GalleryUIComponent(QObject):
     """
     UI component for the AOI gallery view.
 
@@ -145,6 +145,8 @@ class GalleryUIComponent:
 
     # Signal for when an AOI is clicked
     aoi_clicked = Signal(int, int)  # image_idx, aoi_idx
+    # Emitted when the view is first laid out with a valid size
+    view_ready = Signal()
 
     def __init__(self, gallery_controller):
         """
@@ -153,6 +155,7 @@ class GalleryUIComponent:
         Args:
             gallery_controller: Reference to the GalleryController
         """
+        super().__init__()
         self.gallery_controller = gallery_controller
         self.logger = LoggerService()
 
@@ -160,6 +163,9 @@ class GalleryUIComponent:
         self.gallery_widget = None
         self.gallery_view = None
         self.count_label = None
+        
+        # Track when the view has a valid geometry and initial thumbnails are queued
+        self._initial_thumbnails_loaded = False
 
         # Scroll debounce timer for performance
         self.scroll_timer = QTimer()
@@ -224,6 +230,10 @@ class GalleryUIComponent:
         self.gallery_view.clicked.connect(self._on_item_clicked)
         self.gallery_view.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
+        # Listen for layout/visibility changes to know when the view is ready
+        self.gallery_view.installEventFilter(self)
+        self.gallery_view.viewport().installEventFilter(self)
+
         # Timer for delayed thumbnail loading
         self.thumbnail_load_timer = QTimer()
         self.thumbnail_load_timer.setSingleShot(True)
@@ -262,8 +272,9 @@ class GalleryUIComponent:
         if self.gallery_view:
             self.gallery_view.setModel(model)
             self._update_count_label(model.rowCount())
-            # Trigger initial thumbnail loading after a short delay
-            self.thumbnail_load_timer.start()
+            # Connect model readiness signals to trigger initial thumbnail loading
+            model.modelReset.connect(self._on_model_ready)
+            model.rowsInserted.connect(lambda *_: self._on_model_ready())
 
     def _update_count_label(self, count):
         """Update the count label with the number of AOIs."""
@@ -311,6 +322,8 @@ class GalleryUIComponent:
 
             # Get visible rectangle
             visible_rect = self.gallery_view.viewport().rect()
+            if visible_rect.width() <= 0 or visible_rect.height() <= 0:
+                return
 
             # Get visible item range (with buffer)
             first_visible = self.gallery_view.indexAt(visible_rect.topLeft())
@@ -340,6 +353,34 @@ class GalleryUIComponent:
 
         except Exception as e:
             self.logger.error(f"Error queuing visible thumbnails: {e}")
+
+    def _on_model_ready(self):
+        """Triggered when the model resets or rows are inserted."""
+        try:
+            if (self.gallery_widget and self.gallery_widget.isVisible() and
+                not self._initial_thumbnails_loaded):
+                self._load_visible_thumbnails()
+                self._initial_thumbnails_loaded = True
+                self.view_ready.emit()
+        except Exception as e:
+            self.logger.debug(f"Error in _on_model_ready: {e}")
+
+    def eventFilter(self, obj, event):
+        """Watch for the first time the view/viewport has a valid size."""
+        try:
+            if event.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest):
+                if (self.gallery_widget and self.gallery_widget.isVisible() and
+                    not self._initial_thumbnails_loaded):
+                    # Ensure we have a model with rows and a valid viewport size
+                    model = self.gallery_view.model() if self.gallery_view else None
+                    viewport_rect = self.gallery_view.viewport().rect() if self.gallery_view else QRect()
+                    if model and model.rowCount() > 0 and viewport_rect.width() > 0 and viewport_rect.height() > 0:
+                        self._load_visible_thumbnails()
+                        self._initial_thumbnails_loaded = True
+                        self.view_ready.emit()
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
 
 
     def refresh_gallery(self):

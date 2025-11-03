@@ -490,26 +490,8 @@ class ImageService:
             cx, cy = aoi.get("center", (0, 0))
             r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
-
-            # Draw contour outline if available (this is the actual combined boundary)
-            if "contour" in aoi and aoi["contour"] and len(aoi["contour"]) > 2:
-                # Convert contour points back to numpy array format for OpenCV
-                contour = np.array(aoi["contour"], dtype=np.int32)
-                if len(contour.shape) == 2:
-                    contour = contour.reshape((-1, 1, 2))
-                # Draw contour with solid line
-                cv2.polylines(image_copy, [contour], True, bgr, thickness=2)
-
-                # Also draw the minimum enclosing circle with dotted line for reference
-                if r > 0:
-                    # Draw dotted circle by drawing small arcs
-                    for angle in range(0, 360, 10):
-                        start_angle = angle
-                        end_angle = angle + 5
-                        cv2.ellipse(image_copy, center, (r, r), 0, start_angle, end_angle, bgr, thickness=1)
-            elif r > 0:
-                # Fallback to circle if no contour data (for backward compatibility)
-                cv2.circle(image_copy, center, r, bgr, thickness=2)
+            
+            cv2.circle(image_copy, center, r, bgr, thickness=2)
 
             # Add confidence label if available
             if "confidence" in aoi:

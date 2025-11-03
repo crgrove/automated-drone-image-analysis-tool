@@ -96,7 +96,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
         self._add_Toggles()
-        self._adjust_ui_sizing()
+        #self._adjust_ui_sizing()
         # ---------------- settings / data ----------------
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
@@ -328,9 +328,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                 size_policy = self.thumbnailScrollArea.sizePolicy()
                 size_policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
                 self.thumbnailScrollArea.setSizePolicy(size_policy)
-                # Set to content size (thumbnails are typically ~96px + margins)
-                self.thumbnailScrollArea.setMinimumHeight(0)  # Remove minimum
-                self.thumbnailScrollArea.setMaximumHeight(120)  # Reasonable max for thumbnails
+                # Set minimum height to ensure thumbnails are always visible (not cut off)
+                # Thumbnail content is 96px, plus scrollbar and margins = ~116px
+                self.thumbnailScrollArea.setMinimumHeight(116)  # Ensure minimum space
 
             # Fix statusBarWidget (GPS coordinates area) to be content-height only
             if hasattr(self, 'statusBarWidget') and self.statusBarWidget:
@@ -395,36 +395,31 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.logger.error(traceback.format_exc())
 
     def _setup_splitter_layout(self):
-        """Replace QHBoxLayout with QSplitter for draggable divider between image and gallery."""
+        """Configure the UI-defined splitter and insert the main image widget."""
         try:
             # Gallery column width (thumbnail + spacing)
             self.GALLERY_COLUMN_WIDTH = 200  # 190px thumbnail + 10px spacing
             # Gallery overhead (margins + scrollbar + padding)
             self.GALLERY_OVERHEAD = 35  # Approx. 20px scrollbar + 15px margins/padding
 
-            # Create a QSplitter to replace the ImageLayout
-            self.image_gallery_splitter = QSplitter(Qt.Horizontal, self.centralwidget)
-            self.image_gallery_splitter.setObjectName("imageGallerySplitter")
-            self.image_gallery_splitter.setHandleWidth(4)  # Width of the draggable handle
-            self.image_gallery_splitter.setChildrenCollapsible(False)  # Prevent widgets from collapsing
+            # Use the splitter defined in the UI
+            self.image_gallery_splitter = self.mainSplitter
+            self.image_gallery_splitter.setHandleWidth(4)
+            self.image_gallery_splitter.setChildrenCollapsible(False)
 
-            # Remove widgets from old layout
-            self.ImageLayout.removeWidget(self.placeholderImage)
-            self.ImageLayout.removeWidget(self.aoiFrame)
+            # Replace placeholder with the actual image widget in the image area layout
+            if hasattr(self, 'placeholderImage') and self.placeholderImage:
+                if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
+                    self.verticalLayout_3.removeWidget(self.placeholderImage)
+                self.placeholderImage.deleteLater()
 
-            # Add widgets to splitter
-            self.image_gallery_splitter.addWidget(self.main_image)
-            self.image_gallery_splitter.addWidget(self.aoiFrame)
-
-            # Delete the placeholder now
-            self.placeholderImage.deleteLater()
-
-            # Replace the ImageLayout content with the splitter
-            self.ImageLayout.addWidget(self.image_gallery_splitter)
+            if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
+                # Insert main image right after the header (index 1)
+                self.verticalLayout_3.insertWidget(1, self.main_image)
 
             # Set stretch factors (image expands, gallery stays preferred size)
-            self.image_gallery_splitter.setStretchFactor(0, 1)  # Image expands
-            self.image_gallery_splitter.setStretchFactor(1, 0)  # Gallery fixed size
+            self.image_gallery_splitter.setStretchFactor(0, 1)
+            self.image_gallery_splitter.setStretchFactor(1, 0)
 
             # Connect splitter moved signal for snapping behavior
             self.image_gallery_splitter.splitterMoved.connect(self._on_splitter_moved)
@@ -433,7 +428,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             saved_position = self.settings_service.get_setting('viewer/splitter_position_single', None)
             if saved_position:
                 try:
-                    # Restore saved position
                     positions = [int(p) for p in str(saved_position).split(',')]
                     if len(positions) == 2:
                         self.image_gallery_splitter.setSizes(positions)
@@ -517,6 +511,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                         gallery_view.updateGeometry()
                         gallery_view.scheduleDelayedItemsLayout()
                         gallery_view.viewport().update()
+                        
+                        # Layout updated; GalleryUIComponent listens for resize/layout signals
 
         except Exception as e:
             self.logger.debug(f"Error updating gallery geometry: {e}")
@@ -620,7 +616,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.gallery_widget.setVisible(True)
                 self.gallery_widget.show()
                 self.gallery_widget.raise_()
-
                 # Only sync if filters have changed
                 if hasattr(self, '_last_filter_sync'):
                     # Check if filters have changed since last sync
@@ -650,6 +645,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self.aoi_controller.sort_method,
                         self.aoi_controller.sort_color_hue
                     )
+                
+                # Ensure thumbnail loading is triggered after everything is set up
+                # This handles the case where load_all_aois() was called before widget was visible
+                if hasattr(self.gallery_controller, 'ui_component') and self.gallery_controller.ui_component:
+                    QTimer.singleShot(200, lambda: self.gallery_controller.ui_component._load_visible_thumbnails())
 
                 self.logger.info("Switched to gallery view mode")
 
@@ -1170,7 +1170,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             if self.current_image is None:
                 self.current_image = 0
 
-            self.main_image = QtImageViewer(self, self.centralwidget)
+            self.main_image = QtImageViewer(self, self.imageWidget)
             # Set a reasonable minimum size to prevent the widget from being too small
             self.main_image.setMinimumSize(QSize(400, 300))
             self.main_image.setObjectName("mainImage")
@@ -1202,8 +1202,9 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.unified_map_export = UnifiedMapExportController(self, self.logger)
 
             # Force the layout to update and ensure proper sizing
-            self.ImageLayout.update()
-            self.centralwidget.updateGeometry()
+            if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
+                self.verticalLayout_3.update()
+            self.outerWidget.updateGeometry()
             QApplication.processEvents()
 
             # Load the image immediately - the widget should be properly sized now
