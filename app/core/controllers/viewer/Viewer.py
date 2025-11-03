@@ -36,7 +36,6 @@ from core.views.viewer.widgets.OverlayWidget import OverlayWidget
 from core.views.viewer.dialogs.UpscaleDialog import UpscaleDialog
 from core.views.viewer.dialogs.HelpDialog import HelpDialog
 from core.views.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
-from core.views.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
 from core.views.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
 
 from core.controllers.viewer.UIStyleController import UIStyleController
@@ -54,6 +53,8 @@ from core.controllers.viewer.exports.UnifiedMapExportController import UnifiedMa
 from core.controllers.viewer.aoi.AOIController import AOIController
 from core.controllers.viewer.gallery.GalleryController import GalleryController
 from core.controllers.viewer.thumbnails.ThumbnailController import ThumbnailController
+from core.controllers.viewer.path.PathValidationController import PathValidationController
+from core.controllers.viewer.bearing.BearingRecoveryController import BearingRecoveryController
 from core.controllers.viewer.CoordinateController import CoordinateController
 from core.controllers.viewer.status.StatusController import StatusController
 from core.controllers.viewer.GPSMapController import GPSMapController
@@ -64,6 +65,7 @@ from core.services.ImageService import ImageService
 from core.services.ThermalParserService import ThermalParserService
 from core.services.SettingsService import SettingsService
 from core.services.BackfillCacheService import BackfillCacheService
+from core.services.CachePathService import CachePathService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
@@ -102,8 +104,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.xml_service = XmlService(xml_path)
         self.images = self.xml_service.get_images()
 
+        # Initialize controllers needed during early setup
+        # (must exist before validation/recovery calls below)
+        self.path_validation_controller = PathValidationController(self)
+        self.bearing_recovery_controller = BearingRecoveryController(self)
+
         # Validate and fix paths if needed
-        if not self._validate_and_fix_paths():
+        if not self.path_validation_controller.validate_and_fix_paths(self.images):
             # User cancelled folder selection - show error and close viewer
             QMessageBox.critical(self, "Load Results Failed",
                                 "Cannot load results without valid image and mask locations.\n\n"
@@ -138,6 +145,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.pixel_info_controller = PixelInfoController(self)
         self.image_load_controller = ImageLoadController(self)
         self.altitude_controller = AltitudeController(self)
+        
+        # Initialize services
+        self.cache_path_service = CachePathService()
 
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
@@ -200,7 +210,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._load_images()
 
         # Check for missing bearings and offer recovery
-        self._check_and_recover_bearings()
+        updated_count = self.bearing_recovery_controller.check_and_recover_bearings(
+            self.images, self.xml_service, self.xml_path
+        )
+        # Reload images if bearings were updated
+        if updated_count > 0:
+            self.images = self.xml_service.get_images()
+            self._load_images()
 
         # Set up UI elements for controllers
         # Controllers get UI elements directly from parent
@@ -217,12 +233,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.setStyleSheet("QToolTip {background-color: lightblue; color:black; border:1px solid blue;}")
 
         self.showMaximized()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not hasattr(self, '_initialized_once'):
-            self._initial_fit_image()
-            self._initialized_once = True
 
     def _initial_fit_image(self):
         if self.main_image is not None and not self.main_image._is_destroyed:
@@ -309,103 +319,18 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
 
-    def _adjust_ui_sizing(self):
-        """Adjust UI element sizing to be content-based rather than fixed height."""
-        from PySide6.QtWidgets import QSizePolicy
-
-        try:
-            # Fix TitleWidget (top icon button row) to be content-height only
-            if hasattr(self, 'TitleWidget') and self.TitleWidget:
-                size_policy = self.TitleWidget.sizePolicy()
-                size_policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
-                self.TitleWidget.setSizePolicy(size_policy)
-                self.TitleWidget.setMaximumHeight(60)  # Reasonable max for icon buttons
-                self.TitleWidget.adjustSize()
-
-            # Fix thumbnailScrollArea (bottom row) to be content-height only
-            if hasattr(self, 'thumbnailScrollArea') and self.thumbnailScrollArea:
-                # The thumbnail scroll area should be exactly the size of its contents
-                size_policy = self.thumbnailScrollArea.sizePolicy()
-                size_policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
-                self.thumbnailScrollArea.setSizePolicy(size_policy)
-                # Set minimum height to ensure thumbnails are always visible (not cut off)
-                # Thumbnail content is 96px, plus scrollbar and margins = ~116px
-                self.thumbnailScrollArea.setMinimumHeight(116)  # Ensure minimum space
-
-            # Fix statusBarWidget (GPS coordinates area) to be content-height only
-            if hasattr(self, 'statusBarWidget') and self.statusBarWidget:
-                size_policy = self.statusBarWidget.sizePolicy()
-                size_policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
-                self.statusBarWidget.setSizePolicy(size_policy)
-                self.statusBarWidget.setMaximumHeight(40)  # Reasonable max for status text
-                self.statusBarWidget.adjustSize()
-
-        except Exception as e:
-            self.logger.debug(f"Error adjusting UI sizing: {e}")
-
     def _setup_gallery_mode_ui(self):
         """Set up the gallery mode toggle and stacked widget for AOI display."""
-        try:
-            # Check that required UI elements exist
-            if not hasattr(self, 'aoiFrame') or not self.aoiFrame:
-                self.logger.error("aoiFrame not found, cannot set up gallery")
-                return
-
-            if not hasattr(self, 'aoiListWidget') or not self.aoiListWidget:
-                self.logger.error("aoiListWidget not found, cannot set up gallery")
-                return
-
-            if not hasattr(self, 'aoiSortLabel') or not self.aoiSortLabel:
-                self.logger.error("aoiSortLabel not found, cannot set up gallery")
-                return
-
-            # Get the aoiFrame layout
-            aoi_frame_layout = self.aoiFrame.layout()
-            if not aoi_frame_layout:
-                self.logger.error("aoiFrame layout not found")
-                return
-
-            # Check if the parent widget is visible - if not, defer creation
-            if not self.isVisible():
-                self.logger.debug("Parent widget not visible yet, deferring gallery widget creation")
-                return
-
-            # Create gallery widget with aoiFrame as parent (safer than layout manipulation)
-            self.gallery_widget = self.gallery_controller.create_gallery_widget(self.aoiFrame)
-
-            # Start hidden - will be sized when shown
-            self.gallery_widget.setVisible(False)
-            self.gallery_widget.hide()
-
-            # Raise aoiListWidget to front initially (single-image mode)
-            self.aoiListWidget.raise_()
-
-            # Don't pre-load gallery data yet - images haven't been loaded
-            # This will be done after images are loaded
-
-            # Note: Gallery mode toggle button and Generate Cache button removed
-            # Gallery mode is now toggled using the G key only
-            # Cache generation functionality is still available but UI button removed
-
-            self.logger.info("Gallery mode UI setup complete")
-
-        except Exception as e:
-            self.logger.error(f"Error setting up gallery mode UI: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
+        # Delegate to GalleryController
+        gallery_widget = self.gallery_controller.setup_gallery_mode_ui()
+        if gallery_widget:
+            self.gallery_widget = gallery_widget
 
     def _setup_splitter_layout(self):
         """Configure the UI-defined splitter and insert the main image widget."""
         try:
-            # Gallery column width (thumbnail + spacing)
-            self.GALLERY_COLUMN_WIDTH = 200  # 190px thumbnail + 10px spacing
-            # Gallery overhead (margins + scrollbar + padding)
-            self.GALLERY_OVERHEAD = 35  # Approx. 20px scrollbar + 15px margins/padding
-
             # Use the splitter defined in the UI
             self.image_gallery_splitter = self.mainSplitter
-            self.image_gallery_splitter.setHandleWidth(4)
-            self.image_gallery_splitter.setChildrenCollapsible(False)
 
             # Replace placeholder with the actual image widget in the image area layout
             if hasattr(self, 'placeholderImage') and self.placeholderImage:
@@ -417,264 +342,40 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # Insert main image right after the header (index 1)
                 self.verticalLayout_3.insertWidget(1, self.main_image)
 
-            # Set stretch factors (image expands, gallery stays preferred size)
-            self.image_gallery_splitter.setStretchFactor(0, 1)
-            self.image_gallery_splitter.setStretchFactor(1, 0)
-
-            # Connect splitter moved signal for snapping behavior
-            self.image_gallery_splitter.splitterMoved.connect(self._on_splitter_moved)
-
-            # Load saved splitter position for single-image mode (default starting mode)
-            saved_position = self.settings_service.get_setting('viewer/splitter_position_single', None)
-            if saved_position:
-                try:
-                    positions = [int(p) for p in str(saved_position).split(',')]
-                    if len(positions) == 2:
-                        self.image_gallery_splitter.setSizes(positions)
-                        self.logger.debug(f"Restored single-image splitter position: {positions}")
-                except Exception as e:
-                    self.logger.debug(f"Could not restore splitter position: {e}")
-            else:
-                # Default to 1-column width for single-image mode
-                self._set_splitter_to_single_column()
+            # Delegate gallery-related splitter setup to GalleryController
+            self.gallery_controller.setup_splitter_layout(self.image_gallery_splitter)
 
         except Exception as e:
             self.logger.error(f"Error setting up splitter layout: {e}")
 
     def _on_splitter_moved(self, pos, index):
         """Handle splitter movement with snapping to column widths."""
-        try:
-            # Get current sizes
-            sizes = self.image_gallery_splitter.sizes()
-            if len(sizes) != 2:
-                return
-
-            image_width = sizes[0]
-            gallery_width = sizes[1]
-            total_width = image_width + gallery_width
-
-            # Calculate usable width for columns (subtract overhead for margins/scrollbar)
-            usable_width = gallery_width - self.GALLERY_OVERHEAD
-
-            # Calculate number of columns that fit in the usable space
-            # Use floor to ensure we only count columns that fully fit
-            import math
-            num_columns = max(1, math.floor(usable_width / self.GALLERY_COLUMN_WIDTH))
-
-            # Calculate the ideal gallery width for this number of columns
-            # This ensures no extra space on the right
-            snapped_gallery_width = (num_columns * self.GALLERY_COLUMN_WIDTH) + self.GALLERY_OVERHEAD
-
-            # Apply minimum and maximum constraints
-            min_gallery_width = self.GALLERY_COLUMN_WIDTH + self.GALLERY_OVERHEAD  # 1 column + overhead
-            max_gallery_width = total_width - 400  # Minimum 400px for image
-
-            snapped_gallery_width = max(min_gallery_width, min(snapped_gallery_width, max_gallery_width))
-            snapped_image_width = total_width - snapped_gallery_width
-
-            # Only update if changed significantly (avoid infinite loop)
-            if abs(gallery_width - snapped_gallery_width) > 5:
-                self.image_gallery_splitter.setSizes([snapped_image_width, snapped_gallery_width])
-
-            # Update gallery widget geometry to match new aoiFrame size
-            self._update_gallery_geometry()
-
-            # Save the position
-            self._save_splitter_position()
-
-        except Exception as e:
-            self.logger.error(f"Error handling splitter movement: {e}")
+        # Delegate to GalleryController
+        gallery_widget = getattr(self, 'gallery_widget', None)
+        self.gallery_controller.on_splitter_moved(pos, index, self.image_gallery_splitter, gallery_widget)
 
     def _update_gallery_geometry(self):
         """Update gallery widget geometry to fill aoiFrame."""
-        try:
-            if (hasattr(self, 'gallery_widget') and self.gallery_widget and
-                hasattr(self, 'gallery_mode') and self.gallery_mode and
-                self.gallery_widget.isVisible()):
-
-                # Fill frame width for responsive grid display
-                frame_rect = self.aoiFrame.rect()
-                aoi_list_rect = self.aoiListWidget.geometry()
-
-                self.gallery_widget.setGeometry(
-                    5,
-                    aoi_list_rect.y(),
-                    frame_rect.width() - 10,
-                    aoi_list_rect.height()
-                )
-
-                # Force the gallery view to update its layout
-                if hasattr(self.gallery_controller, 'ui_component') and self.gallery_controller.ui_component:
-                    gallery_view = self.gallery_controller.ui_component.gallery_view
-                    if gallery_view:
-                        # Update the view's geometry and force layout recalculation
-                        gallery_view.updateGeometry()
-                        gallery_view.scheduleDelayedItemsLayout()
-                        gallery_view.viewport().update()
-                        
-                        # Layout updated; GalleryUIComponent listens for resize/layout signals
-
-        except Exception as e:
-            self.logger.debug(f"Error updating gallery geometry: {e}")
+        # Delegate to GalleryController
+        if hasattr(self, 'gallery_widget') and self.gallery_widget:
+            self.gallery_controller.update_gallery_geometry(self.gallery_widget)
 
     def _set_splitter_to_single_column(self):
         """Set the splitter to show exactly 1 column in the gallery."""
-        try:
-            total_width = sum(self.image_gallery_splitter.sizes())
-            # Calculate width for 1 column + overhead
-            single_column_width = self.GALLERY_COLUMN_WIDTH + self.GALLERY_OVERHEAD
-            image_width = total_width - single_column_width
-
-            self.image_gallery_splitter.setSizes([image_width, single_column_width])
-            self.logger.debug(f"Set splitter to single column: [{image_width}, {single_column_width}]")
-        except Exception as e:
-            self.logger.debug(f"Error setting splitter to single column: {e}")
+        # Delegate to GalleryController
+        if hasattr(self, 'image_gallery_splitter'):
+            self.gallery_controller.set_splitter_to_single_column(self.image_gallery_splitter)
 
     def _save_splitter_position(self):
         """Save current splitter position to settings based on current view mode."""
-        try:
-            sizes = self.image_gallery_splitter.sizes()
-            # Save as comma-separated string
-            position_str = f"{sizes[0]},{sizes[1]}"
-
-            # Save to different settings key based on mode
-            if hasattr(self, 'gallery_mode') and self.gallery_mode:
-                # Save gallery mode position
-                self.settings_service.set_setting('viewer/splitter_position_gallery', position_str)
-            else:
-                # Save single-image mode position
-                self.settings_service.set_setting('viewer/splitter_position_single', position_str)
-        except Exception as e:
-            self.logger.debug(f"Could not save splitter position: {e}")
+        # Delegate to GalleryController
+        if hasattr(self, 'image_gallery_splitter'):
+            self.gallery_controller.save_splitter_position(self.image_gallery_splitter)
 
     def _toggle_gallery_mode(self):
         """Toggle between single-image and gallery view modes."""
-        try:
-            # Make sure gallery is set up - try to create it if it doesn't exist
-            if not self.gallery_widget:
-                # Ensure we're visible before creating widgets
-                if not self.isVisible():
-                    self.logger.warning("Cannot create gallery widget - viewer not visible")
-                    return
-
-                self._setup_gallery_mode_ui()
-
-                # Check if it was created successfully
-                if not self.gallery_widget:
-                    self.logger.error("Failed to create gallery widget")
-                    return
-
-                self._gallery_setup_pending = False
-                # Don't load AOIs here - will be loaded when actually switching to gallery mode below
-
-            if not self.gallery_widget:
-                self.logger.warning("Gallery widget not available")
-                return
-
-            self.gallery_mode = not self.gallery_mode
-
-            if self.gallery_mode:
-                # Switch to gallery view
-                # Remove fixed width constraints - splitter handles sizing
-                self.aoiFrame.setMinimumWidth(250)  # Just ensure minimum
-                self.aoiFrame.setMaximumWidth(16777215)  # Remove max constraint
-
-                # Restore saved gallery splitter position or set default to 4 columns
-                saved_gallery_position = self.settings_service.get_setting('viewer/splitter_position_gallery', None)
-                if saved_gallery_position:
-                    try:
-                        positions = [int(p) for p in str(saved_gallery_position).split(',')]
-                        if len(positions) == 2:
-                            self.image_gallery_splitter.setSizes(positions)
-                            self.logger.debug(f"Restored gallery splitter position: {positions}")
-                            # Force update of gallery geometry after restoring position
-                            QTimer.singleShot(0, self._update_gallery_geometry)
-                    except Exception as e:
-                        self.logger.debug(f"Could not restore gallery splitter position: {e}")
-                else:
-                    # Default to 4 columns
-                    total_width = sum(self.image_gallery_splitter.sizes())
-                    four_column_width = (4 * self.GALLERY_COLUMN_WIDTH) + self.GALLERY_OVERHEAD
-                    image_width = total_width - four_column_width
-                    self.image_gallery_splitter.setSizes([image_width, four_column_width])
-                    self.logger.debug(f"Set gallery to default 4 columns: [{image_width}, {four_column_width}]")
-                    # Force update of gallery geometry
-                    QTimer.singleShot(0, self._update_gallery_geometry)
-
-                # Gallery widget fills the frame width
-                frame_rect = self.aoiFrame.rect()
-                aoi_list_rect = self.aoiListWidget.geometry()
-
-                self.gallery_widget.setGeometry(
-                    5,  # Small margin
-                    aoi_list_rect.y(),
-                    frame_rect.width() - 10,
-                    aoi_list_rect.height()
-                )
-
-                # Show gallery and raise it to front
-                self.gallery_widget.setVisible(True)
-                self.gallery_widget.show()
-                self.gallery_widget.raise_()
-                # Only sync if filters have changed
-                if hasattr(self, '_last_filter_sync'):
-                    # Check if filters have changed since last sync
-                    current_filters = (
-                        self.aoi_controller.filter_flagged_only,
-                        self.aoi_controller.filter_color_hue,
-                        self.aoi_controller.filter_color_range,
-                        self.aoi_controller.filter_area_min,
-                        self.aoi_controller.filter_area_max,
-                        self.aoi_controller.sort_method,
-                        self.aoi_controller.sort_color_hue
-                    )
-                    if current_filters != self._last_filter_sync:
-                        self.gallery_controller.sync_filters_from_aoi_controller()
-                        self.gallery_controller.load_all_aois()
-                        self._last_filter_sync = current_filters
-                else:
-                    # First time - do sync
-                    self.gallery_controller.sync_filters_from_aoi_controller()
-                    self.gallery_controller.load_all_aois()
-                    self._last_filter_sync = (
-                        self.aoi_controller.filter_flagged_only,
-                        self.aoi_controller.filter_color_hue,
-                        self.aoi_controller.filter_color_range,
-                        self.aoi_controller.filter_area_min,
-                        self.aoi_controller.filter_area_max,
-                        self.aoi_controller.sort_method,
-                        self.aoi_controller.sort_color_hue
-                    )
-                
-                # Ensure thumbnail loading is triggered after everything is set up
-                # This handles the case where load_all_aois() was called before widget was visible
-                if hasattr(self.gallery_controller, 'ui_component') and self.gallery_controller.ui_component:
-                    QTimer.singleShot(200, lambda: self.gallery_controller.ui_component._load_visible_thumbnails())
-
-                self.logger.info("Switched to gallery view mode")
-
-            else:
-                # Switch to single-image view
-                # Set splitter to single column width
-                self._set_splitter_to_single_column()
-
-                # Reset to reasonable single-column width
-                self.aoiFrame.setMinimumWidth(250)
-                self.aoiFrame.setMaximumWidth(400)  # Reasonable max for single column
-
-                # Raise single-image list to front, keep gallery in background
-                self.aoiListWidget.raise_()
-
-                # Don't destroy gallery widget - keep it cached for fast switching
-                # Just hide it
-                self.gallery_widget.hide()
-
-                self.logger.info("Switched to single-image view mode")
-
-        except Exception as e:
-            self.logger.error(f"Error toggling gallery mode: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
+        # Delegate to GalleryController
+        self.gallery_controller.toggle_gallery_mode()
 
     def _generate_cache(self):
         """Generate thumbnail and color caches for this dataset."""
@@ -770,7 +471,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 "Cache Generated",
                 f"Cache generation complete!\n\n"
                 f"Processed {total_images} images with {total_aois} AOIs.\n\n"
-                f"The gallery will now load much faster."
+                f"The viewer will now load thumbnails and colors much faster."
             )
 
             # Reload gallery if in gallery mode to show cached results
@@ -819,6 +520,11 @@ class Viewer(QMainWindow, Ui_Viewer):
     def showEvent(self, event):
         """Handle the show event - widget is now visible."""
         super().showEvent(event)
+        
+        # Initial fit image on first show
+        if not hasattr(self, '_initialized_once'):
+            self._initial_fit_image()
+            self._initialized_once = True
 
         # If gallery setup was pending and we're now visible, we can prepare it
         # but don't actually create it until the user needs it
@@ -832,19 +538,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         # If gallery widget exists and is visible (in gallery mode), update its geometry
         if (hasattr(self, 'gallery_widget') and self.gallery_widget and
-            hasattr(self, 'aoiListWidget') and hasattr(self, 'gallery_mode') and
-            self.gallery_mode and self.gallery_widget.isVisible()):
-
-            # Fill frame width for responsive grid display
-            frame_rect = self.aoiFrame.rect()
-            aoi_list_rect = self.aoiListWidget.geometry()
-
-            self.gallery_widget.setGeometry(
-                5,
-                aoi_list_rect.y(),
-                frame_rect.width() - 10,
-                aoi_list_rect.height()
-            )
+            hasattr(self, 'gallery_mode') and self.gallery_mode):
+            # Delegate to GalleryController
+            self.gallery_controller.update_gallery_geometry(self.gallery_widget)
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
@@ -920,93 +616,18 @@ class Viewer(QMainWindow, Ui_Viewer):
                     pass  # Not a valid image
         self.images = valid_images
 
-    def _check_and_recover_bearings(self):
-        """Check if images are missing bearings and offer recovery options."""
-        from datetime import datetime
-        import piexif
-
-        # Check how many images are missing bearings
-        images_missing_bearings = []
-
-        # Quick check: do ANY images have bearing in XML?
-        # If all have bearings, skip recovery entirely
-        any_has_xml_bearing = any(img.get('bearing') is not None for img in self.images)
-
-        if any_has_xml_bearing:
-            # Some images have bearings already, skip recovery
-            self.logger.info("Bearing data found in XML, skipping recovery")
-            return
-
-        # No XML bearings found - check if first image has bearing in EXIF data
-        # Use the same logic as the "Gimbal Orientation" display in the viewer
-        if len(self.images) > 0:
-            first_image_path = self.images[0]['path']
-            try:
-                # Create ImageService WITHOUT calculated_bearing to check EXIF/XMP only
-                # This uses the same logic as the "Gimbal Orientation" display
-                image_service = ImageService(first_image_path, calculated_bearing=None)
-
-                # get_camera_yaw() checks Gimbal Yaw first, then Flight Yaw, then calculated_bearing
-                # Since we passed calculated_bearing=None, it only checks EXIF/XMP data
-                camera_yaw = image_service.get_camera_yaw()
-
-                if camera_yaw is not None:
-                    self.logger.info(f"First image has gimbal orientation in EXIF ({camera_yaw}°), skipping recovery")
-                    return
-                else:
-                    self.logger.info("First image does not have gimbal orientation in EXIF, showing recovery dialog")
-            except Exception as e:
-                self.logger.warning(f"Could not check first image EXIF for bearing: {e}")
-                # Continue to show recovery dialog if EXIF check fails
-
-        # No XML bearings found - prepare lightweight image list for dialog
-        # The actual GPS/timestamp extraction happens in the calculation service
-        self.logger.info(f"No bearing data in XML, preparing recovery for {len(self.images)} images")
-
-        for image in self.images:
-            # Just add the image path - GPS/timestamp will be extracted during calculation
-            images_missing_bearings.append({
-                'path': image['path'],
-                'lat': None,  # Will be extracted during calculation
-                'lon': None,  # Will be extracted during calculation
-                'timestamp': None  # Will be extracted during calculation
-            })
-
-        # Show recovery dialog immediately (no slow EXIF check needed)
-        if len(images_missing_bearings) > 0:
-            self.logger.info(f"Found {len(images_missing_bearings)}/{len(self.images)} images missing bearings")
-
-            # Show bearing recovery dialog
-            dialog = BearingRecoveryDialog(self, images_missing_bearings)
-            result = dialog.exec()
-
-            if result == QDialog.Accepted:
-                # Get results and save to XML
-                bearing_results = dialog.get_results()
-
-                if bearing_results:
-                    # Update XML with calculated bearings
-                    updated_count = self.xml_service.set_multiple_bearings(bearing_results)
-
-                    # Save XML file
-                    self.xml_service.save_xml_file(self.xml_path)
-
-                    # Reload images to get updated bearing data
-                    self.images = self.xml_service.get_images()
-
-                    # Re-run _load_images to add 'name' field and validate paths
-                    self._load_images()
-
-                    self.logger.info(f"Saved {updated_count} calculated bearings to XML")
-        else:
-            self.logger.info("All images have bearing information")
 
     def _setupViewer(self):
         if len(self.images) == 0:
             self._show_no_images_message()
         else:
             # Check for caches and prompt user if missing
-            self._check_and_prompt_for_caches()
+            alternative_cache_dir, _ = self.cache_path_service.check_and_prompt_for_caches(
+                self.xml_path, self
+            )
+            if alternative_cache_dir:
+                self.alternative_cache_dir = alternative_cache_dir
+                self.cache_path_service.update_cache_paths(Path(alternative_cache_dir), self)
 
             self._load_initial_image()
 
@@ -1067,95 +688,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.gps_map_open = False
             self.rotate_image_open = False
 
-    def _check_and_prompt_for_caches(self):
-        """
-        Check if cache directories exist, and if not, prompt user to locate them.
-
-        Returns:
-            bool: True if caches are available (found or user declined), False if user wants to retry
-        """
-        try:
-            # Get the expected cache directory from xml_path
-            results_dir = Path(self.xml_path).parent
-            thumbnail_cache_dir = results_dir / '.thumbnails'
-            image_thumbnail_cache_dir = results_dir / '.image_thumbnails'
-            color_cache_dir = results_dir / '.color_cache'
-
-            # Check which caches are missing
-            missing_caches = []
-            if not thumbnail_cache_dir.exists():
-                missing_caches.append('AOI thumbnails')
-            if not image_thumbnail_cache_dir.exists():
-                missing_caches.append('Image thumbnails')
-            if not color_cache_dir.exists():
-                missing_caches.append('Color cache')
-
-            # If all caches exist, no need to prompt
-            if not missing_caches:
-                return True
-
-            # Show dialog to prompt user
-            dialog = CacheLocationDialog(self, missing_caches)
-            result = dialog.exec()
-
-            if result == QDialog.Accepted:
-                # User selected a cache folder
-                selected_path = dialog.get_selected_path()
-                if selected_path:
-                    # Store for use by all controllers
-                    self.alternative_cache_dir = str(selected_path)
-                    # Update cache paths for all controllers
-                    self._update_cache_paths(selected_path)
-                    self.logger.info(f"Using cache from: {selected_path}")
-                    return True
-
-            # User declined - proceed without cache
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error checking caches: {e}")
-            return True  # Continue anyway
-
-    def _update_cache_paths(self, cache_dir: Path):
-        """
-        Update cache directory paths for all controllers to use an alternative location.
-
-        Args:
-            cache_dir: Path to the directory containing cache subdirectories
-        """
-        try:
-            from core.services.ColorCacheService import ColorCacheService
-
-            # Update gallery controller's model cache paths
-            if hasattr(self, 'gallery_controller') and self.gallery_controller:
-                model = self.gallery_controller.model
-
-                # Update color cache service
-                color_cache_path = cache_dir / '.color_cache'
-                if color_cache_path.exists():
-                    model.color_cache_service = ColorCacheService(cache_dir=str(color_cache_path))
-                    model.dataset_dir = cache_dir  # Update the dataset dir reference
-                    self.logger.info(f"Using color cache from: {color_cache_path}")
-
-                # Update thumbnail loader cache path
-                thumbnail_cache_path = cache_dir / '.thumbnails'
-                if thumbnail_cache_path.exists() and hasattr(model, 'thumbnail_loader'):
-                    model.thumbnail_loader.set_dataset_cache_dir(str(thumbnail_cache_path))
-                    self.logger.info(f"Using AOI thumbnail cache from: {thumbnail_cache_path}")
-
-            # Update thumbnail controller for main image thumbnails
-            if hasattr(self, 'thumbnail_controller') and self.thumbnail_controller:
-                image_thumbnail_path = cache_dir / '.image_thumbnails'
-                if image_thumbnail_path.exists():
-                    # Store the alternative cache path for thumbnail loader to use
-                    self.thumbnail_controller.alternative_cache_dir = str(cache_dir)
-                    # If loader is already created, update it
-                    if hasattr(self.thumbnail_controller, 'loader') and self.thumbnail_controller.loader:
-                        self.thumbnail_controller.loader.results_dir = str(cache_dir)
-                    self.logger.info(f"Using image thumbnail cache from: {image_thumbnail_path}")
-
-        except Exception as e:
-            self.logger.error(f"Error updating cache paths: {e}")
 
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
@@ -1751,186 +1283,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         # For now, just log it
         self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
 
-    def _validate_and_fix_paths(self):
-        """
-        Validate that all image and mask paths exist. Prompt user to select folders if missing.
-
-        Returns:
-            bool: True if all paths are valid or were fixed, False if user cancelled.
-        """
-        missing_images = []
-        missing_masks = []
-
-        # Check which images and masks are missing
-        for image in self.images:
-            image_path = image.get('path', '')
-            mask_path = image.get('mask_path', '')
-
-            if image_path and not os.path.exists(image_path):
-                missing_images.append({
-                    'image': image,
-                    'filename': os.path.basename(image_path)
-                })
-
-            if mask_path and not os.path.exists(mask_path):
-                missing_masks.append({
-                    'image': image,
-                    'filename': os.path.basename(mask_path)
-                })
-
-        # Prompt for source images folder if any are missing
-        if missing_images:
-            if not self._prompt_for_source_folder(missing_images):
-                return False  # User cancelled
-
-        # Prompt for masks folder if any are missing
-        if missing_masks:
-            if not self._prompt_for_mask_folder(missing_masks):
-                return False  # User cancelled
-
-        return True
-
-    def _prompt_for_source_folder(self, missing_images):
-        """
-        Prompt user to select folder containing source images.
-
-        Args:
-            missing_images (list): List of dicts with 'image' and 'filename' keys.
-
-        Returns:
-            bool: True if successful, False if user cancelled.
-        """
-        # Build message with list of missing files
-        file_list = '\n'.join([f"  • {item['filename']}" for item in missing_images[:10]])
-        if len(missing_images) > 10:
-            file_list += f"\n  ... and {len(missing_images) - 10} more"
-
-        message = (f"{len(missing_images)} source image(s) not found at expected locations:\n\n"
-                   f"{file_list}\n\n"
-                   f"Please select the folder containing the source images.")
-
-        # Show informative message
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Source Images Not Found")
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        msg_box.setDefaultButton(QMessageBox.Ok)
-
-        if msg_box.exec() != QMessageBox.Ok:
-            return False
-
-        # Open folder selection dialog
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select Source Images Folder",
-            "",
-            QFileDialog.ShowDirsOnly
-        )
-
-        if not folder:
-            return False  # User cancelled
-
-        # Update paths for files found in the selected folder
-        files_found = 0
-        still_missing = []
-
-        for item in missing_images:
-            filename = item['filename']
-            new_path = os.path.join(folder, filename)
-
-            if os.path.exists(new_path):
-                item['image']['path'] = new_path
-                files_found += 1
-            else:
-                still_missing.append(filename)
-
-        # Report results
-        if still_missing:
-            still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
-            if len(still_missing) > 10:
-                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
-
-            QMessageBox.warning(
-                self,
-                "Some Images Still Missing",
-                f"Found {files_found} of {len(missing_images)} images.\n\n"
-                f"Still missing:\n{still_missing_list}"
-            )
-            return False
-
-        return True
-
-    def _prompt_for_mask_folder(self, missing_masks):
-        """
-        Prompt user to select folder containing detection masks.
-
-        Args:
-            missing_masks (list): List of dicts with 'image' and 'filename' keys.
-
-        Returns:
-            bool: True if successful, False if user cancelled.
-        """
-        # Build message with list of missing files
-        file_list = '\n'.join([f"  • {item['filename']}" for item in missing_masks[:10]])
-        if len(missing_masks) > 10:
-            file_list += f"\n  ... and {len(missing_masks) - 10} more"
-
-        message = (f"{len(missing_masks)} detection mask(s) not found at expected locations:\n\n"
-                   f"{file_list}\n\n"
-                   f"Please select the folder containing the mask files.")
-
-        # Show informative message
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Detection Masks Not Found")
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        msg_box.setDefaultButton(QMessageBox.Ok)
-
-        if msg_box.exec() != QMessageBox.Ok:
-            return False
-
-        # Open folder selection dialog
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select Masks Folder",
-            "",
-            QFileDialog.ShowDirsOnly
-        )
-
-        if not folder:
-            return False  # User cancelled
-
-        # Update paths for files found in the selected folder
-        files_found = 0
-        still_missing = []
-
-        for item in missing_masks:
-            filename = item['filename']
-            new_path = os.path.join(folder, filename)
-
-            if os.path.exists(new_path):
-                item['image']['mask_path'] = new_path
-                files_found += 1
-            else:
-                still_missing.append(filename)
-
-        # Report results
-        if still_missing:
-            still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
-            if len(still_missing) > 10:
-                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
-
-            QMessageBox.warning(
-                self,
-                "Some Masks Still Missing",
-                f"Found {files_found} of {len(missing_masks)} masks.\n\n"
-                f"Still missing:\n{still_missing_list}"
-            )
-            return False
-
-        return True
 
     def _apply_icons(self):
         """Apply themed icons to all buttons in the viewer."""

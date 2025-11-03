@@ -7,6 +7,7 @@ for displaying AOIs from all loaded images.
 
 import colorsys
 import fnmatch
+import math
 import numpy as np
 from PySide6.QtCore import QThread, QTimer
 from PySide6.QtWidgets import QProgressDialog, QApplication
@@ -66,6 +67,11 @@ class GalleryController:
 
         # Progress dialog for color calculation
         self.color_calc_progress_dialog = None
+
+        # Gallery column width constants (thumbnail + spacing)
+        self.GALLERY_COLUMN_WIDTH = 200  # 190px thumbnail + 10px spacing
+        # Gallery overhead (margins + scrollbar + padding)
+        self.GALLERY_OVERHEAD = 35  # Approx. 20px scrollbar + 15px margins/padding
 
     def create_gallery_widget(self, parent=None):
         """
@@ -732,3 +738,313 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error syncing selection from AOI controller: {e}")
+
+    def setup_gallery_mode_ui(self):
+        """Set up the gallery mode UI."""
+        try:
+            # Check that required UI elements exist
+            if not hasattr(self.parent, 'aoiFrame') or not self.parent.aoiFrame:
+                self.logger.error("aoiFrame not found, cannot set up gallery")
+                return None
+
+            if not hasattr(self.parent, 'aoiListWidget') or not self.parent.aoiListWidget:
+                self.logger.error("aoiListWidget not found, cannot set up gallery")
+                return None
+
+            # Check if the parent widget is visible - if not, defer creation
+            if not self.parent.isVisible():
+                self.logger.debug("Parent widget not visible yet, deferring gallery widget creation")
+                return None
+
+            # Create gallery widget with aoiFrame as parent (safer than layout manipulation)
+            gallery_widget = self.create_gallery_widget(self.parent.aoiFrame)
+
+            # Start hidden - will be sized when shown
+            gallery_widget.setVisible(False)
+            gallery_widget.hide()
+
+            # Raise aoiListWidget to front initially (single-image mode)
+            self.parent.aoiListWidget.raise_()
+
+            self.logger.info("Gallery mode UI setup complete")
+            return gallery_widget
+
+        except Exception as e:
+            self.logger.error(f"Error setting up gallery mode UI: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return None
+
+    def update_gallery_geometry(self, gallery_widget):
+        """Update gallery widget geometry to fill aoiFrame."""
+        try:
+            if (gallery_widget and gallery_widget.isVisible() and
+                hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode):
+
+                # Fill frame width for responsive grid display
+                frame_rect = self.parent.aoiFrame.rect()
+                aoi_list_rect = self.parent.aoiListWidget.geometry()
+
+                gallery_widget.setGeometry(
+                    5,
+                    aoi_list_rect.y(),
+                    frame_rect.width() - 10,
+                    aoi_list_rect.height()
+                )
+
+                # Force the gallery view to update its layout
+                if self.ui_component and self.ui_component.gallery_view:
+                    gallery_view = self.ui_component.gallery_view
+                    # Update the view's geometry and force layout recalculation
+                    gallery_view.updateGeometry()
+                    gallery_view.scheduleDelayedItemsLayout()
+                    gallery_view.viewport().update()
+
+        except Exception as e:
+            self.logger.debug(f"Error updating gallery geometry: {e}")
+
+    def set_splitter_to_single_column(self, splitter):
+        """Set the splitter to show exactly 1 column in the gallery."""
+        try:
+            total_width = sum(splitter.sizes())
+            # Calculate width for 1 column + overhead
+            single_column_width = self.GALLERY_COLUMN_WIDTH + self.GALLERY_OVERHEAD
+            image_width = total_width - single_column_width
+
+            splitter.setSizes([image_width, single_column_width])
+            self.logger.debug(f"Set splitter to single column: [{image_width}, {single_column_width}]")
+        except Exception as e:
+            self.logger.debug(f"Error setting splitter to single column: {e}")
+
+    def save_splitter_position(self, splitter):
+        """Save current splitter position to settings based on current view mode."""
+        try:
+            if not hasattr(self.parent, 'settings_service'):
+                return
+
+            sizes = splitter.sizes()
+            # Save as comma-separated string
+            position_str = f"{sizes[0]},{sizes[1]}"
+
+            # Save to different settings key based on mode
+            if hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode:
+                # Save gallery mode position
+                self.parent.settings_service.set_setting('viewer/splitter_position_gallery', position_str)
+            else:
+                # Save single-image mode position
+                self.parent.settings_service.set_setting('viewer/splitter_position_single', position_str)
+        except Exception as e:
+            self.logger.debug(f"Could not save splitter position: {e}")
+
+    def on_splitter_moved(self, pos, index, splitter, gallery_widget):
+        """Handle splitter movement with snapping to column widths."""
+        try:
+            # Get current sizes
+            sizes = splitter.sizes()
+            if len(sizes) != 2:
+                return
+
+            image_width = sizes[0]
+            gallery_width = sizes[1]
+            total_width = image_width + gallery_width
+
+            # Calculate usable width for columns (subtract overhead for margins/scrollbar)
+            usable_width = gallery_width - self.GALLERY_OVERHEAD
+
+            # Calculate number of columns that fit in the usable space
+            # Use floor to ensure we only count columns that fully fit
+            num_columns = max(1, math.floor(usable_width / self.GALLERY_COLUMN_WIDTH))
+
+            # Calculate the ideal gallery width for this number of columns
+            # This ensures no extra space on the right
+            snapped_gallery_width = (num_columns * self.GALLERY_COLUMN_WIDTH) + self.GALLERY_OVERHEAD
+
+            # Apply minimum and maximum constraints
+            min_gallery_width = self.GALLERY_COLUMN_WIDTH + self.GALLERY_OVERHEAD  # 1 column + overhead
+            max_gallery_width = total_width - 400  # Minimum 400px for image
+
+            snapped_gallery_width = max(min_gallery_width, min(snapped_gallery_width, max_gallery_width))
+            snapped_image_width = total_width - snapped_gallery_width
+
+            # Only update if changed significantly (avoid infinite loop)
+            if abs(gallery_width - snapped_gallery_width) > 5:
+                splitter.setSizes([snapped_image_width, snapped_gallery_width])
+
+            # Update gallery widget geometry to match new aoiFrame size
+            if gallery_widget:
+                self.update_gallery_geometry(gallery_widget)
+
+            # Save the position
+            self.save_splitter_position(splitter)
+
+        except Exception as e:
+            self.logger.error(f"Error handling splitter movement: {e}")
+
+    def setup_splitter_layout(self, splitter):
+        """Configure splitter layout for gallery mode."""
+        try:
+            splitter.setHandleWidth(4)
+            splitter.setChildrenCollapsible(False)
+
+            # Set stretch factors (image expands, gallery stays preferred size)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 0)
+
+            # Connect splitter moved signal for snapping behavior
+            # We'll use a lambda to pass the splitter and gallery_widget
+            def on_splitter_moved_handler(pos, index):
+                gallery_widget = getattr(self.parent, 'gallery_widget', None)
+                self.on_splitter_moved(pos, index, splitter, gallery_widget)
+
+            splitter.splitterMoved.connect(on_splitter_moved_handler)
+
+            # Load saved splitter position for single-image mode (default starting mode)
+            if hasattr(self.parent, 'settings_service'):
+                saved_position = self.parent.settings_service.get_setting('viewer/splitter_position_single', None)
+                if saved_position:
+                    try:
+                        positions = [int(p) for p in str(saved_position).split(',')]
+                        if len(positions) == 2:
+                            splitter.setSizes(positions)
+                            self.logger.debug(f"Restored single-image splitter position: {positions}")
+                    except Exception as e:
+                        self.logger.debug(f"Could not restore splitter position: {e}")
+                else:
+                    # Default to 1-column width for single-image mode
+                    self.set_splitter_to_single_column(splitter)
+
+        except Exception as e:
+            self.logger.error(f"Error setting up splitter layout: {e}")
+
+    def toggle_gallery_mode(self):
+        """Toggle between single-image and gallery view modes."""
+        try:
+            # Make sure gallery is set up - try to create it if it doesn't exist
+            if not hasattr(self.parent, 'gallery_widget') or not self.parent.gallery_widget:
+                # Ensure we're visible before creating widgets
+                if not self.parent.isVisible():
+                    self.logger.warning("Cannot create gallery widget - viewer not visible")
+                    return
+
+                gallery_widget = self.setup_gallery_mode_ui()
+
+                # Check if it was created successfully
+                if not gallery_widget:
+                    self.logger.error("Failed to create gallery widget")
+                    return
+
+                self.parent.gallery_widget = gallery_widget
+                if hasattr(self.parent, '_gallery_setup_pending'):
+                    self.parent._gallery_setup_pending = False
+
+            if not hasattr(self.parent, 'gallery_widget') or not self.parent.gallery_widget:
+                self.logger.warning("Gallery widget not available")
+                return
+
+            self.parent.gallery_mode = not self.parent.gallery_mode
+
+            if self.parent.gallery_mode:
+                # Switch to gallery view
+                # Remove fixed width constraints - splitter handles sizing
+                self.parent.aoiFrame.setMinimumWidth(250)  # Just ensure minimum
+                self.parent.aoiFrame.setMaximumWidth(16777215)  # Remove max constraint
+
+                # Restore saved gallery splitter position or set default to 4 columns
+                if hasattr(self.parent, 'settings_service'):
+                    saved_gallery_position = self.parent.settings_service.get_setting('viewer/splitter_position_gallery', None)
+                    if saved_gallery_position:
+                        try:
+                            positions = [int(p) for p in str(saved_gallery_position).split(',')]
+                            if len(positions) == 2:
+                                self.parent.image_gallery_splitter.setSizes(positions)
+                                self.logger.debug(f"Restored gallery splitter position: {positions}")
+                                # Force update of gallery geometry after restoring position
+                                QTimer.singleShot(0, lambda: self.update_gallery_geometry(self.parent.gallery_widget))
+                        except Exception as e:
+                            self.logger.debug(f"Could not restore gallery splitter position: {e}")
+                    else:
+                        # Default to 4 columns
+                        total_width = sum(self.parent.image_gallery_splitter.sizes())
+                        four_column_width = (4 * self.GALLERY_COLUMN_WIDTH) + self.GALLERY_OVERHEAD
+                        image_width = total_width - four_column_width
+                        self.parent.image_gallery_splitter.setSizes([image_width, four_column_width])
+                        self.logger.debug(f"Set gallery to default 4 columns: [{image_width}, {four_column_width}]")
+                        # Force update of gallery geometry
+                        QTimer.singleShot(0, lambda: self.update_gallery_geometry(self.parent.gallery_widget))
+
+                # Gallery widget fills the frame width
+                frame_rect = self.parent.aoiFrame.rect()
+                aoi_list_rect = self.parent.aoiListWidget.geometry()
+
+                self.parent.gallery_widget.setGeometry(
+                    5,  # Small margin
+                    aoi_list_rect.y(),
+                    frame_rect.width() - 10,
+                    aoi_list_rect.height()
+                )
+
+                # Show gallery and raise it to front
+                self.parent.gallery_widget.setVisible(True)
+                self.parent.gallery_widget.show()
+                self.parent.gallery_widget.raise_()
+
+                # Only sync if filters have changed
+                if hasattr(self.parent, '_last_filter_sync'):
+                    # Check if filters have changed since last sync
+                    current_filters = (
+                        self.parent.aoi_controller.filter_flagged_only,
+                        self.parent.aoi_controller.filter_color_hue,
+                        self.parent.aoi_controller.filter_color_range,
+                        self.parent.aoi_controller.filter_area_min,
+                        self.parent.aoi_controller.filter_area_max,
+                        self.parent.aoi_controller.sort_method,
+                        self.parent.aoi_controller.sort_color_hue
+                    )
+                    if current_filters != self.parent._last_filter_sync:
+                        self.sync_filters_from_aoi_controller()
+                        self.load_all_aois()
+                        self.parent._last_filter_sync = current_filters
+                else:
+                    # First time - do sync
+                    self.sync_filters_from_aoi_controller()
+                    self.load_all_aois()
+                    self.parent._last_filter_sync = (
+                        self.parent.aoi_controller.filter_flagged_only,
+                        self.parent.aoi_controller.filter_color_hue,
+                        self.parent.aoi_controller.filter_color_range,
+                        self.parent.aoi_controller.filter_area_min,
+                        self.parent.aoi_controller.filter_area_max,
+                        self.parent.aoi_controller.sort_method,
+                        self.parent.aoi_controller.sort_color_hue
+                    )
+
+                # Ensure thumbnail loading is triggered after everything is set up
+                # This handles the case where load_all_aois() was called before widget was visible
+                if self.ui_component:
+                    QTimer.singleShot(200, lambda: self.ui_component._load_visible_thumbnails())
+
+                self.logger.info("Switched to gallery view mode")
+
+            else:
+                # Switch to single-image view
+                # Set splitter to single column width
+                if hasattr(self.parent, 'image_gallery_splitter'):
+                    self.set_splitter_to_single_column(self.parent.image_gallery_splitter)
+
+                # Reset to reasonable single-column width
+                self.parent.aoiFrame.setMinimumWidth(250)
+                self.parent.aoiFrame.setMaximumWidth(400)  # Reasonable max for single column
+
+                # Raise single-image list to front, keep gallery in background
+                self.parent.aoiListWidget.raise_()
+
+                # Don't destroy gallery widget - keep it cached for fast switching
+                # Just hide it
+                self.parent.gallery_widget.hide()
+
+                self.logger.info("Switched to single-image view mode")
+
+        except Exception as e:
+            self.logger.error(f"Error toggling gallery mode: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
