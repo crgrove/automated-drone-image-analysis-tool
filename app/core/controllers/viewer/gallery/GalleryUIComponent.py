@@ -234,11 +234,8 @@ class GalleryUIComponent(QObject):
         self.gallery_view.installEventFilter(self)
         self.gallery_view.viewport().installEventFilter(self)
 
-        # Timer for delayed thumbnail loading
-        self.thumbnail_load_timer = QTimer()
-        self.thumbnail_load_timer.setSingleShot(True)
-        self.thumbnail_load_timer.timeout.connect(self._load_visible_thumbnails)
-        self.thumbnail_load_timer.setInterval(50)  # Faster response
+        # Connect to view signals to trigger thumbnail loading when view becomes visible
+        # (handled in eventFilter and showEvent)
 
         layout.addWidget(self.gallery_view)
 
@@ -246,40 +243,72 @@ class GalleryUIComponent(QObject):
         return widget
 
     def _create_header_widget(self):
-        """Create the header widget with title and controls."""
+        """Create the header widget (empty - main AOI title is used instead)."""
+        # Return empty widget - the main AOI header title will be updated instead
         header = QWidget()
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(5, 5, 5, 5)
-
-        # Title label
-        title = QLabel("AOI Gallery - All Images")
-        title_font = title.font()
-        title_font.setPointSize(11)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        header_layout.addWidget(title)
-
-        header_layout.addStretch()
-
-        # Count label
+        header.setFixedHeight(0)  # Make it invisible
+        header.setMaximumHeight(0)
+        
+        # Keep count_label for internal tracking (but don't display it)
         self.count_label = QLabel("0 AOIs")
-        header_layout.addWidget(self.count_label)
-
+        self.count_label.setVisible(False)  # Hidden - we'll update main title instead
+        
         return header
 
     def set_model(self, model):
         """Set the data model for the gallery view."""
         if self.gallery_view:
             self.gallery_view.setModel(model)
+            # Connect model changes to update header
+            model.modelReset.connect(self._on_model_changed)
+            model.rowsInserted.connect(lambda *_: self._on_model_changed())
+            # Update count label (will update header if in gallery mode)
             self._update_count_label(model.rowCount())
             # Connect model readiness signals to trigger initial thumbnail loading
             model.modelReset.connect(self._on_model_ready)
             model.rowsInserted.connect(lambda *_: self._on_model_ready())
+    
+    def _on_model_changed(self):
+        """Handle model changes - update header and reload thumbnails if in gallery mode."""
+        if self.gallery_view and self.gallery_view.model():
+            count = self.gallery_view.model().rowCount()
+            self._update_count_label(count)
+            
+            # When model changes (e.g., after filtering/sorting), reload visible thumbnails
+            # Reset the flag so thumbnails can be reloaded
+            self._initial_thumbnails_loaded = False
+            
+            # Always trigger thumbnail loading when model changes
+            # The model's _queue_visible_thumbnails() queues initial items, but we need to
+            # ensure visible items are prioritized
+            if self.gallery_widget and self.gallery_widget.isVisible():
+                # Check if viewport is ready
+                viewport_rect = self.gallery_view.viewport().rect() if self.gallery_view else QRect()
+                if viewport_rect.width() > 0 and viewport_rect.height() > 0:
+                    self._load_visible_thumbnails()
+                    self._initial_thumbnails_loaded = True
 
     def _update_count_label(self, count):
         """Update the count label with the number of AOIs."""
         if self.count_label:
             self.count_label.setText(f"{count} AOI{'s' if count != 1 else ''}")
+        
+        # Also update the main AOI header title when in gallery mode
+        if (self.gallery_controller and 
+            hasattr(self.gallery_controller.parent, 'gallery_mode') and 
+            self.gallery_controller.parent.gallery_mode and
+            hasattr(self.gallery_controller.parent, 'areaCountLabel')):
+            self._update_main_aoi_header(count)
+    
+    def _update_main_aoi_header(self, count):
+        """Update the main AOI header title to show gallery mode with count."""
+        if (self.gallery_controller and 
+            hasattr(self.gallery_controller.parent, 'areaCountLabel')):
+            area_count_label = self.gallery_controller.parent.areaCountLabel
+            if area_count_label:
+                # Format: "# Areas of Interest - Gallery Mode" (matching single-image format)
+                area_text = f"{count} {'Area' if count == 1 else 'Areas'} of Interest"
+                area_count_label.setText(area_text)
 
     def _on_item_clicked(self, index):
         """Handle item click in the gallery."""
@@ -310,7 +339,7 @@ class GalleryUIComponent(QObject):
     def _handle_scroll_end(self):
         """Handle scroll end for potential optimizations."""
         # Trigger loading of visible thumbnails after scroll
-        self.thumbnail_load_timer.start()
+        self._load_visible_thumbnails()
 
     def _load_visible_thumbnails(self):
         """Queue thumbnails for currently visible items."""
@@ -357,11 +386,19 @@ class GalleryUIComponent(QObject):
     def _on_model_ready(self):
         """Triggered when the model resets or rows are inserted."""
         try:
-            if (self.gallery_widget and self.gallery_widget.isVisible() and
-                not self._initial_thumbnails_loaded):
-                self._load_visible_thumbnails()
-                self._initial_thumbnails_loaded = True
-                self.view_ready.emit()
+            # Always reload thumbnails when model resets (model may have been filtered/sorted)
+            if self.gallery_widget and self.gallery_widget.isVisible():
+                # Reset flag to allow reloading
+                self._initial_thumbnails_loaded = False
+                # Load thumbnails if viewport is ready
+                model = self.gallery_view.model() if self.gallery_view else None
+                viewport_rect = self.gallery_view.viewport().rect() if self.gallery_view else QRect()
+                if model and model.rowCount() > 0 and viewport_rect.width() > 0 and viewport_rect.height() > 0:
+                    self._load_visible_thumbnails()
+                    self._initial_thumbnails_loaded = True
+                    if not hasattr(self, '_view_ready_emitted'):
+                        self.view_ready.emit()
+                        self._view_ready_emitted = True
         except Exception as e:
             self.logger.debug(f"Error in _on_model_ready: {e}")
 

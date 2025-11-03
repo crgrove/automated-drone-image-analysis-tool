@@ -348,11 +348,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         except Exception as e:
             self.logger.error(f"Error setting up splitter layout: {e}")
 
+    def _reset_aoi_frame_width(self):
+        """Reset aoiFrame width to default single-column width."""
+        try:
+            if hasattr(self, 'aoiFrame') and self.aoiFrame:
+                # Reset to default single-column width
+                default_width = self.gallery_controller.GALLERY_COLUMN_WIDTH + self.gallery_controller.GALLERY_OVERHEAD
+                if hasattr(self, 'image_gallery_splitter') and self.image_gallery_splitter:
+                    total_width = sum(self.image_gallery_splitter.sizes())
+                    image_width = total_width - default_width
+                    self.image_gallery_splitter.setSizes([image_width, default_width])
+        except Exception as e:
+            self.logger.debug(f"Error resetting aoiFrame width: {e}")
+
     def _on_splitter_moved(self, pos, index):
         """Handle splitter movement with snapping to column widths."""
         # Delegate to GalleryController
         gallery_widget = getattr(self, 'gallery_widget', None)
         self.gallery_controller.on_splitter_moved(pos, index, self.image_gallery_splitter, gallery_widget)
+        
+        # Resize main image and reposition overlay when splitter moves
+        self._resize_main_image_and_reposition_overlay()
 
     def _update_gallery_geometry(self):
         """Update gallery widget geometry to fill aoiFrame."""
@@ -532,15 +548,47 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Just mark that we're ready to create the gallery when needed
             self.logger.debug("Viewer is now visible, gallery can be created when needed")
 
-    def resizeEvent(self, event):
-        """Handle resize event - keep gallery widget sized correctly."""
-        super().resizeEvent(event)
+    def _resize_main_image_and_reposition_overlay(self):
+        """Resize the main image to fit new dimensions and reposition the overlay."""
+        if self.main_image is not None and not self.main_image._is_destroyed:
+            # Ensure the widget has been resized by Qt
+            # The splitterMoved signal is emitted after sizes are set, so widget should be resized
+            self.main_image.updateGeometry()
+            
+            # Reset zoom to fit the image to the new viewport dimensions
+            if self.main_image.hasImage():
+                # Check if widget has valid size before resetting
+                if self.main_image.width() > 0 and self.main_image.height() > 0:
+                    # Clear zoom stack and fit image to viewport
+                    self.main_image.clearZoom()
+                    scene_rect = self.main_image._safe_scene_rect()
+                    if scene_rect and not scene_rect.isEmpty():
+                        self.main_image.fitInView(scene_rect, self.main_image.aspectRatioMode)
+                        self.main_image._emit_zoom_if_changed()
+            else:
+                self.main_image.updateViewer()
+            
+            # Reposition the overlay after image resize
+            if hasattr(self, 'overlay'):
+                self.overlay._place_overlay()
 
+    def resizeEvent(self, event):
+        """Handle resize event - adjust main image, gallery widget, and snap aoiFrame."""
+        super().resizeEvent(event)
         # If gallery widget exists and is visible (in gallery mode), update its geometry
         if (hasattr(self, 'gallery_widget') and self.gallery_widget and
             hasattr(self, 'gallery_mode') and self.gallery_mode):
             # Delegate to GalleryController
             self.gallery_controller.update_gallery_geometry(self.gallery_widget)
+        
+        # Handle main image resizing (original functionality)
+        if self.main_image is not None and not self.main_image._is_destroyed:
+            if event.oldSize() != event.size():
+                # Ensure image is properly resized to fit the new dimensions
+                if self.main_image.hasImage():
+                    self.main_image.resetZoom()
+                else:
+                    self.main_image.updateViewer()
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
@@ -712,6 +760,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Replace the QHBoxLayout with a QSplitter for draggable divider
             self._setup_splitter_layout()
+
+            # Reset aoiFrame width to default (single column) on initial load
+            self._reset_aoi_frame_width()
 
             self.main_image.viewport().installEventFilter(self)
 
@@ -1032,21 +1083,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
                 self.thumbnail_controller.ui_component.scroll_thumbnail_into_view()
             self.jumpToLine.setText("")
-
-    def resizeEvent(self, event):
-        """Handles window resize events to adjust the main image.
-
-        Args:
-            event (QResizeEvent): Resize event.
-        """
-        super().resizeEvent(event)
-        if self.main_image is not None and not self.main_image._is_destroyed:
-            if event.oldSize() != event.size():
-                # Ensure image is properly resized to fit the new dimensions
-                if self.main_image.hasImage():
-                    self.main_image.resetZoom()
-                else:
-                    self.main_image.updateViewer()
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Map Export button to show unified export options."""

@@ -9,7 +9,7 @@ import colorsys
 import fnmatch
 import math
 import numpy as np
-from PySide6.QtCore import QThread, QTimer
+from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QProgressDialog, QApplication
 from PySide6.QtCore import Qt
 from core.services.LoggerService import LoggerService
@@ -175,9 +175,8 @@ class GalleryController:
             self.color_calc_progress_dialog.show()
             QApplication.processEvents()
 
-            # Use QTimer to defer color calculation to next event loop cycle
-            # This allows the progress dialog to display before calculation starts
-            QTimer.singleShot(50, self.model._precalculate_color_info)
+            # Start color calculation - processEvents() above ensures dialog is visible
+            self.model._precalculate_color_info()
 
         except Exception as e:
             self.logger.error(f"Error starting color calculation: {e}")
@@ -288,6 +287,14 @@ class GalleryController:
             # Update count label in UI
             if self.ui_component:
                 self.ui_component._update_count_label(len(filtered_aois))
+                
+                # Ensure thumbnails are loaded for the filtered results
+                # The modelReset signal will trigger _on_model_changed which loads thumbnails
+                # But also explicitly trigger if widget is visible
+                if (self.ui_component.gallery_widget and 
+                    self.ui_component.gallery_widget.isVisible() and
+                    len(filtered_aois) > 0):
+                    self.ui_component._load_visible_thumbnails()
 
             self.logger.info(f"Loaded {len(filtered_aois)} AOIs in gallery (from {len(all_aois)} total)")
 
@@ -614,11 +621,29 @@ class GalleryController:
                     self.parent._load_image()
 
             # 2. Zoom to the AOI in the image viewer
-            # Give the image more time to load if needed, then zoom
-            from PySide6.QtCore import QTimer
-            # Use longer delay if we just loaded a new image (500ms), shorter if same image (100ms)
-            delay = 500 if needs_load else 100
-            QTimer.singleShot(delay, lambda: self._zoom_to_aoi(aoi_data))
+            # If we loaded a new image, wait for it to be ready, otherwise zoom immediately
+            if needs_load:
+                # Connect to viewChanged signal to zoom once image is loaded and displayed
+                def zoom_when_ready():
+                    if (hasattr(self.parent, 'main_image') and 
+                        self.parent.main_image and 
+                        self.parent.main_image.hasImage()):
+                        self._zoom_to_aoi(aoi_data)
+                        # Disconnect after first call
+                        try:
+                            self.parent.main_image.viewChanged.disconnect(zoom_when_ready)
+                        except:
+                            pass
+                
+                # Connect to viewChanged signal (emitted when image is displayed)
+                if hasattr(self.parent, 'main_image') and self.parent.main_image:
+                    self.parent.main_image.viewChanged.connect(zoom_when_ready)
+                else:
+                    # Fallback: try zooming directly
+                    self._zoom_to_aoi(aoi_data)
+            else:
+                # Same image - zoom immediately
+                self._zoom_to_aoi(aoi_data)
 
         except Exception as e:
             self.logger.error(f"Error handling AOI click: {e}")
@@ -877,6 +902,10 @@ class GalleryController:
             # Save the position
             self.save_splitter_position(splitter)
 
+            # Resize main image and reposition overlay when splitter moves
+            if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
+                self.parent._resize_main_image_and_reposition_overlay()
+
         except Exception as e:
             self.logger.error(f"Error handling splitter movement: {e}")
 
@@ -916,6 +945,32 @@ class GalleryController:
         except Exception as e:
             self.logger.error(f"Error setting up splitter layout: {e}")
 
+    def _restore_single_image_header(self):
+        """Restore the single-image mode header title."""
+        try:
+            # Trigger update of AOI list to restore the header
+            if (hasattr(self.parent, 'aoi_controller') and 
+                hasattr(self.parent, 'current_image') and
+                hasattr(self.parent, 'images') and
+                self.parent.current_image < len(self.parent.images)):
+                image = self.parent.images[self.parent.current_image]
+                areas_of_interest = image.get('areas_of_interest', [])
+                
+                # Use the AOI controller's UI component to update the header
+                if hasattr(self.parent.aoi_controller, 'ui_component'):
+                    # Get filtered count for display
+                    filtered_aois = self.parent.aoi_controller.filter_aois_with_indices(
+                        list(enumerate(areas_of_interest)), 
+                        self.parent.current_image
+                    )
+                    total_count = len(areas_of_interest)
+                    filtered_count = len(filtered_aois)
+                    
+                    # Update the header using the AOI UI component's method
+                    self.parent.aoi_controller.ui_component._update_count_label(filtered_count, total_count)
+        except Exception as e:
+            self.logger.debug(f"Error restoring single-image header: {e}")
+
     def toggle_gallery_mode(self):
         """Toggle between single-image and gallery view modes."""
         try:
@@ -941,6 +996,12 @@ class GalleryController:
                 self.logger.warning("Gallery widget not available")
                 return
 
+            # Save current position BEFORE toggling mode (so we know which mode we're leaving)
+            was_in_gallery_mode = getattr(self.parent, 'gallery_mode', False)
+            if was_in_gallery_mode and hasattr(self.parent, 'image_gallery_splitter'):
+                # We're about to exit gallery mode, save the current gallery position
+                self.save_splitter_position(self.parent.image_gallery_splitter)
+
             self.parent.gallery_mode = not self.parent.gallery_mode
 
             if self.parent.gallery_mode:
@@ -956,10 +1017,18 @@ class GalleryController:
                         try:
                             positions = [int(p) for p in str(saved_gallery_position).split(',')]
                             if len(positions) == 2:
-                                self.parent.image_gallery_splitter.setSizes(positions)
+                                # Temporarily disconnect splitter signal to avoid saving during restore
+                                splitter = self.parent.image_gallery_splitter
+                                splitter.blockSignals(True)
+                                splitter.setSizes(positions)
+                                splitter.blockSignals(False)
                                 self.logger.debug(f"Restored gallery splitter position: {positions}")
                                 # Force update of gallery geometry after restoring position
-                                QTimer.singleShot(0, lambda: self.update_gallery_geometry(self.parent.gallery_widget))
+                                QApplication.processEvents()  # Ensure sizes are applied
+                                self.update_gallery_geometry(self.parent.gallery_widget)
+                                # Resize main image and reposition overlay
+                                if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
+                                    self.parent._resize_main_image_and_reposition_overlay()
                         except Exception as e:
                             self.logger.debug(f"Could not restore gallery splitter position: {e}")
                     else:
@@ -967,10 +1036,17 @@ class GalleryController:
                         total_width = sum(self.parent.image_gallery_splitter.sizes())
                         four_column_width = (4 * self.GALLERY_COLUMN_WIDTH) + self.GALLERY_OVERHEAD
                         image_width = total_width - four_column_width
-                        self.parent.image_gallery_splitter.setSizes([image_width, four_column_width])
+                        splitter = self.parent.image_gallery_splitter
+                        splitter.blockSignals(True)
+                        splitter.setSizes([image_width, four_column_width])
+                        splitter.blockSignals(False)
                         self.logger.debug(f"Set gallery to default 4 columns: [{image_width}, {four_column_width}]")
                         # Force update of gallery geometry
-                        QTimer.singleShot(0, lambda: self.update_gallery_geometry(self.parent.gallery_widget))
+                        QApplication.processEvents()  # Ensure sizes are applied
+                        self.update_gallery_geometry(self.parent.gallery_widget)
+                        # Resize main image and reposition overlay
+                        if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
+                            self.parent._resize_main_image_and_reposition_overlay()
 
                 # Gallery widget fills the frame width
                 frame_rect = self.parent.aoiFrame.rect()
@@ -1019,9 +1095,17 @@ class GalleryController:
                     )
 
                 # Ensure thumbnail loading is triggered after everything is set up
-                # This handles the case where load_all_aois() was called before widget was visible
-                if self.ui_component:
-                    QTimer.singleShot(200, lambda: self.ui_component._load_visible_thumbnails())
+                # The model signals are already connected in set_model, so just trigger if model has data
+                if self.ui_component and self.model:
+                    # If model already has data, trigger thumbnail loading
+                    if self.model.rowCount() > 0:
+                        self.ui_component._load_visible_thumbnails()
+
+                # Update header immediately if gallery model already has data (for subsequent opens)
+                # The model signals are already connected in set_model via _on_model_changed
+                if (self.model and self.model.rowCount() > 0 and 
+                    hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode):
+                    self.ui_component._update_count_label(self.model.rowCount())
 
                 self.logger.info("Switched to gallery view mode")
 
@@ -1030,6 +1114,9 @@ class GalleryController:
                 # Set splitter to single column width
                 if hasattr(self.parent, 'image_gallery_splitter'):
                     self.set_splitter_to_single_column(self.parent.image_gallery_splitter)
+                    # Resize main image and reposition overlay
+                    if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
+                        self.parent._resize_main_image_and_reposition_overlay()
 
                 # Reset to reasonable single-column width
                 self.parent.aoiFrame.setMinimumWidth(250)
@@ -1041,6 +1128,9 @@ class GalleryController:
                 # Don't destroy gallery widget - keep it cached for fast switching
                 # Just hide it
                 self.parent.gallery_widget.hide()
+
+                # Restore single-image mode header title
+                self._restore_single_image_header()
 
                 self.logger.info("Switched to single-image view mode")
 

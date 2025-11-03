@@ -167,8 +167,24 @@ class AOIGalleryModel(QAbstractListModel):
 
         # Clear old data
         self.aoi_items = items
-        self.thumbnail_cache.clear()
-        self.thumbnail_loader.clear_queue()
+        
+        # Only clear thumbnail cache if this is a new dataset (not just filtering/sorting)
+        # When preserve_color_cache is True, we're filtering/sorting the same dataset,
+        # so we should preserve thumbnails that are already loaded
+        if not preserve_color_cache:
+            self.thumbnail_cache.clear()
+            self.thumbnail_loader.clear_queue()
+        else:
+            # When filtering/sorting, only clear thumbnails for items that are no longer in the list
+            # Keep thumbnails for items that are still present
+            items_set = {(img_idx, aoi_idx) for img_idx, aoi_idx, _ in items}
+            keys_to_remove = [key for key in self.thumbnail_cache.keys() if key not in items_set]
+            for key in keys_to_remove:
+                del self.thumbnail_cache[key]
+            # Clear loading_set for items that are no longer in the filtered list
+            # This allows them to be re-queued if needed
+            # The thumbnail loader's loading_set needs to be updated
+            # We'll let queue_thumbnail handle the loading_set check naturally
 
         # Only clear color cache if not preserving it (i.e., loading a completely new dataset)
         if not preserve_color_cache:
@@ -194,6 +210,8 @@ class AOIGalleryModel(QAbstractListModel):
         self._precalculate_temperature_info()
 
         # Start loading visible thumbnails
+        # Do this after endResetModel so the view can request data and trigger data() calls
+        # which will also queue thumbnails via _get_thumbnail_icon()
         self._queue_visible_thumbnails()
 
     def rowCount(self, parent=QModelIndex()):
@@ -261,6 +279,7 @@ class AOIGalleryModel(QAbstractListModel):
             return self.thumbnail_cache[cache_key]
 
         # Queue for background loading if needed
+        # This ensures thumbnails are queued even if _load_visible_thumbnails() hasn't been called yet
         if self.viewer and image_idx < len(self.viewer.images):
             image = self.viewer.images[image_idx]
             # Use path for loading the actual image
@@ -269,6 +288,8 @@ class AOIGalleryModel(QAbstractListModel):
             xml_path = image.get('xml_path', '')
 
             if image_path:
+                # Check if this thumbnail is already queued to avoid duplicate requests
+                # The thumbnail loader tracks its own queue, so we can always queue it
                 # Queue for background loading (non-blocking)
                 self.thumbnail_loader.queue_thumbnail(
                     image_idx, aoi_idx, image_path, aoi_data,
@@ -281,8 +302,13 @@ class AOIGalleryModel(QAbstractListModel):
 
     def _queue_visible_thumbnails(self):
         """Queue visible thumbnails for priority loading."""
-        # This will be called by the UI component
-        pass
+        # Queue thumbnails for all items initially
+        # This ensures thumbnails start loading even if viewport isn't ready yet
+        # The UI component will later prioritize visible items via _load_visible_thumbnails()
+        if self.viewer and len(self.aoi_items) > 0:
+            # Queue ALL items - this ensures every thumbnail gets queued
+            # The thumbnail loader will handle duplicates and prioritize based on high_priority flag
+            self.queue_thumbnails_for_range(0, len(self.aoi_items) - 1, high_priority=False)
 
     def queue_thumbnails_for_range(self, start_row: int, end_row: int, high_priority: bool = False):
         """
