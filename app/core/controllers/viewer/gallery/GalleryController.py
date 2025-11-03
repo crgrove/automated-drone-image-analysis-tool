@@ -6,6 +6,7 @@ for displaying AOIs from all loaded images.
 """
 
 import colorsys
+import fnmatch
 import numpy as np
 from PySide6.QtCore import QThread, QTimer
 from PySide6.QtWidgets import QProgressDialog, QApplication
@@ -52,10 +53,13 @@ class GalleryController:
         self.sort_method = None
         self.sort_color_hue = None
         self.filter_flagged_only = False
+        self.filter_comment_pattern = None
         self.filter_color_hue = None
         self.filter_color_range = None
         self.filter_area_min = None
         self.filter_area_max = None
+        self.filter_temperature_min = None
+        self.filter_temperature_max = None
 
         # Cache for AOIService instances per image
         self._aoi_service_cache = {}
@@ -347,6 +351,26 @@ class GalleryController:
             elif self.sort_method == 'y':
                 aoi_items.sort(key=lambda x: x[2]['center'][1])
 
+            elif self.sort_method == 'temperature_asc':
+                def temp_sort_key_asc(item):
+                    img_idx, aoi_idx, aoi = item
+                    temp = self._get_aoi_temperature(img_idx, aoi_idx)
+                    # Sort None/unavailable temperatures to the end
+                    if temp is None:
+                        return float('inf')
+                    return temp
+                aoi_items.sort(key=temp_sort_key_asc)
+
+            elif self.sort_method == 'temperature_desc':
+                def temp_sort_key_desc(item):
+                    img_idx, aoi_idx, aoi = item
+                    temp = self._get_aoi_temperature(img_idx, aoi_idx)
+                    # Sort None/unavailable temperatures to the end
+                    if temp is None:
+                        return float('-inf')
+                    return temp
+                aoi_items.sort(key=temp_sort_key_desc, reverse=True)
+
         except Exception as e:
             self.logger.error(f"Error sorting AOIs globally: {e}")
 
@@ -370,6 +394,16 @@ class GalleryController:
                 if not aoi.get('flagged', False):
                     continue
 
+            # Apply comment filter
+            if self.filter_comment_pattern is not None:
+                comment = aoi.get('user_comment', '').strip()
+                # Skip AOIs with empty comments when filter is active
+                if not comment:
+                    continue
+                # Case-insensitive wildcard matching
+                if not fnmatch.fnmatch(comment.lower(), self.filter_comment_pattern.lower()):
+                    continue
+
             # Apply color filter
             if self.filter_color_hue is not None and self.filter_color_range is not None:
                 hue = self._get_aoi_hue(img_idx, aoi_idx)
@@ -386,6 +420,18 @@ class GalleryController:
                 continue
             if self.filter_area_max is not None and area > self.filter_area_max:
                 continue
+
+            # Apply temperature filter
+            if self.filter_temperature_min is not None or self.filter_temperature_max is not None:
+                temp = self._get_aoi_temperature(img_idx, aoi_idx)
+                # Skip AOIs without temperature data when filter is active
+                if temp is None:
+                    continue
+                # Check min/max temperature bounds (in Celsius)
+                if self.filter_temperature_min is not None and temp < self.filter_temperature_min:
+                    continue
+                if self.filter_temperature_max is not None and temp > self.filter_temperature_max:
+                    continue
 
             # AOI passed all filters
             filtered.append((img_idx, aoi_idx, aoi))
@@ -435,6 +481,42 @@ class GalleryController:
             diff = 360 - diff
         return diff
 
+    def _get_aoi_temperature(self, img_idx, aoi_idx):
+        """
+        Get the temperature for an AOI (in Celsius).
+
+        Args:
+            img_idx: Image index
+            aoi_idx: AOI index within the image
+
+        Returns:
+            Temperature in Celsius or None if unavailable
+        """
+        try:
+            # Try to get from model's cached temperature info (fastest - already in memory)
+            cache_key = (img_idx, aoi_idx)
+            if hasattr(self.model, '_temperature_info_cache') and cache_key in self.model._temperature_info_cache:
+                return self.model._temperature_info_cache[cache_key]
+
+            # Try to get from AOI data directly (loaded from XML)
+            if self.parent and hasattr(self.parent, 'images'):
+                if 0 <= img_idx < len(self.parent.images):
+                    image = self.parent.images[img_idx]
+                    aois = image.get('areas_of_interest', [])
+                    if 0 <= aoi_idx < len(aois):
+                        temp = aois[aoi_idx].get('temperature')
+                        if temp is not None:
+                            # Cache it for future use
+                            if hasattr(self.model, '_temperature_info_cache'):
+                                self.model._temperature_info_cache[cache_key] = temp
+                            return temp
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error getting AOI temperature: {e}")
+            return None
+
     def set_sort_method(self, method, color_hue=None):
         """
         Set the sort method for the gallery.
@@ -455,17 +537,23 @@ class GalleryController:
         Args:
             filters: Dict with filter settings {
                 'flagged_only': bool,
+                'comment_filter': str or None,
                 'color_hue': int or None,
                 'color_range': int or None,
                 'area_min': float or None,
-                'area_max': float or None
+                'area_max': float or None,
+                'temperature_min': float or None,
+                'temperature_max': float or None
             }
         """
         self.filter_flagged_only = filters.get('flagged_only', False)
+        self.filter_comment_pattern = filters.get('comment_filter')
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
         self.filter_area_min = filters.get('area_min')
         self.filter_area_max = filters.get('area_max')
+        self.filter_temperature_min = filters.get('temperature_min')
+        self.filter_temperature_max = filters.get('temperature_max')
 
         self.load_all_aois()  # Reload with new filters
 
@@ -482,10 +570,16 @@ class GalleryController:
 
         # Sync filter settings
         self.filter_flagged_only = aoi_ctrl.filter_flagged_only
+        if hasattr(aoi_ctrl, 'filter_comment_pattern'):
+            self.filter_comment_pattern = aoi_ctrl.filter_comment_pattern
         self.filter_color_hue = aoi_ctrl.filter_color_hue
         self.filter_color_range = aoi_ctrl.filter_color_range
         self.filter_area_min = aoi_ctrl.filter_area_min
         self.filter_area_max = aoi_ctrl.filter_area_max
+        if hasattr(aoi_ctrl, 'filter_temperature_min'):
+            self.filter_temperature_min = aoi_ctrl.filter_temperature_min
+        if hasattr(aoi_ctrl, 'filter_temperature_max'):
+            self.filter_temperature_max = aoi_ctrl.filter_temperature_max
 
         # Sync sort settings
         self.sort_method = aoi_ctrl.sort_method
