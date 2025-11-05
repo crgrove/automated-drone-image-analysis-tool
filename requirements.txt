@@ -14,7 +14,7 @@ pyarrow==20.0.0
 utm
 PyExifTool
 reportlab
-onnxruntime-gpu==1.20.1
+onnxruntime-directml
 tifffile
 requests
 qtawesome

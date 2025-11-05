@@ -73,7 +73,8 @@ class SlidingWindowSlicer:
             w = np.maximum(0.0, xx2 - xx1 + 1)
             h = np.maximum(0.0, yy2 - yy1 + 1)
             inter = w * h
-            iou = inter / (areas[i] + areas[order[1:]] - inter)
+            eps = 1e-6
+            iou = inter / np.maximum(areas[i] + areas[order[1:]] - inter, eps)
             inds = np.where(iou <= iou_threshold)[0]
             order = order[inds + 1]
         merged = [(*all_boxes[i], all_scores[i], all_classes[i]) for i in keep]

@@ -30,7 +30,6 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         self.logger = LoggerService()
         self.setupUi(self)
         self.confidenceSlider.valueChanged.connect(self.update_confidence)
-        self.GPULabel.linkActivated.connect(self.show_gpu_requirements_popup)
         self.cpu_only = False
         self._update_gpu_label()
 
@@ -78,45 +77,13 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         Update the GPU status label to indicate whether GPU acceleration is available.
         Adds a requirements link for more info.
         """
-        requirements_link = (
-            '<a href="gpu_reqs" style="text-decoration: underline; color: #0066cc;">'
-            'Requirements</a>'
-        )
         if sys.platform == 'darwin':
             self.GPULabel.setText(
-                f'<span style="color:red;">&#x274C; GPU Not Available</span> &nbsp; {requirements_link}'
+                f'<span style="color:red;">&#x274C; GPU Not Available</span>'
             )
             return
-
-        results = CudaCheck.check_onnxruntime_gpu_env()
-        if results["overall"]:
-            self.GPULabel.setText(
-                f'<span style="color:green;">&#x2714; GPU Available</span> &nbsp; {requirements_link}'
-            )
-            self.cpu_only = False
         else:
             self.GPULabel.setText(
-                f'<span style="color:red;">&#x274C; GPU Not Available</span> &nbsp; {requirements_link}'
+                f'<span style="color:green;">&#x2714; GPU Available</span>'
             )
-            self.cpu_only = True
-
-    def show_gpu_requirements_popup(self, link):
-        """
-        Show a popup dialog with details on ONNX Runtime GPU requirements.
-
-        Args:
-            link (str): The link identifier (unused, required for signal compatibility).
-        """
-        msg = (
-            "<div style='font-size:10pt'><b>ONNX Runtime GPU Requirements:</b><br><ol>"
-            "<li>Have a CUDA-enable NVIDA graphics card</li>"
-            "<li>CUDA Toolkit version 12 or great is installed and in PATH</li>"
-            "<li>cuDNN version 9 or great is installed (C:\\Program Files\\NVIDIA\\CUDNN)</li>"
-            "<li>cuDNN directory is in your system PATH</li>"
-            "<li>ONNX Runtime has CUDAExecutionProvider available</li></ol></div>"
-            ""
-            "<br><span style='font-size:10pt;color:#666;'>"
-            "See the <a href='https://onnxruntime.ai/docs/build/eps.html#cuda'>official documentation</a> for details."
-            "</span>"
-        )
-        QMessageBox.information(self, "ONNX Runtime GPU Requirements", msg)
+            self.cpu_only = False

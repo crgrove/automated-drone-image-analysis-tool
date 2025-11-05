@@ -10,9 +10,7 @@ from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from helpers.SlidingWindowSlicer import SlidingWindowSlicer
 from helpers.CudaCheck import CudaCheck
 
-SLICE_SIZE = 1280
 OVERLAP = 0.2
-MODEL_IMG_SIZE = 640
 
 
 class AIPersonDetectorService(AlgorithmService):
@@ -46,12 +44,25 @@ class AIPersonDetectorService(AlgorithmService):
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.confidence = options['person_detector_confidence'] / 100
         self.cpu_only = options['cpu_only']
-        if getattr(sys, 'frozen', False):
-            # Frozen (PyInstaller)
-            self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model.onnx')
+        if self.cpu_only:
+            self.slice_size = 1280
+            self.model_img_size = 640
+            if getattr(sys, 'frozen', False):
+                # Frozen (PyInstaller)
+                self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model_V2_640.onnx')
+            else:
+                # Not frozen (dev)
+                self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model_V2_640.onnx'))
         else:
-            # Not frozen (dev)
-            self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model.onnx'))
+            self.slice_size = 2048
+            self.model_img_size = 1024
+            if getattr(sys, 'frozen', False):
+                # Frozen (PyInstaller)
+                self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model_V2_1024.onnx')
+            else:
+                # Not frozen (dev)
+                self.model_path = path.abspath(path.join(path.dirname(__file__), 'best_mixed_logged.onnx'))
+        
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -74,12 +85,12 @@ class AIPersonDetectorService(AlgorithmService):
             all_boxes = []
             all_scores = []
             all_classes = []
-            slices = SlidingWindowSlicer.get_slices(img_pre_processed.shape, SLICE_SIZE, OVERLAP)
+            slices = SlidingWindowSlicer.get_slices(img_pre_processed.shape, self.slice_size, OVERLAP)
             for s_idx, (x1, y1, x2, y2) in enumerate(slices):
                 crop = img_pre_processed[y1:y2, x1:x2]
                 crop_w = x2 - x1
                 crop_h = y2 - y1
-                input_tensor = self._preprocess_slice(crop, out_size=MODEL_IMG_SIZE)
+                input_tensor = self._preprocess_slice(crop, out_size=self.model_img_size)
                 outputs = session.run(None, {input_name: input_tensor})
                 bboxes = self._postprocess(outputs, (x1, y1), crop_w, crop_h)
                 for bx in bboxes:
@@ -167,10 +178,10 @@ class AIPersonDetectorService(AlgorithmService):
             x1, y1, x2, y2, conf, cls = pred[:6]
             if conf < self.confidence:
                 continue
-            x1 = int((x1 / MODEL_IMG_SIZE) * crop_w) + slice_rect[0]
-            x2 = int((x2 / MODEL_IMG_SIZE) * crop_w) + slice_rect[0]
-            y1 = int((y1 / MODEL_IMG_SIZE) * crop_h) + slice_rect[1]
-            y2 = int((y2 / MODEL_IMG_SIZE) * crop_h) + slice_rect[1]
+            x1 = int((x1 / self.model_img_size) * crop_w) + slice_rect[0]
+            x2 = int((x2 / self.model_img_size) * crop_w) + slice_rect[0]
+            y1 = int((y1 / self.model_img_size) * crop_h) + slice_rect[1]
+            y2 = int((y2 / self.model_img_size) * crop_h) + slice_rect[1]
             bboxes.append((x1, y1, x2, y2, float(conf), int(cls)))
         return bboxes
 
@@ -183,18 +194,22 @@ class AIPersonDetectorService(AlgorithmService):
             onnxruntime.InferenceSession: Loaded ONNX model session.
         """
         so = ort.SessionOptions()
+        so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        so.enable_mem_pattern = False
+        so.enable_mem_reuse = True
+        so.enable_profiling = False
         so.intra_op_num_threads = 1
 
-        providers_cuda_first = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        providers_cpu_only = ["CPUExecutionProvider"]
+        providers_cuda_first = ["DmlExecutionProvider", "CPUExecutionProvider"]
 
+        providers_cpu_only = ["CPUExecutionProvider"]
         if self.cpu_only:
             return ort.InferenceSession(
                     self.model_path,
                     sess_options=so,
                     providers=providers_cpu_only
                 )
-
         try:
             return ort.InferenceSession(
                 self.model_path,
@@ -202,7 +217,7 @@ class AIPersonDetectorService(AlgorithmService):
                 providers=providers_cuda_first
             )
         except Exception as e:
-            self.logger.warning(f"CUDAExecutionProvider failed: {e}")
+            self.logger.warning(f"DmlExecutionProvider failed: {e}")
             try:
                 return ort.InferenceSession(
                     self.model_path,
