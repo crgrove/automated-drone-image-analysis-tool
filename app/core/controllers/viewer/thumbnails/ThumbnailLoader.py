@@ -12,12 +12,13 @@ class ThumbnailLoader(QObject):
 
     thumbnail_loaded = Signal(int, QIcon)
 
-    def __init__(self, images, thumbnail_size=(100, 56), results_dir=None):
+    def __init__(self, images, thumbnail_size=(100, 56), results_dir=None, input_root=None):
         super().__init__()
         self.images = images
         self.thumbnail_size = QSize(*thumbnail_size)
         self.loaded_indices = set()
         self.results_dir = results_dir
+        self.input_root = input_root
 
     @Slot(int)
     def load_thumbnail(self, index):
@@ -56,6 +57,7 @@ class ThumbnailLoader(QObject):
         Check if a thumbnail is cached without loading it.
 
         Checks both new (portable) and legacy cache keys for backward compatibility.
+        Also checks legacy .image_thumbnails directory for old datasets.
 
         Args:
             image_path: Path to the original image
@@ -73,11 +75,29 @@ class ThumbnailLoader(QObject):
                 return False
 
             results_path = Path(self.results_dir)
-            thumb_dir = results_path / '.image_thumbnails'
+            
+            # Try unified .thumbnails directory first (new format)
+            thumb_dir = results_path / '.thumbnails'
 
-            # Try new (portable) key - filename only
-            filename = os.path.basename(image_path)
-            path_hash = hashlib.md5(filename.encode()).hexdigest()
+            # Try new (portable) key - relative path to input root when available
+            key_source = None
+            if getattr(self, 'input_root', None):
+                try:
+                    from pathlib import Path as _P
+                    key_source = str(_P(image_path).relative_to(_P(self.input_root)))
+                except Exception:
+                    try:
+                        import os as _os
+                        key_source = _os.path.relpath(image_path, self.input_root)
+                    except Exception:
+                        key_source = None
+
+            if not key_source:
+                # Fall back to filename only (legacy)
+                key_source = os.path.basename(image_path)
+
+            norm_key = key_source.replace('\\', '/').lower()
+            path_hash = hashlib.md5(norm_key.encode()).hexdigest()
             thumb_path = thumb_dir / f"{path_hash}.jpg"
 
             if thumb_path.exists():
@@ -88,7 +108,21 @@ class ThumbnailLoader(QObject):
             legacy_hash = hashlib.md5(abs_path.encode()).hexdigest()
             legacy_thumb_path = thumb_dir / f"{legacy_hash}.jpg"
 
-            return legacy_thumb_path.exists()
+            if legacy_thumb_path.exists():
+                return True
+
+            # Backward compatibility: Try legacy .image_thumbnails directory
+            legacy_thumb_dir = results_path / '.image_thumbnails'
+            if legacy_thumb_dir.exists():
+                legacy_path = legacy_thumb_dir / f"{path_hash}.jpg"
+                if legacy_path.exists():
+                    return True
+                
+                legacy_abs_path = legacy_thumb_dir / f"{legacy_hash}.jpg"
+                if legacy_abs_path.exists():
+                    return True
+
+            return False
         except Exception:
             return False
 
@@ -97,6 +131,7 @@ class ThumbnailLoader(QObject):
         Load a cached thumbnail if it exists.
 
         Tries both new (portable) and legacy cache keys for backward compatibility.
+        Also checks legacy .image_thumbnails directory for old datasets.
 
         Args:
             image_path: Path to the original image
@@ -114,11 +149,29 @@ class ThumbnailLoader(QObject):
                 return None
 
             results_path = Path(self.results_dir)
-            thumb_dir = results_path / '.image_thumbnails'
+            
+            # Try unified .thumbnails directory first (new format)
+            thumb_dir = results_path / '.thumbnails'
 
-            # Try new (portable) key - filename only
-            filename = os.path.basename(image_path)
-            path_hash = hashlib.md5(filename.encode()).hexdigest()
+            # Try new (portable) key - relative path to input root when available
+            key_source = None
+            if getattr(self, 'input_root', None):
+                try:
+                    from pathlib import Path as _P
+                    key_source = str(_P(image_path).relative_to(_P(self.input_root)))
+                except Exception:
+                    try:
+                        import os as _os
+                        key_source = _os.path.relpath(image_path, self.input_root)
+                    except Exception:
+                        key_source = None
+
+            if not key_source:
+                # Fall back to filename only (legacy)
+                key_source = os.path.basename(image_path)
+
+            norm_key = key_source.replace('\\', '/').lower()
+            path_hash = hashlib.md5(norm_key.encode()).hexdigest()
             thumb_path = thumb_dir / f"{path_hash}.jpg"
 
             if thumb_path.exists():
@@ -131,6 +184,17 @@ class ThumbnailLoader(QObject):
 
             if legacy_thumb_path.exists():
                 return QPixmap(str(legacy_thumb_path))
+
+            # Backward compatibility: Try legacy .image_thumbnails directory
+            legacy_thumb_dir = results_path / '.image_thumbnails'
+            if legacy_thumb_dir.exists():
+                legacy_path = legacy_thumb_dir / f"{path_hash}.jpg"
+                if legacy_path.exists():
+                    return QPixmap(str(legacy_path))
+                
+                legacy_abs_path = legacy_thumb_dir / f"{legacy_hash}.jpg"
+                if legacy_abs_path.exists():
+                    return QPixmap(str(legacy_abs_path))
 
             return None
         except Exception:

@@ -93,31 +93,12 @@ class AOIGalleryModel(QAbstractListModel):
         """
         try:
             self.dataset_dir = Path(xml_path).parent
-            color_cache_dir = self.dataset_dir / '.color_cache'
             thumbnail_cache_dir = self.dataset_dir / '.thumbnails'
 
-            # Initialize color cache service if cache directory exists
-            if color_cache_dir.exists():
-                self.color_cache_service = ColorCacheService(cache_dir=str(color_cache_dir))
-                self.color_cache_service.load_cache_file()  # Load existing cached colors
-                self.logger.info(f"Using per-dataset color cache from {color_cache_dir}")
-            else:
-                # Create cache directory for future use
-                color_cache_dir.mkdir(parents=True, exist_ok=True)
-                self.color_cache_service = ColorCacheService(cache_dir=str(color_cache_dir))
-                self.logger.info(f"Created color cache directory at {color_cache_dir}")
-
-            # Initialize temperature cache service
-            temperature_cache_dir = self.dataset_dir / '.temperature_cache'
-            if temperature_cache_dir.exists():
-                self.temperature_cache_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
-                self.temperature_cache_service.load_cache_file()  # Load existing cached temperatures
-                self.logger.info(f"Using per-dataset temperature cache from {temperature_cache_dir}")
-            else:
-                # Create cache directory for future use
-                temperature_cache_dir.mkdir(parents=True, exist_ok=True)
-                self.temperature_cache_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
-                self.logger.info(f"Created temperature cache directory at {temperature_cache_dir}")
+            # Color and temperature cache data is stored in XML, not JSON files
+            # Cache services are not needed in viewer - data comes from XML
+            self.color_cache_service = None
+            self.temperature_cache_service = None
 
             # Update thumbnail loader with dataset cache directory
             if thumbnail_cache_dir.exists():
@@ -606,25 +587,11 @@ class AOIGalleryModel(QAbstractListModel):
                     # Process events to keep UI responsive
                     QApplication.processEvents()
 
-                # First, try to get from per-dataset cache
-                if self.color_cache_service and img_idx < len(self.viewer.images):
-                    image = self.viewer.images[img_idx]
-                    # Use path for loading the actual image
-                    image_path = image.get('path', '')
-                    # Use xml_path for legacy cache lookups (original path before relocation)
-                    xml_path = image.get('xml_path', '')
-
-                    # Store xml_path temporarily in aoi_data for cache lookups
-                    aoi_data_with_xml = aoi_data.copy()
-                    if xml_path:
-                        aoi_data_with_xml['_xml_path'] = xml_path
-
-                    cached_color = self.color_cache_service.get_color_info(image_path, aoi_data_with_xml)
-
-                    if cached_color:
-                        self._color_info_cache[cache_key] = cached_color
-                        cached_count += 1
-                        continue
+                # Get color info from XML (color_info is in AOI dict)
+                if 'color_info' in aoi_data and aoi_data['color_info']:
+                    self._color_info_cache[cache_key] = aoi_data['color_info']
+                    cached_count += 1
+                    continue
 
                 # Not in cache, calculate it
                 if img_idx not in self._aoi_service_cache:
@@ -646,28 +613,16 @@ class AOIGalleryModel(QAbstractListModel):
                         self._color_info_cache[cache_key] = color_info
                         calculated_count += 1
 
-                        # Save to persistent cache for next time
-                        if self.color_cache_service:
-                            try:
-                                image = self.viewer.images[img_idx]
-                                image_path = image.get('path', '')
-                                if image_path:
-                                    self.color_cache_service.save_color_info(image_path, aoi_data, color_info)
-                            except Exception as e:
-                                self.logger.debug(f"Could not save color to cache: {e}")
+                        # Note: Colors are stored in memory cache only
+                        # For persistence, use backfill cache service to save to XML
                     else:
                         self._color_info_cache[cache_key] = None
                 else:
                     self._color_info_cache[cache_key] = None
 
-            # Complete - save cache to disk if we calculated any new colors
-            if calculated_count > 0 and self.color_cache_service:
-                try:
-                    self.color_calc_message.emit("Saving color cache to disk...")
-                    self.color_cache_service.save_cache_file()
-                    self.logger.info(f"Saved {calculated_count} newly calculated colors to cache")
-                except Exception as e:
-                    self.logger.error(f"Error saving color cache: {e}")
+            # Note: Newly calculated colors are not saved to JSON files
+            # They are stored in memory cache only. For persistence, they should be saved to XML.
+            # This is handled by the backfill cache service if the user regenerates caches.
 
             if cached_count > 0:
                 completion_msg = f"Loaded {cached_count} colors from cache, calculated {calculated_count}"
@@ -705,7 +660,7 @@ class AOIGalleryModel(QAbstractListModel):
         Temperature values are already calculated during analysis and stored in the cache.
         This method loads them into memory for fast tooltip access.
         """
-        if not self.viewer or not self.aoi_items or not self.temperature_cache_service:
+        if not self.viewer or not self.aoi_items:
             return
 
         total_aois = len(self.aoi_items)
@@ -717,24 +672,10 @@ class AOIGalleryModel(QAbstractListModel):
             for img_idx, aoi_idx, aoi_data in self.aoi_items:
                 cache_key = (img_idx, aoi_idx)
 
-                # Get from per-dataset temperature cache
-                if img_idx < len(self.viewer.images):
-                    image = self.viewer.images[img_idx]
-                    image_path = image.get('path', '')
-                    xml_path = image.get('xml_path', '')
-
-                    # Store xml_path temporarily in aoi_data for cache lookups
-                    aoi_data_with_xml = aoi_data.copy()
-                    if xml_path:
-                        aoi_data_with_xml['_xml_path'] = xml_path
-
-                    cached_temp = self.temperature_cache_service.get_temperature(image_path, aoi_data_with_xml)
-
-                    if cached_temp is not None:
-                        self._temperature_info_cache[cache_key] = cached_temp
-                        loaded_count += 1
-                    else:
-                        self._temperature_info_cache[cache_key] = None
+                # Get temperature from XML (temperature is in AOI dict)
+                if 'temperature' in aoi_data and aoi_data['temperature'] is not None:
+                    self._temperature_info_cache[cache_key] = aoi_data['temperature']
+                    loaded_count += 1
                 else:
                     self._temperature_info_cache[cache_key] = None
 

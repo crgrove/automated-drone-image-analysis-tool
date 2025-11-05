@@ -42,17 +42,18 @@ class ThumbnailCacheService:
         Initialize the thumbnail cache service.
 
         Args:
-            cache_dir: Directory for persistent cache (default: ~/.cache/adiat/thumbnails)
+            cache_dir: Optional global cache directory (if None, only per-dataset cache is used)
             max_memory_cache: Maximum items in memory cache
             dataset_cache_dir: Per-dataset cache directory (optional, checked first)
         """
         self.logger = LoggerService()
 
-        # Set up global cache directory
-        if cache_dir is None:
-            cache_dir = os.path.join(Path.home(), '.cache', 'adiat', 'thumbnails')
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Set up global cache directory (only if explicitly provided)
+        # If not provided, we only use per-dataset cache
+        self.cache_dir = Path(cache_dir) if cache_dir else None
+        if self.cache_dir:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Thumbnail cache initialized at {self.cache_dir}")
 
         # Set up per-dataset cache directory (optional)
         self.dataset_cache_dir = Path(dataset_cache_dir) if dataset_cache_dir else None
@@ -67,10 +68,6 @@ class ThumbnailCacheService:
 
         # Clear the LRU cache to set max size
         self.get_thumbnail_from_memory.cache_clear()
-
-        self.logger.info(f"Thumbnail cache initialized at {self.cache_dir}")
-        if self.dataset_cache_dir:
-            self.logger.info(f"Per-dataset cache enabled at {self.dataset_cache_dir}")
 
     def get_cache_key(self, image_path: str, aoi_data: Dict[str, Any]) -> str:
         """
@@ -156,13 +153,20 @@ class ThumbnailCacheService:
         Returns:
             Path to cache file
         """
-        # Use specified directory or default to global cache
-        base_dir = cache_dir if cache_dir else self.cache_dir
+        # Use specified directory or dataset cache (no global cache fallback)
+        if cache_dir:
+            base_dir = cache_dir
+        elif self.dataset_cache_dir:
+            base_dir = self.dataset_cache_dir
+        elif self.cache_dir:
+            base_dir = self.cache_dir
+        else:
+            raise ValueError("No cache directory available")
 
-        # Use first 2 chars as subdirectory for better file system performance
-        subdir = base_dir / cache_key[:2]
-        subdir.mkdir(exist_ok=True, parents=True)
-        return subdir / f"{cache_key}.jpg"
+        # Use flat directory structure for all thumbnails (main images and AOIs)
+        # No subdirectories needed - modern file systems handle thousands of files efficiently
+        base_dir.mkdir(exist_ok=True, parents=True)
+        return base_dir / f"{cache_key}.jpg"
 
     def extract_aoi_region_fast(self, image_path: str, aoi_data: Dict[str, Any],
                                 target_size: Tuple[int, int] = (180, 180)) -> Optional[np.ndarray]:
@@ -246,7 +250,7 @@ class ThumbnailCacheService:
 
         Args:
             cache_key: Unique cache key
-            thumbnail_array: Numpy array of thumbnail
+            thumbnail_array: Numpy array of thumbnail (RGB format)
             cache_dir: Optional override cache directory
 
         Returns:
@@ -255,9 +259,15 @@ class ThumbnailCacheService:
         try:
             cache_path = self.get_cache_path(cache_key, cache_dir)
 
-            # Convert to PIL Image and save as JPEG (smaller than PNG)
-            img = Image.fromarray(thumbnail_array.astype('uint8'))
-            img.save(cache_path, 'JPEG', quality=90, optimize=True)
+            # Convert RGB to BGR for cv2.imwrite (cv2 expects BGR format)
+            if len(thumbnail_array.shape) == 3 and thumbnail_array.shape[2] == 3:
+                thumbnail_bgr = cv2.cvtColor(thumbnail_array, cv2.COLOR_RGB2BGR)
+            else:
+                thumbnail_bgr = thumbnail_array
+
+            # Save as JPEG with balanced quality (80 = good balance of quality and speed)
+            # Reduced from 90 for faster writes with minimal visual difference for thumbnails
+            cv2.imwrite(str(cache_path), thumbnail_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
 
             return True
 
@@ -315,15 +325,14 @@ class ThumbnailCacheService:
                     img = Image.open(dataset_cache_path)
                     return np.array(img)
 
-            # Fall back to global cache
-            cache_path = self.get_cache_path(cache_key)
+            # Fall back to global cache (if available)
+            if self.cache_dir:
+                cache_path = self.get_cache_path(cache_key)
+                if cache_path.exists():
+                    with Image.open(cache_path) as img:
+                        return np.array(img.convert('RGB'))
 
-            if not cache_path.exists():
-                return None
-
-            # Load with PIL
-            with Image.open(cache_path) as img:
-                return np.array(img.convert('RGB'))
+            return None
 
         except Exception as e:
             self.logger.error(f"Error loading thumbnail from disk: {e}")
@@ -356,10 +365,11 @@ class ThumbnailCacheService:
             if dataset_cache_path.exists():
                 return True
 
-        # Check global cache
-        cache_path = self.get_cache_path(cache_key)
-        if cache_path.exists():
-            return True
+        # Check global cache (if available)
+        if self.cache_dir:
+            cache_path = self.get_cache_path(cache_key)
+            if cache_path.exists():
+                return True
 
         # Fallback: Try legacy cache key (for backward compatibility with old caches)
         xml_path = aoi_data.get('_xml_path')  # Extract original XML path if provided
@@ -371,10 +381,11 @@ class ThumbnailCacheService:
                 if legacy_dataset_path.exists():
                     return True
 
-            # Check global cache with legacy key
-            legacy_cache_path = self.get_cache_path(legacy_key)
-            if legacy_cache_path.exists():
-                return True
+            # Check global cache with legacy key (if available)
+            if self.cache_dir:
+                legacy_cache_path = self.get_cache_path(legacy_key)
+                if legacy_cache_path.exists():
+                    return True
 
         return False
 
@@ -422,8 +433,10 @@ class ThumbnailCacheService:
                 if thumbnail_array is None:
                     return None
 
-                # Save to disk cache with new key
-                self.save_thumbnail_to_disk(cache_key, thumbnail_array)
+                # Save to disk cache with new key (prefer dataset cache)
+                target_cache_dir = self.dataset_cache_dir if self.dataset_cache_dir else self.cache_dir
+                if target_cache_dir:
+                    self.save_thumbnail_to_disk(cache_key, thumbnail_array, target_cache_dir)
 
             # Convert to QIcon
             qimage = qimage2ndarray.array2qimage(thumbnail_array, normalize=False)
@@ -442,8 +455,12 @@ class ThumbnailCacheService:
         """Clear all thumbnails from disk cache."""
         try:
             import shutil
-            shutil.rmtree(self.cache_dir)
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            if self.cache_dir:
+                shutil.rmtree(self.cache_dir)
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+            if self.dataset_cache_dir:
+                shutil.rmtree(self.dataset_cache_dir)
+                self.dataset_cache_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info("Disk cache cleared")
         except Exception as e:
             self.logger.error(f"Error clearing disk cache: {e}")
@@ -456,10 +473,14 @@ class ThumbnailCacheService:
             Dictionary with cache statistics
         """
         # Count disk cache files
-        disk_count = sum(1 for _ in self.cache_dir.rglob("*.jpg"))
-
-        # Get disk cache size
-        disk_size = sum(f.stat().st_size for f in self.cache_dir.rglob("*.jpg"))
+        disk_count = 0
+        disk_size = 0
+        if self.cache_dir:
+            disk_count += sum(1 for _ in self.cache_dir.rglob("*.jpg"))
+            disk_size += sum(f.stat().st_size for f in self.cache_dir.rglob("*.jpg"))
+        if self.dataset_cache_dir:
+            disk_count += sum(1 for _ in self.dataset_cache_dir.rglob("*.jpg"))
+            disk_size += sum(f.stat().st_size for f in self.dataset_cache_dir.rglob("*.jpg"))
 
         # Get memory cache stats
         cache_info = self.get_thumbnail_from_memory.cache_info()

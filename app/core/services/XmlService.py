@@ -145,6 +145,13 @@ class XmlService:
                     # Load temperature data if present (for thermal datasets)
                     if area_of_interest_xml.get('temperature'):
                         area_of_interest['temperature'] = float(area_of_interest_xml.get('temperature'))
+                    # Load color cache data if present
+                    if area_of_interest_xml.get('color_rgb'):
+                        area_of_interest['color_info'] = {
+                            'rgb': literal_eval(area_of_interest_xml.get('color_rgb')),
+                            'hex': area_of_interest_xml.get('color_hex', ''),
+                            'hue_degrees': float(area_of_interest_xml.get('color_hue', 0))
+                        }
                     areas_of_interest.append(area_of_interest)
                 image['areas_of_interest'] = areas_of_interest
                 images.append(image)
@@ -247,6 +254,15 @@ class XmlService:
             if 'temperature' in area and area['temperature'] is not None:
                 area_xml.set('temperature', str(area['temperature']))
                 temp_count += 1
+            # Save color cache data if present
+            if 'color_info' in area and area['color_info']:
+                color_info = area['color_info']
+                if 'rgb' in color_info:
+                    area_xml.set('color_rgb', str(color_info['rgb']))
+                if 'hex' in color_info:
+                    area_xml.set('color_hex', str(color_info['hex']))
+                if 'hue_degrees' in color_info:
+                    area_xml.set('color_hue', str(color_info['hue_degrees']))
             # Optionally save contour and detected_pixels if available
             # Note: These can be large, so we might want to make this configurable
             if 'contour' in area and area['contour']:

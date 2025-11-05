@@ -12,6 +12,11 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
+from core.services.ThumbnailCacheService import ThumbnailCacheService
+from core.services.ColorCacheService import ColorCacheService
+from core.services.TemperatureCacheService import TemperatureCacheService
+from core.services.AOIService import AOIService
+
 
 class AlgorithmService:
     """Base class for algorithm services that provides methods for processing images."""
@@ -256,7 +261,7 @@ class AlgorithmService:
 
         return areas_of_interest, base_contour_count
 
-    def generate_aoi_cache(self, img: np.ndarray, image_path: str, areas_of_interest: list, output_dir: str) -> None:
+    def generate_aoi_cache(self, img: np.ndarray, image_path: str, areas_of_interest: list, output_dir: str, thermal: bool = False) -> None:
         """
         Generate and cache thumbnails and color information for all AOIs.
 
@@ -270,36 +275,25 @@ class AlgorithmService:
             output_dir: Output directory where cache folders will be created
         """
         try:
-            from core.services.ThumbnailCacheService import ThumbnailCacheService
-            from core.services.ColorCacheService import ColorCacheService
-            from core.services.TemperatureCacheService import TemperatureCacheService
-            from core.services.AOIService import AOIService
-
             if not areas_of_interest:
                 return
 
-            # Set up cache directories
+            # Set up thumbnail cache directory (still needed for disk storage)
             thumbnail_cache_dir = Path(output_dir) / '.thumbnails'
-            color_cache_dir = Path(output_dir) / '.color_cache'
-            temperature_cache_dir = Path(output_dir) / '.temperature_cache'
             thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
-            color_cache_dir.mkdir(parents=True, exist_ok=True)
-            temperature_cache_dir.mkdir(parents=True, exist_ok=True)
 
             # Initialize cache services
+            # Note: Color and temperature cache data goes to XML, not JSON files
             thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
-            color_service = ColorCacheService(cache_dir=str(color_cache_dir))
-            temperature_service = TemperatureCacheService(cache_dir=str(temperature_cache_dir))
-
-            # Load existing cache files to avoid overwriting data from other processes
-            color_service.load_cache_file()
-            temperature_service.load_cache_file()
+            color_service = ColorCacheService()  # In-memory only - data goes to XML
+            temperature_service = TemperatureCacheService() if thermal else None  # In-memory only - data goes to XML
 
             # Create AOIService for color calculation
             image_data = {
                 'path': image_path,
                 'is_thermal': self.is_thermal
             }
+            
             aoi_service = AOIService(image_data)
 
             # Process each AOI
@@ -329,7 +323,8 @@ class AlgorithmService:
                         continue
 
                     # Resize to target thumbnail size
-                    thumbnail_resized = cv2.resize(thumbnail_region, (180, 180), interpolation=cv2.INTER_LANCZOS4)
+                    # Use INTER_AREA for downscaling - faster and better quality than INTER_LANCZOS4
+                    thumbnail_resized = cv2.resize(thumbnail_region, (180, 180), interpolation=cv2.INTER_AREA)
 
                     # Convert to RGB if needed (some algorithms work in different color spaces)
                     if len(thumbnail_resized.shape) == 2:
@@ -353,9 +348,12 @@ class AlgorithmService:
                             'hex': color_result['hex'],
                             'hue_degrees': color_result['hue_degrees']
                         }
+                        # Store color info directly in AOI dict for XML export (no JSON file)
+                        aoi['color_info'] = color_info
+                        # Also store in cache service for memory tracking (will be written to XML later)
                         color_service.save_color_info(image_path, aoi, color_info)
 
-                    # Cache temperature information if present (for thermal datasets)
+                    # Temperature is already in aoi dict, just track in cache service
                     if 'temperature' in aoi and aoi['temperature'] is not None:
                         temperature_service.save_temperature(image_path, aoi, aoi['temperature'])
 
@@ -364,11 +362,8 @@ class AlgorithmService:
                     print(f"Error caching AOI at {center}: {e}")
                     continue
 
-            # Save color cache to disk
-            color_service.save_cache_file()
-
-            # Save temperature cache to disk (for thermal datasets)
-            temperature_service.save_cache_file()
+            # Note: Color and temperature cache data is now stored in AOI dicts and will be written to XML
+            # No need to save JSON files - data goes directly to XML via AnalyzeService
 
         except Exception as e:
             # Don't fail the entire detection if cache generation fails
@@ -457,13 +452,27 @@ class AlgorithmService:
         stacked = np.stack(bands, axis=0)
 
         # Save with tifffile (multi-band, compressed)
-        tifffile.imwrite(
-            str(mask_file),
-            stacked,
-            photometric='minisblack',
-            metadata={'axes': 'CYX'},  # Channels, Y, X
-            compression='deflate'  # or 'zlib' / 'lzma' if you prefer
-        )
+        # Try 'lzw' first (faster), fall back to 'deflate' if imagecodecs is not available
+        try:
+            tifffile.imwrite(
+                str(mask_file),
+                stacked,
+                photometric='minisblack',
+                metadata={'axes': 'CYX'},  # Channels, Y, X
+                compression='lzw'  # Faster than 'deflate' while maintaining good compression
+            )
+        except (ValueError, RuntimeError) as e:
+            # Fall back to 'deflate' if 'lzw' requires imagecodecs package
+            if 'imagecodecs' in str(e) or 'lzw' in str(e).lower():
+                tifffile.imwrite(
+                    str(mask_file),
+                    stacked,
+                    photometric='minisblack',
+                    metadata={'axes': 'CYX'},  # Channels, Y, X
+                    compression='deflate'  # Fallback compression that works without imagecodecs
+                )
+            else:
+                raise
 
         return str(mask_file)
 

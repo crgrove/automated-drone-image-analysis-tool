@@ -259,26 +259,22 @@ class AnalyzeService(QObject):
             instance.set_scale_factor(scale_factor)  # Pass scale factor to algorithm for coordinate transformation
             result = instance.process_image(img, full_path, input_dir, output_dir)
 
-            # Generate main image thumbnail (using original resolution image)
-            try:
-                AnalyzeService._generate_main_image_thumbnail(original_img, full_path, output_dir)
-            except Exception as thumb_error:
-                logger = LoggerService()
-                logger.warning(f"Main thumbnail generation failed for {full_path}: {thumb_error}")
-
-            # Generate thumbnail and color cache for detected AOIs (using original resolution image)
             if result and result.areas_of_interest:
+                # Generate main image thumbnail (using original resolution image)
                 try:
-                    filename = os.path.basename(full_path)
+                    AnalyzeService._generate_main_image_thumbnail(original_img, full_path, output_dir, input_root=input_dir)
+                except Exception as thumb_error:
                     logger = LoggerService()
-                    logger.info(f"Generating {len(result.areas_of_interest)} thumbnails for {filename}...")
-
+                    logger.warning(f"Main thumbnail generation failed for {full_path}: {thumb_error}")
+                # Generate thumbnail and color cache for detected AOIs (using original resolution image)            
+                try:
                     # Call cache generation with original (unscaled) image for best quality thumbnails
                     instance.generate_aoi_cache(
                         img=original_img,
                         image_path=full_path,
                         areas_of_interest=result.areas_of_interest,
-                        output_dir=output_dir
+                        output_dir=output_dir,
+                        thermal=thermal
                     )
                 except Exception as cache_error:
                     # Don't fail detection if cache generation fails
@@ -345,7 +341,7 @@ class AnalyzeService(QObject):
         self.pool.terminate()
 
     @staticmethod
-    def _generate_main_image_thumbnail(img, image_path, output_dir):
+    def _generate_main_image_thumbnail(img, image_path, output_dir, input_root=None):
         """
         Generate a thumbnail for the main image to speed up viewer loading.
 
@@ -355,17 +351,33 @@ class AnalyzeService(QObject):
             output_dir: Output directory where thumbnail folder will be created
         """
         try:
-            from PIL import Image as PILImage
-
-            # Create thumbnail directory
-            thumb_dir = Path(output_dir) / '.image_thumbnails'
+            # Create thumbnail directory (unified with AOI thumbnails)
+            thumb_dir = Path(output_dir) / '.thumbnails'
             thumb_dir.mkdir(parents=True, exist_ok=True)
 
-            # Generate filename using basename only (portable across machines)
-            # Drone images have unique filenames, so this is safe
+            # Generate stable key by hashing the relative input path to avoid collisions
             import hashlib
-            filename = os.path.basename(image_path)
-            path_hash = hashlib.md5(filename.encode()).hexdigest()
+            rel_key_source = None
+            try:
+                if input_root:
+                    # Prefer relative to provided input root
+                    from pathlib import Path as _P
+                    rel = _P(image_path)
+                    rel_key_source = str(rel.relative_to(_P(input_root)))
+            except Exception:
+                # Fall back to os.relpath, may cross drives on Windows
+                try:
+                    rel_key_source = os.path.relpath(image_path, input_root) if input_root else None
+                except Exception:
+                    rel_key_source = None
+
+            if not rel_key_source:
+                # Last resort: use filename only (legacy behavior)
+                rel_key_source = os.path.basename(image_path)
+
+            # Normalize for cross-platform stability
+            norm_key = rel_key_source.replace('\\', '/').lower()
+            path_hash = hashlib.md5(norm_key.encode()).hexdigest()
             thumb_filename = f"{path_hash}.jpg"
             thumb_path = thumb_dir / thumb_filename
 
@@ -380,12 +392,30 @@ class AnalyzeService(QObject):
                 # BGR to RGB
                 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-            # Create PIL Image and resize to thumbnail size (100x56)
-            pil_img = PILImage.fromarray(img_rgb)
-            pil_img.thumbnail((100, 56), PILImage.Resampling.LANCZOS)
+            # Calculate thumbnail dimensions maintaining aspect ratio (max 100x56)
+            # This matches PIL's thumbnail() behavior
+            max_width, max_height = 100, 56
+            height, width = img_rgb.shape[:2]
+            aspect_ratio = width / height
+            
+            if aspect_ratio > (max_width / max_height):
+                # Image is wider - fit to width
+                thumb_width = max_width
+                thumb_height = int(max_width / aspect_ratio)
+            else:
+                # Image is taller - fit to height
+                thumb_height = max_height
+                thumb_width = int(max_height * aspect_ratio)
 
-            # Save as JPEG with good quality
-            pil_img.save(thumb_path, 'JPEG', quality=85, optimize=True)
+            # Resize using cv2 - use INTER_AREA for downscaling (faster and better quality)
+            thumb_img = cv2.resize(img_rgb, (thumb_width, thumb_height), interpolation=cv2.INTER_AREA)
+
+            # Convert RGB back to BGR for cv2.imwrite (cv2 expects BGR format)
+            thumb_img_bgr = cv2.cvtColor(thumb_img, cv2.COLOR_RGB2BGR)
+
+            # Save as JPEG with balanced quality (80 = good balance of quality and speed)
+            # Reduced from 85 for faster writes with minimal visual difference for thumbnails
+            cv2.imwrite(str(thumb_path), thumb_img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
 
         except Exception as e:
             # Don't fail processing if thumbnail generation fails

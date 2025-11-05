@@ -80,8 +80,19 @@ class ThumbnailController(QObject):
             import os
             results_dir = os.path.dirname(self.parent.xml_path)
 
+        # Determine input root (for relative-path hashing)
+        input_root = None
+        try:
+            if hasattr(self.parent, 'settings') and isinstance(self.parent.settings, dict):
+                input_root = self.parent.settings.get('input_dir')
+            if not input_root and hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+                settings, _ = self.parent.xml_service.get_settings()
+                input_root = settings.get('input_dir') if isinstance(settings, dict) else None
+        except Exception:
+            input_root = None
+
         self.loader_thread = QThread()
-        self.loader = ThumbnailLoader(self.parent.images, results_dir=results_dir)
+        self.loader = ThumbnailLoader(self.parent.images, results_dir=results_dir, input_root=input_root)
         self.loader.moveToThread(self.loader_thread)
 
         # Connect signals with queued connection to ensure UI updates on main thread

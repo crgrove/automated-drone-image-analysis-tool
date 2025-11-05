@@ -16,7 +16,7 @@ class CacheLocationDialog(QDialog):
     Dialog for selecting an alternative cache location.
 
     Allows users to browse to an ADIAT_Results folder containing
-    pre-generated cache directories (.thumbnails, .image_thumbnails, .color_cache).
+    pre-generated cache directories (.thumbnails).
     """
 
     def __init__(self, parent=None, missing_caches=None):
@@ -125,18 +125,14 @@ class CacheLocationDialog(QDialog):
 
             # Validate that the folder contains cache directories
             has_thumbnails = (folder_path / '.thumbnails').exists()
-            has_image_thumbnails = (folder_path / '.image_thumbnails').exists()
-            has_colors = (folder_path / '.color_cache').exists()
 
-            if not any([has_thumbnails, has_image_thumbnails, has_colors]):
+            if not has_thumbnails:
                 QMessageBox.warning(
                     self,
                     "Invalid Cache Folder",
-                    "The selected folder does not contain any cache directories.\n\n"
-                    "Expected to find at least one of:\n"
-                    "  • .thumbnails/\n"
-                    "  • .image_thumbnails/\n"
-                    "  • .color_cache/\n\n"
+                    "The selected folder does not contain thumbnail cache directory.\n\n"
+                    "Expected to find:\n"
+                    "  • .thumbnails/\n\n"
                     "Please select a valid ADIAT_Results folder."
                 )
                 return
@@ -145,13 +141,7 @@ class CacheLocationDialog(QDialog):
             self.selected_path = folder_path
 
             # Show confirmation of what was found
-            found_items = []
-            if has_thumbnails:
-                found_items.append("AOI thumbnails")
-            if has_image_thumbnails:
-                found_items.append("Image thumbnails")
-            if has_colors:
-                found_items.append("Color cache")
+            found_items = ["Thumbnails"]
 
             QMessageBox.information(
                 self,

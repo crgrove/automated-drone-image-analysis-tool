@@ -7,7 +7,6 @@ for controllers when alternative cache locations are provided.
 
 from pathlib import Path
 from core.services.LoggerService import LoggerService
-from core.services.ColorCacheService import ColorCacheService
 
 
 class CachePathService:
@@ -39,17 +38,11 @@ class CachePathService:
             # Get the expected cache directory from xml_path
             results_dir = Path(xml_path).parent
             thumbnail_cache_dir = results_dir / '.thumbnails'
-            image_thumbnail_cache_dir = results_dir / '.image_thumbnails'
-            color_cache_dir = results_dir / '.color_cache'
 
-            # Check which caches are missing
+            # Check which caches are missing (only thumbnails now - color/temp data is in XML)
             missing_caches = []
             if not thumbnail_cache_dir.exists():
-                missing_caches.append('AOI thumbnails')
-            if not image_thumbnail_cache_dir.exists():
-                missing_caches.append('Image thumbnails')
-            if not color_cache_dir.exists():
-                missing_caches.append('Color cache')
+                missing_caches.append('Thumbnails')
 
             # If all caches exist, no need to prompt
             if not missing_caches:
@@ -86,12 +79,8 @@ class CachePathService:
             if hasattr(viewer, 'gallery_controller') and viewer.gallery_controller:
                 model = viewer.gallery_controller.model
 
-                # Update color cache service
-                color_cache_path = cache_dir / '.color_cache'
-                if color_cache_path.exists():
-                    model.color_cache_service = ColorCacheService(cache_dir=str(color_cache_path))
-                    model.dataset_dir = cache_dir  # Update the dataset dir reference
-                    self.logger.info(f"Using color cache from: {color_cache_path}")
+                # Update dataset directory reference
+                model.dataset_dir = cache_dir
 
                 # Update thumbnail loader cache path
                 thumbnail_cache_path = cache_dir / '.thumbnails'
@@ -99,16 +88,16 @@ class CachePathService:
                     model.thumbnail_loader.set_dataset_cache_dir(str(thumbnail_cache_path))
                     self.logger.info(f"Using AOI thumbnail cache from: {thumbnail_cache_path}")
 
-            # Update thumbnail controller for main image thumbnails
+            # Update thumbnail controller for main image thumbnails (now unified in .thumbnails)
             if hasattr(viewer, 'thumbnail_controller') and viewer.thumbnail_controller:
-                image_thumbnail_path = cache_dir / '.image_thumbnails'
-                if image_thumbnail_path.exists():
+                thumbnail_path = cache_dir / '.thumbnails'
+                if thumbnail_path.exists():
                     # Store the alternative cache path for thumbnail loader to use
                     viewer.thumbnail_controller.alternative_cache_dir = str(cache_dir)
                     # If loader is already created, update it
                     if hasattr(viewer.thumbnail_controller, 'loader') and viewer.thumbnail_controller.loader:
                         viewer.thumbnail_controller.loader.results_dir = str(cache_dir)
-                    self.logger.info(f"Using image thumbnail cache from: {image_thumbnail_path}")
+                    self.logger.info(f"Using thumbnail cache from: {thumbnail_path}")
 
         except Exception as e:
             self.logger.error(f"Error updating cache paths: {e}")
