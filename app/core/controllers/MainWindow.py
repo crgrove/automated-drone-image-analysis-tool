@@ -57,16 +57,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.setupUi(self)
 
-        # Set custom tooltip styling - light blue background with black text
-        self.setStyleSheet("""
-            QToolTip {
-                background-color: lightblue;
-                color: black;
-                border: 1px solid #333333;
-                padding: 4px;
-                font-size: 11px;
-            }
-        """)
+        self.setStylesheets()
 
         self.__threads = []
         self.images = None
@@ -95,6 +86,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.processingResolutionCombo.addItem(preset_name)
 
         self._set_defaults(version)
+
+        # Global Options layout remains as defined in the .ui
 
         # Setting up GUI element connections
         self.identifierColorButton.clicked.connect(self._identifierButton_clicked)
@@ -153,6 +146,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._previous_min_area = self.minAreaSpinBox.value()
         self._previous_max_area = self.maxAreaSpinBox.value()
 
+    
+
+    def setStylesheets(self):
+        """
+        Sets the stylesheets for the main window.
+        """
+        self.cancelButton.setStyleSheet("""
+            QPushButton { background-color: rgb(136,0,0); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.startButton.setStyleSheet("""
+            QPushButton { background-color: rgb(0,136,0); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.viewResultsButton.setStyleSheet("""
+            QPushButton { background-color: rgb(0,0,136); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
     def _load_algorithms(self):
         """
         Loads and categorizes algorithms for selection in the algorithm combobox.
@@ -179,7 +199,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Replaces the standard combobox with a grouped version to allow algorithm grouping.
         """
         self.tempAlgorithmComboBox.deleteLater()
-        self.algorithmComboBox = GroupedComboBox(self.setupFrame)
+        self.algorithmComboBox = GroupedComboBox(self.setupWidget)
         sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
         self.algorithmComboBox.setSizePolicy(sizePolicy)
@@ -710,12 +730,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             enabled (bool): True to enable, False to disable.
         """
-        if enabled:
-            self.startButton.setStyleSheet("background-color: rgb(0, 136, 0); color: rgb(228, 231, 235);")
-            self.startButton.setEnabled(True)
-        else:
-            self.startButton.setStyleSheet("")
-            self.startButton.setEnabled(False)
+        self.startButton.setEnabled(enabled)
 
     def _set_CancelButton(self, enabled):
         """
@@ -724,12 +739,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             enabled (bool): True to enable, False to disable.
         """
-        if enabled:
-            self.cancelButton.setStyleSheet("background-color: rgb(136, 0, 0); color: rgb(228, 231, 235);")
-            self.cancelButton.setEnabled(True)
-        else:
-            self.cancelButton.setStyleSheet("")
-            self.cancelButton.setEnabled(False)
+        self.cancelButton.setEnabled(enabled)
 
     def _set_ViewResultsButton(self, enabled):
         """
@@ -738,12 +748,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             enabled (bool): True to enable, False to disable.
         """
-        if enabled:
-            self.viewResultsButton.setStyleSheet("background-color: rgb(0, 0, 136); color: rgb(228, 231, 235);")
-            self.viewResultsButton.setEnabled(True)
-        else:
-            self.viewResultsButton.setStyleSheet("")
-            self.viewResultsButton.setEnabled(False)
+        self.viewResultsButton.setEnabled(enabled)
 
     def _set_defaults(self, version):
         """

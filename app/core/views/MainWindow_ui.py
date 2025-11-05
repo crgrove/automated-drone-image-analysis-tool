@@ -28,7 +28,7 @@ class Ui_MainWindow(object):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.setEnabled(True)
-        MainWindow.resize(897, 835)
+        MainWindow.resize(888, 835)
         font = QFont()
         font.setPointSize(10)
         MainWindow.setFont(font)
@@ -68,17 +68,14 @@ class Ui_MainWindow(object):
         self.centralwidget.setSizePolicy(sizePolicy)
         self.verticalLayout_3 = QVBoxLayout(self.centralwidget)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
-        self.setupFrame = QFrame(self.centralwidget)
-        self.setupFrame.setObjectName(u"setupFrame")
-        self.setupFrame.setFrameShape(QFrame.StyledPanel)
-        self.setupFrame.setFrameShadow(QFrame.Plain)
-        self.setupFrame.setLineWidth(3)
-        self.verticalLayout_4 = QVBoxLayout(self.setupFrame)
+        self.setupWidget = QWidget(self.centralwidget)
+        self.setupWidget.setObjectName(u"setupWidget")
+        self.verticalLayout_4 = QVBoxLayout(self.setupWidget)
         self.verticalLayout_4.setObjectName(u"verticalLayout_4")
         self.directoriesLayout = QGridLayout()
         self.directoriesLayout.setSpacing(6)
         self.directoriesLayout.setObjectName(u"directoriesLayout")
-        self.outputFolderButton = QPushButton(self.setupFrame)
+        self.outputFolderButton = QPushButton(self.setupWidget)
         self.outputFolderButton.setObjectName(u"outputFolderButton")
         self.outputFolderButton.setFont(font)
         icon1 = QIcon()
@@ -87,33 +84,33 @@ class Ui_MainWindow(object):
 
         self.directoriesLayout.addWidget(self.outputFolderButton, 1, 2, 1, 1)
 
-        self.outputFolderLine = QLineEdit(self.setupFrame)
+        self.outputFolderLine = QLineEdit(self.setupWidget)
         self.outputFolderLine.setObjectName(u"outputFolderLine")
         self.outputFolderLine.setFont(font)
         self.outputFolderLine.setReadOnly(True)
 
         self.directoriesLayout.addWidget(self.outputFolderLine, 1, 1, 1, 1)
 
-        self.inputFolderLabel = QLabel(self.setupFrame)
+        self.inputFolderLabel = QLabel(self.setupWidget)
         self.inputFolderLabel.setObjectName(u"inputFolderLabel")
         self.inputFolderLabel.setFont(font)
 
         self.directoriesLayout.addWidget(self.inputFolderLabel, 0, 0, 1, 1)
 
-        self.outputFolderLabel = QLabel(self.setupFrame)
+        self.outputFolderLabel = QLabel(self.setupWidget)
         self.outputFolderLabel.setObjectName(u"outputFolderLabel")
         self.outputFolderLabel.setFont(font)
 
         self.directoriesLayout.addWidget(self.outputFolderLabel, 1, 0, 1, 1)
 
-        self.inputFolderButton = QPushButton(self.setupFrame)
+        self.inputFolderButton = QPushButton(self.setupWidget)
         self.inputFolderButton.setObjectName(u"inputFolderButton")
         self.inputFolderButton.setFont(font)
         self.inputFolderButton.setIcon(icon1)
 
         self.directoriesLayout.addWidget(self.inputFolderButton, 0, 2, 1, 1)
 
-        self.inputFolderLine = QLineEdit(self.setupFrame)
+        self.inputFolderLine = QLineEdit(self.setupWidget)
         self.inputFolderLine.setObjectName(u"inputFolderLine")
         self.inputFolderLine.setFont(font)
         self.inputFolderLine.setReadOnly(True)
@@ -123,39 +120,51 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_4.addLayout(self.directoriesLayout)
 
-        self.GlobalOptionsFrame = QFrame(self.setupFrame)
+        self.globalOptionsTopPadding = QSpacerItem(20, 9, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        self.verticalLayout_4.addItem(self.globalOptionsTopPadding)
+
+        self.GlobalOptionsFrame = QFrame(self.setupWidget)
         self.GlobalOptionsFrame.setObjectName(u"GlobalOptionsFrame")
         self.GlobalOptionsFrame.setFrameShape(QFrame.StyledPanel)
         self.GlobalOptionsFrame.setFrameShadow(QFrame.Raised)
+        self.GlobalOptionsFrame.setLineWidth(0)
         self.verticalLayout_6 = QVBoxLayout(self.GlobalOptionsFrame)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
-        self.GeneralLayout = QHBoxLayout()
-        self.GeneralLayout.setObjectName(u"GeneralLayout")
-        self.minAreaLabel = QLabel(self.GlobalOptionsFrame)
+        self.verticalLayout_5 = QVBoxLayout()
+        self.verticalLayout_5.setSpacing(9)
+        self.verticalLayout_5.setObjectName(u"verticalLayout_5")
+        self.verticalLayout_5.setContentsMargins(-1, 5, -1, 9)
+        self.widget = QWidget(self.GlobalOptionsFrame)
+        self.widget.setObjectName(u"widget")
+        self.horizontalLayout_2 = QHBoxLayout(self.widget)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.minAreaLabel = QLabel(self.widget)
         self.minAreaLabel.setObjectName(u"minAreaLabel")
         self.minAreaLabel.setFont(font)
 
-        self.GeneralLayout.addWidget(self.minAreaLabel)
+        self.horizontalLayout_2.addWidget(self.minAreaLabel)
 
-        self.minAreaSpinBox = QSpinBox(self.GlobalOptionsFrame)
+        self.minAreaSpinBox = QSpinBox(self.widget)
         self.minAreaSpinBox.setObjectName(u"minAreaSpinBox")
         self.minAreaSpinBox.setFont(font)
         self.minAreaSpinBox.setMinimum(1)
         self.minAreaSpinBox.setMaximum(999)
         self.minAreaSpinBox.setValue(10)
 
-        self.GeneralLayout.addWidget(self.minAreaSpinBox)
+        self.horizontalLayout_2.addWidget(self.minAreaSpinBox)
 
-        self.maxAreaLabel = QLabel(self.GlobalOptionsFrame)
+        self.maxAreaLabel = QLabel(self.widget)
         self.maxAreaLabel.setObjectName(u"maxAreaLabel")
         font1 = QFont()
         font1.setPointSize(10)
         font1.setBold(False)
         self.maxAreaLabel.setFont(font1)
 
-        self.GeneralLayout.addWidget(self.maxAreaLabel)
+        self.horizontalLayout_2.addWidget(self.maxAreaLabel)
 
-        self.maxAreaSpinBox = QSpinBox(self.GlobalOptionsFrame)
+        self.maxAreaSpinBox = QSpinBox(self.widget)
         self.maxAreaSpinBox.setObjectName(u"maxAreaSpinBox")
         self.maxAreaSpinBox.setFont(font)
         self.maxAreaSpinBox.setMinimum(0)
@@ -163,57 +172,74 @@ class Ui_MainWindow(object):
         self.maxAreaSpinBox.setSingleStep(1)
         self.maxAreaSpinBox.setValue(0)
 
-        self.GeneralLayout.addWidget(self.maxAreaSpinBox)
+        self.horizontalLayout_2.addWidget(self.maxAreaSpinBox)
 
-        self.processingResolutionLabel = QLabel(self.GlobalOptionsFrame)
+        self.processingResolutionLabel = QLabel(self.widget)
         self.processingResolutionLabel.setObjectName(u"processingResolutionLabel")
         self.processingResolutionLabel.setFont(font)
 
-        self.GeneralLayout.addWidget(self.processingResolutionLabel)
+        self.horizontalLayout_2.addWidget(self.processingResolutionLabel)
 
-        self.processingResolutionCombo = QComboBox(self.GlobalOptionsFrame)
+        self.processingResolutionCombo = QComboBox(self.widget)
         self.processingResolutionCombo.setObjectName(u"processingResolutionCombo")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.processingResolutionCombo.sizePolicy().hasHeightForWidth())
+        self.processingResolutionCombo.setSizePolicy(sizePolicy1)
         self.processingResolutionCombo.setFont(font)
 
-        self.GeneralLayout.addWidget(self.processingResolutionCombo)
+        self.horizontalLayout_2.addWidget(self.processingResolutionCombo)
 
-        self.generalHorizontalSpacer1 = QSpacerItem(48, 43, QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-        self.GeneralLayout.addItem(self.generalHorizontalSpacer1)
+        self.horizontalLayout_2.addItem(self.horizontalSpacer_2)
 
-        self.identifierColor = QLabel(self.GlobalOptionsFrame)
+
+        self.verticalLayout_5.addWidget(self.widget)
+
+        self.widget_2 = QWidget(self.GlobalOptionsFrame)
+        self.widget_2.setObjectName(u"widget_2")
+        self.horizontalLayout_4 = QHBoxLayout(self.widget_2)
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.horizontalLayout_4.setContentsMargins(0, 0, 0, 0)
+        self.identifierColor = QLabel(self.widget_2)
         self.identifierColor.setObjectName(u"identifierColor")
         self.identifierColor.setFont(font)
 
-        self.GeneralLayout.addWidget(self.identifierColor)
+        self.horizontalLayout_4.addWidget(self.identifierColor)
 
-        self.identifierColorButton = QPushButton(self.GlobalOptionsFrame)
+        self.identifierColorButton = QPushButton(self.widget_2)
         self.identifierColorButton.setObjectName(u"identifierColorButton")
         self.identifierColorButton.setStyleSheet(u"background-color: rgb(0, 255, 0);")
 
-        self.GeneralLayout.addWidget(self.identifierColorButton)
+        self.horizontalLayout_4.addWidget(self.identifierColorButton)
 
-        self.generalHorizontalSpacer2 = QSpacerItem(40, 20, QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-
-        self.GeneralLayout.addItem(self.generalHorizontalSpacer2)
-
-        self.maxProcessesLabel = QLabel(self.GlobalOptionsFrame)
+        self.maxProcessesLabel = QLabel(self.widget_2)
         self.maxProcessesLabel.setObjectName(u"maxProcessesLabel")
         self.maxProcessesLabel.setFont(font)
 
-        self.GeneralLayout.addWidget(self.maxProcessesLabel)
+        self.horizontalLayout_4.addWidget(self.maxProcessesLabel)
 
-        self.maxProcessesSpinBox = QSpinBox(self.GlobalOptionsFrame)
+        self.maxProcessesSpinBox = QSpinBox(self.widget_2)
         self.maxProcessesSpinBox.setObjectName(u"maxProcessesSpinBox")
+        self.maxProcessesSpinBox.setMinimumSize(QSize(40, 0))
         self.maxProcessesSpinBox.setFont(font)
         self.maxProcessesSpinBox.setMinimum(1)
         self.maxProcessesSpinBox.setMaximum(20)
         self.maxProcessesSpinBox.setValue(10)
 
-        self.GeneralLayout.addWidget(self.maxProcessesSpinBox)
+        self.horizontalLayout_4.addWidget(self.maxProcessesSpinBox)
+
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_4.addItem(self.horizontalSpacer)
 
 
-        self.verticalLayout_6.addLayout(self.GeneralLayout)
+        self.verticalLayout_5.addWidget(self.widget_2)
+
+
+        self.verticalLayout_6.addLayout(self.verticalLayout_5)
 
         self.AdvancedFeaturesWidget = QWidget(self.GlobalOptionsFrame)
         self.AdvancedFeaturesWidget.setObjectName(u"AdvancedFeaturesWidget")
@@ -301,46 +327,54 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_4.addWidget(self.GlobalOptionsFrame)
 
-        self.line = QFrame(self.setupFrame)
+        self.globalOptionsBottomPadding = QSpacerItem(20, 5, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        self.verticalLayout_4.addItem(self.globalOptionsBottomPadding)
+
+        self.line = QFrame(self.setupWidget)
         self.line.setObjectName(u"line")
         self.line.setFrameShape(QFrame.Shape.HLine)
         self.line.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.verticalLayout_4.addWidget(self.line)
 
+        self.verticalSpacer = QSpacerItem(20, 5, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        self.verticalLayout_4.addItem(self.verticalSpacer)
+
         self.algorithmSelectorlLayout = QHBoxLayout()
         self.algorithmSelectorlLayout.setObjectName(u"algorithmSelectorlLayout")
-        self.algorithmLabel = QLabel(self.setupFrame)
+        self.algorithmLabel = QLabel(self.setupWidget)
         self.algorithmLabel.setObjectName(u"algorithmLabel")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-        sizePolicy1.setHorizontalStretch(0)
-        sizePolicy1.setVerticalStretch(0)
-        sizePolicy1.setHeightForWidth(self.algorithmLabel.sizePolicy().hasHeightForWidth())
-        self.algorithmLabel.setSizePolicy(sizePolicy1)
+        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        sizePolicy2.setHorizontalStretch(0)
+        sizePolicy2.setVerticalStretch(0)
+        sizePolicy2.setHeightForWidth(self.algorithmLabel.sizePolicy().hasHeightForWidth())
+        self.algorithmLabel.setSizePolicy(sizePolicy2)
         self.algorithmLabel.setFont(font)
 
         self.algorithmSelectorlLayout.addWidget(self.algorithmLabel)
 
-        self.tempAlgorithmComboBox = QComboBox(self.setupFrame)
+        self.tempAlgorithmComboBox = QComboBox(self.setupWidget)
         self.tempAlgorithmComboBox.setObjectName(u"tempAlgorithmComboBox")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        sizePolicy2.setHorizontalStretch(0)
-        sizePolicy2.setVerticalStretch(0)
-        sizePolicy2.setHeightForWidth(self.tempAlgorithmComboBox.sizePolicy().hasHeightForWidth())
-        self.tempAlgorithmComboBox.setSizePolicy(sizePolicy2)
+        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        sizePolicy3.setHorizontalStretch(0)
+        sizePolicy3.setVerticalStretch(0)
+        sizePolicy3.setHeightForWidth(self.tempAlgorithmComboBox.sizePolicy().hasHeightForWidth())
+        self.tempAlgorithmComboBox.setSizePolicy(sizePolicy3)
         self.tempAlgorithmComboBox.setMinimumSize(QSize(300, 0))
         self.tempAlgorithmComboBox.setFont(font)
 
         self.algorithmSelectorlLayout.addWidget(self.tempAlgorithmComboBox)
 
-        self.algorithmHorizontalSpacer = QSpacerItem(400, 20, QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.algorithmHorizontalSpacer = QSpacerItem(500, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
 
         self.algorithmSelectorlLayout.addItem(self.algorithmHorizontalSpacer)
 
 
         self.verticalLayout_4.addLayout(self.algorithmSelectorlLayout)
 
-        self.algorithmFrame = QFrame(self.setupFrame)
+        self.algorithmFrame = QFrame(self.setupWidget)
         self.algorithmFrame.setObjectName(u"algorithmFrame")
         self.algorithmFrame.setFrameShape(QFrame.StyledPanel)
         self.algorithmFrame.setFrameShadow(QFrame.Plain)
@@ -352,18 +386,18 @@ class Ui_MainWindow(object):
         self.verticalLayout_4.addWidget(self.algorithmFrame)
 
 
-        self.verticalLayout_3.addWidget(self.setupFrame)
+        self.verticalLayout_3.addWidget(self.setupWidget)
 
         self.mainButtons = QHBoxLayout()
         self.mainButtons.setObjectName(u"mainButtons")
         self.startButton = QPushButton(self.centralwidget)
         self.startButton.setObjectName(u"startButton")
         self.startButton.setEnabled(True)
-        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        sizePolicy3.setHorizontalStretch(0)
-        sizePolicy3.setVerticalStretch(0)
-        sizePolicy3.setHeightForWidth(self.startButton.sizePolicy().hasHeightForWidth())
-        self.startButton.setSizePolicy(sizePolicy3)
+        sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        sizePolicy4.setHorizontalStretch(0)
+        sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.startButton.sizePolicy().hasHeightForWidth())
+        self.startButton.setSizePolicy(sizePolicy4)
         self.startButton.setMinimumSize(QSize(150, 0))
         font2 = QFont()
         font2.setPointSize(10)
@@ -379,8 +413,8 @@ class Ui_MainWindow(object):
         self.cancelButton = QPushButton(self.centralwidget)
         self.cancelButton.setObjectName(u"cancelButton")
         self.cancelButton.setEnabled(False)
-        sizePolicy3.setHeightForWidth(self.cancelButton.sizePolicy().hasHeightForWidth())
-        self.cancelButton.setSizePolicy(sizePolicy3)
+        sizePolicy4.setHeightForWidth(self.cancelButton.sizePolicy().hasHeightForWidth())
+        self.cancelButton.setSizePolicy(sizePolicy4)
         self.cancelButton.setMinimumSize(QSize(150, 0))
         self.cancelButton.setFont(font2)
         self.cancelButton.setStyleSheet(u"")
@@ -393,8 +427,8 @@ class Ui_MainWindow(object):
         self.viewResultsButton = QPushButton(self.centralwidget)
         self.viewResultsButton.setObjectName(u"viewResultsButton")
         self.viewResultsButton.setEnabled(False)
-        sizePolicy3.setHeightForWidth(self.viewResultsButton.sizePolicy().hasHeightForWidth())
-        self.viewResultsButton.setSizePolicy(sizePolicy3)
+        sizePolicy4.setHeightForWidth(self.viewResultsButton.sizePolicy().hasHeightForWidth())
+        self.viewResultsButton.setSizePolicy(sizePolicy4)
         self.viewResultsButton.setMinimumSize(QSize(150, 0))
         self.viewResultsButton.setFont(font2)
         self.viewResultsButton.setAutoFillBackground(False)
@@ -405,7 +439,7 @@ class Ui_MainWindow(object):
 
         self.mainButtons.addWidget(self.viewResultsButton)
 
-        self.buttonsSpacer = QSpacerItem(400, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+        self.buttonsSpacer = QSpacerItem(400, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
 
         self.mainButtons.addItem(self.buttonsSpacer)
 
@@ -429,7 +463,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
         self.mainBar = QMenuBar(MainWindow)
         self.mainBar.setObjectName(u"mainBar")
-        self.mainBar.setGeometry(QRect(0, 0, 897, 23))
+        self.mainBar.setGeometry(QRect(0, 0, 888, 23))
         self.menuFile = QMenu(self.mainBar)
         self.menuFile.setObjectName(u"menuFile")
         self.menuHelp = QMenu(self.mainBar)
