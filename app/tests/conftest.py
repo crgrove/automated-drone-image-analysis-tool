@@ -2,7 +2,7 @@ import sys
 import os
 import qdarktheme
 import pytest
-from app.core.controllers.MainWindow import MainWindow
+from core.controllers.images.MainWindow import MainWindow
 from PySide6.QtWidgets import QApplication
 
 # Add the app directory to the Python path

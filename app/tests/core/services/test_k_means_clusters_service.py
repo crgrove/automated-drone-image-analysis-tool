@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import cv2
 from unittest.mock import patch, MagicMock
-from app.core.services.KMeansClustersService import KMeansClustersService  # Adjust the import according to your project structure
-from app.core.services.LoggerService import LoggerService  # Adjust the import according to your project structure
+from core.services.KMeansClustersService import KMeansClustersService  # Adjust the import according to your project structure
+from core.services.LoggerService import LoggerService  # Adjust the import according to your project structure
 
 
 @pytest.fixture

@@ -6,35 +6,43 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>674</width>
-    <height>94</height>
+    <width>800</width>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
    <item>
-    <layout class="QHBoxLayout" name="ColorSelectionLayout">
+    <layout class="QHBoxLayout" name="buttonLayout">
      <item>
-      <widget class="QPushButton" name="colorButton">
+      <widget class="QPushButton" name="addColorButton">
        <property name="font">
         <font>
          <pointsize>10</pointsize>
         </font>
        </property>
        <property name="toolTip">
-        <string>Select a target color from an image to detect using RGB color space.
-Opens a color picker that allows you to:
-• Load an image from the input folder
-• Click on pixels to sample colors
-• Automatically calculates RGB values
-• Sets Red, Green, and Blue range tolerances
-The selected color becomes the center of your RGB detection range.
-Adjust the +/- range values to capture color variations.</string>
+        <string>Add a new color range to detect. Each color can have its own RGB range tolerances.</string>
        </property>
        <property name="text">
-        <string> Pick Color</string>
+        <string>Add Color</string>
        </property>
        <property name="icon">
         <iconset resource="../../resources.qrc">
@@ -46,238 +54,17 @@ Adjust the +/- range values to capture color variations.</string>
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer_4">
+      <spacer name="horizontalSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>18</width>
+         <width>40</width>
          <height>20</height>
         </size>
        </property>
       </spacer>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="SpinBoxLayout">
-       <item>
-        <widget class="QLabel" name="rSensitivityLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Red channel tolerance for RGB color detection.
-Defines how much variation in the red channel value is acceptable.
-Adjust to allow more or less red color variation.</string>
-         </property>
-         <property name="text">
-          <string>Red Range +/-</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSpinBox" name="rRangeSpinBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Red channel range tolerance (+/-).
-• Range: 0 to 255
-• Default: 50
-Creates a range around the target red value by adding and subtracting this amount.
-• Lower values: Strict red matching (narrow range)
-• Higher values: Loose red matching (wide range)
-Example: Target red 150, range 50 = detects red values from 100-200.</string>
-         </property>
-         <property name="maximum">
-          <number>255</number>
-         </property>
-         <property name="value">
-          <number>50</number>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="horizontalSpacer">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>18</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QLabel" name="gSensitivityLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Green channel tolerance for RGB color detection.
-Defines how much variation in the green channel value is acceptable.
-Adjust to allow more or less green color variation.</string>
-         </property>
-         <property name="text">
-          <string>Green Range +/-</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSpinBox" name="gRangeSpinBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Green channel range tolerance (+/-).
-• Range: 0 to 255
-• Default: 50
-Creates a range around the target green value by adding and subtracting this amount.
-• Lower values: Strict green matching (narrow range)
-• Higher values: Loose green matching (wide range)
-Example: Target green 100, range 50 = detects green values from 50-150.</string>
-         </property>
-         <property name="maximum">
-          <number>255</number>
-         </property>
-         <property name="value">
-          <number>50</number>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="horizontalSpacer_2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>18</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QLabel" name="bSensitivityLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Blue channel tolerance for RGB color detection.
-Defines how much variation in the blue channel value is acceptable.
-Adjust to allow more or less blue color variation.</string>
-         </property>
-         <property name="text">
-          <string>Blue Range +/-</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSpinBox" name="bRangeSpinBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Blue channel range tolerance (+/-).
-• Range: 0 to 255
-• Default: 50
-Creates a range around the target blue value by adding and subtracting this amount.
-• Lower values: Strict blue matching (narrow range)
-• Higher values: Loose blue matching (wide range)
-Example: Target blue 80, range 50 = detects blue values from 30-130.</string>
-         </property>
-         <property name="maximum">
-          <number>255</number>
-         </property>
-         <property name="value">
-          <number>50</number>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="ColorRangeLayout">
-     <item>
-      <widget class="QLabel" name="colorRangeLabel">
-       <property name="font">
-        <font>
-         <pointsize>10</pointsize>
-        </font>
-       </property>
-       <property name="toolTip">
-        <string>Visual preview of the RGB color detection range.
-Shows the minimum, center, and maximum colors that will be detected.</string>
-       </property>
-       <property name="text">
-        <string>Color Range:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QFrame" name="minColor">
-       <property name="whatsThis">
-        <string/>
-       </property>
-       <property name="toolTip">
-        <string>Minimum color in the detection range.
-Shows the darkest/lowest RGB values that will be detected.
-Calculated by subtracting the range values from the target color.</string>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Raised</enum>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QFrame" name="midColor">
-       <property name="toolTip">
-        <string>Center/target color for detection.
-Shows the exact RGB color that was selected.
-This is the middle of your detection range.</string>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Raised</enum>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QFrame" name="maxColor">
-       <property name="toolTip">
-        <string>Maximum color in the detection range.
-Shows the brightest/highest RGB values that will be detected.
-Calculated by adding the range values to the target color.</string>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Raised</enum>
-       </property>
-      </widget>
      </item>
      <item>
       <widget class="QPushButton" name="viewRangeButton">
@@ -310,6 +97,46 @@ Use this to see what colors are going to be detected and optimize the color rang
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAsNeeded</enum>
+     </property>
+     <widget class="QWidget" name="scrollAreaWidgetContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>798</width>
+        <height>350</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="colorsLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+      </layout>
+     </widget>
+    </widget>
    </item>
   </layout>
  </widget>

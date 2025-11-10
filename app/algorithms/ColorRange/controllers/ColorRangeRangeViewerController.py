@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
-from core.views.viewer.widgets.QtImageViewer import QtImageViewer
+from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 
 from PySide6.QtGui import QImage
 from PySide6.QtCore import Qt, QSize
@@ -10,19 +10,20 @@ from PySide6.QtWidgets import QDialog, QFrame
 
 
 class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
-    """Controller for the Color Range Range Viewer Dialog."""
+    """Controller for the Color Range Range Viewer Dialog supporting multiple colors."""
 
-    def __init__(self, min_rgb, max_rgb):
+    def __init__(self, color_ranges):
         """
         Initializes the ColorRangeRangeViewer dialog.
 
         Args:
-            min_rgb (tuple[int, int, int]): The minimum color in the selected range.
-            max_rgb (tuple[int, int, int]): The maximum color in the selected range.
+            color_ranges (list[dict]): List of color range configs, each with:
+                'color_range': [min_rgb, max_rgb] where min_rgb and max_rgb are (r, g, b) tuples
+                OR for backward compatibility: (min_rgb, max_rgb) tuple pair
         """
         QDialog.__init__(self)
         self.setupUi(self)
-        palettes = self.generate_palettes(min_rgb, max_rgb)
+        palettes = self.generate_palettes(color_ranges)
         self.populate_image(palettes["selected"][2], True)
         self.populate_image(palettes["selected"][1], True)
         self.populate_image(palettes["selected"][0], True)
@@ -30,19 +31,22 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         self.populate_image(palettes["unselected"][1], False)
         self.populate_image(palettes["unselected"][0], False)
 
-    def generate_palettes(self, min_rgb, max_rgb):
+    def generate_palettes(self, color_ranges):
         """
         Generates color palettes as numpy arrays representing selected and unselected colors.
 
         Args:
-            min_rgb (tuple[int, int, int]): The minimum color in the selected range.
-            max_rgb (tuple[int, int, int]): The maximum color in the selected range.
+            color_ranges (list[dict] | tuple): List of color range configs or legacy (min_rgb, max_rgb) tuple
 
         Returns:
             dict: A dictionary with numpy arrays for selected and unselected color ranges.
         """
-        cv_lower_limit = np.array([min_rgb[2], min_rgb[1], min_rgb[0]], dtype=np.uint8)
-        cv_upper_limit = np.array([max_rgb[2], max_rgb[1], max_rgb[0]], dtype=np.uint8)
+        # Handle backward compatibility: if it's a tuple, convert to list format
+        if isinstance(color_ranges, tuple) and len(color_ranges) == 2:
+            # Legacy format: (min_rgb, max_rgb)
+            color_ranges = [{'color_range': [color_ranges[0], color_ranges[1]]}]
+        elif not isinstance(color_ranges, list):
+            color_ranges = [color_ranges]
 
         multiplier = 2
         x_range = 180 * multiplier
@@ -52,9 +56,10 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         med = self.generate_palette(x_range, y_range, multiplier, 128)
         low = self.generate_palette(x_range, y_range, multiplier, 64)
 
-        high_mask = cv2.inRange(high, cv_lower_limit, cv_upper_limit)
-        med_mask = cv2.inRange(med, cv_lower_limit, cv_upper_limit)
-        low_mask = cv2.inRange(low, cv_lower_limit, cv_upper_limit)
+        # Generate combined mask for all color ranges (OR logic)
+        high_mask = self.generate_combined_mask(high, color_ranges)
+        med_mask = self.generate_combined_mask(med, color_ranges)
+        low_mask = self.generate_combined_mask(low, color_ranges)
 
         inverse_high_mask = cv2.bitwise_not(high_mask)
         inverse_med_mask = cv2.bitwise_not(med_mask)
@@ -69,6 +74,44 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
 
         return {"selected": [selected_high, selected_med, selected_low],
                 "unselected": [unselected_high, unselected_med, unselected_low]}
+
+    def generate_combined_mask(self, img, color_ranges):
+        """
+        Generates a combined mask for pixels that match ANY of the configured color ranges.
+
+        Args:
+            img (numpy.ndarray): Palette image to be processed.
+            color_ranges (list[dict]): List of color range configs with 'color_range' key.
+
+        Returns:
+            numpy.ndarray: Combined mask (0/255) where any color range matches.
+        """
+        combined = np.zeros(img.shape[:2], dtype=np.uint8)
+        
+        for color_config in color_ranges:
+            # Handle both dict format and direct tuple format
+            if isinstance(color_config, dict):
+                color_range = color_config.get('color_range')
+            else:
+                color_range = color_config
+            
+            if not color_range or len(color_range) != 2:
+                continue
+                
+            min_rgb = color_range[0]
+            max_rgb = color_range[1]
+            
+            # Convert RGB to BGR for OpenCV
+            cv_lower_limit = np.array([min_rgb[2], min_rgb[1], min_rgb[0]], dtype=np.uint8)
+            cv_upper_limit = np.array([max_rgb[2], max_rgb[1], max_rgb[0]], dtype=np.uint8)
+            
+            # Generate mask for this color range
+            mask = cv2.inRange(img, cv_lower_limit, cv_upper_limit)
+            
+            # Combine with OR logic
+            combined = cv2.bitwise_or(combined, mask)
+        
+        return combined
 
     def generate_palette(self, x_range, y_range, multiplier, saturation):
         """

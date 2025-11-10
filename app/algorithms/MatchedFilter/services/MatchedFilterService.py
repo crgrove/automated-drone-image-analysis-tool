@@ -1,12 +1,14 @@
 import numpy as np
 import cv2
 import spectral
+import traceback
 from core.services.LoggerService import LoggerService
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 
 
 class MatchedFilterService(AlgorithmService):
-    """Service that executes the Matched Filter algorithm to detect and highlight areas matching a specific color."""
+    """Service that executes the Matched Filter algorithm to detect and highlight areas matching
+    one or more specific color signatures."""
 
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
         """
@@ -18,16 +20,36 @@ class MatchedFilterService(AlgorithmService):
             max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
             aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
             combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'selected_color' and 'match_filter_threshold'.
+            options (dict): Additional algorithm-specific options. Supports:
+                - 'color_configs': List of color configs (new format)
+                - 'selected_color' + 'match_filter_threshold': Single color (legacy format)
         """
         self.logger = LoggerService()
         super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options)
-        self.match_color = options['selected_color']
-        self.threshold = options['match_filter_threshold']
+        
+        # Support both new multi-color format and legacy single-color format
+        self.color_configs = []
+        
+        if 'color_configs' in options and options['color_configs']:
+            # New format: multiple color configurations
+            self.color_configs = options['color_configs']
+        elif 'selected_color' in options and 'match_filter_threshold' in options:
+            # Legacy format: single color configuration
+            self.color_configs = [{
+                'selected_color': options['selected_color'],
+                'match_filter_threshold': options['match_filter_threshold']
+            }]
+        else:
+            # Fallback: use identifier as single color with default threshold
+            self.color_configs = [{
+                'selected_color': identifier,
+                'match_filter_threshold': 0.3
+            }]
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
-        Processes a single image using the Matched Filter algorithm to identify areas matching the specified color.
+        Processes a single image using the Matched Filter algorithm to identify areas matching
+        one or more specified color signatures.
 
         Args:
             img (numpy.ndarray): The image to be processed.
@@ -36,35 +58,59 @@ class MatchedFilterService(AlgorithmService):
             output_dir (str): The base output folder.
 
         Returns:
-            AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
+            AnalysisResult: Contains the processed image path, list of areas of interest,
+                base contour count, and error message if any.
         """
         try:
-            # Calculate the matched filter scores based on the specified color.
-            scores = spectral.matched_filter(img, np.array([self.match_color[2], self.match_color[1], self.match_color[0]], dtype=np.uint8))
-            mask = np.uint8((1 * (scores > self.threshold)))
-
-            # Identify contours in the masked image
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
+            # Start with an empty mask and combined scores
+            combined_mask = np.zeros(img.shape[:2], dtype=np.uint8)
+            combined_scores = np.zeros(img.shape[:2], dtype=np.float32)
+            
+            # Process each color configuration and combine masks with OR logic
+            for color_config in self.color_configs:
+                match_color = color_config.get('selected_color')
+                threshold = color_config.get('match_filter_threshold', 0.3)
+                
+                if not match_color:
+                    continue
+                
+                # Calculate the matched filter scores based on the specified color
+                # spectral.matched_filter expects BGR format
+                color_bgr = np.array([match_color[2], match_color[1], match_color[0]], dtype=np.uint8)
+                scores = spectral.matched_filter(img, color_bgr)
+                
+                # Create mask for this color (threshold applied)
+                mask = np.uint8((1 * (scores > threshold)))
+                
+                # Combine masks using OR logic
+                combined_mask = cv2.bitwise_or(combined_mask, mask)
+                
+                # Keep track of maximum scores across all colors for confidence calculation
+                combined_scores = np.maximum(combined_scores, scores * mask.astype(np.float32))
+            
+            # Identify contours in the combined masked image
+            contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
-
+            
             # Add confidence scores to AOIs based on matched filter scores
             if areas_of_interest:
-                areas_of_interest = self._add_confidence_scores(areas_of_interest, scores, mask)
-
+                areas_of_interest = self._add_confidence_scores(areas_of_interest, combined_scores, combined_mask)
+            
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
-
+            
             # Store mask instead of duplicating image
             mask_path = None
             if areas_of_interest:
                 # Convert mask to 0-255 range for storage
-                mask_255 = mask * 255
+                mask_255 = combined_mask * 255
                 mask_path = self.store_mask(full_path, output_path, mask_255)
-
+            
             return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
-
+            
         except Exception as e:
             # Log and return an error if processing fails.
+            print(traceback.format_exc())
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))
 
@@ -74,7 +120,7 @@ class MatchedFilterService(AlgorithmService):
 
         Args:
             areas_of_interest (list): List of AOI dictionaries
-            filter_scores (numpy.ndarray): Matched filter scores for each pixel
+            filter_scores (numpy.ndarray): Combined matched filter scores for each pixel
             mask (numpy.ndarray): Binary detection mask
 
         Returns:

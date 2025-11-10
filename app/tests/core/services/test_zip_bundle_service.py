@@ -2,7 +2,7 @@ import pytest
 import zipfile
 import os
 from unittest.mock import patch, MagicMock
-from app.core.services.ZipBundleService import ZipBundleService
+from core.services.ZipBundleService import ZipBundleService
 
 
 @pytest.fixture

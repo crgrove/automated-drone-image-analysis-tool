@@ -5,10 +5,10 @@ from PySide6.QtCore import Qt
 from unittest.mock import patch
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from app.core.controllers.VideoParser import VideoParser
-from app.core.controllers.Perferences import Preferences
-from app.core.services.PdfGeneratorService import PdfGeneratorService
-from app.core.services.KMLGeneratorService import KMLGeneratorService
+from core.controllers.images.VideoParser import VideoParser
+from core.controllers.Perferences import Preferences
+from core.services.PdfGeneratorService import PdfGeneratorService
+from core.services.KMLGeneratorService import KMLGeneratorService
 
 
 def testVisible(main_window):

@@ -19,8 +19,9 @@ class SettingsService:
             value (str): The value to be set for the setting.
         """
         self.settings.setValue(name, value)
+        self.settings.sync()  # Ensure setting is persisted immediately
 
-    def get_setting(self, name, default_value=''):
+    def get_setting(self, name, default_value=None):
         """
         Retrieve the value of a specified setting from QSettings.
 
@@ -29,6 +30,9 @@ class SettingsService:
             default_value (str): The default value to return if the setting does not exist.
 
         Returns:
-            str: The value of the setting, or the default value if the setting does not exist.
+            Any: The value of the setting with its stored type (int/str/bool/tuple/etc.),
+                 or the default value if the setting does not exist.
         """
-        return self.settings.value(name, default_value)
+        value = self.settings.value(name, default_value)
+        # Return value as-is to preserve original types
+        return value if value is not None else default_value

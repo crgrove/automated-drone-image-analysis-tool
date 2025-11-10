@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtMultimedia import QSound
 
-from core.services.RealtimeColorDetectionService import Detection
+from core.services.streaming.RealtimeColorDetectionService import Detection
 from core.services.LoggerService import LoggerService
 
 

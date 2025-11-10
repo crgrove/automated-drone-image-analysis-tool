@@ -12,10 +12,10 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
-from core.services.ThumbnailCacheService import ThumbnailCacheService
-from core.services.ColorCacheService import ColorCacheService
-from core.services.TemperatureCacheService import TemperatureCacheService
-from core.services.AOIService import AOIService
+from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
+from core.services.cache.ColorCacheService import ColorCacheService
+from core.services.cache.TemperatureCacheService import TemperatureCacheService
+from core.services.image.AOIService import AOIService
 
 
 class AlgorithmService:

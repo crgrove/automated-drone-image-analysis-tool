@@ -1,0 +1,80 @@
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QDialog
+
+from core.views.SelectionDialog_ui import Ui_MediaSelector
+from core.services.SettingsService import SettingsService
+
+class SelectionDialog(QDialog, Ui_MediaSelector):
+    """Controller for the media selection dialog.
+
+    Exposes a simple API where clicking a button records the selection and
+    closes the dialog with accept(). Consumers can either connect to the
+    selectionMade signal or inspect the `selection` attribute after exec().
+    """
+
+    selectionMade = Signal(str)
+    wizardRequested = Signal()  # Signal emitted when setup wizard should be shown
+
+    def __init__(self, theme: str):
+        super().__init__()
+        self.setupUi(self)
+        
+        self.settings_service = SettingsService()
+
+        self.selection: str | None = None
+
+        # Consistent tooltip styling across dialogs
+        self.setStyleSheet(
+            """
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+            """
+        )
+
+        self.imageButton.clicked.connect(self._on_image_clicked)
+        self.streamButton.clicked.connect(self._on_stream_clicked)
+
+        self._apply_icons(theme)
+
+    def _on_image_clicked(self) -> None:
+        self.selection = "images"
+        
+        # Check if setup wizard should be shown
+        skip_wizard = self.settings_service.get_setting('SkipImageAnalysisGuide', 'No')
+        # Ensure we're comparing strings (QSettings might return different types)
+        skip_wizard_str = str(skip_wizard).strip()
+        
+        if skip_wizard_str == 'Yes':
+            # Wizard is skipped, proceed normally
+            self.selectionMade.emit(self.selection)
+            self.accept()
+        else:
+            # Show setup wizard first
+            # Close this dialog before showing wizard
+            self.accept()  # Close the dialog
+            self.wizardRequested.emit()  # Signal will be handled after dialog closes
+
+    def _on_stream_clicked(self) -> None:
+        self.selection = "stream"
+        self.selectionMade.emit(self.selection)
+        # Close the dialog - the viewer will be created in __main__.py via the signal handler
+        self.accept()
+
+    def _apply_icons(self, theme: str) -> None:
+        """Apply themed icons to the dialog buttons."""
+        try:
+            from helpers.IconHelper import IconHelper
+
+            self.imageButton.setIcon(IconHelper.create_icon("fa6s.image", theme))
+            # Use a broadly available Material icon for streaming/video
+            self.streamButton.setIcon(IconHelper.create_icon("fa6s.video", theme))
+        except Exception:
+            # Icons are non-critical; ignore if assets are not available yet
+            pass
+
+

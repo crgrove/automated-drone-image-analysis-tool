@@ -13,8 +13,8 @@ from multiprocessing import Pool, pool
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.services.LoggerService import LoggerService
-from core.services.HistogramNormalizationService import HistogramNormalizationService
-from core.services.KMeansClustersService import KMeansClustersService
+from core.services.advancedFeatures.HistogramNormalizationService import HistogramNormalizationService
+from core.services.advancedFeatures.KMeansClustersService import KMeansClustersService
 from core.services.XmlService import XmlService
 from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
 from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService

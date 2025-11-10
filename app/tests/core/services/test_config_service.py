@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import patch, mock_open
-from app.core.services.ConfigService import ConfigService  # Adjust the import according to your project structure
+from core.services.ConfigService import ConfigService  # Adjust the import according to your project structure
 
 
 def test_config_service_initialization():

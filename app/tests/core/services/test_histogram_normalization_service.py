@@ -4,8 +4,8 @@ import cv2
 from unittest.mock import patch, MagicMock
 from PIL import Image, UnidentifiedImageError
 from skimage import exposure
-from app.core.services.HistogramNormalizationService import HistogramNormalizationService
-from app.core.services.LoggerService import LoggerService
+from core.services.HistogramNormalizationService import HistogramNormalizationService
+from core.services.LoggerService import LoggerService
 
 
 @pytest.fixture

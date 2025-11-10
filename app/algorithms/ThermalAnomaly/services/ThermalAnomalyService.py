@@ -5,7 +5,7 @@ import traceback
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
 from helpers.ColorUtils import ColorUtils
-from core.services.ThermalParserService import ThermalParserService
+from core.services.thermal.ThermalParserService import ThermalParserService
 from helpers.MetaDataHelper import MetaDataHelper
 
 

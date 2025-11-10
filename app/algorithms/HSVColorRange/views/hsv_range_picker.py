@@ -194,6 +194,7 @@ class HSVRangePickerWidget(QWidget):
         buttons_layout = QHBoxLayout()
 
         # HSV Assistant button - now a regular button like "Pick Screen Color"
+        # Hidden per user request - "Use Image" option should not appear in HSV Color Picker
         self.hsv_assistant_button = QPushButton("Use Image")
         self.hsv_assistant_button.setFixedHeight(35)
         self.hsv_assistant_button.setToolTip(
@@ -206,6 +207,7 @@ class HSVRangePickerWidget(QWidget):
             "Recommended for finding the best color range for your target."
         )
         self.hsv_assistant_button.clicked.connect(self.open_hsv_assistant)
+        self.hsv_assistant_button.hide()  # Hide the "Use Image" button
 
         self.pick_screen_button = QPushButton("Pick Screen Color")
         self.pick_screen_button.setFixedHeight(35)
@@ -218,6 +220,7 @@ class HSVRangePickerWidget(QWidget):
             "Ranges remain unchanged - adjust manually after picking."
         )
         self.pick_screen_button.clicked.connect(self.pick_screen_color)
+        self.pick_screen_button.hide()  # Hide the "Pick Screen Color" button
 
         self.add_custom_button = QPushButton("Add to Custom Colors")
         self.add_custom_button.setFixedHeight(35)

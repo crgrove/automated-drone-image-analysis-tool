@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QSizePolicy, QGridLayout, QColorDialog)
 
 from .hsv_range_picker import HSVRangePickerWidget
-from core.services.CustomColorsService import get_custom_colors_service
+from core.services.color.CustomColorsService import get_custom_colors_service
 
 
 class ColorRangeDialog(QDialog):
@@ -156,6 +156,15 @@ class ColorRangeDialog(QDialog):
     def create_button_layout(self):
         """Create the bottom button layout."""
         button_layout = QHBoxLayout()
+
+        # Pick from image (opens image color picker)
+        self.pick_from_image_btn = QPushButton("Pick From Image...")
+        self.pick_from_image_btn.setToolTip(
+            "Open the Image Color Picker. After selecting a pixel and closing the picker,\n"
+            "the picked color will be used as the base color for this HSV picker."
+        )
+        self.pick_from_image_btn.clicked.connect(self.open_image_color_picker)
+        button_layout.addWidget(self.pick_from_image_btn)
 
         # Test button (if image available)
         if self.original_image is not None:
@@ -392,6 +401,34 @@ class ColorRangeDialog(QDialog):
         color_data = self.get_hsv_ranges()
         self.colorSelected.emit(color_data)
         super().accept()
+
+    def open_image_color_picker(self):
+        """Launch the Image Color Picker and set base HSV from the selected pixel color."""
+        try:
+            # Import here to avoid any heavy imports at module import time
+            from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
+        except Exception as e:
+            print(f"Failed to import ColorPickerDialog: {e}")
+            return
+
+        dlg = ColorPickerDialog(self)
+        if dlg.exec():
+            rgb = dlg.get_selected_color()  # (r, g, b)
+            if rgb is not None:
+                r, g, b = rgb
+                qcolor = QColor(r, g, b)
+                h, s, v, _ = qcolor.getHsvF()  # h,s,v in 0-1 range
+                self.color_picker.set_hsv(h, s, v)
+                self.color_picker.update_display()
+                # If preview panel exists, refresh to reflect new center color
+                if self.original_image is not None:
+                    self.update_preview()
+        # Ensure the pick button does not retain focus when returning
+        try:
+            self.pick_from_image_btn.clearFocus()
+            self.color_picker.setFocus(Qt.OtherFocusReason)
+        except Exception:
+            pass
 
 
 class ColorSwatchButton(QPushButton):

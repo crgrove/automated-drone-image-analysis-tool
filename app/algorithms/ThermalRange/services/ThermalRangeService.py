@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from core.services.LoggerService import LoggerService
-from core.services.ThermalParserService import ThermalParserService
+from core.services.thermal.ThermalParserService import ThermalParserService
 
 
 class ThermalRangeService(AlgorithmService):

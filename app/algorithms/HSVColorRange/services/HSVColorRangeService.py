@@ -12,58 +12,111 @@ class HSVColorRangeService(AlgorithmService):
         super().__init__('HSVColorRange', identifier, min_area, max_area, aoi_radius, combine_aois, options)
 
         self.target_color_hsv = None
+        # Store for backward compatibility
         selected_color = self.options.get('selected_color')
         if selected_color is not None:
             # Ensure shape (1,1,3) for cv2.cvtColor
             rgb_color = np.uint8([[selected_color]])
             self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
 
+    def _create_mask_from_hsv_ranges(self, hsv_image, hsv_ranges):
+        """
+        Create a mask from HSV range data.
+        
+        Args:
+            hsv_image: Image in HSV color space
+            hsv_ranges: Dict with h, s, v, h_minus, h_plus, s_minus, s_plus, v_minus, v_plus
+        
+        Returns:
+            numpy.ndarray: Binary mask
+        """
+        h, s, v = hsv_ranges['h'], hsv_ranges['s'], hsv_ranges['v']
+        h_minus, h_plus = hsv_ranges['h_minus'], hsv_ranges['h_plus']
+        s_minus, s_plus = hsv_ranges['s_minus'], hsv_ranges['s_plus']
+        v_minus, v_plus = hsv_ranges['v_minus'], hsv_ranges['v_plus']
+
+        # Calculate bounds in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
+        h_center = int(h * 179)
+        s_center = int(s * 255)
+        v_center = int(v * 255)
+
+        h_low = max(0, h_center - int(h_minus * 179))
+        h_high = min(179, h_center + int(h_plus * 179))
+        s_low = max(0, s_center - int(s_minus * 255))
+        s_high = min(255, s_center + int(s_plus * 255))
+        v_low = max(0, v_center - int(v_minus * 255))
+        v_high = min(255, v_center + int(v_plus * 255))
+
+        # Handle hue wrapping if necessary
+        if h_low > h_high:
+            # Hue wraps around (e.g., 350° to 10°)
+            mask1 = cv2.inRange(hsv_image,
+                                np.array([h_low, s_low, v_low], dtype=np.uint8),
+                                np.array([179, s_high, v_high], dtype=np.uint8))
+            mask2 = cv2.inRange(hsv_image,
+                                np.array([0, s_low, v_low], dtype=np.uint8),
+                                np.array([h_high, s_high, v_high], dtype=np.uint8))
+            return cv2.bitwise_or(mask1, mask2)
+        else:
+            lower_bound = np.array([h_low, s_low, v_low], dtype=np.uint8)
+            upper_bound = np.array([h_high, s_high, v_high], dtype=np.uint8)
+            return cv2.inRange(hsv_image, lower_bound, upper_bound)
+
     def process_image(self, img, full_path, input_dir, output_dir):
         try:
-            if self.target_color_hsv is None:
-                return AnalysisResult(full_path, error_message="No color selected for HSV Filter")
-
             # Convert the image from BGR to HSV color space
             hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-            # Check if we have new HSV ranges data
-            hsv_ranges = self.options.get('hsv_ranges')
-            if hsv_ranges:
-                # Use precise HSV ranges from the new picker
-                h, s, v = hsv_ranges['h'], hsv_ranges['s'], hsv_ranges['v']
-                h_minus, h_plus = hsv_ranges['h_minus'], hsv_ranges['h_plus']
-                s_minus, s_plus = hsv_ranges['s_minus'], hsv_ranges['s_plus']
-                v_minus, v_plus = hsv_ranges['v_minus'], hsv_ranges['v_plus']
+            # Check if we have multiple HSV configs (new format)
+            hsv_configs = self.options.get('hsv_configs')
+            if hsv_configs:
+                # Handle string format
+                if isinstance(hsv_configs, str):
+                    from ast import literal_eval
+                    hsv_configs = literal_eval(hsv_configs)
+                
+                # Combine multiple HSV ranges with OR logic
+                mask = None
+                for hsv_config in hsv_configs:
+                    if isinstance(hsv_config, dict):
+                        hsv_ranges = hsv_config.get('hsv_ranges')
+                        if isinstance(hsv_ranges, str):
+                            from ast import literal_eval
+                            hsv_ranges = literal_eval(hsv_ranges)
+                        
+                        if hsv_ranges:
+                            this_mask = self._create_mask_from_hsv_ranges(hsv_image, hsv_ranges)
+                            if mask is None:
+                                mask = this_mask
+                            else:
+                                mask = cv2.bitwise_or(mask, this_mask)
+                
+                if mask is None:
+                    return AnalysisResult(full_path, error_message="No valid HSV ranges configured")
+                
+                # Use first color for confidence scoring (backward compatibility)
+                if hsv_configs and isinstance(hsv_configs[0], dict):
+                    first_config = hsv_configs[0]
+                    selected_color = first_config.get('selected_color')
+                    if selected_color:
+                        if isinstance(selected_color, str):
+                            from ast import literal_eval
+                            selected_color = literal_eval(selected_color)
+                        rgb_color = np.uint8([[selected_color]])
+                        self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
 
-                # Calculate bounds in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
-                h_center = int(h * 179)
-                s_center = int(s * 255)
-                v_center = int(v * 255)
-
-                h_low = max(0, h_center - int(h_minus * 179))
-                h_high = min(179, h_center + int(h_plus * 179))
-                s_low = max(0, s_center - int(s_minus * 255))
-                s_high = min(255, s_center + int(s_plus * 255))
-                v_low = max(0, v_center - int(v_minus * 255))
-                v_high = min(255, v_center + int(v_plus * 255))
-
-                # Handle hue wrapping if necessary
-                if h_low > h_high:
-                    # Hue wraps around (e.g., 350° to 10°)
-                    mask1 = cv2.inRange(hsv_image,
-                                        np.array([h_low, s_low, v_low], dtype=np.uint8),
-                                        np.array([179, s_high, v_high], dtype=np.uint8))
-                    mask2 = cv2.inRange(hsv_image,
-                                        np.array([0, s_low, v_low], dtype=np.uint8),
-                                        np.array([h_high, s_high, v_high], dtype=np.uint8))
-                    mask = cv2.bitwise_or(mask1, mask2)
-                else:
-                    lower_bound = np.array([h_low, s_low, v_low], dtype=np.uint8)
-                    upper_bound = np.array([h_high, s_high, v_high], dtype=np.uint8)
-                    mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
+            # Check if we have single HSV ranges data (legacy format)
+            elif 'hsv_ranges' in self.options and self.options.get('hsv_ranges'):
+                hsv_ranges = self.options.get('hsv_ranges')
+                if isinstance(hsv_ranges, str):
+                    from ast import literal_eval
+                    hsv_ranges = literal_eval(hsv_ranges)
+                
+                if hsv_ranges:
+                    mask = self._create_mask_from_hsv_ranges(hsv_image, hsv_ranges)
 
             # Check for old HSV window data (backward compatibility)
-            elif 'hsv_window' in self.options:
+            elif 'hsv_window' in self.options and self.options.get('hsv_window'):
                 hsv_window = self.options.get('hsv_window')
                 # Use precise HSV ranges from the old dialog format
                 lower_bound = np.array([hsv_window['h_min'] / 2, hsv_window['s_min'] * 255 / 100,
@@ -89,7 +142,10 @@ class HSVColorRangeService(AlgorithmService):
                     mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
 
             else:
-                # Fallback to old method
+                # Fallback to old method (requires target_color_hsv)
+                if self.target_color_hsv is None:
+                    return AnalysisResult(full_path, error_message="No color selected for HSV Filter")
+                
                 hue_threshold = self.options.get('hue_threshold', 10)
                 saturation_threshold = self.options.get('saturation_threshold', 30)
                 value_threshold = self.options.get('value_threshold', 30)
@@ -107,6 +163,10 @@ class HSVColorRangeService(AlgorithmService):
                         mask = this_mask
                     else:
                         mask = cv2.bitwise_or(mask, this_mask)
+            
+            # Ensure mask is defined
+            if mask is None:
+                return AnalysisResult(full_path, error_message="No valid HSV configuration found")
 
             # Calculate HSV distance for confidence scoring
             # Only calculate for detected pixels to save computation

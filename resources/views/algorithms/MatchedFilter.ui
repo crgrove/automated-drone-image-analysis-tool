@@ -6,32 +6,43 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>674</width>
-    <height>94</height>
+    <width>800</width>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
    <item>
-    <layout class="QHBoxLayout" name="ColorSelectionLayout">
+    <layout class="QHBoxLayout" name="buttonLayout">
      <item>
-      <widget class="QPushButton" name="colorButton">
+      <widget class="QPushButton" name="addColorButton">
        <property name="font">
         <font>
          <pointsize>10</pointsize>
         </font>
        </property>
        <property name="toolTip">
-        <string>Select a target color signature for matched filter detection.
-Opens a color picker to sample the spectral signature from an image.
-The matched filter algorithm uses this color signature to find similar pixels.
-Picks RGB values which are converted to a spectral signature for matching.
-Best for detecting specific colored objects with consistent spectral properties.</string>
+        <string>Add a new color signature for matched filter detection. Each color can have its own threshold value.</string>
        </property>
        <property name="text">
-        <string> Pick Color</string>
+        <string>Add Color</string>
        </property>
        <property name="icon">
         <iconset resource="../../resources.qrc">
@@ -42,111 +53,6 @@ Best for detecting specific colored objects with consistent spectral properties.
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QFrame" name="colorSample">
-       <property name="minimumSize">
-        <size>
-         <width>50</width>
-         <height>20</height>
-        </size>
-       </property>
-       <property name="toolTip">
-        <string>Visual preview of the selected target color signature.
-Shows the color that will be used for matched filter detection.
-The algorithm finds pixels with similar spectral characteristics to this color.</string>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Raised</enum>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="SilderLayout">
-       <item>
-        <widget class="QLabel" name="thresholdLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Detection threshold for matched filter algorithm.
-• Range: 0.1 to 1.0 (displayed as slider 1-10, divided by 10)
-• Default: 0.3
-Controls the correlation coefficient required for a pixel to match the target color signature:
-• Lower values (0.1-0.3): INCREASE detections - more lenient matching, accepts less similar colors
-• Higher values (0.7-1.0): DECREASE detections - strict matching, only very similar colors detected
-Threshold represents how closely a pixel's spectral signature must match the target signature.</string>
-         </property>
-         <property name="text">
-          <string>Threshold:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSlider" name="thresholdSlider">
-         <property name="minimum">
-          <number>1</number>
-         </property>
-         <property name="maximum">
-          <number>10</number>
-         </property>
-         <property name="toolTip">
-          <string>Adjust the detection threshold for matched filter algorithm.
-• Range: 0.1 to 1.0 (displayed as 1-10, divided by 10)
-• Default: 0.3 (slider value 3)
-The matched filter algorithm finds pixels with similar spectral signatures:
-• Lower values (0.1-0.3): More lenient matching, more detections (may include dissimilar colors)
-• Medium values (0.4-0.6): Balanced detection (recommended for most cases)
-• Higher values (0.7-1.0): Strict matching, fewer detections (only very similar colors)
-Threshold represents the correlation coefficient between target and pixel signatures.
-Start with 0.3 and adjust based on detection results.</string>
-         </property>
-         <property name="pageStep">
-          <number>1</number>
-         </property>
-         <property name="value">
-          <number>3</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="tickPosition">
-          <enum>QSlider::TicksBelow</enum>
-         </property>
-         <property name="tickInterval">
-          <number>1</number>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="thresholdValueLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>Current threshold value for matched filter detection.
-Displays the slider value divided by 10 (e.g., slider 3 = threshold 0.3).
-Represents the minimum correlation coefficient for detection.</string>
-         </property>
-         <property name="text">
-          <string>.3</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="RangeViewerLayout">
      <item>
       <spacer name="horizontalSpacer">
        <property name="orientation">
@@ -163,7 +69,7 @@ Represents the minimum correlation coefficient for detection.</string>
      <item>
       <widget class="QPushButton" name="viewRangeButton">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+        <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -176,7 +82,7 @@ Represents the minimum correlation coefficient for detection.</string>
        <property name="toolTip">
         <string>Opens the Range Viewer window to:
 - See the range of colors that will be searched for in the image analysis.
-Use this to see what colors are going to be detected and optimize the color ranges before processing.</string>
+Use this to see what colors are going to be detected and optimize the thresholds before processing.</string>
        </property>
        <property name="text">
         <string>View Range</string>
@@ -191,6 +97,46 @@ Use this to see what colors are going to be detected and optimize the color rang
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAsNeeded</enum>
+     </property>
+     <widget class="QWidget" name="scrollAreaWidgetContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>798</width>
+        <height>350</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="colorsLayout">
+       <property name="spacing">
+        <number>6</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+      </layout>
+     </widget>
+    </widget>
    </item>
   </layout>
  </widget>

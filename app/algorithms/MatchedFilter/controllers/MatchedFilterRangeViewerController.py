@@ -4,7 +4,7 @@ import spectral
 import pandas as pd
 
 from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
-from core.views.viewer.widgets.QtImageViewer import QtImageViewer
+from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 
 from PySide6.QtGui import QImage
 from PySide6.QtCore import Qt, QSize
@@ -12,19 +12,19 @@ from PySide6.QtWidgets import QDialog, QFrame
 
 
 class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
-    """Controller for the Color Match Range Viewer Dialog."""
+    """Controller for the Matched Filter Range Viewer Dialog supporting multiple colors."""
 
-    def __init__(self, ref_rgb, threshold):
+    def __init__(self, color_configs):
         """
-        Initializes the MatchedFilterRangeViewer dialog.
+        Initialize the MatchedFilterRangeViewer dialog.
 
         Args:
-            ref_rgb (tuple[int, int, int]): The reference color to be matched.
-            threshold (float): The threshold a pixel score must meet to be flagged as a match.
+            color_configs (list[dict]): List of configs with keys:
+                'selected_color': (r,g,b), 'match_filter_threshold': float
         """
         QDialog.__init__(self)
         self.setupUi(self)
-        palettes = self.generate_palettes(ref_rgb, threshold)
+        palettes = self.generate_palettes(color_configs)
         self.populate_image(palettes["selected"][2], True)
         self.populate_image(palettes["selected"][1], True)
         self.populate_image(palettes["selected"][0], True)
@@ -32,13 +32,12 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         self.populate_image(palettes["unselected"][1], False)
         self.populate_image(palettes["unselected"][0], False)
 
-    def generate_palettes(self, ref_rgb, threshold):
+    def generate_palettes(self, color_configs):
         """
         Generates color palettes as numpy arrays representing selected and unselected colors.
 
         Args:
-            ref_rgb (tuple[int, int, int]): The reference color to be matched.
-            threshold (float): The threshold a pixel score must meet to be flagged as a match.
+            color_configs (list[dict]): List of color configs
 
         Returns:
             dict: A dictionary with numpy arrays for selected and unselected color ranges.
@@ -51,9 +50,9 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         med = self.generate_palette(x_range, y_range, multiplier, 128)
         low = self.generate_palette(x_range, y_range, multiplier, 64)
 
-        high_mask = self.generate_mask(high, ref_rgb, threshold)
-        med_mask = self.generate_mask(med, ref_rgb, threshold)
-        low_mask = self.generate_mask(low, ref_rgb, threshold)
+        high_mask = self.generate_combined_mask(high, color_configs)
+        med_mask = self.generate_combined_mask(med, color_configs)
+        low_mask = self.generate_combined_mask(low, color_configs)
 
         inverse_high_mask = cv2.bitwise_not(high_mask)
         inverse_med_mask = cv2.bitwise_not(med_mask)
@@ -69,21 +68,27 @@ class MatchedFilterRangeViewer(QDialog, Ui_ColorRangeViewer):
         return {"selected": [selected_high, selected_med, selected_low],
                 "unselected": [unselected_high, unselected_med, unselected_low]}
 
-    def generate_mask(self, img, ref_rgb, threshold):
+    def generate_combined_mask(self, img, color_configs):
         """
-        Generates a mask for pixels that match the reference color within the specified threshold.
+        Generates a combined mask for pixels that match ANY of the configured colors.
 
         Args:
-            img (numpy.ndarray): The image to be processed.
-            ref_rgb (tuple[int, int, int]): The reference color to be matched.
-            threshold (float): The threshold a pixel score must meet to be flagged as a match.
+            img (numpy.ndarray): Palette image to be processed.
+            color_configs (list[dict]): List with 'selected_color' and 'match_filter_threshold'.
 
         Returns:
-            numpy.ndarray: A mask representing pixels that match the reference color.
+            numpy.ndarray: Combined mask (0/255) where any color meets its threshold.
         """
-        scores = spectral.matched_filter(img, np.array([ref_rgb[2], ref_rgb[1], ref_rgb[0]], dtype=np.uint8))
-        mask = np.uint8((255 * (scores > threshold)))
-        return mask
+        combined = np.zeros(img.shape[:2], dtype=np.uint8)
+        for cfg in color_configs:
+            rgb = cfg.get('selected_color')
+            threshold = float(cfg.get('match_filter_threshold', 0.3))
+            if rgb is None:
+                continue
+            scores = spectral.matched_filter(img, np.array([rgb[2], rgb[1], rgb[0]], dtype=np.uint8))
+            mask = (scores > threshold).astype(np.uint8) * 255
+            combined = cv2.bitwise_or(combined, mask)
+        return combined
 
     def generate_palette(self, x_range, y_range, multiplier, saturation):
         """
