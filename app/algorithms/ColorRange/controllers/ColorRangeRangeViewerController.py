@@ -87,30 +87,30 @@ class ColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
             numpy.ndarray: Combined mask (0/255) where any color range matches.
         """
         combined = np.zeros(img.shape[:2], dtype=np.uint8)
-        
+
         for color_config in color_ranges:
             # Handle both dict format and direct tuple format
             if isinstance(color_config, dict):
                 color_range = color_config.get('color_range')
             else:
                 color_range = color_config
-            
+
             if not color_range or len(color_range) != 2:
                 continue
-                
+
             min_rgb = color_range[0]
             max_rgb = color_range[1]
-            
+
             # Convert RGB to BGR for OpenCV
             cv_lower_limit = np.array([min_rgb[2], min_rgb[1], min_rgb[0]], dtype=np.uint8)
             cv_upper_limit = np.array([max_rgb[2], max_rgb[1], max_rgb[0]], dtype=np.uint8)
-            
+
             # Generate mask for this color range
             mask = cv2.inRange(img, cv_lower_limit, cv_upper_limit)
-            
+
             # Combine with OR logic
             combined = cv2.bitwise_or(combined, mask)
-        
+
         return combined
 
     def generate_palette(self, x_range, y_range, multiplier, saturation):

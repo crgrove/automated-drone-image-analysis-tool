@@ -6,23 +6,21 @@ color detection applications. Designed for <250ms latency processing.
 """
 
 # Set environment variable to avoid numpy compatibility issues - MUST be first
+from core.services.LoggerService import LoggerService
+from PySide6.QtCore import QObject, QThread, Signal
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, Tuple, Callable, Dict, Any
+from queue import Queue, Empty
+import time
+import threading
+import numpy as np
+import cv2
 import os
 os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
 # Also set these for better compatibility
 os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
 os.environ.setdefault('NPY_DISABLE_SVML', '1')
-
-import cv2
-import numpy as np
-import threading
-import time
-from queue import Queue, Empty
-from typing import Optional, Tuple, Callable, Dict, Any
-from enum import Enum
-from dataclasses import dataclass
-
-from PySide6.QtCore import QObject, QThread, Signal
-from core.services.LoggerService import LoggerService
 
 
 class StreamType(Enum):
@@ -351,8 +349,8 @@ class RTMPStreamService(QThread):
                     if self._frame_number % 30 == 0:
                         total_capture = read_time_ms + resize_time_ms + copy_time_ms
                         self.logger.debug(f"Capture profiling: read={read_time_ms:.1f}ms, "
-                                        f"resize={resize_time_ms:.1f}ms, copy={copy_time_ms:.1f}ms, "
-                                        f"total_capture={total_capture:.1f}ms")
+                                          f"resize={resize_time_ms:.1f}ms, copy={copy_time_ms:.1f}ms, "
+                                          f"total_capture={total_capture:.1f}ms")
                 except Exception as e:
                     self.logger.error(f"Error emitting frame: {e}")
                     continue

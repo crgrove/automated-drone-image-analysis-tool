@@ -6,8 +6,9 @@ and visual rendering of AOIs from all loaded images.
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                                QListView, QPushButton, QFrame, QAbstractItemView,
-                                QStyledItemDelegate, QStyle, QStyleOptionViewItem)
+                               QListView, QPushButton, QFrame,
+                               QAbstractItemView, QStyledItemDelegate, QStyle,
+                               QStyleOptionViewItem)
 from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent, QObject
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon
 import qtawesome as qta
@@ -38,7 +39,6 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         try:
             # Get data from model
             icon = index.data(Qt.DecorationRole)
-            text = index.data(Qt.DisplayRole)
             user_data = index.data(Qt.UserRole)
 
             if not user_data:
@@ -46,8 +46,6 @@ class AOIGalleryDelegate(QStyledItemDelegate):
                 return
 
             aoi_data = user_data.get('aoi_data', {})
-            image_idx = user_data.get('image_idx', -1)
-            aoi_idx = user_data.get('aoi_idx', -1)
 
             # Calculate layout rectangles
             thumbnail_rect = QRect(
@@ -120,7 +118,7 @@ class AOIGalleryDelegate(QStyledItemDelegate):
                     painter.setPen(QPen(QColor(255, 255, 255), 1))
                     painter.drawRect(swatch_rect)
 
-        except Exception as e:
+        except Exception:
             # Fallback to default rendering on error
             pass
 
@@ -163,7 +161,7 @@ class GalleryUIComponent(QObject):
         self.gallery_widget = None
         self.gallery_view = None
         self.count_label = None
-        
+
         # Track when the view has a valid geometry and initial thumbnails are queued
         self._initial_thumbnails_loaded = False
 
@@ -248,11 +246,11 @@ class GalleryUIComponent(QObject):
         header = QWidget()
         header.setFixedHeight(0)  # Make it invisible
         header.setMaximumHeight(0)
-        
+
         # Keep count_label for internal tracking (but don't display it)
         self.count_label = QLabel("0 AOIs")
         self.count_label.setVisible(False)  # Hidden - we'll update main title instead
-        
+
         return header
 
     def set_model(self, model):
@@ -267,17 +265,17 @@ class GalleryUIComponent(QObject):
             # Connect model readiness signals to trigger initial thumbnail loading
             model.modelReset.connect(self._on_model_ready)
             model.rowsInserted.connect(lambda *_: self._on_model_ready())
-    
+
     def _on_model_changed(self):
         """Handle model changes - update header and reload thumbnails if in gallery mode."""
         if self.gallery_view and self.gallery_view.model():
             count = self.gallery_view.model().rowCount()
             self._update_count_label(count)
-            
+
             # When model changes (e.g., after filtering/sorting), reload visible thumbnails
             # Reset the flag so thumbnails can be reloaded
             self._initial_thumbnails_loaded = False
-            
+
             # Always trigger thumbnail loading when model changes
             # The model's _queue_visible_thumbnails() queues initial items, but we need to
             # ensure visible items are prioritized
@@ -292,18 +290,18 @@ class GalleryUIComponent(QObject):
         """Update the count label with the number of AOIs."""
         if self.count_label:
             self.count_label.setText(f"{count} AOI{'s' if count != 1 else ''}")
-        
+
         # Also update the main AOI header title when in gallery mode
-        if (self.gallery_controller and 
-            hasattr(self.gallery_controller.parent, 'gallery_mode') and 
-            self.gallery_controller.parent.gallery_mode and
-            hasattr(self.gallery_controller.parent, 'areaCountLabel')):
+        if (self.gallery_controller and
+                hasattr(self.gallery_controller.parent, 'gallery_mode') and
+                self.gallery_controller.parent.gallery_mode and
+                hasattr(self.gallery_controller.parent, 'areaCountLabel')):
             self._update_main_aoi_header(count)
-    
+
     def _update_main_aoi_header(self, count):
         """Update the main AOI header title to show gallery mode with count."""
-        if (self.gallery_controller and 
-            hasattr(self.gallery_controller.parent, 'areaCountLabel')):
+        if (self.gallery_controller and
+                hasattr(self.gallery_controller.parent, 'areaCountLabel')):
             area_count_label = self.gallery_controller.parent.areaCountLabel
             if area_count_label:
                 # Format: "# Areas of Interest - Gallery Mode" (matching single-image format)
@@ -407,7 +405,7 @@ class GalleryUIComponent(QObject):
         try:
             if event.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest):
                 if (self.gallery_widget and self.gallery_widget.isVisible() and
-                    not self._initial_thumbnails_loaded):
+                        not self._initial_thumbnails_loaded):
                     # Ensure we have a model with rows and a valid viewport size
                     model = self.gallery_view.model() if self.gallery_view else None
                     viewport_rect = self.gallery_view.viewport().rect() if self.gallery_view else QRect()
@@ -418,7 +416,6 @@ class GalleryUIComponent(QObject):
         except Exception:
             pass
         return super().eventFilter(obj, event)
-
 
     def refresh_gallery(self):
         """Refresh the gallery display."""

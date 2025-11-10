@@ -6,19 +6,18 @@ real-time processing performance. Supports hardware encoding when available.
 """
 
 # Set environment variable to avoid numpy._core issues - MUST be first
+from core.services.LoggerService import LoggerService
+from PySide6.QtCore import QObject, QThread, Signal
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional, Tuple, Dict, Any
+from queue import Queue, Empty
+import threading
+import time
+import numpy as np
+import cv2
 import os  # noqa: E402
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
-import cv2
-import numpy as np
-import time
-import threading
-from queue import Queue, Empty
-from typing import Optional, Tuple, Dict, Any
-from dataclasses import dataclass
-from pathlib import Path
-
-from PySide6.QtCore import QObject, QThread, Signal
-from core.services.LoggerService import LoggerService
 
 
 @dataclass

@@ -14,14 +14,14 @@ from core.services.LoggerService import LoggerService
 class PathValidationController:
     """
     Controller for managing path validation and recovery.
-    
+
     Handles checking for missing files and prompting users to locate them.
     """
 
     def __init__(self, parent_viewer):
         """
         Initialize the path validation controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -31,10 +31,10 @@ class PathValidationController:
     def validate_and_fix_paths(self, images):
         """
         Validate that all image and mask paths exist. Prompt user to select folders if missing.
-        
+
         Args:
             images: List of image dictionaries to validate
-            
+
         Returns:
             bool: True if all paths are valid or were fixed, False if user cancelled.
         """
@@ -73,10 +73,10 @@ class PathValidationController:
     def _prompt_for_source_folder(self, missing_images):
         """
         Prompt user to select folder containing source images.
-        
+
         Args:
             missing_images (list): List of dicts with 'image' and 'filename' keys.
-            
+
         Returns:
             bool: True if successful, False if user cancelled.
         """
@@ -144,10 +144,10 @@ class PathValidationController:
     def _prompt_for_mask_folder(self, missing_masks):
         """
         Prompt user to select folder containing detection masks.
-        
+
         Args:
             missing_masks (list): List of dicts with 'image' and 'filename' keys.
-            
+
         Returns:
             bool: True if successful, False if user cancelled.
         """
@@ -211,12 +211,3 @@ class PathValidationController:
             return False
 
         return True
-
-
-
-
-
-
-
-
-

@@ -10,17 +10,17 @@ A widget representing a single HSV color range configuration row with:
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIntValidator
-from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel, 
-                                QLineEdit, QPushButton, QSizePolicy, QColorDialog)
+from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
+                               QLineEdit, QPushButton, QSizePolicy, QColorDialog)
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
 from core.services.color.CustomColorsService import get_custom_colors_service
 
 
 class ClickableColorSwatch(QFrame):
     """A clickable color swatch that opens HSV color picker when clicked and displays HSV values."""
-    
+
     colorChanged = Signal(QColor)
-    
+
     def __init__(self, parent=None, color=None, on_click_callback=None):
         super().__init__(parent)
         self._color = color or QColor(255, 0, 0)
@@ -32,23 +32,23 @@ class ClickableColorSwatch(QFrame):
         self.setMaximumSize(80, 35)
         self.setCursor(Qt.PointingHandCursor)
         self._update_style()
-    
+
     def setColor(self, color):
         """Set the color and update display."""
         self._color = color
         self._update_hsv_values()
         self._update_style()
         self.colorChanged.emit(color)
-    
+
     def setHSV(self, h, s, v):
         """Set HSV values for display."""
         self._hsv_values = (h, s, v)
         self._update_style()
-    
+
     def getColor(self):
         """Get the current color."""
         return self._color
-    
+
     def _update_hsv_values(self):
         """Update HSV values from current color."""
         h, s, v, _ = self._color.getHsvF()
@@ -57,7 +57,7 @@ class ClickableColorSwatch(QFrame):
         s_pct = int(round(s * 100))
         v_pct = int(round(v * 100))
         self._hsv_values = (h_deg, s_pct, v_pct)
-    
+
     def _update_style(self):
         """Update the stylesheet with current color."""
         r, g, b = self._color.red(), self._color.green(), self._color.blue()
@@ -72,7 +72,7 @@ class ClickableColorSwatch(QFrame):
             self.setToolTip(f"RGB: ({r}, {g}, {b})\nClick to change color")
         # Trigger repaint to show HSV text
         self.update()
-    
+
     def paintEvent(self, event):
         """Override paint event to draw HSV text on the swatch."""
         super().paintEvent(event)
@@ -81,22 +81,22 @@ class ClickableColorSwatch(QFrame):
             h, s, v = self._hsv_values
             r, g, b = self._color.red(), self._color.green(), self._color.blue()
             text_color = Qt.white if (r + g + b) < 384 else Qt.black
-            
+
             painter = QPainter(self)
             painter.setRenderHint(QPainter.Antialiasing)
             painter.setPen(text_color)
-            
+
             # Use smaller font
             font = QFont(self.font())
             font.setPointSize(8)
             font.setBold(True)
             painter.setFont(font)
-            
+
             # Draw HSV text centered
             text = f"({h}°,{s}%,{v}%)"
             painter.drawText(self.rect(), Qt.AlignCenter, text)
             painter.end()
-    
+
     def mousePressEvent(self, event):
         """Handle mouse click to open color picker."""
         if event.button() == Qt.LeftButton:
@@ -117,18 +117,18 @@ class ClickableColorSwatch(QFrame):
 
 class HSVColorRowWidget(QWidget):
     """Widget representing a single HSV color range configuration."""
-    
+
     # Signal emitted when this row should be deleted
     delete_requested = Signal(QWidget)
     # Signal emitted when color or ranges change
     changed = Signal()
-    
-    def __init__(self, parent=None, color=None, h_minus=None, h_plus=None, 
+
+    def __init__(self, parent=None, color=None, h_minus=None, h_plus=None,
                  s_minus=None, s_plus=None, v_minus=None, v_plus=None,
                  hsv_ranges=None):
         """
         Initialize an HSV color row widget.
-        
+
         Args:
             parent: Parent widget
             color: QColor or tuple (r, g, b) for the target color
@@ -138,7 +138,7 @@ class HSVColorRowWidget(QWidget):
             hsv_ranges: Dict with HSV range data (alternative to individual params)
         """
         super().__init__(parent)
-        
+
         # Store color
         if color is None:
             self.color = QColor(255, 0, 0)  # Default to red
@@ -146,7 +146,7 @@ class HSVColorRowWidget(QWidget):
             self.color = QColor(color[0], color[1], color[2])
         else:
             self.color = color
-        
+
         # Initialize HSV window data
         if hsv_ranges:
             # Use provided HSV ranges (already in normalized 0-1 format)
@@ -180,37 +180,37 @@ class HSVColorRowWidget(QWidget):
                 'v_minus': (v_minus / 100) if v_minus is not None else (50/100),  # Convert from percentage
                 'v_plus': (v_plus / 100) if v_plus is not None else (50/100)  # Convert from percentage
             }
-        
+
         self._setup_ui()
         self._update_inputs()
         self._update_display()
-    
+
     def _setup_ui(self):
         """Set up the UI layout and widgets."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(8)
         self.setFixedHeight(42)
-        
+
         # Column 1: Color swatch (clickable to change color, shows HSV)
         # Pass callback to open HSV picker when clicked
         self.colorSwatch = ClickableColorSwatch(self, self.color, on_click_callback=self._open_hsv_picker)
         self.colorSwatch.colorChanged.connect(self._on_color_changed)
         layout.addWidget(self.colorSwatch)
-        
+
         # Column 2: HSV Range Controls
         range_layout = QHBoxLayout()
         range_layout.setSpacing(4)
-        
+
         # Integer validators
         h_validator = QIntValidator(0, 359, self)
         sv_validator = QIntValidator(0, 100, self)
-        
+
         # Hue Min/Max
         h_label = QLabel("H (°):", self)
         h_label.setFont(self.font())
         range_layout.addWidget(h_label)
-        
+
         self.hMinEdit = QLineEdit(self)
         self.hMinEdit.setValidator(h_validator)
         # Absolute min degrees; text will be set in _update_inputs
@@ -220,10 +220,10 @@ class HSVColorRowWidget(QWidget):
         self.hMinEdit.setMaximumHeight(28)
         self.hMinEdit.editingFinished.connect(self._on_h_minus_changed)
         range_layout.addWidget(self.hMinEdit)
-        
+
         h_sep = QLabel("-", self)
         range_layout.addWidget(h_sep)
-        
+
         self.hPlusEdit = QLineEdit(self)
         self.hPlusEdit.setValidator(h_validator)
         # Absolute max degrees; text will be set in _update_inputs
@@ -233,14 +233,14 @@ class HSVColorRowWidget(QWidget):
         self.hPlusEdit.setMaximumHeight(28)
         self.hPlusEdit.editingFinished.connect(self._on_h_plus_changed)
         range_layout.addWidget(self.hPlusEdit)
-        
+
         range_layout.addSpacing(8)
-        
+
         # Saturation Min/Max (display as percentages)
         s_label = QLabel("S (%):", self)
         s_label.setFont(self.font())
         range_layout.addWidget(s_label)
-        
+
         self.sMinEdit = QLineEdit(self)
         self.sMinEdit.setValidator(sv_validator)
         self.sMinEdit.setMinimumWidth(35)
@@ -249,10 +249,10 @@ class HSVColorRowWidget(QWidget):
         self.sMinEdit.setMaximumHeight(28)
         self.sMinEdit.editingFinished.connect(self._on_s_minus_changed)
         range_layout.addWidget(self.sMinEdit)
-        
+
         s_sep = QLabel("-", self)
         range_layout.addWidget(s_sep)
-        
+
         self.sPlusEdit = QLineEdit(self)
         self.sPlusEdit.setValidator(sv_validator)
         self.sPlusEdit.setMinimumWidth(35)
@@ -261,14 +261,14 @@ class HSVColorRowWidget(QWidget):
         self.sPlusEdit.setMaximumHeight(28)
         self.sPlusEdit.editingFinished.connect(self._on_s_plus_changed)
         range_layout.addWidget(self.sPlusEdit)
-        
+
         range_layout.addSpacing(8)
-        
+
         # Value Min/Max (display as percentages)
         v_label = QLabel("V (%):", self)
         v_label.setFont(self.font())
         range_layout.addWidget(v_label)
-        
+
         self.vMinEdit = QLineEdit(self)
         self.vMinEdit.setValidator(sv_validator)
         self.vMinEdit.setMinimumWidth(35)
@@ -277,10 +277,10 @@ class HSVColorRowWidget(QWidget):
         self.vMinEdit.setMaximumHeight(28)
         self.vMinEdit.editingFinished.connect(self._on_v_minus_changed)
         range_layout.addWidget(self.vMinEdit)
-        
+
         v_sep = QLabel("-", self)
         range_layout.addWidget(v_sep)
-        
+
         self.vPlusEdit = QLineEdit(self)
         self.vPlusEdit.setValidator(sv_validator)
         self.vPlusEdit.setMinimumWidth(35)
@@ -289,16 +289,16 @@ class HSVColorRowWidget(QWidget):
         self.vPlusEdit.setMaximumHeight(28)
         self.vPlusEdit.editingFinished.connect(self._on_v_plus_changed)
         range_layout.addWidget(self.vPlusEdit)
-        
+
         layout.addLayout(range_layout)
-        
+
         # Column 3: Gradient display
         self.gradientWidget = ColorGradientWidget(self)
         self.gradientWidget.setMinimumHeight(35)
         self.gradientWidget.setMaximumHeight(35)
         self.gradientWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.gradientWidget)
-        
+
         # Column 4: Delete button
         self.deleteButton = QPushButton("✕", self)
         self.deleteButton.setObjectName("deleteButton")
@@ -322,45 +322,45 @@ class HSVColorRowWidget(QWidget):
         """)
         self.deleteButton.clicked.connect(lambda: self.delete_requested.emit(self))
         layout.addWidget(self.deleteButton)
-    
+
     def _hsv_to_rgb(self, h, s, v):
         """Convert HSV (0-1 normalized) to RGB (0-255)."""
         color = QColor.fromHsvF(h, s, v)
         return (color.red(), color.green(), color.blue())
-    
+
     def _calculate_gradient_colors(self):
         """Calculate min, mid, max RGB colors from HSV ranges for gradient display."""
         h, s, v = self._hsv_window['h'], self._hsv_window['s'], self._hsv_window['v']
         h_minus, h_plus = self._hsv_window['h_minus'], self._hsv_window['h_plus']
         s_minus, s_plus = self._hsv_window['s_minus'], self._hsv_window['s_plus']
         v_minus, v_plus = self._hsv_window['v_minus'], self._hsv_window['v_plus']
-        
+
         # Calculate min HSV (center - minus ranges, clamped)
         h_min = max(0.0, min(1.0, h - h_minus))
         s_min = max(0.0, min(1.0, s - s_minus))
         v_min = max(0.0, min(1.0, v - v_minus))
-        
+
         # Mid HSV (center color)
         h_mid, s_mid, v_mid = h, s, v
-        
+
         # Calculate max HSV (center + plus ranges, clamped)
         h_max = max(0.0, min(1.0, h + h_plus))
         s_max = max(0.0, min(1.0, s + s_plus))
         v_max = max(0.0, min(1.0, v + v_plus))
-        
+
         # Convert to RGB
         min_rgb = self._hsv_to_rgb(h_min, s_min, v_min)
         mid_rgb = self._hsv_to_rgb(h_mid, s_mid, v_mid)
         max_rgb = self._hsv_to_rgb(h_max, s_max, v_max)
-        
+
         return min_rgb, mid_rgb, max_rgb
-    
+
     def _open_hsv_picker(self):
         """Open the HSV color range picker dialog."""
         try:
             from algorithms.HSVColorRange.views.color_range_dialog import ColorRangeDialog
             from core.services.color.CustomColorsService import get_custom_colors_service
-            
+
             # Get current HSV values
             initial_hsv = (self._hsv_window['h'], self._hsv_window['s'], self._hsv_window['v'])
             initial_ranges = {
@@ -371,34 +371,34 @@ class HSVColorRowWidget(QWidget):
                 'v_minus': self._hsv_window['v_minus'],
                 'v_plus': self._hsv_window['v_plus']
             }
-            
+
             # Open dialog
             dialog = ColorRangeDialog(None, initial_hsv, initial_ranges, self)
-            
+
             if dialog.exec() == ColorRangeDialog.Accepted:
                 hsv_data = dialog.get_hsv_ranges()
-                
+
                 # Save any custom colors that may have been modified
                 custom_colors_service = get_custom_colors_service()
                 custom_colors_service.sync_with_dialog()
-                
+
                 # Update HSV window data
                 self._hsv_window = hsv_data
-                
+
                 # Update color from HSV
                 h, s, v = hsv_data['h'], hsv_data['s'], hsv_data['v']
                 self.color = QColor.fromHsvF(h, s, v)
-                
+
                 # Update inputs
                 self._update_inputs()
-                
+
                 # Update display
                 self._update_display()
                 self.changed.emit()
-        except Exception as e:
+        except Exception:
             # Silently fail if there's an error
             pass
-    
+
     def _on_color_changed(self, color):
         """Handle color swatch change - update HSV window."""
         self.color = color
@@ -406,7 +406,7 @@ class HSVColorRowWidget(QWidget):
         self._hsv_window['h'] = h
         self._hsv_window['s'] = s
         self._hsv_window['v'] = v
-        
+
         # Update min/max to ±50% for S/V, ±20 for H (defaults)
         self._hsv_window['h_minus'] = 20/179
         self._hsv_window['h_plus'] = 20/179
@@ -414,12 +414,12 @@ class HSVColorRowWidget(QWidget):
         self._hsv_window['s_plus'] = 50/100
         self._hsv_window['v_minus'] = 50/100
         self._hsv_window['v_plus'] = 50/100
-        
+
         # Update UI
         self._update_inputs()
         self._update_display()
         self.changed.emit()
-    
+
     def _on_h_minus_changed(self):
         """Handle hue MIN value change (absolute degrees)."""
         try:
@@ -445,7 +445,7 @@ class HSVColorRowWidget(QWidget):
             center_deg = int(round(self._hsv_window['h'] * 360))
             min_deg = max(0, center_deg - int(round(self._hsv_window['h_minus'] * 360)))
             self.hMinEdit.setText(str(min_deg))
-    
+
     def _on_h_plus_changed(self):
         """Handle hue MAX value change (absolute degrees)."""
         try:
@@ -471,7 +471,7 @@ class HSVColorRowWidget(QWidget):
             center_deg = int(round(self._hsv_window['h'] * 360))
             max_deg = min(359, center_deg + int(round(self._hsv_window['h_plus'] * 360)))
             self.hPlusEdit.setText(str(max_deg))
-    
+
     def _on_s_minus_changed(self):
         """Handle saturation MIN value change (absolute %)."""
         try:
@@ -493,7 +493,7 @@ class HSVColorRowWidget(QWidget):
             center_pct = int(round(self._hsv_window['s'] * 100))
             min_pct = max(0, center_pct - int(round(self._hsv_window['s_minus'] * 100)))
             self.sMinEdit.setText(str(min_pct))
-    
+
     def _on_s_plus_changed(self):
         """Handle saturation MAX value change (absolute %)."""
         try:
@@ -515,7 +515,7 @@ class HSVColorRowWidget(QWidget):
             center_pct = int(round(self._hsv_window['s'] * 100))
             max_pct = min(100, center_pct + int(round(self._hsv_window['s_plus'] * 100)))
             self.sPlusEdit.setText(str(max_pct))
-    
+
     def _on_v_minus_changed(self):
         """Handle value MIN value change (absolute %)."""
         try:
@@ -537,7 +537,7 @@ class HSVColorRowWidget(QWidget):
             center_pct = int(round(self._hsv_window['v'] * 100))
             min_pct = max(0, center_pct - int(round(self._hsv_window['v_minus'] * 100)))
             self.vMinEdit.setText(str(min_pct))
-    
+
     def _on_v_plus_changed(self):
         """Handle value MAX value change (absolute %)."""
         try:
@@ -559,7 +559,7 @@ class HSVColorRowWidget(QWidget):
             center_pct = int(round(self._hsv_window['v'] * 100))
             max_pct = min(100, center_pct + int(round(self._hsv_window['v_plus'] * 100)))
             self.vPlusEdit.setText(str(max_pct))
-    
+
     def _update_inputs(self):
         """Update input field values from stored ranges as ABSOLUTE bounds."""
         center_deg = int(round(self._hsv_window['h'] * 360))
@@ -583,7 +583,7 @@ class HSVColorRowWidget(QWidget):
         v_max = min(100, center_v + int(v_plus_pct))
         self.vMinEdit.setText(str(v_min))
         self.vPlusEdit.setText(str(v_max))
-    
+
     def _update_display(self):
         """Update the color swatch and gradient display."""
         # Update color swatch (block signals to avoid loop)
@@ -597,15 +597,15 @@ class HSVColorRowWidget(QWidget):
             v_pct = int(round(v * 100))
             self.colorSwatch.setHSV(h_deg, s_pct, v_pct)
             self.colorSwatch.blockSignals(False)
-        
+
         # Calculate and update gradient
         min_rgb, mid_rgb, max_rgb = self._calculate_gradient_colors()
         self.gradientWidget.set_colors(min_rgb, mid_rgb, max_rgb)
-    
+
     def set_color(self, color):
         """
         Set the target color and update HSV window.
-        
+
         Args:
             color: QColor or tuple (r, g, b)
         """
@@ -613,12 +613,12 @@ class HSVColorRowWidget(QWidget):
             self.color = QColor(color[0], color[1], color[2])
         else:
             self.color = color
-        
+
         h, s, v, _ = self.color.getHsvF()
         self._hsv_window['h'] = h
         self._hsv_window['s'] = s
         self._hsv_window['v'] = v
-        
+
         # Set default ranges (±50% for S/V, ±20 for H)
         self._hsv_window['h_minus'] = 20/179
         self._hsv_window['h_plus'] = 20/179
@@ -626,19 +626,19 @@ class HSVColorRowWidget(QWidget):
         self._hsv_window['s_plus'] = 50/100
         self._hsv_window['v_minus'] = 50/100
         self._hsv_window['v_plus'] = 50/100
-        
+
         self._update_inputs()
         self._update_display()
         self.changed.emit()
-    
+
     def get_color(self):
         """Get the target color as QColor."""
         return self.color
-    
+
     def get_rgb(self):
         """Get the target color as RGB tuple."""
         return (self.color.red(), self.color.green(), self.color.blue())
-    
+
     def get_hsv_ranges(self):
         """Get the HSV range data."""
         return self._hsv_window.copy()

@@ -62,7 +62,7 @@ class PDFDocTemplate(BaseDocTemplate):
         y_margin = min_margin + footer_space
 
         template = PageTemplate('normal', [Frame(x_margin, y_margin, frame_width, frame_height, id='F1')],
-                               onPage=self.add_footer)
+                                onPage=self.add_footer)
         self.addPageTemplates(template)
 
     def add_footer(self, canvas, doc):
@@ -94,12 +94,12 @@ class PDFDocTemplate(BaseDocTemplate):
         # Early exit for non-Paragraph flowables (most common case)
         if flowable.__class__.__name__ != 'Paragraph':
             return
-        
+
         # Only process Paragraphs with heading styles
         style = getattr(flowable, 'style', None)
         if not style or not hasattr(style, 'name'):
             return
-            
+
         style_name = style.name
         if style_name not in ('Heading2', 'Heading3'):
             return
@@ -145,7 +145,7 @@ class PdfGeneratorService:
         self.story = []
         self.doc = None
         self._initialize_styles()
-        
+
         # Performance optimization: Cache rotated images per image path
         self._rotated_image_cache = {}  # key: (image_path, bearing) -> rotated_img_array
         self._image_service_cache = {}  # key: image_path -> ImageService instance
@@ -225,14 +225,14 @@ class PdfGeneratorService:
 
             # Add TOC after all content is generated
             toc = self._create_toc()
-            
+
             # Find the index of the first PageBreak (which marks the end of the title page)
             # Optimize: use next() with generator for early exit
             first_page_break_idx = next(
                 (i for i, flowable in enumerate(self.story) if isinstance(flowable, PageBreak)),
                 -1
             )
-            
+
             # Optimize list insertion: use list slicing instead of two separate inserts
             # This is more efficient than two O(n) insert operations
             if first_page_break_idx != -1:
@@ -322,7 +322,7 @@ class PdfGeneratorService:
 
     def _count_flagged_aois(self):
         """Count total AOIs to process across all non-hidden images.
-        
+
         Returns:
             int: Total number of AOIs to process
         """
@@ -337,7 +337,7 @@ class PdfGeneratorService:
         """
         Add detailed AOI pages to the report.
         Each flagged AOI gets its own page with zoomed views and metadata.
-        
+
         Args:
             progress_callback: Optional callback function(current, total, message) for progress updates
             cancel_check: Optional function that returns True if operation should be cancelled
@@ -359,7 +359,7 @@ class PdfGeneratorService:
 
             # Get AOIs for this image (already filtered by controller)
             flagged_aois = img.get('areas_of_interest', [])
-            
+
             # Skip if no AOIs (shouldn't happen with controller filtering, but safety check)
             if not flagged_aois:
                 continue
@@ -367,7 +367,7 @@ class PdfGeneratorService:
             # Get image path (use 'path' field which viewer uses for display)
             image_path = img.get('path', '')
             mask_path = img.get('mask_path', '')
-            
+
             # Get original image path for GPS metadata
             original_path = img.get('original_path', image_path) if 'original_path' in img else image_path
 
@@ -398,7 +398,7 @@ class PdfGeneratorService:
 
             # Add image header once per image (not per AOI)
             self.story.append(Paragraph(img['name'], self.h3))
-            
+
             # Add metadata as separate paragraph
             metadata_text = f"GPS Coordinates: {position_str} (camera's position, not ground location) | "
             metadata_text += f"AGL: {agl_str} | Drone Orientation: {orientation_str} | Estimated Average GSD: {gsd_str}"
@@ -496,7 +496,6 @@ class PdfGeneratorService:
 
                 # Page break between AOIs
                 self.story.append(PageBreak())
-
 
     def _initialize_styles(self):
         """Initialize paragraph styles for the document."""
@@ -654,28 +653,28 @@ class PdfGeneratorService:
             # Add legend with white background
             legend_x, legend_y_start = 20, img_height - 120
             cv2.rectangle(map_img, (legend_x - 10, legend_y_start - 10),
-                         (450, img_height - 20), (255, 255, 255), -1)
+                          (450, img_height - 20), (255, 255, 255), -1)
             cv2.rectangle(map_img, (legend_x - 10, legend_y_start - 10),
-                         (450, img_height - 20), (0, 0, 0), 2)
+                          (450, img_height - 20), (0, 0, 0), 2)
 
-            legend_y = legend_y_start +10
+            legend_y = legend_y_start + 10
             cv2.circle(map_img, (legend_x + 20, legend_y), 12, (0, 100, 255), -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 14, (0, 0, 0), 2)
             cv2.putText(map_img, 'Images with flagged AOIs', (legend_x + 44, legend_y + 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
             legend_y += 35
             cv2.circle(map_img, (legend_x + 20, legend_y), 8, (100, 100, 100), -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 10, (255, 255, 255), 2)
             cv2.putText(map_img, 'Images without flagged AOIs', (legend_x + 44, legend_y + 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
             legend_y += 35
             color_bgr = (identifier_color[2], identifier_color[1], identifier_color[0])
             cv2.circle(map_img, (legend_x + 20, legend_y), 8, color_bgr, -1)
             cv2.circle(map_img, (legend_x + 20, legend_y), 10, (0, 0, 0), 2)
             cv2.putText(map_img, 'Flagged AOI locations', (legend_x + 44, legend_y + 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
             # Encode to bytes (reduced quality to 75 for smaller file size - maps don't need high detail)
             _, buffer = cv2.imencode('.jpg', map_img, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -727,16 +726,16 @@ class PdfGeneratorService:
             cache_dir.mkdir(exist_ok=True)
 
             # Download and place tiles in parallel for better performance
-            tile_coords = [(tx, ty) for ty in range(min_tile_y, max_tile_y + 1) 
-                          for tx in range(min_tile_x, max_tile_x + 1)]
-            
+            tile_coords = [(tx, ty) for ty in range(min_tile_y, max_tile_y + 1)
+                           for tx in range(min_tile_x, max_tile_x + 1)]
+
             # Use ThreadPoolExecutor for parallel tile downloads
             with ThreadPoolExecutor(max_workers=8) as executor:
                 future_to_coord = {
                     executor.submit(self._get_tile, tx, ty, zoom, cache_dir): (tx, ty)
                     for tx, ty in tile_coords
                 }
-                
+
                 for future in as_completed(future_to_coord):
                     tx, ty = future_to_coord[future]
                     try:
@@ -874,7 +873,7 @@ class PdfGeneratorService:
             # Fallback to gray tile
             return np.ones((256, 256, 3), dtype=np.uint8) * 230
 
-        except Exception as e:
+        except Exception:
             # Return gray tile on error
             return np.ones((256, 256, 3), dtype=np.uint8) * 230
 
@@ -892,7 +891,7 @@ class PdfGeneratorService:
         try:
             # Get original image path (not mask/thumbnail)
             original_path = img.get('original_path', img['path']) if 'original_path' in img else img['path']
-            
+
             # Create image dict for AOIService
             image_dict = {
                 'path': original_path,
@@ -967,7 +966,7 @@ class PdfGeneratorService:
         # Perform rotation
         rotated = cv2.warpAffine(img_array, rotation_matrix, (new_width, new_height),
                                  borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
-        
+
         # Cache the result if cache_key provided
         if cache_key is not None:
             cache_entry = (cache_key, bearing)
@@ -1078,8 +1077,6 @@ class PdfGeneratorService:
             self.logger.error(f"Error creating zoomed AOI image: {e}")
             return None, None
 
-
-
     def _get_aoi_average_info(self, image, aoi):
         """
         Calculate average color information for an AOI.
@@ -1100,7 +1097,7 @@ class PdfGeneratorService:
                 img_array = self._image_service_cache[cache_key].img_array
 
             aoi_service = AOIService(image, img_array=img_array)
-            
+
             color_result = aoi_service.get_aoi_representative_color(aoi)
             if color_result:
                 # Return hue angle with color square (matching viewer display)

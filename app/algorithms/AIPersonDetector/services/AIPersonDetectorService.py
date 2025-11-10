@@ -14,31 +14,30 @@ OVERLAP = 0.2
 
 
 class AIPersonDetectorService(AlgorithmService):
-    """
-    Service class for detecting people in images using an ONNX object detection model.
-    Processes large images using a sliding window approach, aggregates detections,
-    and identifies areas of interest.
+    """Service class for detecting people in images using an ONNX object detection model.
 
-    Args:
-        identifier (str): Unique identifier for the analysis run.
-        min_area (int): Minimum area for detected objects of interest.
-        max_area (int): Maximum area for detected objects of interest.
-        aoi_radius (int): Radius for defining areas of interest.
-        combine_aois (bool): Whether to combine overlapping AOIs.
-        options (dict): Algorithm-specific options, must include 'person_detector_confidence'.
+    Processes large images using a sliding window approach, aggregates detections,
+    and identifies areas of interest. Supports both CPU and GPU inference.
+
+    Attributes:
+        confidence: Confidence threshold for detections (0.0 to 1.0).
+        cpu_only: Whether to use CPU-only mode.
+        slice_size: Size of image slices for processing.
+        model_img_size: Input size for the ONNX model.
+        model_path: Path to the ONNX model file.
     """
 
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
-        """
-        Initialize the AIPersonDetectorService.
+        """Initialize the AIPersonDetectorService.
 
         Args:
-            identifier (str): Unique identifier for the analysis run.
-            min_area (int): Minimum area for detected objects of interest.
-            max_area (int): Maximum area for detected objects of interest.
-            aoi_radius (int): Radius for defining areas of interest.
-            combine_aois (bool): Whether to combine overlapping AOIs.
-            options (dict): Algorithm-specific options, must include 'person_detector_confidence'.
+            identifier: Unique identifier for the analysis run.
+            min_area: Minimum area for detected objects of interest.
+            max_area: Maximum area for detected objects of interest.
+            aoi_radius: Radius for defining areas of interest.
+            combine_aois: Whether to combine overlapping AOIs.
+            options: Algorithm-specific options, must include
+                'person_detector_confidence' and 'cpu_only'.
         """
         self.logger = LoggerService()
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
@@ -62,20 +61,23 @@ class AIPersonDetectorService(AlgorithmService):
             else:
                 # Not frozen (dev)
                 self.model_path = path.abspath(path.join(path.dirname(__file__), 'best_mixed_logged.onnx'))
-        
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """
-        Process a single image to detect people, aggregate results, and identify areas of interest.
+        """Process a single image to detect people, aggregate results, and identify areas of interest.
+
+        Uses sliding window approach to process large images, runs ONNX model
+        inference on each slice, aggregates detections, and applies NMS to
+        remove duplicates.
 
         Args:
-            img (np.ndarray): Input image (BGR format).
-            full_path (str): Full path to the input image.
-            input_dir (str): Base input directory.
-            output_dir (str): Base output directory.
+            img: Input image (BGR format) as numpy array.
+            full_path: Full path to the input image.
+            input_dir: Base input directory.
+            output_dir: Base output directory.
 
         Returns:
-            AnalysisResult: Result object with details of the analysis.
+            AnalysisResult object with details of the analysis including
+            detected people as areas of interest.
         """
         session = self._create_onnx_session()
         input_name = session.get_inputs()[0].name
@@ -128,29 +130,27 @@ class AIPersonDetectorService(AlgorithmService):
             return AnalysisResult(full_path, error_message=str(e))
 
     def _preprocess_whole_image(self, img):
-        """
-        Convert BGR image to RGB and normalize to [0, 1] float32.
+        """Convert BGR image to RGB and normalize to [0, 1] float32.
 
         Args:
-            img (np.ndarray): Input image in BGR format.
+            img: Input image in BGR format as numpy array.
 
         Returns:
-            np.ndarray: Normalized RGB image as float32.
+            Normalized RGB image as float32 numpy array.
         """
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img_norm = img_rgb.astype(np.float32) / 255.0
         return img_norm
 
     def _preprocess_slice(self, slice_img, out_size=640):
-        """
-        Resize and format image slice for ONNX model input.
+        """Resize and format image slice for ONNX model input.
 
         Args:
-            slice_img (np.ndarray): Image slice (float32, RGB).
-            out_size (int, optional): Size for model input. Defaults to 640.
+            slice_img: Image slice (float32, RGB) as numpy array.
+            out_size: Size for model input. Defaults to 640.
 
         Returns:
-            np.ndarray: Model-ready input tensor (1, 3, out_size, out_size).
+            Model-ready input tensor (1, 3, out_size, out_size) as numpy array.
         """
         img_resized = cv2.resize(slice_img, (out_size, out_size))
         img_transposed = np.transpose(img_resized, (2, 0, 1))
@@ -158,17 +158,16 @@ class AIPersonDetectorService(AlgorithmService):
         return img_input
 
     def _postprocess(self, outputs, slice_rect, crop_w, crop_h):
-        """
-        Convert model outputs to bounding boxes in full image coordinates.
+        """Convert model outputs to bounding boxes in full image coordinates.
 
         Args:
-            outputs (list): Raw model outputs.
-            slice_rect (tuple): Top-left (x, y) of the slice in original image.
-            crop_w (int): Width of slice.
-            crop_h (int): Height of slice.
+            outputs: Raw model outputs from ONNX inference.
+            slice_rect: Top-left (x, y) of the slice in original image.
+            crop_w: Width of slice.
+            crop_h: Height of slice.
 
         Returns:
-            list[tuple]: Bounding boxes as (x1, y1, x2, y2, confidence, class).
+            List of bounding boxes as (x1, y1, x2, y2, confidence, class) tuples.
         """
         preds = outputs[0][0]
         bboxes = []
@@ -186,12 +185,13 @@ class AIPersonDetectorService(AlgorithmService):
         return bboxes
 
     def _create_onnx_session(self):
-        """
-        Create an ONNX Runtime inference session.
-        Tries to use CUDAExecutionProvider; falls back to CPUExecutionProvider if CUDA fails.
+        """Create an ONNX Runtime inference session.
+
+        Tries to use DmlExecutionProvider (DirectML) first; falls back to
+        CPUExecutionProvider if DirectML fails or if cpu_only is True.
 
         Returns:
-            onnxruntime.InferenceSession: Loaded ONNX model session.
+            Loaded ONNX model session (onnxruntime.InferenceSession).
         """
         so = ort.SessionOptions()
         so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
@@ -206,10 +206,10 @@ class AIPersonDetectorService(AlgorithmService):
         providers_cpu_only = ["CPUExecutionProvider"]
         if self.cpu_only:
             return ort.InferenceSession(
-                    self.model_path,
-                    sess_options=so,
-                    providers=providers_cpu_only
-                )
+                self.model_path,
+                sess_options=so,
+                providers=providers_cpu_only
+            )
         try:
             return ort.InferenceSession(
                 self.model_path,

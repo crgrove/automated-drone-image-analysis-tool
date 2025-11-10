@@ -124,4 +124,3 @@ class PDFExportDialog(QDialog):
             bool: True if images without flagged AOIs should be included
         """
         return self.include_images_without_flagged_aois.isChecked()
-

@@ -14,7 +14,7 @@ from core.services.LoggerService import LoggerService
 class TemperatureCacheService:
     """
     Service for in-memory caching of AOI temperature information.
-    
+
     Temperature data is stored in XML files, not JSON. This service only provides
     in-memory storage during processing.
 
@@ -130,7 +130,7 @@ class TemperatureCacheService:
     def get_all_cache_data(self) -> Dict[str, float]:
         """
         Get all cached temperature data for XML export.
-        
+
         Returns:
             Dict of {cache_key: temperature_celsius} for all cached entries
         """

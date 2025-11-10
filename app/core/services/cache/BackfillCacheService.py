@@ -162,8 +162,8 @@ class BackfillCacheService(QObject):
             return False
 
     def _generate_aoi_cache(self, img: np.ndarray, image_path: str, image_data: dict,
-                           areas_of_interest: list, thumbnail_service: ThumbnailCacheService,
-                           color_service: ColorCacheService) -> tuple[int, dict]:
+                            areas_of_interest: list, thumbnail_service: ThumbnailCacheService,
+                            color_service: ColorCacheService) -> tuple[int, dict]:
         """
         Generate thumbnails and color info for all AOIs in an image.
 
@@ -263,7 +263,7 @@ class BackfillCacheService(QObject):
     def _update_xml_with_colors(self, xml_service: XmlService, images: list, color_updates: dict):
         """
         Update XML file with color cache data.
-        
+
         Args:
             xml_service: XML service instance
             images: List of image dictionaries from XML
@@ -271,13 +271,13 @@ class BackfillCacheService(QObject):
         """
         try:
             from xml.etree.ElementTree import ElementTree
-            
+
             root = xml_service.xml.getroot()
             images_xml = root.find('images')
-            
+
             if images_xml is None:
                 return
-            
+
             # Match images by path and update AOI color info
             # Need to handle both absolute and relative paths
             for image_xml in images_xml:
@@ -299,7 +299,7 @@ class BackfillCacheService(QObject):
                             break
                     except Exception:
                         pass
-                
+
                 if matched_path:
                     # Update each AOI with color info
                     aoi_elements = list(image_xml.findall('areas_of_interest'))
@@ -309,11 +309,11 @@ class BackfillCacheService(QObject):
                             aoi_xml.set('color_rgb', str(color_info['rgb']))
                             aoi_xml.set('color_hex', str(color_info['hex']))
                             aoi_xml.set('color_hue', str(color_info['hue_degrees']))
-            
+
             # Save updated XML
             xml_service.save_xml_file(xml_service.xml_path)
             self.logger.info(f"Updated XML with color cache data for {len(color_updates)} images")
-            
+
         except Exception as e:
             self.logger.error(f"Error updating XML with colors: {e}")
 

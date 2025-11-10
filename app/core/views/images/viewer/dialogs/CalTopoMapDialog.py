@@ -6,7 +6,7 @@ of a target map for exporting AOIs.
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-                                QLabel, QListWidget, QListWidgetItem, QLineEdit)
+                               QLabel, QListWidget, QListWidgetItem, QLineEdit)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from datetime import datetime
@@ -103,7 +103,7 @@ class CalTopoMapDialog(QDialog):
 
             # Format map information
             title = map_data.get('title', 'Untitled Map')
-            map_id = map_data.get('id', '')
+            # map_id = map_data.get('id', '')  # Reserved for future use
             modified = map_data.get('modified', '')
 
             # Format modified date if available

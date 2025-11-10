@@ -79,11 +79,11 @@ class AIPersonDetectorController(QWidget, Ui_AIPersonDetector, AlgorithmControll
         """
         if sys.platform == 'darwin':
             self.GPULabel.setText(
-                f'<span style="color:red;">&#x274C; GPU Not Available</span>'
+                '<span style="color:red;">&#x274C; GPU Not Available</span>'
             )
             return
         else:
             self.GPULabel.setText(
-                f'<span style="color:green;">&#x2714; GPU Available</span>'
+                '<span style="color:green;">&#x2714; GPU Available</span>'
             )
             self.cpu_only = False

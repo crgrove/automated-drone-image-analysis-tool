@@ -326,7 +326,7 @@ class AOIFilterDialog(QDialog):
 
         if color.isValid():
             # Convert to HSV and extract hue
-            h, s, v = color.getHsv()[0], color.getHsv()[1], color.getHsv()[2]
+            h = color.getHsv()[0]
             # Qt hue is 0-359 (-1 for achromatic), we want 0-360
             if h == -1:
                 h = 0

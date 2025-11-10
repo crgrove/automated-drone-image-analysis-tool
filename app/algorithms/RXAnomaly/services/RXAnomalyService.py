@@ -10,19 +10,26 @@ from core.services.LoggerService import LoggerService
 
 
 class RXAnomalyService(AlgorithmService):
-    """Service that executes the RX Anomaly algorithm for detecting anomalies in spectral images."""
+    """Service that executes the RX Anomaly algorithm for detecting anomalies in spectral images.
+
+    Uses Reed-Xiaoli (RX) anomaly detection algorithm to identify anomalous
+    pixels based on statistical analysis in CIE LAB color space.
+
+    Attributes:
+        chi_threshold: Chi-squared threshold for anomaly detection.
+        segments: Number of image segments for processing.
+    """
 
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
-        """
-        Initializes the RXAnomalyService with specific parameters for anomaly detection.
+        """Initialize the RXAnomalyService with specific parameters for anomaly detection.
 
         Args:
-            identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
-            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
-            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'sensitivity' and 'segments'.
+            identifier: RGB values for the color to highlight areas of interest.
+            min_area: Minimum area in pixels for an object to qualify as an area of interest.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois: If True, overlapping areas of interest will be combined.
+            options: Additional algorithm-specific options, including 'sensitivity' and 'segments'.
         """
         self.logger = LoggerService()
         super().__init__('RXAnomaly', identifier, min_area, max_area, aoi_radius, combine_aois, options)
@@ -30,17 +37,20 @@ class RXAnomalyService(AlgorithmService):
         self.segments = options['segments']
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """
-        Processes a single image using the RX Anomaly algorithm.
+        """Process a single image using the RX Anomaly algorithm.
+
+        Converts image to CIE LAB color space, splits into segments, applies
+        RX anomaly detection, and identifies areas of interest with confidence scores.
 
         Args:
-            img (numpy.ndarray): The image to be processed.
-            full_path (str): The path to the image being analyzed.
-            input_dir (str): The base input folder.
-            output_dir (str): The base output folder.
+            img: The image to be processed as numpy array.
+            full_path: The path to the image being analyzed.
+            input_dir: The base input folder.
+            output_dir: The base output folder.
 
         Returns:
-            AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
+            AnalysisResult containing the processed image path, list of areas
+            of interest, base contour count, and error message if any.
         """
         try:
             # Convert to CIE LAB color space for more perceptually uniform analysis
@@ -84,28 +94,26 @@ class RXAnomalyService(AlgorithmService):
             return AnalysisResult(full_path, error_message=str(e))
 
     def get_threshold(self, sensitivity):
-        """
-        Calculates the chi-squared threshold based on a sensitivity value.
+        """Calculate the chi-squared threshold based on a sensitivity value.
 
         Args:
-            sensitivity (int): Sensitivity value to convert to chi-squared threshold.
+            sensitivity: Sensitivity value to convert to chi-squared threshold.
 
         Returns:
-            float: The calculated chi-squared threshold.
+            The calculated chi-squared threshold as float.
         """
         return 1 - float("." + ("1".zfill(sensitivity + 5)))
 
     def _add_confidence_scores(self, areas_of_interest, rx_values, mask):
-        """
-        Adds confidence scores to AOIs based on RX anomaly detector values.
+        """Add confidence scores to AOIs based on RX anomaly detector values.
 
         Args:
-            areas_of_interest (list): List of AOI dictionaries
-            rx_values (numpy.ndarray): RX detector values for each pixel
-            mask (numpy.ndarray): Binary detection mask
+            areas_of_interest: List of AOI dictionaries.
+            rx_values: RX detector values for each pixel as numpy array.
+            mask: Binary detection mask as numpy array.
 
         Returns:
-            list: AOIs with added confidence scores
+            List of AOIs with added confidence scores.
         """
         # Get all RX values from detected pixels to find max for normalization
         detected_rx_values = rx_values[mask > 0]

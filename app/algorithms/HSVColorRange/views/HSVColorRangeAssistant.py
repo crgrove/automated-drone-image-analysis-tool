@@ -29,12 +29,27 @@ class SelectionState:
 
 
 class FastImageViewer(QGraphicsView):
-    """Fast image viewer with click-based selection."""
+    """Fast image viewer with click-based selection.
+
+    Interactive image viewer that allows users to select pixels by clicking
+    and automatically expands selection to similar colors. Supports undo/redo
+    and real-time HSV value display.
+
+    Attributes:
+        selectionChanged: Signal emitted when selection changes.
+        cursorHSVChanged: Signal emitted when cursor moves over image.
+            Emits (H, S, V) values.
+    """
 
     selectionChanged = Signal()
     cursorHSVChanged = Signal(int, int, int)  # H degrees, S percent, V percent
 
     def __init__(self, parent=None):
+        """Initialize the fast image viewer.
+
+        Args:
+            parent: Parent widget. Defaults to None.
+        """
         super().__init__(parent)
 
         # Scene setup
@@ -72,7 +87,11 @@ class FastImageViewer(QGraphicsView):
         self.update_custom_cursor()
 
     def update_custom_cursor(self):
-        """Create a circular cursor matching selection radius with center dot."""
+        """Create a circular cursor matching selection radius with center dot.
+
+        Generates a custom cursor that shows the selection radius as a circle
+        with a center dot and crosshair for precise pixel selection.
+        """
         # Calculate actual radius in screen pixels
         zoom = self.transform().m11() if self.transform() else 1.0
         screen_radius = int(self.radius * zoom)
@@ -116,7 +135,14 @@ class FastImageViewer(QGraphicsView):
         self.custom_cursor = QCursor(pixmap, center, center)
 
     def load_image(self, filepath: str) -> bool:
-        """Load an image from file."""
+        """Load an image from file.
+
+        Args:
+            filepath: Path to the image file.
+
+        Returns:
+            True if image loaded successfully, False otherwise.
+        """
         try:
             # Read image
             self.image = cv2.imread(filepath)
@@ -178,7 +204,17 @@ class FastImageViewer(QGraphicsView):
             return False
 
     def keyPressEvent(self, event: QKeyEvent):
-        """Handle keyboard shortcuts."""
+        """Handle keyboard shortcuts.
+
+        Supports:
+        - Ctrl: Enable erase mode
+        - [ / ]: Decrease/increase selection radius
+        - Ctrl+Z: Undo
+        - Ctrl+Shift+Z: Redo
+
+        Args:
+            event: Key press event.
+        """
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = True
             self.update_cursor_display()
@@ -195,14 +231,24 @@ class FastImageViewer(QGraphicsView):
             super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event: QKeyEvent):
-        """Handle key release."""
+        """Handle key release.
+
+        Updates cursor display when Ctrl key is released.
+
+        Args:
+            event: Key release event.
+        """
         if event.key() == Qt.Key_Control:
             self.ctrl_pressed = False
             self.update_cursor_display()
         super().keyReleaseEvent(event)
 
     def update_cursor_display(self):
-        """Update cursor based on current state."""
+        """Update cursor based on current state.
+
+        Shows custom cursor when Ctrl is pressed (erase mode), otherwise
+        shows default arrow cursor.
+        """
         if self.ctrl_pressed:
             self.setCursor(self.custom_cursor if self.custom_cursor else Qt.CrossCursor)
             # Don't change drag mode here - let mouse press handle it
@@ -211,7 +257,14 @@ class FastImageViewer(QGraphicsView):
             # Don't change drag mode here - let mouse press handle it
 
     def get_hsv_at_pos(self, scene_pos: QPointF) -> Optional[Tuple[int, int, int]]:
-        """Get HSV value at position."""
+        """Get HSV value at position.
+
+        Args:
+            scene_pos: Scene position as QPointF.
+
+        Returns:
+            HSV tuple (H, S, V) if position is within image bounds, None otherwise.
+        """
         if self.image_hsv is None:
             return None
 
@@ -224,7 +277,13 @@ class FastImageViewer(QGraphicsView):
         return None
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        """Handle mouse move."""
+        """Handle mouse move.
+
+        Updates HSV text display at cursor position and emits cursorHSVChanged signal.
+
+        Args:
+            event: Mouse move event.
+        """
         scene_pos = self.mapToScene(event.pos())
 
         # Update HSV display
@@ -260,7 +319,14 @@ class FastImageViewer(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent):
-        """Handle mouse press - click to select similar pixels."""
+        """Handle mouse press - click to select similar pixels.
+
+        When Ctrl is pressed, selects or erases pixels based on color similarity.
+        Otherwise enables panning mode.
+
+        Args:
+            event: Mouse press event.
+        """
         if event.button() == Qt.LeftButton:
             if self.ctrl_pressed:
                 pos = self.mapToScene(event.pos())
@@ -332,20 +398,38 @@ class FastImageViewer(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        """Handle mouse release."""
+        """Handle mouse release.
+
+        Resets drag mode after panning.
+
+        Args:
+            event: Mouse release event.
+        """
         if event.button() == Qt.LeftButton:
             # Reset drag mode after panning
             self.setDragMode(QGraphicsView.NoDrag)
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
-        """Double click to fit image."""
+        """Double click to fit image.
+
+        Fits the image to view and updates cursor.
+
+        Args:
+            event: Mouse double click event.
+        """
         if self._photo:
             self.fitInView(self._photo, Qt.KeepAspectRatio)
             self.update_custom_cursor()
 
     def wheelEvent(self, event: QWheelEvent):
-        """Zoom with mouse wheel."""
+        """Zoom with mouse wheel.
+
+        Zooms in/out and updates cursor and HSV text scale.
+
+        Args:
+            event: Wheel event.
+        """
         if self._photo:
             # Scale factor
             scale_factor = 1.15
@@ -372,18 +456,34 @@ class FastImageViewer(QGraphicsView):
                 self.setCursor(self.custom_cursor if self.custom_cursor else Qt.CrossCursor)
 
     def enterEvent(self, event):
-        """Handle mouse enter."""
+        """Handle mouse enter.
+
+        Sets focus to receive keyboard events.
+
+        Args:
+            event: Enter event.
+        """
         super().enterEvent(event)
         self.setFocus()  # Ensure we receive keyboard events
 
     def leaveEvent(self, event):
-        """Handle mouse leave."""
+        """Handle mouse leave.
+
+        Hides HSV text display when mouse leaves the viewer.
+
+        Args:
+            event: Leave event.
+        """
         super().leaveEvent(event)
         if self._hsv_text_item:
             self._hsv_text_item.hide()
 
     def create_overlay(self):
-        """Create or update the selection overlay."""
+        """Create or update the selection overlay.
+
+        Generates a semi-transparent white overlay showing selected pixels
+        on top of the image.
+        """
         if self.image is None:
             return
 
@@ -414,7 +514,11 @@ class FastImageViewer(QGraphicsView):
         self._overlay.setZValue(1)  # Above photo
 
     def set_radius(self, radius):
-        """Set selection radius and update cursor."""
+        """Set selection radius and update cursor.
+
+        Args:
+            radius: Selection radius in pixels.
+        """
         self.radius = radius
         self.update_custom_cursor()
 
@@ -423,11 +527,22 @@ class FastImageViewer(QGraphicsView):
             self.setCursor(self.custom_cursor if self.custom_cursor else Qt.CrossCursor)
 
     def set_tolerance(self, tolerance):
-        """Set color tolerance for similar pixel detection."""
+        """Set color tolerance for similar pixel detection.
+
+        Args:
+            tolerance: Color tolerance value for HSV range expansion.
+        """
         self.tolerance = tolerance
 
     def is_in_image(self, scene_pos: QPointF) -> bool:
-        """Check if position is within image bounds."""
+        """Check if position is within image bounds.
+
+        Args:
+            scene_pos: Scene position as QPointF.
+
+        Returns:
+            True if position is within image bounds, False otherwise.
+        """
         if self.image is None:
             return False
         h, w = self.image.shape[:2]
@@ -435,7 +550,11 @@ class FastImageViewer(QGraphicsView):
         return 0 <= x < w and 0 <= y < h
 
     def save_undo_state(self):
-        """Save current state for undo."""
+        """Save current state for undo.
+
+        Saves a copy of the current selection mask to the undo stack.
+        Limits stack size to 50 states and clears redo stack.
+        """
         if self.selection_mask is not None:
             state = SelectionState(
                 mask=self.selection_mask.copy(),
@@ -449,7 +568,11 @@ class FastImageViewer(QGraphicsView):
             self.redo_stack.clear()
 
     def undo(self):
-        """Undo last action."""
+        """Undo last action.
+
+        Restores the previous selection state from the undo stack and
+        updates the display.
+        """
         if len(self.undo_stack) > 1:
             # Save current to redo
             current = SelectionState(
@@ -468,7 +591,11 @@ class FastImageViewer(QGraphicsView):
             self.selectionChanged.emit()
 
     def redo(self):
-        """Redo last undone action."""
+        """Redo last undone action.
+
+        Restores the next selection state from the redo stack and
+        updates the display.
+        """
         if self.redo_stack:
             # Save current
             self.save_undo_state()
@@ -482,7 +609,11 @@ class FastImageViewer(QGraphicsView):
             self.selectionChanged.emit()
 
     def reset_selection(self):
-        """Clear all selections."""
+        """Clear all selections.
+
+        Clears the selection mask, overlay, and selected HSV ranges.
+        Updates the display and emits selectionChanged signal.
+        """
         if self.selection_mask is not None:
             self.save_undo_state()
             self.selection_mask.fill(False)
@@ -491,18 +622,37 @@ class FastImageViewer(QGraphicsView):
             self.selectionChanged.emit()
 
     def get_selected_pixels_hsv(self) -> Optional[np.ndarray]:
-        """Get HSV values of selected pixels."""
+        """Get HSV values of selected pixels.
+
+        Returns:
+            Numpy array of HSV values for selected pixels, or None if no
+            image is loaded or no pixels are selected.
+        """
         if self.image_hsv is None or not np.any(self.selection_mask):
             return None
         return self.image_hsv[self.selection_mask]
 
 
 class HSVColorRangeAssistant(QDialog):
-    """Main dialog for HSV Color Range Assistant tool."""
+    """Main dialog for HSV Color Range Assistant tool.
+
+    Interactive tool for selecting HSV color ranges by clicking on
+    image pixels. Provides real-time mask preview and range adjustment.
+
+    Attributes:
+        rangeAccepted: Signal emitted when ranges are accepted.
+            Emits dictionary with HSV range parameters.
+        hsv_ranges: Dictionary containing HSV range parameters.
+    """
 
     rangeAccepted = Signal(dict)
 
     def __init__(self, parent=None):
+        """Initialize the HSV Color Range Assistant dialog.
+
+        Args:
+            parent: Parent widget. Defaults to None.
+        """
         super().__init__(parent)
 
         self.setWindowTitle("HSV Color Range Assistant - Click Selection")
@@ -520,7 +670,11 @@ class HSVColorRangeAssistant(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup the user interface."""
+        """Set up the user interface.
+
+        Creates toolbar, image viewer, and mask preview sections.
+        Sets up signal connections for interactive color selection.
+        """
         layout = QVBoxLayout(self)
 
         # Toolbar
@@ -568,7 +722,14 @@ class HSVColorRangeAssistant(QDialog):
         layout.addWidget(buttons)
 
     def create_toolbar(self) -> QWidget:
-        """Create toolbar."""
+        """Create toolbar.
+
+        Creates a toolbar widget with buttons for browsing images,
+        resetting selection, and showing help.
+
+        Returns:
+            QWidget containing the toolbar.
+        """
         toolbar = QWidget()
         layout = QHBoxLayout(toolbar)
 
@@ -679,7 +840,14 @@ class HSVColorRangeAssistant(QDialog):
         return toolbar
 
     def create_right_panel(self) -> QWidget:
-        """Create right panel with info and controls."""
+        """Create right panel with info and controls.
+
+        Creates the right panel containing color preview, HSV range controls,
+        statistics, and mask preview.
+
+        Returns:
+            QWidget containing the right panel.
+        """
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
@@ -999,7 +1167,10 @@ class HSVColorRangeAssistant(QDialog):
         return panel
 
     def browse_image(self):
-        """Browse for image file."""
+        """Browse for image file.
+
+        Opens a file dialog to select an image and loads it into the viewer.
+        """
         filepath, _ = QFileDialog.getOpenFileName(
             self, "Select Image", "",
             "Images (*.png *.jpg *.jpeg *.bmp)"
@@ -1008,23 +1179,42 @@ class HSVColorRangeAssistant(QDialog):
             self.viewer.load_image(filepath)
 
     def reset_selection(self):
-        """Reset selection."""
+        """Reset selection.
+
+        Clears all selections in the viewer and resets displays.
+        """
         self.viewer.reset_selection()
 
     def on_radius_changed(self, value):
-        """Update selection radius."""
+        """Update selection radius.
+
+        Args:
+            value: New selection radius value.
+        """
         self.viewer.set_radius(value)
 
     def on_tolerance_changed(self, value):
-        """Update color tolerance."""
+        """Update color tolerance.
+
+        Args:
+            value: New color tolerance value.
+        """
         self.viewer.set_tolerance(value)
 
     def on_selection_changed(self):
-        """Handle selection change."""
+        """Handle selection change.
+
+        Called when the viewer's selection changes. Updates HSV ranges
+        and displays based on the new selection.
+        """
         self.update_ranges()
 
     def update_ranges(self):
-        """Update HSV ranges from selection."""
+        """Update HSV ranges from selection.
+
+        Calculates HSV center values and ranges from selected pixels,
+        applies buffer values, and updates all displays and preview.
+        """
         pixels = self.viewer.get_selected_pixels_hsv()
 
         if pixels is None or len(pixels) == 0:
@@ -1090,7 +1280,11 @@ class HSVColorRangeAssistant(QDialog):
         self.update_preview()
 
     def reset_displays(self):
-        """Reset all display values to defaults."""
+        """Reset all display values to defaults.
+
+        Resets color preview, labels, and HSV ranges to default/empty state.
+        Hides all warning labels.
+        """
         # Reset color preview to neutral gray
         self.color_preview.setStyleSheet("background-color: #808080; border: 1px solid black;")
         self.hex_label.setText("#000000")
@@ -1123,7 +1317,11 @@ class HSVColorRangeAssistant(QDialog):
             self.v_warning_label.setVisible(False)
 
     def update_displays(self):
-        """Update UI displays."""
+        """Update UI displays.
+
+        Updates color preview, center labels, range labels, and warning
+        labels based on current HSV ranges.
+        """
         if not self.hsv_ranges:
             return
 
@@ -1163,7 +1361,12 @@ class HSVColorRangeAssistant(QDialog):
         self.check_range_warnings()
 
     def update_preview(self):
-        """Update mask preview."""
+        """Update mask preview.
+
+        Generates a grayscale mask preview showing which pixels will be
+        detected with the current HSV ranges. Scales the preview to fit
+        the preview label while maintaining aspect ratio.
+        """
         if self.viewer.image_hsv is None:
             return
 
@@ -1227,7 +1430,11 @@ class HSVColorRangeAssistant(QDialog):
         ))
 
     def check_range_warnings(self):
-        """Check and display warning labels based on range values."""
+        """Check and display warning labels based on range values.
+
+        Shows warning labels when HSV ranges are too wide (e.g., saturation
+        or value lower bounds below 25%), which may result in false positives.
+        """
         # Check Saturation warning - if lower bound is in the bottom 25% (< 64 out of 255)
         s_center = self.hsv_ranges.get('s_center', 0)
         s_minus = self.hsv_ranges.get('s_minus', 0)
@@ -1255,13 +1462,19 @@ class HSVColorRangeAssistant(QDialog):
         self.h_warning_label.setVisible(h_range > 30)
 
     def show_help(self):
-        """Show help dialog with instructions."""
+        """Show help dialog with instructions.
+
+        Displays a comprehensive help dialog explaining how to use the
+        HSV Color Range Assistant tool, including navigation, selection,
+        and range adjustment instructions.
+        """
         from PySide6.QtWidgets import QMessageBox
 
         help_text = """
 <h2>HSV Color Range Assistant - Help</h2>
 
-<p>This tool helps you pick the HSV color range of a specific color in a photo. Click on the BROWSE button to open an image.</p>
+<p>This tool helps you pick the HSV color range of a specific color in a photo.
+Click on the BROWSE button to open an image.</p>
 
 <h3>Navigation:</h3>
 <p>• Use the mouse scroll wheel to zoom in/out of the image<br>
@@ -1293,7 +1506,11 @@ class HSVColorRangeAssistant(QDialog):
         msg.exec()
 
     def accept(self):
-        """Accept and emit ranges."""
+        """Accept and emit ranges.
+
+        Overrides QDialog.accept() to emit the rangeAccepted signal with
+        the current HSV ranges before closing the dialog.
+        """
         # Convert ranges to normalized format expected by HSV picker
         normalized_ranges = {
             'h_center': self.hsv_ranges['h_center'],  # Keep in OpenCV scale

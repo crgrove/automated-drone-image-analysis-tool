@@ -14,14 +14,14 @@ from PySide6.QtWidgets import QDialog
 class BearingRecoveryController:
     """
     Controller for managing bearing recovery operations.
-    
+
     Handles checking for missing bearings and orchestrating the recovery dialog.
     """
 
     def __init__(self, parent_viewer):
         """
         Initialize the bearing recovery controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -31,7 +31,7 @@ class BearingRecoveryController:
     def check_and_recover_bearings(self, images, xml_service, xml_path):
         """
         Check if images are missing bearings and offer recovery options.
-        
+
         Args:
             images: List of image dictionaries
             xml_service: XmlService instance for updating bearings
@@ -107,6 +107,5 @@ class BearingRecoveryController:
                     return updated_count
         else:
             self.logger.info("All images have bearing information")
-        
-        return 0
 
+        return 0

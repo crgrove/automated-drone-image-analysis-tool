@@ -1,75 +1,71 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
+from typing import List, Dict, Any, Optional
+from helpers.MetaDataHelper import MetaDataHelper
+from helpers.LocationInfo import LocationInfo
+from core.services.cache.CachePathService import CachePathService
+from core.services.cache.BackfillCacheService import BackfillCacheService
+from core.services.SettingsService import SettingsService
+from core.services.thermal.ThermalParserService import ThermalParserService
+from core.services.image.ImageService import ImageService
+from core.services.XmlService import XmlService
+from core.services.LoggerService import LoggerService
+from core.controllers.images.viewer.GPSMapController import GPSMapController
+from core.controllers.images.viewer.status.StatusController import StatusController
+from core.controllers.images.viewer.CoordinateController import CoordinateController
+from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
+from core.controllers.images.viewer.path.PathValidationController import PathValidationController
+from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
+from core.controllers.images.viewer.gallery.GalleryController import GalleryController
+from core.controllers.images.viewer.aoi.AOIController import AOIController
+from core.controllers.images.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
+from core.controllers.images.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
+from core.controllers.images.viewer.exports.CalTopoExportController import CalTopoExportController
+from core.controllers.images.viewer.exports.ZipExportController import ZipExportController
+from core.controllers.images.viewer.exports.PDFExportController import PDFExportController
+from core.controllers.images.viewer.AltitudeController import AltitudeController
+from core.controllers.images.viewer.image.ImageLoadController import ImageLoadController
+from core.controllers.images.viewer.PixelInfoController import PixelInfoController
+from core.controllers.images.viewer.ThermalDataController import ThermalDataController
+from core.controllers.images.viewer.UIStyleController import UIStyleController
+from core.views.images.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
+from core.views.images.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
+from core.views.images.viewer.dialogs.HelpDialog import HelpDialog
+from core.views.images.viewer.dialogs.UpscaleDialog import UpscaleDialog
+from core.views.images.viewer.widgets.OverlayWidget import OverlayWidget
+from core.controllers.images.viewer.MagnifyingGlass import MagnifyingGlass
+from core.views.images.viewer.dialogs.MeasureDialog import MeasureDialog
+from core.views.images.viewer.dialogs.LoadingDialog import LoadingDialog
+from core.views.images.viewer.widgets.ScaleBarWidget import ScaleBarWidget
+from core.views.images.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
+from core.controllers.images.viewer.status.StatusDict import StatusDict
+from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
+from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
+from core.views.components.Toggle import Toggle
+from PySide6.QtWidgets import (
+    QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication, QLabel,
+    QHBoxLayout, QWidget, QProgressDialog
+)
+from PySide6.QtCore import (
+    Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
+)
+from PySide6.QtGui import (
+    QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen,
+    QPalette, QColor, QDesktopServices, QBrush, QCursor
+)
+from urllib.parse import quote_plus
+from pathlib import Path
+import qtawesome as qta
+import cv2
+import tempfile
+import numpy as np
+import colorsys
+import re
+import math
+import traceback
+from PIL import UnidentifiedImageError
+import qimage2ndarray
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
-
-import qimage2ndarray
-from PIL import UnidentifiedImageError
-import traceback
-import math
-import re
-import colorsys
-import numpy as np
-import tempfile
-import cv2
-import qtawesome as qta
-
-from pathlib import Path
-from urllib.parse import quote_plus
-
-from PySide6.QtGui import QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen, QPalette, QColor, QDesktopServices, QBrush, QCursor
-from PySide6.QtCore import Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
-from PySide6.QtWidgets import QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication
-from PySide6.QtWidgets import QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QAbstractButton, QMenu, QInputDialog, QStackedWidget, QProgressDialog, QSplitter
-
-from core.views.components.Toggle import Toggle
-from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
-from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
-
-from core.controllers.images.viewer.status.StatusDict import StatusDict
-
-from core.views.images.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
-from core.views.images.viewer.widgets.ScaleBarWidget import ScaleBarWidget
-from core.views.images.viewer.dialogs.LoadingDialog import LoadingDialog
-from core.views.images.viewer.dialogs.MeasureDialog import MeasureDialog
-from core.controllers.images.viewer.MagnifyingGlass import MagnifyingGlass
-from core.views.images.viewer.widgets.OverlayWidget import OverlayWidget
-from core.views.images.viewer.dialogs.UpscaleDialog import UpscaleDialog
-from core.views.images.viewer.dialogs.HelpDialog import HelpDialog
-from core.views.images.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
-from core.views.images.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
-
-from core.controllers.images.viewer.UIStyleController import UIStyleController
-from core.controllers.images.viewer.ThermalDataController import ThermalDataController
-from core.controllers.images.viewer.PixelInfoController import PixelInfoController
-from core.controllers.images.viewer.image.ImageLoadController import ImageLoadController
-from core.controllers.images.viewer.AltitudeController import AltitudeController
-
-from core.controllers.images.viewer.exports.PDFExportController import PDFExportController
-from core.controllers.images.viewer.exports.ZipExportController import ZipExportController
-from core.controllers.images.viewer.exports.CalTopoExportController import CalTopoExportController
-from core.controllers.images.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
-from core.controllers.images.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
-
-from core.controllers.images.viewer.aoi.AOIController import AOIController
-from core.controllers.images.viewer.gallery.GalleryController import GalleryController
-from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
-from core.controllers.images.viewer.path.PathValidationController import PathValidationController
-from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
-from core.controllers.images.viewer.CoordinateController import CoordinateController
-from core.controllers.images.viewer.status.StatusController import StatusController
-from core.controllers.images.viewer.GPSMapController import GPSMapController
-
-from core.services.LoggerService import LoggerService
-from core.services.XmlService import XmlService
-from core.services.image.ImageService import ImageService
-from core.services.thermal.ThermalParserService import ThermalParserService
-from core.services.SettingsService import SettingsService
-from core.services.cache.BackfillCacheService import BackfillCacheService
-from core.services.cache.CachePathService import CachePathService
-from helpers.LocationInfo import LocationInfo
-from helpers.MetaDataHelper import MetaDataHelper
-
-from typing import List, Dict, Any, Optional
 
 
 class Viewer(QMainWindow, Ui_Viewer):
@@ -98,7 +94,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
         self._add_Toggles()
-        #self._adjust_ui_sizing()
+        # self._adjust_ui_sizing()
         # ---------------- settings / data ----------------
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
@@ -112,9 +108,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Validate and fix paths if needed
         if not self.path_validation_controller.validate_and_fix_paths(self.images):
             # User cancelled folder selection - show error and close viewer
-            QMessageBox.critical(self, "Load Results Failed",
-                                "Cannot load results without valid image and mask locations.\n\n"
-                                "The viewer will now close.")
+            QMessageBox.critical(
+                self, "Load Results Failed",
+                "Cannot load results without valid image and mask locations.\n\n"
+                "The viewer will now close."
+            )
             QTimer.singleShot(0, self.close)  # Close after __init__ completes
             return
 
@@ -139,13 +137,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.coordinate_controller = CoordinateController(self)
         self.status_controller = StatusController(self)
         self.gps_map_controller = GPSMapController(self)
-        
+
         self.ui_style_controller = UIStyleController(self, theme)
         self.thermal_controller = ThermalDataController(self)
         self.pixel_info_controller = PixelInfoController(self)
         self.image_load_controller = ImageLoadController(self)
         self.altitude_controller = AltitudeController(self)
-        
+
         # Initialize services
         self.cache_path_service = CachePathService()
 
@@ -177,11 +175,14 @@ class Viewer(QMainWindow, Ui_Viewer):
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Gimbal Orientation", "Estimated Average GSD",
                                               "Temperature", "Color Values"])
-        
+
         # Apply icons
         self._apply_icons()
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
-        self.statusBar.setToolTip("Image metadata and information.\nClick on GPS Coordinates to copy, share, or open in mapping applications.")
+        self.statusBar.setToolTip(
+            "Image metadata and information.\n"
+            "Click on GPS Coordinates to copy, share, or open in mapping applications."
+        )
 
         # toast (non intrusive) over statusBarWidget
         self._toastLabel = QLabel(self.statusBarWidget)
@@ -366,7 +367,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Delegate to GalleryController
         gallery_widget = getattr(self, 'gallery_widget', None)
         self.gallery_controller.on_splitter_moved(pos, index, self.image_gallery_splitter, gallery_widget)
-        
+
         # Resize main image and reposition overlay when splitter moves
         self._resize_main_image_and_reposition_overlay()
 
@@ -448,8 +449,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.cache_progress_dialog.canceled.connect(self.backfill_service.cancel)
 
             # Start cache generation in background thread
-            from PySide6.QtCore import QThread
-
             self.cache_thread = QThread()
             self.backfill_service.moveToThread(self.cache_thread)
 
@@ -536,7 +535,7 @@ class Viewer(QMainWindow, Ui_Viewer):
     def showEvent(self, event):
         """Handle the show event - widget is now visible."""
         super().showEvent(event)
-        
+
         # Initial fit image on first show
         if not hasattr(self, '_initialized_once'):
             self._initial_fit_image()
@@ -554,7 +553,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Ensure the widget has been resized by Qt
             # The splitterMoved signal is emitted after sizes are set, so widget should be resized
             self.main_image.updateGeometry()
-            
+
             # Reset zoom to fit the image to the new viewport dimensions
             if self.main_image.hasImage():
                 # Check if widget has valid size before resetting
@@ -567,7 +566,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                         self.main_image._emit_zoom_if_changed()
             else:
                 self.main_image.updateViewer()
-            
+
             # Reposition the overlay after image resize
             if hasattr(self, 'overlay'):
                 self.overlay._place_overlay()
@@ -577,10 +576,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         super().resizeEvent(event)
         # If gallery widget exists and is visible (in gallery mode), update its geometry
         if (hasattr(self, 'gallery_widget') and self.gallery_widget and
-            hasattr(self, 'gallery_mode') and self.gallery_mode):
+                hasattr(self, 'gallery_mode') and self.gallery_mode):
             # Delegate to GalleryController
             self.gallery_controller.update_gallery_geometry(self.gallery_widget)
-        
+
         # Handle main image resizing (original functionality)
         if self.main_image is not None and not self.main_image._is_destroyed:
             if event.oldSize() != event.size():
@@ -664,7 +663,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                     pass  # Not a valid image
         self.images = valid_images
 
-
     def _setupViewer(self):
         if len(self.images) == 0:
             self._show_no_images_message()
@@ -688,7 +686,6 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             self.aoiSortComboBox.currentTextChanged.connect(self.aoi_controller.on_sort_combo_changed)
             self.filterButton.clicked.connect(self.aoi_controller.open_filter_dialog)
-        
 
             # Set the buttons in the AOI controller
 
@@ -706,26 +703,26 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.ui_style_controller.update_measure_button_style()
             self.ui_style_controller.update_gps_map_button_style()
             self.ui_style_controller.update_rotate_image_button_style()
-            
+
             # Connect the POIs button
             if hasattr(self, 'showPOIsButton'):
                 self.showPOIsButton.clicked.connect(self._on_show_pois_clicked)
                 self.showPOIsButton.setToolTip("Show Pixels of Interest (H or Ctrl+I)")
                 # Initialize button styling
                 self._update_show_pois_button_style()
-            
+
             # Connect the AOIs button
             if hasattr(self, 'showAOIsButton'):
                 self.showAOIsButton.clicked.connect(self._on_show_aois_clicked)
                 self.showAOIsButton.setToolTip("Toggle AOI Circles (C)")
                 # Initialize button styling
                 self._update_show_aois_button_style()
-            
+
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
 
-                    # Session variable to store GSD value
+            # Session variable to store GSD value
             self.current_gsd = None
             self.measure_dialog = None
             self.help_dialog = None
@@ -735,7 +732,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.measure_dialog_open = False
             self.gps_map_open = False
             self.rotate_image_open = False
-
 
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
@@ -772,7 +768,7 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
-            
+
             # Connect signals
             self.main_image.zoomChanged.connect(self._update_scale_bar)
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
@@ -1027,7 +1023,6 @@ class Viewer(QMainWindow, Ui_Viewer):
             height = qimage.height()
 
             # Convert to numpy array
-            import qimage2ndarray
             full_image_array = qimage2ndarray.rgb_view(qimage)
 
             # Crop to visible portion (convert scene coords to image coords)
@@ -1058,7 +1053,6 @@ class Viewer(QMainWindow, Ui_Viewer):
                 "Please install it using: pip install qimage2ndarray"
             )
         except Exception as e:
-            import traceback
             print(f"Error opening upscale dialog: {e}")
             print(traceback.format_exc())
             QMessageBox.warning(
@@ -1115,7 +1109,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Handles clicks on the Generate Zip Bundle."""
         if hasattr(self, 'zip_export'):
             self.zip_export.export_zip(self.images)
-
 
     def _export_coverage_extent_kml(self):
         """Handles the export of coverage extent KML file for all images."""
@@ -1232,14 +1225,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.measure_dialog is None or not self.measure_dialog.isVisible():
             self.measure_dialog = MeasureDialog(self, self.main_image, self.current_gsd, self.distance_unit)
             self.measure_dialog.gsdChanged.connect(self._on_gsd_changed)
-            
+
             # Connect to dialog close event to update button state
             self.measure_dialog.finished.connect(self._on_measure_dialog_closed)
-            
+
             # Update button state to show dialog is open
             self.measure_dialog_open = True
             self.ui_style_controller.update_measure_button_style()
-            
+
             self.measure_dialog.show()
 
     def _on_gsd_changed(self, gsd_value):
@@ -1264,7 +1257,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Prompt user to manually override altitude for all images."""
         # Delegate to AltitudeController
         self.altitude_controller.manual_altitude_override()
-
 
     def _enter_aoi_creation_mode(self):
         """Enter AOI creation mode - user can click and drag to draw a circle."""
@@ -1319,7 +1311,6 @@ class Viewer(QMainWindow, Ui_Viewer):
         # For now, just log it
         self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
 
-
     def _apply_icons(self):
         """Apply themed icons to all buttons in the viewer."""
         from helpers.IconHelper import IconHelper
@@ -1349,11 +1340,11 @@ class Viewer(QMainWindow, Ui_Viewer):
                 # Get mouse position in scene coordinates
                 view_pos = ev.pos()
                 scene_pos = self.main_image.mapToScene(view_pos)
-                
+
                 if self.main_image.hasImage():
                     # Toggle magnifying glass at the clicked position
                     self._toggle_magnifying_glass(scene_pos.x(), scene_pos.y())
                     return True  # Event handled
-        
+
         # Overlay positioning is now handled automatically by the overlay widget
         return super().eventFilter(obj, ev)

@@ -19,21 +19,35 @@ from core.services.image.AOIService import AOIService
 
 
 class AlgorithmService:
-    """Base class for algorithm services that provides methods for processing images."""
+    """Base class for algorithm services that provides methods for processing images.
+
+    Provides common functionality for image processing algorithms including
+    coordinate transformation, area of interest identification, and caching.
+
+    Attributes:
+        name: Name of the algorithm.
+        identifier_color: RGB tuple for highlighting areas of interest.
+        min_area: Minimum area in pixels for an object to qualify as an AOI.
+        max_area: Maximum area in pixels for an object to qualify as an AOI.
+        aoi_radius: Radius added to the minimum enclosing circle around an AOI.
+        combine_aois: If True, overlapping areas of interest will be combined.
+        options: Dictionary of algorithm-specific options.
+        is_thermal: Whether this is a thermal image algorithm.
+        scale_factor: Scale factor for coordinate transformation.
+    """
 
     def __init__(self, name, identifier_color, min_area, max_area, aoi_radius, combine_aois, options, is_thermal=False):
-        """
-        Initializes the AlgorithmService with the necessary parameters.
+        """Initialize the AlgorithmService with the necessary parameters.
 
         Args:
-            name (str): The name of the algorithm to be used for analysis.
-            identifier_color (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
-            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
-            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options.
-            is_thermal (bool, optional): Indicates if this is a thermal image algorithm. Defaults to False.
+            name: The name of the algorithm to be used for analysis.
+            identifier_color: RGB values for the color to highlight areas of interest.
+            min_area: Minimum area in pixels for an object to qualify as an area of interest.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois: If True, overlapping areas of interest will be combined.
+            options: Additional algorithm-specific options.
+            is_thermal: Indicates if this is a thermal image algorithm. Defaults to False.
         """
         self.name = name
         self.identifier_color = identifier_color
@@ -46,24 +60,22 @@ class AlgorithmService:
         self.scale_factor = 1.0  # Default: no scaling
 
     def set_scale_factor(self, scale_factor):
-        """
-        Sets the scale factor for coordinate transformation from processing to original resolution.
+        """Set the scale factor for coordinate transformation from processing to original resolution.
 
         Args:
-            scale_factor (float): The scale factor used when downscaling the image for processing.
+            scale_factor: The scale factor used when downscaling the image for processing.
         """
         self.scale_factor = scale_factor
 
     def transform_to_original_coords(self, x, y):
-        """
-        Transforms coordinates from processing resolution back to original resolution.
+        """Transform coordinates from processing resolution back to original resolution.
 
         Args:
-            x (float): X coordinate in processing resolution.
-            y (float): Y coordinate in processing resolution.
+            x: X coordinate in processing resolution.
+            y: Y coordinate in processing resolution.
 
         Returns:
-            tuple[int, int]: (x, y) coordinates in original resolution.
+            Tuple of (x, y) coordinates in original resolution as integers.
         """
         if self.scale_factor == 1.0:
             return int(x), int(y)
@@ -71,14 +83,13 @@ class AlgorithmService:
         return int(x * inverse_scale), int(y * inverse_scale)
 
     def transform_contour_to_original(self, contour):
-        """
-        Transforms a contour from processing resolution back to original resolution.
+        """Transform a contour from processing resolution back to original resolution.
 
         Args:
-            contour (numpy.ndarray): Contour in processing resolution.
+            contour: Contour in processing resolution as numpy array.
 
         Returns:
-            numpy.ndarray: Contour scaled to original resolution.
+            Contour scaled to original resolution as numpy array of int32.
         """
         if self.scale_factor == 1.0:
             return contour
@@ -86,37 +97,47 @@ class AlgorithmService:
         return (contour * inverse_scale).astype(np.int32)
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """
-        Processes a single image file using the algorithm.
+        """Process a single image file using the algorithm.
+
+        Must be implemented by subclasses to perform algorithm-specific processing.
 
         Args:
-            img (numpy.ndarray): The image to be processed.
-            full_path (str): The path to the image being analyzed.
-            input_dir (str): The base input directory.
-            output_dir (str): The base output directory.
+            img: The image to be processed as numpy array.
+            full_path: The path to the image being analyzed.
+            input_dir: The base input directory.
+            output_dir: The base output directory.
 
         Returns:
-            tuple: A tuple containing:
-                - numpy.ndarray: Processed image.
-                - list: List of areas of interest.
+            AnalysisResult containing processed image path, areas of interest,
+            and error message if any.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
         """
         raise NotImplementedError
 
     def collect_pixels_of_interest(self, mask):
+        """Collect pixel coordinates from a binary mask.
+
+        Args:
+            mask: Binary mask where non-zero pixels are of interest.
+
+        Returns:
+            Array of (x, y) coordinates of pixels where mask > 0.
+        """
         coords = np.argwhere(mask > 0)
         return coords[:, [1, 0]]
 
     def identify_areas_of_interest(self, img_or_shape, contours):
-        """
-        Calculates areas of interest from contours without modifying the input image.
+        """Calculate areas of interest from contours without modifying the input image.
 
         Args:
-            img_or_shape (numpy.ndarray | tuple | list): The image array or its shape (H, W, [C]).
-            contours (list): List of contours.
+            img_or_shape: The image array or its shape (H, W, [C]).
+            contours: List of contours from cv2.findContours.
 
         Returns:
-            tuple: (areas_of_interest, base_contour_count)
-                - areas_of_interest (list): Final list of AOI dictionaries with structure:
+            Tuple of (areas_of_interest, base_contour_count) where:
+                - areas_of_interest: List of AOI dictionaries with structure:
                     {
                         'center': (x, y),              # Tuple of pixel coordinates
                         'radius': int,                  # Radius in pixels
@@ -128,7 +149,7 @@ class AlgorithmService:
                         'raw_score': float (optional),  # Algorithm-specific raw value
                         'score_method': str (optional)  # 'mean', 'max', 'median'
                     }
-                - base_contour_count (int): Count of original valid contours before combining.
+                - base_contour_count: Count of original valid contours before combining.
         """
         if len(contours) == 0:
             return None, None
@@ -261,18 +282,25 @@ class AlgorithmService:
 
         return areas_of_interest, base_contour_count
 
-    def generate_aoi_cache(self, img: np.ndarray, image_path: str, areas_of_interest: list, output_dir: str, thermal: bool = False) -> None:
-        """
-        Generate and cache thumbnails and color information for all AOIs.
+    def generate_aoi_cache(
+        self,
+        img: np.ndarray,
+        image_path: str,
+        areas_of_interest: list,
+        output_dir: str,
+        thermal: bool = False
+    ) -> None:
+        """Generate and cache thumbnails and color information for all AOIs.
 
-        Called after process_image() while the image is still in memory, allowing for efficient
-        thumbnail extraction without reloading the image from disk.
+        Called after process_image() while the image is still in memory, allowing
+        for efficient thumbnail extraction without reloading the image from disk.
 
         Args:
-            img: The image array (already in memory from detection)
-            image_path: Path to the source image file
-            areas_of_interest: List of AOI dictionaries from detection
-            output_dir: Output directory where cache folders will be created
+            img: The image array (already in memory from detection).
+            image_path: Path to the source image file.
+            areas_of_interest: List of AOI dictionaries from detection.
+            output_dir: Output directory where cache folders will be created.
+            thermal: Whether this is a thermal image. Defaults to False.
         """
         try:
             if not areas_of_interest:
@@ -293,7 +321,7 @@ class AlgorithmService:
                 'path': image_path,
                 'is_thermal': self.is_thermal
             }
-            
+
             aoi_service = AOIService(image_data)
 
             # Process each AOI
@@ -370,16 +398,15 @@ class AlgorithmService:
             print(f"Error generating AOI cache: {e}")
 
     def _construct_output_path(self, full_path, input_dir, output_dir):
-        """
-        Properly constructs an output path by replacing the input directory with the output directory.
+        """Construct an output path by replacing the input directory with the output directory.
 
         Args:
-            full_path (str): Full path to the input file
-            input_dir (str): Input directory path
-            output_dir (str): Output directory path
+            full_path: Full path to the input file.
+            input_dir: Input directory path.
+            output_dir: Output directory path.
 
         Returns:
-            str: Properly constructed output path
+            Properly constructed output path as string.
         """
         # Convert all paths to Path objects for proper handling
         full_path_obj = Path(full_path)
@@ -399,14 +426,17 @@ class AlgorithmService:
         return str(output_path)
 
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
-        """
-        Saves the detection mask as a TIFF file with temperature data embedded as additional bands.
+        """Save the detection mask as a TIFF file with temperature data embedded as additional bands.
 
         Args:
-            input_file (str): Path to the input image file.
-            output_file (str): Path to save the mask (will be saved as .tif extension).
-            mask (np.ndarray): Binary mask of detected pixels (0 or 255).
-            temperature_data (np.ndarray or list, optional): Temperature matrix to store as additional bands.
+            input_file: Path to the input image file.
+            output_file: Path to save the mask (will be saved as .tif extension).
+            mask: Binary mask of detected pixels (0 or 255) as numpy array.
+            temperature_data: Temperature matrix to store as additional bands.
+                Optional, can be numpy array or list.
+
+        Returns:
+            Path to the saved mask file as string.
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -477,16 +507,16 @@ class AlgorithmService:
         return str(mask_file)
 
     def split_image(self, img, segments, overlap=0):
-        """
-        Splits an image into a grid of segments with optional overlap.
+        """Split an image into a grid of segments with optional overlap.
 
         Args:
-            img (numpy.ndarray): The image to be divided.
-            segments (int): Number of segments in the grid.
-            overlap (int or float): Overlap between segments in pixels or as a percentage (0-1).
+            img: The image to be divided as numpy array.
+            segments: Number of segments in the grid.
+            overlap: Overlap between segments in pixels or as a percentage (0-1).
+                Defaults to 0.
 
         Returns:
-            list: A 2D list of numpy.ndarrays representing the segments.
+            A 2D list of numpy arrays representing the segments.
         """
         rows, cols = self._get_rows_cols_from_segments(segments)
         if len(img.shape) == 2:  # Grayscale image
@@ -517,27 +547,25 @@ class AlgorithmService:
         return pieces
 
     def glue_image(self, pieces):
-        """
-        Combines the segments of an image into a single image.
+        """Combine the segments of an image into a single image.
 
         Args:
-            pieces (list): A list of lists containing numpy.ndarrays representing the segments of the image.
+            pieces: A list of lists containing numpy arrays representing the segments.
 
         Returns:
-            numpy.ndarray: The combined image.
+            The combined image as a numpy array.
         """
         rows = [cv2.hconcat(row) for row in pieces]
         return cv2.vconcat(rows)
 
     def _get_rows_cols_from_segments(self, segments):
-        """
-        Get the number of rows and columns for a number of segments
+        """Get the number of rows and columns for a number of segments.
 
         Args:
-            segments (int): The number of segments in which to divide the image.
+            segments: The number of segments in which to divide the image.
 
         Returns:
-            int, int: The number of rows and columns.
+            Tuple of (rows, columns) as integers.
         """
         if segments == 2:
             return 1, 2
@@ -548,20 +576,27 @@ class AlgorithmService:
 
 
 class AnalysisResult:
-    """Class representing the result of an image processing operation."""
+    """Class representing the result of an image processing operation.
+
+    Attributes:
+        input_path: Path to the input image.
+        output_path: Path to the output image (relative to output_dir).
+        areas_of_interest: List of detected areas of interest.
+        base_contour_count: Count of base contours before combining.
+        error_message: Error message if processing failed.
+    """
 
     def __init__(self, input_path=None, output_path=None, output_dir=None,
                  areas_of_interest=None, base_contour_count=None, error_message=None):
-        """
-        Initializes an AnalysisResult with the given parameters.
+        """Initialize an AnalysisResult with the given parameters.
 
         Args:
-            input_path (str, optional): Path to the input image. Defaults to None.
-            output_path (str, optional): Path to the output image. Defaults to None.
-            output_dir (str, optional): Path to the output directory. Defaults to None.
-            areas_of_interest (list, optional): List of detected areas of interest. Defaults to None.
-            base_contour_count (int, optional): Count of base contours. Defaults to None.
-            error_message (str, optional): Error message if processing failed. Defaults to None.
+            input_path: Path to the input image. Defaults to None.
+            output_path: Path to the output image. Defaults to None.
+            output_dir: Path to the output directory. Defaults to None.
+            areas_of_interest: List of detected areas of interest. Defaults to None.
+            base_contour_count: Count of base contours. Defaults to None.
+            error_message: Error message if processing failed. Defaults to None.
         """
         self.input_path = input_path
 

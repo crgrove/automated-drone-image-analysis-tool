@@ -29,7 +29,13 @@ class BearingCalculationWorker(QThread):
     progress = Signal(int, int, str)
     cancelled = Signal()
 
-    def __init__(self, service: BearingCalculationService, mode: str, images: List[Dict[str, Any]], track_file: Optional[str] = None):
+    def __init__(
+        self,
+        service: BearingCalculationService,
+        mode: str,
+        images: List[Dict[str, Any]],
+        track_file: Optional[str] = None
+    ):
         super().__init__()
         self.service = service
         self.mode = mode

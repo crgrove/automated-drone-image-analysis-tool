@@ -80,12 +80,12 @@ class CoverageExtentGenerationThread(QThread):
                         "Generating KML file..."
                     )
                     self.kml_service.generate_coverage_extent_kml(coverage_data, self.output_path)
-                    
+
                 if not self._is_canceled:
                     self.finished.emit(coverage_data)
                 else:
                     self.canceled.emit()
-                    
+
         except Exception as e:
             self.errorOccurred.emit(str(e))
 
@@ -97,10 +97,11 @@ class CoverageExtentGenerationThread(QThread):
         """
         self._is_canceled = True
 
+
 class CoverageExtentExportController:
     """
     Controller for exporting coverage extent KML files.
-    
+
     Handles generation of KML files showing the geographic coverage extent
     of all images, with merged polygons for overlapping areas.
     """
@@ -108,7 +109,7 @@ class CoverageExtentExportController:
     def __init__(self, parent_viewer, logger=None):
         """
         Initialize the coverage extent export controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
             logger: Optional LoggerService instance
@@ -158,7 +159,7 @@ class CoverageExtentExportController:
             custom_alt = None
             if hasattr(self.parent, 'altitude_controller'):
                 custom_alt = self.parent.altitude_controller.get_effective_altitude()
-                       
+
             coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
             kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
 
@@ -287,10 +288,10 @@ class CoverageExtentExportController:
         skip_info = ""
         if coverage_data['skipped_count'] > 0:
             skip_info = (
-                f"\n\nImages may be skipped for:\n"
-                f"  • Missing GPS data\n"
-                f"  • No valid GSD\n"
-                f"  • Gimbal not nadir"
+                "\n\nImages may be skipped for:\n"
+                "  • Missing GPS data\n"
+                "  • No valid GSD\n"
+                "  • Gimbal not nadir"
             )
 
         QMessageBox.information(
@@ -303,4 +304,3 @@ class CoverageExtentExportController:
             f"Coverage areas: {num_polygons}\n"
             f"Total area: {area_display}{skip_info}"
         )
-

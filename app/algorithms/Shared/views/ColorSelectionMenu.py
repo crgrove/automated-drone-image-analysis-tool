@@ -14,7 +14,7 @@ class ColorSelectionMenu:
     Provides options based on mode:
       - 'RGB': Shows "From Color Picker" (RGB), "From Image", "From List"
       - 'HSV': Shows "From HSV Picker", "From Image", "From List"
-    
+
     Always available:
       - From Image (Eyedropper) using ColorPickerDialog
       - From List (Predefined colors)
@@ -53,7 +53,7 @@ class ColorSelectionMenu:
         elif self.mode == 'RGB':
             # RGB mode: show RGB color picker at the top
             self._menu.addAction("From Color Picker", self._select_from_qt_color_dialog)
-        
+
         # Always show these options (after the mode-specific picker)
         self._menu.addAction("From Image", self._select_from_image_dialog)
         self._menu.addAction("From List", self._select_from_list_dialog)
@@ -94,17 +94,15 @@ class ColorSelectionMenu:
         """Open the HSV color range picker dialog."""
         if self.on_hsv_selected is None:
             return
-        
+
         # Import here to avoid circular dependencies
         from algorithms.HSVColorRange.views.color_range_dialog import ColorRangeDialog
-        
+
         initial_hsv = self.get_initial_hsv()
         initial_ranges = self.get_initial_ranges()
-        
+
         dialog = ColorRangeDialog(None, initial_hsv, initial_ranges, self.parent)
-        
+
         if dialog.exec() == ColorRangeDialog.Accepted:
             hsv_data = dialog.get_hsv_ranges()
             self.on_hsv_selected(hsv_data)
-
-

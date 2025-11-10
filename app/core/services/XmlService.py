@@ -5,14 +5,22 @@ from core.services.LoggerService import LoggerService
 
 
 class XmlService:
-    """Service for parsing and modifying an ADIAT XML file."""
+    """Service for parsing and modifying an ADIAT XML file.
+
+    Provides utilities for reading and writing ADIAT analysis results in XML format,
+    including settings, images, and areas of interest.
+
+    Attributes:
+        xml_path: Path to the XML file, or None if creating new.
+        xml: ElementTree instance for the XML document.
+        logger: LoggerService instance for logging.
+    """
 
     def __init__(self, path=None):
-        """
-        Initialize the XmlService with an optional XML file path.
+        """Initialize the XmlService with an optional XML file path.
 
         Args:
-            path (str, optional): Path to the XML file.
+            path: Path to the XML file. If None, creates a new empty XML tree.
         """
         self.xml_path = path
         self.logger = LoggerService()
@@ -24,11 +32,12 @@ class XmlService:
             self.xml = ET.ElementTree(root)  # Ensures self.xml is an ElementTree
 
     def get_settings(self):
-        """
-        Parse the XML file to retrieve settings and the count of images with areas of interest.
+        """Parse the XML file to retrieve settings and the count of images with areas of interest.
 
         Returns:
-            tuple: A dictionary containing settings from the analysis and an integer for the number of images with areas of interest.
+            Tuple of (settings_dict, image_count) where settings_dict contains
+            analysis settings and image_count is the number of images with areas
+            of interest.
         """
         root = self.xml.getroot()
         settings_xml = root.find("settings")
@@ -68,11 +77,12 @@ class XmlService:
         return settings, image_count
 
     def get_images(self):
-        """
-        Parse the XML file to retrieve images with areas of interest.
+        """Parse the XML file to retrieve images with areas of interest.
 
         Returns:
-            list[dict]: A list of dictionaries containing image details and areas of interest from the analysis.
+            List of dictionaries containing image details and areas of interest
+            from the analysis. Each dict includes 'path', 'mask_path', 'bearing'
+            metadata if present, and 'areas_of_interest' list.
         """
         root = self.xml.getroot()
         images = []

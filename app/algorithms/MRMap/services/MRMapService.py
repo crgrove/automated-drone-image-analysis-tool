@@ -13,19 +13,28 @@ NUMBER_OF_QUANTIZED_HISTOGRAM_BINS = 26
 
 
 class MRMapService(AlgorithmService):
-    """Service that executes the MRMap algorithm for detecting anomalies in spectral images."""
+    """Service that executes the MRMap algorithm for detecting anomalies in spectral images.
+
+    Uses Multi-Resolution Map (MRMap) algorithm to detect rare color combinations
+    based on histogram analysis and bin count thresholds.
+
+    Attributes:
+        segments: Number of image segments for processing.
+        threshold: Bin count threshold for anomaly detection.
+        window_size: Window size for processing.
+    """
 
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
-        """
-        Initializes the MRMapService with specific parameters for anomaly detection.
+        """Initialize the MRMapService with specific parameters for anomaly detection.
 
         Args:
-            identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
-            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
-            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'threshold', 'segments', and 'window'.
+            identifier: RGB values for the color to highlight areas of interest.
+            min_area: Minimum area in pixels for an object to qualify as an area of interest.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois: If True, overlapping areas of interest will be combined.
+            options: Additional algorithm-specific options, including 'threshold',
+                'segments', and 'window'.
         """
         self.logger = LoggerService()
         super().__init__('MRMap', identifier, min_area, max_area, aoi_radius, combine_aois, options)
@@ -34,17 +43,20 @@ class MRMapService(AlgorithmService):
         self.window_size = options['window']
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """
-        Processes a single image using the MR Map algorithm.
+        """Process a single image using the MR Map algorithm.
+
+        Analyzes image using histogram-based bin counting to identify rare
+        color combinations. Adds confidence scores based on bin count rarity.
 
         Args:
-            img (numpy.ndarray): The image to be processed.
-            full_path (str): The path to the image being analyzed.
-            input_dir (str): The base input folder.
-            output_dir (str): The base output folder.
+            img: The image to be processed as numpy array.
+            full_path: The path to the image being analyzed.
+            input_dir: The base input folder.
+            output_dir: The base output folder.
 
         Returns:
-            AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
+            AnalysisResult containing the processed image path, list of areas
+            of interest, base contour count, and error message if any.
         """
         try:
             height, width = img.shape[:2]
@@ -85,11 +97,31 @@ class MRMapService(AlgorithmService):
             return AnalysisResult(full_path, error_message=str(e))
 
     def _getADIATContours(self, pixel_anom):
+        """Get contours from pixel anomaly mask using standard method.
+
+        Args:
+            pixel_anom: Boolean array indicating anomalous pixels.
+
+        Returns:
+            List of contours from cv2.findContours.
+        """
         mask = pixel_anom.astype(np.uint8) * 255
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         return contours
 
     def _getMRMapsContours(self, pixel_anom):
+        """Get contours from pixel anomaly mask using MRMap-specific method.
+
+        Uses connected component analysis with window-based connectivity
+        to merge nearby anomalies into rectangles.
+
+        Args:
+            pixel_anom: Boolean array indicating anomalous pixels.
+
+        Returns:
+            Tuple of (mask, contours) where mask is the combined mask and
+            contours is the list of contours.
+        """
         visited = np.zeros_like(pixel_anom, dtype=bool)
         anomaly_rectangles = []
         mask = np.zeros_like(pixel_anom, dtype=np.uint8)
@@ -117,6 +149,20 @@ class MRMapService(AlgorithmService):
         return mask, contours
 
     def _find_connected_pixels(self, pixel_anom, visited, start_x, start_y, width, height):
+        """Find connected pixels using BFS with window-based connectivity.
+
+        Args:
+            pixel_anom: Boolean array indicating anomalous pixels.
+            visited: Boolean array tracking visited pixels.
+            start_x: Starting X coordinate.
+            start_y: Starting Y coordinate.
+            width: Image width.
+            height: Image height.
+
+        Returns:
+            Tuple of (count, rect) where count is the number of connected
+            pixels and rect is [min_x, min_y, max_x, max_y].
+        """
         queue = deque([(start_x, start_y)])
         rect = [start_x, start_y, start_x, start_y]
         count = 0
@@ -138,7 +184,10 @@ class MRMapService(AlgorithmService):
             x_range = np.clip([x - self.window_size, x + self.window_size + 1], 0, width)
             y_range = np.clip([y - self.window_size, y + self.window_size + 1], 0, height)
 
-            neighbors = np.argwhere(pixel_anom[y_range[0]:y_range[1], x_range[0]:x_range[1]] & ~visited[y_range[0]:y_range[1], x_range[0]:x_range[1]])
+            neighbors = np.argwhere(
+                pixel_anom[y_range[0]:y_range[1], x_range[0]:x_range[1]] &
+                ~visited[y_range[0]:y_range[1], x_range[0]:x_range[1]]
+            )
 
             for dy, dx in neighbors:
                 queue.append((x_range[0] + dx, y_range[0] + dy))
@@ -146,7 +195,15 @@ class MRMapService(AlgorithmService):
         return count, rect
 
     def _merge_rectangles(self, rect1, rect2):
-        """Merge two overlapping rectangles into one."""
+        """Merge two overlapping rectangles into one.
+
+        Args:
+            rect1: First rectangle as [min_x, min_y, max_x, max_y].
+            rect2: Second rectangle as [min_x, min_y, max_x, max_y].
+
+        Returns:
+            Merged rectangle as [min_x, min_y, max_x, max_y].
+        """
         return [
             min(rect1[0], rect2[0]),  # left
             min(rect1[1], rect2[1]),  # top
@@ -155,7 +212,15 @@ class MRMapService(AlgorithmService):
         ]
 
     def _rectangles_overlap(self, rect1, rect2):
-        """Check if two rectangles overlap."""
+        """Check if two rectangles overlap.
+
+        Args:
+            rect1: First rectangle as [min_x, min_y, max_x, max_y].
+            rect2: Second rectangle as [min_x, min_y, max_x, max_y].
+
+        Returns:
+            True if rectangles overlap, False otherwise.
+        """
         return not (
             rect1[2] < rect2[0] or  # rect1 right < rect2 left
             rect1[0] > rect2[2] or  # rect1 left > rect2 right
@@ -164,17 +229,18 @@ class MRMapService(AlgorithmService):
         )
 
     def _add_confidence_scores(self, areas_of_interest, bin_counts, mask):
-        """
-        Adds confidence scores to AOIs based on histogram bin counts (rarity scores).
-        Lower bin count = rarer color = higher confidence.
+        """Add confidence scores to AOIs based on histogram bin counts (rarity scores).
+
+        Lower bin count = rarer color = higher confidence. Normalizes scores
+        to 0-100 range based on detected pixel bin counts.
 
         Args:
-            areas_of_interest (list): List of AOI dictionaries
-            bin_counts (numpy.ndarray): Histogram bin counts for each pixel
-            mask (numpy.ndarray): Binary detection mask
+            areas_of_interest: List of AOI dictionaries.
+            bin_counts: Histogram bin counts for each pixel as numpy array.
+            mask: Binary detection mask as numpy array.
 
         Returns:
-            list: AOIs with added confidence scores
+            List of AOIs with added confidence scores.
         """
         # Get all bin counts from detected pixels to find max for normalization
         detected_bin_counts = bin_counts[mask > 0]
@@ -235,7 +301,23 @@ class MRMapService(AlgorithmService):
 
 
 class Histogram:
+    """Histogram class for quantized RGB color analysis.
+
+    Creates a quantized 3D histogram of RGB color values for efficient
+    bin counting and rarity analysis.
+
+    Attributes:
+        image_array: Original image array.
+        mapping: Quantization mapping from 256 shades to bins.
+        q_histogram: Quantized 3D histogram array.
+    """
+
     def __init__(self, image):
+        """Initialize histogram with image data.
+
+        Args:
+            image: Image array to analyze.
+        """
         self.image_array = image
 
         # Use a smaller integer type for bin mapping
@@ -246,6 +328,11 @@ class Histogram:
         self.create_histogram()
 
     def create_histogram(self):
+        """Create quantized 3D histogram from image.
+
+        Maps RGB pixel values to quantized bins and computes histogram
+        for efficient bin count lookups.
+        """
         # Directly map pixel values to quantized bins
         r_mapped = self.mapping[self.image_array[:, :, 2]]
         g_mapped = self.mapping[self.image_array[:, :, 1]]
@@ -259,6 +346,16 @@ class Histogram:
         )
 
     def bin_count(self, r, g, b):
+        """Get bin count for RGB color values.
+
+        Args:
+            r: Red channel value (0-255).
+            g: Green channel value (0-255).
+            b: Blue channel value (0-255).
+
+        Returns:
+            Bin count for the quantized RGB color as numpy array.
+        """
         qr = self.mapping[r]
         qg = self.mapping[g]
         qb = self.mapping[b]

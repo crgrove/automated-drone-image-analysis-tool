@@ -53,7 +53,6 @@ class ThumbnailController(QObject):
         self.load_timer.timeout.connect(self._process_next_thumbnail)
         self.load_timer.setSingleShot(True)
 
-
     def initialize_thumbnails_deferred(self):
         """Initialize thumbnail widgets immediately, load images in background."""
         # Delegate UI initialization to UI component
@@ -65,7 +64,6 @@ class ThumbnailController(QObject):
 
         # Load initial visible thumbnails
         self._request_visible_thumbnails()
-
 
     def _start_background_loader(self):
         """Start the background thumbnail loader."""
@@ -126,14 +124,12 @@ class ThumbnailController(QObject):
         """Handle thumbnail click."""
         index = button.property('imageIndex')
         self.parent.current_image = index
-        
+
         # Delegate UI updates to UI component
         if self.ui_component:
             self.ui_component.set_active_index(index)
-            
+
         self.parent._load_image()
-
-
 
     def set_active_index(self, index):
         """Set active thumbnail by index."""
@@ -145,7 +141,7 @@ class ThumbnailController(QObject):
         # Delegate UI updates to UI component
         if self.ui_component:
             self.ui_component.set_active_index(index)
-            
+
         # Request this thumbnail to be loaded
         self._request_thumbnail(index)
 

@@ -14,7 +14,7 @@ from core.services.LoggerService import LoggerService
 class ColorCacheService:
     """
     Service for in-memory caching of AOI color information.
-    
+
     Color data is stored in XML files, not JSON. This service only provides
     in-memory storage during processing.
 
@@ -82,7 +82,7 @@ class ColorCacheService:
         return self.memory_cache.get(cache_key)
 
     def save_color_info(self, image_path: str, aoi_data: Dict[str, Any],
-                       color_info: Dict[str, Any]) -> bool:
+                        color_info: Dict[str, Any]) -> bool:
         """
         Save color information for an AOI to memory cache.
 
@@ -100,7 +100,7 @@ class ColorCacheService:
             # Validate color info structure
             required_keys = ['rgb', 'hex', 'hue_degrees']
             if not all(key in color_info for key in required_keys):
-                self.logger.warning(f"Invalid color info structure, missing required keys")
+                self.logger.warning("Invalid color info structure, missing required keys")
                 return False
 
             # Add to memory cache
@@ -139,7 +139,7 @@ class ColorCacheService:
     def get_all_cache_data(self) -> Dict[str, Dict[str, Any]]:
         """
         Get all cached color data for XML export.
-        
+
         Returns:
             Dict of {cache_key: color_info} for all cached entries
         """

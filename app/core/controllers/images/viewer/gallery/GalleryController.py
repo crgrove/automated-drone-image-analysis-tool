@@ -212,22 +212,22 @@ class GalleryController:
             # Disconnect model signals
             try:
                 self.model.color_calc_progress.disconnect(self._on_color_calc_progress)
-            except:
+            except Exception:
                 pass
             try:
                 self.model.color_calc_message.disconnect(self._on_color_calc_message)
-            except:
+            except Exception:
                 pass
             try:
                 self.model.color_calc_complete.disconnect(self._on_color_calc_complete)
-            except:
+            except Exception:
                 pass
 
             # Disconnect dialog signals
             if self.color_calc_progress_dialog:
                 try:
                     self.color_calc_progress_dialog.canceled.disconnect(self._on_color_calc_cancelled)
-                except:
+                except Exception:
                     pass
         except Exception as e:
             self.logger.debug(f"Error disconnecting signals: {e}")
@@ -287,13 +287,13 @@ class GalleryController:
             # Update count label in UI
             if self.ui_component:
                 self.ui_component._update_count_label(len(filtered_aois))
-                
+
                 # Ensure thumbnails are loaded for the filtered results
                 # The modelReset signal will trigger _on_model_changed which loads thumbnails
                 # But also explicitly trigger if widget is visible
-                if (self.ui_component.gallery_widget and 
-                    self.ui_component.gallery_widget.isVisible() and
-                    len(filtered_aois) > 0):
+                if (self.ui_component.gallery_widget and
+                        self.ui_component.gallery_widget.isVisible() and
+                        len(filtered_aois) > 0):
                     self.ui_component._load_visible_thumbnails()
 
             self.logger.info(f"Loaded {len(filtered_aois)} AOIs in gallery (from {len(all_aois)} total)")
@@ -617,7 +617,7 @@ class GalleryController:
             needs_load = (self.parent.current_image != image_idx)
             if needs_load:
                 self.parent.current_image = image_idx
-                
+
                 # Connect to viewChanged signal BEFORE loading to avoid missing the signal
                 # Note: viewChanged fires twice during load_image():
                 # 1. From setImage() -> updateViewer() (zoom stack not reset yet)
@@ -626,51 +626,51 @@ class GalleryController:
                 zoom_handler = None
                 zoom_executed = False
                 view_changed_count = 0
-                
+
                 def zoom_when_ready():
                     nonlocal zoom_executed, view_changed_count
                     view_changed_count += 1
-                    
+
                     # Check if _recursion_guard is set - if so, updateViewer() is still running
                     # and zoomToArea() will return early. We need to wait for it to complete.
                     recursion_guard_active = False
-                    if (hasattr(self.parent, 'main_image') and 
-                        self.parent.main_image and 
-                        hasattr(self.parent.main_image, '_recursion_guard')):
+                    if (hasattr(self.parent, 'main_image') and
+                            self.parent.main_image and
+                            hasattr(self.parent.main_image, '_recursion_guard')):
                         recursion_guard_active = self.parent.main_image._recursion_guard
-                    
+
                     # Don't try to zoom if recursion guard is active - zoomToArea() will return early
                     if recursion_guard_active:
                         return
-                    
+
                     # Check if zoom stack is empty (meaning resetZoom has been called)
                     # This ensures we only zoom after the resetZoom viewChanged signal
                     zoom_stack_cleared = False
-                    if (hasattr(self.parent, 'main_image') and 
-                        self.parent.main_image and 
-                        hasattr(self.parent.main_image, 'zoomStack')):
+                    if (hasattr(self.parent, 'main_image') and
+                            self.parent.main_image and
+                            hasattr(self.parent.main_image, 'zoomStack')):
                         zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
-                    
+
                     # Only zoom if:
                     # 1. We haven't zoomed yet
                     # 2. Image is loaded
                     # 3. Recursion guard is not active (updateViewer completed)
                     # 4. Zoom stack is cleared (resetZoom has been called)
-                    if (not zoom_executed and 
-                        hasattr(self.parent, 'main_image') and 
-                        self.parent.main_image and 
-                        self.parent.main_image.hasImage() and
-                        not recursion_guard_active and
-                        zoom_stack_cleared):
+                    if (not zoom_executed and
+                            hasattr(self.parent, 'main_image') and
+                            self.parent.main_image and
+                            self.parent.main_image.hasImage() and
+                            not recursion_guard_active and
+                            zoom_stack_cleared):
                         zoom_executed = True
                         self._zoom_to_aoi(aoi_data)
                         # Disconnect after first call
                         if zoom_handler:
                             try:
                                 self.parent.main_image.viewChanged.disconnect(zoom_handler)
-                            except:
+                            except Exception:
                                 pass
-                
+
                 # Connect to viewChanged signal BEFORE loading (critical for race condition)
                 if hasattr(self.parent, 'main_image') and self.parent.main_image:
                     try:
@@ -678,53 +678,53 @@ class GalleryController:
                         zoom_handler = zoom_when_ready
                     except Exception as e:
                         self.logger.debug(f"Could not connect to viewChanged: {e}")
-                
+
                 # Now load the image - this will emit viewChanged signals which our handler will catch
                 if hasattr(self.parent, '_load_image'):
                     self.parent._load_image()
-                
+
                 # Check if image is ready and zoom stack is cleared but signal handler hasn't executed
                 # Only check if zoom hasn't already executed via the signal
                 if (not zoom_executed and
-                    hasattr(self.parent, 'main_image') and 
-                    self.parent.main_image and 
-                    self.parent.main_image.hasImage()):
+                        hasattr(self.parent, 'main_image') and
+                        self.parent.main_image and
+                        self.parent.main_image.hasImage()):
                     # Check if recursion guard is active - if so, wait for signal handler
                     recursion_guard_active = False
                     if hasattr(self.parent.main_image, '_recursion_guard'):
                         recursion_guard_active = self.parent.main_image._recursion_guard
-                    
+
                     # Check if zoom stack is cleared (resetZoom has been called)
                     zoom_stack_cleared = False
                     if hasattr(self.parent.main_image, 'zoomStack'):
                         zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
-                    
+
                     # Only zoom if recursion guard is not active and zoom stack is cleared
                     if not recursion_guard_active and zoom_stack_cleared:
                         # Disconnect the signal handler to prevent double-zoom
                         if zoom_handler:
                             try:
                                 self.parent.main_image.viewChanged.disconnect(zoom_handler)
-                            except:
+                            except Exception:
                                 pass
                         # Zoom directly since image is ready and zoom is reset
                         zoom_executed = True
                         self._zoom_to_aoi(aoi_data)
                 elif not zoom_handler:
                     # Couldn't connect to signal, try zooming directly if image is ready and zoom is reset
-                    if (hasattr(self.parent, 'main_image') and 
-                        self.parent.main_image and 
-                        self.parent.main_image.hasImage()):
+                    if (hasattr(self.parent, 'main_image') and
+                            self.parent.main_image and
+                            self.parent.main_image.hasImage()):
                         # Check if recursion guard is active
                         recursion_guard_active = False
                         if hasattr(self.parent.main_image, '_recursion_guard'):
                             recursion_guard_active = self.parent.main_image._recursion_guard
-                        
+
                         # Check if zoom stack is cleared before zooming
                         zoom_stack_cleared = False
                         if hasattr(self.parent.main_image, 'zoomStack'):
                             zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
-                        
+
                         if not recursion_guard_active and zoom_stack_cleared:
                             self._zoom_to_aoi(aoi_data)
             else:
@@ -890,7 +890,8 @@ class GalleryController:
         """Update gallery widget geometry to fill aoiFrame."""
         try:
             if (gallery_widget and gallery_widget.isVisible() and
-                hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode):
+                    hasattr(self.parent, 'gallery_mode') and
+                    self.parent.gallery_mode):
 
                 # Fill frame width for responsive grid display
                 frame_rect = self.parent.aoiFrame.rect()
@@ -1035,23 +1036,23 @@ class GalleryController:
         """Restore the single-image mode header title."""
         try:
             # Trigger update of AOI list to restore the header
-            if (hasattr(self.parent, 'aoi_controller') and 
-                hasattr(self.parent, 'current_image') and
-                hasattr(self.parent, 'images') and
-                self.parent.current_image < len(self.parent.images)):
+            if (hasattr(self.parent, 'aoi_controller') and
+                    hasattr(self.parent, 'current_image') and
+                    hasattr(self.parent, 'images') and
+                    self.parent.current_image < len(self.parent.images)):
                 image = self.parent.images[self.parent.current_image]
                 areas_of_interest = image.get('areas_of_interest', [])
-                
+
                 # Use the AOI controller's UI component to update the header
                 if hasattr(self.parent.aoi_controller, 'ui_component'):
                     # Get filtered count for display
                     filtered_aois = self.parent.aoi_controller.filter_aois_with_indices(
-                        list(enumerate(areas_of_interest)), 
+                        list(enumerate(areas_of_interest)),
                         self.parent.current_image
                     )
                     total_count = len(areas_of_interest)
                     filtered_count = len(filtered_aois)
-                    
+
                     # Update the header using the AOI UI component's method
                     self.parent.aoi_controller.ui_component._update_count_label(filtered_count, total_count)
         except Exception as e:
@@ -1189,8 +1190,9 @@ class GalleryController:
 
                 # Update header immediately if gallery model already has data (for subsequent opens)
                 # The model signals are already connected in set_model via _on_model_changed
-                if (self.model and self.model.rowCount() > 0 and 
-                    hasattr(self.parent, 'gallery_mode') and self.parent.gallery_mode):
+                if (self.model and self.model.rowCount() > 0 and
+                        hasattr(self.parent, 'gallery_mode') and
+                        self.parent.gallery_mode):
                     self.ui_component._update_count_label(self.model.rowCount())
 
                 self.logger.info("Switched to gallery view mode")

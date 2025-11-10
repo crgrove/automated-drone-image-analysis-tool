@@ -122,7 +122,10 @@ class HelpDialog(QDialog):
         # Create icon HTML tags
         def icon_html(key):
             if key in icons and icons[key]:
-                return f'<img src="{icons[key]}" width="25" height="25" style="vertical-align: middle; margin-right: 8px; border: 1px solid #555; border-radius: 3px; background: #3a3a3a; padding: 3px;" />'
+                style = ("vertical-align: middle; margin-right: 8px; "
+                         "border: 1px solid #555; border-radius: 3px; "
+                         "background: #3a3a3a; padding: 3px;")
+                return f'<img src="{icons[key]}" width="25" height="25" style="{style}" />'
             else:
                 return '<span class="button-icon">?</span>'
 
@@ -209,11 +212,13 @@ class HelpDialog(QDialog):
                     </tr>
                     <tr>
                         <td>Shift + E</td>
-                        <td>Export coverage extent KML (generates polygons showing geographic area covered by all images)</td>
+                        <td>Export coverage extent KML (generates polygons showing
+                            geographic area covered by all images)</td>
                     </tr>
                     <tr>
                         <td>Shift + O</td>
-                        <td>Override altitude for all images (manually set custom AGL altitude for GSD calculations)</td>
+                        <td>Override altitude for all images (manually set custom
+                            AGL altitude for GSD calculations)</td>
                     </tr>
                     <tr>
                         <td>Ctrl + H</td>
@@ -385,8 +390,11 @@ class HelpDialog(QDialog):
                 <ul>
                     <li><b>GPS Coordinates:</b> Latitude and longitude of current image (clickable)</li>
                     <li><b>Relative Altitude:</b> The altitude of the drone relative to its take off point</li>
-                    <li><b>Estimated Average GSD:</b> The estimated Ground Sampling Distance (cm/px) calculated from the drones Relative Altitude. WARNING, may not be accurate</li>
-                    <li><b>Color Values:</b> The RGB, HSV, or temperature pixel value at the current cursor position</li>
+                    <li><b>Estimated Average GSD:</b> The estimated Ground Sampling
+                        Distance (cm/px) calculated from the drones Relative Altitude.
+                        WARNING, may not be accurate</li>
+                    <li><b>Color Values:</b> The RGB, HSV, or temperature pixel
+                        value at the current cursor position</li>
                     <li><b>Drone Orientation:</b> Drone bearing angle</li>
                 </ul>
             </div>
@@ -394,12 +402,19 @@ class HelpDialog(QDialog):
             <div class="section">
                 <h2>💡 Tips</h2>
                 <ul>
-                    <li>Use <b>Shift+F</b> to quickly select AOIs without clicking on them precisely</li>
-                    <li>Press <b>F</b> to flag important AOIs for quick filtering later</li>
-                    <li>Use the <b>magnifying glass</b> to inspect fine details without zooming the entire view</li>
-                    <li>Left click on on an AOIs document icon to add <b>comments</b> for that AOI. Comments are exported in reports and CalTopo markers</li>
-                    <li>The <b>measure tool</b> uses the estimated GSD for calculating measurements. WARNING it may not be accurate</li>
-                    <li>Press <b>M</b> to open the GPS map and see the spatial distribution of all images and selected AOI</li>
+                    <li>Use <b>Shift+F</b> to quickly select AOIs without clicking
+                        on them precisely</li>
+                    <li>Press <b>F</b> to flag important AOIs for quick filtering
+                        later</li>
+                    <li>Use the <b>magnifying glass</b> to inspect fine details
+                        without zooming the entire view</li>
+                    <li>Left click on on an AOIs document icon to add <b>comments</b>
+                        for that AOI. Comments are exported in reports and CalTopo
+                        markers</li>
+                    <li>The <b>measure tool</b> uses the estimated GSD for calculating
+                        measurements. WARNING it may not be accurate</li>
+                    <li>Press <b>M</b> to open the GPS map and see the spatial
+                        distribution of all images and selected AOI</li>
                     <li>Press <b>R</b> to view images oriented to true north based on drone heading</li>
                 </ul>
             </div>

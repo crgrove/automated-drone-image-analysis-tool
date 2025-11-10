@@ -24,6 +24,7 @@ from PySide6.QtGui import QCursor, QColor
 from core.services.LoggerService import LoggerService
 from core.services.image.AOIService import AOIService
 
+
 class AOIController:
     """
     Controller for managing Areas of Interest (AOI) business logic.
@@ -65,32 +66,32 @@ class AOIController:
         # Create UI component internally
         from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
         self.ui_component = AOIUIComponent(self)
-        
+
         # Initialize sort combo box
         self._initialize_sort_combo()
 
     def _get_aoi_service(self):
         """
         Get or create a cached AOIService for the current image.
-        
+
         Returns:
             AOIService instance for the current image, or None if no image is loaded
         """
         try:
             current_image_idx = self.parent.current_image
-            
+
             # Check if we can use cached service
-            if (self._cached_aoi_service is not None and 
-                self._cached_image_index == current_image_idx):
+            if (self._cached_aoi_service is not None and
+                    self._cached_image_index == current_image_idx):
                 return self._cached_aoi_service
-            
+
             # Create new service for current image
             if current_image_idx < len(self.parent.images):
                 image = self.parent.images[current_image_idx]
                 self._cached_aoi_service = AOIService(image)
                 self._cached_image_index = current_image_idx
                 return self._cached_aoi_service
-            
+
             return None
         except Exception as e:
             self.logger.error(f"Error getting AOIService: {e}")
@@ -117,8 +118,6 @@ class AOIController:
                             if img_idx not in self.flagged_aois:
                                 self.flagged_aois[img_idx] = set()
                             self.flagged_aois[img_idx].add(aoi_idx)
-
-
 
     def calculate_aoi_average_info(self, area_of_interest, is_thermal, temperature_data, temperature_unit):
         """Calculate average color or temperature for an AOI.
@@ -185,7 +184,7 @@ class AOIController:
                 aoi_service = self._get_aoi_service()
                 if not aoi_service:
                     return None, None
-                
+
                 color_result = aoi_service.get_aoi_representative_color(area_of_interest)
                 if color_result:
                     # Return hue angle, hex color, and RGB tuple for the color square
@@ -257,7 +256,6 @@ class AOIController:
                 self.parent.gallery_controller.sync_selection_from_aoi_controller(
                     self.parent.current_image, aoi_index
                 )
-
 
     def find_aoi_at_position(self, x, y):
         """Find the AOI at the given cursor position.
@@ -441,7 +439,7 @@ class AOIController:
         # Refresh the AOI display to show/hide flag icon (UI component handles this)
         if self.ui_component:
             self.ui_component.refresh_aoi_display()
-        
+
         # Update GPS map if it's open to reflect flagged status change
         if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller.map_dialog:
             if self.parent.gps_map_controller.map_dialog.isVisible():
@@ -456,7 +454,7 @@ class AOIController:
                 # Update the map with refreshed data
                 if current_gps_index is not None:
                     self.parent.gps_map_controller.map_dialog.update_gps_data(
-                        self.parent.gps_map_controller.gps_data, 
+                        self.parent.gps_map_controller.gps_data,
                         current_gps_index
                     )
 
@@ -629,17 +627,17 @@ class AOIController:
             # Only works for non-thermal images
             if self.parent.is_thermal:
                 return None
-            
+
             # Use cached AOIService for current image
             aoi_service = self._get_aoi_service()
             if not aoi_service:
                 return None
-            
+
             color_result = aoi_service.get_aoi_representative_color(aoi)
-            
+
             if color_result:
                 return color_result['hue_degrees']
-            
+
             return None
         except Exception as e:
             self.logger.error(f"Error getting AOI hue: {e}")
@@ -829,17 +827,6 @@ class AOIController:
         self.filter_temperature_min = filters.get('temperature_min')
         self.filter_temperature_max = filters.get('temperature_max')
 
-        # Update button appearance if available
-        has_filters = any([
-            self.filter_flagged_only,
-            self.filter_color_hue is not None,
-            self.filter_area_min is not None,
-            self.filter_area_max is not None,
-            self.filter_comment_pattern is not None,
-            self.filter_temperature_min is not None,
-            self.filter_temperature_max is not None
-        ])
-
         # Refresh AOI display
         self.refresh_aoi_display()
 
@@ -856,12 +843,12 @@ class AOIController:
         """Initialize the sort combo box with options."""
         if not hasattr(self.parent, 'aoiSortComboBox'):
             return
-            
+
         combo = self.parent.aoiSortComboBox
-        
+
         # Clear existing items
         combo.clear()
-        
+
         # Define sort options with their display text, data, and icons
         sort_options = [
             ("Default", None, qta.icon('fa6s.sort', color='#888888')),
@@ -903,7 +890,11 @@ class AOIController:
                 if temp_count >= 5:
                     break
 
-        self.logger.debug(f"Sort combo: has_temperature_data={has_temperature_data}, found {temp_count} AOIs with temperature (checked {total_aois_checked} total AOIs)")
+        self.logger.debug(
+            f"Sort combo: has_temperature_data={has_temperature_data}, "
+            f"found {temp_count} AOIs with temperature "
+            f"(checked {total_aois_checked} total AOIs)"
+        )
 
         # Add items dynamically
         for idx, (text, data, icon) in enumerate(sort_options):
@@ -916,7 +907,7 @@ class AOIController:
                 item = model.item(idx)
                 item.setEnabled(False)
                 item.setToolTip("Temperature sorting unavailable (no thermal data)")
-        
+
         # Set current selection based on current sort method
         if self.sort_method is None:
             combo.setCurrentIndex(0)  # "Default"
@@ -950,12 +941,12 @@ class AOIController:
         else:
             # Other sort methods (area_asc, area_desc, x, y)
             self.set_sort_method(current_data)
-    
+
     def _update_combo_selection(self):
         """Update combo box selection to match current sort method."""
         if not hasattr(self.parent, 'aoiSortComboBox'):
             return
-            
+
         combo = self.parent.aoiSortComboBox
         if self.sort_method is None:
             combo.setCurrentIndex(0)  # "No Sort"
@@ -1036,7 +1027,7 @@ class AOIController:
 
             if color.isValid():
                 # Convert to HSV and extract hue
-                h, s, v = color.getHsv()[0], color.getHsv()[1], color.getHsv()[2]
+                h = color.getHsv()[0]
                 # Qt hue is 0-359 (-1 for achromatic), we want 0-360
                 if h == -1:
                     h = 0

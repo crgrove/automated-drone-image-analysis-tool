@@ -249,8 +249,10 @@ class GeodesicHelper:
 
         for candidate in candidates:
             # Sum of angular distances to all points
-            sum_dist = sum(abs(GeodesicHelper.angle_difference_deg(candidate, a))
-                          for a in angles)
+            sum_dist = sum(
+                abs(GeodesicHelper.angle_difference_deg(candidate, a))
+                for a in angles
+            )
             if sum_dist < min_sum_dist:
                 min_sum_dist = sum_dist
                 best_angle = candidate
@@ -313,8 +315,10 @@ class GeodesicHelper:
                 filtered = savgol_filter(unwrapped, window, poly_order)
 
                 # Rewrap to [0, 360)
-                smoothed = [GeodesicHelper.normalize_angle_deg(math.degrees(a))
-                           for a in filtered]
+                smoothed = [
+                    GeodesicHelper.normalize_angle_deg(math.degrees(a))
+                    for a in filtered
+                ]
             except ImportError:
                 # scipy not available, skip Savitzky-Golay
                 pass

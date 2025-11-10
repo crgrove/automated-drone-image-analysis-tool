@@ -232,7 +232,7 @@ class ThreadedCaptureWorker:
                 self._frame_queue.put(frame, timestamp, frame_number)
                 last_frame_time = time.time()
 
-            except Exception as e:
+            except Exception:
                 with self._lock:
                     self._capture_errors += 1
                 # Don't log every error to avoid spam
@@ -677,7 +677,7 @@ class RealtimeColorDetector(QObject):
                     motion_new_height = int(original_height * motion_scale_factor)
 
                     motion_processing_frame = cv2.resize(frame, (motion_new_width, motion_new_height),
-                                                        interpolation=cv2.INTER_LINEAR)
+                                                         interpolation=cv2.INTER_LINEAR)
 
                     # Create scaled config for motion detection (separate from color)
                     motion_scaled_config = HSVConfig(
@@ -1633,7 +1633,7 @@ class RealtimeColorDetector(QObject):
             return detections
 
     def _fuse_detections(self, color_detections: List[Detection], motion_detections: List[Detection],
-                        config: HSVConfig) -> List[Detection]:
+                         config: HSVConfig) -> List[Detection]:
         """
         Fuse color and motion detections based on fusion mode.
 
@@ -1921,11 +1921,11 @@ class RealtimeColorDetector(QObject):
 
                 # Background for text
                 cv2.rectangle(annotated, (x, y - label_size[1] - 8),
-                            (x + label_size[0] + 4, y), color, -1)
+                              (x + label_size[0] + 4, y), color, -1)
 
                 # Text
                 cv2.putText(annotated, label, (x + 2, y - 4),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
         # Add timing overlay if enabled
         if self._config.show_timing_overlay:
@@ -1937,7 +1937,7 @@ class RealtimeColorDetector(QObject):
                 timing_text = f"FPS: {fps:.1f} | Avg: {avg_time*1000:.1f}ms"
                 # Use annotated frame height (not original frame) for correct positioning
                 cv2.putText(annotated, timing_text, (10, annotated.shape[0] - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
         # Add detection count and config info
         info_text = f"Detections: {len(detections)}"
@@ -1955,13 +1955,13 @@ class RealtimeColorDetector(QObject):
             info_text += f" | {self._config.processing_resolution[0]}x{self._config.processing_resolution[1]}"
 
         cv2.putText(annotated, info_text, (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
 
         # Upscale back to original resolution if we rendered at processing resolution
         if needs_upscale and self._original_frame is not None:
             original_height, original_width = self._original_frame.shape[:2]
             annotated = cv2.resize(annotated, (original_width, original_height),
-                                  interpolation=cv2.INTER_LINEAR)
+                                   interpolation=cv2.INTER_LINEAR)
 
         return annotated
 

@@ -134,7 +134,7 @@ class PDFExportController:
                     img_copy = img.copy()
                     # Check if this image has flagged AOIs
                     has_flagged_aois = idx in flagged_aois and len(flagged_aois[idx]) > 0
-                    
+
                     if has_flagged_aois:
                         # This image has flagged AOIs - filter to only include flagged ones
                         flagged_indices = flagged_aois[idx]
@@ -143,7 +143,7 @@ class PDFExportController:
                             if i in flagged_indices
                         ]
                         img_copy['areas_of_interest'] = filtered_aois
-                        
+
                         # Always include images with flagged AOIs
                         filtered_images.append(img_copy)
                     else:
@@ -161,8 +161,8 @@ class PDFExportController:
 
             # Create PDF generator with filtered images
             pdf_generator = PdfGeneratorService(
-                self.parent, 
-                organization=organization, 
+                self.parent,
+                organization=organization,
                 search_name=search_name,
                 images=filtered_images,
                 include_images_without_flagged_aois=include_images_without_flagged_aois,
@@ -181,7 +181,7 @@ class PDFExportController:
                 total_items=total_aois
             )
             self.progress_dialog.set_title("Generating PDF Report...")
-            
+
             # Disconnect old thread signals if it exists
             if self.pdf_thread is not None:
                 try:
@@ -189,9 +189,9 @@ class PDFExportController:
                     self.pdf_thread.canceled.disconnect()
                     self.pdf_thread.errorOccurred.disconnect()
                     self.pdf_thread.progressUpdated.disconnect()
-                except:
+                except Exception:
                     pass  # Ignore if already disconnected
-            
+
             # Create PDF generation thread
             self.pdf_thread = PdfGenerationThread(pdf_generator, file_name)
 

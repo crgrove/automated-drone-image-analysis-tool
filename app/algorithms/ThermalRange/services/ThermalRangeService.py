@@ -6,19 +6,26 @@ from core.services.thermal.ThermalParserService import ThermalParserService
 
 
 class ThermalRangeService(AlgorithmService):
-    """Service that executes the Thermal Range algorithm to detect and highlight areas of interest in thermal images."""
+    """Service that executes the Thermal Range algorithm.
+
+    Detects and highlights areas of interest in thermal images based on
+    temperature range thresholds. Extracts temperature data for detected AOIs.
+
+    Attributes:
+        min_temp: Minimum temperature threshold in Celsius.
+        max_temp: Maximum temperature threshold in Celsius.
+    """
 
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
-        """
-        Initializes the ThermalRangeService with specific parameters for processing thermal images.
+        """Initialize the ThermalRangeService with specific parameters for processing thermal images.
 
         Args:
-            identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
-            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
-            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois (bool): If True, overlapping areas of interest will be combined.
-            options (dict): Additional algorithm-specific options, including 'minTemp' and 'maxTemp'.
+            identifier: RGB values for the color to highlight areas of interest.
+            min_area: Minimum area in pixels for an object to qualify as an area of interest.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois: If True, overlapping areas of interest will be combined.
+            options: Additional algorithm-specific options, including 'minTemp' and 'maxTemp'.
         """
         self.logger = LoggerService()
         super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
@@ -26,18 +33,21 @@ class ThermalRangeService(AlgorithmService):
         self.max_temp = options['maxTemp']
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """
-        Processes a single thermal image using the Thermal Range algorithm, identifying and highlighting areas
-        of interest based on temperature thresholds.
+        """Process a single thermal image using the Thermal Range algorithm.
+
+        Identifies and highlights areas of interest based on temperature
+        thresholds. Extracts temperature data for each detected AOI.
 
         Args:
-            img (numpy.ndarray): The image to be processed.
-            full_path (str): The path to the image being analyzed.
-            input_dir (str): The base input folder.
-            output_dir (str): The base output folder.
+            img: The image to be processed as numpy array.
+            full_path: The path to the image being analyzed.
+            input_dir: The base input folder.
+            output_dir: The base output folder.
 
         Returns:
-            AnalysisResult: Contains the processed image path, list of areas of interest, base contour count, and error message if any.
+            AnalysisResult containing the processed image path, list of areas
+            of interest with temperature data, base contour count, and error
+            message if any.
         """
         try:
             # Create an instance of ThermalParserService and parse the thermal image.
@@ -82,7 +92,10 @@ class ThermalRangeService(AlgorithmService):
                             temps_extracted += 1
                             # Debug: Log first few temperatures
                             if temps_extracted <= 3:
-                                self.logger.debug(f"AOI at {aoi['center']}: avg temperature={temp_value:.2f}°C (from {len(temps)} pixels)")
+                                self.logger.debug(
+                                    f"AOI at {aoi['center']}: avg temperature="
+                                    f"{temp_value:.2f}°C (from {len(temps)} pixels)"
+                                )
                         else:
                             aoi['temperature'] = None
                             self.logger.warning(f"AOI at {aoi['center']}: all detected pixels out of bounds")

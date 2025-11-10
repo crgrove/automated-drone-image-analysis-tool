@@ -46,7 +46,7 @@ class PDFSettingsService:
         except Exception:
             # If loading fails, return empty values
             pass
-        
+
         return {'organization': '', 'search_name': '', 'include_images_without_flagged_aois': False}
 
     def save_settings(self, organization, search_name, include_images_without_flagged_aois=False):
@@ -72,4 +72,3 @@ class PDFSettingsService:
         except Exception:
             # If saving fails, return False
             return False
-

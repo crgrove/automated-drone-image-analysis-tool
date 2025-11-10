@@ -12,7 +12,7 @@ from core.services.thermal.ThermalParserService import ThermalParserService
 class ThermalDataController:
     """
     Controller for managing thermal data from thermal images.
-    
+
     Handles thermal data loading from XMP metadata or direct parsing,
     temperature unit conversion, and temperature queries at specific positions.
     """
@@ -20,7 +20,7 @@ class ThermalDataController:
     def __init__(self, parent_viewer):
         """
         Initialize the thermal data controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -31,15 +31,15 @@ class ThermalDataController:
     def load_thermal_data(self, image_service, image_path, temperature_unit):
         """
         Load thermal data from an image.
-        
+
         First tries to get thermal data from XMP metadata, then falls back to
         direct parsing from the thermal image file.
-        
+
         Args:
             image_service: ImageService instance for the current image
             image_path (str): Path to the image file
             temperature_unit (str): Desired temperature unit ('F' or 'C')
-            
+
         Returns:
             np.ndarray or None: Temperature data array or None if unavailable
         """
@@ -68,11 +68,11 @@ class ThermalDataController:
     def get_temperature_at_point(self, x, y):
         """
         Get the temperature value at a specific point.
-        
+
         Args:
             x (int): X coordinate
             y (int): Y coordinate
-            
+
         Returns:
             float or None: Temperature value at the point, or None if unavailable
         """
@@ -98,12 +98,12 @@ class ThermalDataController:
     def convert_temperature(value, from_unit, to_unit):
         """
         Convert temperature between units.
-        
+
         Args:
             value (float): Temperature value
             from_unit (str): Source unit ('C' or 'F')
             to_unit (str): Target unit ('C' or 'F')
-            
+
         Returns:
             float: Converted temperature value
         """
@@ -116,4 +116,3 @@ class ThermalDataController:
             return (value - 32.0) / 1.8
 
         return value
-

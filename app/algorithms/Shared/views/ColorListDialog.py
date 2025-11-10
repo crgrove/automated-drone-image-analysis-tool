@@ -115,7 +115,7 @@ class ColorListDialog(QDialog):
             self.table.setItem(row, 1, QTableWidgetItem(name))
             # RGB
             self.table.setItem(row, 2, QTableWidgetItem(f"({rgb[0]}, {rgb[1]}, {rgb[2]})"))
-            
+
             # HSV column (only for HSV mode)
             if self.mode == 'HSV':
                 # Check if HSV is already in the data, otherwise convert from RGB
@@ -129,7 +129,7 @@ class ColorListDialog(QDialog):
             else:
                 # Uses column is at index 3 for RGB mode
                 uses_col = 3
-            
+
             # Uses
             self.table.setItem(row, uses_col, QTableWidgetItem(uses))
 
@@ -168,5 +168,3 @@ class ColorListDialog(QDialog):
             return None
         r, g, b = self._selected_rgb
         return QColor(r, g, b)
-
-

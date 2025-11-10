@@ -598,7 +598,7 @@ class QtImageViewer(QGraphicsView):
         # Check if we're in AOI creation mode (via parent window)
         if (hasattr(self.window, 'aoi_creation_mode') and
             self.window.aoi_creation_mode and
-            ev.button() == Qt.LeftButton):
+                ev.button() == Qt.LeftButton):
             # Start AOI creation
             scene_pos = self.mapToScene(ev.position().toPoint())
             self.window.aoi_creation_start = scene_pos
@@ -682,7 +682,7 @@ class QtImageViewer(QGraphicsView):
         if (hasattr(self.window, 'aoi_creation_mode') and
             self.window.aoi_creation_mode and
             self.window.aoi_creation_start is not None and
-            ev.button() == Qt.LeftButton):
+                ev.button() == Qt.LeftButton):
 
             scene_pos = self.mapToScene(ev.position().toPoint())
 
@@ -810,7 +810,7 @@ class QtImageViewer(QGraphicsView):
         if (hasattr(self.window, 'aoi_creation_mode') and
             self.window.aoi_creation_mode and
             self.window.aoi_creation_start is not None and
-            self.window.aoi_creation_preview_item is not None):
+                self.window.aoi_creation_preview_item is not None):
 
             scene_pos = self.mapToScene(ev.position().toPoint())
             self.window.aoi_creation_current = scene_pos

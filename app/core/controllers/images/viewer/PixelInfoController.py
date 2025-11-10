@@ -12,7 +12,7 @@ from core.services.LoggerService import LoggerService
 class PixelInfoController:
     """
     Controller for displaying pixel information at the cursor position.
-    
+
     Handles temperature display for thermal images, RGB/HSV color values
     for non-thermal images, and coordinates tracking.
     """
@@ -20,7 +20,7 @@ class PixelInfoController:
     def __init__(self, parent_viewer):
         """
         Initialize the pixel info controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -30,7 +30,7 @@ class PixelInfoController:
     def update_cursor_info(self, pos):
         """
         Update cursor information display based on mouse position.
-        
+
         Args:
             pos (QPoint): The current mouse position in image coordinates.
                          Will be (-1, -1) when cursor is outside the image.
@@ -52,7 +52,7 @@ class PixelInfoController:
     def _update_temperature_display(self, pos):
         """
         Update temperature display at cursor position.
-        
+
         Args:
             pos (QPoint): Cursor position in image coordinates
         """
@@ -73,7 +73,7 @@ class PixelInfoController:
     def _update_color_value_display(self, pos):
         """
         Update color value display at cursor position for non-thermal images.
-        
+
         Args:
             pos (QPoint): Cursor position in image coordinates
         """
@@ -109,7 +109,7 @@ class PixelInfoController:
     def _format_color_display_for_algorithm(self, algorithm_name, r, g, b, x, y):
         """
         Format color value display based on the algorithm type.
-        
+
         Args:
             algorithm_name (str): Name of the current algorithm
             r (int): Red value (0-255)
@@ -117,7 +117,7 @@ class PixelInfoController:
             b (int): Blue value (0-255)
             x (int): X coordinate
             y (int): Y coordinate
-            
+
         Returns:
             str: Formatted color display string
         """
@@ -136,4 +136,3 @@ class PixelInfoController:
         else:
             # Display RGB values for ColorRange, MatchedFilter, AIPersonDetector, and unknown algorithms
             return f"R: {r}, G: {g}, B: {b} at ({x}, {y})"
-

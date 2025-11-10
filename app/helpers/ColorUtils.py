@@ -6,7 +6,9 @@ class ColorUtils:
     """Provides functions to aid in the manipulation of colors."""
 
     @staticmethod
-    def get_rgb_color_range(rgb, r_range, g_range, b_range):
+    def get_rgb_color_range(
+        rgb, r_range, g_range, b_range
+    ):
         """
         Calculate a color range based on a base RGB color and specified ranges for each color channel.
 
@@ -17,7 +19,8 @@ class ColorUtils:
             b_range (int): The range for the blue channel.
 
         Returns:
-            tuple[tuple[int, int, int], tuple[int, int, int]]: The RGB values representing the minimum and maximum colors for the specified range.
+            tuple[tuple[int, int, int], tuple[int, int, int]]: The RGB values
+                representing the minimum and maximum colors for the specified range.
         """
         upper_r = min(rgb[0] + r_range, 255)
         upper_g = min(rgb[1] + g_range, 255)

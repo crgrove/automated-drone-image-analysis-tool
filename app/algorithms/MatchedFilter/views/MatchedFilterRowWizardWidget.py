@@ -10,15 +10,15 @@ A simplified widget for matched filter configuration in the wizard with:
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel, QComboBox,
-                                QPushButton, QSizePolicy, QColorDialog)
+                               QPushButton, QSizePolicy, QColorDialog)
 from core.services.color.CustomColorsService import get_custom_colors_service
 
 
 class ClickableColorSwatch(QFrame):
     """A clickable color swatch that opens a color picker when clicked."""
-    
+
     colorChanged = Signal(QColor)
-    
+
     def __init__(self, parent=None, color=None):
         super().__init__(parent)
         self._color = color or QColor(255, 0, 0)
@@ -28,21 +28,21 @@ class ClickableColorSwatch(QFrame):
         self.setMaximumSize(80, 35)
         self.setCursor(Qt.PointingHandCursor)
         self._update_style()
-    
+
     def setColor(self, color):
         """Set the color and update display."""
         self._color = color
         self._update_style()
         self.colorChanged.emit(color)
-    
+
     def getColor(self):
         """Get the current color."""
         return self._color
-    
+
     def _update_style(self):
         """Update the stylesheet with current color."""
         self.setStyleSheet(f"background-color: {self._color.name()}; border: 1px solid #888;")
-    
+
     def mousePressEvent(self, event):
         """Handle mouse click to open color picker."""
         if event.button() == Qt.LeftButton:
@@ -59,10 +59,10 @@ class ClickableColorSwatch(QFrame):
 
 class MatchedFilterRowWizardWidget(QWidget):
     """Simplified widget representing a matched filter configuration for wizard."""
-    
+
     delete_requested = Signal(QWidget)
     changed = Signal()
-    
+
     # Aggressiveness presets: (label, threshold_value)
     AGGRESSIVENESS_PRESETS = [
         ("Very Strict", 0.9),
@@ -71,18 +71,18 @@ class MatchedFilterRowWizardWidget(QWidget):
         ("Broad", 0.3),
         ("Very Broad", 0.1)
     ]
-    
+
     def __init__(self, parent=None, color=None, aggressiveness_index=2):
         """
         Initialize a matched filter row wizard widget.
-        
+
         Args:
             parent: Parent widget
             color: QColor or tuple (r, g, b) for the target color
             aggressiveness_index: Index into AGGRESSIVENESS_PRESETS (0-4, default 2 = Moderate)
         """
         super().__init__(parent)
-        
+
         # Store color
         if color is None:
             self.color = QColor(255, 0, 0)
@@ -90,11 +90,11 @@ class MatchedFilterRowWizardWidget(QWidget):
             self.color = QColor(color[0], color[1], color[2])
         else:
             self.color = color
-            
+
         self.aggressiveness_index = max(0, min(aggressiveness_index, len(self.AGGRESSIVENESS_PRESETS) - 1))
-        
+
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the UI layout and widgets."""
         layout = QHBoxLayout(self)
@@ -104,18 +104,18 @@ class MatchedFilterRowWizardWidget(QWidget):
         # Keep row compact: don't expand to full dialog width
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(42)
-        
+
         # Color swatch
         self.colorSwatch = ClickableColorSwatch(self, self.color)
         self.colorSwatch.colorChanged.connect(self._on_color_changed)
         layout.addWidget(self.colorSwatch)
-        
+
         # Aggressiveness label (multi-line, vertically centered)
         aggr_label = QLabel("Match\nAggressiveness:", self)
         aggr_label.setFont(self.font())
         aggr_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         layout.addWidget(aggr_label)
-        
+
         # Aggressiveness dropdown
         self.aggressivenessCombo = QComboBox(self)
         # Inputs should be 11pt
@@ -130,7 +130,7 @@ class MatchedFilterRowWizardWidget(QWidget):
         self.aggressivenessCombo.setMaximumWidth(220)
         self.aggressivenessCombo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.aggressivenessCombo)
-        
+
         # Delete button
         self.deleteButton = QPushButton("✕", self)
         btn_font = QFont(self.font())
@@ -158,17 +158,17 @@ class MatchedFilterRowWizardWidget(QWidget):
         self.deleteButton.clicked.connect(lambda: self.delete_requested.emit(self))
         self.deleteButton.setFocusPolicy(Qt.NoFocus)  # Prevent delete button from getting focus
         layout.addWidget(self.deleteButton)
-    
+
     def _on_color_changed(self, color):
         """Handle color swatch change."""
         self.color = color
         self.changed.emit()
-    
+
     def _on_aggressiveness_changed(self, index):
         """Handle aggressiveness dropdown change."""
         self.aggressiveness_index = index
         self.changed.emit()
-    
+
     def set_color(self, color):
         """Set the target color."""
         if isinstance(color, tuple):
@@ -179,20 +179,19 @@ class MatchedFilterRowWizardWidget(QWidget):
         self.colorSwatch.setColor(self.color)
         self.colorSwatch.blockSignals(False)
         self.changed.emit()
-        
+
     def get_color(self):
         """Get the target color as QColor."""
         return self.color
-        
+
     def get_rgb(self):
         """Get the target color as RGB tuple."""
         return (self.color.red(), self.color.green(), self.color.blue())
-    
+
     def get_aggressiveness_index(self):
         """Get the selected aggressiveness index."""
         return self.aggressiveness_index
-    
+
     def get_threshold(self):
         """Get the numeric threshold value (0.1-1.0)."""
         return self.AGGRESSIVENESS_PRESETS[self.aggressiveness_index][1]
-

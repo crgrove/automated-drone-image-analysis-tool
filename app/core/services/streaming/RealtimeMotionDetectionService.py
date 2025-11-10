@@ -6,22 +6,20 @@ motion compensation for in-flight detection scenarios.
 """
 
 # Set environment variable to avoid numpy compatibility issues
+from core.services.LoggerService import LoggerService
+from PySide6.QtCore import QObject, Signal
+import collections
+from threading import Lock
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Tuple, Optional, Dict, Any
+import time
+import numpy as np
+import cv2
 import os
 os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
 os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
 os.environ.setdefault('NPY_DISABLE_SVML', '1')
-
-import cv2
-import numpy as np
-import time
-from typing import List, Tuple, Optional, Dict, Any
-from dataclasses import dataclass, field
-from enum import Enum
-from threading import Lock
-import collections
-
-from PySide6.QtCore import QObject, Signal
-from core.services.LoggerService import LoggerService
 
 
 class DetectionMode(Enum):
@@ -775,7 +773,7 @@ class RealtimeMotionDetector(QObject):
             with self._config_lock:
                 # Check if resolution is changing
                 resolution_changed = 'processing_resolution' in kwargs and \
-                                   kwargs['processing_resolution'] != self._config.processing_resolution
+                    kwargs['processing_resolution'] != self._config.processing_resolution
 
                 for key, value in kwargs.items():
                     if hasattr(self._config, key):

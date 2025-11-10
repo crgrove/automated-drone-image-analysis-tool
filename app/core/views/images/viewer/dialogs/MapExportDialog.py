@@ -16,29 +16,29 @@ from PySide6.QtGui import QFont
 class MapExportDialog(QDialog):
     """
     Dialog for configuring map export options.
-    
+
     Provides options to:
     - Choose export type (KML file or CalTopo)
     - Select what data to include (drone locations, flagged AOIs, coverage area)
     """
-    
+
     def __init__(self, parent=None):
         """
         Initialize the map export dialog.
-        
+
         Args:
             parent: Parent widget
         """
         super().__init__(parent)
         self.setWindowTitle("Map Export Options")
         self.setMinimumWidth(400)
-        
+
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the dialog UI."""
         layout = QVBoxLayout(self)
-        
+
         # Title
         title_label = QLabel("Configure Map Export")
         title_font = QFont()
@@ -46,98 +46,96 @@ class MapExportDialog(QDialog):
         title_font.setBold(True)
         title_label.setFont(title_font)
         layout.addWidget(title_label)
-        
+
         # Export type selection
         export_type_group = QGroupBox("Export Type")
         export_type_layout = QVBoxLayout()
-        
+
         self.kml_radio = QRadioButton("KML File")
         self.kml_radio.setChecked(True)  # Default selection
         self.kml_radio.setToolTip("Export to a KML file for use in Google Earth, etc.")
-        
+
         self.caltopo_radio = QRadioButton("CalTopo")
         self.caltopo_radio.setToolTip("Export directly to a CalTopo map")
-        
+
         self.export_type_group = QButtonGroup(self)
         self.export_type_group.addButton(self.kml_radio, 0)
         self.export_type_group.addButton(self.caltopo_radio, 1)
-        
+
         export_type_layout.addWidget(self.kml_radio)
         export_type_layout.addWidget(self.caltopo_radio)
         export_type_group.setLayout(export_type_layout)
         layout.addWidget(export_type_group)
-        
+
         # Data to include
         data_group = QGroupBox("Data to Include")
         data_layout = QVBoxLayout()
-        
+
         self.include_locations = QCheckBox("Drone/Image Locations")
         self.include_locations.setChecked(True)  # Default: on
         self.include_locations.setToolTip("Include markers for each drone image location")
-        
+
         self.include_flagged_aois = QCheckBox("Flagged Areas of Interest")
         self.include_flagged_aois.setChecked(True)  # Default: on
         self.include_flagged_aois.setToolTip("Include markers for flagged AOIs")
-        
+
         self.include_coverage = QCheckBox("Coverage Area")
         self.include_coverage.setChecked(True)  # Default: on
         self.include_coverage.setToolTip("Include polygon(s) showing the geographic coverage extent")
-        
+
         data_layout.addWidget(self.include_locations)
         data_layout.addWidget(self.include_flagged_aois)
         data_layout.addWidget(self.include_coverage)
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
-        
+
         # Buttons
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        
+
         self.export_button = QPushButton("Export")
         self.export_button.setDefault(True)
         self.export_button.clicked.connect(self.accept)
-        
+
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.reject)
-        
+
         button_layout.addWidget(self.export_button)
         button_layout.addWidget(self.cancel_button)
         layout.addLayout(button_layout)
-        
+
     def get_export_type(self):
         """
         Get the selected export type.
-        
+
         Returns:
             str: 'kml' or 'caltopo'
         """
         return 'kml' if self.kml_radio.isChecked() else 'caltopo'
-    
+
     def should_include_locations(self):
         """
         Check if drone/image locations should be included.
-        
+
         Returns:
             bool: True if locations should be included
         """
         return self.include_locations.isChecked()
-    
+
     def should_include_flagged_aois(self):
         """
         Check if flagged AOIs should be included.
-        
+
         Returns:
             bool: True if flagged AOIs should be included
         """
         return self.include_flagged_aois.isChecked()
-    
+
     def should_include_coverage(self):
         """
         Check if coverage area should be included.
-        
+
         Returns:
             bool: True if coverage area should be included
         """
         return self.include_coverage.isChecked()
-
-

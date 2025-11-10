@@ -15,21 +15,40 @@ from core.controllers.images.guidePages import (
 
 
 class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
-    """Wizard dialog for initial setup and configuration of ADIAT."""
+    """Wizard dialog for initial setup and configuration of ADIAT.
+
+    Provides a multi-page wizard interface for configuring image analysis
+    parameters including directories, image capture settings, target size,
+    algorithm selection, algorithm parameters, and general settings.
+
+    Attributes:
+        wizardCompleted: Signal emitted when wizard is completed. Emits a dict
+            containing all wizard configuration data.
+        settings_service: Instance of SettingsService for accessing settings.
+        current_page: Current page index (0-based).
+        total_pages: Total number of pages in the wizard.
+        wizard_data: Dictionary containing all wizard configuration data.
+        pages: List of page instances for each wizard step.
+    """
 
     wizardCompleted = Signal(dict)  # Emits wizard data when completed
 
     def __init__(self, parent=None):
+        """Initialize the Image Analysis Guide wizard.
+
+        Args:
+            parent: Parent widget for the dialog.
+        """
         super().__init__(parent)
         self.setupUi(self)
-        
+
         self.settings_service = SettingsService()
         self.current_page = 0
         self.total_pages = 6  # Directories, Image Capture, Target Size, Algorithm, Algorithm Parameters, General Settings
-        
+
         # Create or bind to algorithm parameters page
         self._create_algorithm_parameters_page()
-        
+
         # Wizard data
         self.wizard_data = {
             'input_directory': '',
@@ -50,7 +69,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             'first_image_path': None,  # Path to first image for metadata extraction
             'processing_resolution': '50%'  # Default processing resolution
         }
-        
+
         # Create page instances
         self.pages = [
             DirectoriesPage(self.wizard_data, self.settings_service, self),
@@ -60,43 +79,52 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             AlgorithmParametersPage(self.wizard_data, self.settings_service, self),
             GeneralSettingsPage(self.wizard_data, self.settings_service, self)
         ]
-        
+
         # Set up callbacks for page interactions
         self.pages[0].on_input_directory_changed = lambda: self.pages[1].scan_input_directory()
         self.pages[0].on_validation_changed = self._update_navigation_buttons
         self.pages[3].on_algorithm_selected = self._on_algorithm_selected
-        
+
         # Initialize pages
         for page in self.pages:
             page.setup_ui()
             page.connect_signals()
             page.load_data()
-        
+
         # Set window title
         self.setWindowTitle("ADIAT Setup Wizard")
-        
+
         # Connect navigation signals
         self.continueButton.clicked.connect(self._on_continue)
         self.backButton.clicked.connect(self._on_back)
         self.cancelButton.clicked.connect(self.reject)
-        
+
         # Initially disable continue button until directories are set
         self._update_navigation_buttons()
-    
+
     def _on_algorithm_selected(self):
-        """Handle algorithm selection - enable continue button."""
+        """Handle algorithm selection - enable continue button.
+
+        Called when an algorithm is selected on the algorithm selection page.
+        Updates navigation buttons to reflect the new selection state.
+        """
         if self.current_page == 3:
             self._update_navigation_buttons()
-    
+
     def _create_algorithm_parameters_page(self):
-        """Create the algorithm parameters page UI programmatically."""
+        """Create the algorithm parameters page UI programmatically.
+
+        Creates the algorithm parameters page widget if it doesn't exist in the
+        .ui file. This provides backward compatibility for UI files that may not
+        include this page.
+        """
         # If the page already exists in the .ui, bind to it and return
         existing_page = self.stackedWidget.findChild(QWidget, "pageAlgorithmParameters")
         if existing_page is not None:
             self.pageAlgorithmParameters = existing_page
             self.algorithmParametersContainer = self.pageAlgorithmParameters.findChild(QWidget, "algorithmParametersContainer")
             return
-        
+
         # Otherwise create it programmatically (backward compatibility)
         self.pageAlgorithmParameters = QWidget()
         self.pageAlgorithmParameters.setObjectName("pageAlgorithmParameters")
@@ -120,57 +148,70 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         self.algorithmParametersContainer.setObjectName("algorithmParametersContainer")
         vertical_layout.addWidget(self.algorithmParametersContainer)
         self.stackedWidget.insertWidget(4, self.pageAlgorithmParameters)
-    
+
     def _on_continue(self):
-        """Handle continue button click."""
+        """Handle continue button click.
+
+        Saves current page data, validates it, and either moves to the next
+        page or completes the wizard if on the last page.
+        """
         # Save current page data
         if self.current_page < len(self.pages):
             self.pages[self.current_page].save_data()
-        
+
         # Validate current page
         if self.current_page < len(self.pages):
             if not self.pages[self.current_page].validate():
                 return  # Don't proceed if validation fails
-        
+
         # Move to next page or complete
         if self.current_page < self.total_pages - 1:
             # Exit current page
             if self.current_page < len(self.pages):
                 self.pages[self.current_page].on_exit()
-            
+
             self.current_page += 1
             self.stackedWidget.setCurrentIndex(self.current_page)
-            
+
             # Enter new page
             if self.current_page < len(self.pages):
                 self.pages[self.current_page].on_enter()
-            
+
             self._update_navigation_buttons()
         else:
             # Last page - complete wizard
             self._complete_wizard()
-    
+
     def _on_back(self):
-        """Handle back button click."""
+        """Handle back button click.
+
+        Saves current page data, exits the current page, and navigates to the
+        previous page if not on the first page.
+        """
         if self.current_page > 0:
             # Exit current page
             if self.current_page < len(self.pages):
                 self.pages[self.current_page].on_exit()
                 self.pages[self.current_page].save_data()
-            
+
             self.current_page -= 1
             self.stackedWidget.setCurrentIndex(self.current_page)
-            
+
             # Enter previous page
             if self.current_page < len(self.pages):
                 self.pages[self.current_page].on_enter()
-            
+
             self._update_navigation_buttons()
-    
+
     def _update_navigation_buttons(self):
-        """Update navigation button states."""
+        """Update navigation button states.
+
+        Enables/disables the back and continue buttons based on the current
+        page and validation state. Changes continue button text to "Start
+        Processing" on the last page.
+        """
         self.backButton.setEnabled(self.current_page > 0)
-        
+
         if self.current_page == self.total_pages - 1:
             self.continueButton.setText("Start Processing")
             self.continueButton.setEnabled(True)  # Always enable on last page
@@ -182,50 +223,60 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
                 self.continueButton.setEnabled(can_continue)
             else:
                 self.continueButton.setEnabled(True)
-    
+
     def _complete_wizard(self):
-        """Complete the wizard and save settings."""
+        """Complete the wizard and save settings.
+
+        Saves all page data, persists settings to SettingsService, and emits
+        the wizardCompleted signal with the collected wizard data before
+        accepting the dialog.
+        """
         # Save all page data
         for page in self.pages:
             page.save_data()
-        
+
         # Save skip preference (from GeneralSettingsPage)
         # This is already saved via signal handler, but ensure it's saved here too
         skip_value = 'Yes' if self.skipCheckBox.isChecked() else 'No'
         self.settings_service.set_setting('SkipImageAnalysisGuide', skip_value)
-        
+
         # Save wizard data to settings
         if self.wizard_data['drone'] is not None:
             # Save drone selection (could save model name)
             pass
-        
+
         # Save altitude unit preference
         self.settings_service.set_setting('DistanceUnit', self.wizard_data['altitude_unit'])
-        
+
         # Save max processes
         self.settings_service.set_setting('MaxProcesses', str(self.wizard_data['max_processes']))
-        
+
         # Save normalize histogram
         normalize = 'Yes' if self.wizard_data['normalize_histogram'] else 'No'
         self.settings_service.set_setting('NormalizeHistogram', normalize)
-        
+
         # Save identifier color
         color = self.wizard_data['identifier_color']
         color_str = f"{color.red()},{color.green()},{color.blue()}"
         self.settings_service.set_setting('IdentifierColor', color_str)
-        
+
         # Save processing resolution
         if self.wizard_data.get('processing_resolution'):
             self.settings_service.set_setting('ProcessingResolution', self.wizard_data['processing_resolution'])
-        
+
         # Emit signal with wizard data
         self.wizardCompleted.emit(self.wizard_data)
-        
+
         # Accept dialog
         self.accept()
-    
+
     def reject(self) -> None:
-        """Handle Close/Cancel. Persist skip preference before closing."""
+        """Handle Close/Cancel. Persist skip preference before closing.
+
+        Overrides QDialog.reject() to save the skip wizard preference before
+        closing the dialog, ensuring user preferences are preserved even if
+        the wizard is cancelled.
+        """
         try:
             # Save skip preference (from GeneralSettingsPage)
             skip_value = 'Yes' if self.skipCheckBox.isChecked() else 'No'

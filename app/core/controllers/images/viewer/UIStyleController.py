@@ -8,14 +8,14 @@ Provides centralized button styling logic for the viewer, including active/inact
 class UIStyleController:
     """
     Controller for managing UI element styling, particularly button states.
-    
+
     Handles dynamic styling based on button active/inactive states and theme.
     """
 
     def __init__(self, parent_viewer, theme):
         """
         Initialize the UI style controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
             theme (str): Current theme name ('Dark' or 'Light')
@@ -26,7 +26,7 @@ class UIStyleController:
     def update_toolbutton_style(self, button, is_active, property_name="buttonActive"):
         """
         Update a QToolButton's styling based on its active state.
-        
+
         Args:
             button: The QToolButton to style
             is_active (bool): Whether the button is in active state
@@ -34,9 +34,9 @@ class UIStyleController:
         """
         if button is None:
             return
-            
+
         button.setProperty(property_name, is_active)
-        
+
         if self.theme.lower() == 'light':
             # Light theme colors
             style = f"""
@@ -91,7 +91,7 @@ class UIStyleController:
                     background-color: rgba(136, 136, 136, 0.2);
                 }}
             """
-        
+
         button.setStyleSheet(style)
         button.style().unpolish(button)
         button.style().polish(button)
@@ -159,4 +159,3 @@ class UIStyleController:
                 self.parent.rotate_image_open,
                 "rotateActive"
             )
-

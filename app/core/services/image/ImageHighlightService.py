@@ -14,7 +14,7 @@ import tifffile
 class ImageHighlightService:
     """
     Service for applying visual highlights to images for detection visualization.
-    
+
     Handles both mask-based highlighting (efficient for large detection areas) and
     pixel-based highlighting (for individual detected pixels).
     """
@@ -102,4 +102,3 @@ class ImageHighlightService:
                                 highlighted_image[y, x] = highlight_color_array
 
         return highlighted_image
-

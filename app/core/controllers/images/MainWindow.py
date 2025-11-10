@@ -1,43 +1,40 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
+from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
+from algorithms.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
+from algorithms.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
+from algorithms.MRMap.controllers.MRMapController import MRMapController
+from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
+from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
+from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
+from core.services.ConfigService import ConfigService
+from core.services.XmlService import XmlService
+from core.services.SettingsService import SettingsService
+from core.services.AnalyzeService import AnalyzeService
+from core.services.LoggerService import LoggerService
+from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
+from core.controllers.streaming.IntegratedDetectionViewer import IntegratedDetectionViewer
+from core.controllers.streaming.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
+from core.controllers.streaming.RTMPColorDetectionViewer import RTMPColorDetectionViewer
+from core.controllers.images.VideoParser import VideoParser
+from core.controllers.Perferences import Preferences
+from core.controllers.images.viewer.Viewer import Viewer
+from helpers.PickleHelper import PickleHelper
+from core.views.images.MainWindow_ui import Ui_MainWindow
+from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
+                               QMessageBox, QSizePolicy, QAbstractButton)
+from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
+from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
+import qtawesome as qta
+import sys
+import platform
+import pathlib
+from core.views.components.GroupedComboBox import GroupedComboBox
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
-from core.views.components.GroupedComboBox import GroupedComboBox
-import pathlib
-import platform
-import sys
-import qtawesome as qta
-from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
-from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
-from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
-                               QMessageBox, QSizePolicy, QAbstractButton)
-from core.views.images.MainWindow_ui import Ui_MainWindow
-
-from helpers.PickleHelper import PickleHelper
-
-from core.controllers.images.viewer.Viewer import Viewer
-from core.controllers.Perferences import Preferences
-from core.controllers.images.VideoParser import VideoParser
-from core.controllers.streaming.RTMPColorDetectionViewer import RTMPColorDetectionViewer
-from core.controllers.streaming.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
-from core.controllers.streaming.IntegratedDetectionViewer import IntegratedDetectionViewer
-from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
-
-from core.services.LoggerService import LoggerService
-from core.services.AnalyzeService import AnalyzeService
-from core.services.SettingsService import SettingsService
-from core.services.XmlService import XmlService
-from core.services.ConfigService import ConfigService
 
 """****Import Algorithm Controllers****"""
-from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
-from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
-from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
-from algorithms.MRMap.controllers.MRMapController import MRMapController
-from algorithms.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
-from algorithms.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
-from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
-from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
 """****End Algorithm Import****"""
 
 
@@ -100,7 +97,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionLoadFile.triggered.connect(self._open_load_file)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
-        
+
         # Connect Image Analysis Guide menu item
         if hasattr(self, 'actionImageAnalysisGuide'):
             self.actionImageAnalysisGuide.triggered.connect(self._open_image_analysis_guide)
@@ -151,8 +148,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._previous_min_area = self.minAreaSpinBox.value()
         self._previous_max_area = self.maxAreaSpinBox.value()
 
-    
-
     def setStylesheets(self):
         """
         Sets the stylesheets for the main window.
@@ -178,6 +173,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 font-size: 11px;
             }
         """)
+
     def _load_algorithms(self):
         """
         Loads and categorizes algorithms for selection in the algorithm combobox.
@@ -622,7 +618,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def populate_from_wizard_data(self, wizard_data):
         """
         Populates the MainWindow UI with data from the wizard.
-        
+
         Args:
             wizard_data (dict): Dictionary containing wizard configuration data.
         """
@@ -631,7 +627,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.inputFolderLine.setText(wizard_data['input_directory'])
         if wizard_data.get('output_directory'):
             self.outputFolderLine.setText(wizard_data['output_directory'])
-        
+
         # Set identifier color
         if wizard_data.get('identifier_color'):
             color = wizard_data['identifier_color']
@@ -641,11 +637,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.identifierColor = color
             qcolor = QColor(*self.identifierColor)
             self.identifierColorButton.setStyleSheet("background-color: " + qcolor.name() + ";")
-        
+
         # Set max processes
         if wizard_data.get('max_processes'):
             self.maxProcessesSpinBox.setValue(wizard_data['max_processes'])
-        
+
         # Calculate and set min/max area from object size and GSD
         # GSD is stored in gsd_list as a list of sensor GSD values
         gsd_list = wizard_data.get('gsd_list', [])
@@ -656,10 +652,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if gsd_values:
                 # Use the first GSD value (or could average them)
                 gsd_cm_per_pixel = gsd_values[0]
-                
+
                 object_size_min_ft = wizard_data['object_size_min']
                 object_size_max_ft = wizard_data['object_size_max']
-                
+
                 # Convert object size from feet to cm, then to pixels
                 # object_size_cm = object_size_ft * 30.48
                 # pixels = object_size_cm / gsd_cm_per_pixel
@@ -667,13 +663,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 min_pixels = (object_size_min_ft * 30.48) / gsd_cm_per_pixel
                 max_pixels = (object_size_max_ft * 30.48) / gsd_cm_per_pixel
                 min_area = max(10, int(min_pixels * min_pixels)/250)
-                max_area = max(100,int(max_pixels * max_pixels))
-                
+                max_area = max(100, int(max_pixels * max_pixels))
+
                 self.minAreaSpinBox.setValue(min_area)
                 self._minAreaOriginal = min_area
                 self.maxAreaSpinBox.setValue(max_area)
                 self._maxAreaOriginal = max_area
-        
+
         # Set normalize histogram based on lighting conditions
         if wizard_data.get('normalize_histogram'):
             self.histogramCheckbox.setChecked(True)
@@ -683,14 +679,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.histogramLine.setText(ref_path)
         else:
             self.histogramCheckbox.setChecked(False)
-        
+
         # Set processing resolution
         if wizard_data.get('processing_resolution'):
             resolution_text = wizard_data['processing_resolution']
             if resolution_text in self.resolution_presets:
                 self.processingResolutionCombo.setCurrentText(resolution_text)
                 self.settings_service.set_setting('ProcessingResolution', resolution_text)
-        
+
         # Set algorithm
         if wizard_data.get('algorithm'):
             algorithm_label = wizard_data['algorithm']
@@ -701,7 +697,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.algorithmComboBox.setCurrentText(algorithm_label)
                     # Load algorithm widget (this will trigger _algorithmComboBox_changed)
                     self._algorithmComboBox_changed()
-                    
+
                     # Load algorithm options if available
                     # Wait a moment for the widget to be fully initialized
                     if wizard_data.get('algorithm_options'):
@@ -710,7 +706,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         if self.algorithmWidget:
                             self.algorithmWidget.load_options(wizard_data['algorithm_options'])
                     break
-        
+
         # Auto-start processing if requested
         if wizard_data.get('auto_start', False):
             # Use QTimer.singleShot to ensure UI is fully rendered before starting
@@ -722,20 +718,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens the Image Analysis Guide wizard and populates this MainWindow on completion.
         """
         from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
-        
+
         # Launch the wizard
         wizard = ImageAnalysisGuide()
-        
+
         # Connect to wizard completion to populate this MainWindow
         def _on_wizard_completed(wizard_data):
             # Populate this MainWindow with wizard data
             self.populate_from_wizard_data(wizard_data)
-        
+
         wizard.wizardCompleted.connect(_on_wizard_completed)
         wizard.exec()
-        
+
         # Wizard closed - MainWindow remains open
-    
+
     def _open_preferences(self):
         """
         Opens the Preferences dialog.
@@ -987,11 +983,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             theme (str): Name of the active theme used to resolve icon paths.
         """
         from helpers.IconHelper import IconHelper
-        
+
         self.inputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
         self.outputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
         self.startButton.setIcon(IconHelper.create_icon('fa6s.play', theme))
         self.cancelButton.setIcon(IconHelper.create_icon('mdi.close-circle', theme))
         self.viewResultsButton.setIcon(IconHelper.create_icon('fa6.images', theme))
         self.histogramButton.setIcon(IconHelper.create_icon('fa6.image', theme))
-        

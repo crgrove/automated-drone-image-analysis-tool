@@ -11,7 +11,7 @@ from core.services.LoggerService import LoggerService
 class AltitudeController:
     """
     Controller for managing custom altitude settings.
-    
+
     Handles custom AGL altitude input and management for images with
     negative or unreliable altitude data.
     """
@@ -19,7 +19,7 @@ class AltitudeController:
     def __init__(self, parent_viewer):
         """
         Initialize the altitude controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -30,7 +30,7 @@ class AltitudeController:
     def prompt_for_custom_altitude(self, auto_triggered=True):
         """
         Prompt user for custom AGL altitude when negative altitude is detected.
-        
+
         Args:
             auto_triggered (bool): If True, sets flag to -1 on cancel (don't show again)
         """
@@ -55,7 +55,7 @@ class AltitudeController:
     def _show_altitude_override_dialog(self, title, message, auto_triggered=True, default_value=100.0):
         """
         Show altitude override dialog and update custom altitude.
-        
+
         Args:
             title: Dialog window title
             message: Dialog message text
@@ -100,7 +100,7 @@ class AltitudeController:
     def get_effective_altitude(self):
         """
         Get the effective altitude for GSD calculations.
-        
+
         Returns:
             float or None: Custom altitude in feet if set and positive, otherwise None
         """
@@ -111,7 +111,7 @@ class AltitudeController:
     def set_custom_altitude(self, altitude_ft):
         """
         Set custom altitude directly.
-        
+
         Args:
             altitude_ft (float): Altitude in feet
         """
@@ -122,4 +122,3 @@ class AltitudeController:
         """Clear the custom altitude setting."""
         self.custom_agl_altitude_ft = None
         self.logger.info("Custom AGL altitude cleared")
-

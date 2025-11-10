@@ -13,22 +13,29 @@ from helpers.MetaDataHelper import MetaDataHelper
 
 
 class VideoParserService(QObject):
-    """Service to parse video into images."""
+    """Service to parse video into images.
+
+    Extracts frames from video files at specified intervals and optionally
+    embeds GPS metadata from SRT subtitle files.
+
+    Attributes:
+        sig_msg: Signal emitted with status messages (str).
+        sig_done: Signal emitted when processing completes (id, count).
+    """
 
     # Signals to send info back to the GUI
     sig_msg = Signal(str)
     sig_done = Signal(int, int)
 
     def __init__(self, id, video, srt, output, interval):
-        """
-        Initialize the VideoParserService with parameters for video processing.
+        """Initialize the VideoParserService with parameters for video processing.
 
         Args:
-            id (int): Numeric ID.
-            video (str): Path to the video file to be processed.
-            srt (str): Path to the SRT file with metadata for processing.
-            output (str): Path to the output directory where images will be stored.
-            interval (int): Time interval in seconds between frames to capture.
+            id: Numeric ID for this parser instance.
+            video: Path to the video file to be processed.
+            srt: Path to the SRT file with metadata for processing.
+            output: Path to the output directory where images will be stored.
+            interval: Time interval in seconds between frames to capture.
         """
         self.logger = LoggerService()
         super().__init__()
@@ -41,11 +48,11 @@ class VideoParserService(QObject):
 
     @Slot()
     def process_video(self):
-        """
-        Convert video frames to still images and attach metadata from an SRT file if provided.
+        """Convert video frames to still images and attach metadata from an SRT file if provided.
 
         Captures images at specified intervals, extracting GPS metadata from the SRT file
-        and embedding it into each image where available.
+        and embedding it into each image where available. Emits sig_msg for status updates
+        and sig_done when complete.
         """
         try:
             cap = cv2.VideoCapture(self.video_path)

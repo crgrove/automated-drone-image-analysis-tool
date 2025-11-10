@@ -18,22 +18,20 @@ Step 9: End-to-End Optimization (pending)
 """
 
 # Set environment variables before imports
+from core.services.LoggerService import LoggerService
+from PySide6.QtCore import QObject, Signal
+from enum import Enum
+from threading import Lock, Thread
+from collections import deque
+from dataclasses import dataclass, field
+from typing import List, Tuple, Optional, Dict, Any
+import time
+import numpy as np
+import cv2
 import os
 os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
 os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
 os.environ.setdefault('NPY_DISABLE_SVML', '1')
-
-import cv2
-import numpy as np
-import time
-from typing import List, Tuple, Optional, Dict, Any
-from dataclasses import dataclass, field
-from collections import deque
-from threading import Lock, Thread
-from enum import Enum
-
-from PySide6.QtCore import QObject, Signal
-from core.services.LoggerService import LoggerService
 
 
 # ============================================================================
@@ -333,17 +331,17 @@ class TimingOverlayRenderer:
         # Latest timings (real-time)
         if latest_timings:
             lines.append(f"Latest: motion={latest_timings.motion_detection_ms:.1f}ms "
-                        f"color={latest_timings.color_detection_ms:.1f}ms "
-                        f"render={latest_timings.render_ms:.1f}ms")
+                         f"color={latest_timings.color_detection_ms:.1f}ms "
+                         f"render={latest_timings.render_ms:.1f}ms")
 
         # Average timings
         if metrics.average_timings:
             avg = metrics.average_timings
             lines.append(f"Average: motion={avg.motion_detection_ms:.1f}ms "
-                        f"color={avg.color_detection_ms:.1f}ms "
-                        f"render={avg.render_ms:.1f}ms")
+                         f"color={avg.color_detection_ms:.1f}ms "
+                         f"render={avg.render_ms:.1f}ms")
             lines.append(f"Total: {avg.total_ms:.1f}ms/frame "
-                        f"(target: 33ms for 30fps)")
+                         f"(target: 33ms for 30fps)")
 
         # Detections
         lines.append(f"Detections: {metrics.detection_count}")
@@ -367,14 +365,14 @@ class TimingOverlayRenderer:
         # Draw semi-transparent background
         overlay = annotated.copy()
         cv2.rectangle(overlay, (5, 5), (5 + bg_width, 5 + bg_height),
-                     (0, 0, 0), -1)
+                      (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, annotated, 0.4, 0, annotated)
 
         # Draw text
         y_offset = 5 + padding + 15
         for line in lines:
             cv2.putText(annotated, line, (10, y_offset), font, font_scale,
-                       (0, 255, 0), thickness, cv2.LINE_AA)
+                        (0, 255, 0), thickness, cv2.LINE_AA)
             y_offset += line_height
 
         return annotated
@@ -1148,7 +1146,7 @@ class RealtimeIntegratedDetector(QObject):
         return persistent_mask
 
     def _fuse_detections(self, motion_detections: List[Detection], color_detections: List[Detection],
-                        config: IntegratedDetectionConfig) -> List[Detection]:
+                         config: IntegratedDetectionConfig) -> List[Detection]:
         """
         Step 5: Fuse motion and color detections using configured mode.
 
@@ -1358,7 +1356,7 @@ class RealtimeIntegratedDetector(QObject):
         )
 
     def _apply_temporal_voting(self, current_detections: List[Detection],
-                              config: IntegratedDetectionConfig) -> List[Detection]:
+                               config: IntegratedDetectionConfig) -> List[Detection]:
         """
         Step 5: Apply temporal majority voting to reduce flicker.
 
@@ -1498,7 +1496,7 @@ class RealtimeIntegratedDetector(QObject):
         return filtered
 
     def _apply_color_exclusion_filter(self, detections: List[Detection], frame_bgr: np.ndarray,
-                                     config: IntegratedDetectionConfig) -> List[Detection]:
+                                      config: IntegratedDetectionConfig) -> List[Detection]:
         """
         Task A2: Filter detections by excluded hue ranges (background learning).
 
@@ -1558,7 +1556,7 @@ class RealtimeIntegratedDetector(QObject):
         return filtered
 
     def sample_region_colors(self, frame_bgr: np.ndarray, x1: int, y1: int, x2: int, y2: int,
-                           hue_tolerance: float = 15.0) -> List[Tuple[float, float]]:
+                             hue_tolerance: float = 15.0) -> List[Tuple[float, float]]:
         """
         Task A2: Sample dominant colors from a region and return hue ranges to exclude.
 
@@ -1595,11 +1593,11 @@ class RealtimeIntegratedDetector(QObject):
         region_hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
 
         # Build histogram of hues in the region
-        hue_channel = region_hsv[:, :, 0]
+        # hue_channel = region_hsv[:, :, 0]  # Reserved for future use
         hist = cv2.calcHist([region_hsv], [0], None, [180], [0, 180])
 
         # Find top 5 dominant hues
-        top_hues = []
+        # top_hues = []  # Reserved for future use
         hist_flat = hist.flatten()
 
         # Get indices of top 5 peaks
@@ -1669,7 +1667,7 @@ class RealtimeIntegratedDetector(QObject):
             new_w = max(1, new_w)
             new_h = max(1, new_h)
             processing_frame = cv2.resize(working_frame, (new_w, new_h),
-                                         interpolation=cv2.INTER_LINEAR)
+                                          interpolation=cv2.INTER_LINEAR)
         else:
             # Input is smaller or equal - process at original resolution
             processing_frame = working_frame
@@ -1786,8 +1784,8 @@ class RealtimeIntegratedDetector(QObject):
             if config.max_detections_to_render > 0 and len(detections) > config.max_detections_to_render:
                 # Sort by confidence * area (prioritize high-confidence, larger detections)
                 detections_sorted = sorted(detections,
-                                          key=lambda d: d.confidence * d.area,
-                                          reverse=True)
+                                           key=lambda d: d.confidence * d.area,
+                                           reverse=True)
                 detections_to_render = detections_sorted[:config.max_detections_to_render]
                 detections_dropped = len(detections) - config.max_detections_to_render
 
@@ -1856,7 +1854,7 @@ class RealtimeIntegratedDetector(QObject):
                 if config.render_shape == 0:  # Box (uses contour bounds if available)
                     # Box already uses contour-based bounding box from detection
                     cv2.rectangle(annotated_frame, (x_scaled, y_scaled),
-                                (x_scaled + w_scaled, y_scaled + h_scaled), color, 2)
+                                  (x_scaled + w_scaled, y_scaled + h_scaled), color, 2)
                     # Add small centroid marker
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
                 elif config.render_shape == 1:  # Circle (exceeds contour by 50%)
@@ -1886,13 +1884,13 @@ class RealtimeIntegratedDetector(QObject):
                     else:
                         label = f"#{i+1} MOTION {int(detection.area)}px"
                     cv2.putText(annotated_frame, label, (x_scaled, max(15, y_scaled - 5)),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
 
             # Show warning if we dropped detections for performance
             if detections_dropped > 0:
                 warning_text = f"⚠ {total_detections} detections ({detections_dropped} not shown for performance)"
                 cv2.putText(annotated_frame, warning_text, (10, annotated_frame.shape[0] - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 1, cv2.LINE_AA)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 1, cv2.LINE_AA)
 
         # Show camera movement indicator at top of screen
         if is_camera_moving:
@@ -1906,11 +1904,11 @@ class RealtimeIntegratedDetector(QObject):
 
             # Text centered at top
             cv2.putText(annotated_frame, "CAMERA MOVEMENT DETECTED",
-                       (w//2 - 190, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2, cv2.LINE_AA)
+                        (w//2 - 190, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2, cv2.LINE_AA)
             cv2.putText(annotated_frame, "Motion detection paused (color still active)",
-                       (w//2 - 210, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+                        (w//2 - 210, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Add timing overlay
         if config.show_timing_overlay:
@@ -1922,7 +1920,7 @@ class RealtimeIntegratedDetector(QObject):
         if config.render_at_processing_res and scale_factor < 1.0:
             h_orig, w_orig = working_frame.shape[:2]
             annotated_frame = cv2.resize(annotated_frame, (w_orig, h_orig),
-                                        interpolation=cv2.INTER_LINEAR)
+                                         interpolation=cv2.INTER_LINEAR)
 
         timings.render_ms = (time.perf_counter() - render_start) * 1000
 

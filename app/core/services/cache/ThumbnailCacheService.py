@@ -84,8 +84,6 @@ class ThumbnailCacheService:
         Returns:
             Unique hash key for this thumbnail
         """
-        import os
-
         # Use only the filename to make cache portable across machines
         # Drone images have unique filenames, so this is safe
         filename = os.path.basename(image_path)
@@ -116,7 +114,6 @@ class ThumbnailCacheService:
         Returns:
             Unique hash key using old formula
         """
-        import os
 
         # Use XML path if provided (for relocated files), otherwise use absolute path
         # The XML path is the original path from when cache was generated
@@ -131,7 +128,7 @@ class ThumbnailCacheService:
 
         try:
             mtime = os.path.getmtime(image_path)
-        except:
+        except Exception:
             mtime = 0
 
         center = aoi_data.get('center', (0, 0))
@@ -390,7 +387,7 @@ class ThumbnailCacheService:
         return False
 
     def get_thumbnail(self, image_path: str, aoi_data: Dict[str, Any],
-                     target_size: Tuple[int, int] = (180, 180)) -> Optional[QIcon]:
+                      target_size: Tuple[int, int] = (180, 180)) -> Optional[QIcon]:
         """
         Get thumbnail with multi-level caching.
 
@@ -531,6 +528,6 @@ class ThumbnailWorker(QRunnable):
                 cache_key = self.cache_service.get_cache_key(self.image_path, self.aoi_data)
                 self.callback(cache_key, icon)
 
-        except Exception as e:
+        except Exception:
             # Don't crash the thread pool
             pass

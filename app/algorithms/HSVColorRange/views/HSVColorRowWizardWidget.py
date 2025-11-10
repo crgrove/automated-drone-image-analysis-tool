@@ -10,7 +10,7 @@ A simplified widget for HSV color range configuration in the wizard with:
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel, QComboBox,
-                                QPushButton, QSizePolicy, QColorDialog)
+                               QPushButton, QSizePolicy, QColorDialog)
 from core.services.color.CustomColorsService import get_custom_colors_service
 import cv2
 import numpy as np
@@ -18,9 +18,9 @@ import numpy as np
 
 class ClickableColorSwatch(QFrame):
     """A clickable color swatch that opens a color picker when clicked."""
-    
+
     colorChanged = Signal(QColor)
-    
+
     def __init__(self, parent=None, color=None):
         super().__init__(parent)
         self._color = color or QColor(255, 0, 0)
@@ -30,17 +30,17 @@ class ClickableColorSwatch(QFrame):
         self.setMaximumSize(80, 35)
         self.setCursor(Qt.PointingHandCursor)
         self._update_style()
-    
+
     def setColor(self, color):
         """Set the color and update display."""
         self._color = color
         self._update_style()
         self.colorChanged.emit(color)
-    
+
     def getColor(self):
         """Get the current color."""
         return self._color
-    
+
     def _update_style(self):
         """Update the stylesheet with current color."""
         if not self._color or not self._color.isValid():
@@ -56,7 +56,7 @@ class ClickableColorSwatch(QFrame):
         self.setToolTip(f"HSV: ({h}, {s}, {v})\nClick to change color")
         self.update()
         self.repaint()
-    
+
     def paintEvent(self, event):
         """Draw HSV text on top of the swatch color."""
         super().paintEvent(event)
@@ -66,12 +66,12 @@ class ClickableColorSwatch(QFrame):
         r, g, b = self._color.red(), self._color.green(), self._color.blue()
         from PySide6.QtGui import QPainter, QFont
         text_color = Qt.white if (r + g + b) < 384 else Qt.black
-        
+
         # Compute HSV in OpenCV scale for display
         hsv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0][0]
         h, s, v = int(hsv[0]), int(hsv[1]), int(hsv[2])
         text = f"({h},{s},{v})"
-        
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(text_color)
@@ -81,7 +81,7 @@ class ClickableColorSwatch(QFrame):
         painter.setFont(font)
         painter.drawText(self.rect(), Qt.AlignCenter, text)
         painter.end()
-    
+
     def mousePressEvent(self, event):
         """Handle mouse click to open color picker."""
         if event.button() == Qt.LeftButton:
@@ -98,10 +98,10 @@ class ClickableColorSwatch(QFrame):
 
 class HSVColorRowWizardWidget(QWidget):
     """Simplified widget representing an HSV color range configuration for wizard."""
-    
+
     delete_requested = Signal(QWidget)
     changed = Signal()
-    
+
     # Tolerance presets for HSV: (label, (h_range, s_range, v_range))
     TOLERANCE_PRESETS = [
         ("Very Narrow", (10, 30, 30)),
@@ -110,18 +110,18 @@ class HSVColorRowWizardWidget(QWidget):
         ("Wide", (30, 100, 100)),
         ("Very Wide", (40, 120, 120))
     ]
-    
+
     def __init__(self, parent=None, color=None, tolerance_index=2):
         """
         Initialize an HSV color row wizard widget.
-        
+
         Args:
             parent: Parent widget
             color: QColor or tuple (r, g, b) for the target color
             tolerance_index: Index into TOLERANCE_PRESETS (0-4, default 2 = Moderate)
         """
         super().__init__(parent)
-        
+
         # Store color
         if color is None:
             self.color = QColor(255, 0, 0)
@@ -129,11 +129,11 @@ class HSVColorRowWizardWidget(QWidget):
             self.color = QColor(color[0], color[1], color[2])
         else:
             self.color = color
-        
+
         self.tolerance_index = max(0, min(tolerance_index, len(self.TOLERANCE_PRESETS) - 1))
-        
+
         self._setup_ui()
-        
+
     def _setup_ui(self):
         """Set up the UI layout and widgets."""
         layout = QHBoxLayout(self)
@@ -143,20 +143,20 @@ class HSVColorRowWizardWidget(QWidget):
         # Keep row compact: don't expand to full dialog width
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(42)
-        
+
         # Color swatch - ensure color is set properly
         self.colorSwatch = ClickableColorSwatch(self, self.color)
         self.colorSwatch.colorChanged.connect(self._on_color_changed)
         # Force update to ensure color is displayed
         self.colorSwatch.setColor(self.color)
         layout.addWidget(self.colorSwatch)
-        
+
         # Tolerance label
         tolerance_label = QLabel("Match\nTolerance:", self)
         tolerance_label.setFont(self.font())
         tolerance_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         layout.addWidget(tolerance_label)
-        
+
         # Tolerance dropdown
         self.toleranceCombo = QComboBox(self)
         # Inputs should be 11pt
@@ -171,7 +171,7 @@ class HSVColorRowWizardWidget(QWidget):
         self.toleranceCombo.setMaximumWidth(200)
         self.toleranceCombo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.toleranceCombo)
-        
+
         # Delete button
         self.deleteButton = QPushButton("✕", self)
         btn_font = QFont(self.font())
@@ -199,17 +199,17 @@ class HSVColorRowWizardWidget(QWidget):
         self.deleteButton.clicked.connect(lambda: self.delete_requested.emit(self))
         self.deleteButton.setFocusPolicy(Qt.NoFocus)  # Prevent delete button from getting focus
         layout.addWidget(self.deleteButton)
-    
+
     def _on_color_changed(self, color):
         """Handle color swatch change."""
         self.color = color
         self.changed.emit()
-    
+
     def _on_tolerance_changed(self, index):
         """Handle tolerance dropdown change."""
         self.tolerance_index = index
         self.changed.emit()
-    
+
     def set_color(self, color):
         """Set the target color."""
         if isinstance(color, tuple):
@@ -220,40 +220,39 @@ class HSVColorRowWizardWidget(QWidget):
         self.colorSwatch.setColor(self.color)
         self.colorSwatch.blockSignals(False)
         self.changed.emit()
-        
+
     def get_color(self):
         """Get the target color as QColor."""
         return self.color
-        
+
     def get_rgb(self):
         """Get the target color as RGB tuple."""
         return (self.color.red(), self.color.green(), self.color.blue())
-    
+
     def get_tolerance_index(self):
         """Get the selected tolerance index."""
         return self.tolerance_index
-    
+
     def get_tolerance_values(self):
         """Get the HSV tolerance values (h_range, s_range, v_range)."""
         return self.TOLERANCE_PRESETS[self.tolerance_index][1]
-    
+
     def get_ranges(self):
         """Get the range values for backward compatibility."""
         return self.get_tolerance_values()
-    
+
     def get_color_range(self):
         """Get the min and max HSV range as tuples based on tolerance."""
         r, g, b = self.color.red(), self.color.green(), self.color.blue()
-        
+
         # Convert RGB to HSV (OpenCV format: H=0-179, S=0-255, V=0-255)
         hsv = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0][0]
         h, s, v = int(hsv[0]), int(hsv[1]), int(hsv[2])
-        
+
         # Get tolerance values
         h_range, s_range, v_range = self.get_tolerance_values()
-        
+
         # Calculate min/max with clamping
         min_hsv = (max(0, h - h_range), max(0, s - s_range), max(0, v - v_range))
         max_hsv = (min(179, h + h_range), min(255, s + s_range), min(255, v + v_range))
         return min_hsv, max_hsv
-

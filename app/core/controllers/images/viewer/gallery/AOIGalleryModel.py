@@ -148,7 +148,7 @@ class AOIGalleryModel(QAbstractListModel):
 
         # Clear old data
         self.aoi_items = items
-        
+
         # Only clear thumbnail cache if this is a new dataset (not just filtering/sorting)
         # When preserve_color_cache is True, we're filtering/sorting the same dataset,
         # so we should preserve thumbnails that are already loaded
@@ -377,7 +377,6 @@ class AOIGalleryModel(QAbstractListModel):
         except Exception as e:
             self.logger.error(f"Error generating thumbnail for image {image_idx}, AOI {aoi_idx}: {e}")
             return None
-
 
     def _crop_aoi_region(self, image_array, aoi_data):
         """

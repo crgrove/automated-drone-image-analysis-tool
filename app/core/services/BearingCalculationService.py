@@ -72,12 +72,14 @@ class BearingCalculationService(QObject):
         images: List[Dict[str, Any]],
         track_file_path: str
     ):
-        """
-        Calculate bearings for images using an external track file.
+        """Calculate bearings for images using an external track file.
+
+        Parses track file (KML, GPX, or CSV), interpolates bearings for each
+        image based on timestamps, and emits calculation_complete signal with results.
 
         Args:
-            images: List of image dicts with 'path', 'timestamp', 'lat', 'lon'
-            track_file_path: Path to KML, GPX, or CSV track file
+            images: List of image dicts with 'path', 'timestamp', 'lat', 'lon'.
+            track_file_path: Path to KML, GPX, or CSV track file.
         """
         self._cancel_requested = False
 
@@ -118,11 +120,14 @@ class BearingCalculationService(QObject):
             self.calculation_error.emit(str(e))
 
     def calculate_auto(self, images: List[Dict[str, Any]]):
-        """
-        Auto-calculate bearings from image GPS coordinates only.
+        """Auto-calculate bearings from image GPS coordinates only.
+
+        Calculates bearings by analyzing GPS sequence from images themselves,
+        detecting turns and handling stationary periods. Emits calculation_complete
+        signal with results.
 
         Args:
-            images: List of image dicts with 'path', 'timestamp', 'lat', 'lon'
+            images: List of image dicts with 'path', 'timestamp', 'lat', 'lon'.
         """
         self._cancel_requested = False
 
@@ -286,7 +291,7 @@ class BearingCalculationService(QObject):
                     alt = float(row[alt_col]) if alt_col and row[alt_col] else None
 
                     track_points.append(TrackPoint(ts, lat, lon, alt))
-                except (ValueError, KeyError) as e:
+                except (ValueError, KeyError):
                     # Skip invalid rows
                     continue
 
@@ -478,7 +483,11 @@ class BearingCalculationService(QObject):
         # Debug: Check first image structure
         if len(images) > 0:
             first_img = images[0]
-            self._logger.info(f"First image data: path={first_img.get('path')}, lat={first_img.get('lat')}, lon={first_img.get('lon')}, timestamp={first_img.get('timestamp')}")
+            self._logger.info(
+                f"First image data: path={first_img.get('path')}, "
+                f"lat={first_img.get('lat')}, lon={first_img.get('lon')}, "
+                f"timestamp={first_img.get('timestamp')}"
+            )
 
         for idx, img in enumerate(images):
             # Emit progress during extraction
@@ -592,7 +601,7 @@ class BearingCalculationService(QObject):
                 # Check alignment with PREVIOUS leg using best-fit bearing from multiple points
                 aligned_with_prev_leg = False
                 if i >= 2:
-                    prev_prev = imgs_with_gps[i-2]
+                    # prev_prev = imgs_with_gps[i-2]  # Reserved for future use
 
                     # Calculate leg bearing using the furthest points available for stability
                     # Look back up to 5 points or start of data
@@ -624,11 +633,16 @@ class BearingCalculationService(QObject):
 
                         # Debug logging
                         if i <= 10:  # Log first 10 points
-                            self._logger.info(f"Point {i}: Aligned with PREV leg. leg_bearing={leg_bearing:.2f}°, point_bearing={current_from_prev_bearing:.2f}°, diff={angle_diff:.2f}°")
+                            self._logger.info(
+                                f"Point {i}: Aligned with PREV leg. "
+                                f"leg_bearing={leg_bearing:.2f}°, "
+                                f"point_bearing={current_from_prev_bearing:.2f}°, "
+                                f"diff={angle_diff:.2f}°"
+                            )
 
                 # If NOT aligned with previous leg, check NEXT leg using best-fit bearing
                 if not aligned_with_prev_leg and i <= N - 3:
-                    next_next = imgs_with_gps[i+2]
+                    # next_next = imgs_with_gps[i+2]  # Reserved for future use
 
                     # Calculate leg bearing using the furthest points available for stability
                     # Look ahead up to 5 points or end of data
@@ -658,7 +672,12 @@ class BearingCalculationService(QObject):
 
                         # Debug logging
                         if i <= 10:
-                            self._logger.info(f"Point {i}: Aligned with NEXT leg. leg_bearing={next_leg_bearing:.2f}°, point_bearing={current_to_next_bearing:.2f}°, diff={angle_diff:.2f}°")
+                            self._logger.info(
+                                f"Point {i}: Aligned with NEXT leg. "
+                                f"leg_bearing={next_leg_bearing:.2f}°, "
+                                f"point_bearing={current_to_next_bearing:.2f}°, "
+                                f"diff={angle_diff:.2f}°"
+                            )
                     else:
                         # Not aligned with either leg - we're in transition between legs
                         # Use bearing from current to next point as best estimate

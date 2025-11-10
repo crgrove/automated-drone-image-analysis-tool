@@ -48,5 +48,3 @@ def get_predefined_colors() -> List[Dict[str, Any]]:
 
     # Nothing available
     return []
-
-

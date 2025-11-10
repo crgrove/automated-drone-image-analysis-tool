@@ -1,39 +1,52 @@
 class AlgorithmController:
-    """Base class for algorithm controllers that manages algorithm options and validation."""
+    """Base class for algorithm controllers that manages algorithm options and validation.
+
+    Provides a common interface for algorithm configuration UI controllers.
+    Subclasses must implement get_options(), validate(), and load_options().
+
+    Attributes:
+        name: Name of the algorithm.
+        is_thermal: Whether this algorithm is for thermal images.
+    """
 
     def __init__(self, config):
-        """
-        Initializes the AlgorithmController with the given name and thermal flag.
+        """Initialize the AlgorithmController with the given name and thermal flag.
 
         Args:
-            config (dict): Algorithm config information.
+            config: Algorithm config dictionary containing 'name' and 'type'.
         """
         self.name = config['name']
         self.is_thermal = (config['type'] == 'Thermal')
 
     def get_options(self):
-        """
-        Populates and returns options based on user-selected values.
+        """Populate and return options based on user-selected values.
 
         Returns:
-            dict: A dictionary of option names and their values.
+            Dictionary of option names and their values.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
         """
         raise NotImplementedError
 
     def validate(self):
-        """
-        Validates that the required values have been provided.
+        """Validate that the required values have been provided.
 
         Returns:
-            str: An error message if validation fails, else None.
+            Error message string if validation fails, else None.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
         """
         raise NotImplementedError
 
     def load_options(self, options):
-        """
-        Sets UI elements based on provided options.
+        """Set UI elements based on provided options.
 
         Args:
-            options (dict): Dictionary of options to set.
+            options: Dictionary of options to set.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
         """
         raise NotImplementedError

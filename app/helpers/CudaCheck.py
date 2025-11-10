@@ -5,26 +5,32 @@ import re
 
 
 class CudaCheck:
+    """Helper class for checking CUDA and GPU support for ONNX Runtime.
+
+    Provides utilities to verify CUDA Toolkit, cuDNN, and ONNX Runtime
+    GPU provider availability.
+    """
 
     @staticmethod
     def check_onnxruntime_gpu_env():
-        """
-        Check the runtime environment for ONNX GPU support:
+        """Check the runtime environment for ONNX GPU support.
+
+        Checks:
         - CUDA Toolkit installation (version >= 12.0)
         - cuDNN installation
         - cuDNN path configuration
         - ONNX Runtime CUDAExecutionProvider availability
 
         Returns:
-            dict: A dictionary summarizing each check and an overall result.
-                {
-                    "cuda_installed": bool,
-                    "cuda_version_sufficient": bool,
-                    "cudnn_installed": bool,
-                    "cudnn_in_path": bool,
-                    "ort_cuda_provider_available": bool,
-                    "overall": bool
-                }
+            Dictionary summarizing each check and an overall result:
+            {
+                "cuda_installed": bool,
+                "cuda_version_sufficient": bool,
+                "cudnn_installed": bool,
+                "cudnn_in_path": bool,
+                "ort_cuda_provider_available": bool,
+                "overall": bool
+            }
         """
         results = {
             "cuda_installed": False,

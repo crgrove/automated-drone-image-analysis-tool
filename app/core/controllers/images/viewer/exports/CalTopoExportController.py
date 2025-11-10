@@ -142,8 +142,8 @@ class CalTopoExportController:
                 QMessageBox.critical(
                     self.parent,
                     "Export Failed",
-                    f"Failed to export markers to CalTopo.\n\n"
-                    f"Please check the console output for error details."
+                    "Failed to export markers to CalTopo.\n\n"
+                    "Please check the console output for error details."
                 )
                 return False
 
@@ -198,7 +198,6 @@ class CalTopoExportController:
                 # Get image dimensions for AOI GPS calculation
                 img_array = image_service.img_array
                 height, width = img_array.shape[:2]
-                image_center = (width/2, height/2)
 
                 # Get bearing
                 # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
@@ -226,13 +225,7 @@ class CalTopoExportController:
                 if gsd_cm is None:
                     gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
 
-                # Check gimbal angle for accuracy
-                gimbal_pitch = image_service.get_camera_pitch()
-                is_nadir = True
-                if gimbal_pitch is not None:
-                    is_nadir = (-95 <= gimbal_pitch <= -85)
-
-            except Exception as e:
+            except Exception:
                 continue
 
             # Get AOI data
@@ -267,7 +260,7 @@ class CalTopoExportController:
 
                     if result:
                         aoi_lat, aoi_lon = result
-                        gps_note = f"Estimated AOI GPS\n"
+                        gps_note = "Estimated AOI GPS\n"
                     else:
                         gps_note = "Image GPS (calculation failed)\n"
                 except Exception as e:
@@ -281,7 +274,7 @@ class CalTopoExportController:
                     if color_result:
                         marker_rgb = color_result['rgb']
                         color_info = f"Color/Temp: Hue: {color_result['hue_degrees']}° {color_result['hex']}\n"
-                except Exception as e:
+                except Exception:
                     # If color calculation fails, continue without color
                     pass
 
@@ -413,6 +406,7 @@ class CalTopoExportController:
             loop = QEventLoop()
             QTimer.singleShot(5000, loop.quit)  # 5 second timeout for network request
             timer = QTimer()
+
             def check():
                 if result_container['result'] is not None:
                     loop.quit()
@@ -565,6 +559,7 @@ class CalTopoExportController:
         loop = QEventLoop()
         QTimer.singleShot(1000, loop.quit)
         timer = QTimer()
+
         def check():
             if result_container['result'] is not None:
                 loop.quit()
@@ -576,7 +571,7 @@ class CalTopoExportController:
         if result_container['result']:
             try:
                 return json.loads(result_container['result'])
-            except:
+            except Exception:
                 pass
 
         return None
@@ -753,6 +748,7 @@ class CalTopoExportController:
                 loop = QEventLoop()
                 QTimer.singleShot(1000, loop.quit)
                 timer = QTimer()
+
                 def check():
                     if result_container['result'] is not None:
                         loop.quit()
@@ -907,6 +903,7 @@ class CalTopoExportController:
                 loop = QEventLoop()
                 QTimer.singleShot(1000, loop.quit)
                 timer = QTimer()
+
                 def check():
                     if result_container['result'] is not None:
                         loop.quit()

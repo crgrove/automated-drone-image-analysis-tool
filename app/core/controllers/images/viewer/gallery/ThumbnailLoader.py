@@ -62,9 +62,9 @@ class ThumbnailLoader(QObject):
         self.total_pending = 0
 
     def queue_thumbnail(self, image_idx: int, aoi_idx: int,
-                       image_path: str, aoi_data: Dict,
-                       xml_path: str = None,
-                       high_priority: bool = False):
+                        image_path: str, aoi_data: Dict,
+                        xml_path: str = None,
+                        high_priority: bool = False):
         """
         Queue a thumbnail for background loading, or load immediately if cached.
 
@@ -88,17 +88,17 @@ class ThumbnailLoader(QObject):
             return
 
         # Check if already in queue
-        in_queue = any(item[0] == image_idx and item[1] == aoi_idx 
-                      for item in self.high_priority_queue + self.pending_loads)
+        in_queue = any(item[0] == image_idx and item[1] == aoi_idx
+                       for item in self.high_priority_queue + self.pending_loads)
         if in_queue:
             # If already in queue and this is high priority, promote it to high priority queue
             if high_priority:
                 # Remove from normal queue if present
-                self.pending_loads = [item for item in self.pending_loads 
-                                     if not (item[0] == image_idx and item[1] == aoi_idx)]
+                self.pending_loads = [item for item in self.pending_loads
+                                      if not (item[0] == image_idx and item[1] == aoi_idx)]
                 # Add to high priority if not already there
-                if not any(item[0] == image_idx and item[1] == aoi_idx 
-                          for item in self.high_priority_queue):
+                if not any(item[0] == image_idx and item[1] == aoi_idx
+                           for item in self.high_priority_queue):
                     item = (image_idx, aoi_idx, image_path, aoi_data_with_xml)
                     self.high_priority_queue.append(item)
             return
@@ -156,7 +156,7 @@ class ThumbnailLoader(QObject):
             self.batch_timer.stop()
 
     def _start_load(self, image_idx: int, aoi_idx: int,
-                   image_path: str, aoi_data: Dict):
+                    image_path: str, aoi_data: Dict):
         """Start loading a single thumbnail."""
         try:
             # Create worker with callback

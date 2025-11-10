@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+from pathlib import Path
+import subprocess
+import glob
+import json
 import re
 import os
 from subprocess import check_call
@@ -12,10 +16,6 @@ cmdclass = {}
 
 
 # PySide6 build tools
-import json
-import glob
-import subprocess
-from pathlib import Path
 
 has_build_ui = True
 
@@ -41,7 +41,7 @@ if has_build_ui:
             # Load configuration from pyuic.json
             with open('pyuic.json', 'r') as f:
                 config = json.load(f)
-            
+
             # Process UI files
             for file_pattern, output_dir in config['files']:
                 if file_pattern.endswith('.ui'):
@@ -60,11 +60,11 @@ if has_build_ui:
             try:
                 # Ensure output directory exists
                 Path(output_dir).mkdir(parents=True, exist_ok=True)
-                
+
                 # Generate output filename
                 ui_name = Path(ui_file).stem
                 output_file = Path(output_dir) / f"{ui_name}_ui.py"
-                
+
                 # Run pyside6-uic
                 cmd = [
                     'pyside6-uic',
@@ -73,10 +73,10 @@ if has_build_ui:
                     '-o',
                     str(output_file)
                 ]
-                
+
                 print(f"Converting {ui_file} -> {output_file}")
                 subprocess.run(cmd, check=True)
-                
+
             except subprocess.CalledProcessError as e:
                 print(f"Error converting {ui_file}: {e}")
             except Exception as e:
@@ -87,11 +87,11 @@ if has_build_ui:
             try:
                 # Ensure output directory exists
                 Path(output_dir).mkdir(parents=True, exist_ok=True)
-                
+
                 # Generate output filename
                 qrc_name = Path(qrc_file).stem
                 output_file = Path(output_dir) / f"{qrc_name}_rc.py"
-                
+
                 # Run pyside6-rcc
                 cmd = [
                     'pyside6-rcc',
@@ -99,10 +99,10 @@ if has_build_ui:
                     '-o',
                     str(output_file)
                 ]
-                
+
                 print(f"Converting {qrc_file} -> {output_file}")
                 subprocess.run(cmd, check=True)
-                
+
             except subprocess.CalledProcessError as e:
                 print(f"Error converting {qrc_file}: {e}")
             except Exception as e:

@@ -32,7 +32,6 @@ class StatusController:
         self.parent = parent_viewer
         self.logger = LoggerService()  # Create our own logger
 
-
     def message_listener(self, key, value):
         """Updates the status bar with all key-value pairs from self.messages, skipping None values."""
         status_bar = self.parent.statusBar

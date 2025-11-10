@@ -188,7 +188,7 @@ class UpscaleDialog(QDialog):
 
         # Set initial size (will be adjusted after image is loaded)
         self.resize(1000, 800)
-        
+
         # Auto-upscale if requested
         if auto_upscale and image_array is not None:
             # Use QTimer to defer upscaling until after the dialog is fully shown
@@ -287,7 +287,6 @@ class UpscaleDialog(QDialog):
             f"Use mouse wheel to zoom, right-click to pan"
         )
 
-
     def _get_visible_portion(self):
         """
         Extract the currently visible portion of the image from the viewer.
@@ -330,17 +329,17 @@ class UpscaleDialog(QDialog):
         """Perform the initial upscale in-place (not creating a new dialog)."""
         if self.image_array is None or self.image_array.size == 0:
             return
-        
+
         try:
             # Upscale the full image
             upscaled_image = self._upscale_image(self.image_array, self.upscale_factor)
-            
+
             # Update current level
             self.current_level = self.current_level * self.upscale_factor
-            
+
             # Update window title
             self.setWindowTitle(f"Upscaled View - {self.current_level}x")
-            
+
             # Display the upscaled image
             self._display_image(upscaled_image)
         except Exception as e:
@@ -644,7 +643,7 @@ class UpscaleDialog(QDialog):
             # Check for CUDA
             if cv2.cuda.getCudaEnabledDeviceCount() > 0:
                 return True
-        except:
+        except Exception:
             pass
         return False
 

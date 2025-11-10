@@ -27,7 +27,16 @@ from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnom
 
 
 class AnalyzeService(QObject):
-    """Service to process images using a selected algorithm."""
+    """Service to process images using a selected algorithm.
+
+    Coordinates multi-process image analysis with progress tracking, caching,
+    and result export. Supports various algorithms and processing options.
+
+    Attributes:
+        sig_msg: Signal emitted with status messages (str).
+        sig_aois: Signal emitted when AOIs are found.
+        sig_done: Signal emitted when processing completes (id, total, message).
+    """
 
     # Signals to send info back to the GUI
     sig_msg = Signal(str)
@@ -37,26 +46,24 @@ class AnalyzeService(QObject):
     def __init__(self, id, algorithm, input, output, identifier_color, min_area, num_processes,
                  max_aois, aoi_radius, histogram_reference_path, kmeans_clusters, options, max_area,
                  processing_resolution=1.0):
-        """
-        Initialize the AnalyzeService with parameters for processing images.
+        """Initialize the AnalyzeService with parameters for processing images.
 
         Args:
-            id (int): Numeric ID.
-            algorithm (dict): Dictionary specifying the algorithm for analysis.
-            input (str): Path to the input directory containing images.
-            output (str): Path to the output directory where processed images will be stored.
-            identifier_color (tuple[int, int, int]): RGB values to highlight areas of interest.
-            min_area (int): Minimum size in pixels for an object to be considered an area of interest.
-            max_area (int): Maximum area in pixels for an object to be considered an area of interest.
-            num_processes (int): Number of concurrent processes for image processing.
-            max_aois (int): Maximum areas of interest threshold in a single image before issuing a warning.
-            aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
-            histogram_reference_path (str): Path to the histogram reference image.
-            kmeans_clusters (int): Number of clusters (colors) to retain in the image.
-            options (dict): Additional algorithm-specific options.
-            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
-            processing_resolution (float): Percentage to scale images (0.1 to 1.0).
-                1.0 means process at original resolution (no scaling).
+            id: Numeric ID for this analysis session.
+            algorithm: Dictionary specifying the algorithm for analysis.
+            input: Path to the input directory containing images.
+            output: Path to the output directory where processed images will be stored.
+            identifier_color: RGB values to highlight areas of interest.
+            min_area: Minimum size in pixels for an object to be considered an area of interest.
+            num_processes: Number of concurrent processes for image processing.
+            max_aois: Maximum areas of interest threshold in a single image before issuing a warning.
+            aoi_radius: Radius added to the minimum enclosing circle around areas of interest.
+            histogram_reference_path: Path to the histogram reference image.
+            kmeans_clusters: Number of clusters (colors) to retain in the image.
+            options: Additional algorithm-specific options.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            processing_resolution: Percentage to scale images (0.1 to 1.0).
+                1.0 means process at original resolution (no scaling). Defaults to 1.0.
         """
         self.logger = LoggerService()
         self.xmlService = XmlService()
@@ -84,8 +91,10 @@ class AnalyzeService(QObject):
 
     @Slot()
     def process_files(self):
-        """
-        Process all files in the input directory using the selected algorithm and settings.
+        """Process all files in the input directory using the selected algorithm and settings.
+
+        Sets up output directories, processes images in parallel, generates AOI
+        caches, and exports results to XML. Emits progress signals throughout.
         """
         try:
             self._setup_output_dir()
@@ -189,26 +198,31 @@ class AnalyzeService(QObject):
     @staticmethod
     def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
                      thermal, processing_resolution=1.0):
-        """
-        Process a single image using the selected algorithm and settings.
+        """Process a single image using the selected algorithm and settings.
+
+        Applies histogram normalization and k-means clustering if specified,
+        then processes the image with the selected algorithm. Generates
+        thumbnails and caches for detected areas of interest.
 
         Args:
-            algorithm (dict): Dictionary specifying the algorithm for analysis.
-            identifier_color (tuple[int, int, int]): RGB values for highlighting areas of interest.
-            min_area (int): Minimum size in pixels for an object to be considered an area of interest.
-            max_area (int): Maximum size in pixels for an object to be considered an area of interest.
-            aoi_radius (int): Radius added to the minimum enclosing circle around areas of interest.
-            options (dict): Additional algorithm-specific options.
-            full_path (str): Path to the image file being analyzed.
-            input_dir (str): Path to the input directory containing images.
-            output_dir (str): Path to the output directory for processed images.
-            hist_ref_path (str): Path to the histogram reference image.
-            kmeans_clusters (int): Number of clusters (colors) to retain in the image.
-            thermal (bool): Whether this is a thermal image algorithm.
-            processing_resolution (float): Percentage to scale images (0.1 to 1.0). 1.0 = no scaling.
+            algorithm: Dictionary specifying the algorithm for analysis.
+            identifier_color: RGB values for highlighting areas of interest.
+            min_area: Minimum size in pixels for an object to be considered an area of interest.
+            max_area: Maximum size in pixels for an object to be considered an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around areas of interest.
+            options: Additional algorithm-specific options.
+            full_path: Path to the image file being analyzed.
+            input_dir: Path to the input directory containing images.
+            output_dir: Path to the output directory for processed images.
+            hist_ref_path: Path to the histogram reference image.
+            kmeans_clusters: Number of clusters (colors) to retain in the image.
+            thermal: Whether this is a thermal image algorithm.
+            processing_resolution: Percentage to scale images (0.1 to 1.0).
+                1.0 = no scaling. Defaults to 1.0.
 
         Returns:
-            tuple[numpy.ndarray, list]: Processed image with areas of interest highlighted and list of areas of interest.
+            AnalysisResult containing processed image path, areas of interest,
+            and error message if any.
         """
         img = cv2.imdecode(np.fromfile(full_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         if img is None:
@@ -266,7 +280,7 @@ class AnalyzeService(QObject):
                 except Exception as thumb_error:
                     logger = LoggerService()
                     logger.warning(f"Main thumbnail generation failed for {full_path}: {thumb_error}")
-                # Generate thumbnail and color cache for detected AOIs (using original resolution image)            
+                # Generate thumbnail and color cache for detected AOIs (using original resolution image)
                 try:
                     # Call cache generation with original (unscaled) image for best quality thumbnails
                     instance.generate_aoi_cache(
@@ -289,8 +303,10 @@ class AnalyzeService(QObject):
 
     @Slot()
     def _process_complete(self, result):
-        """
-        Handle completion of an image processing task.
+        """Handle completion of an image processing task.
+
+        Updates progress counters, checks for max AOI limits, and emits
+        signals for GUI updates.
 
         Args:
             result: Result object from the process_file method containing processed image data.
@@ -333,8 +349,9 @@ class AnalyzeService(QObject):
 
     @Slot()
     def process_cancel(self):
-        """
-        Cancel any ongoing asynchronous processes.
+        """Cancel any ongoing asynchronous processes.
+
+        Sets cancellation flag and terminates the process pool.
         """
         self.cancelled = True
         self.sig_msg.emit("--- Cancelling Image Processing ---")
@@ -342,13 +359,16 @@ class AnalyzeService(QObject):
 
     @staticmethod
     def _generate_main_image_thumbnail(img, image_path, output_dir, input_root=None):
-        """
-        Generate a thumbnail for the main image to speed up viewer loading.
+        """Generate a thumbnail for the main image to speed up viewer loading.
+
+        Creates a thumbnail image (max 100x56) maintaining aspect ratio and
+        stores it in the .thumbnails directory with a hash-based filename.
 
         Args:
-            img: Original image array (before any scaling)
-            image_path: Path to the source image
-            output_dir: Output directory where thumbnail folder will be created
+            img: Original image array (before any scaling).
+            image_path: Path to the source image.
+            output_dir: Output directory where thumbnail folder will be created.
+            input_root: Optional input root directory for generating relative paths.
         """
         try:
             # Create thumbnail directory (unified with AOI thumbnails)
@@ -397,7 +417,7 @@ class AnalyzeService(QObject):
             max_width, max_height = 100, 56
             height, width = img_rgb.shape[:2]
             aspect_ratio = width / height
-            
+
             if aspect_ratio > (max_width / max_height):
                 # Image is wider - fit to width
                 thumb_width = max_width
@@ -417,13 +437,15 @@ class AnalyzeService(QObject):
             # Reduced from 85 for faster writes with minimal visual difference for thumbnails
             cv2.imwrite(str(thumb_path), thumb_img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
 
-        except Exception as e:
+        except Exception:
             # Don't fail processing if thumbnail generation fails
             pass
 
     def _setup_output_dir(self):
-        """
-        Create the output directory for storing processed images.
+        """Create the output directory for storing processed images.
+
+        Removes existing output directory if present and creates a new one.
+        Logs errors if directory creation fails.
         """
         try:
             if os.path.exists(self.output):

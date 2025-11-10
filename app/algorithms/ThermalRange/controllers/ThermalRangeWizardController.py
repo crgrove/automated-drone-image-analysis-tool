@@ -15,11 +15,11 @@ from core.views.components.RangeSlider import RangeSlider
 
 class TemperatureRangeSlider(RangeSlider):
     """Custom RangeSlider for temperature selection."""
-    
+
     def __init__(self, parent=None, is_fahrenheit=True):
         """Initialize temperature range slider with appropriate unit."""
         self.is_fahrenheit = is_fahrenheit
-        
+
         if is_fahrenheit:
             # Fahrenheit: 0-150°F with 10-degree increments
             snap_points = [
@@ -66,49 +66,75 @@ class TemperatureRangeSlider(RangeSlider):
             ]
             # Default to 32-43°C (roughly 90-110°F)
             min_val, max_val = 32, 43
-        
+
         # Override SNAP_POINTS before calling parent init
         TemperatureRangeSlider.SNAP_POINTS = snap_points
-        
-        super().__init__(parent, minimum=snap_points[0][0], maximum=snap_points[-1][0], 
-                        min_value=min_val, max_value=max_val)
+
+        super().__init__(parent, minimum=snap_points[0][0], maximum=snap_points[-1][0],
+                         min_value=min_val, max_value=max_val)
 
 
 class ThermalRangeWizardController(QWidget, Ui_ThermalRangeWizard, AlgorithmController):
-    """Wizard controller for Thermal Range algorithm."""
-    
+    """Wizard controller for Thermal Range algorithm.
+
+    Provides a simplified interface for configuring thermal temperature range
+    detection. Handles temperature unit conversion (Fahrenheit/Celsius) and
+    provides a custom temperature range slider.
+
+    Attributes:
+        theme: Theme name for UI styling.
+        settings_service: SettingsService instance for accessing preferences.
+        rangeSlider: TemperatureRangeSlider widget for selecting temperature range.
+    """
+
     def __init__(self, config, theme):
-        """Initialize the wizard controller."""
+        """Initialize the wizard controller.
+
+        Args:
+            config: Algorithm configuration dictionary.
+            theme: Theme name for UI styling.
+        """
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
         self.theme = theme
         self.settings_service = SettingsService()
-        
+
         self.setupUi(self)
         self._wire_up_ui()
-    
+
     def _wire_up_ui(self):
-        """Configure UI and set defaults based on temperature unit."""
+        """Configure UI and set defaults based on temperature unit.
+
+        Creates and configures the temperature range slider based on the
+        user's preferred temperature unit (Fahrenheit or Celsius).
+        """
         # Check temperature unit from settings
         is_fahrenheit = self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit'
-        
+
         # Create custom temperature range slider
         self.rangeSlider = TemperatureRangeSlider(self, is_fahrenheit=is_fahrenheit)
-        
+
         # Insert into placeholder
         placeholder = self.rangeSliderPlaceholder
         layout = QVBoxLayout(placeholder)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.rangeSlider)
-    
+
     def get_options(self):
-        """Get algorithm options."""
+        """Get algorithm options.
+
+        Retrieves the selected temperature range from the UI and converts
+        to Celsius if necessary (algorithm services expect Celsius).
+
+        Returns:
+            Dictionary containing minTemp and maxTemp in Celsius.
+        """
         options = dict()
         is_fahrenheit = self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit'
-        
+
         min_val = self.rangeSlider.minValue()
         max_val = self.rangeSlider.maxValue()
-        
+
         # Convert to Celsius if in Fahrenheit
         if is_fahrenheit:
             options['minTemp'] = self._convert_fahrenheit_to_celsius(min_val)
@@ -116,40 +142,50 @@ class ThermalRangeWizardController(QWidget, Ui_ThermalRangeWizard, AlgorithmCont
         else:
             options['minTemp'] = min_val
             options['maxTemp'] = max_val
-        
+
         return options
-    
+
     def validate(self):
-        """Validate configuration."""
+        """Validate configuration.
+
+        Returns:
+            None, as all inputs are optional and have defaults.
+        """
         # Always valid - no required inputs
         return None
-    
+
     def load_options(self, options):
-        """Load options into UI."""
+        """Load options into UI.
+
+        Restores UI state from a previously saved options dictionary.
+        Handles temperature unit conversion if needed.
+
+        Args:
+            options: Dictionary containing algorithm options to load.
+        """
         if not isinstance(options, dict):
             return
-        
+
         is_fahrenheit = self.settings_service.get_setting('TemperatureUnit') == 'Fahrenheit'
-        
+
         if 'minTemp' in options and 'maxTemp' in options:
             min_temp_c = float(options['minTemp'])
             max_temp_c = float(options['maxTemp'])
-            
+
             if is_fahrenheit:
                 min_val = int(self._convert_celsius_to_fahrenheit(min_temp_c))
                 max_val = int(self._convert_celsius_to_fahrenheit(max_temp_c))
             else:
                 min_val = int(min_temp_c)
                 max_val = int(max_temp_c)
-            
+
             self.rangeSlider.setMinValue(min_val)
             self.rangeSlider.setMaxValue(max_val)
-    
+
     def _convert_fahrenheit_to_celsius(self, value):
         """Convert Fahrenheit to Celsius."""
         return (value - 32) / 1.8000
-    
+
     def _convert_celsius_to_fahrenheit(self, value):
         """Convert Celsius to Fahrenheit."""
         return (value * 1.8000) + 32
-

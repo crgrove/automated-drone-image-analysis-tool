@@ -58,7 +58,8 @@ class ZipExportThread(QThread):
                         return
                     self.controller._export_native_copy_one(img, staging_root)
                     current += 1
-                    self.progressUpdated.emit(current, total, f"Copying {os.path.basename(img.get('path',''))}")
+                    self.progressUpdated.emit(
+                        current, total, f"Copying {os.path.basename(img.get('path', ''))}")
                 self.controller._export_native_finalize(staging_root)
             else:
                 # Augmented export: render per image
@@ -68,7 +69,8 @@ class ZipExportThread(QThread):
                         return
                     self.controller._export_augmented_one(img, staging_root)
                     current += 1
-                    self.progressUpdated.emit(current, total, f"Rendering {os.path.basename(img.get('path',''))}")
+                    self.progressUpdated.emit(
+                        current, total, f"Rendering {os.path.basename(img.get('path', ''))}")
 
             # Inform user we're finalizing (zipping, writing XML)
             self.progressUpdated.emit(total, total, "Finalizing export...")
@@ -229,7 +231,6 @@ class ZipExportController:
 
     def _export_native_finalize(self, staging_root):
         ctx = getattr(self, '_native_ctx', {})
-        images_root = ctx.get('images_root')
         xml_path = ctx.get('xml_path')
         xml_service = ctx.get('xml_service')
         input_dir = ctx.get('input_dir')
@@ -252,11 +253,15 @@ class ZipExportController:
                         if xml_path and not os.path.isabs(full_path):
                             full_path = os.path.join(os.path.dirname(xml_path), full_path)
                         try:
-                            rel_from_input = os.path.relpath(full_path, input_dir) if input_dir else os.path.basename(full_path)
+                            if input_dir:
+                                rel_from_input = os.path.relpath(full_path, input_dir)
+                            else:
+                                rel_from_input = os.path.basename(full_path)
                         except ValueError:
                             rel_from_input = os.path.basename(full_path)
                         # XML sits inside ADIAT_Results, images live at ../images/
-                        image_xml.set('path', os.path.join('..', 'images', rel_from_input).replace('\\', '/'))
+                        rel_path = os.path.join('..', 'images', rel_from_input)
+                        image_xml.set('path', rel_path.replace('\\', '/'))
 
                     mask_name = image_xml.get('mask_path', '')
                     if mask_name and mask_src_dir:

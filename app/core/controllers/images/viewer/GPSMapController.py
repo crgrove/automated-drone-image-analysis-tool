@@ -159,7 +159,10 @@ class GPSMapController(QObject):
                 # Try to get DateTimeOriginal
                 datetime_original = exif_data['Exif'].get(piexif.ExifIFD.DateTimeOriginal)
                 if datetime_original:
-                    datetime_str = datetime_original.decode('utf-8') if isinstance(datetime_original, bytes) else datetime_original
+                    if isinstance(datetime_original, bytes):
+                        datetime_str = datetime_original.decode('utf-8')
+                    else:
+                        datetime_str = datetime_original
                     return datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
 
                 # Fallback to DateTime
@@ -277,7 +280,9 @@ class GPSMapController(QObject):
 
             # Get custom altitude if available
             custom_alt_ft = None
-            if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+            if (hasattr(self.parent, 'custom_agl_altitude_ft') and
+                    self.parent.custom_agl_altitude_ft and
+                    self.parent.custom_agl_altitude_ft > 0):
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
 
             # Calculate AOI GPS coordinates with metadata using the convenience method
@@ -296,7 +301,7 @@ class GPSMapController(QObject):
                 temperature_data = None
                 if hasattr(self.parent, 'thermal_controller'):
                     temperature_data = self.parent.thermal_controller.temperature_data
-                
+
                 avg_info, _ = self.parent.aoi_controller.calculate_aoi_average_info(
                     aoi,
                     self.parent.is_thermal,

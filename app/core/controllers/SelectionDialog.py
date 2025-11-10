@@ -4,21 +4,36 @@ from PySide6.QtWidgets import QDialog
 from core.views.SelectionDialog_ui import Ui_MediaSelector
 from core.services.SettingsService import SettingsService
 
+
 class SelectionDialog(QDialog, Ui_MediaSelector):
     """Controller for the media selection dialog.
 
-    Exposes a simple API where clicking a button records the selection and
-    closes the dialog with accept(). Consumers can either connect to the
-    selectionMade signal or inspect the `selection` attribute after exec().
+    Allows users to choose between Images and Streaming modes. Exposes a simple
+    API where clicking a button records the selection and closes the dialog
+    with accept(). Consumers can either connect to the selectionMade signal or
+    inspect the `selection` attribute after exec().
+
+    Attributes:
+        selectionMade: Signal emitted when a selection is made. Emits the
+            selection string ("images" or "stream").
+        wizardRequested: Signal emitted when the setup wizard should be shown
+            (for Images mode).
+        selection: The current selection string ("images" or "stream") or None.
+        settings_service: Instance of SettingsService for accessing settings.
     """
 
     selectionMade = Signal(str)
     wizardRequested = Signal()  # Signal emitted when setup wizard should be shown
 
     def __init__(self, theme: str):
+        """Initialize the selection dialog.
+
+        Args:
+            theme: Theme name to use for icons ('Dark' or 'Light').
+        """
         super().__init__()
         self.setupUi(self)
-        
+
         self.settings_service = SettingsService()
 
         self.selection: str | None = None
@@ -42,13 +57,18 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
         self._apply_icons(theme)
 
     def _on_image_clicked(self) -> None:
+        """Handle click on the Images button.
+
+        Sets selection to "images" and either proceeds directly (if wizard is
+        skipped) or emits wizardRequested signal to show the setup wizard first.
+        """
         self.selection = "images"
-        
+
         # Check if setup wizard should be shown
         skip_wizard = self.settings_service.get_setting('SkipImageAnalysisGuide', 'No')
         # Ensure we're comparing strings (QSettings might return different types)
         skip_wizard_str = str(skip_wizard).strip()
-        
+
         if skip_wizard_str == 'Yes':
             # Wizard is skipped, proceed normally
             self.selectionMade.emit(self.selection)
@@ -60,13 +80,22 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
             self.wizardRequested.emit()  # Signal will be handled after dialog closes
 
     def _on_stream_clicked(self) -> None:
+        """Handle click on the Stream button.
+
+        Sets selection to "stream", emits the selectionMade signal, and closes
+        the dialog. The viewer will be created in __main__.py via the signal handler.
+        """
         self.selection = "stream"
         self.selectionMade.emit(self.selection)
         # Close the dialog - the viewer will be created in __main__.py via the signal handler
         self.accept()
 
     def _apply_icons(self, theme: str) -> None:
-        """Apply themed icons to the dialog buttons."""
+        """Apply themed icons to the dialog buttons.
+
+        Args:
+            theme: Theme name to use for icons ('Dark' or 'Light').
+        """
         try:
             from helpers.IconHelper import IconHelper
 
@@ -76,5 +105,3 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
         except Exception:
             # Icons are non-critical; ignore if assets are not available yet
             pass
-
-

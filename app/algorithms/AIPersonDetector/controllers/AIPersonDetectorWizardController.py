@@ -13,40 +13,40 @@ from algorithms.AIPersonDetector.views.AIPersonDetectorWizard_ui import Ui_AIPer
 
 class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, AlgorithmController):
     """Wizard controller for AI Person Detector algorithm."""
-    
+
     def __init__(self, config, theme):
         """Initialize the wizard controller."""
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
         self.theme = theme
         self.cpu_only = False
-        
+
         self.setupUi(self)
         self._wire_up_ui()
-    
+
     def _wire_up_ui(self):
         """Attach custom widgets and set defaults."""
         # Confidence slider with text labels matching mockup
         self.confidenceSlider = TextLabeledSlider(
-            self, 
+            self,
             presets=["Very \nConfident", "Confident", "Balanced", "Permissive", "Very \nPermissive"]
         )
         placeholder = self.confidenceSliderPlaceholder
         layout = QVBoxLayout(placeholder)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.confidenceSlider)
-    
+
     def _read_ui_state(self):
         """Read current UI selections into simple values."""
         confidence_index = self.confidenceSlider.value()
         aggr_label, aggr_value = self.confidenceSlider.getCurrentPreset()
         return confidence_index, aggr_label, aggr_value
-    
+
     def get_options(self):
         """Get algorithm options."""
         options = dict()
         confidence_index, aggr_label, aggr_value = self._read_ui_state()
-        
+
         # Map slider index to confidence value (0.01 - 1.0)
         # Index 0 (Very Confident) = 0.9, Index 4 (Very Permissive) = 0.1
         confidence_map = {
@@ -56,27 +56,27 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
             3: 0.3,   # Permissive
             4: 0.1    # Very Permissive
         }
-        
+
         # Service-expected fields
         options['person_detector_confidence'] = confidence_map.get(confidence_index, 0.5)
         options['cpu_only'] = self.cpu_only
-        
+
         # Wizard fields retained for reference
         options['confidence_index'] = confidence_index
         options['confidence_label'] = aggr_label
-        
+
         return options
-    
+
     def validate(self):
         """Validate configuration."""
         # Always valid - no required inputs
         return None
-    
+
     def load_options(self, options):
         """Load options into UI."""
         if not isinstance(options, dict):
             return
-        
+
         if 'confidence_index' in options:
             confidence_index = options.get('confidence_index')
             if isinstance(confidence_index, int):
@@ -95,4 +95,3 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
             else:
                 index = 4  # Very Permissive
             self.confidenceSlider.setValue(index)
-

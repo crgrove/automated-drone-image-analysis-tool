@@ -6,22 +6,19 @@ thresholds and cooldown periods to prevent alert spam.
 """
 
 # Set environment variable to avoid numpy._core issues - MUST be first
+from core.services.LoggerService import LoggerService
+from core.services.streaming.RealtimeColorDetectionService import Detection
+from PySide6.QtMultimedia import QSound
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
+from PySide6.QtCore import QObject, QTimer, Signal, Qt
+from enum import Enum
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+import threading
+import time
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
-
-import time
-import threading
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
-from enum import Enum
-
-from PySide6.QtCore import QObject, QTimer, Signal, Qt
-from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
-from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtMultimedia import QSound
-
-from core.services.streaming.RealtimeColorDetectionService import Detection
-from core.services.LoggerService import LoggerService
 
 
 class AlertType(Enum):
@@ -33,7 +30,25 @@ class AlertType(Enum):
 
 @dataclass
 class AlertConfig:
-    """Configuration for alert system."""
+    """Configuration for alert system.
+
+    Attributes:
+        enabled: Whether alerts are enabled.
+        alert_type: Type of alert (audio, visual, both, none).
+        audio_file: Path to custom sound file.
+        use_system_sound: Whether to use system sound.
+        audio_volume: Audio volume (0.0 to 1.0).
+        show_system_notification: Whether to show system tray notifications.
+        show_popup_window: Whether to show popup windows.
+        flash_window: Whether to flash the window.
+        min_confidence: Minimum confidence to trigger alert.
+        min_area: Minimum area to trigger alert.
+        max_detections_per_alert: Limit detections shown in alert.
+        cooldown_ms: Minimum time between alerts in milliseconds.
+        detection_persistence_ms: How long detection must persist in milliseconds.
+        require_consecutive_detections: Whether to require consecutive detections.
+        consecutive_count: Number of consecutive detections required.
+    """
     enabled: bool = True
     alert_type: AlertType = AlertType.BOTH
 
@@ -62,15 +77,31 @@ class AlertConfig:
 
 
 class AlertHistory:
-    """Tracks alert history for cooldown management."""
+    """Tracks alert history for cooldown management.
+
+    Thread-safe history tracking for managing alert cooldowns and statistics.
+
+    Attributes:
+        max_history: Maximum number of alerts to keep in history.
+        alerts: List of (timestamp, detection_count) tuples.
+    """
 
     def __init__(self, max_history: int = 100):
+        """Initialize alert history tracker.
+
+        Args:
+            max_history: Maximum number of alerts to keep in history. Defaults to 100.
+        """
         self.max_history = max_history
         self.alerts = []  # List of (timestamp, detection_count) tuples
         self._lock = threading.Lock()
 
     def add_alert(self, detection_count: int):
-        """Add alert to history."""
+        """Add alert to history.
+
+        Args:
+            detection_count: Number of detections in this alert.
+        """
         with self._lock:
             timestamp = time.time()
             self.alerts.append((timestamp, detection_count))
@@ -80,14 +111,25 @@ class AlertHistory:
                 self.alerts = self.alerts[-self.max_history:]
 
     def get_last_alert_time(self) -> float:
-        """Get timestamp of last alert."""
+        """Get timestamp of last alert.
+
+        Returns:
+            Timestamp of last alert, or 0.0 if no alerts.
+        """
         with self._lock:
             if self.alerts:
                 return self.alerts[-1][0]
             return 0.0
 
     def get_alert_count(self, time_window: float) -> int:
-        """Get number of alerts in time window."""
+        """Get number of alerts in time window.
+
+        Args:
+            time_window: Time window in seconds to count alerts.
+
+        Returns:
+            Number of alerts in the specified time window.
+        """
         with self._lock:
             current_time = time.time()
             cutoff_time = current_time - time_window
@@ -95,7 +137,12 @@ class AlertHistory:
             return sum(1 for timestamp, _ in self.alerts if timestamp >= cutoff_time)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get alert statistics."""
+        """Get alert statistics.
+
+        Returns:
+            Dictionary containing total alerts, average detections, last alert
+            time, and alerts in last hour/minute.
+        """
         with self._lock:
             if not self.alerts:
                 return {'total_alerts': 0, 'avg_detections': 0, 'last_alert': None}
@@ -114,8 +161,7 @@ class AlertHistory:
 
 
 class AlertManager(QObject):
-    """
-    Manages real-time alerts for color detection system.
+    """Manages real-time alerts for color detection system.
 
     Features:
     - Audio alerts with system or custom sounds
@@ -123,6 +169,11 @@ class AlertManager(QObject):
     - Configurable thresholds and cooldowns
     - Alert history tracking
     - Prevention of alert spam
+
+    Attributes:
+        alertTriggered: Signal emitted when alert is triggered (alert_info, detections).
+        alertConfigChanged: Signal emitted when config changes (new config dict).
+        statsChanged: Signal emitted when statistics change (stats dict).
     """
 
     # Signals
@@ -131,6 +182,11 @@ class AlertManager(QObject):
     statsChanged = Signal(dict)  # alert statistics
 
     def __init__(self, config: AlertConfig = None):
+        """Initialize the alert manager.
+
+        Args:
+            config: Alert configuration. If None, uses default AlertConfig.
+        """
         super().__init__()
         self.logger = LoggerService()
 
@@ -161,7 +217,11 @@ class AlertManager(QObject):
         self.logger.info("Alert manager initialized")
 
     def _init_audio_system(self) -> Optional[QSound]:
-        """Initialize audio system for alerts."""
+        """Initialize audio system for alerts.
+
+        Returns:
+            QSound instance if custom audio file is configured, None otherwise.
+        """
         try:
             if self.config.audio_file and os.path.exists(self.config.audio_file):
                 return QSound(self.config.audio_file)
@@ -173,7 +233,11 @@ class AlertManager(QObject):
             return None
 
     def _init_system_tray(self):
-        """Initialize system tray for notifications."""
+        """Initialize system tray for notifications.
+
+        Sets up system tray icon for displaying notifications. Handles
+        platform-specific differences and fallbacks gracefully.
+        """
         try:
             # Check if system tray is supported on this platform
             if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -225,7 +289,11 @@ class AlertManager(QObject):
             self._system_tray = None
 
     def update_config(self, config: AlertConfig):
-        """Update alert configuration."""
+        """Update alert configuration.
+
+        Args:
+            config: New alert configuration to apply.
+        """
         self.config = config
 
         # Reinitialize audio if needed
@@ -236,12 +304,14 @@ class AlertManager(QObject):
         self.logger.info("Alert configuration updated")
 
     def process_detections(self, detections: List[Detection], timestamp: float):
-        """
-        Process detections and trigger alerts if conditions are met.
+        """Process detections and trigger alerts if conditions are met.
+
+        Filters detections by thresholds, checks persistence requirements,
+        and triggers alerts if cooldown period has passed.
 
         Args:
-            detections: List of current detections
-            timestamp: Detection timestamp
+            detections: List of current detections.
+            timestamp: Detection timestamp.
         """
         try:
             if not self.config.enabled or not self._alert_processing_enabled:
@@ -270,7 +340,14 @@ class AlertManager(QObject):
             self.disable_alert_processing()
 
     def _filter_detections(self, detections: List[Detection]) -> List[Detection]:
-        """Filter detections based on alert thresholds."""
+        """Filter detections based on alert thresholds.
+
+        Args:
+            detections: List of detections to filter.
+
+        Returns:
+            Filtered list of detections that meet confidence and area thresholds.
+        """
         valid_detections = []
 
         for detection in detections:
@@ -288,7 +365,16 @@ class AlertManager(QObject):
         return valid_detections[:self.config.max_detections_per_alert]
 
     def _should_trigger_persistent_alert(self, detections: List[Detection], timestamp: float) -> bool:
-        """Check if persistent alert should be triggered."""
+        """Check if persistent alert should be triggered.
+
+        Args:
+            detections: List of current detections.
+            timestamp: Detection timestamp.
+
+        Returns:
+            True if alert should be triggered based on consecutive detection
+            count and cooldown period.
+        """
         current_time = time.time()
 
         # Update consecutive detection counter
@@ -307,18 +393,38 @@ class AlertManager(QObject):
         return self._check_cooldown()
 
     def _should_trigger_immediate_alert(self, detections: List[Detection], timestamp: float) -> bool:
-        """Check if immediate alert should be triggered."""
+        """Check if immediate alert should be triggered.
+
+        Args:
+            detections: List of current detections.
+            timestamp: Detection timestamp.
+
+        Returns:
+            True if cooldown period has passed.
+        """
         return self._check_cooldown()
 
     def _check_cooldown(self) -> bool:
-        """Check if cooldown period has passed."""
+        """Check if cooldown period has passed.
+
+        Returns:
+            True if enough time has passed since last alert.
+        """
         current_time = time.time()
         last_alert_time = self.history.get_last_alert_time()
 
         return (current_time - last_alert_time) >= (self.config.cooldown_ms / 1000.0)
 
     def _trigger_alert_safe(self, detections: List[Detection], timestamp: float):
-        """Trigger alert with timeout protection to prevent hanging."""
+        """Trigger alert with timeout protection to prevent hanging.
+
+        Uses a background thread to trigger alerts, preventing blocking of
+        the main processing thread.
+
+        Args:
+            detections: List of detections that triggered the alert.
+            timestamp: Detection timestamp.
+        """
         try:
             # Use a separate thread to prevent blocking
             import threading
@@ -339,7 +445,14 @@ class AlertManager(QObject):
             self.logger.error(f"Error in safe alert trigger: {e}")
 
     def _trigger_alert(self, detections: List[Detection], timestamp: float):
-        """Trigger alert for detections."""
+        """Trigger alert for detections.
+
+        Plays audio and/or visual alerts, records in history, and emits signals.
+
+        Args:
+            detections: List of detections that triggered the alert.
+            timestamp: Detection timestamp.
+        """
         try:
             # Create alert info
             alert_info = {
@@ -379,7 +492,11 @@ class AlertManager(QObject):
             self.logger.error(f"Error triggering alert: {e}")
 
     def _play_audio_alert(self):
-        """Play audio alert."""
+        """Play audio alert.
+
+        Attempts to play custom sound file or system sound based on configuration.
+        Handles errors gracefully to prevent blocking.
+        """
         try:
             if self._audio_system:
                 # Play custom sound file with timeout protection
@@ -405,7 +522,15 @@ class AlertManager(QObject):
             self.logger.error(f"Error playing audio alert: {e}")
 
     def _show_visual_alert(self, alert_info: Dict[str, Any], detections: List[Detection]):
-        """Show visual alert."""
+        """Show visual alert.
+
+        Displays system tray notifications and/or popup windows based on
+        configuration.
+
+        Args:
+            alert_info: Dictionary containing alert metadata.
+            detections: List of detections that triggered the alert.
+        """
         try:
             # Create alert message
             message = self._create_alert_message(alert_info, detections)
@@ -452,7 +577,15 @@ class AlertManager(QObject):
             self.logger.error(f"Error showing visual alert: {e}")
 
     def _create_alert_message(self, alert_info: Dict[str, Any], detections: List[Detection]) -> str:
-        """Create formatted alert message."""
+        """Create formatted alert message.
+
+        Args:
+            alert_info: Dictionary containing alert metadata.
+            detections: List of detections that triggered the alert.
+
+        Returns:
+            Formatted alert message string.
+        """
         message = f"Detected {alert_info['detection_count']} object(s)\n"
         message += f"Average confidence: {alert_info['avg_confidence']:.2f}\n"
         message += f"Total area: {alert_info['total_area']:.0f} pixels\n"
@@ -466,7 +599,11 @@ class AlertManager(QObject):
         return message.strip()
 
     def _show_popup_message(self, message: str):
-        """Show popup message (must be called from main thread)."""
+        """Show popup message (must be called from main thread).
+
+        Args:
+            message: Message text to display in popup.
+        """
         try:
             msg_box = QMessageBox()
             msg_box.setWindowTitle("ADIAT - Detection Alert")
@@ -477,7 +614,11 @@ class AlertManager(QObject):
             self.logger.error(f"Error showing popup: {e}")
 
     def get_statistics(self) -> Dict[str, Any]:
-        """Get alert statistics."""
+        """Get alert statistics.
+
+        Returns:
+            Dictionary containing alert history statistics and current configuration.
+        """
         stats = self.history.get_stats()
         stats.update({
             'config': self._get_config_dict(),
@@ -487,7 +628,11 @@ class AlertManager(QObject):
         return stats
 
     def _get_config_dict(self) -> Dict[str, Any]:
-        """Get current configuration as dictionary."""
+        """Get current configuration as dictionary.
+
+        Returns:
+            Dictionary representation of current alert configuration.
+        """
         return {
             'enabled': self.config.enabled,
             'alert_type': self.config.alert_type.value,
@@ -501,14 +646,20 @@ class AlertManager(QObject):
         }
 
     def reset_statistics(self):
-        """Reset alert statistics."""
+        """Reset alert statistics.
+
+        Clears alert history and resets counters.
+        """
         self.history = AlertHistory()
         self._consecutive_detections = 0
         self._last_detection_time = 0
         self.logger.info("Alert statistics reset")
 
     def test_alert(self):
-        """Test alert system with dummy detection."""
+        """Test alert system with dummy detection.
+
+        Creates a dummy detection and triggers an alert to test the system.
+        """
         try:
             # Create dummy detection for testing
             dummy_detection = Detection(
@@ -528,12 +679,19 @@ class AlertManager(QObject):
             self.logger.error(f"Error testing alert: {e}")
 
     def disable_alert_processing(self):
-        """Emergency disable of alert processing to prevent hangs."""
+        """Emergency disable of alert processing to prevent hangs.
+
+        Disables alert processing if errors are detected to prevent system
+        hangs or blocking.
+        """
         self._alert_processing_enabled = False
         self.logger.warning("Alert processing has been disabled due to errors")
 
     def enable_alert_processing(self):
-        """Re-enable alert processing."""
+        """Re-enable alert processing.
+
+        Re-enables alert processing after it has been disabled.
+        """
         self._alert_processing_enabled = True
         self.logger.info("Alert processing has been re-enabled")
 
@@ -541,7 +699,15 @@ class AlertManager(QObject):
 # Convenience functions for common alert configurations
 
 def create_audio_only_config(cooldown_ms: int = 2000, min_confidence: float = 0.5) -> AlertConfig:
-    """Create audio-only alert configuration."""
+    """Create audio-only alert configuration.
+
+    Args:
+        cooldown_ms: Cooldown period in milliseconds. Defaults to 2000.
+        min_confidence: Minimum confidence threshold. Defaults to 0.5.
+
+    Returns:
+        AlertConfig configured for audio-only alerts.
+    """
     return AlertConfig(
         alert_type=AlertType.AUDIO_ONLY,
         cooldown_ms=cooldown_ms,
@@ -552,7 +718,15 @@ def create_audio_only_config(cooldown_ms: int = 2000, min_confidence: float = 0.
 
 
 def create_visual_only_config(cooldown_ms: int = 3000, min_confidence: float = 0.6) -> AlertConfig:
-    """Create visual-only alert configuration."""
+    """Create visual-only alert configuration.
+
+    Args:
+        cooldown_ms: Cooldown period in milliseconds. Defaults to 3000.
+        min_confidence: Minimum confidence threshold. Defaults to 0.6.
+
+    Returns:
+        AlertConfig configured for visual-only alerts.
+    """
     return AlertConfig(
         alert_type=AlertType.VISUAL_ONLY,
         cooldown_ms=cooldown_ms,
@@ -563,7 +737,15 @@ def create_visual_only_config(cooldown_ms: int = 3000, min_confidence: float = 0
 
 
 def create_persistent_alert_config(consecutive_count: int = 5, min_confidence: float = 0.7) -> AlertConfig:
-    """Create configuration requiring persistent detections."""
+    """Create configuration requiring persistent detections.
+
+    Args:
+        consecutive_count: Number of consecutive detections required. Defaults to 5.
+        min_confidence: Minimum confidence threshold. Defaults to 0.7.
+
+    Returns:
+        AlertConfig configured for persistent detection alerts.
+    """
     return AlertConfig(
         alert_type=AlertType.BOTH,
         require_consecutive_detections=True,

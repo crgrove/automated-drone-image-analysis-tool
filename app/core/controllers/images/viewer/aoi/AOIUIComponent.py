@@ -11,7 +11,10 @@ import numpy as np
 import qimage2ndarray
 import qtawesome as qta
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QFrame, QProgressBar
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton,
+    QMenu, QApplication, QAbstractItemView, QFrame, QProgressBar
+)
 try:
     from shiboken6 import isValid as _qt_is_valid
 except Exception:
@@ -28,11 +31,10 @@ from core.services.LoggerService import LoggerService
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 
 
-
 class AOIUIComponent:
     """
     UI component for managing Areas of Interest (AOI) display and interaction.
-    
+
     This component handles all UI operations while AOIController manages business logic.
     """
 
@@ -55,7 +57,6 @@ class AOIUIComponent:
         self.batch_timer.timeout.connect(self._process_next_batch)
         self.batch_loading_state = None  # Stores state during batch loading
         self.batch_progress_widget = None  # Progress indicator widget
-
 
     def load_areas_of_interest(self, augmented_image, areas_of_interest):
         """Load areas of interest thumbnails for a given image.
@@ -194,7 +195,7 @@ class AOIUIComponent:
             temperature_data = None
             if hasattr(self.aoi_controller.parent, 'thermal_controller'):
                 temperature_data = self.aoi_controller.parent.thermal_controller.temperature_data
-            
+
             avg_color_info, color_rgb = self.aoi_controller.calculate_aoi_average_info(
                 area_of_interest,
                 self.aoi_controller.parent.is_thermal,
@@ -306,7 +307,11 @@ class AOIUIComponent:
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         info_widget.customContextMenuRequested.connect(
-            lambda pos, c=area_of_interest['center'], a=area_of_interest.get('area', 0), info=None, idx=original_index: self.aoi_controller.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
+            lambda pos, c=area_of_interest['center'],
+            a=area_of_interest.get('area', 0), info=None, idx=original_index:
+            self.aoi_controller.show_aoi_context_menu(
+                pos, info_widget, c, a, info, idx
+            )
         )
 
         return info_widget
@@ -376,7 +381,11 @@ class AOIUIComponent:
             comment_icon.setToolTip(f"Comment:\n{user_comment}\n\nClick to edit comment")
         else:
             comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
-            comment_icon.setToolTip("No comment yet.\nClick to add a comment for this AOI.\n\nUse comments to note important details, observations,\nor actions needed for this detection.")
+            comment_icon.setToolTip(
+                "No comment yet.\nClick to add a comment for this AOI.\n\n"
+                "Use comments to note important details, observations,\n"
+                "or actions needed for this detection."
+            )
 
         def make_comment_click_handler(aoi_idx):
             return lambda event: self.aoi_controller.edit_aoi_comment(aoi_idx)
@@ -387,7 +396,12 @@ class AOIUIComponent:
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         info_widget.customContextMenuRequested.connect(
-            lambda pos, c=area_of_interest['center'], a=area_of_interest.get('area', 0), info=avg_color_info, idx=original_index: self.aoi_controller.show_aoi_context_menu(pos, info_widget, c, a, info, idx)
+            lambda pos, c=area_of_interest['center'],
+            a=area_of_interest.get('area', 0), info=avg_color_info,
+            idx=original_index:
+            self.aoi_controller.show_aoi_context_menu(
+                pos, info_widget, c, a, info, idx
+            )
         )
 
         return info_widget

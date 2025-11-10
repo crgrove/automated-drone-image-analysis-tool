@@ -123,4 +123,3 @@ class ExportProgressDialog(QDialog):
             bool: True if cancelled, False otherwise
         """
         return self.cancelled
-

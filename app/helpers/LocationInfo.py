@@ -84,7 +84,8 @@ class LocationInfo:
             lng (float): The decimal longitude position.
 
         Returns:
-            dict: Contains the degrees, minutes, and seconds values for latitude and longitude, including reference values.
+            dict: Contains the degrees, minutes, and seconds values for latitude
+                and longitude, including reference values.
         """
         is_positive = lat >= 0
         lat = abs(lat)

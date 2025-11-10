@@ -19,7 +19,7 @@ from helpers.LocationInfo import LocationInfo
 class ImageLoadController:
     """
     Controller for loading and displaying images with metadata.
-    
+
     Handles image loading, augmentation (AOI circles, pixel highlighting),
     metadata extraction, and preserving zoom/pan state during reloads.
     """
@@ -27,7 +27,7 @@ class ImageLoadController:
     def __init__(self, parent_viewer):
         """
         Initialize the image load controller.
-        
+
         Args:
             parent_viewer: The main Viewer instance
         """
@@ -121,7 +121,7 @@ class ImageLoadController:
     def reload_image_preserving_view(self):
         """
         Reload the current image while preserving zoom and pan state.
-        
+
         Respects both the draw AOI circle and highlight pixels toggles.
         """
         if not hasattr(self.parent, 'main_image') or self.parent.main_image is None:
@@ -199,12 +199,12 @@ class ImageLoadController:
     def _apply_augmentations(self, image_service, image, mask_path):
         """
         Apply image augmentations (circles, highlights).
-        
+
         Args:
             image_service: ImageService instance
             image: Image dictionary
             mask_path: Path to mask file
-            
+
         Returns:
             np.ndarray: Augmented image array
         """
@@ -309,7 +309,7 @@ class ImageLoadController:
     def _update_overlay(self, image_service):
         """Update overlay with new image data."""
         direction = image_service.get_camera_yaw()
-        
+
         # Get custom altitude if available
         custom_alt = None
         if hasattr(self.parent, 'altitude_controller'):
@@ -343,4 +343,3 @@ class ImageLoadController:
         print(f"{'='*60}\n")
         # Show error to user
         QMessageBox.critical(self.parent, "Error Loading Image", error_msg)
-

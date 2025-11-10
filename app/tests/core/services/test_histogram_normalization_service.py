@@ -23,8 +23,8 @@ def test_histogram_normalization_service_initialization(mock_reference_image):
     mock_image_array = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
 
     with patch("PIL.Image.open") as mock_open, \
-         patch("numpy.fromfile", return_value=mock_image_array.tobytes()), \
-         patch("cv2.imdecode", return_value=mock_image_array):
+            patch("numpy.fromfile", return_value=mock_image_array.tobytes()), \
+            patch("cv2.imdecode", return_value=mock_image_array):
 
         mock_img = MagicMock()
         mock_open.return_value.__enter__.return_value = mock_img  # Simulate context manager
@@ -48,8 +48,8 @@ def test_matchHistograms(mock_reference_image, mock_source_image):
     mock_image_array_src = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
 
     with patch("PIL.Image.open") as mock_open, \
-         patch("numpy.fromfile", return_value=mock_image_array_ref.tobytes()), \
-         patch("cv2.imdecode", return_value=mock_image_array_ref):
+            patch("numpy.fromfile", return_value=mock_image_array_ref.tobytes()), \
+            patch("cv2.imdecode", return_value=mock_image_array_ref):
 
         mock_img = MagicMock()
         mock_open.return_value.__enter__.return_value = mock_img

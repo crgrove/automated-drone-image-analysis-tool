@@ -614,7 +614,12 @@ class MetaDataHelper:
             base_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=False)
             # Ensure xpacket wrapper (so your get_xmp_data finder works)
             if b"<?xpacket" not in base_bytes:
-                base_bytes = b'<?xpacket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>' + base_bytes + b'<?xpacket end="w"?>'
+                xpacket_start = (
+                    b'<?xpacket begin="\xef\xbb\xbf" '
+                    b'id="W5M0MpCehiHzreSzNTczkc9d"?>'
+                )
+                xpacket_end = b'<?xpacket end="w"?>'
+                base_bytes = xpacket_start + base_bytes + xpacket_end
             MetaDataHelper.embed_xmp_xml(base_bytes, destination_file)
             return
 
@@ -637,7 +642,12 @@ class MetaDataHelper:
         desc.set("{http://ns.adobe.com/xmp/note/}HasExtendedXMP", guid)
         base_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=False)
         if b"<?xpacket" not in base_bytes:
-            base_bytes = b'<?xpacket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>' + base_bytes + b'<?xpacket end="w"?>'
+            xpacket_start = (
+                b'<?xpacket begin="\xef\xbb\xbf" '
+                b'id="W5M0MpCehiHzreSzNTczkc9d"?>'
+            )
+            xpacket_end = b'<?xpacket end="w"?>'
+            base_bytes = xpacket_start + base_bytes + xpacket_end
         MetaDataHelper.embed_xmp_xml(base_bytes, destination_file)
 
         # 2) Write the extended packet (chunked APP1)

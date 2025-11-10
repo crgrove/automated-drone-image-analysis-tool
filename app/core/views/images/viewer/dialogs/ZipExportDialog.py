@@ -54,5 +54,3 @@ class ZipExportDialog(QDialog):
 
     def get_export_mode(self):
         return 'augmented' if self.augmented_radio.isChecked() else 'native'
-
-

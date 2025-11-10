@@ -4,6 +4,7 @@ from helpers.MetaDataHelper import MetaDataHelper
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
 
+
 class KMLGeneratorService:
     """Service to generate a KML file with placemarks for flagged AOIs."""
 
@@ -37,7 +38,7 @@ class KMLGeneratorService:
             r, g, b = color_rgb
             # Full opacity (FF) + BGR
             kml_color = f'ff{b:02x}{g:02x}{r:02x}'
-            
+
             # Create normal style
             normal_style = simplekml.Style()
             normal_style.iconstyle.color = kml_color
@@ -48,12 +49,12 @@ class KMLGeneratorService:
             highlight_style.iconstyle.color = kml_color
             highlight_style.iconstyle.scale = 1.5
             highlight_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png'
-            
+
             # Create StyleMap
             style_map = simplekml.StyleMap()
             style_map.normalstyle = normal_style
             style_map.highlightstyle = highlight_style
-            
+
             # Assign StyleMap to placemark
             pnt.stylemap = style_map
 
@@ -75,17 +76,17 @@ class KMLGeneratorService:
         normal_style.iconstyle.color = simplekml.Color.yellow
         normal_style.iconstyle.scale = 1.0
         normal_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/camera.png'
-        
+
         highlight_style = simplekml.Style()
         highlight_style.iconstyle.color = simplekml.Color.yellow
         highlight_style.iconstyle.scale = 1.3
         highlight_style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/camera.png'
-        
+
         # Create StyleMap
         style_map = simplekml.StyleMap()
         style_map.normalstyle = normal_style
         style_map.highlightstyle = highlight_style
-        
+
         # Assign StyleMap to placemark
         pnt.stylemap = style_map
 
@@ -114,9 +115,9 @@ class KMLGeneratorService:
             if not image.get('hidden', False):
                 aois = image.get('areas_of_interest', [])
                 total_aois += sum(1 for aoi in aois if aoi.get('flagged', False))
-        
+
         current_aoi_count = 0
-        
+
         for img_idx, image in enumerate(images):
             # Check for cancellation
             if cancel_check and cancel_check():
@@ -143,17 +144,17 @@ class KMLGeneratorService:
                 img_array = image_service.img_array
                 height, width = img_array.shape[:2]
 
-            except Exception as e:
+            except Exception:
                 continue
 
             # Process each flagged AOI
             aois = image.get('areas_of_interest', [])
-            
+
             for aoi_idx, aoi in enumerate(aois):
                 # Only export flagged AOIs
                 if not aoi.get('flagged', False):
                     continue
-                
+
                 # Update progress
                 current_aoi_count += 1
                 if progress_callback:
@@ -162,14 +163,14 @@ class KMLGeneratorService:
                         total_aois,
                         f"Processing {image_name} - AOI {aoi_idx + 1}..."
                     )
-                
+
                 # Check for cancellation
                 if cancel_check and cancel_check():
                     return  # Exit early if cancelled
 
                 center = aoi.get('center', [0, 0])
                 area = aoi.get('area', 0)
-                radius = aoi.get('radius', 0)
+                # radius = aoi.get('radius', 0)  # Reserved for future use
 
                 # Calculate AOI-specific GPS coordinates with fallback
                 aoi_lat = image_gps['latitude']
@@ -188,7 +189,7 @@ class KMLGeneratorService:
 
                     if result:
                         aoi_lat, aoi_lon = result
-                        gps_note = f"Estimated AOI GPS\n"
+                        gps_note = "Estimated AOI GPS\n"
                     else:
                         gps_note = "Image GPS (calculation failed)\n"
                 except Exception as e:
@@ -277,7 +278,7 @@ class KMLGeneratorService:
                     altitude = self.custom_altitude_ft
                 else:
                     altitude = image_service.get_relative_altitude(distance_unit='ft')
-                
+
                 gimbal_pitch = image_service.get_camera_pitch()
                 gimbal_yaw = image_service.get_camera_yaw()
 
@@ -291,7 +292,7 @@ class KMLGeneratorService:
                     )
 
                 # Build description
-                description = f"Drone/Image Location\n"
+                description = "Drone/Image Location\n"
                 description += f"Image: {image_name}\n"
                 description += f"GPS: {image_gps['latitude']:.6f}, {image_gps['longitude']:.6f}\n"
 
@@ -310,7 +311,7 @@ class KMLGeneratorService:
                     description
                 )
 
-            except Exception as e:
+            except Exception:
                 # Silently continue on error - individual image location failures
                 # shouldn't stop the entire export
                 continue

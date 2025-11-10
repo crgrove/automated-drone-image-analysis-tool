@@ -49,7 +49,7 @@ class ImageService:
                 raise ValueError(f"Could not load image: {self.path}")
             self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    def get_relative_altitude(self, distance_unit= 'm'):
+    def get_relative_altitude(self, distance_unit='m'):
         """
         Retrieves the drone's relative altitude from metadata.
 
@@ -112,7 +112,7 @@ class ImageService:
     def get_camera_pitch(self):
         """
         Get camera pitch angle (standard photogrammetry convention).
-        
+
         Convention: -90° = nadir (straight down), 0° = horizontal, +90° = straight up.
 
         Returns:
@@ -124,22 +124,22 @@ class ImageService:
         pitch = MetaDataHelper.get_drone_xmp_attribute('Gimbal Pitch', self.drone_make, self.xmp_data)
         if pitch is None:
             return None
-        
+
         try:
             pitch = float(pitch)
         except (TypeError, ValueError):
             return None
-        
+
         # Normalize to [-180, 180] range
         while pitch > 180:
             pitch -= 360
         while pitch < -180:
             pitch += 360
-        
+
         # For DJI drones, gimbal pitch is already in the correct convention
         # (-90 = nadir, 0 = horizontal, +90 = up)
         # For Autel, may need different handling (add if needed)
-        
+
         return pitch
 
     def get_gimbal_roll(self):
@@ -270,7 +270,7 @@ class ImageService:
             altitude_meters = custom_altitude_ft / 3.28084
         else:
             altitude_meters = self.get_relative_altitude()
-        
+
         if altitude_meters is None:
             return None
 
@@ -306,7 +306,7 @@ class ImageService:
         )
         return round(gsd_service.compute_average_gsd(), 2)
 
-    def get_position(self, position_format = 'Lat/Long - Decimal Degrees'):
+    def get_position(self, position_format='Lat/Long - Decimal Degrees'):
         """
         Formats the GPS position based on the specified output format.
 
@@ -457,7 +457,7 @@ class ImageService:
     def _get_drone_orientation(self):
         """
         Retrieves the yaw orientation of the drone body (0–360 degrees).
-        
+
         Private method - use get_camera_yaw() instead for the camera direction.
 
         Returns:
@@ -472,7 +472,7 @@ class ImageService:
 
         yaw = float(yaw)
         return 360 + yaw if yaw < 0 else yaw
-        
+
     def circle_areas_of_interest(self, identifier_color, areas_of_interest):
         """
         Augments the image with contour outlines or circles for areas of interest.
@@ -490,7 +490,7 @@ class ImageService:
             cx, cy = aoi.get("center", (0, 0))
             r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
-            
+
             cv2.circle(image_copy, center, r, bgr, thickness=2)
 
             # Add confidence label if available
@@ -517,12 +517,12 @@ class ImageService:
                 # Draw text background for better visibility
                 (text_width, text_height), baseline = cv2.getTextSize(conf_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                 cv2.rectangle(image_copy,
-                             (label_pos[0] - 2, label_pos[1] - text_height - 2),
-                             (label_pos[0] + text_width + 2, label_pos[1] + baseline + 2),
-                             (0, 0, 0), -1)  # Black background
+                              (label_pos[0] - 2, label_pos[1] - text_height - 2),
+                              (label_pos[0] + text_width + 2, label_pos[1] + baseline + 2),
+                              (0, 0, 0), -1)  # Black background
 
                 # Draw confidence text
                 cv2.putText(image_copy, conf_text, label_pos,
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 2)
 
         return image_copy

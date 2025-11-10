@@ -6,7 +6,7 @@ and colors, allowing them to reuse existing caches instead of regenerating.
 """
 
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                                QPushButton, QFileDialog, QMessageBox)
+                               QPushButton, QFileDialog, QMessageBox)
 from PySide6.QtCore import Qt
 from pathlib import Path
 
@@ -146,7 +146,7 @@ class CacheLocationDialog(QDialog):
             QMessageBox.information(
                 self,
                 "Cache Found",
-                f"Found cached data for:\n  • " + "\n  • ".join(found_items) + "\n\n"
+                "Found cached data for:\n  • " + "\n  • ".join(found_items) + "\n\n"
                 "These caches will be used to improve loading performance."
             )
 

@@ -6,30 +6,27 @@ stream processing with color detection capabilities.
 """
 
 # Set environment variable to avoid numpy compatibility issues - MUST be first
-import os
-os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
-os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
-os.environ.setdefault('NPY_DISABLE_SVML', '1')
-
-import cv2
-import numpy as np
-import time
-import math
-from typing import Optional, List, Dict, Any
-
-from PySide6.QtCore import Qt, QTimer, Signal, QRect
-from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence, QPainter, QBrush, QPen
+from core.services.LoggerService import LoggerService
+from core.services.streaming.VideoRecordingService import RecordingManager
+from core.services.streaming.RealtimeColorDetectionService import RealtimeColorDetector, HSVConfig, Detection, MotionAlgorithm, FusionMode
+from core.services.streaming.RTMPStreamService import StreamManager, StreamType
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
                                QGroupBox, QGridLayout, QTextEdit, QSplitter,
                                QColorDialog, QCheckBox, QComboBox, QProgressBar,
                                QMessageBox, QStatusBar, QSlider, QFileDialog, QDialog, QTabWidget,
                                QListWidget, QListWidgetItem, QDoubleSpinBox)
-
-from core.services.streaming.RTMPStreamService import StreamManager, StreamType
-from core.services.streaming.RealtimeColorDetectionService import RealtimeColorDetector, HSVConfig, Detection, MotionAlgorithm, FusionMode
-from core.services.streaming.VideoRecordingService import RecordingManager
-from core.services.LoggerService import LoggerService
+from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QKeySequence, QPainter, QBrush, QPen
+from PySide6.QtCore import Qt, QTimer, Signal, QRect
+from typing import Optional, List, Dict, Any
+import math
+import time
+import numpy as np
+import cv2
+import os
+os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
+os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
+os.environ.setdefault('NPY_DISABLE_SVML', '1')
 
 
 class DetectionTracker:
@@ -252,7 +249,6 @@ class DetectionTracker:
             best_match_idx = None
             best_ghost_id = None
             best_distance = self.distance_threshold
-            best_is_ghost = False
 
             # First, try to match to previous detections (prioritize active detections)
             for i, prev_det in enumerate(self.previous_detections):
@@ -265,7 +261,6 @@ class DetectionTracker:
                 if distance < best_distance:
                     best_distance = distance
                     best_match_idx = i
-                    best_is_ghost = False
 
             # If no match to active detections, try matching to ghosts
             if best_match_idx is None:
@@ -282,7 +277,6 @@ class DetectionTracker:
                     if distance < ghost_threshold and distance < best_distance:
                         best_distance = distance
                         best_ghost_id = ghost_id
-                        best_is_ghost = True
 
             if best_match_idx is not None:
                 # Matched to previous detection - keep same ID
@@ -391,7 +385,7 @@ class DetectionThumbnailWidget(QWidget):
         self.tracker.max_slots = max_thumbnails
 
     def update_thumbnails(self, frame: np.ndarray, detections: List[Detection], zoom: float = 3.0,
-                         processing_resolution: tuple = None, original_resolution: tuple = None):
+                          processing_resolution: tuple = None, original_resolution: tuple = None):
         """Update thumbnails with tracked detections in stable slots.
 
         Args:
@@ -878,16 +872,16 @@ class VideoTimelineWidget(QWidget):
         self.beginning_btn = QPushButton("⟸")
         self.beginning_btn.setFixedSize(28, 28)  # Slightly smaller
         self.beginning_btn.setToolTip("Jump to beginning of video.\n"
-                                       "Keyboard shortcut: Home key\n"
-                                       "Resets video to first frame")
+                                      "Keyboard shortcut: Home key\n"
+                                      "Resets video to first frame")
         timeline_layout.addWidget(self.beginning_btn)
 
         # Play/Pause button
         self.play_pause_btn = QPushButton("⏸")
         self.play_pause_btn.setFixedSize(35, 28)  # Slightly smaller
         self.play_pause_btn.setToolTip("Play/Pause video playback.\n"
-                                        "Keyboard shortcut: Space bar\n"
-                                        "Detection continues even when paused")
+                                       "Keyboard shortcut: Space bar\n"
+                                       "Detection continues even when paused")
         timeline_layout.addWidget(self.play_pause_btn)
 
         # Jump to end button
@@ -1092,14 +1086,14 @@ class HSVControlWidget(QWidget):
         # ═══ Color Range List ═══
         range_list_group = QGroupBox("Active Color Ranges (Maximum 3)")
         range_list_group.setToolTip("Manage multiple HSV color ranges for detection.\n"
-                                     "Select a range to edit its settings below.")
+                                    "Select a range to edit its settings below.")
         range_list_layout = QVBoxLayout(range_list_group)
 
         # List widget to show all ranges
         self.color_range_list = QListWidget()
         self.color_range_list.setMaximumHeight(120)
         self.color_range_list.setToolTip("Click a color range to select and edit it.\n"
-                                          "The selected range's settings appear in the controls below.")
+                                         "The selected range's settings appear in the controls below.")
         range_list_layout.addWidget(self.color_range_list)
 
         # Add/Remove buttons
@@ -1130,8 +1124,8 @@ class HSVControlWidget(QWidget):
         self.color_button = QPushButton(" Pick Color")
         self.color_button.setMinimumHeight(30)
         self.color_button.setToolTip("Open the advanced HSV color picker to select target color.\n"
-                                      "Features visual HSV range preview and live image testing.\n"
-                                      "Click to interactively choose colors from video frames.")
+                                     "Features visual HSV range preview and live image testing.\n"
+                                     "Click to interactively choose colors from video frames.")
         color_layout.addWidget(self.color_button)
 
         # Color sample display
@@ -1140,7 +1134,7 @@ class HSVControlWidget(QWidget):
         self.color_sample.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
         self.color_sample.setStyleSheet("background-color: red")
         self.color_sample.setToolTip("Currently selected target color for detection.\n"
-                                      "This swatch shows the exact color being searched for in the video stream.")
+                                     "This swatch shows the exact color being searched for in the video stream.")
         color_layout.addWidget(self.color_sample)
 
         color_layout.addStretch()
@@ -1149,7 +1143,7 @@ class HSVControlWidget(QWidget):
         # HSV threshold controls
         threshold_group = QGroupBox("HSV Thresholds")
         threshold_group.setToolTip("Fine-tune color detection by adjusting HSV (Hue, Saturation, Value) ranges.\n"
-                                    "Wider ranges detect more color variations but may include false positives.")
+                                   "Wider ranges detect more color variations but may include false positives.")
         threshold_layout = QGridLayout(threshold_group)
 
         # Hue threshold
@@ -1183,20 +1177,20 @@ class HSVControlWidget(QWidget):
         self.saturation_minus_spinbox.setRange(0, 255)
         self.saturation_minus_spinbox.setValue(50)
         self.saturation_minus_spinbox.setToolTip("Lower saturation threshold (0-255).\n"
-                                                  "Saturation is the color intensity/purity:\n"
-                                                  "• 0: Gray/white (no color)\n"
-                                                  "• 128: Moderate color intensity\n"
-                                                  "• 255: Pure, vivid color\n"
-                                                  "Lower values include more washed-out colors")
+                                                 "Saturation is the color intensity/purity:\n"
+                                                 "• 0: Gray/white (no color)\n"
+                                                 "• 128: Moderate color intensity\n"
+                                                 "• 255: Pure, vivid color\n"
+                                                 "Lower values include more washed-out colors")
         threshold_layout.addWidget(self.saturation_minus_spinbox, 1, 2)
         threshold_layout.addWidget(QLabel("+"), 1, 3)
         self.saturation_plus_spinbox = QSpinBox()
         self.saturation_plus_spinbox.setRange(0, 255)
         self.saturation_plus_spinbox.setValue(50)
         self.saturation_plus_spinbox.setToolTip("Upper saturation threshold (0-255).\n"
-                                                 "Defines range of acceptable color intensity.\n"
-                                                 "Higher values include more vivid colors\n"
-                                                 "Tip: Decrease for muted/pastel colors")
+                                                "Defines range of acceptable color intensity.\n"
+                                                "Higher values include more vivid colors\n"
+                                                "Tip: Decrease for muted/pastel colors")
         threshold_layout.addWidget(self.saturation_plus_spinbox, 1, 4)
 
         # Value threshold
@@ -1303,10 +1297,10 @@ class HSVControlWidget(QWidget):
         self.enable_hue_expansion = QCheckBox("Enable Hue Expansion")
         self.enable_hue_expansion.setChecked(False)
         self.enable_hue_expansion.setToolTip("Expands detected colors to include similar hues.\n"
-                                              "Groups similar colors together (e.g., red and orange, blue and cyan).\n"
-                                              "Helps detect objects even if exact color varies slightly.\n"
-                                              "Recommended: OFF for specific colors (e.g., red jacket only),\n"
-                                              "ON for color families (e.g., any warm colors).")
+                                             "Groups similar colors together (e.g., red and orange, blue and cyan).\n"
+                                             "Helps detect objects even if exact color varies slightly.\n"
+                                             "Recommended: OFF for specific colors (e.g., red jacket only),\n"
+                                             "ON for color families (e.g., any warm colors).")
         hue_layout.addWidget(self.enable_hue_expansion)
 
         hue_range_layout = QHBoxLayout()
@@ -1315,10 +1309,10 @@ class HSVControlWidget(QWidget):
         self.hue_expansion_range.setRange(0, 30)
         self.hue_expansion_range.setValue(5)
         self.hue_expansion_range.setToolTip("Hue expansion range in OpenCV hue units (0-30, ~0-60 degrees).\n"
-                                             "Expands color detection by ±N hue values.\n"
-                                             "Larger values = wider color range, detect more variations.\n"
-                                             "Smaller values = narrower color range, more specific.\n"
-                                             "Recommended: 5 (~10°) for slight variations, 10-15 (~20-30°) for color families.")
+                                            "Expands color detection by ±N hue values.\n"
+                                            "Larger values = wider color range, detect more variations.\n"
+                                            "Smaller values = narrower color range, more specific.\n"
+                                            "Recommended: 5 (~10°) for slight variations, 10-15 (~20-30°) for color families.")
         hue_range_layout.addWidget(self.hue_expansion_range)
         self.hue_range_label = QLabel("±5 (~10°)")
         hue_range_layout.addWidget(self.hue_range_label)
@@ -1356,19 +1350,19 @@ class HSVControlWidget(QWidget):
         ])
         self.resolution_combo.setCurrentText("Original")
         self.resolution_combo.setToolTip("Video processing resolution:\n"
-                                          "• Original: Process at native resolution (highest quality, slowest)\n"
-                                          "• 426x240: 240p - Ultra fast, very low quality\n"
-                                          "• 640x360: 360p - Very fast, low quality\n"
-                                          "• 960x540: 540p (qHD) - Fast with decent quality\n"
-                                          "• 1280x720: 720p HD - Balanced speed and quality\n"
-                                          "• 1600x900: 900p HD+ - Good quality, moderate speed\n"
-                                          "• 1920x1080: 1080p Full HD - High quality, slower\n"
-                                          "• 2560x1440: 1440p QHD - Very high quality, slow\n"
-                                          "• 3200x1800: QHD+ - Ultra high quality, very slow\n"
-                                          "• 3840x2160: 4K UHD - Maximum quality, extremely slow\n"
-                                          "• 5120x2880: 5K - Professional quality\n"
-                                          "• 7680x4320: 8K - Cinema quality\n"
-                                          "Lower resolutions improve FPS but may miss small objects")
+                                         "• Original: Process at native resolution (highest quality, slowest)\n"
+                                         "• 426x240: 240p - Ultra fast, very low quality\n"
+                                         "• 640x360: 360p - Very fast, low quality\n"
+                                         "• 960x540: 540p (qHD) - Fast with decent quality\n"
+                                         "• 1280x720: 720p HD - Balanced speed and quality\n"
+                                         "• 1600x900: 900p HD+ - Good quality, moderate speed\n"
+                                         "• 1920x1080: 1080p Full HD - High quality, slower\n"
+                                         "• 2560x1440: 1440p QHD - Very high quality, slow\n"
+                                         "• 3200x1800: QHD+ - Ultra high quality, very slow\n"
+                                         "• 3840x2160: 4K UHD - Maximum quality, extremely slow\n"
+                                         "• 5120x2880: 5K - Professional quality\n"
+                                         "• 7680x4320: 8K - Cinema quality\n"
+                                         "Lower resolutions improve FPS but may miss small objects")
         res_layout.addWidget(self.resolution_combo)
         res_layout.addStretch()
         layout.addWidget(res_group)
@@ -1381,9 +1375,9 @@ class HSVControlWidget(QWidget):
         self.threaded_capture_checkbox = QCheckBox("Use Threaded Capture")
         self.threaded_capture_checkbox.setChecked(False)
         self.threaded_capture_checkbox.setToolTip("Enables background video decoding in a separate thread.\n"
-                                                   "Allows processing to happen in parallel with video capture.\n"
-                                                   "Improves performance especially for high-resolution videos (2K/4K).\n"
-                                                   "Highly recommended for all video sources. No downsides.")
+                                                  "Allows processing to happen in parallel with video capture.\n"
+                                                  "Improves performance especially for high-resolution videos (2K/4K).\n"
+                                                  "Highly recommended for all video sources. No downsides.")
         perf_layout.addWidget(self.threaded_capture_checkbox)
 
         self.render_at_processing_res_checkbox = QCheckBox("Render at Processing Resolution")
@@ -1437,9 +1431,9 @@ class HSVControlWidget(QWidget):
         self.motion_enabled_checkbox = QCheckBox("Enable Motion Detection")
         self.motion_enabled_checkbox.setChecked(False)
         self.motion_enabled_checkbox.setToolTip("Detect moving objects by analyzing frame-to-frame differences.\n"
-                                                 "Works best for stationary cameras or slow-moving cameras.\n"
-                                                 "Automatically pauses when excessive camera movement is detected.\n"
-                                                 "Can be combined with Color Detection for more robust detection.")
+                                                "Works best for stationary cameras or slow-moving cameras.\n"
+                                                "Automatically pauses when excessive camera movement is detected.\n"
+                                                "Can be combined with Color Detection for more robust detection.")
         layout.addWidget(self.motion_enabled_checkbox)
 
         # Algorithm Selection
@@ -1451,12 +1445,12 @@ class HSVControlWidget(QWidget):
         self.motion_algorithm_combo.addItems(["FRAME_DIFF", "MOG2", "KNN"])
         self.motion_algorithm_combo.setCurrentText("KNN")
         self.motion_algorithm_combo.setToolTip("Motion detection algorithm:\n\n"
-                                                "• FRAME_DIFF: Simple frame differencing. Fast, sensitive to all motion.\n"
-                                                "  Good for: Quick tests, high-contrast scenes.\n\n"
-                                                "• MOG2: Gaussian mixture model (recommended). Adapts to lighting changes.\n"
-                                                "  Good for: General use, varying lighting, shadows optional.\n\n"
-                                                "• KNN: K-nearest neighbors. More robust to noise than MOG2.\n"
-                                                "  Good for: Noisy videos, complex backgrounds.")
+                                               "• FRAME_DIFF: Simple frame differencing. Fast, sensitive to all motion.\n"
+                                               "  Good for: Quick tests, high-contrast scenes.\n\n"
+                                               "• MOG2: Gaussian mixture model (recommended). Adapts to lighting changes.\n"
+                                               "  Good for: General use, varying lighting, shadows optional.\n\n"
+                                               "• KNN: K-nearest neighbors. More robust to noise than MOG2.\n"
+                                               "  Good for: Noisy videos, complex backgrounds.")
         algo_layout.addWidget(self.motion_algorithm_combo, 0, 1)
 
         layout.addWidget(algo_group)
@@ -1464,8 +1458,8 @@ class HSVControlWidget(QWidget):
         # Motion Processing Resolution
         motion_res_group = QGroupBox("Motion Processing Resolution")
         motion_res_group.setToolTip("Separate processing resolution for motion detection.\n"
-                                     "Lower resolution = faster motion detection.\n"
-                                     "Independent from color detection resolution for optimal performance.")
+                                    "Lower resolution = faster motion detection.\n"
+                                    "Independent from color detection resolution for optimal performance.")
         motion_res_layout = QHBoxLayout(motion_res_group)
         motion_res_layout.addWidget(QLabel("Resolution:"))
         self.motion_resolution_combo = QComboBox()
@@ -1485,13 +1479,13 @@ class HSVControlWidget(QWidget):
         ])
         self.motion_resolution_combo.setCurrentText("Same as Color")
         self.motion_resolution_combo.setToolTip("Motion detection processing resolution:\n"
-                                                 "• Same as Color: Use color detection resolution (default)\n"
-                                                 "• 426x240: Ultra fast motion detection (recommended for speed)\n"
-                                                 "• 640x360: Very fast, good for most use cases\n"
-                                                 "• Higher resolutions: More accurate but slower\n\n"
-                                                 "PERFORMANCE TIP: Use low resolution for motion (426x240)\n"
-                                                 "and high resolution for color (720p+) for best balance.\n"
-                                                 "Example: Motion @ 240p + Color @ 720p = ~2x faster than both @ 720p")
+                                                "• Same as Color: Use color detection resolution (default)\n"
+                                                "• 426x240: Ultra fast motion detection (recommended for speed)\n"
+                                                "• 640x360: Very fast, good for most use cases\n"
+                                                "• Higher resolutions: More accurate but slower\n\n"
+                                                "PERFORMANCE TIP: Use low resolution for motion (426x240)\n"
+                                                "and high resolution for color (720p+) for best balance.\n"
+                                                "Example: Motion @ 240p + Color @ 720p = ~2x faster than both @ 720p")
         motion_res_layout.addWidget(self.motion_resolution_combo)
         motion_res_layout.addStretch()
         layout.addWidget(motion_res_group)
@@ -1506,9 +1500,9 @@ class HSVControlWidget(QWidget):
         self.motion_threshold_spinbox.setRange(1, 255)
         self.motion_threshold_spinbox.setValue(1)
         self.motion_threshold_spinbox.setToolTip("Minimum pixel intensity change to consider as motion (1-255).\n"
-                                                  "Lower values = more sensitive, detects subtle motion, more false positives.\n"
-                                                  "Higher values = less sensitive, only strong motion, fewer false positives.\n"
-                                                  "Recommended: 10 for general use, 5 for subtle motion, 15-20 for high contrast scenes.")
+                                                 "Lower values = more sensitive, detects subtle motion, more false positives.\n"
+                                                 "Higher values = less sensitive, only strong motion, fewer false positives.\n"
+                                                 "Recommended: 10 for general use, 5 for subtle motion, 15-20 for high contrast scenes.")
         param_layout.addWidget(self.motion_threshold_spinbox, row, 1)
 
         row += 1
@@ -1517,10 +1511,10 @@ class HSVControlWidget(QWidget):
         self.motion_min_area_spinbox.setRange(1, 100000)
         self.motion_min_area_spinbox.setValue(100)
         self.motion_min_area_spinbox.setToolTip("Minimum detection area in pixels (1-100000).\n"
-                                                 "Filters out very small detections (noise, insects, raindrops).\n"
-                                                 "Lower values = detect smaller objects, more noise.\n"
-                                                 "Higher values = only large objects, less noise.\n"
-                                                 "Recommended: 5-10 for person detection, 50-100 for vehicle detection.")
+                                                "Filters out very small detections (noise, insects, raindrops).\n"
+                                                "Lower values = detect smaller objects, more noise.\n"
+                                                "Higher values = only large objects, less noise.\n"
+                                                "Recommended: 5-10 for person detection, 50-100 for vehicle detection.")
         param_layout.addWidget(self.motion_min_area_spinbox, row, 1)
 
         row += 1
@@ -1529,10 +1523,10 @@ class HSVControlWidget(QWidget):
         self.motion_max_area_spinbox.setRange(10, 1000000)
         self.motion_max_area_spinbox.setValue(1000)
         self.motion_max_area_spinbox.setToolTip("Maximum detection area in pixels (10-1000000).\n"
-                                                 "Filters out very large detections (shadows, clouds, global lighting changes).\n"
-                                                 "Lower values = only small/medium objects.\n"
-                                                 "Higher values = allow large objects.\n"
-                                                 "Recommended: 1000 for people, 10000 for vehicles, higher for large objects.")
+                                                "Filters out very large detections (shadows, clouds, global lighting changes).\n"
+                                                "Lower values = only small/medium objects.\n"
+                                                "Higher values = allow large objects.\n"
+                                                "Recommended: 1000 for people, 10000 for vehicles, higher for large objects.")
         param_layout.addWidget(self.motion_max_area_spinbox, row, 1)
 
         row += 1
@@ -1541,14 +1535,14 @@ class HSVControlWidget(QWidget):
         self.max_motion_detections_spinbox.setRange(0, 500)
         self.max_motion_detections_spinbox.setValue(5)
         self.max_motion_detections_spinbox.setToolTip("Maximum number of motion detections to process per frame (0 = unlimited).\n"
-                                                       "PERFORMANCE CRITICAL: Limits processing to prevent frame rate drops.\n"
-                                                       "When camera pans, entire frame moves creating thousands of detections.\n"
-                                                       "This caps processing to keep system responsive.\n"
-                                                       "• 0: Unlimited (may cause severe slowdown during camera movement)\n"
-                                                       "• 50: Fast, good for real-time tracking of a few objects\n"
-                                                       "• 100: Balanced performance (recommended)\n"
-                                                       "• 200+: Slower, only use if you need to track many objects\n"
-                                                       "Note: Best used WITH 'Pause on Camera Movement' for optimal performance.")
+                                                      "PERFORMANCE CRITICAL: Limits processing to prevent frame rate drops.\n"
+                                                      "When camera pans, entire frame moves creating thousands of detections.\n"
+                                                      "This caps processing to keep system responsive.\n"
+                                                      "• 0: Unlimited (may cause severe slowdown during camera movement)\n"
+                                                      "• 50: Fast, good for real-time tracking of a few objects\n"
+                                                      "• 100: Balanced performance (recommended)\n"
+                                                      "• 200+: Slower, only use if you need to track many objects\n"
+                                                      "Note: Best used WITH 'Pause on Camera Movement' for optimal performance.")
         param_layout.addWidget(self.max_motion_detections_spinbox, row, 1)
 
         row += 1
@@ -1571,10 +1565,10 @@ class HSVControlWidget(QWidget):
         self.morphology_kernel_size.setSingleStep(2)
         self.morphology_kernel_size.setValue(3)
         self.morphology_kernel_size.setToolTip("Morphological operation kernel size (odd numbers: 1, 3, 5, etc.).\n"
-                                                "Removes small noise and fills holes in detections.\n"
-                                                "Larger values = remove more noise, merge nearby detections.\n"
-                                                "Smaller values = preserve detail, keep detections separate.\n"
-                                                "Recommended: 3 for general use, 1 for precise edges, 5-7 for noisy videos.")
+                                               "Removes small noise and fills holes in detections.\n"
+                                               "Larger values = remove more noise, merge nearby detections.\n"
+                                               "Smaller values = preserve detail, keep detections separate.\n"
+                                               "Recommended: 3 for general use, 1 for precise edges, 5-7 for noisy videos.")
         param_layout.addWidget(self.morphology_kernel_size, row, 1)
 
         layout.addWidget(param_group)
@@ -1588,10 +1582,10 @@ class HSVControlWidget(QWidget):
         self.persistence_frames.setRange(2, 30)
         self.persistence_frames.setValue(15)
         self.persistence_frames.setToolTip("Size of temporal window for persistence filtering (2-30 frames).\n"
-                                            "Motion must appear in N out of M consecutive frames to be confirmed.\n"
-                                            "Larger values = longer memory, more stable, slower response.\n"
-                                            "Smaller values = shorter memory, faster response, more flicker.\n"
-                                            "Recommended: 3 for 30fps video (100ms window), 5 for 60fps.")
+                                           "Motion must appear in N out of M consecutive frames to be confirmed.\n"
+                                           "Larger values = longer memory, more stable, slower response.\n"
+                                           "Smaller values = shorter memory, faster response, more flicker.\n"
+                                           "Recommended: 3 for 30fps video (100ms window), 5 for 60fps.")
         persist_layout.addWidget(self.persistence_frames, 0, 1)
 
         persist_layout.addWidget(QLabel("Threshold (N of M):"), 1, 0)
@@ -1599,10 +1593,10 @@ class HSVControlWidget(QWidget):
         self.persistence_threshold.setRange(1, 30)
         self.persistence_threshold.setValue(7)
         self.persistence_threshold.setToolTip("Number of frames within window where motion must appear (N of M).\n"
-                                               "Higher values = more stringent, filters flickering false positives.\n"
-                                               "Lower values = more lenient, detects brief/intermittent motion.\n"
-                                               "Must be ≤ Window Frames.\n"
-                                               "Recommended: 2 (motion in 2 of last 3 frames)")
+                                              "Higher values = more stringent, filters flickering false positives.\n"
+                                              "Lower values = more lenient, detects brief/intermittent motion.\n"
+                                              "Must be ≤ Window Frames.\n"
+                                              "Recommended: 2 (motion in 2 of last 3 frames)")
         persist_layout.addWidget(self.persistence_threshold, 1, 1)
 
         layout.addWidget(persist_group)
@@ -1616,10 +1610,10 @@ class HSVControlWidget(QWidget):
         self.bg_history.setRange(10, 500)
         self.bg_history.setValue(20)
         self.bg_history.setToolTip("Number of frames to learn background model (10-500).\n"
-                                    "Only applies to MOG2 and KNN algorithms.\n"
-                                    "Longer history = adapts slower to lighting changes, more stable.\n"
-                                    "Shorter history = adapts faster, less stable.\n"
-                                    "Recommended: 50 (~1.7 sec at 30fps) for general use.")
+                                   "Only applies to MOG2 and KNN algorithms.\n"
+                                   "Longer history = adapts slower to lighting changes, more stable.\n"
+                                   "Shorter history = adapts faster, less stable.\n"
+                                   "Recommended: 50 (~1.7 sec at 30fps) for general use.")
         bg_layout.addWidget(self.bg_history, 0, 1)
 
         bg_layout.addWidget(QLabel("Variance Threshold:"), 1, 0)
@@ -1627,17 +1621,17 @@ class HSVControlWidget(QWidget):
         self.bg_var_threshold.setRange(1.0, 100.0)
         self.bg_var_threshold.setValue(20.0)
         self.bg_var_threshold.setToolTip("Variance threshold for background/foreground classification (1.0-100.0).\n"
-                                          "Only applies to MOG2 and KNN algorithms.\n"
-                                          "Lower values = more sensitive, detects subtle changes, more false positives.\n"
-                                          "Higher values = less sensitive, only strong foreground objects.\n"
-                                          "Recommended: 10.0 for indoor, 15-20 for outdoor with varying lighting.")
+                                         "Only applies to MOG2 and KNN algorithms.\n"
+                                         "Lower values = more sensitive, detects subtle changes, more false positives.\n"
+                                         "Higher values = less sensitive, only strong foreground objects.\n"
+                                         "Recommended: 10.0 for indoor, 15-20 for outdoor with varying lighting.")
         bg_layout.addWidget(self.bg_var_threshold, 1, 1)
 
         self.bg_detect_shadows = QCheckBox("Detect Shadows (slower)")
         self.bg_detect_shadows.setToolTip("Enables shadow detection in MOG2 background subtractor.\n"
-                                           "Helps distinguish shadows from actual objects (reduces false positives).\n"
-                                           "Adds ~10-20% processing overhead.\n"
-                                           "Recommended: ON for outdoor scenes with strong shadows, OFF for speed.")
+                                          "Helps distinguish shadows from actual objects (reduces false positives).\n"
+                                          "Adds ~10-20% processing overhead.\n"
+                                          "Recommended: ON for outdoor scenes with strong shadows, OFF for speed.")
         bg_layout.addWidget(self.bg_detect_shadows, 2, 0, 1, 2)
 
         layout.addWidget(bg_group)
@@ -1649,9 +1643,9 @@ class HSVControlWidget(QWidget):
         self.pause_on_camera_movement = QCheckBox("Pause on Camera Movement")
         self.pause_on_camera_movement.setChecked(True)
         self.pause_on_camera_movement.setToolTip("Automatically pauses motion detection when camera is moving/panning.\n"
-                                                  "Prevents false positives caused by camera movement (entire scene appears to move).\n"
-                                                  "Detects camera movement by measuring percentage of frame with motion.\n"
-                                                  "Recommended: ON for handheld/drone footage, OFF for stationary tripod cameras.")
+                                                 "Prevents false positives caused by camera movement (entire scene appears to move).\n"
+                                                 "Detects camera movement by measuring percentage of frame with motion.\n"
+                                                 "Recommended: ON for handheld/drone footage, OFF for stationary tripod cameras.")
         cam_layout.addWidget(self.pause_on_camera_movement)
 
         cam_thresh_layout = QHBoxLayout()
@@ -1660,10 +1654,10 @@ class HSVControlWidget(QWidget):
         self.camera_movement_threshold.setRange(1, 100)
         self.camera_movement_threshold.setValue(1)
         self.camera_movement_threshold.setToolTip("Percentage of frame with motion to consider as camera movement (1-100%).\n"
-                                                   "If more than this % of pixels show motion, pause detection.\n"
-                                                   "Lower values = detect camera movement sooner (more pauses).\n"
-                                                   "Higher values = tolerate more motion before pausing (fewer pauses).\n"
-                                                   "Recommended: 15% for drone/handheld, 30% for shaky tripod.")
+                                                  "If more than this % of pixels show motion, pause detection.\n"
+                                                  "Lower values = detect camera movement sooner (more pauses).\n"
+                                                  "Higher values = tolerate more motion before pausing (fewer pauses).\n"
+                                                  "Recommended: 15% for drone/handheld, 30% for shaky tripod.")
         cam_thresh_layout.addWidget(self.camera_movement_threshold)
         self.camera_movement_label = QLabel("1%")
         cam_thresh_layout.addWidget(self.camera_movement_label)
@@ -1685,13 +1679,13 @@ class HSVControlWidget(QWidget):
         self.motion_confidence_slider.setTickPosition(QSlider.TicksBelow)
         self.motion_confidence_slider.setTickInterval(10)
         self.motion_confidence_slider.setToolTip("Filter motion detections by confidence score (0-100%).\n"
-                                                  "Confidence is based on detection area relative to max area.\n"
-                                                  "• 0%: Show all motion detections (default)\n"
-                                                  "• 25%: Filter weak motion matches\n"
-                                                  "• 50%: Show medium+ confidence only\n"
-                                                  "• 75%+: Show high confidence only\n"
-                                                  "Higher values reduce false positives but may miss valid motion.\n"
-                                                  "This is separate from the Color Detection confidence threshold.")
+                                                 "Confidence is based on detection area relative to max area.\n"
+                                                 "• 0%: Show all motion detections (default)\n"
+                                                 "• 25%: Filter weak motion matches\n"
+                                                 "• 50%: Show medium+ confidence only\n"
+                                                 "• 75%+: Show high confidence only\n"
+                                                 "Higher values reduce false positives but may miss valid motion.\n"
+                                                 "This is separate from the Color Detection confidence threshold.")
         motion_conf_layout.addWidget(self.motion_confidence_slider, 0, 1)
 
         self.motion_confidence_label = QLabel("0%")
@@ -1732,10 +1726,10 @@ class HSVControlWidget(QWidget):
         self.fusion_mode_combo.addItems(["Union", "Intersection", "Color Priority", "Motion Priority"])
         self.fusion_mode_combo.setCurrentText("Union")
         self.fusion_mode_combo.setToolTip("Fusion mode:\n"
-                                           "• Union: All detections, merge overlapping\n"
-                                           "• Intersection: Only detections in both\n"
-                                           "• Color Priority: Color + non-overlapping motion\n"
-                                           "• Motion Priority: Motion + non-overlapping color")
+                                          "• Union: All detections, merge overlapping\n"
+                                          "• Intersection: Only detections in both\n"
+                                          "• Color Priority: Color + non-overlapping motion\n"
+                                          "• Motion Priority: Motion + non-overlapping color")
         fusion_mode_layout.addWidget(self.fusion_mode_combo)
         fusion_mode_layout.addStretch()
         fusion_layout.addLayout(fusion_mode_layout)
@@ -1784,9 +1778,9 @@ class HSVControlWidget(QWidget):
         self.enable_aspect_ratio_filter = QCheckBox("Enable Aspect Ratio Filtering")
         self.enable_aspect_ratio_filter.setChecked(False)  # Default OFF
         self.enable_aspect_ratio_filter.setToolTip("Filters detections based on aspect ratio (width/height).\n"
-                                                    "Removes very thin/elongated detections (wires, shadows, cracks).\n"
-                                                    "Useful for filtering non-object shapes.\n"
-                                                    "Recommended: OFF by default, ON if many thin false positives.")
+                                                   "Removes very thin/elongated detections (wires, shadows, cracks).\n"
+                                                   "Useful for filtering non-object shapes.\n"
+                                                   "Recommended: OFF by default, ON if many thin false positives.")
         aspect_layout.addWidget(self.enable_aspect_ratio_filter)
 
         ratio_layout = QGridLayout()
@@ -1796,10 +1790,10 @@ class HSVControlWidget(QWidget):
         self.min_aspect_ratio.setValue(0.2)
         self.min_aspect_ratio.setSingleStep(0.1)
         self.min_aspect_ratio.setToolTip("Minimum aspect ratio (width/height) to keep (0.1-10.0).\n"
-                                          "Rejects very tall/thin vertical detections.\n"
-                                          "Example: 0.2 = reject if height > 5× width.\n"
-                                          "Lower values = allow thinner objects.\n"
-                                          "Recommended: 0.2 for filtering poles/wires, 0.5 for people.")
+                                         "Rejects very tall/thin vertical detections.\n"
+                                         "Example: 0.2 = reject if height > 5× width.\n"
+                                         "Lower values = allow thinner objects.\n"
+                                         "Recommended: 0.2 for filtering poles/wires, 0.5 for people.")
         ratio_layout.addWidget(self.min_aspect_ratio, 0, 1)
 
         ratio_layout.addWidget(QLabel("Max Ratio:"), 1, 0)
@@ -1808,10 +1802,10 @@ class HSVControlWidget(QWidget):
         self.max_aspect_ratio.setValue(5.0)
         self.max_aspect_ratio.setSingleStep(0.1)
         self.max_aspect_ratio.setToolTip("Maximum aspect ratio (width/height) to keep (0.1-20.0).\n"
-                                          "Rejects very wide/thin horizontal detections.\n"
-                                          "Example: 5.0 = reject if width > 5× height.\n"
-                                          "Higher values = allow wider objects.\n"
-                                          "Recommended: 5.0 for filtering shadows/lines, 10.0 for vehicles.")
+                                         "Rejects very wide/thin horizontal detections.\n"
+                                         "Example: 5.0 = reject if width > 5× height.\n"
+                                         "Higher values = allow wider objects.\n"
+                                         "Recommended: 5.0 for filtering shadows/lines, 10.0 for vehicles.")
         ratio_layout.addWidget(self.max_aspect_ratio, 1, 1)
 
         aspect_layout.addLayout(ratio_layout)
@@ -1824,10 +1818,10 @@ class HSVControlWidget(QWidget):
         self.clustering_enabled_checkbox = QCheckBox("Enable Detection Clustering")
         self.clustering_enabled_checkbox.setChecked(False)  # Default OFF
         self.clustering_enabled_checkbox.setToolTip("Combines nearby detections into single merged detection.\n"
-                                                     "Groups detections whose centroids are within specified distance.\n"
-                                                     "Merged detection encompasses all combined contours.\n"
-                                                     "Useful for: Combining scattered patches of same object.\n"
-                                                     "Recommended: OFF by default, ON if objects appear fragmented.")
+                                                    "Groups detections whose centroids are within specified distance.\n"
+                                                    "Merged detection encompasses all combined contours.\n"
+                                                    "Useful for: Combining scattered patches of same object.\n"
+                                                    "Recommended: OFF by default, ON if objects appear fragmented.")
         cluster_layout.addWidget(self.clustering_enabled_checkbox)
 
         cluster_dist_layout = QGridLayout()
@@ -1836,10 +1830,10 @@ class HSVControlWidget(QWidget):
         self.clustering_distance_spinbox.setRange(0, 500)
         self.clustering_distance_spinbox.setValue(50)  # Default 50px
         self.clustering_distance_spinbox.setToolTip("Maximum centroid distance to merge detections (0-500 pixels).\n"
-                                                     "Detections closer than this distance are combined into one.\n"
-                                                     "Lower values = only merge very close detections.\n"
-                                                     "Higher values = merge distant detections (may over-merge).\n"
-                                                     "Recommended: 50px for people, 100px for vehicles at 720p.")
+                                                    "Detections closer than this distance are combined into one.\n"
+                                                    "Lower values = only merge very close detections.\n"
+                                                    "Higher values = merge distant detections (may over-merge).\n"
+                                                    "Recommended: 50px for people, 100px for vehicles at 720p.")
         cluster_dist_layout.addWidget(self.clustering_distance_spinbox, 0, 1)
 
         cluster_layout.addLayout(cluster_dist_layout)
@@ -1863,14 +1857,14 @@ class HSVControlWidget(QWidget):
         self.render_shape_combo.addItems(["Box", "Circle", "Dot", "Off"])
         self.render_shape_combo.setCurrentText("Circle")
         self.render_shape_combo.setToolTip("Shape to draw around detections:\n\n"
-                                            "• Box: Rectangle around detection bounding box.\n"
-                                            "  Use for: Precise boundaries, technical visualization.\n\n"
-                                            "• Circle: Circle encompassing detection (150% of contour radius).\n"
-                                            "  Use for: General use, cleaner look (default).\n\n"
-                                            "• Dot: Small dot at detection centroid.\n"
-                                            "  Use for: Minimal overlay, fast rendering.\n\n"
-                                            "• Off: No shape overlay (only thumbnails/text if enabled).\n"
-                                            "  Use for: Clean video with minimal overlays.")
+                                           "• Box: Rectangle around detection bounding box.\n"
+                                           "  Use for: Precise boundaries, technical visualization.\n\n"
+                                           "• Circle: Circle encompassing detection (150% of contour radius).\n"
+                                           "  Use for: General use, cleaner look (default).\n\n"
+                                           "• Dot: Small dot at detection centroid.\n"
+                                           "  Use for: Minimal overlay, fast rendering.\n\n"
+                                           "• Off: No shape overlay (only thumbnails/text if enabled).\n"
+                                           "  Use for: Clean video with minimal overlays.")
         shape_layout.addWidget(self.render_shape_combo, 0, 1)
 
         layout.addWidget(shape_group)
@@ -1881,25 +1875,25 @@ class HSVControlWidget(QWidget):
 
         self.render_text_checkbox = QCheckBox("Show Text Labels (slower)")
         self.render_text_checkbox.setToolTip("Displays text labels near detections showing detection information.\n"
-                                              "Adds ~5-15ms processing overhead depending on detection count.\n"
-                                              "Labels show: detection type, confidence, area.\n"
-                                              "Recommended: OFF for speed, ON for debugging/analysis.")
+                                             "Adds ~5-15ms processing overhead depending on detection count.\n"
+                                             "Labels show: detection type, confidence, area.\n"
+                                             "Recommended: OFF for speed, ON for debugging/analysis.")
         vis_layout.addWidget(self.render_text_checkbox)
 
         self.render_contours_checkbox = QCheckBox("Show Contours (slowest)")
         self.render_contours_checkbox.setToolTip("Draws exact detection contours (pixel-precise boundaries).\n"
-                                                  "Adds ~10-20ms processing overhead (very expensive).\n"
-                                                  "Shows exact shape detected by algorithm.\n"
-                                                  "Recommended: OFF for speed, ON only for detailed analysis.")
+                                                 "Adds ~10-20ms processing overhead (very expensive).\n"
+                                                 "Shows exact shape detected by algorithm.\n"
+                                                 "Recommended: OFF for speed, ON only for detailed analysis.")
         vis_layout.addWidget(self.render_contours_checkbox)
 
         self.use_detection_color = QCheckBox("Use Detection Color (hue @ 100% sat/val for detected colors)")
         self.use_detection_color.setChecked(True)  # Default ON
         self.use_detection_color.setToolTip("Color the detection overlay based on detected color.\n"
-                                              "For color detections: Uses the detected hue at 100% saturation/value.\n"
-                                              "For motion detections: Uses default color (green/blue).\n"
-                                              "Helps visually identify what color was detected.\n"
-                                              "Recommended: ON for color detection, OFF for motion-only.")
+                                            "For color detections: Uses the detected hue at 100% saturation/value.\n"
+                                            "For motion detections: Uses default color (green/blue).\n"
+                                            "Helps visually identify what color was detected.\n"
+                                            "Recommended: ON for color detection, OFF for motion-only.")
         vis_layout.addWidget(self.use_detection_color)
 
         layout.addWidget(vis_group)
@@ -1914,10 +1908,10 @@ class HSVControlWidget(QWidget):
         self.max_detections_spinbox.setValue(100)
         self.max_detections_spinbox.setSpecialValueText("Unlimited")
         self.max_detections_spinbox.setToolTip("Maximum number of detections to render on screen (0-1000).\n"
-                                                 "Prevents rendering slowdown when hundreds of detections occur.\n"
-                                                 "Shows highest confidence detections first.\n"
-                                                 "0 = Unlimited (may cause lag with many detections).\n"
-                                                 "Recommended: 100 for general use, 50 for complex rendering (text+contours).")
+                                               "Prevents rendering slowdown when hundreds of detections occur.\n"
+                                               "Shows highest confidence detections first.\n"
+                                               "0 = Unlimited (may cause lag with many detections).\n"
+                                               "Recommended: 100 for general use, 50 for complex rendering (text+contours).")
         limit_layout.addWidget(self.max_detections_spinbox, 0, 1)
 
         layout.addWidget(limit_group)
@@ -1929,16 +1923,16 @@ class HSVControlWidget(QWidget):
         self.show_timing_overlay_checkbox = QCheckBox("Show Timing Overlay (FPS, metrics)")
         self.show_timing_overlay_checkbox.setChecked(False)  # Default OFF
         self.show_timing_overlay_checkbox.setToolTip("Displays detailed timing information on video overlay.\n"
-                                                      "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
-                                                      "Useful for performance tuning and debugging.\n"
-                                                      "Recommended: OFF for clean view, ON when optimizing performance.")
+                                                     "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
+                                                     "Useful for performance tuning and debugging.\n"
+                                                     "Recommended: OFF for clean view, ON when optimizing performance.")
         overlay_layout.addWidget(self.show_timing_overlay_checkbox)
 
         self.show_detections_checkbox = QCheckBox("Show Detections")
         self.show_detections_checkbox.setChecked(True)  # Default ON
         self.show_detections_checkbox.setToolTip("Toggle detection rendering on/off.\n"
-                                                  "When OFF, no detection overlays are shown (clean video).\n"
-                                                  "Recommended: ON for analysis, OFF for clean recording.")
+                                                 "When OFF, no detection overlays are shown (clean video).\n"
+                                                 "Recommended: ON for analysis, OFF for clean recording.")
         overlay_layout.addWidget(self.show_detections_checkbox)
 
         layout.addWidget(overlay_group)
@@ -2045,8 +2039,8 @@ class HSVControlWidget(QWidget):
 
             # Format HSV summary
             hsv_summary = (f"H:{int(h*179)}±{range_data['hue_minus']}/{range_data['hue_plus']}, "
-                          f"S:{int(s*255)}±{range_data['sat_minus']}/{range_data['sat_plus']}, "
-                          f"V:{int(v*255)}±{range_data['val_minus']}/{range_data['val_plus']}")
+                           f"S:{int(s*255)}±{range_data['sat_minus']}/{range_data['sat_plus']}, "
+                           f"V:{int(v*255)}±{range_data['val_minus']}/{range_data['val_plus']}")
 
             # Create list item with color swatch
             item_text = f"  {name}   ({hsv_summary})"
@@ -2471,16 +2465,15 @@ class HSVControlWidget(QWidget):
                 self.logger.warning(f"Invalid resolution format: {resolution_text}")
 
         # Parse motion processing resolution (separate from color)
-        motion_processing_resolution = None
+        # Note: motion_processing_resolution is reserved for future use
         motion_resolution_text = self.motion_resolution_combo.currentText()
         if motion_resolution_text != "Same as Color":
             # Parse "WIDTHxHEIGHT" format
             try:
                 parts = motion_resolution_text.lower().split('x')
                 if len(parts) == 2:
-                    width = int(parts[0])
-                    height = int(parts[1])
-                    motion_processing_resolution = (width, height)
+                    # motion_processing_resolution = (_width, _height)  # Reserved for future use
+                    pass
             except (ValueError, IndexError):
                 self.logger.warning(f"Invalid motion resolution format: {motion_resolution_text}")
 
@@ -2621,7 +2614,7 @@ class HSVControlWidget(QWidget):
                 if len(parts) == 2:
                     width = int(parts[0])
                     height = int(parts[1])
-                    motion_processing_resolution = (width, height)
+                    # motion_processing_resolution = (width, height)  # Reserved for future use
             except (ValueError, IndexError):
                 self.logger.warning(f"Invalid motion resolution format: {motion_resolution_text}")
 
@@ -2748,15 +2741,15 @@ class StreamControlWidget(QWidget):
         self.url_input.setPlaceholderText("Click to browse for video file...")
         self.url_input.setText("")  # Default empty for file selection
         self.url_input.setToolTip("Enter or browse for the video source:\n"
-                                   "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
-                                   "• HDMI Capture: Enter device index (0, 1, 2, etc.)\n"
-                                   "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)")
+                                  "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
+                                  "• HDMI Capture: Enter device index (0, 1, 2, etc.)\n"
+                                  "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)")
         url_layout.addWidget(self.url_input, 1)
 
         self.browse_button = QPushButton("Browse...")
         self.browse_button.setVisible(True)  # Visible by default since File is default
         self.browse_button.setToolTip("Open file browser to select a video file for analysis.\n"
-                                       "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM")
+                                      "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM")
         url_layout.addWidget(self.browse_button)
 
         connection_layout.addLayout(url_layout, 0, 1)
@@ -2766,9 +2759,9 @@ class StreamControlWidget(QWidget):
         self.type_combo = QComboBox()
         self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
         self.type_combo.setToolTip("Select the type of video source:\n"
-                                    "• File: Pre-recorded video file with timeline controls\n"
-                                    "• HDMI Capture: Live capture from HDMI capture device\n"
-                                    "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
+                                   "• File: Pre-recorded video file with timeline controls\n"
+                                   "• HDMI Capture: Live capture from HDMI capture device\n"
+                                   "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
         connection_layout.addWidget(self.type_combo, 1, 1)
 
         # Connection buttons
@@ -2776,12 +2769,12 @@ class StreamControlWidget(QWidget):
         self.connect_button = QPushButton("Connect")
         self.connect_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
         self.connect_button.setToolTip("Connect to the specified video source and begin processing.\n"
-                                        "Color detection will start automatically upon successful connection.")
+                                       "Color detection will start automatically upon successful connection.")
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }")
         self.disconnect_button.setEnabled(False)
         self.disconnect_button.setToolTip("Disconnect from the current video source and stop processing.\n"
-                                           "Any active recording will be stopped automatically.")
+                                          "Any active recording will be stopped automatically.")
 
         button_layout.addWidget(self.connect_button)
         button_layout.addWidget(self.disconnect_button)
@@ -2790,9 +2783,9 @@ class StreamControlWidget(QWidget):
         self.status_label = QLabel("Status: Disconnected")
         self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
         self.status_label.setToolTip("Current connection status:\n"
-                                      "• Disconnected: No active video source\n"
-                                      "• Connected: Streaming and processing video\n"
-                                      "• Error: Connection problem or stream interrupted")
+                                     "• Disconnected: No active video source\n"
+                                     "• Connected: Streaming and processing video\n"
+                                     "• Error: Connection problem or stream interrupted")
 
         # Performance display
         performance_group = QGroupBox("Performance")
@@ -2801,14 +2794,14 @@ class StreamControlWidget(QWidget):
 
         self.fps_label = QLabel("FPS: --")
         self.fps_label.setToolTip("Frames per second being processed from the video stream.\n"
-                                   "Lower FPS may indicate system load or slow stream.")
+                                  "Lower FPS may indicate system load or slow stream.")
         self.latency_label = QLabel("Processing: -- ms")
         self.latency_label.setToolTip("Time in milliseconds to process each frame including color detection.\n"
-                                       "Lower values indicate better real-time performance.\n"
-                                       "Target: <50ms for smooth real-time detection")
+                                      "Lower values indicate better real-time performance.\n"
+                                      "Target: <50ms for smooth real-time detection")
         self.detections_label = QLabel("Detections: --")
         self.detections_label.setToolTip("Number of color matches found in the current frame.\n"
-                                          "Adjust HSV thresholds and area constraints to refine detections.")
+                                         "Adjust HSV thresholds and area constraints to refine detections.")
 
         performance_layout.addWidget(self.fps_label, 0, 0)
         performance_layout.addWidget(self.latency_label, 0, 1)
@@ -2957,11 +2950,11 @@ class RTMPColorDetectionViewer(QMainWindow):
 
         self.video_display = VideoDisplayWidget()
         self.video_display.setToolTip("Live video stream with color detection visualization.\n"
-                                       "Detected objects are highlighted with:\n"
-                                       "• Green bounding boxes around matches\n"
-                                       "• Detection ID and area labels (if enabled)\n"
-                                       "• Confidence scores for each detection\n"
-                                       "The display automatically scales to fit the window")
+                                      "Detected objects are highlighted with:\n"
+                                      "• Green bounding boxes around matches\n"
+                                      "• Detection ID and area labels (if enabled)\n"
+                                      "• Confidence scores for each detection\n"
+                                      "The display automatically scales to fit the window")
         video_layout.addWidget(self.video_display, 1)  # Give video display stretch factor of 1
 
         # Timeline controls (for file playback) - fixed size, no stretch

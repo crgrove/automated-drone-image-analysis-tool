@@ -12,7 +12,7 @@ from core.services.LoggerService import LoggerService
 class CachePathService:
     """
     Service for managing cache directory paths.
-    
+
     Handles detection of cache directories and updating controller cache paths.
     """
 
@@ -23,11 +23,11 @@ class CachePathService:
     def check_and_prompt_for_caches(self, xml_path, parent_widget):
         """
         Check if cache directories exist, and if not, prompt user to locate them.
-        
+
         Args:
             xml_path: Path to XML file (used to determine expected cache location)
             parent_widget: Parent widget for dialogs
-            
+
         Returns:
             tuple: (alternative_cache_dir or None, bool indicating success)
         """
@@ -69,7 +69,7 @@ class CachePathService:
     def update_cache_paths(self, cache_dir, viewer):
         """
         Update cache directory paths for all controllers to use an alternative location.
-        
+
         Args:
             cache_dir: Path to the directory containing cache subdirectories
             viewer: Viewer instance to update controllers on
@@ -101,6 +101,3 @@ class CachePathService:
 
         except Exception as e:
             self.logger.error(f"Error updating cache paths: {e}")
-
-
-

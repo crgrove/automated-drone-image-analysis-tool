@@ -5,7 +5,11 @@ This widget renders map tiles, GPS points, connection lines, and handles user in
 """
 
 import math
-from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsPolygonItem, QWidget, QLabel
+from PySide6.QtWidgets import (
+    QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem,
+    QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsPolygonItem, QWidget,
+    QLabel
+)
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QEvent
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette, QPolygonF
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
@@ -319,7 +323,7 @@ class GPSMapView(QGraphicsView):
         # Initialize current image state (bearing, FOV, etc.)
         if self.current_image_index >= 0:
             self.set_current_image(self.current_image_index)
-        
+
         # Ensure compass is created after data is loaded
         self._ensure_compass_created()
 
@@ -435,7 +439,7 @@ class GPSMapView(QGraphicsView):
         if temp_aoi_data and temp_aoi_color:
             color_rgb = [temp_aoi_color.red(), temp_aoi_color.green(), temp_aoi_color.blue()]
             self.set_aoi_marker(temp_aoi_data, color_rgb)
-        
+
         # Ensure compass is in correct position after map render
         self._ensure_compass_created()
         if self.compass_container:
@@ -649,7 +653,7 @@ class GPSMapView(QGraphicsView):
 
         # Update FOV box
         self.update_fov_box(self.current_image_index)
-        
+
         # Ensure compass stays in correct position
         self._ensure_compass_created()
         if self.compass_container:
@@ -724,7 +728,7 @@ class GPSMapView(QGraphicsView):
 
         # Reload with new source
         self.load_visible_tiles()
-        
+
         # Ensure compass is in correct position after tile source change
         self._ensure_compass_created()
         if self.compass_container:
@@ -818,7 +822,7 @@ class GPSMapView(QGraphicsView):
 
         # Schedule tile loading
         self.load_visible_tiles()
-        
+
         # Ensure compass is in correct position after fitting
         self._ensure_compass_created()
         if self.compass_container:
@@ -871,7 +875,7 @@ class GPSMapView(QGraphicsView):
         zoom_factor = 1.15 if event.angleDelta().y() > 0 else 0.85
         self.zoom_scale *= zoom_factor
         self.scale(zoom_factor, zoom_factor)
-        
+
         # Defer tile zoom level check to avoid performance hits during rapid scrolling
         if hasattr(self, '_tile_zoom_timer'):
             self._tile_zoom_timer.stop()
@@ -879,13 +883,13 @@ class GPSMapView(QGraphicsView):
             self._tile_zoom_timer = QTimer(self)
             self._tile_zoom_timer.setSingleShot(True)
             self._tile_zoom_timer.timeout.connect(self._deferred_tile_check)
-        
+
         # Start a short timer to check tile zoom after scrolling stops
         self._tile_zoom_timer.start(150)  # Wait 150ms after last scroll
-        
+
         # Still load visible tiles immediately for smooth experience
         self.load_visible_tiles()
-        
+
         # Ensure compass stays in correct position
         self._ensure_compass_created()
         if self.compass_container:
@@ -900,7 +904,7 @@ class GPSMapView(QGraphicsView):
         if self.compass_container:
             self._position_compass()
             self.compass_container.raise_()
-    
+
     def _check_tile_zoom_level(self):
         """Check if we need to change tile zoom level based on current scale."""
         if self.zoom_scale > 1.5:
@@ -987,7 +991,7 @@ class GPSMapView(QGraphicsView):
 
         # Load new tiles
         self.load_visible_tiles()
-        
+
         # Ensure compass stays in correct position after zoom level change
         self._ensure_compass_created()
         if self.compass_container:
@@ -1130,7 +1134,7 @@ class GPSMapView(QGraphicsView):
         # Re-center
         if center_point is not None:
             self.centerOn(center_point)
-        
+
         # Ensure compass stays in correct position after rotation
         self._ensure_compass_created()
         if self.compass_container:
@@ -1216,7 +1220,7 @@ class GPSMapView(QGraphicsView):
         self.aoi_marker.setToolTip(tooltip)
 
         self.scene.addItem(self.aoi_marker)
-        
+
         # Ensure compass stays on top after adding marker
         if self.compass_container:
             self.compass_container.raise_()
@@ -1329,7 +1333,7 @@ class GPSMapView(QGraphicsView):
             self.fov_box.setBrush(brush)
             self.fov_box.setZValue(5)
 
-            tooltip = f"Image FOV\n"
+            tooltip = "Image FOV\n"
             tooltip += f"Dimensions: {width}x{height} pixels\n"
             tooltip += f"Ground Coverage: {width_m:.1f}m x {height_m:.1f}m\n"
             tooltip += f"GSD: {gsd_cm:.2f} cm/px\n"
@@ -1337,7 +1341,7 @@ class GPSMapView(QGraphicsView):
             self.fov_box.setToolTip(tooltip)
 
             self.scene.addItem(self.fov_box)
-            
+
             # Ensure compass stays on top after adding FOV box
             if self.compass_container:
                 self.compass_container.raise_()

@@ -164,7 +164,7 @@ class CalTopoAuthDialog(QDialog):
              '/m/' in url_string or
              ('/login' not in url_string and '/accounts/login' not in url_string))):
 
-            print(f"Login detected! Enabling Done button.")
+            print("Login detected! Enabling Done button.")
             self.cookies_captured = True
 
     def on_manual_done_clicked(self):
@@ -190,9 +190,6 @@ class CalTopoAuthDialog(QDialog):
             return
 
         # Extract cookies from the web view
-        cookies = {}
-        cookie_store = self.profile.cookieStore()
-
         # Note: QWebEngineCore cookie API is asynchronous
         # For simplicity, we'll extract cookies from the profile
         # A more robust implementation would use cookie_store signals

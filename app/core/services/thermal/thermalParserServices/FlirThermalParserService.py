@@ -88,20 +88,20 @@ class FlirThermalParserService:
             -np.sqrt(object_distance / 2) * (ata2 + atb2 * np.sqrt(h2o))
         )
         raw_refl1 = (planck_r1 / (planck_r2 * (np.exp(planck_b / (reflected_apparent_temperature +
-                                                           ABSOLUTE_ZERO)) - planck_f)) - planck_o)
+                                                                  ABSOLUTE_ZERO)) - planck_f)) - planck_o)
         raw_refl1_attn = (1 - emissivity) / emissivity * raw_refl1
         raw_atm1 = (planck_r1 / (planck_r2 * (np.exp(planck_b / (atmospheric_temperature +
-                                                       ABSOLUTE_ZERO)) - planck_f)) - planck_o)
+                                                                 ABSOLUTE_ZERO)) - planck_f)) - planck_o)
         raw_atm1_attn = (1 - tau1) / emissivity / tau1 * raw_atm1
         raw_wind = (planck_r1 / (planck_r2 * (np.exp(planck_b / (ir_window_temperature +
-                                                       ABSOLUTE_ZERO)) - planck_f)) - planck_o)
+                                                                 ABSOLUTE_ZERO)) - planck_f)) - planck_o)
         raw_wind_attn = (emiss_wind / emissivity / tau1 / ir_window_transmission *
-                          raw_wind)
+                         raw_wind)
         raw_refl2 = (planck_r1 / (planck_r2 * (np.exp(planck_b / (reflected_apparent_temperature +
-                                                            ABSOLUTE_ZERO)) - planck_f)) - planck_o)
+                                                                  ABSOLUTE_ZERO)) - planck_f)) - planck_o)
         raw_refl2_attn = refl_wind / emissivity / tau1 / ir_window_transmission * raw_refl2
         raw_atm2 = (planck_r1 / (planck_r2 * (np.exp(planck_b / (atmospheric_temperature +
-                                                       ABSOLUTE_ZERO)) - planck_f)) - planck_o)
+                                                                 ABSOLUTE_ZERO)) - planck_f)) - planck_o)
         raw_atm2_attn = (1 - tau2) / emissivity / tau1 / ir_window_transmission / tau2 * raw_atm2
         raw_obj = (raw / emissivity / tau1 / ir_window_transmission / tau2 - raw_atm1_attn -
                    raw_atm2_attn - raw_wind_attn - raw_refl1_attn - raw_refl2_attn)

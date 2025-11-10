@@ -75,7 +75,7 @@ class ThumbnailLoader(QObject):
                 return False
 
             results_path = Path(self.results_dir)
-            
+
             # Try unified .thumbnails directory first (new format)
             thumb_dir = results_path / '.thumbnails'
 
@@ -117,7 +117,7 @@ class ThumbnailLoader(QObject):
                 legacy_path = legacy_thumb_dir / f"{path_hash}.jpg"
                 if legacy_path.exists():
                     return True
-                
+
                 legacy_abs_path = legacy_thumb_dir / f"{legacy_hash}.jpg"
                 if legacy_abs_path.exists():
                     return True
@@ -149,7 +149,7 @@ class ThumbnailLoader(QObject):
                 return None
 
             results_path = Path(self.results_dir)
-            
+
             # Try unified .thumbnails directory first (new format)
             thumb_dir = results_path / '.thumbnails'
 
@@ -191,7 +191,7 @@ class ThumbnailLoader(QObject):
                 legacy_path = legacy_thumb_dir / f"{path_hash}.jpg"
                 if legacy_path.exists():
                     return QPixmap(str(legacy_path))
-                
+
                 legacy_abs_path = legacy_thumb_dir / f"{legacy_hash}.jpg"
                 if legacy_abs_path.exists():
                     return QPixmap(str(legacy_abs_path))

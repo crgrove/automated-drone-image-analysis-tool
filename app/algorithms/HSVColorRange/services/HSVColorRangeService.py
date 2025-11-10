@@ -7,7 +7,26 @@ from core.services.LoggerService import LoggerService
 
 
 class HSVColorRangeService(AlgorithmService):
+    """Service that executes the HSV Color Range algorithm.
+
+    Detects areas within one or more HSV color ranges. Supports both single
+    and multiple HSV range configurations with hue wraparound handling.
+
+    Attributes:
+        target_color_hsv: Target HSV color for backward compatibility.
+    """
+
     def __init__(self, identifier, min_area, max_area, aoi_radius, combine_aois, options):
+        """Initialize the HSVColorRangeService.
+
+        Args:
+            identifier: RGB values for the color to highlight areas of interest.
+            min_area: Minimum area in pixels for an object to qualify as an area of interest.
+            max_area: Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois: If True, overlapping areas of interest will be combined.
+            options: Additional algorithm-specific options including HSV range configurations.
+        """
         self.logger = LoggerService()
         super().__init__('HSVColorRange', identifier, min_area, max_area, aoi_radius, combine_aois, options)
 
@@ -20,15 +39,17 @@ class HSVColorRangeService(AlgorithmService):
             self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
 
     def _create_mask_from_hsv_ranges(self, hsv_image, hsv_ranges):
-        """
-        Create a mask from HSV range data.
-        
+        """Create a mask from HSV range data.
+
+        Handles hue wraparound for OpenCV HSV format (H: 0-179, S/V: 0-255).
+
         Args:
-            hsv_image: Image in HSV color space
-            hsv_ranges: Dict with h, s, v, h_minus, h_plus, s_minus, s_plus, v_minus, v_plus
-        
+            hsv_image: Image in HSV color space as numpy array.
+            hsv_ranges: Dictionary with h, s, v, h_minus, h_plus, s_minus,
+                s_plus, v_minus, v_plus keys.
+
         Returns:
-            numpy.ndarray: Binary mask
+            Binary mask as numpy array (0 or 255).
         """
         h, s, v = hsv_ranges['h'], hsv_ranges['s'], hsv_ranges['v']
         h_minus, h_plus = hsv_ranges['h_minus'], hsv_ranges['h_plus']
@@ -63,6 +84,21 @@ class HSVColorRangeService(AlgorithmService):
             return cv2.inRange(hsv_image, lower_bound, upper_bound)
 
     def process_image(self, img, full_path, input_dir, output_dir):
+        """Process a single image to identify areas within one or more HSV color ranges.
+
+        Supports both single and multiple HSV range configurations. Handles hue
+        wraparound and combines multiple ranges with OR logic.
+
+        Args:
+            img: The image to be processed as numpy array (BGR format).
+            full_path: The path to the image being analyzed.
+            input_dir: The base input folder.
+            output_dir: The base output folder.
+
+        Returns:
+            AnalysisResult containing the processed image path, list of areas
+            of interest, base contour count, and error message if any.
+        """
         try:
             # Convert the image from BGR to HSV color space
             hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -74,7 +110,7 @@ class HSVColorRangeService(AlgorithmService):
                 if isinstance(hsv_configs, str):
                     from ast import literal_eval
                     hsv_configs = literal_eval(hsv_configs)
-                
+
                 # Combine multiple HSV ranges with OR logic
                 mask = None
                 for hsv_config in hsv_configs:
@@ -83,17 +119,17 @@ class HSVColorRangeService(AlgorithmService):
                         if isinstance(hsv_ranges, str):
                             from ast import literal_eval
                             hsv_ranges = literal_eval(hsv_ranges)
-                        
+
                         if hsv_ranges:
                             this_mask = self._create_mask_from_hsv_ranges(hsv_image, hsv_ranges)
                             if mask is None:
                                 mask = this_mask
                             else:
                                 mask = cv2.bitwise_or(mask, this_mask)
-                
+
                 if mask is None:
                     return AnalysisResult(full_path, error_message="No valid HSV ranges configured")
-                
+
                 # Use first color for confidence scoring (backward compatibility)
                 if hsv_configs and isinstance(hsv_configs[0], dict):
                     first_config = hsv_configs[0]
@@ -111,7 +147,7 @@ class HSVColorRangeService(AlgorithmService):
                 if isinstance(hsv_ranges, str):
                     from ast import literal_eval
                     hsv_ranges = literal_eval(hsv_ranges)
-                
+
                 if hsv_ranges:
                     mask = self._create_mask_from_hsv_ranges(hsv_image, hsv_ranges)
 
@@ -145,7 +181,7 @@ class HSVColorRangeService(AlgorithmService):
                 # Fallback to old method (requires target_color_hsv)
                 if self.target_color_hsv is None:
                     return AnalysisResult(full_path, error_message="No color selected for HSV Filter")
-                
+
                 hue_threshold = self.options.get('hue_threshold', 10)
                 saturation_threshold = self.options.get('saturation_threshold', 30)
                 value_threshold = self.options.get('value_threshold', 30)
@@ -163,7 +199,7 @@ class HSVColorRangeService(AlgorithmService):
                         mask = this_mask
                     else:
                         mask = cv2.bitwise_or(mask, this_mask)
-            
+
             # Ensure mask is defined
             if mask is None:
                 return AnalysisResult(full_path, error_message="No valid HSV configuration found")

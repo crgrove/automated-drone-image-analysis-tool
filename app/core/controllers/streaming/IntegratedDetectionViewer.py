@@ -6,25 +6,8 @@ color quantization, fusion, and temporal smoothing with comprehensive parameter 
 """
 
 # Set environment variable to avoid numpy compatibility issues - MUST be first
-import os
-os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
-os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
-os.environ.setdefault('NPY_DISABLE_SVML', '1')
-
-import cv2
-import numpy as np
-import time
-from typing import Optional, List, Dict, Any
-
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                               QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
-                               QGroupBox, QGridLayout, QTextEdit, QSplitter,
-                               QCheckBox, QComboBox, QMessageBox, QStatusBar,
-                               QSlider, QFileDialog, QTabWidget, QListWidget, QDoubleSpinBox)
-
-from core.services.streaming.RTMPStreamService import StreamManager, StreamType
+from core.services.LoggerService import LoggerService
+from core.services.streaming.VideoRecordingService import RecordingManager
 from core.services.streaming.RealtimeIntegratedDetectionService import (
     RealtimeIntegratedDetector,
     IntegratedDetectionConfig,
@@ -32,8 +15,22 @@ from core.services.streaming.RealtimeIntegratedDetectionService import (
     FusionMode,
     Detection
 )
-from core.services.streaming.VideoRecordingService import RecordingManager
-from core.services.LoggerService import LoggerService
+from core.services.streaming.RTMPStreamService import StreamManager, StreamType
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                               QLabel, QPushButton, QLineEdit, QSpinBox, QFrame,
+                               QGroupBox, QGridLayout, QTextEdit, QSplitter,
+                               QCheckBox, QComboBox, QMessageBox, QStatusBar,
+                               QSlider, QFileDialog, QTabWidget, QListWidget, QDoubleSpinBox)
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import Qt, QTimer, Signal
+from typing import Optional, List, Dict, Any
+import time
+import numpy as np
+import cv2
+import os
+os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
+os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
+os.environ.setdefault('NPY_DISABLE_SVML', '1')
 
 
 class DetectionTracker:
@@ -256,7 +253,6 @@ class DetectionTracker:
             best_match_idx = None
             best_ghost_id = None
             best_distance = self.distance_threshold
-            best_is_ghost = False
 
             # First, try to match to previous detections (prioritize active detections)
             for i, prev_det in enumerate(self.previous_detections):
@@ -269,7 +265,6 @@ class DetectionTracker:
                 if distance < best_distance:
                     best_distance = distance
                     best_match_idx = i
-                    best_is_ghost = False
 
             # If no match to active detections, try matching to ghosts
             if best_match_idx is None:
@@ -286,7 +281,6 @@ class DetectionTracker:
                     if distance < ghost_threshold and distance < best_distance:
                         best_distance = distance
                         best_ghost_id = ghost_id
-                        best_is_ghost = True
 
             if best_match_idx is not None:
                 # Matched to previous detection - keep same ID
@@ -395,7 +389,7 @@ class DetectionThumbnailWidget(QWidget):
         self.tracker.max_slots = max_thumbnails
 
     def update_thumbnails(self, frame: np.ndarray, detections: List[Detection], zoom: float = 3.0,
-                         processing_resolution: tuple = None, original_resolution: tuple = None):
+                          processing_resolution: tuple = None, original_resolution: tuple = None):
         """Update thumbnails with tracked detections in stable slots.
 
         Clustered detections (when detection clustering is enabled) are shown as a SINGLE thumbnail
@@ -437,8 +431,6 @@ class DetectionThumbnailWidget(QWidget):
                 # Apply scale factor to convert from processing res to frame res
                 cx = int(cx_raw * scale_x)
                 cy = int(cy_raw * scale_y)
-                x = int(x_raw * scale_x)
-                y = int(y_raw * scale_y)
                 w = int(w_raw * scale_x)
                 h = int(h_raw * scale_y)
 
@@ -640,9 +632,9 @@ class IntegratedDetectionControlWidget(QWidget):
 
         self.resolution_preset.setCurrentText("1280x720")
         self.resolution_preset.setToolTip("Select a preset resolution for processing. Lower resolutions are faster but less detailed.\n"
-                                         "'Original' uses the video's native resolution (no downsampling).\n"
-                                         "720p (1280x720) provides excellent balance between speed and detection accuracy.\n"
-                                         "Select 'Custom' to manually set width and height.")
+                                          "'Original' uses the video's native resolution (no downsampling).\n"
+                                          "720p (1280x720) provides excellent balance between speed and detection accuracy.\n"
+                                          "Select 'Custom' to manually set width and height.")
         preset_layout.addWidget(self.resolution_preset)
         res_layout.addLayout(preset_layout)
 
@@ -653,7 +645,11 @@ class IntegratedDetectionControlWidget(QWidget):
         self.processing_width.setRange(320, 3840)
         self.processing_width.setValue(1280)
         self.processing_width.setEnabled(False)
-        self.processing_width.setToolTip("Custom processing width in pixels (320-3840).\nOnly enabled when 'Custom' preset is selected.\nLower values = faster processing, less detail.")
+        self.processing_width.setToolTip(
+            "Custom processing width in pixels (320-3840).\n"
+            "Only enabled when 'Custom' preset is selected.\n"
+            "Lower values = faster processing, less detail."
+        )
         custom_layout.addWidget(self.processing_width, 0, 1)
 
         custom_layout.addWidget(QLabel("Height:"), 1, 0)
@@ -661,7 +657,11 @@ class IntegratedDetectionControlWidget(QWidget):
         self.processing_height.setRange(240, 2160)
         self.processing_height.setValue(720)
         self.processing_height.setEnabled(False)
-        self.processing_height.setToolTip("Custom processing height in pixels (240-2160).\nOnly enabled when 'Custom' preset is selected.\nLower values = faster processing, less detail.")
+        self.processing_height.setToolTip(
+            "Custom processing height in pixels (240-2160).\n"
+            "Only enabled when 'Custom' preset is selected.\n"
+            "Lower values = faster processing, less detail."
+        )
         custom_layout.addWidget(self.processing_height, 1, 1)
 
         res_layout.addLayout(custom_layout)
@@ -674,9 +674,9 @@ class IntegratedDetectionControlWidget(QWidget):
         self.threaded_capture = QCheckBox("Use Threaded Capture")
         self.threaded_capture.setChecked(True)  # Default ON
         self.threaded_capture.setToolTip("Enables background video decoding in a separate thread.\n"
-                                        "Allows processing to happen in parallel with video capture.\n"
-                                        "Improves performance especially for high-resolution videos (2K/4K).\n"
-                                        "Highly recommended for all video sources. No downsides.")
+                                         "Allows processing to happen in parallel with video capture.\n"
+                                         "Improves performance especially for high-resolution videos (2K/4K).\n"
+                                         "Highly recommended for all video sources. No downsides.")
         perf_layout.addWidget(self.threaded_capture)
 
         self.render_at_processing_res = QCheckBox("Render at Processing Resolution (faster for high-res)")
@@ -709,9 +709,9 @@ class IntegratedDetectionControlWidget(QWidget):
         self.enable_motion = QCheckBox("Enable Motion Detection")
         self.enable_motion.setChecked(False)
         self.enable_motion.setToolTip("Detect moving objects by analyzing frame-to-frame differences.\n"
-                                     "Works best for stationary cameras or slow-moving cameras.\n"
-                                     "Automatically pauses when excessive camera movement is detected.\n"
-                                     "Can be combined with Color Detection for more robust detection.")
+                                      "Works best for stationary cameras or slow-moving cameras.\n"
+                                      "Automatically pauses when excessive camera movement is detected.\n"
+                                      "Can be combined with Color Detection for more robust detection.")
         layout.addWidget(self.enable_motion)
 
         # Algorithm Selection
@@ -723,12 +723,12 @@ class IntegratedDetectionControlWidget(QWidget):
         self.motion_algorithm.addItems(["FRAME_DIFF", "MOG2", "KNN"])
         self.motion_algorithm.setCurrentText("MOG2")
         self.motion_algorithm.setToolTip("Motion detection algorithm:\n\n"
-                                        "• FRAME_DIFF: Simple frame differencing. Fast, sensitive to all motion.\n"
-                                        "  Good for: Quick tests, high-contrast scenes.\n\n"
-                                        "• MOG2: Gaussian mixture model (recommended). Adapts to lighting changes.\n"
-                                        "  Good for: General use, varying lighting, shadows optional.\n\n"
-                                        "• KNN: K-nearest neighbors. More robust to noise than MOG2.\n"
-                                        "  Good for: Noisy videos, complex backgrounds.")
+                                         "• FRAME_DIFF: Simple frame differencing. Fast, sensitive to all motion.\n"
+                                         "  Good for: Quick tests, high-contrast scenes.\n\n"
+                                         "• MOG2: Gaussian mixture model (recommended). Adapts to lighting changes.\n"
+                                         "  Good for: General use, varying lighting, shadows optional.\n\n"
+                                         "• KNN: K-nearest neighbors. More robust to noise than MOG2.\n"
+                                         "  Good for: Noisy videos, complex backgrounds.")
         algo_layout.addWidget(self.motion_algorithm, 0, 1)
 
         layout.addWidget(algo_group)
@@ -743,9 +743,9 @@ class IntegratedDetectionControlWidget(QWidget):
         self.motion_threshold.setRange(1, 255)
         self.motion_threshold.setValue(10)
         self.motion_threshold.setToolTip("Minimum pixel intensity change to consider as motion (1-255).\n"
-                                        "Lower values = more sensitive, detects subtle motion, more false positives.\n"
-                                        "Higher values = less sensitive, only strong motion, fewer false positives.\n"
-                                        "Recommended: 10 for general use, 5 for subtle motion, 15-20 for high contrast scenes.")
+                                         "Lower values = more sensitive, detects subtle motion, more false positives.\n"
+                                         "Higher values = less sensitive, only strong motion, fewer false positives.\n"
+                                         "Recommended: 10 for general use, 5 for subtle motion, 15-20 for high contrast scenes.")
         param_layout.addWidget(self.motion_threshold, row, 1)
 
         row += 1
@@ -754,10 +754,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.min_detection_area.setRange(1, 100000)
         self.min_detection_area.setValue(5)
         self.min_detection_area.setToolTip("Minimum detection area in pixels (1-100000).\n"
-                                          "Filters out very small detections (noise, insects, raindrops).\n"
-                                          "Lower values = detect smaller objects, more noise.\n"
-                                          "Higher values = only large objects, less noise.\n"
-                                          "Recommended: 5-10 for person detection, 50-100 for vehicle detection.")
+                                           "Filters out very small detections (noise, insects, raindrops).\n"
+                                           "Lower values = detect smaller objects, more noise.\n"
+                                           "Higher values = only large objects, less noise.\n"
+                                           "Recommended: 5-10 for person detection, 50-100 for vehicle detection.")
         param_layout.addWidget(self.min_detection_area, row, 1)
 
         row += 1
@@ -766,10 +766,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.max_detection_area.setRange(10, 1000000)
         self.max_detection_area.setValue(1000)
         self.max_detection_area.setToolTip("Maximum detection area in pixels (10-1000000).\n"
-                                          "Filters out very large detections (shadows, clouds, global lighting changes).\n"
-                                          "Lower values = only small/medium objects.\n"
-                                          "Higher values = allow large objects.\n"
-                                          "Recommended: 1000 for people, 10000 for vehicles, higher for large objects.")
+                                           "Filters out very large detections (shadows, clouds, global lighting changes).\n"
+                                           "Lower values = only small/medium objects.\n"
+                                           "Higher values = allow large objects.\n"
+                                           "Recommended: 1000 for people, 10000 for vehicles, higher for large objects.")
         param_layout.addWidget(self.max_detection_area, row, 1)
 
         row += 1
@@ -779,10 +779,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.blur_kernel_size.setSingleStep(2)
         self.blur_kernel_size.setValue(5)
         self.blur_kernel_size.setToolTip("Gaussian blur kernel size (must be odd: 1, 3, 5, 7, etc.).\n"
-                                        "Smooths the frame before motion detection to reduce noise.\n"
-                                        "Larger values = more smoothing, less noise, less detail.\n"
-                                        "Smaller values = less smoothing, more detail, more noise.\n"
-                                        "Recommended: 5 for general use, 1 for no blur, 7-9 for noisy videos.")
+                                         "Smooths the frame before motion detection to reduce noise.\n"
+                                         "Larger values = more smoothing, less noise, less detail.\n"
+                                         "Smaller values = less smoothing, more detail, more noise.\n"
+                                         "Recommended: 5 for general use, 1 for no blur, 7-9 for noisy videos.")
         param_layout.addWidget(self.blur_kernel_size, row, 1)
 
         row += 1
@@ -792,10 +792,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.morphology_kernel_size.setSingleStep(2)
         self.morphology_kernel_size.setValue(3)
         self.morphology_kernel_size.setToolTip("Morphological operation kernel size (odd numbers: 1, 3, 5, etc.).\n"
-                                              "Removes small noise and fills holes in detections.\n"
-                                              "Larger values = remove more noise, merge nearby detections.\n"
-                                              "Smaller values = preserve detail, keep detections separate.\n"
-                                              "Recommended: 3 for general use, 1 for precise edges, 5-7 for noisy videos.")
+                                               "Removes small noise and fills holes in detections.\n"
+                                               "Larger values = remove more noise, merge nearby detections.\n"
+                                               "Smaller values = preserve detail, keep detections separate.\n"
+                                               "Recommended: 3 for general use, 1 for precise edges, 5-7 for noisy videos.")
         param_layout.addWidget(self.morphology_kernel_size, row, 1)
 
         layout.addWidget(param_group)
@@ -809,10 +809,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.persistence_frames.setRange(2, 30)
         self.persistence_frames.setValue(3)
         self.persistence_frames.setToolTip("Size of temporal window for persistence filtering (2-30 frames).\n"
-                                          "Motion must appear in N out of M consecutive frames to be confirmed.\n"
-                                          "Larger values = longer memory, more stable, slower response.\n"
-                                          "Smaller values = shorter memory, faster response, more flicker.\n"
-                                          "Recommended: 3 for 30fps video (100ms window), 5 for 60fps.")
+                                           "Motion must appear in N out of M consecutive frames to be confirmed.\n"
+                                           "Larger values = longer memory, more stable, slower response.\n"
+                                           "Smaller values = shorter memory, faster response, more flicker.\n"
+                                           "Recommended: 3 for 30fps video (100ms window), 5 for 60fps.")
         persist_layout.addWidget(self.persistence_frames, 0, 1)
 
         persist_layout.addWidget(QLabel("Threshold (N of M):"), 1, 0)
@@ -820,10 +820,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.persistence_threshold.setRange(1, 30)
         self.persistence_threshold.setValue(2)
         self.persistence_threshold.setToolTip("Number of frames within window where motion must appear (N of M).\n"
-                                             "Higher values = more stringent, filters flickering false positives.\n"
-                                             "Lower values = more lenient, detects brief/intermittent motion.\n"
-                                             "Must be ≤ Window Frames.\n"
-                                             "Recommended: 2 (motion in 2 of last 3 frames)")
+                                              "Higher values = more stringent, filters flickering false positives.\n"
+                                              "Lower values = more lenient, detects brief/intermittent motion.\n"
+                                              "Must be ≤ Window Frames.\n"
+                                              "Recommended: 2 (motion in 2 of last 3 frames)")
         persist_layout.addWidget(self.persistence_threshold, 1, 1)
 
         layout.addWidget(persist_group)
@@ -848,17 +848,17 @@ class IntegratedDetectionControlWidget(QWidget):
         self.bg_var_threshold.setRange(1.0, 100.0)
         self.bg_var_threshold.setValue(10.0)
         self.bg_var_threshold.setToolTip("Variance threshold for background/foreground classification (1.0-100.0).\n"
-                                        "Only applies to MOG2 and KNN algorithms.\n"
-                                        "Lower values = more sensitive, detects subtle changes, more false positives.\n"
-                                        "Higher values = less sensitive, only strong foreground objects.\n"
-                                        "Recommended: 10.0 for indoor, 15-20 for outdoor with varying lighting.")
+                                         "Only applies to MOG2 and KNN algorithms.\n"
+                                         "Lower values = more sensitive, detects subtle changes, more false positives.\n"
+                                         "Higher values = less sensitive, only strong foreground objects.\n"
+                                         "Recommended: 10.0 for indoor, 15-20 for outdoor with varying lighting.")
         bg_layout.addWidget(self.bg_var_threshold, 1, 1)
 
         self.bg_detect_shadows = QCheckBox("Detect Shadows (slower)")
         self.bg_detect_shadows.setToolTip("Enables shadow detection in MOG2 background subtractor.\n"
-                                         "Helps distinguish shadows from actual objects (reduces false positives).\n"
-                                         "Adds ~10-20% processing overhead.\n"
-                                         "Recommended: ON for outdoor scenes with strong shadows, OFF for speed.")
+                                          "Helps distinguish shadows from actual objects (reduces false positives).\n"
+                                          "Adds ~10-20% processing overhead.\n"
+                                          "Recommended: ON for outdoor scenes with strong shadows, OFF for speed.")
         bg_layout.addWidget(self.bg_detect_shadows, 2, 0, 1, 2)
 
         layout.addWidget(bg_group)
@@ -934,10 +934,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.color_rarity_percentile.setRange(0, 100)
         self.color_rarity_percentile.setValue(30)  # Default 30%
         self.color_rarity_percentile.setToolTip("Rarity threshold as percentile of color histogram (0-100%).\n"
-                                               "Detects colors that appear in fewer pixels than this percentile.\n"
-                                               "Lower values (10-20%) = only very rare colors (fewer detections).\n"
-                                               "Higher values (40-60%) = include more common colors (more detections).\n"
-                                               "Recommended: 30% for general use, 15-20% for high-specificity (bright objects only).")
+                                                "Detects colors that appear in fewer pixels than this percentile.\n"
+                                                "Lower values (10-20%) = only very rare colors (fewer detections).\n"
+                                                "Higher values (40-60%) = include more common colors (more detections).\n"
+                                                "Recommended: 30% for general use, 15-20% for high-specificity (bright objects only).")
         percentile_layout.addWidget(self.color_rarity_percentile)
         self.color_percentile_label = QLabel("30%")
         percentile_layout.addWidget(self.color_percentile_label)
@@ -974,10 +974,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.enable_hue_expansion = QCheckBox("Enable Hue Expansion")
         self.enable_hue_expansion.setChecked(False)
         self.enable_hue_expansion.setToolTip("Expands detected rare colors to include similar hues.\n"
-                                            "Groups similar colors together (e.g., red and orange, blue and cyan).\n"
-                                            "Helps detect objects even if exact color varies slightly.\n"
-                                            "Recommended: OFF for specific colors (e.g., red jacket only),\n"
-                                            "ON for color families (e.g., any warm colors).")
+                                             "Groups similar colors together (e.g., red and orange, blue and cyan).\n"
+                                             "Helps detect objects even if exact color varies slightly.\n"
+                                             "Recommended: OFF for specific colors (e.g., red jacket only),\n"
+                                             "ON for color families (e.g., any warm colors).")
         hue_layout.addWidget(self.enable_hue_expansion)
 
         hue_range_layout = QHBoxLayout()
@@ -986,10 +986,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.hue_expansion_range.setRange(0, 30)
         self.hue_expansion_range.setValue(5)
         self.hue_expansion_range.setToolTip("Hue expansion range in OpenCV hue units (0-30, ~0-60 degrees).\n"
-                                           "Expands rare hue detection by ±N hue values.\n"
-                                           "Larger values = wider color range, detect more variations.\n"
-                                           "Smaller values = narrower color range, more specific.\n"
-                                           "Recommended: 5 (~10°) for slight variations, 10-15 (~20-30°) for color families.")
+                                            "Expands rare hue detection by ±N hue values.\n"
+                                            "Larger values = wider color range, detect more variations.\n"
+                                            "Smaller values = narrower color range, more specific.\n"
+                                            "Recommended: 5 (~10°) for slight variations, 10-15 (~20-30°) for color families.")
         hue_range_layout.addWidget(self.hue_expansion_range)
         self.hue_range_label = QLabel("±5 (~10°)")
         hue_range_layout.addWidget(self.hue_range_label)
@@ -1102,10 +1102,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.min_aspect_ratio.setValue(0.2)
         self.min_aspect_ratio.setSingleStep(0.1)
         self.min_aspect_ratio.setToolTip("Minimum aspect ratio (width/height) to keep (0.1-10.0).\n"
-                                        "Rejects very tall/thin vertical detections.\n"
-                                        "Example: 0.2 = reject if height > 5× width.\n"
-                                        "Lower values = allow thinner objects.\n"
-                                        "Recommended: 0.2 for filtering poles/wires, 0.5 for people.")
+                                         "Rejects very tall/thin vertical detections.\n"
+                                         "Example: 0.2 = reject if height > 5× width.\n"
+                                         "Lower values = allow thinner objects.\n"
+                                         "Recommended: 0.2 for filtering poles/wires, 0.5 for people.")
         ratio_layout.addWidget(self.min_aspect_ratio, 0, 1)
 
         ratio_layout.addWidget(QLabel("Max Ratio:"), 1, 0)
@@ -1114,10 +1114,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.max_aspect_ratio.setValue(5.0)
         self.max_aspect_ratio.setSingleStep(0.1)
         self.max_aspect_ratio.setToolTip("Maximum aspect ratio (width/height) to keep (0.1-20.0).\n"
-                                        "Rejects very wide/thin horizontal detections.\n"
-                                        "Example: 5.0 = reject if width > 5× height.\n"
-                                        "Higher values = allow wider objects.\n"
-                                        "Recommended: 5.0 for filtering shadows/lines, 10.0 for vehicles.")
+                                         "Rejects very wide/thin horizontal detections.\n"
+                                         "Example: 5.0 = reject if width > 5× height.\n"
+                                         "Higher values = allow wider objects.\n"
+                                         "Recommended: 5.0 for filtering shadows/lines, 10.0 for vehicles.")
         ratio_layout.addWidget(self.max_aspect_ratio, 1, 1)
 
         aspect_layout.addLayout(ratio_layout)
@@ -1142,10 +1142,10 @@ class IntegratedDetectionControlWidget(QWidget):
         self.clustering_distance.setRange(0, 500)
         self.clustering_distance.setValue(50)  # Default 50px
         self.clustering_distance.setToolTip("Maximum centroid distance to merge detections (0-500 pixels).\n"
-                                           "Detections closer than this distance are combined into one.\n"
-                                           "Lower values = only merge very close detections.\n"
-                                           "Higher values = merge distant detections (may over-merge).\n"
-                                           "Recommended: 50px for people, 100px for vehicles at 720p.")
+                                            "Detections closer than this distance are combined into one.\n"
+                                            "Lower values = only merge very close detections.\n"
+                                            "Higher values = merge distant detections (may over-merge).\n"
+                                            "Recommended: 50px for people, 100px for vehicles at 720p.")
         cluster_dist_layout.addWidget(self.clustering_distance, 0, 1)
 
         cluster_layout.addLayout(cluster_dist_layout)
@@ -1250,9 +1250,9 @@ class IntegratedDetectionControlWidget(QWidget):
 
         self.render_contours = QCheckBox("Show Contours (slowest)")
         self.render_contours.setToolTip("Draws exact detection contours (pixel-precise boundaries).\n"
-                                       "Adds ~10-20ms processing overhead (very expensive).\n"
-                                       "Shows exact shape detected by algorithm.\n"
-                                       "Recommended: OFF for speed, ON only for detailed analysis.")
+                                        "Adds ~10-20ms processing overhead (very expensive).\n"
+                                        "Shows exact shape detected by algorithm.\n"
+                                        "Recommended: OFF for speed, ON only for detailed analysis.")
         vis_layout.addWidget(self.render_contours)
 
         self.use_detection_color = QCheckBox("Use Detection Color (hue @ 100% sat/val for color anomalies)")
@@ -1291,9 +1291,9 @@ class IntegratedDetectionControlWidget(QWidget):
         self.show_timing_overlay = QCheckBox("Show Timing Overlay (FPS, metrics)")
         self.show_timing_overlay.setChecked(False)  # Default OFF
         self.show_timing_overlay.setToolTip("Displays detailed timing information on video overlay.\n"
-                                           "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
-                                           "Useful for performance tuning and debugging.\n"
-                                           "Recommended: OFF for clean view, ON when optimizing performance.")
+                                            "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
+                                            "Useful for performance tuning and debugging.\n"
+                                            "Recommended: OFF for clean view, ON when optimizing performance.")
         overlay_layout.addWidget(self.show_timing_overlay)
 
         self.show_detection_thumbnails = QCheckBox("Show Detection Thumbnails (auto-fit window width)")
@@ -2174,12 +2174,12 @@ class IntegratedDetectionViewer(QMainWindow):
 
                     dropped_info = f", Dropped={self._dropped_frames}" if self._dropped_frames > 0 else ""
                     self.logger.info(f"[PROFILING] End-to-end averages (last 60 frames): "
-                                   f"Qt Signal={avg_qt_signal:.1f}ms, "
-                                   f"Detection={avg_detection:.1f}ms, "
-                                   f"Display={avg_display:.1f}ms, "
-                                   f"Total Pipeline={avg_total:.1f}ms, "
-                                   f"Theoretical FPS={1000/avg_total:.1f}"
-                                   f"{dropped_info}")
+                                     f"Qt Signal={avg_qt_signal:.1f}ms, "
+                                     f"Detection={avg_detection:.1f}ms, "
+                                     f"Display={avg_display:.1f}ms, "
+                                     f"Total Pipeline={avg_total:.1f}ms, "
+                                     f"Theoretical FPS={1000/avg_total:.1f}"
+                                     f"{dropped_info}")
 
                     # Keep only last 300 samples to avoid memory bloat
                     for key in self._profiling_data:
@@ -2206,7 +2206,7 @@ class IntegratedDetectionViewer(QMainWindow):
             for i, detection in enumerate(detections[:5]):
                 x, y, w, h = detection.bbox
                 info_text += f"  #{i+1}: Type({detection.detection_type}) Pos({x},{y}) " \
-                            f"Size({w}x{h}) Area({int(detection.area)}px) Conf({detection.confidence:.2f})\n"
+                    f"Size({w}x{h}) Area({int(detection.area)}px) Conf({detection.confidence:.2f})\n"
         else:
             info_text = "No detections found."
 
