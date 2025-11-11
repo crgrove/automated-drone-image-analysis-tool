@@ -28,19 +28,19 @@ class MRMapService(AlgorithmService):
         """Initialize the MRMapService with specific parameters for anomaly detection.
 
         Args:
-            identifier: RGB values for the color to highlight areas of interest.
-            min_area: Minimum area in pixels for an object to qualify as an area of interest.
-            max_area: Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois: If True, overlapping areas of interest will be combined.
-            options: Additional algorithm-specific options, including 'threshold',
-                'segments', and 'window'.
+            identifier (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
+            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois (bool): If True, overlapping areas of interest will be combined.
+            options (dict): Additional algorithm-specific options, including 'threshold', 'segments', 'window', and 'colorspace'.
         """
         self.logger = LoggerService()
         super().__init__('MRMap', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.segments = options['segments']
         self.threshold = options['threshold']
         self.window_size = options['window']
+        self.colorspace = options.get('colorspace', 'RGB')
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """Process a single image using the MR Map algorithm.
@@ -60,11 +60,22 @@ class MRMapService(AlgorithmService):
         """
         try:
             height, width = img.shape[:2]
-            hist = Histogram(img)
 
-            r, g, b = img[:, :, 2], img[:, :, 1], img[:, :, 0]
+            # Convert to selected colorspace
+            if self.colorspace == 'HSV':
+                img_converted = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            elif self.colorspace == 'LAB':
+                img_converted = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+            else:  # RGB (default)
+                img_converted = img
+
+            hist = Histogram(img_converted)
+
+            # Extract channels (order depends on colorspace)
+            # For all colorspaces, channels are in order [0, 1, 2]
+            ch0, ch1, ch2 = img_converted[:, :, 0], img_converted[:, :, 1], img_converted[:, :, 2]
             # Compute bin counts for each pixel
-            bin_counts = hist.bin_count(r, g, b)
+            bin_counts = hist.bin_count(ch0, ch1, ch2)
             bin_counts = bin_counts * ((8000*6000) / (width * height))
             # Adjust counts based on image size
             # adjusted_counts = bin_counts * (STANDARD_IMAGE_SIZE / (width * height))
@@ -334,30 +345,30 @@ class Histogram:
         for efficient bin count lookups.
         """
         # Directly map pixel values to quantized bins
-        r_mapped = self.mapping[self.image_array[:, :, 2]]
-        g_mapped = self.mapping[self.image_array[:, :, 1]]
-        b_mapped = self.mapping[self.image_array[:, :, 0]]
+        # Works with any 3-channel colorspace (BGR, HSV, LAB, etc.)
+        ch0_mapped = self.mapping[self.image_array[:, :, 0]]
+        ch1_mapped = self.mapping[self.image_array[:, :, 1]]
+        ch2_mapped = self.mapping[self.image_array[:, :, 2]]
 
         # Compute histogram directly without storing a large intermediate array
         self.q_histogram, _ = np.histogramdd(
-            (r_mapped.ravel(), g_mapped.ravel(), b_mapped.ravel()),  # Direct ravel to avoid memory overhead
+            (ch0_mapped.ravel(), ch1_mapped.ravel(), ch2_mapped.ravel()),  # Direct ravel to avoid memory overhead
             bins=(NUMBER_OF_QUANTIZED_HISTOGRAM_BINS,) * 3,
             range=((0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS),) * 3
         )
 
-    def bin_count(self, r, g, b):
-        """Get bin count for RGB color values.
+    def bin_count(self, ch0, ch1, ch2):
+        """
+        Get the histogram bin count for each pixel.
 
         Args:
-            r: Red channel value (0-255).
-            g: Green channel value (0-255).
-            b: Blue channel value (0-255).
+            ch0, ch1, ch2: Channel values for each pixel (can be RGB, HSV, LAB, etc.)
 
         Returns:
-            Bin count for the quantized RGB color as numpy array.
+            numpy.ndarray: Bin counts for each pixel
         """
-        qr = self.mapping[r]
-        qg = self.mapping[g]
-        qb = self.mapping[b]
+        q0 = self.mapping[ch0]
+        q1 = self.mapping[ch1]
+        q2 = self.mapping[ch2]
 
-        return self.q_histogram[qr, qg, qb]
+        return self.q_histogram[q0, q1, q2]

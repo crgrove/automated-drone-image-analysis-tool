@@ -27,12 +27,13 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
         Populates options based on user-selected values.
 
         Returns:
-            dict: A dictionary containing the selected option values, including 'threshold', 'segments', and 'window'.
+            dict: A dictionary containing the selected option values, including 'threshold', 'segments', 'window', and 'colorspace'.
         """
         options = dict()
         options['threshold'] = int(self.thresholdValueLabel.text())
         options['segments'] = int(self.segmentsComboBox.currentText())
         options['window'] = self.windowSpinBox.value()
+        options['colorspace'] = self.colorspaceComboBox.currentText()
         return options
 
     def updatethreshold(self):
@@ -57,7 +58,7 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
         Sets UI elements based on the provided options.
 
         Args:
-            options (dict): The options to use to set UI attributes, including 'threshold', 'segments', and 'version'.
+            options (dict): The options to use to set UI attributes, including 'threshold', 'segments', 'window', and 'colorspace'.
         """
         if 'threshold' in options:
             self.thresholdValueLabel.setText(str(options['threshold']))
@@ -66,3 +67,5 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
             self.segmentsComboBox.setCurrentText(str(options['segments']))
         if 'window' in options:
             self.windowSpinBox.setValue(int(options['window']))
+        if 'colorspace' in options:
+            self.colorspaceComboBox.setCurrentText(str(options['colorspace']))

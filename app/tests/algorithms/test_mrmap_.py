@@ -12,6 +12,7 @@ def testMrMapE2E(main_window, testData, qtbot):
     algorithmWidget = main_window.algorithmWidget
     algorithmWidget.thresholdSlider.setValue(95)
     algorithmWidget.segmentsComboBox.setCurrentText(str(2))
+    algorithmWidget.colorspaceComboBox.setCurrentText('RGB')
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
