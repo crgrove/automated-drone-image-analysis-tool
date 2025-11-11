@@ -222,10 +222,12 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
 
         Args:
             color: QColor or tuple (r, g, b) for the target color
-            h_minus, h_plus: Hue range (0-179)
-            s_minus, s_plus: Saturation range (0-255)
-            v_minus, v_plus: Value range (0-255)
-            hsv_ranges: Dict with HSV range data (alternative to individual params)
+            h_minus, h_plus: Hue range in OpenCV scale (0-179), converted to fractional internally
+            s_minus, s_plus: Saturation range as percentage (0-100), converted to fractional internally
+            v_minus, v_plus: Value range as percentage (0-100), converted to fractional internally
+            hsv_ranges: Dict with HSV range data in fractional format (0-1) with keys:
+                h, s, v (center values, fractional 0-1)
+                h_minus, h_plus, s_minus, s_plus, v_minus, v_plus (range values, fractional 0-1)
         """
         row = HSVColorRowWidget(self.scrollAreaWidgetContents, color, h_minus, h_plus,
                                 s_minus, s_plus, v_minus, v_plus, hsv_ranges)

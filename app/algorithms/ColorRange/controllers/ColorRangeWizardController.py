@@ -58,6 +58,10 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
         Sets up the empty state label, view range button, and color selection
         menu. Initializes the UI to show the empty state.
         """
+        # Update container layout spacing and margins to 0 for table appearance
+        self.colorsLayout.setSpacing(0)
+        self.colorsLayout.setContentsMargins(0, 0, 0, 0)
+
         # Empty state label
         self.emptyLabel = QLabel("No Colors Selected", self.colorsContainer)
         self.emptyLabel.setAlignment(Qt.AlignCenter)
@@ -125,10 +129,13 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
         row.changed.connect(self._on_color_changed)
 
         self.color_rows.append(row)
-        self.colorsLayout.addWidget(row, 0, Qt.AlignLeft)
+        self.colorsLayout.addWidget(row, 0, Qt.AlignTop)
 
         # Clear focus from Add Color button
         self.addColorButton.clearFocus()
+
+        # Update border styles for all rows to maintain table appearance
+        self._update_row_borders()
 
         self._update_empty_state()
         self._update_view_range_button()
@@ -146,8 +153,17 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
             self.colorsLayout.removeWidget(row)
             row.deleteLater()
 
+            # Update border styles for all rows to maintain table appearance
+            self._update_row_borders()
+
             self._update_empty_state()
             self._update_view_range_button()
+
+    def _update_row_borders(self):
+        """Update border styles for all rows to create table appearance."""
+        for row in self.color_rows:
+            if hasattr(row, '_update_border_style'):
+                row._update_border_style()
 
     def _on_color_changed(self):
         """Handle when any color row changes."""

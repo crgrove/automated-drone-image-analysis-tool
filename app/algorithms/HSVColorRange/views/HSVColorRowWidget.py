@@ -150,7 +150,9 @@ class HSVColorRowWidget(QWidget):
         # Initialize HSV window data
         if hsv_ranges:
             # Use provided HSV ranges (already in normalized 0-1 format)
-            h, s, v = hsv_ranges.get('h', 0), hsv_ranges.get('s', 1), hsv_ranges.get('v', 1)
+            # IMPORTANT: Use the passed-in color, not the HSV values from ranges
+            # The color parameter is the source of truth for the actual color
+            h, s, v, _ = self.color.getHsvF()
             self._hsv_window = {
                 'h': h,
                 's': s,
@@ -162,8 +164,7 @@ class HSVColorRowWidget(QWidget):
                 'v_minus': hsv_ranges.get('v_minus', 50/100),  # Default 50% = 0.5
                 'v_plus': hsv_ranges.get('v_plus', 50/100)  # Default 50% = 0.5
             }
-            # Update color from HSV
-            self.color = QColor.fromHsvF(h, s, v)
+            # DO NOT overwrite self.color - use the passed-in color which is the source of truth
         else:
             # Convert color to HSV
             h, s, v, _ = self.color.getHsvF()

@@ -162,27 +162,58 @@ class ColorRowWizardWidget(QWidget):
         Creates horizontal layout with color swatch, tolerance dropdown,
         and delete button.
         """
+        # Remove all margins from the widget itself
+        self.setContentsMargins(0, 0, 0, 0)
+
+        # Outer layout for the row widget
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 2, 8, 2)
-        layout.setSpacing(12)
-        layout.setAlignment(Qt.AlignLeft)
-        # Keep row compact: don't expand to full dialog width
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Frame to visually emulate a table row (bordered container)
+        self.rowFrame = QFrame(self)
+        self.rowFrame.setObjectName("rowFrame")
+        rowLayout = QHBoxLayout(self.rowFrame)
+        # Symmetric top/bottom margins so content isn't flush against borders
+        rowLayout.setContentsMargins(8, 6, 8, 6)
+        rowLayout.setSpacing(12)
+        rowLayout.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        layout.addWidget(self.rowFrame)
+
+        # Keep rows compact horizontally (not full width)
+        # Height must accommodate: 6px top margin + 35px swatch + 6px bottom margin = 47px minimum
+        # Use 54px to provide visible spacing above and below the swatch
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(42)
+        self.setFixedHeight(54)
+
+        # Make rowFrame expand to fill the row
+        self.rowFrame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Default fixed width for consistency
+        DEFAULT_ROW_WIDTH = 520
+        try:
+            self.rowFrame.setFixedWidth(DEFAULT_ROW_WIDTH)
+        except Exception:
+            self.rowFrame.setFixedWidth(DEFAULT_ROW_WIDTH)
+
+        # Set border style - will be updated when row is added to container
+        self._update_border_style()
 
         # Color swatch
-        self.colorSwatch = ClickableColorSwatch(self, self.color)
+        self.colorSwatch = ClickableColorSwatch(self.rowFrame, self.color)
         self.colorSwatch.colorChanged.connect(self._on_color_changed)
-        layout.addWidget(self.colorSwatch)
+        rowLayout.addWidget(self.colorSwatch)
 
         # Tolerance label
-        tolerance_label = QLabel("Match\nTolerance:", self)
-        tolerance_label.setFont(self.font())
+        tolerance_label = QLabel("Match\nTolerance:", self.rowFrame)
+        # Force 11pt font
+        _lbl_font = QFont(self.font())
+        _lbl_font.setPointSize(11)
+        tolerance_label.setFont(_lbl_font)
         tolerance_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        layout.addWidget(tolerance_label)
+        rowLayout.addWidget(tolerance_label)
 
         # Tolerance dropdown
-        self.toleranceCombo = QComboBox(self)
+        self.toleranceCombo = QComboBox(self.rowFrame)
         # Inputs should be 11pt
         combo_font = QFont(self.font())
         combo_font.setPointSize(11)
@@ -194,10 +225,13 @@ class ColorRowWizardWidget(QWidget):
         self.toleranceCombo.setMinimumWidth(150)
         self.toleranceCombo.setMaximumWidth(200)
         self.toleranceCombo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        layout.addWidget(self.toleranceCombo)
+        rowLayout.addWidget(self.toleranceCombo)
+
+        # Add spacer to push delete button to the right
+        rowLayout.addStretch()
 
         # Delete button
-        self.deleteButton = QPushButton("✕", self)
+        self.deleteButton = QPushButton("✕", self.rowFrame)
         btn_font = QFont(self.font())
         btn_font.setPointSize(11)
         self.deleteButton.setFont(btn_font)
@@ -222,7 +256,75 @@ class ColorRowWizardWidget(QWidget):
         """)
         self.deleteButton.clicked.connect(lambda: self.delete_requested.emit(self))
         self.deleteButton.setFocusPolicy(Qt.NoFocus)  # Prevent delete button from getting focus
-        layout.addWidget(self.deleteButton)
+        rowLayout.addWidget(self.deleteButton)
+
+    def _update_border_style(self):
+        """Update border style based on row position to create table appearance."""
+        if not self.parent():
+            # Default: show all borders if parent not ready
+            self.rowFrame.setStyleSheet("""
+                QFrame#rowFrame {
+                    border: 1px solid #666;
+                    background-color: transparent;
+                }
+            """)
+            return
+
+        parent_layout = self.parent().layout()
+        if not parent_layout:
+            self.rowFrame.setStyleSheet("""
+                QFrame#rowFrame {
+                    border: 1px solid #666;
+                    background-color: transparent;
+                }
+            """)
+            return
+
+        # Find index of this widget among other row widgets (filter out non-row widgets)
+        # Check for row widgets by looking for the _update_border_style method
+        row_widgets = []
+        for i in range(parent_layout.count()):
+            item = parent_layout.itemAt(i)
+            widget = item.widget() if item else None
+            if widget and hasattr(widget, '_update_border_style'):
+                row_widgets.append(widget)
+
+        # Find our index in the list of row widgets
+        try:
+            row_index = row_widgets.index(self)
+        except ValueError:
+            # Not found, default to showing all borders
+            self.rowFrame.setStyleSheet("""
+                QFrame#rowFrame {
+                    border: 1px solid #666;
+                    background-color: transparent;
+                }
+            """)
+            return
+
+        is_first = (row_index == 0)
+
+        # Style borders to connect and form a table
+        # First row: all borders (including top)
+        # Other rows: left, right, bottom (no top border to connect)
+        if is_first:
+            border_style = "border: 1px solid #666;"
+        else:
+            border_style = "border-left: 1px solid #666; border-right: 1px solid #666; border-bottom: 1px solid #666; border-top: none;"
+
+        self.rowFrame.setStyleSheet(f"""
+            QFrame#rowFrame {{
+                {border_style}
+                background-color: transparent;
+            }}
+        """)
+
+    def showEvent(self, event):
+        """Update border style when widget is shown."""
+        super().showEvent(event)
+        # Delay to ensure parent layout is ready
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._update_border_style)
 
     def _on_color_changed(self, color):
         """Handle color swatch change.

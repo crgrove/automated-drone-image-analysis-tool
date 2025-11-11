@@ -36,6 +36,10 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
 
     def _wire_up_ui(self):
         """Attach custom widgets and set defaults."""
+        # Update container layout spacing and margins to 0 for table appearance
+        self.targetsLayout.setSpacing(0)
+        self.targetsLayout.setContentsMargins(0, 0, 0, 0)
+
         # Empty state label
         self.emptyLabel = QLabel("No Targets Selected", self.targetsContainer)
         self.emptyLabel.setAlignment(Qt.AlignCenter)
@@ -95,10 +99,13 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
         row.changed.connect(self._on_target_changed)
 
         self.target_rows.append(row)
-        self.targetsLayout.addWidget(row, 0, Qt.AlignLeft)
+        self.targetsLayout.addWidget(row, 0, Qt.AlignTop)
 
         # Clear focus from Add Target button
         self.addTargetButton.clearFocus()
+
+        # Update border styles for all rows to maintain table appearance
+        self._update_row_borders()
 
         self._update_empty_state()
         self._update_view_range_button()
@@ -116,8 +123,17 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
             self.targetsLayout.removeWidget(row)
             row.deleteLater()
 
+            # Update border styles for all rows to maintain table appearance
+            self._update_row_borders()
+
             self._update_empty_state()
             self._update_view_range_button()
+
+    def _update_row_borders(self):
+        """Update border styles for all rows to create table appearance."""
+        for row in self.target_rows:
+            if hasattr(row, '_update_border_style'):
+                row._update_border_style()
 
     def _on_target_changed(self):
         """Handle when any target row changes."""
