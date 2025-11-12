@@ -140,9 +140,9 @@ class AlgorithmService:
         for cnt in contours:
             mask = np.zeros((height, width), dtype=np.uint8)
             cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
-            area = cv2.countNonZero(mask)
+            contour_area = cv2.countNonZero(mask)
 
-            if area >= self.min_area and (self.max_area == 0 or area <= self.max_area):
+            if contour_area >= self.min_area and (self.max_area == 0 or contour_area <= self.max_area):
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius) + self.aoi_radius
@@ -161,6 +161,9 @@ class AlgorithmService:
                     # Get the detected pixels for this AOI
                     detected_pixels = np.argwhere(mask > 0)
                     detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
+
+                    # Use actual detected pixel count for area
+                    area = len(detected_pixels_list)
 
                     areas_of_interest.append({
                         'center': center,
@@ -187,7 +190,6 @@ class AlgorithmService:
             for cnt in contours:
                 mask = np.zeros((height, width), dtype=np.uint8)
                 cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
-                area = cv2.countNonZero(mask)
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius)
@@ -198,6 +200,9 @@ class AlgorithmService:
                 aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
                 aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
                 aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
+
+                # Use actual detected pixel count, not the expanded circle area
+                area = len(aoi_pixels_list)
 
                 areas_of_interest.append({
                     'center': center,
