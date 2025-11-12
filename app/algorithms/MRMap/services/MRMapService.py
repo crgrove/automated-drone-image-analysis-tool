@@ -65,17 +65,11 @@ class MRMapService(AlgorithmService):
             r, g, b = img[:, :, 2], img[:, :, 1], img[:, :, 0]
             # Compute bin counts for each pixel
             bin_counts = hist.bin_count(r, g, b)
-            bin_counts = bin_counts * ((8000*6000) / (width * height))
-            # Adjust counts based on image size
-            # adjusted_counts = bin_counts * (STANDARD_IMAGE_SIZE / (width * height))
 
             # Identify anomalous pixels
             pixel_anom = (0 < bin_counts) & (bin_counts < self.threshold)
 
             mask, contours = self._getMRMapsContours(pixel_anom)
-
-            # Identify contours in the masked image
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
 
