@@ -12,6 +12,11 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
+from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
+from core.services.cache.ColorCacheService import ColorCacheService
+from core.services.cache.TemperatureCacheService import TemperatureCacheService
+from core.services.image.AOIService import AOIService
+
 
 class AlgorithmService:
     """Base class for algorithm services that provides methods for processing images."""
@@ -38,6 +43,44 @@ class AlgorithmService:
         self.combine_aois = combine_aois
         self.options = options
         self.is_thermal = is_thermal
+        self.scale_factor = 1.0  # Default: no scaling
+
+    def set_scale_factor(self, scale_factor):
+        """Set the scale factor for coordinate transformation from processing to original resolution.
+
+        Args:
+            scale_factor: The scale factor used when downscaling the image for processing.
+        """
+        self.scale_factor = scale_factor
+
+    def transform_to_original_coords(self, x, y):
+        """Transform coordinates from processing resolution back to original resolution.
+
+        Args:
+            x: X coordinate in processing resolution.
+            y: Y coordinate in processing resolution.
+
+        Returns:
+            Tuple of (x, y) coordinates in original resolution as integers.
+        """
+        if self.scale_factor == 1.0:
+            return int(x), int(y)
+        inverse_scale = 1.0 / self.scale_factor
+        return int(x * inverse_scale), int(y * inverse_scale)
+
+    def transform_contour_to_original(self, contour):
+        """Transform a contour from processing resolution back to original resolution.
+
+        Args:
+            contour: Contour in processing resolution as numpy array.
+
+        Returns:
+            Contour scaled to original resolution as numpy array of int32.
+        """
+        if self.scale_factor == 1.0:
+            return contour
+        inverse_scale = 1.0 / self.scale_factor
+        return (contour * inverse_scale).astype(np.int32)
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -248,9 +291,123 @@ class AlgorithmService:
 
         return expanded_mask
 
-    def _construct_output_path(self, full_path, input_dir, output_dir):
+    def generate_aoi_cache(
+        self,
+        img: np.ndarray,
+        image_path: str,
+        areas_of_interest: list,
+        output_dir: str,
+        thermal: bool = False
+    ) -> None:
+        """Generate and cache thumbnails and color information for all AOIs.
+
+        Called after process_image() while the image is still in memory, allowing
+        for efficient thumbnail extraction without reloading the image from disk.
+
+        Args:
+            img: The image array (already in memory from detection).
+            image_path: Path to the source image file.
+            areas_of_interest: List of AOI dictionaries from detection.
+            output_dir: Output directory where cache folders will be created.
+            thermal: Whether this is a thermal image. Defaults to False.
         """
-        Properly constructs an output path by replacing the input directory with the output directory.
+        try:
+            if not areas_of_interest:
+                return
+
+            # Set up thumbnail cache directory (still needed for disk storage)
+            thumbnail_cache_dir = Path(output_dir) / '.thumbnails'
+            thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # Initialize cache services
+            # Note: Color and temperature cache data goes to XML, not JSON files
+            thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
+            color_service = ColorCacheService()  # In-memory only - data goes to XML
+            temperature_service = TemperatureCacheService() if thermal else None  # In-memory only - data goes to XML
+
+            # Create AOIService for color calculation
+            image_data = {
+                'path': image_path,
+                'is_thermal': self.is_thermal
+            }
+
+            aoi_service = AOIService(image_data)
+
+            # Process each AOI
+            for aoi in areas_of_interest:
+                try:
+                    # Extract thumbnail from in-memory image
+                    center = aoi.get('center')
+                    radius = aoi.get('radius', 50)
+
+                    if not center:
+                        continue
+
+                    cx, cy = center
+                    crop_radius = radius + 10  # Add padding
+
+                    # Calculate crop bounds
+                    height, width = img.shape[:2]
+                    x1 = max(0, int(cx - crop_radius))
+                    y1 = max(0, int(cy - crop_radius))
+                    x2 = min(width, int(cx + crop_radius))
+                    y2 = min(height, int(cy + crop_radius))
+
+                    # Extract region from in-memory image
+                    thumbnail_region = img[y1:y2, x1:x2]
+
+                    if thumbnail_region.size == 0:
+                        continue
+
+                    # Resize to target thumbnail size
+                    # Use INTER_AREA for downscaling - faster and better quality than INTER_LANCZOS4
+                    thumbnail_resized = cv2.resize(thumbnail_region, (180, 180), interpolation=cv2.INTER_AREA)
+
+                    # Convert to RGB if needed (some algorithms work in different color spaces)
+                    if len(thumbnail_resized.shape) == 2:
+                        # Grayscale
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_GRAY2RGB)
+                    elif thumbnail_resized.shape[2] == 4:
+                        # RGBA
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGRA2RGB)
+                    else:
+                        # BGR to RGB
+                        thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGR2RGB)
+
+                    # Save thumbnail to dataset cache
+                    thumbnail_service.save_thumbnail_from_array(image_path, aoi, thumbnail_rgb, thumbnail_cache_dir)
+
+                    # Calculate and cache color information
+                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    if color_result:
+                        color_info = {
+                            'rgb': color_result['rgb'],
+                            'hex': color_result['hex'],
+                            'hue_degrees': color_result['hue_degrees']
+                        }
+                        # Store color info directly in AOI dict for XML export (no JSON file)
+                        aoi['color_info'] = color_info
+                        # Also store in cache service for memory tracking (will be written to XML later)
+                        color_service.save_color_info(image_path, aoi, color_info)
+
+                    # Temperature is already in aoi dict, just track in cache service
+                    if 'temperature' in aoi and aoi['temperature'] is not None:
+                        temperature_service.save_temperature(image_path, aoi, aoi['temperature'])
+
+                except Exception as e:
+                    # Log error but continue processing other AOIs
+                    print(f"Error caching AOI at {center}: {e}")
+                    continue
+
+            # Note: Color and temperature cache data is now stored in AOI dicts and will be written to XML
+            # No need to save JSON files - data goes directly to XML via AnalyzeService
+
+        except Exception as e:
+            # Don't fail the entire detection if cache generation fails
+            print(f"Error generating AOI cache: {e}")
+
+    def _construct_output_path(self, full_path, input_dir, output_dir):
+        """Construct an output path by replacing the input directory with the output directory.
 
         Args:
             full_path (str): Full path to the input file
