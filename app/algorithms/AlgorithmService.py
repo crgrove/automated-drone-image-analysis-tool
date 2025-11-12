@@ -19,35 +19,21 @@ from core.services.image.AOIService import AOIService
 
 
 class AlgorithmService:
-    """Base class for algorithm services that provides methods for processing images.
-
-    Provides common functionality for image processing algorithms including
-    coordinate transformation, area of interest identification, and caching.
-
-    Attributes:
-        name: Name of the algorithm.
-        identifier_color: RGB tuple for highlighting areas of interest.
-        min_area: Minimum area in pixels for an object to qualify as an AOI.
-        max_area: Maximum area in pixels for an object to qualify as an AOI.
-        aoi_radius: Radius added to the minimum enclosing circle around an AOI.
-        combine_aois: If True, overlapping areas of interest will be combined.
-        options: Dictionary of algorithm-specific options.
-        is_thermal: Whether this is a thermal image algorithm.
-        scale_factor: Scale factor for coordinate transformation.
-    """
+    """Base class for algorithm services that provides methods for processing images."""
 
     def __init__(self, name, identifier_color, min_area, max_area, aoi_radius, combine_aois, options, is_thermal=False):
-        """Initialize the AlgorithmService with the necessary parameters.
+        """
+        Initializes the AlgorithmService with the necessary parameters.
 
         Args:
-            name: The name of the algorithm to be used for analysis.
-            identifier_color: RGB values for the color to highlight areas of interest.
-            min_area: Minimum area in pixels for an object to qualify as an area of interest.
-            max_area: Maximum area in pixels for an object to qualify as an area of interest.
-            aoi_radius: Radius added to the minimum enclosing circle around an area of interest.
-            combine_aois: If True, overlapping areas of interest will be combined.
-            options: Additional algorithm-specific options.
-            is_thermal: Indicates if this is a thermal image algorithm. Defaults to False.
+            name (str): The name of the algorithm to be used for analysis.
+            identifier_color (tuple[int, int, int]): RGB values for the color to highlight areas of interest.
+            min_area (int): Minimum area in pixels for an object to qualify as an area of interest.
+            max_area (int): Maximum area in pixels for an object to qualify as an area of interest.
+            aoi_radius (int): Radius added to the minimum enclosing circle around an area of interest.
+            combine_aois (bool): If True, overlapping areas of interest will be combined.
+            options (dict): Additional algorithm-specific options.
+            is_thermal (bool, optional): Indicates if this is a thermal image algorithm. Defaults to False.
         """
         self.name = name
         self.identifier_color = identifier_color
@@ -97,59 +83,38 @@ class AlgorithmService:
         return (contour * inverse_scale).astype(np.int32)
 
     def process_image(self, img, full_path, input_dir, output_dir):
-        """Process a single image file using the algorithm.
-
-        Must be implemented by subclasses to perform algorithm-specific processing.
+        """
+        Processes a single image file using the algorithm.
 
         Args:
-            img: The image to be processed as numpy array.
-            full_path: The path to the image being analyzed.
-            input_dir: The base input directory.
-            output_dir: The base output directory.
+            img (numpy.ndarray): The image to be processed.
+            full_path (str): The path to the image being analyzed.
+            input_dir (str): The base input directory.
+            output_dir (str): The base output directory.
 
         Returns:
-            AnalysisResult containing processed image path, areas of interest,
-            and error message if any.
-
-        Raises:
-            NotImplementedError: Must be implemented by subclasses.
+            tuple: A tuple containing:
+                - numpy.ndarray: Processed image.
+                - list: List of areas of interest.
         """
         raise NotImplementedError
 
     def collect_pixels_of_interest(self, mask):
-        """Collect pixel coordinates from a binary mask.
-
-        Args:
-            mask: Binary mask where non-zero pixels are of interest.
-
-        Returns:
-            Array of (x, y) coordinates of pixels where mask > 0.
-        """
         coords = np.argwhere(mask > 0)
         return coords[:, [1, 0]]
 
     def identify_areas_of_interest(self, img_or_shape, contours):
-        """Calculate areas of interest from contours without modifying the input image.
+        """
+        Calculates areas of interest from contours without modifying the input image.
 
         Args:
-            img_or_shape: The image array or its shape (H, W, [C]).
-            contours: List of contours from cv2.findContours.
+            img_or_shape (numpy.ndarray | tuple | list): The image array or its shape (H, W, [C]).
+            contours (list): List of contours.
 
         Returns:
-            Tuple of (areas_of_interest, base_contour_count) where:
-                - areas_of_interest: List of AOI dictionaries with structure:
-                    {
-                        'center': (x, y),              # Tuple of pixel coordinates
-                        'radius': int,                  # Radius in pixels
-                        'area': float,                  # Pixel area
-                        'contour': [[x, y], ...],      # List of contour points
-                        'detected_pixels': [[x, y], ...], # List of detected pixel coordinates
-                        'confidence': float (optional), # 0-100 normalized confidence score
-                        'score_type': str (optional),   # 'anomaly', 'match', 'rarity', 'color_distance'
-                        'raw_score': float (optional),  # Algorithm-specific raw value
-                        'score_method': str (optional)  # 'mean', 'max', 'median'
-                    }
-                - base_contour_count: Count of original valid contours before combining.
+            tuple: (areas_of_interest, base_contour_count)
+                - areas_of_interest (list): Final list of AOIs after optional combining.
+                - base_contour_count (int): Count of original valid contours before combining.
         """
         if len(contours) == 0:
             return None, None
@@ -190,34 +155,17 @@ class AlgorithmService:
                 original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
 
                 if not self.combine_aois:
-                    # Transform coordinates to original resolution
-                    orig_center = self.transform_to_original_coords(center[0], center[1])
-                    orig_radius = int(radius / self.scale_factor)
-                    orig_area = int(area / (self.scale_factor * self.scale_factor))
+                    # Store the contour points for drawing the boundary
+                    contour_points = cnt.reshape(-1, 2).tolist()
 
-                    # Store the contour points for drawing the boundary (transformed)
-                    if self.scale_factor != 1.0:
-                        cnt_transformed = self.transform_contour_to_original(cnt)
-                        contour_points = cnt_transformed.reshape(-1, 2).tolist()
-                    else:
-                        contour_points = cnt.reshape(-1, 2).tolist()
-
-                    # Get the detected pixels for this AOI (transformed)
+                    # Get the detected pixels for this AOI
                     detected_pixels = np.argwhere(mask > 0)
-                    if len(detected_pixels) > 0:
-                        if self.scale_factor != 1.0:
-                            inverse_scale = 1.0 / self.scale_factor
-                            detected_pixels_transformed = (detected_pixels[:, [1, 0]] * inverse_scale).astype(int)
-                            detected_pixels_list = detected_pixels_transformed.tolist()
-                        else:
-                            detected_pixels_list = detected_pixels[:, [1, 0]].tolist()
-                    else:
-                        detected_pixels_list = []
+                    detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
 
                     areas_of_interest.append({
-                        'center': orig_center,
-                        'radius': orig_radius,
-                        'area': orig_area,
+                        'center': center,
+                        'radius': radius,
+                        'area': area,
                         'contour': contour_points,
                         'detected_pixels': detected_pixels_list
                     })
@@ -243,36 +191,18 @@ class AlgorithmService:
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius)
+                # Store the contour points for drawing the boundary
+                contour_points = cnt.reshape(-1, 2).tolist()
 
-                # Transform coordinates to original resolution
-                orig_center = self.transform_to_original_coords(center[0], center[1])
-                orig_radius = int(radius / self.scale_factor)
-                orig_area = int(area / (self.scale_factor * self.scale_factor))
-
-                # Store the contour points for drawing the boundary (transformed)
-                if self.scale_factor != 1.0:
-                    cnt_transformed = self.transform_contour_to_original(cnt)
-                    contour_points = cnt_transformed.reshape(-1, 2).tolist()
-                else:
-                    contour_points = cnt.reshape(-1, 2).tolist()
-
-                # Get the original detected pixels that belong to this combined AOI (transformed)
+                # Get the original detected pixels that belong to this combined AOI
                 aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
                 aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
-                if len(aoi_pixels) > 0:
-                    if self.scale_factor != 1.0:
-                        inverse_scale = 1.0 / self.scale_factor
-                        aoi_pixels_transformed = (aoi_pixels[:, [1, 0]] * inverse_scale).astype(int)
-                        aoi_pixels_list = aoi_pixels_transformed.tolist()
-                    else:
-                        aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist()
-                else:
-                    aoi_pixels_list = []
+                aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
 
                 areas_of_interest.append({
-                    'center': orig_center,
-                    'radius': orig_radius,
-                    'area': orig_area,
+                    'center': center,
+                    'radius': radius,
+                    'area': area,
                     'contour': contour_points,
                     'detected_pixels': aoi_pixels_list
                 })
@@ -281,6 +211,85 @@ class AlgorithmService:
         areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
 
         return areas_of_interest, base_contour_count
+
+    def apply_hue_expansion(self, img, mask, areas_of_interest, hue_range):
+        """
+        Expands the pixel detection mask based on hue similarity within AOI circles.
+
+        This method analyzes each AOI's detected pixels, calculates their average hue,
+        and then finds all pixels within the AOI circle that have a similar hue value
+        (within the specified range). This is useful for capturing color variations
+        that might have been missed by the initial detection algorithm.
+
+        Args:
+            img (numpy.ndarray): The original BGR image.
+            mask (numpy.ndarray): The current detection mask (binary, 0 or 255).
+            areas_of_interest (list): List of AOI dictionaries with 'center', 'radius', and 'detected_pixels'.
+            hue_range (int): The +/- hue range in OpenCV format (0-179).
+
+        Returns:
+            numpy.ndarray: Expanded mask with additional pixels.
+        """
+        if areas_of_interest is None or len(areas_of_interest) == 0:
+            return mask
+
+        # Convert image to HSV once for efficiency
+        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+        # Create expanded mask starting with the original
+        expanded_mask = mask.copy()
+
+        for aoi in areas_of_interest:
+            detected_pixels = aoi.get('detected_pixels', [])
+            if len(detected_pixels) == 0:
+                continue
+
+            # Calculate average hue of detected pixels
+            hue_values = []
+            for px, py in detected_pixels:
+                # Ensure pixel coordinates are within image bounds
+                if 0 <= py < hsv_img.shape[0] and 0 <= px < hsv_img.shape[1]:
+                    hue_values.append(hsv_img[py, px, 0])  # H channel
+
+            if len(hue_values) == 0:
+                continue
+
+            avg_hue = int(np.mean(hue_values))
+
+            # Calculate hue range with wraparound handling
+            hue_min = avg_hue - hue_range
+            hue_max = avg_hue + hue_range
+
+            # Create circular ROI mask for this AOI
+            center = aoi['center']
+            radius = aoi['radius']
+            roi_mask = np.zeros(mask.shape[:2], dtype=np.uint8)
+            cv2.circle(roi_mask, center, radius, 255, -1)
+
+            # Get all pixels within the circular ROI
+            roi_y, roi_x = np.where(roi_mask == 255)
+
+            # Check each pixel in ROI for hue match
+            for py, px in zip(roi_y, roi_x):
+                pixel_hue = hsv_img[py, px, 0]
+
+                # Handle hue wraparound (hue is circular: 0-179 in OpenCV)
+                if hue_min < 0:
+                    # Wraparound at lower bound (e.g., hue=5, range=10 -> -5 to 15)
+                    # Matches if hue >= (180 + hue_min) OR hue <= hue_max
+                    if pixel_hue >= (180 + hue_min) or pixel_hue <= hue_max:
+                        expanded_mask[py, px] = 255
+                elif hue_max >= 180:
+                    # Wraparound at upper bound (e.g., hue=175, range=10 -> 165 to 185)
+                    # Matches if hue >= hue_min OR hue <= (hue_max - 180)
+                    if pixel_hue >= hue_min or pixel_hue <= (hue_max - 180):
+                        expanded_mask[py, px] = 255
+                else:
+                    # No wraparound - simple range check
+                    if hue_min <= pixel_hue <= hue_max:
+                        expanded_mask[py, px] = 255
+
+        return expanded_mask
 
     def generate_aoi_cache(
         self,
@@ -401,12 +410,12 @@ class AlgorithmService:
         """Construct an output path by replacing the input directory with the output directory.
 
         Args:
-            full_path: Full path to the input file.
-            input_dir: Input directory path.
-            output_dir: Output directory path.
+            full_path (str): Full path to the input file
+            input_dir (str): Input directory path
+            output_dir (str): Output directory path
 
         Returns:
-            Properly constructed output path as string.
+            str: Properly constructed output path
         """
         # Convert all paths to Path objects for proper handling
         full_path_obj = Path(full_path)
@@ -426,17 +435,14 @@ class AlgorithmService:
         return str(output_path)
 
     def store_mask(self, input_file, output_file, mask, temperature_data=None):
-        """Save the detection mask as a TIFF file with temperature data embedded as additional bands.
+        """
+        Saves the detection mask as a TIFF file with temperature data embedded as additional bands.
 
         Args:
-            input_file: Path to the input image file.
-            output_file: Path to save the mask (will be saved as .tif extension).
-            mask: Binary mask of detected pixels (0 or 255) as numpy array.
-            temperature_data: Temperature matrix to store as additional bands.
-                Optional, can be numpy array or list.
-
-        Returns:
-            Path to the saved mask file as string.
+            input_file (str): Path to the input image file.
+            output_file (str): Path to save the mask (will be saved as .tif extension).
+            mask (np.ndarray): Binary mask of detected pixels (0 or 255).
+            temperature_data (np.ndarray or list, optional): Temperature matrix to store as additional bands.
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -482,41 +488,27 @@ class AlgorithmService:
         stacked = np.stack(bands, axis=0)
 
         # Save with tifffile (multi-band, compressed)
-        # Try 'lzw' first (faster), fall back to 'deflate' if imagecodecs is not available
-        try:
-            tifffile.imwrite(
-                str(mask_file),
-                stacked,
-                photometric='minisblack',
-                metadata={'axes': 'CYX'},  # Channels, Y, X
-                compression='lzw'  # Faster than 'deflate' while maintaining good compression
-            )
-        except (ValueError, RuntimeError) as e:
-            # Fall back to 'deflate' if 'lzw' requires imagecodecs package
-            if 'imagecodecs' in str(e) or 'lzw' in str(e).lower():
-                tifffile.imwrite(
-                    str(mask_file),
-                    stacked,
-                    photometric='minisblack',
-                    metadata={'axes': 'CYX'},  # Channels, Y, X
-                    compression='deflate'  # Fallback compression that works without imagecodecs
-                )
-            else:
-                raise
+        tifffile.imwrite(
+            str(mask_file),
+            stacked,
+            photometric='minisblack',
+            metadata={'axes': 'CYX'},  # Channels, Y, X
+            compression='deflate'  # or 'zlib' / 'lzma' if you prefer
+        )
 
         return str(mask_file)
 
     def split_image(self, img, segments, overlap=0):
-        """Split an image into a grid of segments with optional overlap.
+        """
+        Splits an image into a grid of segments with optional overlap.
 
         Args:
-            img: The image to be divided as numpy array.
-            segments: Number of segments in the grid.
-            overlap: Overlap between segments in pixels or as a percentage (0-1).
-                Defaults to 0.
+            img (numpy.ndarray): The image to be divided.
+            segments (int): Number of segments in the grid.
+            overlap (int or float): Overlap between segments in pixels or as a percentage (0-1).
 
         Returns:
-            A 2D list of numpy arrays representing the segments.
+            list: A 2D list of numpy.ndarrays representing the segments.
         """
         rows, cols = self._get_rows_cols_from_segments(segments)
         if len(img.shape) == 2:  # Grayscale image
@@ -547,25 +539,27 @@ class AlgorithmService:
         return pieces
 
     def glue_image(self, pieces):
-        """Combine the segments of an image into a single image.
+        """
+        Combines the segments of an image into a single image.
 
         Args:
-            pieces: A list of lists containing numpy arrays representing the segments.
+            pieces (list): A list of lists containing numpy.ndarrays representing the segments of the image.
 
         Returns:
-            The combined image as a numpy array.
+            numpy.ndarray: The combined image.
         """
         rows = [cv2.hconcat(row) for row in pieces]
         return cv2.vconcat(rows)
 
     def _get_rows_cols_from_segments(self, segments):
-        """Get the number of rows and columns for a number of segments.
+        """
+        Get the number of rows and columns for a number of segments
 
         Args:
-            segments: The number of segments in which to divide the image.
+            segments (int): The number of segments in which to divide the image.
 
         Returns:
-            Tuple of (rows, columns) as integers.
+            int, int: The number of rows and columns.
         """
         if segments == 2:
             return 1, 2
@@ -576,27 +570,20 @@ class AlgorithmService:
 
 
 class AnalysisResult:
-    """Class representing the result of an image processing operation.
-
-    Attributes:
-        input_path: Path to the input image.
-        output_path: Path to the output image (relative to output_dir).
-        areas_of_interest: List of detected areas of interest.
-        base_contour_count: Count of base contours before combining.
-        error_message: Error message if processing failed.
-    """
+    """Class representing the result of an image processing operation."""
 
     def __init__(self, input_path=None, output_path=None, output_dir=None,
                  areas_of_interest=None, base_contour_count=None, error_message=None):
-        """Initialize an AnalysisResult with the given parameters.
+        """
+        Initializes an AnalysisResult with the given parameters.
 
         Args:
-            input_path: Path to the input image. Defaults to None.
-            output_path: Path to the output image. Defaults to None.
-            output_dir: Path to the output directory. Defaults to None.
-            areas_of_interest: List of detected areas of interest. Defaults to None.
-            base_contour_count: Count of base contours. Defaults to None.
-            error_message: Error message if processing failed. Defaults to None.
+            input_path (str, optional): Path to the input image. Defaults to None.
+            output_path (str, optional): Path to the output image. Defaults to None.
+            output_dir (str, optional): Path to the output directory. Defaults to None.
+            areas_of_interest (list, optional): List of detected areas of interest. Defaults to None.
+            base_contour_count (int, optional): Count of base contours. Defaults to None.
+            error_message (str, optional): Error message if processing failed. Defaults to None.
         """
         self.input_path = input_path
 

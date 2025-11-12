@@ -217,6 +217,10 @@ class HSVColorRangeService(AlgorithmService):
             if areas_of_interest:
                 areas_of_interest = self._add_confidence_scores(areas_of_interest, hsv_distances, mask)
 
+            # Add confidence scores to AOIs based on HSV distance
+            if areas_of_interest:
+                areas_of_interest = self._add_confidence_scores(areas_of_interest, hsv_distances, mask)
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image

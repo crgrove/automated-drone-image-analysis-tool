@@ -101,6 +101,26 @@ class MatchedFilterService(AlgorithmService):
 
             areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
 
+            # Apply hue expansion if enabled
+            hue_expansion_enabled = self.options.get('hue_expansion_enabled', False)
+            hue_expansion_range = self.options.get('hue_expansion_range', 0)
+
+            if hue_expansion_enabled and hue_expansion_range > 0 and areas_of_interest:
+                # Convert mask to 0-255 range for hue expansion
+                mask_255 = combined_mask * 255
+
+                # Apply hue expansion to the mask
+                mask_255 = self.apply_hue_expansion(img, mask_255, areas_of_interest, hue_expansion_range)
+
+                # Convert back to 0-1 range and update combined_mask
+                combined_mask = (mask_255 / 255).astype(np.uint8)
+
+                # Re-find contours with expanded mask
+                contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+                # Re-identify areas of interest with expanded mask
+                areas_of_interest, base_contour_count = self.identify_areas_of_interest(img.shape, contours)
+
             # Add confidence scores to AOIs based on matched filter scores
             if areas_of_interest:
                 areas_of_interest = self._add_confidence_scores(areas_of_interest, combined_scores, combined_mask)
