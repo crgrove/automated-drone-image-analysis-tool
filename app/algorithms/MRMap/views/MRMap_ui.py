@@ -57,6 +57,26 @@ class Ui_MRMap(object):
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer_2)
 
+        self.colorspaceLabel = QLabel(MRMap)
+        self.colorspaceLabel.setObjectName(u"colorspaceLabel")
+        self.colorspaceLabel.setFont(font)
+
+        self.horizontalLayout_3.addWidget(self.colorspaceLabel)
+
+        self.colorspaceComboBox = QComboBox(MRMap)
+        self.colorspaceComboBox.addItem("")
+        self.colorspaceComboBox.addItem("")
+        self.colorspaceComboBox.addItem("")
+        self.colorspaceComboBox.setObjectName(u"colorspaceComboBox")
+        self.colorspaceComboBox.setMinimumSize(QSize(60, 0))
+        self.colorspaceComboBox.setFont(font)
+
+        self.horizontalLayout_3.addWidget(self.colorspaceComboBox)
+
+        self.horizontalSpacer_3 = QSpacerItem(20, 20, QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_3.addItem(self.horizontalSpacer_3)
+
         self.windowLabel = QLabel(MRMap)
         self.windowLabel.setObjectName(u"windowLabel")
         self.windowLabel.setFont(font)
@@ -153,6 +173,10 @@ class Ui_MRMap(object):
 "Higher segment counts improve detection in images with varying features across the scene.\n"
 "Recommended: 4-9 segments for typical drone imagery.", None))
 #endif // QT_CONFIG(tooltip)
+        self.colorspaceLabel.setText(QCoreApplication.translate("MRMap", u"Colorspace:", None))
+        self.colorspaceComboBox.setItemText(0, QCoreApplication.translate("MRMap", u"RGB", None))
+        self.colorspaceComboBox.setItemText(1, QCoreApplication.translate("MRMap", u"HSV", None))
+        self.colorspaceComboBox.setItemText(2, QCoreApplication.translate("MRMap", u"LAB", None))
 #if QT_CONFIG(tooltip)
         self.windowLabel.setToolTip(QCoreApplication.translate("MRMap", u"Window size for multi-resolution analysis.\n"
 "Determines the spatial scale of features to detect.", None))
