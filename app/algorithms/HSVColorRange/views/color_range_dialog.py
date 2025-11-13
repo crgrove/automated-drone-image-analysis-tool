@@ -157,14 +157,10 @@ class ColorRangeDialog(QDialog):
         """Create the bottom button layout."""
         button_layout = QHBoxLayout()
 
-        # Pick from image (opens image color picker)
-        self.pick_from_image_btn = QPushButton("Pick From Image...")
-        self.pick_from_image_btn.setToolTip(
-            "Open the Image Color Picker. After selecting a pixel and closing the picker,\n"
-            "the picked color will be used as the base color for this HSV picker."
-        )
-        self.pick_from_image_btn.clicked.connect(self.open_image_color_picker)
-        button_layout.addWidget(self.pick_from_image_btn)
+        # Pick from Image button
+        self.pick_from_image_button = QPushButton("Pick from Image...")
+        self.pick_from_image_button.clicked.connect(self.open_image_picker)
+        button_layout.addWidget(self.pick_from_image_button)
 
         # Test button (if image available)
         if self.original_image is not None:
@@ -291,6 +287,42 @@ class ColorRangeDialog(QDialog):
         if color.isValid():
             h, s, v, _ = color.getHsvF()
             self.color_picker.set_hsv(h, s, v)
+
+    def open_image_picker(self):
+        """Open the HSV Color Range Assistant dialog for image-based color picking."""
+        from .HSVColorRangeAssistant import HSVColorRangeAssistant
+
+        dialog = HSVColorRangeAssistant(self)
+        dialog.rangeAccepted.connect(self.apply_image_picker_ranges)
+        dialog.exec()
+
+    def apply_image_picker_ranges(self, ranges):
+        """Apply ranges from HSV Color Range Assistant."""
+        # Extract values from ranges dict
+        h_center = ranges['h_center'] / 179  # Convert from OpenCV to 0-1
+        s_center = ranges['s_center'] / 255
+        v_center = ranges['v_center'] / 255
+
+        # Set center color
+        self.color_picker.h = h_center
+        self.color_picker.s = s_center
+        self.color_picker.v = v_center
+
+        # Set ranges
+        self.color_picker.h_minus = ranges['h_minus']
+        self.color_picker.h_plus = ranges['h_plus']
+        self.color_picker.s_minus = ranges['s_minus']
+        self.color_picker.s_plus = ranges['s_plus']
+        self.color_picker.v_minus = ranges['v_minus']
+        self.color_picker.v_plus = ranges['v_plus']
+
+        # Update display and check warnings
+        self.color_picker.update_display()
+        self.color_picker.emit_signals()
+
+        # Update preview if we have an image
+        if self.original_image is not None:
+            self.update_preview()
 
     def connect_signals(self):
         """Connect color picker signals."""
