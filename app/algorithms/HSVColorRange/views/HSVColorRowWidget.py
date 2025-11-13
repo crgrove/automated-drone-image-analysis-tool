@@ -336,16 +336,17 @@ class HSVColorRowWidget(QWidget):
         s_minus, s_plus = self._hsv_window['s_minus'], self._hsv_window['s_plus']
         v_minus, v_plus = self._hsv_window['v_minus'], self._hsv_window['v_plus']
 
-        # Calculate min HSV (center - minus ranges, clamped)
-        h_min = max(0.0, min(1.0, h - h_minus))
+        # Calculate min HSV with wrapping for hue
+        # Use modulo 1.0 to wrap hue around 0-360 degrees
+        h_min = (h - h_minus) % 1.0
         s_min = max(0.0, min(1.0, s - s_minus))
         v_min = max(0.0, min(1.0, v - v_minus))
 
         # Mid HSV (center color)
         h_mid, s_mid, v_mid = h, s, v
 
-        # Calculate max HSV (center + plus ranges, clamped)
-        h_max = max(0.0, min(1.0, h + h_plus))
+        # Calculate max HSV with wrapping for hue
+        h_max = (h + h_plus) % 1.0
         s_max = max(0.0, min(1.0, s + s_plus))
         v_max = max(0.0, min(1.0, v + v_plus))
 
@@ -426,25 +427,24 @@ class HSVColorRowWidget(QWidget):
         try:
             center_deg = int(round(self._hsv_window['h'] * 360))
             min_deg = int(self.hMinEdit.text() or 0)
-            # Clamp within range and not above center
-            min_deg = max(0, min(359, min(min_deg, center_deg)))
-            # Ensure min <= max
-            try:
-                max_deg = int(self.hPlusEdit.text() or 0)
-            except ValueError:
-                max_deg = center_deg + int(round(self._hsv_window['h_plus'] * 360))
-            if min_deg > max_deg:
-                max_deg = min_deg
-                self.hPlusEdit.setText(str(max_deg))
+            # Clamp to valid degree range
+            min_deg = max(0, min(359, min_deg))
+            # Calculate the range, handling wrapping
+            if min_deg <= center_deg:
+                # Normal case: min is before center
+                range_deg = center_deg - min_deg
+            else:
+                # Wrapped case: min is after center (e.g., 330 to 0)
+                range_deg = center_deg + (360 - min_deg)
             # Update minus fraction (relative to 360)
-            self._hsv_window['h_minus'] = max(0.0, (center_deg - min_deg) / 360.0)
+            self._hsv_window['h_minus'] = range_deg / 360.0
             self.hMinEdit.setText(str(min_deg))
             self._update_display()
             self.changed.emit()
         except ValueError:
             # Reset to computed min
             center_deg = int(round(self._hsv_window['h'] * 360))
-            min_deg = max(0, center_deg - int(round(self._hsv_window['h_minus'] * 360)))
+            min_deg = (center_deg - int(round(self._hsv_window['h_minus'] * 360))) % 360
             self.hMinEdit.setText(str(min_deg))
 
     def _on_h_plus_changed(self):
@@ -452,25 +452,24 @@ class HSVColorRowWidget(QWidget):
         try:
             center_deg = int(round(self._hsv_window['h'] * 360))
             max_deg = int(self.hPlusEdit.text() or 0)
-            # Clamp within range and not below center
-            max_deg = max(0, min(359, max(max_deg, center_deg)))
-            # Ensure min <= max
-            try:
-                min_deg = int(self.hMinEdit.text() or 0)
-            except ValueError:
-                min_deg = center_deg - int(round(self._hsv_window['h_minus'] * 360))
-            if max_deg < min_deg:
-                min_deg = max_deg
-                self.hMinEdit.setText(str(min_deg))
+            # Clamp to valid degree range
+            max_deg = max(0, min(359, max_deg))
+            # Calculate the range, handling wrapping
+            if max_deg >= center_deg:
+                # Normal case: max is after center
+                range_deg = max_deg - center_deg
+            else:
+                # Wrapped case: max is before center (e.g., 0 to 30 when center is 350)
+                range_deg = max_deg + (360 - center_deg)
             # Update plus fraction (relative to 360)
-            self._hsv_window['h_plus'] = max(0.0, (max_deg - center_deg) / 360.0)
+            self._hsv_window['h_plus'] = range_deg / 360.0
             self.hPlusEdit.setText(str(max_deg))
             self._update_display()
             self.changed.emit()
         except ValueError:
             # Reset to computed max
             center_deg = int(round(self._hsv_window['h'] * 360))
-            max_deg = min(359, center_deg + int(round(self._hsv_window['h_plus'] * 360)))
+            max_deg = (center_deg + int(round(self._hsv_window['h_plus'] * 360))) % 360
             self.hPlusEdit.setText(str(max_deg))
 
     def _on_s_minus_changed(self):
@@ -564,8 +563,8 @@ class HSVColorRowWidget(QWidget):
     def _update_inputs(self):
         """Update input field values from stored ranges as ABSOLUTE bounds."""
         center_deg = int(round(self._hsv_window['h'] * 360))
-        h_min = max(0, center_deg - int(round(self._hsv_window['h_minus'] * 360)))
-        h_max = min(359, center_deg + int(round(self._hsv_window['h_plus'] * 360)))
+        h_min = (center_deg - int(round(self._hsv_window['h_minus'] * 360))) % 360
+        h_max = (center_deg + int(round(self._hsv_window['h_plus'] * 360))) % 360
         self.hMinEdit.setText(str(h_min))
         self.hPlusEdit.setText(str(h_max))
         center_s = int(round(self._hsv_window['s'] * 100))

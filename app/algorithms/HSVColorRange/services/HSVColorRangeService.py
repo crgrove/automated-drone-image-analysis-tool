@@ -61,22 +61,45 @@ class HSVColorRangeService(AlgorithmService):
         s_center = int(s * 255)
         v_center = int(v * 255)
 
-        h_low = max(0, h_center - int(h_minus * 179))
-        h_high = min(179, h_center + int(h_plus * 179))
+        # Calculate hue range without clamping to detect wrapping
+        # h_minus/h_plus are fractions of 360 degrees, convert to OpenCV scale (0-179)
+        h_low = h_center - int(h_minus * 179)
+        h_high = h_center + int(h_plus * 179)
         s_low = max(0, s_center - int(s_minus * 255))
         s_high = min(255, s_center + int(s_plus * 255))
         v_low = max(0, v_center - int(v_minus * 255))
         v_high = min(255, v_center + int(v_plus * 255))
 
         # Handle hue wrapping if necessary
-        if h_low > h_high:
-            # Hue wraps around (e.g., 350° to 10°)
-            mask1 = cv2.inRange(hsv_image,
-                                np.array([h_low, s_low, v_low], dtype=np.uint8),
-                                np.array([179, s_high, v_high], dtype=np.uint8))
-            mask2 = cv2.inRange(hsv_image,
-                                np.array([0, s_low, v_low], dtype=np.uint8),
-                                np.array([h_high, s_high, v_high], dtype=np.uint8))
+        if h_low < 0 or h_high > 179:
+            # Hue wraps around (e.g., 350° to 10° or 0° with -30 to +30)
+            # Create two masks to cover the wrapped range
+            if h_low < 0:
+                # Wraps at the lower end: convert negative to wrapped value
+                # E.g., h_low = -15 becomes 165 (180 + (-15) = 165)
+                h_low_wrapped = 180 + h_low
+                mask1 = cv2.inRange(hsv_image,
+                                    np.array([h_low_wrapped, s_low, v_low], dtype=np.uint8),
+                                    np.array([179, s_high, v_high], dtype=np.uint8))
+            else:
+                # No wrap at lower end, use normal range up to 179
+                mask1 = cv2.inRange(hsv_image,
+                                    np.array([h_low, s_low, v_low], dtype=np.uint8),
+                                    np.array([179, s_high, v_high], dtype=np.uint8))
+
+            if h_high > 179:
+                # Wraps at the upper end: take modulo to get wrapped value
+                # E.g., h_high = 195 becomes 15 (195 - 180 = 15)
+                h_high_wrapped = h_high - 180
+                mask2 = cv2.inRange(hsv_image,
+                                    np.array([0, s_low, v_low], dtype=np.uint8),
+                                    np.array([h_high_wrapped, s_high, v_high], dtype=np.uint8))
+            else:
+                # No wrap at upper end, use normal range from 0
+                mask2 = cv2.inRange(hsv_image,
+                                    np.array([0, s_low, v_low], dtype=np.uint8),
+                                    np.array([h_high, s_high, v_high], dtype=np.uint8))
+
             return cv2.bitwise_or(mask1, mask2)
         else:
             lower_bound = np.array([h_low, s_low, v_low], dtype=np.uint8)
