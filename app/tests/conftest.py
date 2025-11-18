@@ -1,12 +1,19 @@
 import sys
 import os
-import qdarktheme
 import pytest
-from core.controllers.images.MainWindow import MainWindow
 from PySide6.QtWidgets import QApplication
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'app')))
+
+# Lazy import to avoid dependency issues for streaming tests
+try:
+    import qdarktheme
+    from core.controllers.images.MainWindow import MainWindow
+    _MAIN_WINDOW_AVAILABLE = True
+except ImportError:
+    _MAIN_WINDOW_AVAILABLE = False
+    MainWindow = None
 
 
 @pytest.fixture
@@ -33,6 +40,8 @@ def app():
 
 @pytest.fixture(scope='function')
 def main_window(qtbot):
+    if not _MAIN_WINDOW_AVAILABLE:
+        pytest.skip("MainWindow dependencies not available")
     version = "Version 1.6"
     # qdarktheme.setup_theme()  # Not needed with PySide6, theme is set via stylesheet
     mw = MainWindow(qdarktheme, version)

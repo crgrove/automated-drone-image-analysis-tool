@@ -1,0 +1,196 @@
+"""
+ColorDetectionController.py - HSV color detection algorithm controller for ADIAT
+
+Provides real-time color detection using HSV color space matching.
+Integrated into StreamViewerWindow following the StreamAlgorithmController pattern.
+"""
+
+# Set environment variables
+from algorithms.streaming.ColorDetection.views import ColorDetectionControlWidget
+from algorithms.streaming.ColorDetection.services import ColorDetectionService, HSVConfig, Detection
+from core.services.LoggerService import LoggerService
+from core.controllers.streaming.base import StreamAlgorithmController
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox
+from PySide6.QtCore import Qt, Slot, Signal
+from typing import Dict, List, Any
+import numpy as np
+import os
+os.environ.setdefault('NUMPY_EXPERIMENTAL_DTYPE_API', '0')
+os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
+os.environ.setdefault('NPY_DISABLE_SVML', '1')
+
+
+# Import control widget from views
+
+
+class ColorDetectionController(StreamAlgorithmController):
+    """
+    HSV color detection algorithm controller.
+
+    Provides real-time color detection using HSV color space matching
+    with support for:
+    - Multiple color ranges
+    - Adjustable HSV thresholds
+    - Motion-based filtering
+    - Temporal tracking
+    - False positive reduction
+    """
+
+    def __init__(self, algorithm_config: Dict[str, Any], theme: str, parent=None):
+        """Initialize color detection controller."""
+        super().__init__(algorithm_config, theme, parent)
+
+        self.logger = LoggerService()
+
+        # Initialize color detector service
+        self.color_detector = ColorDetectionService()
+
+        # State
+        self.detection_count = 0
+
+        # Connect detector signals
+        self.color_detector.detectionsReady.connect(self._on_detections_ready)
+        self.color_detector.performanceUpdate.connect(self._on_performance_update)
+        self.provides_custom_rendering = True
+
+        self.logger.info("ColorDetectionController initialized")
+
+    def setup_ui(self):
+        """Setup the algorithm-specific UI."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
+
+        # Color Detection Control Widget
+        self.control_widget = ColorDetectionControlWidget()
+        self.control_widget.configChanged.connect(self._on_config_changed)
+        layout.addWidget(self.control_widget)
+
+    def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict]:
+        """
+        Process a frame for color detection.
+
+        Args:
+            frame: Input frame (BGR format)
+            timestamp: Frame timestamp
+
+        Returns:
+            List of detection dictionaries
+        """
+        try:
+            # Detect colors
+            detections = self.color_detector.detect_colors(frame, timestamp)
+
+            # Convert to standard format
+            detection_dicts = []
+            for detection in detections:
+                color_id = detection.color_id if detection.color_id is not None else 0
+                detection_dicts.append({
+                    'bbox': detection.bbox,
+                    'area': detection.area,
+                    'confidence': detection.confidence,
+                    'class_name': f"Color_{color_id}",
+                    'color_id': color_id,
+                    'mean_color': detection.mean_color
+                })
+
+            self.detection_count += len(detections)
+
+            # Emit detections
+            self.detectionsReady.emit(detection_dicts)
+
+            # Create and emit annotated frame
+            annotated_frame = self.color_detector.create_annotated_frame(frame, detections)
+            self.frameProcessed.emit(annotated_frame)
+
+            return detection_dicts
+
+        except Exception as e:
+            self.logger.error(f"Error processing frame: {e}")
+            return []
+
+    @Slot(list, float, np.ndarray)
+    def _on_detections_ready(self, detections: List[Detection], timestamp: float, annotated_frame: np.ndarray):
+        """Handle detection results from service."""
+        # Already handled in process_frame
+        pass
+
+    @Slot(dict)
+    def _on_performance_update(self, metrics: dict):
+        """Handle performance metrics update."""
+        fps = metrics.get('fps', 0)
+        processing_time = metrics.get('avg_processing_time_ms', 0)
+        self._emit_status(f"FPS: {fps:.1f} | Processing: {processing_time:.1f}ms")
+
+    @Slot(dict)
+    def _on_config_changed(self, config: dict):
+        """Handle configuration change from HSV controls."""
+        hsv_config = self._convert_to_hsv_config(config)
+        self.color_detector.update_config(hsv_config)
+        self._emit_config_changed()
+
+    def _convert_to_hsv_config(self, ui_config: dict) -> HSVConfig:
+        """Convert UI config to HSVConfig object."""
+        # Get target_color_rgb from first color range if available
+        color_ranges = ui_config.get('color_ranges', [])
+        if color_ranges and len(color_ranges) > 0:
+            first_color = color_ranges[0]['color']
+            if isinstance(first_color, QColor):
+                target_color_rgb = (first_color.red(), first_color.green(), first_color.blue())
+            else:
+                target_color_rgb = (255, 0, 0)
+        else:
+            target_color_rgb = (255, 0, 0)
+
+        # Create HSVConfig with required parameter
+        config = HSVConfig(
+            target_color_rgb=target_color_rgb,
+            min_area=ui_config.get('min_area', 100),
+            max_area=ui_config.get('max_area', 100000),
+            processing_resolution=ui_config.get('processing_resolution', None),
+            confidence_threshold=ui_config.get('confidence_threshold', 0.5),
+            show_labels=ui_config.get('render_text', False),  # Map render_text to show_labels
+            show_detections=ui_config.get('render_shape', 1) != 3  # Map render_shape != Off to show_detections
+        )
+
+        # Set optional parameters if provided
+        if color_ranges and len(color_ranges) > 0:
+            first_range = color_ranges[0]
+            config.hue_threshold = first_range.get('hue_plus', 20)
+            config.saturation_threshold = first_range.get('sat_plus', 50)
+            config.value_threshold = first_range.get('val_plus', 50)
+
+        return config
+
+    # Required interface methods
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get current algorithm configuration."""
+        return self.control_widget.get_config()
+
+    def set_config(self, config: Dict[str, Any]):
+        """Apply algorithm configuration."""
+        # Update control widget with config
+        if 'color_ranges' in config:
+            self.control_widget.color_ranges = config['color_ranges']
+            if hasattr(self.control_widget, '_update_color_ranges_display'):
+                self.control_widget._update_color_ranges_display()
+        # Apply other config as needed
+        self._on_config_changed(config)
+
+    def get_stats(self) -> Dict[str, str]:
+        """Get algorithm-specific statistics."""
+        return {
+            'Total Detections': str(self.detection_count)
+        }
+
+    def reset(self):
+        """Reset algorithm state."""
+        self.color_detector.reset()
+        self.detection_count = 0
+
+    def cleanup(self):
+        """Clean up algorithm resources."""
+        self.color_detector.cleanup()
+        self.logger.info("ColorDetectionController cleaned up")

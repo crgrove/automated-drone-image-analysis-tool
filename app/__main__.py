@@ -48,17 +48,18 @@ def main():
                 # Re-raise so our global excepthook handles exit
                 raise
         elif choice == 'stream':
-            # Launch the Real-time anomaly detector (Integrated Detection Viewer)
+            # Launch the Real-time streaming detection window (new architecture)
             try:
-                from core.controllers.streaming.IntegratedDetectionViewer import IntegratedDetectionViewer
-                app._integrated_viewer = IntegratedDetectionViewer()
-                app._integrated_viewer.show()
+                from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+                # Default to IntegratedDetection algorithm
+                app._stream_viewer = StreamViewerWindow(algorithm_name='IntegratedDetection', theme='dark')
+                app._stream_viewer.show()
             except Exception as e:
                 from PySide6.QtWidgets import QMessageBox
                 QMessageBox.critical(
                     None,
                     "Error",
-                    f"Failed to open Real-time Anomaly Detector:\n{str(e)}"
+                    f"Failed to open Real-time Stream Detection:\n{str(e)}"
                 )
                 sys.exit(1)
 

@@ -16,14 +16,14 @@ from core.services.LoggerService import LoggerService
 from core.services.advancedFeatures.HistogramNormalizationService import HistogramNormalizationService
 from core.services.advancedFeatures.KMeansClustersService import KMeansClustersService
 from core.services.XmlService import XmlService
-from algorithms.ColorRange.services.ColorRangeService import ColorRangeService
-from algorithms.RXAnomaly.services.RXAnomalyService import RXAnomalyService
-from algorithms.MatchedFilter.services.MatchedFilterService import MatchedFilterService
-from algorithms.MRMap.services.MRMapService import MRMapService
-from algorithms.AIPersonDetector.services.AIPersonDetectorService import AIPersonDetectorService
-from algorithms.HSVColorRange.services.HSVColorRangeService import HSVColorRangeService
-from algorithms.ThermalRange.services.ThermalRangeService import ThermalRangeService
-from algorithms.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
+from algorithms.images.ColorRange.services.ColorRangeService import ColorRangeService
+from algorithms.images.RXAnomaly.services.RXAnomalyService import RXAnomalyService
+from algorithms.images.MatchedFilter.services.MatchedFilterService import MatchedFilterService
+from algorithms.images.MRMap.services.MRMapService import MRMapService
+from algorithms.images.AIPersonDetector.services.AIPersonDetectorService import AIPersonDetectorService
+from algorithms.images.HSVColorRange.services.HSVColorRangeService import HSVColorRangeService
+from algorithms.images.ThermalRange.services.ThermalRangeService import ThermalRangeService
+from algorithms.images.ThermalAnomaly.services.ThermalAnomalyService import ThermalAnomalyService
 
 
 class AnalyzeService(QObject):

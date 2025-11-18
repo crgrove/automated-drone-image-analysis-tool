@@ -6,7 +6,7 @@ Provides a simple dialog interface for color selection from images.
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QPushButton
 from PySide6.QtCore import Qt
-from .ColorPickerImageViewer import ColorPickerImageViewer
+from algorithms.Shared.views.ColorPickerImageViewer import ColorPickerImageViewer
 
 
 class ColorPickerDialog(QDialog):

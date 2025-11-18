@@ -382,7 +382,8 @@ class RTMPStreamService(QThread):
                     'fps': self._current_fps,
                     'resolution': (width, height),
                     'frame_number': self._frame_number,
-                    'timestamp': current_time
+                    'timestamp': current_time,
+                    'is_playing': self._is_playing
                 })
 
     def stop(self):
@@ -399,6 +400,8 @@ class RTMPStreamService(QThread):
         with self._playback_lock:
             self._is_playing = not self._is_playing
             self.logger.info(f"Video {'playing' if self._is_playing else 'paused'}")
+            # Emit immediate update so UI can reflect new play state
+            self.streamStatsChanged.emit({'is_playing': self._is_playing})
             return self._is_playing
 
     def seek_to_time(self, time_seconds: float):
@@ -502,7 +505,8 @@ class RTMPStreamService(QThread):
                 int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             ),
             'frame_count': self._frame_number,
-            'connected': self._connected
+            'connected': self._connected,
+            'is_playing': self._is_playing
         }
 
 

@@ -7,7 +7,7 @@ thresholds and cooldown periods to prevent alert spam.
 
 # Set environment variable to avoid numpy._core issues - MUST be first
 from core.services.LoggerService import LoggerService
-from core.services.streaming.RealtimeColorDetectionService import Detection
+from algorithms.streaming.ColorDetection.services import Detection
 from PySide6.QtMultimedia import QSound
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication

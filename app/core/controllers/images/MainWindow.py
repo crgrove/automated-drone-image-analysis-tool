@@ -1,21 +1,20 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
-from algorithms.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
-from algorithms.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
-from algorithms.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
-from algorithms.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
-from algorithms.MRMap.controllers.MRMapController import MRMapController
-from algorithms.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
-from algorithms.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
-from algorithms.ColorRange.controllers.ColorRangeController import ColorRangeController
+from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
+from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
+from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
+from algorithms.images.MRMap.controllers.MRMapController import MRMapController
+from algorithms.images.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
+from algorithms.images.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
+from algorithms.images.ColorRange.controllers.ColorRangeController import ColorRangeController
 from core.services.ConfigService import ConfigService
 from core.services.XmlService import XmlService
 from core.services.SettingsService import SettingsService
 from core.services.AnalyzeService import AnalyzeService
 from core.services.LoggerService import LoggerService
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
-from core.controllers.streaming.IntegratedDetectionViewer import IntegratedDetectionViewer
-from core.controllers.streaming.RTMPMotionDetectionViewer import RTMPMotionDetectionViewer
-from core.controllers.streaming.RTMPColorDetectionViewer import RTMPColorDetectionViewer
+# Import streaming detection controllers (now using new architecture)
+from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
 from core.controllers.images.VideoParser import VideoParser
 from core.controllers.Perferences import Preferences
 from core.controllers.images.viewer.Viewer import Viewer
@@ -752,50 +751,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         try:
             if self.rtmp_viewer is None or not self.rtmp_viewer.isVisible():
-                self.rtmp_viewer = RTMPColorDetectionViewer(self)
+                self.rtmp_viewer = StreamViewerWindow(algorithm_name='ColorDetection', theme='dark')
                 self.rtmp_viewer.show()
-                self.logger.info("RTMP Color Detection viewer opened")
+                self.logger.info("Color Detection viewer opened")
             else:
                 # Bring existing viewer to front
                 self.rtmp_viewer.raise_()
                 self.rtmp_viewer.activateWindow()
         except Exception as e:
-            self.logger.error(f"Error opening RTMP viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open RTMP Color Detection viewer:\n{str(e)}")
+            self.logger.error(f"Error opening Color Detection viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Color Detection viewer:\n{str(e)}")
 
     def _open_rtmp_motion_detection(self):
         """
-        Opens the Real-Time RTMP Motion Detection viewer with dual-mode support.
+        Opens the Real-Time Motion Detection viewer (new architecture).
         """
         try:
             if self.rtmp_motion_viewer is None or not self.rtmp_motion_viewer.isVisible():
-                self.rtmp_motion_viewer = RTMPMotionDetectionViewer(self)
+                self.rtmp_motion_viewer = StreamViewerWindow(algorithm_name='MotionDetection', theme='dark')
                 self.rtmp_motion_viewer.show()
-                self.logger.info("RTMP Motion Detection viewer opened")
+                self.logger.info("Motion Detection viewer opened")
             else:
                 # Bring existing viewer to front
                 self.rtmp_motion_viewer.raise_()
                 self.rtmp_motion_viewer.activateWindow()
         except Exception as e:
-            self.logger.error(f"Error opening RTMP motion viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open RTMP Motion Detection viewer:\n{str(e)}")
+            self.logger.error(f"Error opening Motion Detection viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Motion Detection viewer:\n{str(e)}")
 
     def _open_integrated_detection(self):
         """
-        Opens the Real-Time Anomaly Detection viewer.
+        Opens the Real-Time Integrated Anomaly Detection viewer (new architecture).
         """
         try:
             if self.integrated_viewer is None or not self.integrated_viewer.isVisible():
-                self.integrated_viewer = IntegratedDetectionViewer(self)
+                self.integrated_viewer = StreamViewerWindow(algorithm_name='IntegratedDetection', theme='dark')
                 self.integrated_viewer.show()
-                self.logger.info("Anomaly Detection viewer opened")
+                self.logger.info("Integrated Anomaly Detection viewer opened")
             else:
                 # Bring existing viewer to front
                 self.integrated_viewer.raise_()
                 self.integrated_viewer.activateWindow()
         except Exception as e:
-            self.logger.error(f"Error opening Anomaly Detection viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Anomaly Detection viewer:\n{str(e)}")
+            self.logger.error(f"Error opening Integrated Detection viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Integrated Detection viewer:\n{str(e)}")
 
     def _open_coordinator(self):
         """

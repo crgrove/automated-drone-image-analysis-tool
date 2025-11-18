@@ -82,3 +82,10 @@ class LoggerService:
         """
         print(message)
         self.logger.error(message)
+
+        # If we're inside an exception handler, also log the full traceback
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        if exc_type is not None and exc_tb is not None:
+            tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            print(tb_str)
+            self.logger.error(tb_str)
