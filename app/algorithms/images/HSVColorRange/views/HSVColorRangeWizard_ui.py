@@ -75,4 +75,3 @@ class Ui_HSVColorRangeWizard(object):
         pass
     # retranslateUi
 
-

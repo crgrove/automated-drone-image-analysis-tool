@@ -21,7 +21,7 @@ def main():
     """Initialize the application and launch the appropriate window.
 
     Sets up the QApplication, applies the dark theme, sets the application icon,
-    and displays either the MainWindow (for image analysis) or IntegratedDetectionViewer
+    and displays either the MainWindow (for image analysis) or StreamViewerWindow
     (for streaming) based on user selection. Ends the application on window close.
 
     The function first shows a SelectionDialog to allow the user to choose between
@@ -51,8 +51,8 @@ def main():
             # Launch the Real-time streaming detection window (new architecture)
             try:
                 from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
-                # Default to IntegratedDetection algorithm
-                app._stream_viewer = StreamViewerWindow(algorithm_name='IntegratedDetection', theme='dark')
+                # Default to ColorAnomalyAndMotionDetection algorithm
+                app._stream_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme='dark')
                 app._stream_viewer.show()
             except Exception as e:
                 from PySide6.QtWidgets import QMessageBox
@@ -72,26 +72,54 @@ def main():
 
         # Connect to wizard completion signal to populate MainWindow
         wizard_data_from_wizard = None
+        review_file_path = None
 
         def _on_wizard_completed(wizard_data):
             nonlocal wizard_data_from_wizard
             wizard_data_from_wizard = wizard_data
 
+        def _on_review_requested(file_path):
+            nonlocal review_file_path
+            review_file_path = file_path
+
         wizard.wizardCompleted.connect(_on_wizard_completed)
+        wizard.reviewRequested.connect(_on_review_requested)
         wizard_result = wizard.exec()
 
         # After wizard completes (or is cancelled), proceed with MainWindow
         # Whether accepted or cancelled, open MainWindow
         dlg.selection = "images"  # Set selection so dialog knows what was chosen
-        app._main_window = MainWindow(qdarktheme, version)
+        
+        # Check if review was requested
+        if review_file_path:
+            # Review mode: open MainWindow, load XML, and open Viewer
+            app._main_window = MainWindow(qdarktheme, version)
+            app._main_window.show()
+            
+            # Load the XML file
+            try:
+                app._main_window._process_xml_file(review_file_path)
+                # Automatically open the Viewer
+                app._main_window._viewResultsButton_clicked()
+            except Exception as e:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    app._main_window,
+                    "Error Loading Results",
+                    f"Failed to load results file:\n{str(e)}"
+                )
+        else:
+            # Normal wizard flow
+            app._main_window = MainWindow(qdarktheme, version)
 
-        # Populate MainWindow with wizard data if wizard was completed (not cancelled)
-        if wizard_result == QDialog.Accepted and wizard_data_from_wizard:
-            # Mark for auto-start
-            wizard_data_from_wizard['auto_start'] = True
-            app._main_window.populate_from_wizard_data(wizard_data_from_wizard)
+            # Populate MainWindow with wizard data if wizard was completed (not cancelled)
+            if wizard_result == QDialog.Accepted and wizard_data_from_wizard:
+                # Mark for auto-start
+                wizard_data_from_wizard['auto_start'] = True
+                app._main_window.populate_from_wizard_data(wizard_data_from_wizard)
 
-        app._main_window.show()
+            app._main_window.show()
+        
         dlg.accept()  # Close selection dialog (already hidden, but this ensures cleanup)
 
     dlg.selectionMade.connect(_on_selection)

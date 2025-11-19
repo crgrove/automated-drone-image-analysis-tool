@@ -31,6 +31,104 @@ class Ui_ImageAnalysisGuide(object):
         self.verticalLayout.setContentsMargins(-1, 0, -1, -1)
         self.stackedWidget = QStackedWidget(ImageAnalysisGuide)
         self.stackedWidget.setObjectName(u"stackedWidget")
+        self.pageReviewOrNew = QWidget()
+        self.pageReviewOrNew.setObjectName(u"pageReviewOrNew")
+        self.verticalLayout_reviewOrNew = QVBoxLayout(self.pageReviewOrNew)
+        self.verticalLayout_reviewOrNew.setObjectName(u"verticalLayout_reviewOrNew")
+        self.verticalLayout_reviewOrNew.setContentsMargins(-1, 5, -1, -1)
+        self.labelPageReviewOrNewTitle = QLabel(self.pageReviewOrNew)
+        self.labelPageReviewOrNewTitle.setObjectName(u"labelPageReviewOrNewTitle")
+        font = QFont()
+        font.setPointSize(16)
+        font.setBold(True)
+        self.labelPageReviewOrNewTitle.setFont(font)
+
+        self.verticalLayout_reviewOrNew.addWidget(self.labelPageReviewOrNewTitle)
+
+        self.line_reviewOrNew = QFrame(self.pageReviewOrNew)
+        self.line_reviewOrNew.setObjectName(u"line_reviewOrNew")
+        self.line_reviewOrNew.setFrameShape(QFrame.Shape.HLine)
+        self.line_reviewOrNew.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self.verticalLayout_reviewOrNew.addWidget(self.line_reviewOrNew)
+
+        self.fileSelectorWidget = QWidget(self.pageReviewOrNew)
+        self.fileSelectorWidget.setObjectName(u"fileSelectorWidget")
+        self.fileSelectorWidget.setVisible(False)
+        self.verticalLayout_fileSelector = QVBoxLayout(self.fileSelectorWidget)
+        self.verticalLayout_fileSelector.setObjectName(u"verticalLayout_fileSelector")
+        self.verticalLayout_fileSelector.setContentsMargins(-1, 0, -1, -1)
+        self.labelFileInstructions = QLabel(self.fileSelectorWidget)
+        self.labelFileInstructions.setObjectName(u"labelFileInstructions")
+        font1 = QFont()
+        font1.setPointSize(12)
+        self.labelFileInstructions.setFont(font1)
+        self.labelFileInstructions.setWordWrap(True)
+
+        self.verticalLayout_fileSelector.addWidget(self.labelFileInstructions)
+
+        self.horizontalLayout_fileSelector = QHBoxLayout()
+        self.horizontalLayout_fileSelector.setObjectName(u"horizontalLayout_fileSelector")
+        self.filePathLabel = QLabel(self.fileSelectorWidget)
+        self.filePathLabel.setObjectName(u"filePathLabel")
+        self.filePathLabel.setWordWrap(True)
+
+        self.horizontalLayout_fileSelector.addWidget(self.filePathLabel)
+
+        self.browseFileButton = QPushButton(self.fileSelectorWidget)
+        self.browseFileButton.setObjectName(u"browseFileButton")
+        font2 = QFont()
+        font2.setPointSize(11)
+        self.browseFileButton.setFont(font2)
+        self.browseFileButton.setMinimumSize(QSize(80, 0))
+        self.browseFileButton.setMaximumSize(QSize(100, 16777215))
+
+        self.horizontalLayout_fileSelector.addWidget(self.browseFileButton)
+
+
+        self.verticalLayout_fileSelector.addLayout(self.horizontalLayout_fileSelector)
+
+
+        self.verticalLayout_reviewOrNew.addWidget(self.fileSelectorWidget)
+
+        self.labelInstructions = QLabel(self.pageReviewOrNew)
+        self.labelInstructions.setObjectName(u"labelInstructions")
+        self.labelInstructions.setFont(font1)
+        self.labelInstructions.setWordWrap(True)
+
+        self.verticalLayout_reviewOrNew.addWidget(self.labelInstructions)
+
+        self.verticalSpacer_reviewOrNew1 = QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        self.verticalLayout_reviewOrNew.addItem(self.verticalSpacer_reviewOrNew1)
+
+        self.buttonContainer = QWidget(self.pageReviewOrNew)
+        self.buttonContainer.setObjectName(u"buttonContainer")
+        self.verticalLayout_buttonContainer = QVBoxLayout(self.buttonContainer)
+        self.verticalLayout_buttonContainer.setSpacing(15)
+        self.verticalLayout_buttonContainer.setObjectName(u"verticalLayout_buttonContainer")
+        self.reviewButton = QPushButton(self.buttonContainer)
+        self.reviewButton.setObjectName(u"reviewButton")
+        self.reviewButton.setFont(font2)
+        self.reviewButton.setMinimumSize(QSize(0, 50))
+
+        self.verticalLayout_buttonContainer.addWidget(self.reviewButton)
+
+        self.newAnalysisButton = QPushButton(self.buttonContainer)
+        self.newAnalysisButton.setObjectName(u"newAnalysisButton")
+        self.newAnalysisButton.setFont(font2)
+        self.newAnalysisButton.setMinimumSize(QSize(0, 50))
+
+        self.verticalLayout_buttonContainer.addWidget(self.newAnalysisButton)
+
+
+        self.verticalLayout_reviewOrNew.addWidget(self.buttonContainer)
+
+        self.verticalSpacer_reviewOrNew2 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.verticalLayout_reviewOrNew.addItem(self.verticalSpacer_reviewOrNew2)
+
+        self.stackedWidget.addWidget(self.pageReviewOrNew)
         self.pageDirectories = QWidget()
         self.pageDirectories.setObjectName(u"pageDirectories")
         self.verticalLayout_directories = QVBoxLayout(self.pageDirectories)
@@ -38,9 +136,6 @@ class Ui_ImageAnalysisGuide(object):
         self.verticalLayout_directories.setContentsMargins(-1, 5, -1, -1)
         self.labelPage0Title = QLabel(self.pageDirectories)
         self.labelPage0Title.setObjectName(u"labelPage0Title")
-        font = QFont()
-        font.setPointSize(16)
-        font.setBold(True)
         self.labelPage0Title.setFont(font)
 
         self.verticalLayout_directories.addWidget(self.labelPage0Title)
@@ -58,8 +153,6 @@ class Ui_ImageAnalysisGuide(object):
         self.verticalLayout_inputDir.setObjectName(u"verticalLayout_inputDir")
         self.labelInputDirectory = QLabel(self.widgetInputDirectory)
         self.labelInputDirectory.setObjectName(u"labelInputDirectory")
-        font1 = QFont()
-        font1.setPointSize(12)
         self.labelInputDirectory.setFont(font1)
 
         self.verticalLayout_inputDir.addWidget(self.labelInputDirectory)
@@ -74,8 +167,6 @@ class Ui_ImageAnalysisGuide(object):
 
         self.inputDirectoryButton = QPushButton(self.widgetInputDirectory)
         self.inputDirectoryButton.setObjectName(u"inputDirectoryButton")
-        font2 = QFont()
-        font2.setPointSize(11)
         self.inputDirectoryButton.setFont(font2)
 
         self.horizontalLayout_inputDir.addWidget(self.inputDirectoryButton)
@@ -616,6 +707,13 @@ class Ui_ImageAnalysisGuide(object):
 
     def retranslateUi(self, ImageAnalysisGuide):
         ImageAnalysisGuide.setWindowTitle(QCoreApplication.translate("ImageAnalysisGuide", u"Image Analysis Guide", None))
+        self.labelPageReviewOrNewTitle.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Welcome to ADIAT", None))
+        self.labelFileInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Please select the ADIAT_Data.xml file from previous analysis:", None))
+        self.filePathLabel.setText(QCoreApplication.translate("ImageAnalysisGuide", u"No file selected", None))
+        self.browseFileButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Browse...", None))
+        self.labelInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"What would you like to do?", None))
+        self.reviewButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Review Existing Image Analysis", None))
+        self.newAnalysisButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Start New Image Analysis", None))
         self.labelPage0Title.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Select Directories", None))
         self.labelInputDirectory.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Where are the images you want to analyze?", None))
         self.inputDirectoryButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Browse...", None))

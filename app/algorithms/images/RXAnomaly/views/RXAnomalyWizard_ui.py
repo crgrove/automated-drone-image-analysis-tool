@@ -115,4 +115,3 @@ class Ui_RXAnomalyWizard(object):
         pass
     # retranslateUi
 
-

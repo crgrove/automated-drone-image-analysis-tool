@@ -108,4 +108,3 @@ class Ui_AIPersonDetector(object):
         self.GPULabel.setText(QCoreApplication.translate("AIPersonDetector", u"GPU Label", None))
     # retranslateUi
 
-

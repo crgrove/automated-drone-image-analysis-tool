@@ -162,4 +162,3 @@ class Ui_ThermalAnomalyWizard(object):
         pass
     # retranslateUi
 
-

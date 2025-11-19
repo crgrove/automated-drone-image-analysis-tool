@@ -75,4 +75,3 @@ class Ui_MatchedFilterWizard(object):
         pass
     # retranslateUi
 
-

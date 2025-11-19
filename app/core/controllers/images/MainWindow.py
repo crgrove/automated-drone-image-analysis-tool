@@ -101,20 +101,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if hasattr(self, 'actionImageAnalysisGuide'):
             self.actionImageAnalysisGuide.triggered.connect(self._open_image_analysis_guide)
 
-        # Add RTMP Color Detection functionality
-        self.rtmp_viewer = None
-        if hasattr(self, 'actionRTMPDetection'):
-            self.actionRTMPDetection.triggered.connect(self._open_rtmp_detection)
-
-        # Add RTMP Motion Detection functionality
-        self.rtmp_motion_viewer = None
-        if hasattr(self, 'actionRTMPMotionDetection'):
-            self.actionRTMPMotionDetection.triggered.connect(self._open_rtmp_motion_detection)
-
-        # Add Anomaly Detection functionality
-        self.integrated_viewer = None
-        if hasattr(self, 'actionIntegratedDetection'):
-            self.actionIntegratedDetection.triggered.connect(self._open_integrated_detection)
+        # Connect Streaming Detector menu item
+        if hasattr(self, 'actionStreaming'):
+            self.actionStreaming.triggered.connect(self._open_streaming_detector)
 
         # Add Coordinator functionality
         self.coordinator_window = None
@@ -745,56 +734,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         parser = VideoParser(self.settings_service.get_setting('Theme'))
         parser.exec()
 
-    def _open_rtmp_detection(self):
+    def _open_streaming_detector(self):
         """
-        Opens the Real-Time RTMP Color Detection viewer.
-        """
-        try:
-            if self.rtmp_viewer is None or not self.rtmp_viewer.isVisible():
-                self.rtmp_viewer = StreamViewerWindow(algorithm_name='ColorDetection', theme='dark')
-                self.rtmp_viewer.show()
-                self.logger.info("Color Detection viewer opened")
-            else:
-                # Bring existing viewer to front
-                self.rtmp_viewer.raise_()
-                self.rtmp_viewer.activateWindow()
-        except Exception as e:
-            self.logger.error(f"Error opening Color Detection viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Color Detection viewer:\n{str(e)}")
-
-    def _open_rtmp_motion_detection(self):
-        """
-        Opens the Real-Time Motion Detection viewer (new architecture).
+        Closes the Main Window and opens the Streaming Detector window.
         """
         try:
-            if self.rtmp_motion_viewer is None or not self.rtmp_motion_viewer.isVisible():
-                self.rtmp_motion_viewer = StreamViewerWindow(algorithm_name='MotionDetection', theme='dark')
-                self.rtmp_motion_viewer.show()
-                self.logger.info("Motion Detection viewer opened")
-            else:
-                # Bring existing viewer to front
-                self.rtmp_motion_viewer.raise_()
-                self.rtmp_motion_viewer.activateWindow()
+            # Get theme from settings
+            theme = self.settings_service.get_setting('Theme', 'Dark').lower()
+            
+            # Open the streaming viewer window
+            streaming_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme=theme)
+            
+            # Store on QApplication instance (like __main__.py does)
+            app = QApplication.instance()
+            if app:
+                app._stream_viewer = streaming_viewer
+            
+            streaming_viewer.show()
+            self.logger.info("Streaming Detector opened")
+            
+            # Hide the main window instead of closing to prevent closeEvent from firing
+            # This prevents closeEvent from closing all windows including the StreamViewerWindow
+            self.hide()
         except Exception as e:
-            self.logger.error(f"Error opening Motion Detection viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Motion Detection viewer:\n{str(e)}")
-
-    def _open_integrated_detection(self):
-        """
-        Opens the Real-Time Integrated Anomaly Detection viewer (new architecture).
-        """
-        try:
-            if self.integrated_viewer is None or not self.integrated_viewer.isVisible():
-                self.integrated_viewer = StreamViewerWindow(algorithm_name='IntegratedDetection', theme='dark')
-                self.integrated_viewer.show()
-                self.logger.info("Integrated Anomaly Detection viewer opened")
-            else:
-                # Bring existing viewer to front
-                self.integrated_viewer.raise_()
-                self.integrated_viewer.activateWindow()
-        except Exception as e:
-            self.logger.error(f"Error opening Integrated Detection viewer: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Integrated Detection viewer:\n{str(e)}")
+            self.logger.error(f"Error opening Streaming Detector: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Streaming Detector:\n{str(e)}")
 
     def _open_coordinator(self):
         """

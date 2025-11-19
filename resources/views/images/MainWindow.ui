@@ -1153,12 +1153,12 @@ Use to monitor processing progress and troubleshoot issues.</string>
      <string>Menu</string>
     </property>
     <addaction name="actionImageAnalysisGuide"/>
+    <addaction name="actionStreaming"/>
+    <addaction name="actionCoordinator"/>
+    <addaction name="separator"/>
     <addaction name="actionLoadFile"/>
     <addaction name="actionPreferences"/>
     <addaction name="actionVideoParser"/>
-    <addaction name="actionRTMPDetection"/>
-    <addaction name="actionIntegratedDetection"/>
-    <addaction name="actionCoordinator"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -1249,21 +1249,12 @@ Use to prepare video footage for image-based analysis.</string>
     </font>
    </property>
   </action>
-  <action name="actionRTMPDetection">
+  <action name="actionStreaming">
    <property name="text">
-    <string>Real-Time Color Detection</string>
+    <string>Streaming Detector</string>
    </property>
    <property name="toolTip">
-    <string>Open the Real-Time Color Detection window for live video analysis.
-Perform HSV color-based detection on live video streams.
-Features:
-• Connect to RTMP/RTSP video streams or local cameras
-• Real-time color detection with adjustable HSV ranges
-• Interactive HSV range tuning with live preview
-• Adjustable processing resolution for performance
-• Frame capture and saving capabilities
-• Detection statistics and performance metrics
-Ideal for live drone feeds and real-time monitoring applications.</string>
+    <string>Switch to the Streaming Detector</string>
    </property>
    <property name="font">
     <font>

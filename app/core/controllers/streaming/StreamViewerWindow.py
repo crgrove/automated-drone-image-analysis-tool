@@ -56,7 +56,7 @@ class StreamViewerWindow(QMainWindow):
         self.settings = QSettings("ADIAT", "StreamViewer")
         self.theme = theme
         self._maximized_applied = False
-        self._initial_algorithm_name = algorithm_name or "IntegratedDetection"
+        self._initial_algorithm_name = algorithm_name or "ColorAnomalyAndMotionDetection"
 
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
@@ -237,12 +237,9 @@ class StreamViewerWindow(QMainWindow):
         # Populate with available algorithms from registry
         registry = self._algorithm_registry()
         algorithm_options = []
-        for key in ("IntegratedDetection", "ColorDetection"):
+        for key in ("ColorAnomalyAndMotionDetection", "ColorDetection"):
             if key in registry:
                 label = registry[key].get("label", key)
-                # Rename IntegratedDetection to "Color Anomaly & Motion Detection"
-                if key == "IntegratedDetection":
-                    label = "Color Anomaly & Motion Detection"
                 algorithm_options.append((label, key))
 
         # Add to combo box
@@ -377,10 +374,10 @@ class StreamViewerWindow(QMainWindow):
                 'controller': 'ColorDetectionController',
                 'module': 'algorithms.streaming.ColorDetection.controllers.ColorDetectionController'
             },
-            'IntegratedDetection': {
-                'label': 'Integrated Detection (Anomaly)',
-                'controller': 'IntegratedDetectionController',
-                'module': 'algorithms.streaming.IntegratedDetection.controllers.IntegratedDetectionController'
+            'ColorAnomalyAndMotionDetection': {
+                'label': 'Color Anomaly & Motion Detection',
+                'controller': 'ColorAnomalyAndMotionDetectionController',
+                'module': 'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionController'
             }
         }
 

@@ -125,4 +125,3 @@ class Ui_ThermalRange(object):
 #endif // QT_CONFIG(tooltip)
     # retranslateUi
 
-

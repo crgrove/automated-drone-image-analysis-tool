@@ -1,5 +1,5 @@
 """
-IntegratedDetectionController.py - Integrated anomaly detection algorithm controller
+ColorAnomalyAndMotionDetectionController.py - Color anomaly and motion detection algorithm controller
 
 Combines motion detection, color quantization, fusion, and temporal smoothing
 for comprehensive anomaly detection. Integrated into StreamViewerWindow following
@@ -7,10 +7,10 @@ the StreamAlgorithmController pattern.
 """
 
 # Set environment variables
-from algorithms.streaming.IntegratedDetection.views.IntegratedDetectionControlWidget import IntegratedDetectionControlWidget
-from algorithms.streaming.IntegratedDetection.services import (
-    IntegratedDetectionService,
-    IntegratedDetectionConfig,
+from algorithms.streaming.ColorAnomalyAndMotionDetection.views.ColorAnomalyAndMotionDetectionControlWidget import ColorAnomalyAndMotionDetectionControlWidget
+from algorithms.streaming.ColorAnomalyAndMotionDetection.services import (
+    ColorAnomalyAndMotionDetectionOrchestrator,
+    ColorAnomalyAndMotionDetectionConfig,
     MotionAlgorithm,
     FusionMode,
     Detection
@@ -29,9 +29,9 @@ os.environ.setdefault('NUMBA_DISABLE_INTEL_SVML', '1')
 os.environ.setdefault('NPY_DISABLE_SVML', '1')
 
 
-class IntegratedDetectionController(StreamAlgorithmController):
+class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
     """
-    Integrated anomaly detection algorithm controller.
+    Color anomaly and motion detection algorithm controller.
 
     Provides comprehensive anomaly detection by combining:
     - Motion detection with multiple algorithms
@@ -42,14 +42,14 @@ class IntegratedDetectionController(StreamAlgorithmController):
     """
 
     def __init__(self, algorithm_config: Dict[str, Any], theme: str, parent=None):
-        """Initialize integrated detection controller."""
+        """Initialize color anomaly and motion detection controller."""
         super().__init__(algorithm_config, theme, parent)
 
         self.logger = LoggerService()
         self.provides_custom_rendering = True
 
-        # Initialize integrated detector service
-        self.integrated_detector = IntegratedDetectionService()
+        # Initialize color anomaly and motion detector orchestrator
+        self.integrated_detector = ColorAnomalyAndMotionDetectionOrchestrator()
 
         # State
         self.detection_count = 0
@@ -63,7 +63,7 @@ class IntegratedDetectionController(StreamAlgorithmController):
             initial_config = self.integrated_controls.get_config()
             self._on_config_changed(initial_config)
 
-        self.logger.info("IntegratedDetectionController initialized")
+        self.logger.info("ColorAnomalyAndMotionDetectionController initialized")
 
     def setup_ui(self):
         """Setup the algorithm-specific UI."""
@@ -71,8 +71,8 @@ class IntegratedDetectionController(StreamAlgorithmController):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
 
-        # Integrated Detection Control Widget (algorithm-specific)
-        self.integrated_controls = IntegratedDetectionControlWidget()
+        # Color Anomaly and Motion Detection Control Widget (algorithm-specific)
+        self.integrated_controls = ColorAnomalyAndMotionDetectionControlWidget()
         self.integrated_controls.configChanged.connect(self._on_config_changed)
         layout.addWidget(self.integrated_controls)
 
@@ -160,8 +160,8 @@ class IntegratedDetectionController(StreamAlgorithmController):
         self.integrated_detector.update_config(integrated_config)
         self._emit_config_changed()
 
-    def _convert_to_config(self, ui_config: dict) -> IntegratedDetectionConfig:
-        """Convert UI config to IntegratedDetectionConfig object."""
+    def _convert_to_config(self, ui_config: dict) -> ColorAnomalyAndMotionDetectionConfig:
+        """Convert UI config to ColorAnomalyAndMotionDetectionConfig object."""
         # Get existing config as base
         base_config = self.integrated_detector.config
 
@@ -185,7 +185,7 @@ class IntegratedDetectionController(StreamAlgorithmController):
         if not isinstance(fusion_mode, FusionMode):
             fusion_mode = base_config.fusion_mode
 
-        return IntegratedDetectionConfig(
+        return ColorAnomalyAndMotionDetectionConfig(
             processing_width=processing_width,
             processing_height=processing_height,
             enable_motion=ui_config.get('enable_motion', base_config.enable_motion),
@@ -251,14 +251,12 @@ class IntegratedDetectionController(StreamAlgorithmController):
 
     def reset(self):
         """Reset algorithm state."""
-        # IntegratedDetectionService doesn't have a reset method
-        # Use reset_metrics if needed
+        # Reset orchestrator metrics
         if hasattr(self.integrated_detector, 'reset_metrics'):
             self.integrated_detector.reset_metrics()
         self.detection_count = 0
 
     def cleanup(self):
         """Clean up algorithm resources."""
-        # IntegratedDetectionService doesn't have a cleanup method
-        # Resources are managed automatically
-        self.logger.info("IntegratedDetectionController cleaned up")
+        # Resources are managed automatically by the orchestrator and sub-services
+        self.logger.info("ColorAnomalyAndMotionDetectionController cleaned up")

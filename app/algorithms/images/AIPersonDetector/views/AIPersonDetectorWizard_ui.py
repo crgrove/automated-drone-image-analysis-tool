@@ -75,4 +75,3 @@ class Ui_AIPersonDetectorWizard(object):
         pass
     # retranslateUi
 
-

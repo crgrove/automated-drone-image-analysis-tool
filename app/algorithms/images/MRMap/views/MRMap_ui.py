@@ -177,6 +177,7 @@ class Ui_MRMap(object):
         self.colorspaceComboBox.setItemText(0, QCoreApplication.translate("MRMap", u"RGB", None))
         self.colorspaceComboBox.setItemText(1, QCoreApplication.translate("MRMap", u"HSV", None))
         self.colorspaceComboBox.setItemText(2, QCoreApplication.translate("MRMap", u"LAB", None))
+
 #if QT_CONFIG(tooltip)
         self.windowLabel.setToolTip(QCoreApplication.translate("MRMap", u"Window size for multi-resolution analysis.\n"
 "Determines the spatial scale of features to detect.", None))
@@ -217,5 +218,4 @@ class Ui_MRMap(object):
 #endif // QT_CONFIG(tooltip)
         self.thresholdValueLabel.setText(QCoreApplication.translate("MRMap", u"100", None))
     # retranslateUi
-
 

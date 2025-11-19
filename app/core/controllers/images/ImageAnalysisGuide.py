@@ -5,6 +5,7 @@ from PySide6.QtGui import QFont, QColor
 from core.views.images.ImageAnalysisGuide_ui import Ui_ImageAnalysisGuide
 from core.services.SettingsService import SettingsService
 from core.controllers.images.guidePages import (
+    ReviewOrNewPage,
     DirectoriesPage,
     ImageCapturePage,
     TargetSizePage,
@@ -32,6 +33,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
     """
 
     wizardCompleted = Signal(dict)  # Emits wizard data when completed
+    reviewRequested = Signal(str)  # Emits XML file path when review is requested
 
     def __init__(self, parent=None):
         """Initialize the Image Analysis Guide wizard.
@@ -44,13 +46,15 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
 
         self.settings_service = SettingsService()
         self.current_page = 0
-        self.total_pages = 6  # Directories, Image Capture, Target Size, Algorithm, Algorithm Parameters, General Settings
+        self.total_pages = 7  # Review/New, Directories, Image Capture, Target Size, Algorithm, Algorithm Parameters, General Settings
 
         # Create or bind to algorithm parameters page
         self._create_algorithm_parameters_page()
 
         # Wizard data
         self.wizard_data = {
+            'review_mode': None,  # 'review' or 'new'
+            'review_file_path': None,  # Path to ADIAT_Data.xml file
             'input_directory': '',
             'output_directory': '',
             'drone': None,  # Selected drone row (single sensor)
@@ -70,8 +74,9 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             'processing_resolution': '50%'  # Default processing resolution
         }
 
-        # Create page instances
+        # Create page instances (ReviewOrNewPage is first)
         self.pages = [
+            ReviewOrNewPage(self.wizard_data, self.settings_service, self),
             DirectoriesPage(self.wizard_data, self.settings_service, self),
             ImageCapturePage(self.wizard_data, self.settings_service, self),
             TargetSizePage(self.wizard_data, self.settings_service, self),
@@ -81,9 +86,10 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         ]
 
         # Set up callbacks for page interactions
-        self.pages[0].on_input_directory_changed = lambda: self.pages[1].scan_input_directory()
         self.pages[0].on_validation_changed = self._update_navigation_buttons
-        self.pages[3].on_algorithm_selected = self._on_algorithm_selected
+        self.pages[1].on_input_directory_changed = lambda: self.pages[2].scan_input_directory()
+        self.pages[1].on_validation_changed = self._update_navigation_buttons
+        self.pages[4].on_algorithm_selected = self._on_algorithm_selected
 
         # Initialize pages
         for page in self.pages:
@@ -108,7 +114,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         Called when an algorithm is selected on the algorithm selection page.
         Updates navigation buttons to reflect the new selection state.
         """
-        if self.current_page == 3:
+        if self.current_page == 4:  # AlgorithmSelectionPage is now at index 4
             self._update_navigation_buttons()
 
     def _create_algorithm_parameters_page(self):
@@ -147,7 +153,8 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         self.algorithmParametersContainer = QWidget(self.pageAlgorithmParameters)
         self.algorithmParametersContainer.setObjectName("algorithmParametersContainer")
         vertical_layout.addWidget(self.algorithmParametersContainer)
-        self.stackedWidget.insertWidget(4, self.pageAlgorithmParameters)
+        # Note: pageAlgorithmParameters is already in the .ui file, so we don't need to insert it
+        # The .ui file should have it at the correct index (5, after ReviewOrNew, Directories, ImageCapture, TargetSize, AlgorithmSelection)
 
     def _on_continue(self):
         """Handle continue button click.
@@ -158,6 +165,19 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         # Save current page data
         if self.current_page < len(self.pages):
             self.pages[self.current_page].save_data()
+
+        # Check if we're on the review page and review mode is selected
+        if self.current_page == 0 and self.wizard_data.get('review_mode') == 'review':
+            # Validate that file is selected
+            if not self.pages[0].validate():
+                return  # Don't proceed if validation fails
+            
+            # Emit review signal and close wizard
+            review_file = self.wizard_data.get('review_file_path')
+            if review_file:
+                self.reviewRequested.emit(review_file)
+                self.accept()
+            return
 
         # Validate current page
         if self.current_page < len(self.pages):
@@ -178,6 +198,9 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
                 self.pages[self.current_page].on_enter()
 
             self._update_navigation_buttons()
+            
+            # Set focus to an appropriate widget on the new page (not the close button)
+            self._set_focus_on_page()
         else:
             # Last page - complete wizard
             self._complete_wizard()
@@ -203,6 +226,19 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
 
             self._update_navigation_buttons()
 
+    def _set_focus_on_page(self):
+        """Set focus to an appropriate widget on the current page."""
+        if self.current_page == 1:  # DirectoriesPage
+            # Focus on the first input directory button or line edit
+            if hasattr(self, 'inputDirectoryButton'):
+                self.inputDirectoryButton.setFocus()
+        elif self.current_page == 2:  # ImageCapturePage
+            # Focus on the drone combo box
+            if hasattr(self, 'droneComboBox'):
+                self.droneComboBox.setFocus()
+        # For other pages, let Qt handle default focus
+        # This prevents the Close button from getting focus
+
     def _update_navigation_buttons(self):
         """Update navigation button states.
 
@@ -212,7 +248,24 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         """
         self.backButton.setEnabled(self.current_page > 0)
 
-        if self.current_page == self.total_pages - 1:
+        # Special handling for first page (ReviewOrNewPage)
+        if self.current_page == 0:
+            review_mode = self.wizard_data.get('review_mode')
+            if review_mode == 'review':
+                # Show "Load Results" button when review file is selected
+                self.continueButton.setText("Load Results")
+                can_continue = self.pages[0].validate()
+                self.continueButton.setEnabled(can_continue)
+            elif review_mode == 'new':
+                # New analysis was selected, enable continue button
+                self.continueButton.setText("Continue")
+                can_continue = self.pages[0].validate()
+                self.continueButton.setEnabled(can_continue)
+            else:
+                # No selection yet
+                self.continueButton.setText("Continue")
+                self.continueButton.setEnabled(False)
+        elif self.current_page == self.total_pages - 1:
             self.continueButton.setText("Start Processing")
             self.continueButton.setEnabled(True)  # Always enable on last page
         else:

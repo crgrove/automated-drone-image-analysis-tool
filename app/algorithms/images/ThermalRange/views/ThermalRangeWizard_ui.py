@@ -56,4 +56,3 @@ class Ui_ThermalRangeWizard(object):
         pass
     # retranslateUi
 
-

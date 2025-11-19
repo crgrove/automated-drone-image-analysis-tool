@@ -176,4 +176,3 @@ class Ui_ThermalAnomaly(object):
 #endif // QT_CONFIG(tooltip)
     # retranslateUi
 
-

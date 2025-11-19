@@ -97,4 +97,3 @@ class Ui_ColorRangeViewer(object):
         self.label.setText(QCoreApplication.translate("ColorRangeViewer", u"Unselected", None))
     # retranslateUi
 
-

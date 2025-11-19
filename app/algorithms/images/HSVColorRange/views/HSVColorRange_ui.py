@@ -303,4 +303,3 @@ class Ui_HSVColorRange(object):
         self.viewRangeButton.setProperty(u"iconName", QCoreApplication.translate("HSVColorRange", u"eye.png", None))
     # retranslateUi
 
-

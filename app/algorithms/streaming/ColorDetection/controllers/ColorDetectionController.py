@@ -160,6 +160,44 @@ class ColorDetectionController(StreamAlgorithmController):
             config.hue_threshold = first_range.get('hue_plus', 20)
             config.saturation_threshold = first_range.get('sat_plus', 50)
             config.value_threshold = first_range.get('val_plus', 50)
+            
+            # Convert all color ranges to hsv_ranges_list format for multi-color detection
+            # The service expects hsv_ranges_list with normalized values (0-1)
+            hsv_ranges_list = []
+            for color_range in color_ranges:
+                color = color_range.get('color', QColor(255, 0, 0))
+                if isinstance(color, QColor):
+                    # Convert QColor to HSV (0-1 normalized)
+                    # getHsvF() returns (h, s, v, alpha) - we only need h, s, v
+                    h, s, v, _ = color.getHsvF()
+                else:
+                    # Fallback if color is not QColor
+                    h, s, v = 0.0, 1.0, 1.0
+                
+                # Convert thresholds from OpenCV format to normalized format
+                # hue_minus/hue_plus are in 0-179 range, convert to normalized 0-1
+                h_minus = color_range.get('hue_minus', 20) / 179.0
+                h_plus = color_range.get('hue_plus', 20) / 179.0
+                # sat_minus/sat_plus are in 0-255 range, convert to normalized 0-1
+                s_minus = color_range.get('sat_minus', 50) / 255.0
+                s_plus = color_range.get('sat_plus', 50) / 255.0
+                # val_minus/val_plus are in 0-255 range, convert to normalized 0-1
+                v_minus = color_range.get('val_minus', 50) / 255.0
+                v_plus = color_range.get('val_plus', 50) / 255.0
+                
+                hsv_ranges_list.append({
+                    'h': h,
+                    's': s,
+                    'v': v,
+                    'h_minus': h_minus,
+                    'h_plus': h_plus,
+                    's_minus': s_minus,
+                    's_plus': s_plus,
+                    'v_minus': v_minus,
+                    'v_plus': v_plus
+                })
+            
+            config.hsv_ranges_list = hsv_ranges_list
 
         return config
 

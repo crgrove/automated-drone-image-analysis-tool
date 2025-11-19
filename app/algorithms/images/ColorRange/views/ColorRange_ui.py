@@ -100,4 +100,3 @@ class Ui_ColorRange(object):
         self.viewRangeButton.setProperty(u"iconName", QCoreApplication.translate("ColorRange", u"eye.png", None))
     # retranslateUi
 
-

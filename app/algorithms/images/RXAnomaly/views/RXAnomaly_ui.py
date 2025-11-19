@@ -162,4 +162,3 @@ class Ui_RXAnomaly(object):
         self.sensitivityValueLabel.setText(QCoreApplication.translate("RXAnomaly", u"5", None))
     # retranslateUi
 
-

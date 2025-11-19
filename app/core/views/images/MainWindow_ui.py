@@ -47,9 +47,9 @@ class Ui_MainWindow(object):
         self.actionVideoParser = QAction(MainWindow)
         self.actionVideoParser.setObjectName(u"actionVideoParser")
         self.actionVideoParser.setFont(font)
-        self.actionRTMPDetection = QAction(MainWindow)
-        self.actionRTMPDetection.setObjectName(u"actionRTMPDetection")
-        self.actionRTMPDetection.setFont(font)
+        self.actionStreaming = QAction(MainWindow)
+        self.actionStreaming.setObjectName(u"actionStreaming")
+        self.actionStreaming.setFont(font)
         self.actionIntegratedDetection = QAction(MainWindow)
         self.actionIntegratedDetection.setObjectName(u"actionIntegratedDetection")
         self.actionIntegratedDetection.setFont(font)
@@ -464,12 +464,12 @@ class Ui_MainWindow(object):
         self.mainBar.addAction(self.menuFile.menuAction())
         self.mainBar.addAction(self.menuHelp.menuAction())
         self.menuFile.addAction(self.actionImageAnalysisGuide)
+        self.menuFile.addAction(self.actionStreaming)
+        self.menuFile.addAction(self.actionCoordinator)
+        self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionLoadFile)
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
-        self.menuFile.addAction(self.actionRTMPDetection)
-        self.menuFile.addAction(self.actionIntegratedDetection)
-        self.menuFile.addAction(self.actionCoordinator)
         self.menuHelp.addAction(self.actionHelp)
         self.menuHelp.addAction(self.actionCommunityHelp)
 
@@ -527,18 +527,9 @@ class Ui_MainWindow(object):
 "\u2022 Embeds location data into extracted frames\n"
 "Use to prepare video footage for image-based analysis.", None))
 #endif // QT_CONFIG(tooltip)
-        self.actionRTMPDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Color Detection", None))
+        self.actionStreaming.setText(QCoreApplication.translate("MainWindow", u"Streaming Detector", None))
 #if QT_CONFIG(tooltip)
-        self.actionRTMPDetection.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Real-Time Color Detection window for live video analysis.\n"
-"Perform HSV color-based detection on live video streams.\n"
-"Features:\n"
-"\u2022 Connect to RTMP/RTSP video streams or local cameras\n"
-"\u2022 Real-time color detection with adjustable HSV ranges\n"
-"\u2022 Interactive HSV range tuning with live preview\n"
-"\u2022 Adjustable processing resolution for performance\n"
-"\u2022 Frame capture and saving capabilities\n"
-"\u2022 Detection statistics and performance metrics\n"
-"Ideal for live drone feeds and real-time monitoring applications.", None))
+        self.actionStreaming.setToolTip(QCoreApplication.translate("MainWindow", u"Switch to the Streaming Detector", None))
 #endif // QT_CONFIG(tooltip)
         self.actionIntegratedDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Anomaly Detection", None))
 #if QT_CONFIG(tooltip)

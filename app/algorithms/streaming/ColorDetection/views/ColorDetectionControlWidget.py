@@ -2,7 +2,7 @@
 ColorDetectionControlWidget.py - Control widget for color detection parameters.
 
 This widget provides a tabbed interface for configuring all ColorDetectionService
-parameters. It matches the IntegratedDetection UI structure.
+parameters. It matches the ColorAnomalyAndMotionDetection UI structure.
 """
 
 from typing import Dict, Any, List, Tuple, Optional
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from PySide6.QtGui import QColor
 
 from core.services.LoggerService import LoggerService
+from core.views.streaming.components import InputProcessingTab, RenderingTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
 from algorithms.Shared.views import HSVColorRowWidget, ColorRangeDialog
 
@@ -65,101 +66,14 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         # Clear placeholder tabs
         self.tabs.clear()
 
-        # Add actual tabs - Input & Processing first, then Color Selection, Detection, and Rendering
-        self.tabs.addTab(self._create_input_processing_tab(), "Input & Processing")
+        # Use shared tabs for Input & Processing and Rendering
+        self.input_processing_tab = InputProcessingTab()
+        self.rendering_tab = RenderingTab(show_detection_color_option=True)
         self.tabs.addTab(self._create_color_selection_tab(), "Color Selection")
         self.tabs.addTab(self._create_detection_tab(), "Detection")
-        self.tabs.addTab(self._create_rendering_tab(), "Rendering")
+        self.tabs.addTab(self.input_processing_tab, "Input & Processing")
+        self.tabs.addTab(self.rendering_tab, "Rendering")
 
-    def _create_input_processing_tab(self) -> QWidget:
-        """Create Input & Processing tab - matches IntegratedDetection."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        # Processing Resolution
-        res_group = QGroupBox("Processing Resolution")
-        res_layout = QVBoxLayout(res_group)
-
-        # Dropdown for preset resolutions
-        preset_layout = QHBoxLayout()
-        preset_layout.addWidget(QLabel("Preset:"))
-        self.resolution_preset = QComboBox()
-
-        # Common 16:9 resolutions (matching IntegratedDetection)
-        self.resolution_presets = {
-            "Original": None,  # Use video's native resolution
-            "426x240": (426, 240),
-            "640x360": (640, 360),
-            "960x540": (960, 540),
-            "1280x720": (1280, 720),
-            "1600x900": (1600, 900),
-            "1920x1080": (1920, 1080),
-            "2560x1440": (2560, 1440),
-            "3200x1800": (3200, 1800),
-            "3840x2160": (3840, 2160),
-            "5120x2880": (5120, 2880),
-            "7680x4320": (7680, 4320),
-            "Custom": "custom"  # Special marker for custom resolution
-        }
-
-        for preset in self.resolution_presets.keys():
-            self.resolution_preset.addItem(preset)
-
-        self.resolution_preset.setCurrentText("1280x720")
-        self.resolution_preset.setToolTip("Select a preset resolution for processing. Lower resolutions are faster but less detailed.\n"
-                                          "'Original' uses the video's native resolution (no downsampling).\n"
-                                          "720p (1280x720) provides excellent balance between speed and detection accuracy.\n"
-                                          "Select 'Custom' to manually set width and height.")
-        preset_layout.addWidget(self.resolution_preset)
-        res_layout.addLayout(preset_layout)
-
-        # Custom resolution inputs (hidden by default)
-        custom_layout = QGridLayout()
-        custom_layout.addWidget(QLabel("Width:"), 0, 0)
-        self.processing_width = QSpinBox()
-        self.processing_width.setRange(320, 3840)
-        self.processing_width.setValue(1280)
-        self.processing_width.setEnabled(False)
-        self.processing_width.setToolTip(
-            "Custom processing width in pixels (320-3840).\nOnly enabled when 'Custom' preset is selected.\nLower values = faster processing, less detail.")
-        custom_layout.addWidget(self.processing_width, 0, 1)
-
-        custom_layout.addWidget(QLabel("Height:"), 1, 0)
-        self.processing_height = QSpinBox()
-        self.processing_height.setRange(240, 2160)
-        self.processing_height.setValue(720)
-        self.processing_height.setEnabled(False)
-        self.processing_height.setToolTip(
-            "Custom processing height in pixels (240-2160).\nOnly enabled when 'Custom' preset is selected.\nLower values = faster processing, less detail.")
-        custom_layout.addWidget(self.processing_height, 1, 1)
-
-        res_layout.addLayout(custom_layout)
-        layout.addWidget(res_group)
-
-        # Performance Options
-        perf_group = QGroupBox("Performance Options")
-        perf_layout = QVBoxLayout(perf_group)
-
-        self.threaded_capture = QCheckBox("Use Threaded Capture")
-        self.threaded_capture.setChecked(True)  # Default ON
-        self.threaded_capture.setToolTip("Enables background video decoding in a separate thread.\n"
-                                         "Allows processing to happen in parallel with video capture.\n"
-                                         "Improves performance especially for high-resolution videos (2K/4K).\n"
-                                         "Highly recommended for all video sources. No downsides.")
-        perf_layout.addWidget(self.threaded_capture)
-
-        self.render_at_processing_res = QCheckBox("Render at Processing Resolution (faster for high-res)")
-        self.render_at_processing_res.setChecked(True)  # Default ON
-        self.render_at_processing_res.setToolTip("Renders detection overlays at processing resolution instead of original video resolution.\n"
-                                                 "Significantly faster for high-resolution videos (1080p+) with minimal visual impact.\n"
-                                                 "Example: Processing at 720p but video is 4K - renders at 720p then upscales.\n"
-                                                 "Recommended: ON for high-res videos, OFF for native 720p or lower.")
-        perf_layout.addWidget(self.render_at_processing_res)
-
-        layout.addWidget(perf_group)
-        layout.addStretch()
-
-        return widget
 
     def _create_color_selection_tab(self) -> QWidget:
         """Create color selection tab matching screenshot - inline editing with HSV ranges."""
@@ -169,11 +83,19 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         # Top buttons
         btn_layout = QHBoxLayout()
         self.add_color_btn = QPushButton("Add Color")
+        self.add_color_btn.setToolTip("Add a new color range to detect.\n"
+                                      "Opens a color picker dialog where you can select a color\n"
+                                      "and configure its HSV tolerance ranges.\n"
+                                      "You can add multiple color ranges to detect different colors simultaneously.")
         btn_layout.addWidget(self.add_color_btn)
 
         btn_layout.addStretch()
 
         self.view_range_btn = QPushButton("View Range")
+        self.view_range_btn.setToolTip("View HSV color ranges for all configured colors.\n"
+                                       "Opens a viewer dialog for each color range showing\n"
+                                       "the hue, saturation, and value ranges that will be detected.\n"
+                                       "Useful for understanding and fine-tuning multi-color detection.")
         btn_layout.addWidget(self.view_range_btn)
         layout.addLayout(btn_layout)
 
@@ -207,16 +129,26 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         grid = QGridLayout()
 
-        grid.addWidget(QLabel("Min Area (px²):"), 0, 0)
+        grid.addWidget(QLabel("Min Area (px):"), 0, 0)
         self.min_area_spinbox = QSpinBox()
         self.min_area_spinbox.setRange(10, 50000)
-        self.min_area_spinbox.setValue(100)
+        self.min_area_spinbox.setValue(10)
+        self.min_area_spinbox.setToolTip("Minimum detection area in pixels (10-50000).\n"
+                                         "Filters out very small detections (noise, small objects, fragments).\n"
+                                         "Lower values = detect smaller objects, more detections, more noise.\n"
+                                         "Higher values = only large objects, fewer detections, less noise.\n"
+                                         "Recommended: 100 for general use, 50 for small objects, 200-500 for large objects.")
         grid.addWidget(self.min_area_spinbox, 0, 1)
 
-        grid.addWidget(QLabel("Max Area (px²):"), 1, 0)
+        grid.addWidget(QLabel("Max Area (px):"), 1, 0)
         self.max_area_spinbox = QSpinBox()
         self.max_area_spinbox.setRange(100, 500000)
         self.max_area_spinbox.setValue(100000)
+        self.max_area_spinbox.setToolTip("Maximum detection area in pixels (100-500000).\n"
+                                         "Filters out very large detections (shadows, lighting changes, entire scene).\n"
+                                         "Lower values = only small/medium objects.\n"
+                                         "Higher values = allow large objects, may include unwanted large regions.\n"
+                                         "Recommended: 100000 for general use, 50000 for small objects, 200000+ for large objects.")
         grid.addWidget(self.max_area_spinbox, 1, 1)
 
         grid.addWidget(QLabel("Confidence Threshold:"), 2, 0)
@@ -224,6 +156,14 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.confidence_spinbox.setRange(0.0, 1.0)
         self.confidence_spinbox.setSingleStep(0.05)
         self.confidence_spinbox.setValue(0.5)
+        self.confidence_spinbox.setToolTip("Minimum confidence score to accept a detection (0.0-1.0).\n"
+                                          "Confidence is calculated from:\n"
+                                          "• Size score: area relative to max area\n"
+                                          "• Shape score: solidity (how compact/regular the shape is)\n"
+                                          "• Final: average of both scores\n\n"
+                                          "Lower values (0.0-0.3) = accept more detections, including weak/fragmented ones.\n"
+                                          "Higher values (0.7-1.0) = only high-quality detections, well-formed shapes.\n"
+                                          "Recommended: 0.5 for balanced filtering, 0.3 for more detections, 0.7 for strict quality.")
         grid.addWidget(self.confidence_spinbox, 2, 1)
 
         layout.addLayout(grid)
@@ -231,113 +171,17 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         return widget
 
-    def _create_rendering_tab(self) -> QWidget:
-        """Create Rendering tab - matches IntegratedDetection."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        # Shape Options
-        shape_group = QGroupBox("Shape Options")
-        shape_layout = QGridLayout(shape_group)
-
-        shape_layout.addWidget(QLabel("Shape Mode:"), 0, 0)
-        self.render_shape = QComboBox()
-        self.render_shape.addItems(["Box", "Circle", "Dot", "Off"])
-        self.render_shape.setCurrentText("Circle")
-        self.render_shape.setToolTip("Shape to draw around detections:\n\n"
-                                     "• Box: Rectangle around detection bounding box.\n"
-                                     "  Use for: Precise boundaries, technical visualization.\n\n"
-                                     "• Circle: Circle encompassing detection (150% of contour radius).\n"
-                                     "  Use for: General use, cleaner look (default).\n\n"
-                                     "• Dot: Small dot at detection centroid.\n"
-                                     "  Use for: Minimal overlay, fast rendering.\n\n"
-                                     "• Off: No shape overlay (only thumbnails/text if enabled).\n"
-                                     "  Use for: Clean video with minimal overlays.")
-        shape_layout.addWidget(self.render_shape, 0, 1)
-
-        layout.addWidget(shape_group)
-
-        # Text & Contours
-        vis_group = QGroupBox("Visual Options")
-        vis_layout = QVBoxLayout(vis_group)
-
-        self.render_text = QCheckBox("Show Text Labels (slower)")
-        self.render_text.setToolTip("Displays text labels near detections showing detection information.\n"
-                                    "Adds ~5-15ms processing overhead depending on detection count.\n"
-                                    "Labels show: detection type, confidence, area.\n"
-                                    "Recommended: OFF for speed, ON for debugging/analysis.")
-        vis_layout.addWidget(self.render_text)
-
-        self.render_contours = QCheckBox("Show Contours (slowest)")
-        self.render_contours.setToolTip("Draws exact detection contours (pixel-precise boundaries).\n"
-                                        "Adds ~10-20ms processing overhead (very expensive).\n"
-                                        "Shows exact shape detected by algorithm.\n"
-                                        "Recommended: OFF for speed, ON only for detailed analysis.")
-        vis_layout.addWidget(self.render_contours)
-
-        self.use_detection_color = QCheckBox("Use Detection Color (hue @ 100% sat/val for color anomalies)")
-        self.use_detection_color.setChecked(True)  # Default ON
-        self.use_detection_color.setToolTip("Color the detection overlay based on detected color.\n"
-                                            "For color anomalies: Uses the detected hue at 100% saturation/value.\n"
-                                            "For motion detections: Uses default color (green/blue).\n"
-                                            "Helps visually identify what color was detected.\n"
-                                            "Recommended: ON for color detection, OFF for motion-only.")
-        vis_layout.addWidget(self.use_detection_color)
-
-        layout.addWidget(vis_group)
-
-        # Detection Limits
-        limit_group = QGroupBox("Performance Limits")
-        limit_layout = QGridLayout(limit_group)
-
-        limit_layout.addWidget(QLabel("Max Detections:"), 0, 0)
-        self.max_detections_to_render = QSpinBox()
-        self.max_detections_to_render.setRange(0, 1000)
-        self.max_detections_to_render.setValue(100)
-        self.max_detections_to_render.setSpecialValueText("Unlimited")
-        self.max_detections_to_render.setToolTip("Maximum number of detections to render on screen (0-1000).\n"
-                                                 "Prevents rendering slowdown when hundreds of detections occur.\n"
-                                                 "Shows highest confidence detections first.\n"
-                                                 "0 = Unlimited (may cause lag with many detections).\n"
-                                                 "Recommended: 100 for general use, 50 for complex rendering (text+contours).")
-        limit_layout.addWidget(self.max_detections_to_render, 0, 1)
-
-        layout.addWidget(limit_group)
-
-        # Overlay Options
-        overlay_group = QGroupBox("Overlay Options")
-        overlay_layout = QVBoxLayout(overlay_group)
-
-        self.show_timing_overlay = QCheckBox("Show Timing Overlay (FPS, metrics)")
-        self.show_timing_overlay.setChecked(False)  # Default OFF
-        self.show_timing_overlay.setToolTip("Displays detailed timing information on video overlay.\n"
-                                            "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
-                                            "Useful for performance tuning and debugging.\n"
-                                            "Recommended: OFF for clean view, ON when optimizing performance.")
-        overlay_layout.addWidget(self.show_timing_overlay)
-
-        self.show_detection_thumbnails = QCheckBox("Show Detection Thumbnails (auto-fit window width)")
-        self.show_detection_thumbnails.setChecked(False)  # Default OFF
-        self.show_detection_thumbnails.setToolTip("Shows zoomed thumbnails of detected objects below video.\n"
-                                                  "Number of thumbnails adjusts automatically to window width (1-20).\n"
-                                                  "Thumbnails persist for 2 seconds minimum (reduces flicker).\n"
-                                                  "Useful for: Close-up view of detections, tracking specific objects.\n"
-                                                  "Recommended: ON for analysis, OFF for clean display.")
-        overlay_layout.addWidget(self.show_detection_thumbnails)
-
-        layout.addWidget(overlay_group)
-        layout.addStretch()
-
-        return widget
 
     def connect_signals(self):
         """Connect all control signals."""
-        # Input & Processing
-        self.resolution_preset.currentTextChanged.connect(self.on_resolution_preset_changed)
-        self.processing_width.valueChanged.connect(self._emit_config_changed)
-        self.processing_height.valueChanged.connect(self._emit_config_changed)
-        self.threaded_capture.toggled.connect(self._emit_config_changed)
-        self.render_at_processing_res.toggled.connect(self._emit_config_changed)
+        # Input & Processing (from shared InputProcessingTab)
+        self.input_processing_tab.resolution_preset.currentTextChanged.connect(
+            self.input_processing_tab.on_resolution_preset_changed)
+        self.input_processing_tab.resolution_preset.currentTextChanged.connect(self._emit_config_changed)
+        self.input_processing_tab.processing_width.valueChanged.connect(self._emit_config_changed)
+        self.input_processing_tab.processing_height.valueChanged.connect(self._emit_config_changed)
+        self.input_processing_tab.threaded_capture.toggled.connect(self._emit_config_changed)
+        self.input_processing_tab.render_at_processing_res.toggled.connect(self._emit_config_changed)
 
         # Color selection
         if hasattr(self, 'add_color_btn'):
@@ -351,25 +195,14 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             self.max_area_spinbox.valueChanged.connect(self._emit_config_changed)
             self.confidence_spinbox.valueChanged.connect(self._emit_config_changed)
 
-        # Rendering
-        if hasattr(self, 'render_shape'):
-            self.render_shape.currentTextChanged.connect(self._emit_config_changed)
-            self.render_text.toggled.connect(self._emit_config_changed)
-            self.render_contours.toggled.connect(self._emit_config_changed)
-            self.use_detection_color.toggled.connect(self._emit_config_changed)
-            self.max_detections_to_render.valueChanged.connect(self._emit_config_changed)
-            self.show_timing_overlay.toggled.connect(self._emit_config_changed)
-            self.show_detection_thumbnails.toggled.connect(self._emit_config_changed)
-
-    def on_resolution_preset_changed(self, preset_name: str):
-        """Handle resolution preset change."""
-        if preset_name == "Custom":
-            self.processing_width.setEnabled(True)
-            self.processing_height.setEnabled(True)
-        else:
-            self.processing_width.setEnabled(False)
-            self.processing_height.setEnabled(False)
-        self._emit_config_changed()
+        # Rendering (from shared RenderingTab)
+        self.rendering_tab.render_shape.currentTextChanged.connect(self._emit_config_changed)
+        self.rendering_tab.render_text.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.render_contours.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.use_detection_color.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.max_detections_to_render.valueChanged.connect(self._emit_config_changed)
+        self.rendering_tab.show_timing_overlay.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.show_detection_thumbnails.toggled.connect(self._emit_config_changed)
 
     def _on_add_color(self):
         """Add a new color range using HSV ColorRange dialog."""
@@ -411,7 +244,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             self._emit_config_changed()
 
     def _on_view_range(self):
-        """View range - show all color ranges in a viewer dialog."""
+        """View range - show all color ranges in a single combined viewer dialog."""
         if not self.color_ranges:
             return
 
@@ -421,30 +254,42 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         except ImportError:
             return
 
-        # For now, show the first color range (can be extended to show all)
-        if self.color_ranges:
-            first_range = self.color_ranges[0]
+        # Build list of HSV range configs for multi-color viewer
+        hsv_ranges_list = []
+        for i, color_range in enumerate(self.color_ranges):
             # Get RGB color
-            color = first_range.get('color', QColor(255, 0, 0))
+            color = color_range.get('color', QColor(255, 0, 0))
             if isinstance(color, QColor):
                 rgb = (color.red(), color.green(), color.blue())
             else:
                 rgb = (255, 0, 0)
 
-            # Calculate average thresholds for viewer (backward compatibility)
-            hue_minus = first_range.get('hue_minus', 20)
-            hue_plus = first_range.get('hue_plus', 20)
-            sat_minus = first_range.get('sat_minus', 50)
-            sat_plus = first_range.get('sat_plus', 50)
-            val_minus = first_range.get('val_minus', 50)
-            val_plus = first_range.get('val_plus', 50)
+            # Get thresholds in OpenCV format (already in correct format)
+            # hue_minus/hue_plus are in 0-179 range
+            hue_minus = color_range.get('hue_minus', 20)
+            hue_plus = color_range.get('hue_plus', 20)
+            # sat_minus/sat_plus are in 0-255 range
+            sat_minus = color_range.get('sat_minus', 50)
+            sat_plus = color_range.get('sat_plus', 50)
+            # val_minus/val_plus are in 0-255 range
+            val_minus = color_range.get('val_minus', 50)
+            val_plus = color_range.get('val_plus', 50)
 
-            h_avg = int((hue_minus + hue_plus) / 2)
-            s_avg = int((sat_minus + sat_plus) / 2)
-            v_avg = int((val_minus + val_plus) / 2)
+            hsv_ranges_list.append({
+                'rgb': rgb,
+                'hue_minus': hue_minus,
+                'hue_plus': hue_plus,
+                'sat_minus': sat_minus,
+                'sat_plus': sat_plus,
+                'val_minus': val_minus,
+                'val_plus': val_plus
+            })
 
-            range_dialog = HSVColorRangeRangeViewer(rgb, h_avg, s_avg, v_avg)
-            range_dialog.exec()
+        # Create combined viewer dialog showing all color ranges
+        range_dialog = HSVColorRangeRangeViewer(hsv_ranges_list=hsv_ranges_list)
+        if hasattr(range_dialog, 'setWindowTitle'):
+            range_dialog.setWindowTitle(f"Color Ranges: {len(hsv_ranges_list)} colors")
+        range_dialog.exec()
 
     def _on_remove_color_range(self, widget):
         """Remove a color range by widget reference."""
@@ -493,13 +338,13 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.configChanged.emit(self.get_config())
 
     def get_config(self) -> dict:
-        """Get current configuration matching IntegratedDetection format."""
-        # Parse processing resolution
-        preset_name = self.resolution_preset.currentText()
-        if preset_name == "Custom":
-            processing_resolution = (self.processing_width.value(), self.processing_height.value())
+        """Get current configuration matching ColorAnomalyAndMotionDetection format."""
+        # Get processing resolution from shared InputProcessingTab
+        processing_width, processing_height = self.input_processing_tab.get_processing_resolution()
+        if processing_width == 99999:  # "Original" resolution
+            processing_resolution = None
         else:
-            processing_resolution = self.resolution_presets.get(preset_name)
+            processing_resolution = (processing_width, processing_height)
 
         # Map render shape to enum value (0=Box, 1=Circle, 2=Dot, 3=Off)
         shape_map = {
@@ -508,7 +353,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             "Dot": 2,
             "Off": 3
         }
-        render_shape = shape_map.get(self.render_shape.currentText(), 1)
+        render_shape = shape_map.get(self.rendering_tab.render_shape.currentText(), 1)
 
         # Get updated color ranges from row widgets
         # Collect color ranges from widgets
@@ -543,12 +388,12 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             updated_color_ranges = self.color_ranges  # Fallback to stored ranges
 
         config = {
-            # Input & Processing
+            # Input & Processing (from shared InputProcessingTab)
             'processing_resolution': processing_resolution,
-            'processing_width': self.processing_width.value() if preset_name == "Custom" else None,
-            'processing_height': self.processing_height.value() if preset_name == "Custom" else None,
-            'threaded_capture': self.threaded_capture.isChecked(),
-            'render_at_processing_res': self.render_at_processing_res.isChecked(),
+            'processing_width': processing_width if processing_width != 99999 else None,
+            'processing_height': processing_height if processing_height != 99999 else None,
+            'threaded_capture': self.input_processing_tab.threaded_capture.isChecked(),
+            'render_at_processing_res': self.input_processing_tab.render_at_processing_res.isChecked(),
 
             # Color Selection
             'color_ranges': updated_color_ranges,
@@ -558,13 +403,13 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             'max_area': self.max_area_spinbox.value() if hasattr(self, 'max_area_spinbox') else 100000,
             'confidence_threshold': self.confidence_spinbox.value() if hasattr(self, 'confidence_spinbox') else 0.5,
 
-            # Rendering
+            # Rendering (from shared RenderingTab)
             'render_shape': render_shape,
-            'render_text': self.render_text.isChecked() if hasattr(self, 'render_text') else False,
-            'render_contours': self.render_contours.isChecked() if hasattr(self, 'render_contours') else False,
-            'use_detection_color_for_rendering': self.use_detection_color.isChecked() if hasattr(self, 'use_detection_color') else True,
-            'max_detections_to_render': self.max_detections_to_render.value() if hasattr(self, 'max_detections_to_render') else 100,
-            'show_timing_overlay': self.show_timing_overlay.isChecked() if hasattr(self, 'show_timing_overlay') else False,
-            'show_detection_thumbnails': self.show_detection_thumbnails.isChecked() if hasattr(self, 'show_detection_thumbnails') else False,
+            'render_text': self.rendering_tab.render_text.isChecked(),
+            'render_contours': self.rendering_tab.render_contours.isChecked(),
+            'use_detection_color_for_rendering': self.rendering_tab.use_detection_color.isChecked(),
+            'max_detections_to_render': self.rendering_tab.max_detections_to_render.value(),
+            'show_timing_overlay': self.rendering_tab.show_timing_overlay.isChecked(),
+            'show_detection_thumbnails': self.rendering_tab.show_detection_thumbnails.isChecked(),
         }
         return config

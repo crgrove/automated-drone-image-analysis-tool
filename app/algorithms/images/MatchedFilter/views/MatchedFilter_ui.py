@@ -100,4 +100,3 @@ class Ui_MatchedFilter(object):
         self.viewRangeButton.setProperty(u"iconName", QCoreApplication.translate("MatchedFilter", u"eye.png", None))
     # retranslateUi
 
-

@@ -115,4 +115,3 @@ class Ui_MRMapWizard(object):
         pass
     # retranslateUi
 
-
