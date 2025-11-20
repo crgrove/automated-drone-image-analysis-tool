@@ -11,13 +11,20 @@ from algorithms.streaming.ColorDetection.services import Detection
 from PySide6.QtMultimedia import QSound
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
-from PySide6.QtCore import QObject, QTimer, Signal, Qt
+from PySide6.QtCore import QObject, QTimer, Signal, Qt, QMetaObject
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import threading
 import time
 import os
+import importlib
+
+winsound = None
+try:
+    winsound = importlib.import_module("winsound")
+except ImportError:
+    winsound = None
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
@@ -427,8 +434,6 @@ class AlertManager(QObject):
         """
         try:
             # Use a separate thread to prevent blocking
-            import threading
-
             def alert_worker():
                 try:
                     self._trigger_alert(detections, timestamp)
@@ -504,20 +509,19 @@ class AlertManager(QObject):
                     self._audio_system.play()
                 except Exception as e:
                     self.logger.warning(f"Custom audio playback failed: {e}")
-            elif self.config.use_system_sound:
+            elif self.config.use_system_sound and winsound is not None:
                 # Play system beep/sound with timeout protection
                 try:
-                    import winsound
                     # Use non-blocking system sound
                     winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                except ImportError:
-                    # Fallback for non-Windows systems
-                    try:
-                        print('\a')  # Terminal bell
-                    except Exception:
-                        pass  # Even this can sometimes fail
                 except Exception as e:
                     self.logger.warning(f"System sound failed: {e}")
+            elif self.config.use_system_sound:
+                # Fallback for non-Windows systems
+                try:
+                    print('\a')  # Terminal bell
+                except Exception:
+                    pass  # Even this can sometimes fail
         except Exception as e:
             self.logger.error(f"Error playing audio alert: {e}")
 
@@ -562,7 +566,6 @@ class AlertManager(QObject):
             # Popup window
             if self.config.show_popup_window:
                 # This should be called from the main thread
-                from PySide6.QtCore import QMetaObject, Qt
                 try:
                     QMetaObject.invokeMethod(
                         self,

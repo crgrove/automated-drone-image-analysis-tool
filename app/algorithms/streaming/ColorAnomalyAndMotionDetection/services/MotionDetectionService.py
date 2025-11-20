@@ -38,9 +38,12 @@ class MotionDetectionService(QObject):
         # Pre-compute morphology kernels for efficiency
         self._morph_kernel_cache: dict = {}
         
-        # Background subtractors
+        # Background subtractors (initialized with default config)
+        # Initialize with default config to ensure they're ready for use
+        default_config = ColorAnomalyAndMotionDetectionConfig()
         self._bg_subtractor_mog2: Optional[cv2.BackgroundSubtractorMOG2] = None
         self._bg_subtractor_knn: Optional[cv2.BackgroundSubtractorKNN] = None
+        self._init_background_subtractors(default_config)
         
         # Persistence filter state
         self._detection_masks = []

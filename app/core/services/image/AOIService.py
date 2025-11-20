@@ -6,6 +6,7 @@ from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
 from core.services.image.ImageService import ImageService
 from core.services.LoggerService import LoggerService
+from core.services.GSDService import GSDService
 
 
 class AOIService:
@@ -92,7 +93,6 @@ class AOIService:
 
             # --- Step 4: Convert pixel offset to ground distance ---
             # Initialize GSDService with camera parameters
-            from core.services.GSDService import GSDService
             gsd_service = GSDService(
                 focal_length=focal_mm,
                 image_size=(width, height),

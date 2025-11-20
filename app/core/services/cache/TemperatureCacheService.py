@@ -7,6 +7,7 @@ This service provides:
 """
 
 import hashlib
+import os
 from typing import Dict, Optional, Any
 from core.services.LoggerService import LoggerService
 
@@ -45,8 +46,6 @@ class TemperatureCacheService:
             MD5 hash cache key
         """
         try:
-            import os
-
             # Use only the filename to make cache portable across machines
             filename = os.path.basename(image_path)
 

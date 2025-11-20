@@ -13,6 +13,7 @@ from core.services.LoggerService import LoggerService
 from core.services.color.CustomColorsService import get_custom_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
+from helpers.IconHelper import IconHelper
 
 
 class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
@@ -327,7 +328,5 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        from helpers.IconHelper import IconHelper
-
         self.addColorButton.setIcon(IconHelper.create_icon('fa6s.palette', theme))
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', theme))

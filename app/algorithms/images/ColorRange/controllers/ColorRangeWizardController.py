@@ -7,6 +7,7 @@ Provides a simplified, guided interface for configuring RGB color range detectio
 from PySide6.QtWidgets import QWidget, QColorDialog, QLabel, QSizePolicy, QPushButton
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, Signal
+from ast import literal_eval
 
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.ColorRange.views.ColorRangeWizard_ui import Ui_ColorRangeWizard
@@ -254,8 +255,6 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
         """Load options into UI."""
         if not isinstance(options, dict):
             return
-
-        from ast import literal_eval
 
         # Clear existing color rows
         for row in self.color_rows[:]:

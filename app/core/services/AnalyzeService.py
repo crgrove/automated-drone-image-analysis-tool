@@ -7,6 +7,7 @@ import shutil
 import xml.etree.ElementTree as ET
 import time
 import traceback
+import hashlib
 
 from pathlib import Path
 from multiprocessing import Pool, pool
@@ -376,14 +377,12 @@ class AnalyzeService(QObject):
             thumb_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate stable key by hashing the relative input path to avoid collisions
-            import hashlib
             rel_key_source = None
             try:
                 if input_root:
                     # Prefer relative to provided input root
-                    from pathlib import Path as _P
-                    rel = _P(image_path)
-                    rel_key_source = str(rel.relative_to(_P(input_root)))
+                    rel = Path(image_path)
+                    rel_key_source = str(rel.relative_to(Path(input_root)))
             except Exception:
                 # Fall back to os.relpath, may cross drives on Windows
                 try:

@@ -10,6 +10,8 @@ import os
 import requests
 import uuid
 import base64
+import re
+import traceback
 from PySide6.QtCore import QSettings
 
 
@@ -136,7 +138,6 @@ class CalTopoService:
                 return csrf_token
 
             # Try to parse from page content
-            import re
             csrf_match = re.search(r'csrf[_-]?token["\']?\s*[:=]\s*["\']([^"\']+)', response.text, re.IGNORECASE)
             if csrf_match:
                 token = csrf_match.group(1)
@@ -220,7 +221,6 @@ class CalTopoService:
             return response.status_code in [200, 201]
         except Exception as e:
             print(f"Error adding marker: {e}")
-            import traceback
             traceback.print_exc()
             return False
 
@@ -356,6 +356,5 @@ class CalTopoService:
 
         except Exception as e:
             print(f"Error uploading photo waypoint: {e}")
-            import traceback
             traceback.print_exc()
             return False

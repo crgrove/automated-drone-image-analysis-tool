@@ -15,15 +15,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton,
     QMenu, QApplication, QAbstractItemView, QFrame, QProgressBar
 )
-try:
-    from shiboken6 import isValid as _qt_is_valid
-except Exception:
-    def _qt_is_valid(obj):
-        try:
-            _ = obj.metaObject()
-            return True
-        except Exception:
-            return False
+from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint, QTimer
 from PySide6.QtGui import QCursor
 

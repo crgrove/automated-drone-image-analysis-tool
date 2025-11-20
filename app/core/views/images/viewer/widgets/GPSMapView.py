@@ -8,11 +8,12 @@ import math
 from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsPathItem,
     QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsPolygonItem, QWidget,
-    QLabel
+    QLabel, QMenu, QApplication
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QEvent
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette, QPolygonF
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
+from core.services.image.ImageService import ImageService
 
 
 class GPSMapView(QGraphicsView):
@@ -701,7 +702,6 @@ class GPSMapView(QGraphicsView):
             float: Bearing in degrees (0-360), or None if not available
         """
         try:
-            from core.services.image.ImageService import ImageService
             image_service = ImageService(image_path, '')
             return image_service.get_camera_yaw()
         except Exception:
@@ -1056,8 +1056,6 @@ class GPSMapView(QGraphicsView):
         if not self.aoi_data:
             return
 
-        from PySide6.QtWidgets import QMenu
-
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -1084,8 +1082,6 @@ class GPSMapView(QGraphicsView):
         """Copy AOI data to clipboard."""
         if not self.aoi_data:
             return
-
-        from PySide6.QtWidgets import QApplication
 
         clipboard_text = (
             f"Image: {self.aoi_data['image_name']}\n"
@@ -1258,8 +1254,6 @@ class GPSMapView(QGraphicsView):
 
         # Calculate FOV dimensions
         try:
-            from core.services.image.ImageService import ImageService
-
             # Get custom altitude if available
             custom_alt = None
             if hasattr(self, 'parent') and hasattr(self.parent(), 'parent'):

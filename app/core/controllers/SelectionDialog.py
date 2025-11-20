@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QDialog
 
 from core.views.SelectionDialog_ui import Ui_MediaSelector
 from core.services.SettingsService import SettingsService
+from helpers.IconHelper import IconHelper
 
 
 class SelectionDialog(QDialog, Ui_MediaSelector):
@@ -97,8 +98,6 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
             theme: Theme name to use for icons ('Dark' or 'Light').
         """
         try:
-            from helpers.IconHelper import IconHelper
-
             self.imageButton.setIcon(IconHelper.create_icon("fa6s.image", theme))
             # Use a broadly available Material icon for streaming/video
             self.streamButton.setIcon(IconHelper.create_icon("fa6s.video", theme))

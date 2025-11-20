@@ -18,6 +18,7 @@ import numpy as np
 import cv2
 from PIL import Image
 import io
+import shutil
 
 from PySide6.QtCore import QThread, Signal, QObject, QMutex, QMutexLocker, QThreadPool, QRunnable
 from PySide6.QtGui import QPixmap, QIcon, QImage
@@ -451,7 +452,6 @@ class ThumbnailCacheService:
     def clear_disk_cache(self):
         """Clear all thumbnails from disk cache."""
         try:
-            import shutil
             if self.cache_dir:
                 shutil.rmtree(self.cache_dir)
                 self.cache_dir.mkdir(parents=True, exist_ok=True)

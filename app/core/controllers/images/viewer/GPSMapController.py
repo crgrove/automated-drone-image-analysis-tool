@@ -7,7 +7,11 @@ and coordination between the map and main viewer.
 
 from PySide6.QtCore import QObject, Signal
 from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 from core.services.LoggerService import LoggerService
+from core.services.image.ImageService import ImageService
+from core.services.image.AOIService import AOIService
+from core.views.images.viewer.dialogs.GPSMapDialog import GPSMapDialog
 import piexif
 from datetime import datetime
 import math
@@ -51,8 +55,6 @@ class GPSMapController(QObject):
             return
 
         # Create and show the map dialog
-        from core.views.images.viewer.dialogs.GPSMapDialog import GPSMapDialog
-
         # Find the current image in the GPS data list
         current_gps_index = None
         for i, data in enumerate(self.gps_data):
@@ -100,7 +102,6 @@ class GPSMapController(QObject):
             try:
                 # Get EXIF data first, then extract GPS
                 # This bypasses the JPEG-only restriction in LocationInfo.get_gps()
-                from helpers.MetaDataHelper import MetaDataHelper
                 exif_data = MetaDataHelper.get_exif_data_piexif(image['path'])
                 gps_coords = LocationInfo.get_gps(exif_data=exif_data)
 
@@ -186,7 +187,6 @@ class GPSMapController(QObject):
         Returns:
             datetime object or None if timestamp not found
         """
-        from helpers.MetaDataHelper import MetaDataHelper
         exif_data = MetaDataHelper.get_exif_data_piexif(image_path)
         return self.get_image_timestamp_from_exif(exif_data)
 
@@ -202,7 +202,6 @@ class GPSMapController(QObject):
             float: Bearing in degrees (0-360), or None if not available
         """
         try:
-            from core.services.image.ImageService import ImageService
             image_service = ImageService(image_path, '', calculated_bearing=calculated_bearing)
             # Use get_camera_yaw() which accounts for both Flight Yaw and Gimbal Yaw
             bearing = image_service.get_camera_yaw()
@@ -275,7 +274,6 @@ class GPSMapController(QObject):
             aoi = current_image['areas_of_interest'][aoi_index]
 
             # Use AOIService for GPS calculation with metadata
-            from core.services.image.AOIService import AOIService
             aoi_service = AOIService(current_image)
 
             # Get custom altitude if available
@@ -328,7 +326,6 @@ class GPSMapController(QObject):
             GSD in cm/px or None if calculation fails
         """
         try:
-            from core.services.image.ImageService import ImageService
             image_service = ImageService(image_path, '')
 
             # Use the existing ImageService method to get average GSD

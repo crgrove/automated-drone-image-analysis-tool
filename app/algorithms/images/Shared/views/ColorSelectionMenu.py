@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QMenu, QColorDialog, QPushButton, QWidget
 
 from .ColorPickerDialog import ColorPickerDialog
 from .ColorListDialog import ColorListDialog
+from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 
 
 class ColorSelectionMenu:
@@ -94,9 +95,6 @@ class ColorSelectionMenu:
         """Open the HSV color range picker dialog."""
         if self.on_hsv_selected is None:
             return
-
-        # Import here to avoid circular dependencies
-        from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 
         initial_hsv = self.get_initial_hsv()
         initial_ranges = self.get_initial_ranges()

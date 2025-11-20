@@ -6,10 +6,11 @@ using QWebEngineView.
 """
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox
-from PySide6.QtCore import Qt, Signal, QUrl, QStandardPaths
+from PySide6.QtCore import Qt, Signal, QUrl, QStandardPaths, QTimer, QEventLoop
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWebEngineCore import QWebEngineProfile
+from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
 import os
+import re
 
 
 class CalTopoAuthDialog(QDialog):
@@ -76,7 +77,6 @@ class CalTopoAuthDialog(QDialog):
         self.profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
 
         # Set the profile on a new page
-        from PySide6.QtWebEngineCore import QWebEnginePage
         page = QWebEnginePage(self.profile, self.web_view)
         self.web_view.setPage(page)
 
@@ -129,7 +129,6 @@ class CalTopoAuthDialog(QDialog):
         # - https://caltopo.com/map.html#ll=lat,lon&...&id=ABC123
         # - https://caltopo.com/m/ABC123
         # - https://caltopo.com/app/map/ABC123
-        import re
 
         map_id = None
         if '#' in url_string and 'id=' in url_string:
@@ -221,7 +220,6 @@ class CalTopoAuthDialog(QDialog):
         cookie_store.loadAllCookies()
 
         # Wait a moment for cookies to be loaded
-        from PySide6.QtCore import QTimer, QEventLoop
         loop = QEventLoop()
         QTimer.singleShot(500, loop.quit)
         loop.exec()

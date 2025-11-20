@@ -257,9 +257,8 @@ class MatchedFilterRowWizardWidget(QWidget):
     def showEvent(self, event):
         """Update border style when widget is shown."""
         super().showEvent(event)
-        # Delay to ensure parent layout is ready
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, self._update_border_style)
+        # Update border style - method handles parent not ready gracefully
+        self._update_border_style()
 
     def _on_color_changed(self, color):
         """Handle color swatch change."""

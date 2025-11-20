@@ -21,6 +21,7 @@ from algorithms.images.MRMap.controllers.MRMapController import MRMapController
 from algorithms.images.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
 from algorithms.images.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
 from algorithms.images.ColorRange.controllers.ColorRangeController import ColorRangeController
+from core.services.LoggerService import LoggerService
 import os
 import sys
 import pathlib
@@ -165,7 +166,6 @@ class AlgorithmParametersPage(BasePage):
                 pass
 
             # Debug logging
-            from core.services.LoggerService import LoggerService
             logger = LoggerService()
             logger.info(
                 f"Algorithm: {self.active_algorithm.get('name')}, "
@@ -226,7 +226,6 @@ class AlgorithmParametersPage(BasePage):
 
         except Exception as e:
             # Log error and show a message
-            from core.services.LoggerService import LoggerService
             logger = LoggerService()
             logger.error(f"Error loading algorithm widget: {e}")
 

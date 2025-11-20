@@ -20,6 +20,7 @@ from typing import List, Tuple, Optional, Dict, Any
 from dataclasses import dataclass, field
 from threading import Lock
 import concurrent.futures
+import traceback
 
 from PySide6.QtCore import QObject, QThread, Signal
 from helpers.ColorUtils import ColorUtils
@@ -647,7 +648,6 @@ class ColorDetectionService(QObject):
 
         except Exception as e:
             self.logger.error(f"Detection error: {e}")
-            import traceback
             self.logger.error(f"Detection traceback: {traceback.format_exc()}")
             detections = []
 
@@ -817,7 +817,6 @@ class ColorDetectionService(QObject):
 
         except Exception as e:
             self.logger.error(f"Error in CPU detection: {e}")
-            import traceback
             self.logger.error(f"CPU detection traceback: {traceback.format_exc()}")
             return []
 

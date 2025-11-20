@@ -7,7 +7,7 @@ Uses 7 discrete snap-to points with descriptive labels.
 
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF
 from PySide6.QtWidgets import QWidget, QApplication, QSlider, QStyle, QStyleOptionSlider
-from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QPalette, QFont, QTextOption
+from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QPalette, QFont, QTextOption, QFontMetrics
 
 
 class RangeSlider(QWidget):
@@ -167,7 +167,6 @@ class RangeSlider(QWidget):
     def _get_handle_rect(self, position):
         """Get the bounding rectangle for a handle at the given position."""
         # Calculate the same center_y as in paintEvent
-        from PySide6.QtGui import QFontMetrics, QFont
         font = QFont()
         font.setPointSize(11)
         fm = QFontMetrics(font)

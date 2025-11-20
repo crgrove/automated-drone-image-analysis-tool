@@ -8,6 +8,7 @@ from PySide6.QtGui import QIcon
 
 from core.services.LoggerService import LoggerService
 from core.services.VideoParserService import VideoParserService
+from helpers.IconHelper import IconHelper
 
 
 class VideoParser(QDialog, Ui_VideoParser):
@@ -244,8 +245,6 @@ class VideoParser(QDialog, Ui_VideoParser):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        from helpers.IconHelper import IconHelper
-
         self.videoSelectButton.setIcon(IconHelper.create_icon('fa6.file-video', theme))
         self.srtSelectButton.setIcon(IconHelper.create_icon('mdi.subtitles', theme))
         self.outputSelectButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))

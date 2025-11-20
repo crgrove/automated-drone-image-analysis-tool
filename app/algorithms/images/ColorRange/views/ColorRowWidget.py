@@ -9,7 +9,7 @@ A widget representing a single color range configuration row with:
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QIntValidator
+from PySide6.QtGui import QColor, QIntValidator, QPainter, QFont
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
                                QLineEdit, QPushButton, QSizePolicy, QColorDialog)
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
@@ -57,7 +57,6 @@ class ClickableColorSwatch(QFrame):
         """Override paint event to draw RGB text on the swatch."""
         super().paintEvent(event)
         if self._color:
-            from PySide6.QtGui import QPainter, QFont
             r, g, b = self._color.red(), self._color.green(), self._color.blue()
             text_color = Qt.white if (r + g + b) < 384 else Qt.black
 

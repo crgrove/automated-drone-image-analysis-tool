@@ -54,6 +54,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Sub-services
         self.motion_service = MotionDetectionService()
         self.color_service = ColorAnomalyService()
+        
+        # Initialize services with default config
+        self.motion_service.update_config(self.config)
+        self.color_service.update_config(self.config)
 
         # Performance tracking
         self.metrics = PerformanceMetrics()

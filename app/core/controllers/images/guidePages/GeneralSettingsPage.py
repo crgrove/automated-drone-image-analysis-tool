@@ -4,7 +4,7 @@ General Settings page for the Image Analysis Guide wizard.
 
 import os
 import math
-from PySide6.QtWidgets import QVBoxLayout, QMessageBox
+from PySide6.QtWidgets import QVBoxLayout, QMessageBox, QColorDialog
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
@@ -113,7 +113,6 @@ class GeneralSettingsPage(BasePage):
 
     def _on_color_picker(self):
         """Open color picker dialog."""
-        from PySide6.QtWidgets import QColorDialog
         color = QColorDialog.getColor(
             self.wizard_data['identifier_color'],
             self.dialog,

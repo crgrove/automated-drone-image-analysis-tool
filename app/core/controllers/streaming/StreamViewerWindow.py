@@ -13,11 +13,13 @@ It provides:
 """
 
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QLabel, QComboBox, QHBoxLayout,
-                               QVBoxLayout, QPushButton, QLineEdit, QGroupBox, QWidget)
+                               QVBoxLayout, QPushButton, QLineEdit, QGroupBox, QWidget,
+                               QFileDialog)
 from PySide6.QtCore import Qt, QTimer, Slot, QSettings
 from typing import Optional, Dict, Any, List
 import numpy as np
 from types import SimpleNamespace
+import time
 
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
@@ -56,7 +58,8 @@ class StreamViewerWindow(QMainWindow):
         self.settings = QSettings("ADIAT", "StreamViewer")
         self.theme = theme
         self._maximized_applied = False
-        self._initial_algorithm_name = algorithm_name or "ColorAnomalyAndMotionDetection"
+        # Store algorithm name - if None, will load default, if empty string, won't load
+        self._initial_algorithm_name = algorithm_name if algorithm_name is not None else "ColorAnomalyAndMotionDetection"
 
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
@@ -97,8 +100,8 @@ class StreamViewerWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_statistics_display)
         self.update_timer.start(1000)  # Update every second
 
-        # Load algorithm if specified
-        if self._initial_algorithm_name:
+        # Load algorithm if specified (empty string means don't load)
+        if self._initial_algorithm_name and self._initial_algorithm_name.strip():
             self.load_algorithm(self._initial_algorithm_name)
 
         self.logger.info("StreamViewerWindow initialized")
@@ -204,7 +207,6 @@ class StreamViewerWindow(QMainWindow):
 
     def _browse_recording_directory(self):
         """Browse for recording directory."""
-        from PySide6.QtWidgets import QFileDialog
         directory = QFileDialog.getExistingDirectory(
             self, "Select Recording Directory", self.recording_dir_edit.text()
         )
@@ -491,7 +493,6 @@ class StreamViewerWindow(QMainWindow):
 
         # Process frame with algorithm if loaded
         if self.algorithm_widget:
-            import time
             start_time = time.time()
 
             try:

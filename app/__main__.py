@@ -5,8 +5,9 @@ import faulthandler
 from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
 from core.controllers.SelectionDialog import SelectionDialog
 from core.controllers.images.MainWindow import MainWindow
+from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
 from multiprocessing import freeze_support
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from PySide6.QtGui import QIcon
 import traceback
 import sys
@@ -50,12 +51,10 @@ def main():
         elif choice == 'stream':
             # Launch the Real-time streaming detection window (new architecture)
             try:
-                from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
                 # Default to ColorAnomalyAndMotionDetection algorithm
                 app._stream_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme='dark')
                 app._stream_viewer.show()
             except Exception as e:
-                from PySide6.QtWidgets import QMessageBox
                 QMessageBox.critical(
                     None,
                     "Error",
@@ -102,7 +101,6 @@ def main():
                 # Automatically open the Viewer
                 app._main_window._viewResultsButton_clicked()
             except Exception as e:
-                from PySide6.QtWidgets import QMessageBox
                 QMessageBox.critical(
                     app._main_window,
                     "Error Loading Results",
@@ -151,7 +149,6 @@ if __name__ == "__main__":
         traceback.print_exception(exctype, value, tb)
         # Try to stop a running Qt event loop cleanly
         try:
-            from PySide6.QtWidgets import QApplication
             inst = QApplication.instance()
             if inst is not None:
                 inst.quit()

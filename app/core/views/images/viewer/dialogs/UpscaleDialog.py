@@ -16,26 +16,28 @@ import numpy as np
 import cv2
 import os
 import urllib.request
+import importlib
 from pathlib import Path
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QThread, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QMessageBox, QSizePolicy, QComboBox, QProgressDialog
+    QLabel, QMessageBox, QSizePolicy, QComboBox, QProgressDialog, QApplication
 )
-from PySide6.QtCore import QThread, Signal
 
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 
+qimage2ndarray = None
 try:
-    import qimage2ndarray
+    qimage2ndarray = importlib.import_module("qimage2ndarray")
 except ImportError:
-    qimage2ndarray = None
+    pass
 
 try:
-    from cv2 import dnn_superres
+    dnn_superres = importlib.import_module("cv2.dnn_superres")
     OPENCV_SR_AVAILABLE = True
 except ImportError:
+    dnn_superres = None
     OPENCV_SR_AVAILABLE = False
 
 
@@ -171,6 +173,7 @@ class UpscaleDialog(QDialog):
         self.image_array = image_array
         self.original_size = image_array.shape[:2] if image_array is not None else (0, 0)
         self.upscale_method = upscale_method
+        self.auto_upscale = auto_upscale  # Store flag for showEvent
 
         # Detect GPU availability
         self.gpu_available = self._check_gpu_available()
@@ -189,11 +192,14 @@ class UpscaleDialog(QDialog):
         # Set initial size (will be adjusted after image is loaded)
         self.resize(1000, 800)
 
-        # Auto-upscale if requested
-        if auto_upscale and image_array is not None:
-            # Use QTimer to defer upscaling until after the dialog is fully shown
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, self._perform_initial_upscale)
+    def showEvent(self, event):
+        """Handle dialog show event - perform auto-upscale if requested."""
+        super().showEvent(event)
+        # Perform initial upscale after dialog is shown
+        if self.auto_upscale and self.image_array is not None:
+            # Process events to ensure dialog is fully rendered
+            QApplication.processEvents()
+            self._perform_initial_upscale()
 
     def _setup_ui(self):
         """Create the dialog UI components."""

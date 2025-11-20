@@ -9,6 +9,8 @@ import colorsys
 import fnmatch
 import math
 import numpy as np
+import os
+import traceback
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QProgressDialog, QApplication
 from PySide6.QtCore import Qt
@@ -43,7 +45,6 @@ class GalleryController:
         # Use alternative cache directory if provided, otherwise use xml_path directory
         if hasattr(parent_viewer, 'alternative_cache_dir') and parent_viewer.alternative_cache_dir:
             # User provided an alternative cache location
-            import os
             self.model.set_dataset_directory(os.path.join(parent_viewer.alternative_cache_dir, 'ADIAT_Data.xml'))
         elif hasattr(parent_viewer, 'xml_path') and parent_viewer.xml_path:
             self.model.set_dataset_directory(parent_viewer.xml_path)
@@ -180,7 +181,6 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error starting color calculation: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
             # Cleanup
             self._disconnect_color_calc_signals()
@@ -733,7 +733,6 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error handling AOI click: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
 
     def _zoom_to_aoi(self, aoi_data):
@@ -774,7 +773,6 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error zooming to AOI: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
 
     def refresh_gallery(self):
@@ -882,7 +880,6 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error setting up gallery mode UI: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
             return None
 
@@ -1224,5 +1221,4 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error toggling gallery mode: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())

@@ -7,6 +7,9 @@ Provides a simplified, guided interface for configuring HSV color range detectio
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy, QPushButton
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, Signal
+import cv2
+import numpy as np
+from ast import literal_eval
 
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.HSVColorRange.views.HSVColorRangeWizard_ui import Ui_HSVColorRangeWizard
@@ -90,9 +93,6 @@ class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmCo
     def _on_hsv_selected_from_picker(self, hsv_data: dict):
         """Handle HSV color range selected from HSV picker dialog."""
         # Extract the center HSV color from the data
-        import cv2
-        import numpy as np
-
         # The dialog returns 'center_hsv' or we can use 'h', 's', 'v' directly
         if 'center_hsv' in hsv_data:
             h, s, v = hsv_data['center_hsv']
@@ -338,8 +338,6 @@ class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmCo
         """Load options into UI."""
         if not isinstance(options, dict):
             return
-
-        from ast import literal_eval
 
         # Clear existing color rows
         for row in self.color_rows[:]:

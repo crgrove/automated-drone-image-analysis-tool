@@ -8,14 +8,17 @@ selecting HSV color ranges with real-time visual feedback.
 import cv2
 import numpy as np
 from typing import Tuple, Optional
+import sys
 
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QFrame, QCheckBox, QGroupBox,
-                               QSizePolicy, QGridLayout, QColorDialog)
+                               QSizePolicy, QGridLayout, QColorDialog, QApplication)
 
 from algorithms.images.HSVColorRange.views.HSVRangePickerWidget import HSVRangePickerWidget
+from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColorRangeAssistant
+from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
 from core.services.color.CustomColorsService import get_custom_colors_service
 
 
@@ -290,8 +293,6 @@ class ColorRangeDialog(QDialog):
 
     def open_image_picker(self):
         """Open the HSV Color Range Assistant dialog for image-based color picking."""
-        from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColorRangeAssistant
-
         dialog = HSVColorRangeAssistant(self)
         dialog.rangeAccepted.connect(self.apply_image_picker_ranges)
         dialog.exec()
@@ -437,13 +438,11 @@ class ColorRangeDialog(QDialog):
     def open_image_color_picker(self):
         """Launch the Image Color Picker and set base HSV from the selected pixel color."""
         try:
-            # Import here to avoid any heavy imports at module import time
-            from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
+            dlg = ColorPickerDialog(self)
         except Exception as e:
             print(f"Failed to import ColorPickerDialog: {e}")
             return
 
-        dlg = ColorPickerDialog(self)
         if dlg.exec():
             rgb = dlg.get_selected_color()  # (r, g, b)
             if rgb is not None:
@@ -553,9 +552,6 @@ def show_color_picker_dialog(image=None, initial_hsv=(0, 1, 1), initial_ranges=N
 
 
 if __name__ == "__main__":
-    import sys
-    from PySide6.QtWidgets import QApplication
-
     app = QApplication(sys.argv)
 
     # Test with a sample image

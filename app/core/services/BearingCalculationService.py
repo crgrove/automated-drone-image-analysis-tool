@@ -15,12 +15,29 @@ from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
 from pathlib import Path
+import traceback
+import importlib
 
 from PySide6.QtCore import QObject, Signal, QThread
 import numpy as np
 
 from helpers.GeodesicHelper import GeodesicHelper
+from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 from core.services.LoggerService import LoggerService
+import piexif
+
+kml = None
+try:
+    kml = importlib.import_module("fastkml.kml")
+except ImportError:
+    pass
+
+gpxpy = None
+try:
+    gpxpy = importlib.import_module("gpxpy")
+except ImportError:
+    pass
 
 
 @dataclass
@@ -148,9 +165,7 @@ class BearingCalculationService(QObject):
 
     def _parse_kml(self, file_path: str) -> List[TrackPoint]:
         """Parse KML file to extract trackpoints."""
-        try:
-            from fastkml import kml
-        except ImportError:
+        if kml is None:
             raise ImportError("fastkml library not installed. Run: pip install fastkml")
 
         track_points = []
@@ -200,9 +215,7 @@ class BearingCalculationService(QObject):
 
     def _parse_gpx(self, file_path: str) -> List[TrackPoint]:
         """Parse GPX file to extract trackpoints."""
-        try:
-            import gpxpy
-        except ImportError:
+        if gpxpy is None:
             raise ImportError("gpxpy library not installed. Run: pip install gpxpy")
 
         track_points = []
@@ -470,10 +483,6 @@ class BearingCalculationService(QObject):
 
         Mode 2 implementation from spec.
         """
-        from helpers.LocationInfo import LocationInfo
-        from helpers.MetaDataHelper import MetaDataHelper
-        import piexif
-
         self._logger.info(f"Starting auto-bearing calculation for {len(images)} images")
 
         # Extract GPS and timestamps if not already provided
@@ -533,7 +542,6 @@ class BearingCalculationService(QObject):
 
                 except Exception as e:
                     self._logger.error(f"Error extracting data from {img['path']}: {e}")
-                    import traceback
                     self._logger.error(traceback.format_exc())
                     continue
 

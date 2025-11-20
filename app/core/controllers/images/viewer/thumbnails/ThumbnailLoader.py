@@ -5,6 +5,9 @@ Simple thumbnail loader that runs in a background thread without blocking UI.
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QPixmap, QIcon, QImageReader
 from PySide6.QtCore import QSize
+import hashlib
+import os
+from pathlib import Path
 
 
 class ThumbnailLoader(QObject):
@@ -66,10 +69,6 @@ class ThumbnailLoader(QObject):
             bool: True if cached, False otherwise
         """
         try:
-            import hashlib
-            import os
-            from pathlib import Path
-
             # If we don't have a results directory, can't check cache
             if not self.results_dir:
                 return False
@@ -83,12 +82,10 @@ class ThumbnailLoader(QObject):
             key_source = None
             if getattr(self, 'input_root', None):
                 try:
-                    from pathlib import Path as _P
-                    key_source = str(_P(image_path).relative_to(_P(self.input_root)))
+                    key_source = str(Path(image_path).relative_to(Path(self.input_root)))
                 except Exception:
                     try:
-                        import os as _os
-                        key_source = _os.path.relpath(image_path, self.input_root)
+                        key_source = os.path.relpath(image_path, self.input_root)
                     except Exception:
                         key_source = None
 
@@ -140,10 +137,6 @@ class ThumbnailLoader(QObject):
             QPixmap or None
         """
         try:
-            import hashlib
-            import os
-            from pathlib import Path
-
             # If we don't have a results directory, can't load cache
             if not self.results_dir:
                 return None
@@ -157,12 +150,10 @@ class ThumbnailLoader(QObject):
             key_source = None
             if getattr(self, 'input_root', None):
                 try:
-                    from pathlib import Path as _P
-                    key_source = str(_P(image_path).relative_to(_P(self.input_root)))
+                    key_source = str(Path(image_path).relative_to(Path(self.input_root)))
                 except Exception:
                     try:
-                        import os as _os
-                        key_source = _os.path.relpath(image_path, self.input_root)
+                        key_source = os.path.relpath(image_path, self.input_root)
                     except Exception:
                         key_source = None
 

@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple, Set
 from dataclasses import dataclass
 import cv2
 
-from PySide6.QtCore import (Qt, QPoint, QPointF, Signal, QTimer, QRectF, QRect)
+from PySide6.QtCore import (Qt, QPoint, QPointF, Signal, QRectF, QRect)
 from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QImage, QFont,
                            QMouseEvent, QKeyEvent, QWheelEvent, QTransform, QCursor)
 from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
                                QFileDialog, QSplitter, QGraphicsView, QGraphicsScene,
                                QGraphicsPixmapItem, QDialogButtonBox, QApplication,
                                QCheckBox, QGraphicsEllipseItem, QGraphicsItem,
-                               QGraphicsTextItem)
+                               QGraphicsTextItem, QMessageBox)
 
 
 @dataclass
@@ -1468,8 +1468,6 @@ class HSVColorRangeAssistant(QDialog):
         HSV Color Range Assistant tool, including navigation, selection,
         and range adjustment instructions.
         """
-        from PySide6.QtWidgets import QMessageBox
-
         help_text = """
 <h2>HSV Color Range Assistant - Help</h2>
 

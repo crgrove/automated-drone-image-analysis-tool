@@ -11,27 +11,31 @@ calls to setZoom/zoomToArea, widget resize, etc.
 """
 
 import os.path
+import importlib
 from PySide6.QtCore import (
     Qt, QRectF, QPoint, QPointF, Signal, QEvent, QSize
 )
 from PySide6.QtGui import (
-    QImage, QPixmap, QPainterPath, QMouseEvent, QPainter, QPen, QCursor
+    QImage, QPixmap, QPainterPath, QMouseEvent, QPainter, QPen, QCursor, QColor
 )
 from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QFileDialog, QSizePolicy,
     QGraphicsItem, QGraphicsEllipseItem, QGraphicsRectItem,
     QGraphicsLineItem, QGraphicsPolygonItem, QApplication
 )
+from core.views.images.viewer.dialogs.AOICreationDialog import AOICreationDialog
 
 # Optional deps
+np = None
+qimage2ndarray = None
 try:
-    import numpy as np
+    np = importlib.import_module("numpy")
 except ImportError:
-    np = None
+    pass
 try:
-    import qimage2ndarray
+    qimage2ndarray = importlib.import_module("qimage2ndarray")
 except ImportError:
-    qimage2ndarray = None
+    pass
 
 __author__ = "Marcel Goldschen-Ohm <marcel.goldschen@gmail.com>"
 __version__ = "2.1.1 (fixed-lockup)"
@@ -605,12 +609,10 @@ class QtImageViewer(QGraphicsView):
             self.window.aoi_creation_current = scene_pos
 
             # Create preview circle
-            from PySide6.QtGui import QPen, QColor
             pen = QPen(QColor(*self.window.settings.get('identifier_color', [255, 0, 255])))
             pen.setWidth(2)
             pen.setCosmetic(True)
 
-            from PySide6.QtWidgets import QGraphicsEllipseItem
             self.window.aoi_creation_preview_item = QGraphicsEllipseItem()
             self.window.aoi_creation_preview_item.setPen(pen)
             self.scene.addItem(self.window.aoi_creation_preview_item)
@@ -694,7 +696,6 @@ class QtImageViewer(QGraphicsView):
             # Only create AOI if radius is reasonable (at least 5 pixels)
             if radius >= 5:
                 # Show confirmation dialog
-                from core.views.images.viewer.dialogs.AOICreationDialog import AOICreationDialog
                 dialog = AOICreationDialog(self.window)
 
                 if dialog.exec():

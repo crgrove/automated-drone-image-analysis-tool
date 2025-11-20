@@ -10,8 +10,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QComboBox, QSlider, QSpinBox, QCheckBox, QPushButton
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QComboBox, QSlider, QSpinBox, QCheckBox, QPushButton
 
 from core.controllers.streaming.base import StreamAlgorithmController
 from core.services.LoggerService import LoggerService

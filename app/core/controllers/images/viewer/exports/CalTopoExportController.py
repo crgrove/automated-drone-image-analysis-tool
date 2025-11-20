@@ -5,15 +5,20 @@ This controller coordinates the authentication, map selection, and export
 of flagged AOIs to CalTopo maps.
 """
 
-from PySide6.QtWidgets import QMessageBox, QProgressDialog
+from PySide6.QtWidgets import QMessageBox, QProgressDialog, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PySide6.QtCore import Qt, QEventLoop, QTimer
 from core.services.export.CalTopoService import CalTopoService
 from core.views.images.viewer.dialogs.CalTopoAuthDialog import CalTopoAuthDialog
 from core.views.images.viewer.dialogs.CalTopoMapDialog import CalTopoMapDialog
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
+from core.services.image.AOIService import AOIService
 from helpers.LocationInfo import LocationInfo
+from helpers.MetaDataHelper import MetaDataHelper
 import json
+import traceback
+import copy
+import simplekml
 
 
 class CalTopoExportController:
@@ -188,7 +193,6 @@ class CalTopoExportController:
                 image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=calculated_bearing)
 
                 # Get GPS from EXIF data
-                from helpers.MetaDataHelper import MetaDataHelper
                 exif_data = MetaDataHelper.get_exif_data_piexif(image_path)
                 image_gps = LocationInfo.get_gps(exif_data=exif_data)
 
@@ -247,7 +251,6 @@ class CalTopoExportController:
 
                 # Try to calculate precise AOI GPS using AOIService
                 try:
-                    from core.services.image.AOIService import AOIService
                     aoi_service = AOIService(image)
 
                     # Get custom altitude if viewer has one set
@@ -595,8 +598,6 @@ class CalTopoExportController:
             self._install_function_interceptor(web_view)
 
             # Show instructions to user - NON-MODAL so they can interact with CalTopo
-            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-
             instruction_dialog = QDialog(web_view)
             instruction_dialog.setWindowTitle("Record CalTopo Marker Creation")
             instruction_dialog.setModal(False)  # NON-MODAL!
@@ -674,7 +675,6 @@ class CalTopoExportController:
 
         except Exception as e:
             print(f"ERROR: Browser automation failed: {e}")
-            import traceback
             traceback.print_exc()
             return False
 
@@ -768,7 +768,6 @@ class CalTopoExportController:
 
         except Exception as e:
             print(f"ERROR: Replay failed: {e}")
-            import traceback
             traceback.print_exc()
             return False
 
@@ -782,8 +781,6 @@ class CalTopoExportController:
         Returns:
             list: Modified arguments
         """
-        import copy
-
         if not original_args:
             # If no args, create a standard GeoJSON feature
             return [{
@@ -920,7 +917,6 @@ class CalTopoExportController:
 
         except Exception as e:
             print(f"ERROR: Click-based automation failed: {e}")
-            import traceback
             traceback.print_exc()
             return False
 

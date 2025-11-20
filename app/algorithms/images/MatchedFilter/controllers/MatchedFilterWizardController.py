@@ -7,6 +7,7 @@ Provides a simplified, guided interface for configuring matched filter detection
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy, QPushButton
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, Signal
+from ast import literal_eval
 
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.MatchedFilter.views.MatchedFilterWizard_ui import Ui_MatchedFilterWizard
@@ -214,8 +215,6 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
         """Load options into UI."""
         if not isinstance(options, dict):
             return
-
-        from ast import literal_eval
 
         # Clear existing target rows
         for row in self.target_rows[:]:

@@ -6,7 +6,7 @@ This dialog shows all image GPS locations as connected points on an interactive 
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox
 from PySide6.QtCore import Qt, Signal, QPointF, QTimer
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut, QColor
 from core.views.images.viewer.widgets.GPSMapView import GPSMapView
 
 
@@ -137,8 +137,6 @@ class GPSMapDialog(QDialog):
         Returns:
             QColor object for the AOI highlight color
         """
-        from PySide6.QtGui import QColor
-
         # Default to orange if not available
         default_color = QColor(255, 140, 0)
 

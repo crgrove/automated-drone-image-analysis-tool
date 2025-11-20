@@ -6,23 +6,23 @@ UI manipulation is handled by AOIUIComponent.
 """
 
 import colorsys
+import fnmatch
+import math
 import numpy as np
 import qtawesome as qta
+import traceback
+import xml.etree.ElementTree as ET
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QColorDialog
-try:
-    from shiboken6 import isValid as _qt_is_valid
-except Exception:
-    def _qt_is_valid(obj):
-        try:
-            _ = obj.metaObject()
-            return True
-        except Exception:
-            return False
+from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
 
 from core.services.LoggerService import LoggerService
 from core.services.image.AOIService import AOIService
+from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
+from helpers.LocationInfo import LocationInfo
+from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
+from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
 
 
 class AOIController:
@@ -64,7 +64,6 @@ class AOIController:
         self._cached_image_index = None
 
         # Create UI component internally
-        from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
         self.ui_component = AOIUIComponent(self)
 
         # Initialize sort combo box
@@ -385,7 +384,6 @@ class AOIController:
         current_comment = aoi.get('user_comment', '')
 
         # Open comment dialog
-        from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
         dialog = AOICommentDialog(self.parent, current_comment)
 
         if dialog.exec():
@@ -571,7 +569,6 @@ class AOIController:
             aoi = image['areas_of_interest'][aoi_index]
 
             # Use AOIService for GPS calculation
-            from core.services.image.AOIService import AOIService
             aoi_service = AOIService(image)
 
             # Get custom altitude if available
@@ -589,7 +586,6 @@ class AOIController:
                 position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
 
                 # Use LocationInfo for formatting
-                from helpers.LocationInfo import LocationInfo
                 return LocationInfo.format_coordinates(lat, lon, position_format)
 
             return "N/A"
@@ -761,7 +757,6 @@ class AOIController:
 
             # Apply comment filter
             if self.filter_comment_pattern is not None:
-                import fnmatch
                 comment = aoi.get('user_comment', '').strip()
                 if not comment:
                     continue
@@ -1045,8 +1040,6 @@ class AOIController:
 
     def open_filter_dialog(self):
         """Open the filter dialog."""
-        from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
-
         # Get current filter settings
         current_filters = {
             'flagged_only': self.filter_flagged_only,
@@ -1077,10 +1070,6 @@ class AOIController:
             center_y (int): Y coordinate of circle center
             radius (int): Radius of the circle in pixels
         """
-        import math
-        import colorsys
-        import xml.etree.ElementTree as ET
-
         try:
             # Get current image
             if not hasattr(self.parent, 'images') or not hasattr(self.parent, 'current_image'):
@@ -1161,7 +1150,6 @@ class AOIController:
 
         except Exception as e:
             self.logger.error(f"Error creating AOI from circle: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
 
     def enter_creation_mode(self):

@@ -1,5 +1,7 @@
 import os
 from ast import literal_eval
+from datetime import datetime
+import uuid
 import xml.etree.ElementTree as ET
 from core.services.LoggerService import LoggerService
 
@@ -354,9 +356,6 @@ class XmlService:
         Returns:
             str: The review_id (existing or newly generated).
         """
-        import uuid
-        from datetime import datetime
-
         review_meta = self.get_review_metadata()
 
         if review_meta and review_meta.get('review_id'):

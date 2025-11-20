@@ -1,6 +1,7 @@
 import sys
 import os
 import pytest
+import importlib
 from PySide6.QtWidgets import QApplication
 
 # Add the app directory to the Python path
@@ -8,12 +9,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 # Lazy import to avoid dependency issues for streaming tests
 try:
-    import qdarktheme
-    from core.controllers.images.MainWindow import MainWindow
-    _MAIN_WINDOW_AVAILABLE = True
+    qdarktheme = importlib.import_module("qdarktheme")
 except ImportError:
-    _MAIN_WINDOW_AVAILABLE = False
+    qdarktheme = None
+
+try:
+    MainWindowModule = importlib.import_module("core.controllers.images.MainWindow")
+    MainWindow = MainWindowModule.MainWindow
+except ImportError:
     MainWindow = None
+
+_MAIN_WINDOW_AVAILABLE = qdarktheme is not None and MainWindow is not None
 
 
 @pytest.fixture

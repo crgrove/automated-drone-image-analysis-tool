@@ -14,7 +14,7 @@ import time
 from typing import List, Dict, Optional, Any
 from PySide6.QtWidgets import (QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout,
                                QGroupBox, QLineEdit, QPushButton, QComboBox, QFileDialog,
-                               QMessageBox)
+                               QMessageBox, QSizePolicy)
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, Signal
 from core.services.streaming.RTMPStreamService import StreamType
@@ -475,7 +475,6 @@ class VideoDisplayWidget(QLabel):
         self.setText("No Stream Connected")
         self.setScaledContents(False)
         # Set size policy to expanding so it grows to fill available space
-        from PySide6.QtWidgets import QSizePolicy
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def update_frame(self, frame: np.ndarray):

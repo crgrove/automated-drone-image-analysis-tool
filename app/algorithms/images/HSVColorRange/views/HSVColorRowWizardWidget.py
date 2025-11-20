@@ -8,9 +8,10 @@ A simplified widget for HSV color range configuration in the wizard with:
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel, QComboBox,
                                QPushButton, QSizePolicy)
+from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 import cv2
 import numpy as np
 
@@ -75,7 +76,6 @@ class ClickableColorSwatch(QFrame):
             return
         # Determine contrasting text color based on RGB brightness
         r, g, b = self._color.red(), self._color.green(), self._color.blue()
-        from PySide6.QtGui import QPainter, QFont
         text_color = Qt.white if (r + g + b) < 384 else Qt.black
 
         # Compute HSV in OpenCV scale for display
@@ -340,9 +340,8 @@ class HSVColorRowWizardWidget(QWidget):
     def showEvent(self, event):
         """Update border style when widget is shown."""
         super().showEvent(event)
-        # Delay to ensure parent layout is ready
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, self._update_border_style)
+        # Update border style - method handles parent not ready gracefully
+        self._update_border_style()
 
     def _update_hsv_ranges_display(self):
         """Update the HSV ranges display text."""
@@ -405,7 +404,6 @@ class HSVColorRowWizardWidget(QWidget):
     def _open_hsv_picker(self):
         """Open the HSV color range picker dialog and update this row."""
         try:
-            from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 
             # Initial HSV values from current color (0-1 floats)
             h_f, s_f, v_f, _ = self.color.getHsvF()

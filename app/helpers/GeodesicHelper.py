@@ -12,6 +12,13 @@ Provides utilities for:
 import math
 import numpy as np
 from typing import Tuple, List, Optional
+import importlib
+
+savgol_filter = None
+try:
+    savgol_filter = importlib.import_module("scipy.signal").savgol_filter
+except ImportError:
+    savgol_filter = None
 
 
 class GeodesicHelper:
@@ -302,26 +309,20 @@ class GeodesicHelper:
             smoothed.append(median_val)
 
         # Step 2: Optional Savitzky-Golay smoothing
-        if use_savgol and len(smoothed) >= window:
-            try:
-                from scipy.signal import savgol_filter
+        if use_savgol and len(smoothed) >= window and savgol_filter is not None:
+            # Unwrap angles to avoid discontinuities at 0/360
+            unwrapped = np.unwrap(np.radians(smoothed))
 
-                # Unwrap angles to avoid discontinuities at 0/360
-                unwrapped = np.unwrap(np.radians(smoothed))
+            # Apply Savitzky-Golay filter
+            # Polynomial order 2, window as specified
+            poly_order = min(2, window - 1)
+            filtered = savgol_filter(unwrapped, window, poly_order)
 
-                # Apply Savitzky-Golay filter
-                # Polynomial order 2, window as specified
-                poly_order = min(2, window - 1)
-                filtered = savgol_filter(unwrapped, window, poly_order)
-
-                # Rewrap to [0, 360)
-                smoothed = [
-                    GeodesicHelper.normalize_angle_deg(math.degrees(a))
-                    for a in filtered
-                ]
-            except ImportError:
-                # scipy not available, skip Savitzky-Golay
-                pass
+            # Rewrap to [0, 360)
+            smoothed = [
+                GeodesicHelper.normalize_angle_deg(math.degrees(a))
+                for a in filtered
+            ]
 
         return smoothed
 

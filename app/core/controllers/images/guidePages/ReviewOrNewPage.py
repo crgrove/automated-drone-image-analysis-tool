@@ -9,7 +9,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QFileDialog, QWidget, QFrame, QMessageBox
+    QFileDialog, QWidget, QFrame, QMessageBox, QApplication
 )
 from PySide6.QtGui import QFont
 
@@ -98,9 +98,9 @@ class ReviewOrNewPage(BasePage):
         # Save data first, then trigger continue
         self.save_data()
         if self.validate():
-            # Use QTimer to ensure UI updates before navigation
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, self.dialog._on_continue)
+            # Process events to ensure UI updates (visibility changes, button states) are applied
+            QApplication.processEvents()
+            self.dialog._on_continue()
 
     def _on_browse_file(self):
         """Handle browse file button click - open file dialog."""

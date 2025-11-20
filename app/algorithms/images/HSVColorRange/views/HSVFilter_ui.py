@@ -9,6 +9,7 @@
 
 
 from PySide6 import QtCore, QtGui, QtWidgets
+import sys
 from PySide6.QtGui import QFont
 
 
@@ -169,7 +170,6 @@ from . import HSVColorRange_rc
 
 
 if __name__ == "__main__":
-    import sys
     app = QtWidgets.QApplication(sys.argv)
     HSVColorRange = QtWidgets.QWidget()
     ui = Ui_HSVColorRange()

@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import sys
 import shutil
+import pickle
+import re
 
 
 class PickleHelper:
@@ -96,7 +98,6 @@ class PickleHelper:
                 if 'numpy.core.multiarray' in str(e):
                     try:
                         # Try loading with pickle directly and reconstructing DataFrame
-                        import pickle
                         with open(file_path, 'rb') as f:
                             data = pickle.load(f, encoding='latin1')
                         if isinstance(data, pd.DataFrame):
@@ -131,7 +132,6 @@ class PickleHelper:
                 if 'numpy.core.multiarray' in str(e):
                     try:
                         # Try loading with pickle directly and reconstructing DataFrame
-                        import pickle
                         with open(file_path, 'rb') as f:
                             data = pickle.load(f, encoding='latin1')
                         if isinstance(data, pd.DataFrame):
@@ -185,7 +185,6 @@ class PickleHelper:
         Raises:
             ValueError: If the version string does not match the expected format.
         """
-        import re
         # Extract version numbers and optional label
         m = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:\s*(\w+))?', version_str.strip())
         if not m:

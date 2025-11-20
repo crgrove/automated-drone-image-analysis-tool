@@ -9,11 +9,12 @@ A widget representing a single HSV color range configuration row with:
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QIntValidator
+from PySide6.QtGui import QColor, QIntValidator, QPainter, QFont, QFontMetrics
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
                                QLineEdit, QPushButton, QSizePolicy, QColorDialog)
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
 from core.services.color.CustomColorsService import get_custom_colors_service
+from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 
 
 class ClickableColorSwatch(QFrame):
@@ -86,7 +87,6 @@ class ClickableColorSwatch(QFrame):
                 self._update_hsv_values()
 
             if self._hsv_values:
-                from PySide6.QtGui import QPainter, QFont, QFontMetrics
                 h, s, v = self._hsv_values
                 r, g, b = self._color.red(), self._color.green(), self._color.blue()
                 text_color = Qt.white if (r + g + b) < 384 else Qt.black
@@ -377,9 +377,6 @@ class HSVColorRowWidget(QWidget):
     def _open_hsv_picker(self):
         """Open the HSV color range picker dialog."""
         try:
-            from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
-            from core.services.color.CustomColorsService import get_custom_colors_service
-
             # Get current HSV values
             initial_hsv = (self._hsv_window['h'], self._hsv_window['s'], self._hsv_window['v'])
             initial_ranges = {

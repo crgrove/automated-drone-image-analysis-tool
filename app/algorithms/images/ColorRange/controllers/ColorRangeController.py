@@ -14,6 +14,7 @@ from core.services.LoggerService import LoggerService
 from core.services.color.CustomColorsService import get_custom_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
+from helpers.IconHelper import IconHelper
 
 
 class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
@@ -187,7 +188,6 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             self.scrollArea.setMinimumHeight(fixed_height)
             self.scrollArea.setMaximumHeight(fixed_height)
             # Force fixed vertical policy so parent allows this size
-            from PySide6.QtWidgets import QSizePolicy
             self.scrollArea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         else:
             # Expand to fit all rows (up to 3), no scrolling needed
@@ -196,7 +196,6 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
                 total_height = len(self.color_rows) * row_height + (len(self.color_rows) - 1) * spacing + 10
                 self.scrollArea.setMinimumHeight(total_height)
                 self.scrollArea.setMaximumHeight(total_height)
-                from PySide6.QtWidgets import QSizePolicy
                 self.scrollArea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             else:
                 # No rows, minimal height
@@ -409,7 +408,5 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        from helpers.IconHelper import IconHelper
-
         self.addColorButton.setIcon(IconHelper.create_icon('fa6s.palette', theme))
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', theme))

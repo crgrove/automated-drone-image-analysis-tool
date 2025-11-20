@@ -12,6 +12,8 @@ Can be used by multiple algorithms for color selection.
 import cv2
 import numpy as np
 import os
+import importlib
+import re
 from PySide6.QtCore import Qt, QPointF, Signal, QPoint
 from PySide6.QtGui import (
     QImage, QPixmap, QPainter, QPen, QBrush, QColor, QCursor, QMouseEvent, QWheelEvent, QTransform
@@ -22,10 +24,11 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
+qimage2ndarray = None
 try:
-    import qimage2ndarray
+    qimage2ndarray = importlib.import_module("qimage2ndarray")
 except ImportError:
-    qimage2ndarray = None
+    pass
 
 
 class _FitView(QGraphicsView):
@@ -498,7 +501,6 @@ class ColorPickerImageViewer(QWidget):
         text = self.color_label.text()
         if "RGB:" in text and "No color selected" not in text:
             # Extract RGB values from label text
-            import re
             match = re.search(r'RGB:\s*\((\d+),\s*(\d+),\s*(\d+)\)', text)
             if match:
                 return (int(match.group(1)), int(match.group(2)), int(match.group(3)))

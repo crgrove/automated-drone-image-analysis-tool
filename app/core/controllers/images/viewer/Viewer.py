@@ -1,5 +1,7 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
 from typing import List, Dict, Any, Optional
+from datetime import datetime
+import uuid
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
 from core.services.cache.CachePathService import CachePathService
@@ -38,6 +40,7 @@ from core.views.images.viewer.dialogs.LoadingDialog import LoadingDialog
 from core.views.images.viewer.widgets.ScaleBarWidget import ScaleBarWidget
 from core.views.images.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
 from core.controllers.images.viewer.status.StatusDict import StatusDict
+from helpers.IconHelper import IconHelper
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
 from core.views.components.Toggle import Toggle
@@ -1270,9 +1273,6 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _ensure_review_metadata(self):
         """Ensure review metadata exists in the XML, prompt user for name if needed."""
-        import uuid
-        from datetime import datetime
-
         review_meta = self.xml_service.get_review_metadata()
 
         if not review_meta or not review_meta.get('review_id'):
@@ -1313,8 +1313,6 @@ class Viewer(QMainWindow, Ui_Viewer):
 
     def _apply_icons(self):
         """Apply themed icons to all buttons in the viewer."""
-        from helpers.IconHelper import IconHelper
-
         self.magnifyButton.setIcon(IconHelper.create_icon('fa6s.magnifying-glass', self.theme))
         self.kmlButton.setIcon(IconHelper.create_icon('fa5s.map-marker-alt', self.theme))
         self.pdfButton.setIcon(IconHelper.create_icon('fa6s.file-pdf', self.theme))

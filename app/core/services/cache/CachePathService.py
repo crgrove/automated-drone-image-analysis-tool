@@ -6,6 +6,8 @@ for controllers when alternative cache locations are provided.
 """
 
 from pathlib import Path
+from PySide6.QtWidgets import QDialog
+from core.views.images.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
 from core.services.LoggerService import LoggerService
 
 
@@ -32,9 +34,6 @@ class CachePathService:
             tuple: (alternative_cache_dir or None, bool indicating success)
         """
         try:
-            from core.views.images.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
-            from PySide6.QtWidgets import QDialog
-
             # Get the expected cache directory from xml_path
             results_dir = Path(xml_path).parent
             thumbnail_cache_dir = results_dir / '.thumbnails'

@@ -1,7 +1,8 @@
 import os
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox,
-                               QTabWidget, QGroupBox, QProgressBar, QHeaderView, QAbstractItemView)
+                               QTabWidget, QGroupBox, QProgressBar, QHeaderView, QAbstractItemView,
+                               QInputDialog)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from core.services.LoggerService import LoggerService
@@ -332,8 +333,6 @@ class CoordinatorWindow(QMainWindow):
 
     def _create_new_project(self):
         """Create a new search project."""
-        from PySide6.QtWidgets import QInputDialog
-
         # Get project name
         project_name, ok = QInputDialog.getText(
             self,
@@ -519,7 +518,6 @@ class CoordinatorWindow(QMainWindow):
             return
 
         # Let user select which batch this review is for
-        from PySide6.QtWidgets import QInputDialog
         batch_ids = [b['batch_id'] for b in batch_status]
         batch_id, ok = QInputDialog.getItem(
             self,

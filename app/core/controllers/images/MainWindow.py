@@ -29,6 +29,8 @@ import sys
 import platform
 import pathlib
 from core.views.components.GroupedComboBox import GroupedComboBox
+from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
+from helpers.IconHelper import IconHelper
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.images = None
         self.algorithmWidget = None
         self.identifierColor = (0, 255, 0)
+        self._auto_start_requested = False
         self.HistogramImgWidget.setVisible(False)
         self.KMeansWidget.setVisible(False)
         self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
@@ -695,18 +698,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                             self.algorithmWidget.load_options(wizard_data['algorithm_options'])
                     break
 
-        # Auto-start processing if requested
-        if wizard_data.get('auto_start', False):
-            # Use QTimer.singleShot to ensure UI is fully rendered before starting
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, self._startButton_clicked)
+        # Note: Auto-start is handled after show() is called in __main__.py
+        # Store the flag for later use
+        self._auto_start_requested = wizard_data.get('auto_start', False)
 
     def _open_image_analysis_guide(self):
         """
         Opens the Image Analysis Guide wizard and populates this MainWindow on completion.
         """
-        from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
-
         # Launch the wizard
         wizard = ImageAnalysisGuide()
 
@@ -802,6 +801,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.logger.error(f"Error opening Community Help URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
+
+    def showEvent(self, event):
+        """
+        Handle window show event. Auto-start processing if requested from wizard.
+        """
+        super().showEvent(event)
+        if self._auto_start_requested:
+            # Process events to ensure UI is fully rendered
+            QApplication.processEvents()
+            self._startButton_clicked()
+            self._auto_start_requested = False
 
     def closeEvent(self, event):
         """
@@ -945,8 +955,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        from helpers.IconHelper import IconHelper
-
         self.inputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
         self.outputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
         self.startButton.setIcon(IconHelper.create_icon('fa6s.play', theme))

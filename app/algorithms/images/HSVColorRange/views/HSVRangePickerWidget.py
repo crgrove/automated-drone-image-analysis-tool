@@ -8,6 +8,8 @@ saturation/value square, and real-time range visualization.
 
 import sys
 import math
+import colorsys
+import re
 from typing import Tuple, Optional
 
 from PySide6.QtCore import Qt, QRect, QPoint, Signal, QSize
@@ -17,7 +19,9 @@ from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QConicalGradient,
 from PySide6.QtCore import QRectF
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QLineEdit, QPushButton, QFrame, QGridLayout,
-                               QSizePolicy, QColorDialog, QToolButton, QStyle)
+                               QSizePolicy, QColorDialog, QToolButton, QStyle,
+                               QApplication)
+from .HSVColorRangeAssistant import HSVColorRangeAssistant
 
 
 class HSVRangePickerWidget(QWidget):
@@ -403,8 +407,6 @@ class HSVRangePickerWidget(QWidget):
 
     def open_hsv_assistant(self):
         """Open the HSV Color Range Assistant dialog."""
-        from .HSVColorRangeAssistant import HSVColorRangeAssistant
-
         dialog = HSVColorRangeAssistant(self)
         dialog.rangeAccepted.connect(self.apply_hsv_assistant_ranges)
         dialog.exec()
@@ -654,13 +656,11 @@ class HSVRangePickerWidget(QWidget):
     # Color conversion utilities
     def hsv_to_rgb(self, h, s, v):
         """Convert HSV to RGB (0-255 range)."""
-        import colorsys
         r, g, b = colorsys.hsv_to_rgb(h, s, v)
         return int(r * 255), int(g * 255), int(b * 255)
 
     def rgb_to_hsv(self, r, g, b):
         """Convert RGB to HSV (0-1 range)."""
-        import colorsys
         return colorsys.rgb_to_hsv(r/255, g/255, b/255)
 
     def rgb_to_hex(self, r, g, b):
@@ -681,7 +681,6 @@ class HSVRangePickerWidget(QWidget):
 
     def is_valid_hex(self, hex_value):
         """Check if hex string is valid."""
-        import re
         return bool(re.match(r'^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$', hex_value))
 
 
@@ -1128,8 +1127,6 @@ class HueRingWidget(QWidget):
 
 
 if __name__ == "__main__":
-    from PySide6.QtWidgets import QApplication
-
     app = QApplication(sys.argv)
 
     widget = HSVRangePickerWidget()

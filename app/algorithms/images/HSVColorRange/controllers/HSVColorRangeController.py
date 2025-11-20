@@ -8,6 +8,8 @@ from algorithms.Shared.views import HSVColorRowWidget
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
 from core.services.LoggerService import LoggerService
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
+from core.services.color.CustomColorsService import get_custom_colors_service
+from helpers.IconHelper import IconHelper
 
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget, QColorDialog, QLabel, QSizePolicy, QScrollArea,
@@ -204,7 +206,6 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         """Handle HSV range selection from HSV picker."""
         try:
             # Save any custom colors that may have been modified
-            from core.services.color.CustomColorsService import get_custom_colors_service
             custom_colors_service = get_custom_colors_service()
             custom_colors_service.sync_with_dialog()
 
@@ -471,8 +472,6 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         Args:
             theme (str): Name of the active theme used to resolve icon paths.
         """
-        from helpers.IconHelper import IconHelper
-
         if hasattr(self, 'addColorButton'):
             self.addColorButton.setIcon(IconHelper.create_icon('fa6s.palette', theme))
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', theme))

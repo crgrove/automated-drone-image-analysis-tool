@@ -9,13 +9,15 @@ from typing import Dict, Any, List, Tuple, Optional
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
-                               QComboBox, QGroupBox, QPushButton, QListWidget, QListWidgetItem)
+                               QComboBox, QGroupBox, QPushButton, QListWidget, QListWidgetItem,
+                               QScrollArea, QDialog)
 from PySide6.QtGui import QColor
 
 from core.services.LoggerService import LoggerService
 from core.views.streaming.components import InputProcessingTab, RenderingTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
 from algorithms.Shared.views import HSVColorRowWidget, ColorRangeDialog
+from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
 
 
 class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
@@ -100,7 +102,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         layout.addLayout(btn_layout)
 
         # Scroll area for color ranges
-        from PySide6.QtWidgets import QScrollArea
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -207,7 +208,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
     def _on_add_color(self):
         """Add a new color range using HSV ColorRange dialog."""
         # Open the HSV ColorRange dialog
-        from PySide6.QtWidgets import QDialog
         dialog = ColorRangeDialog(initial_image=None, initial_hsv=(0, 1, 1), initial_ranges=None, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             hsv_data = dialog.get_hsv_ranges()
@@ -246,12 +246,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
     def _on_view_range(self):
         """View range - show all color ranges in a single combined viewer dialog."""
         if not self.color_ranges:
-            return
-
-        # Import the range viewer
-        try:
-            from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
-        except ImportError:
             return
 
         # Build list of HSV range configs for multi-color viewer

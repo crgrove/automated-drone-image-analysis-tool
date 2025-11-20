@@ -19,12 +19,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
+from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
 
 
 def demo_color_detection(rtmp_url=None):
     """Demo Real-Time Color Detection with RTMP stream."""
-    from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
-
     app = QApplication(sys.argv)
     viewer = RTMPColorDetectionViewer()
 

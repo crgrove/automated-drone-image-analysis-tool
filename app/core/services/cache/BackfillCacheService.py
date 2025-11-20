@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import Optional
 from PySide6.QtCore import QObject, Signal
+from xml.etree.ElementTree import ElementTree
 
 from core.services.LoggerService import LoggerService
 from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
@@ -270,8 +271,6 @@ class BackfillCacheService(QObject):
             color_updates: Dict of {image_path: {aoi_idx: color_info}}
         """
         try:
-            from xml.etree.ElementTree import ElementTree
-
             root = xml_service.xml.getroot()
             images_xml = root.find('images')
 

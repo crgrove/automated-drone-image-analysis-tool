@@ -6,11 +6,13 @@ functionality with non-blocking lazy loading.
 """
 
 import math
+import os
 from PySide6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, QTimer
 from PySide6.QtGui import QIcon
 
 from core.controllers.images.viewer.thumbnails.ThumbnailLoader import ThumbnailLoader
+from core.controllers.images.viewer.thumbnails.ThumbnailUIComponent import ThumbnailUIComponent
 from core.services.LoggerService import LoggerService
 
 
@@ -37,7 +39,6 @@ class ThumbnailController(QObject):
         self.logger = LoggerService()  # Create our own logger
 
         # Create UI component internally
-        from core.controllers.images.viewer.thumbnails.ThumbnailUIComponent import ThumbnailUIComponent
         self.ui_component = ThumbnailUIComponent(self)
 
         # Background loading
@@ -75,7 +76,6 @@ class ThumbnailController(QObject):
         if self.alternative_cache_dir:
             results_dir = self.alternative_cache_dir
         elif hasattr(self.parent, 'xml_path') and self.parent.xml_path:
-            import os
             results_dir = os.path.dirname(self.parent.xml_path)
 
         # Determine input root (for relative-path hashing)

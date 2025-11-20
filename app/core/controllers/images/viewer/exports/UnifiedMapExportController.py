@@ -13,6 +13,11 @@ from core.services.image.CoverageExtentService import CoverageExtentService
 from core.services.LoggerService import LoggerService
 from core.controllers.images.viewer.exports.CalTopoExportController import CalTopoExportController
 from PySide6.QtCore import QThread, Signal
+from core.services.image.ImageService import ImageService
+from core.services.image.AOIService import AOIService
+from helpers.LocationInfo import LocationInfo
+import simplekml
+import traceback
 
 
 class UnifiedMapExportThread(QThread):
@@ -99,9 +104,6 @@ class UnifiedMapExportThread(QThread):
                 self.progressUpdated.emit(current_step, total_steps, "Exporting flagged AOIs...")
 
                 # Manually add flagged AOIs to KML (without saving yet)
-                from core.services.image.ImageService import ImageService
-                from core.services.image.AOIService import AOIService
-                from helpers.LocationInfo import LocationInfo
 
                 total_aois = sum(len(aois) for aois in self.flagged_aois.values())
                 current_aoi = 0
@@ -280,7 +282,6 @@ class UnifiedMapExportThread(QThread):
                         )
 
                         # Style the polygon
-                        import simplekml
                         pol.style.linestyle.color = simplekml.Color.rgb(0, 100, 200)
                         pol.style.linestyle.width = 2
                         pol.style.polystyle.color = simplekml.Color.changealphaint(100, simplekml.Color.rgb(0, 150, 255))
@@ -292,7 +293,6 @@ class UnifiedMapExportThread(QThread):
             self.finished.emit()
 
         except Exception as e:
-            import traceback
             error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
             self.errorOccurred.emit(error_msg)
 

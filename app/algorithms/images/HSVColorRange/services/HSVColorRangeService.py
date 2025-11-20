@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from ast import literal_eval
 
 from helpers.ColorUtils import ColorUtils
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
@@ -131,7 +132,6 @@ class HSVColorRangeService(AlgorithmService):
             if hsv_configs:
                 # Handle string format
                 if isinstance(hsv_configs, str):
-                    from ast import literal_eval
                     hsv_configs = literal_eval(hsv_configs)
 
                 # Combine multiple HSV ranges with OR logic
@@ -140,7 +140,6 @@ class HSVColorRangeService(AlgorithmService):
                     if isinstance(hsv_config, dict):
                         hsv_ranges = hsv_config.get('hsv_ranges')
                         if isinstance(hsv_ranges, str):
-                            from ast import literal_eval
                             hsv_ranges = literal_eval(hsv_ranges)
 
                         if hsv_ranges:
@@ -159,7 +158,6 @@ class HSVColorRangeService(AlgorithmService):
                     selected_color = first_config.get('selected_color')
                     if selected_color:
                         if isinstance(selected_color, str):
-                            from ast import literal_eval
                             selected_color = literal_eval(selected_color)
                         rgb_color = np.uint8([[selected_color]])
                         self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
@@ -168,7 +166,6 @@ class HSVColorRangeService(AlgorithmService):
             elif 'hsv_ranges' in self.options and self.options.get('hsv_ranges'):
                 hsv_ranges = self.options.get('hsv_ranges')
                 if isinstance(hsv_ranges, str):
-                    from ast import literal_eval
                     hsv_ranges = literal_eval(hsv_ranges)
 
                 if hsv_ranges:

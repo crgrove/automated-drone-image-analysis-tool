@@ -6,6 +6,7 @@ manages business logic and state.
 """
 
 import math
+from functools import partial
 from PySide6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
@@ -61,7 +62,6 @@ class ThumbnailUIComponent:
         button.setProperty('frame', frame)
 
         # Connect click handler
-        from functools import partial
         button.clicked.connect(partial(self.thumbnail_controller.on_thumbnail_clicked, button))
 
         layout = QVBoxLayout(frame)

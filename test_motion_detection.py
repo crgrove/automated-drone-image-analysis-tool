@@ -8,6 +8,7 @@ Tests both static and moving camera modes with sample video or webcam input.
 from core.services.RealtimeMotionDetectionService import (
     RealtimeMotionDetector, DetectionMode, MotionAlgorithm
 )
+import argparse
 import sys
 import os
 import cv2
@@ -236,8 +237,6 @@ def main():
     """Main test function."""
     print("Motion Detection Test Script")
     print("============================\n")
-
-    import argparse
     parser = argparse.ArgumentParser(description='Test motion detection')
     parser.add_argument('--webcam', action='store_true',
                         help='Test with webcam (static mode)')
