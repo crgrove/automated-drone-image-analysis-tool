@@ -1,20 +1,15 @@
 """
-Image Capture page for the Image Analysis Guide wizard.
+Image Capture page for the Streaming Guide wizard.
 """
 
 import pandas as pd
-import piexif
-from pathlib import Path
-import os
-
 from .BasePage import BasePage
 from helpers.PickleHelper import PickleHelper
 from core.services.GSDService import GSDService
-from core.services.image.ImageService import ImageService
 
 
-class ImageCapturePage(BasePage):
-    """Page for image capture information (drone, altitude, GSD)."""
+class StreamImageCapturePage(BasePage):
+    """Page for image capture information (drone, altitude, GSD) for streaming."""
 
     def __init__(self, wizard_data, settings_service, dialog):
         """Initialize the page."""
@@ -42,6 +37,9 @@ class ImageCapturePage(BasePage):
 
     def load_data(self):
         """Load drone data and preferences."""
+        # Initialize altitude if not set
+        if 'altitude' not in self.wizard_data:
+            self.wizard_data['altitude'] = self.dialog.altitudeSlider.value()
         self._load_drone_data()
         self._load_preferences()
 
@@ -53,16 +51,6 @@ class ImageCapturePage(BasePage):
         """Save capture information to wizard_data."""
         # Data is already saved via signal handlers
         pass
-
-    def on_enter(self):
-        """Called when entering the page."""
-        # Trigger scan if we have input directory but no first image
-        if self.wizard_data.get('input_directory') and not self.wizard_data.get('first_image_path'):
-            self.scan_input_directory()
-
-    def scan_input_directory(self):
-        """Public method to trigger input directory scan."""
-        self._scan_input_directory()
 
     def _load_drone_data(self):
         """Load drone data from pickle file and populate dropdown.
@@ -107,7 +95,6 @@ class ImageCapturePage(BasePage):
             # Add cameras grouped by manufacturer with section labels
             for make in sorted(manufacturers.keys()):
                 # Add manufacturer section label (as a separator-like item)
-                # Use a special marker to identify section headers
                 section_text = f"────── {make} ──────"
                 self.dialog.droneComboBox.addItem(section_text, "__SECTION__")
 
@@ -115,7 +102,6 @@ class ImageCapturePage(BasePage):
                 for model, sensor_rows in sorted(manufacturers[make], key=lambda x: x[0]):
                     display_text = f"  {model}"  # Indent models under manufacturer
                     # Store the first sensor row as the default selection
-                    # All sensors will be available for GSD calculation
                     self.dialog.droneComboBox.addItem(display_text, sensor_rows[0])
 
             # Add "Other" option
@@ -123,7 +109,7 @@ class ImageCapturePage(BasePage):
             self.dialog.droneComboBox.addItem("Other", None)
 
             # Try to load saved drone selection
-            saved_drone_key = self.settings_service.get_setting("ImageAnalysisDroneSelection", "")
+            saved_drone_key = self.settings_service.get_setting("StreamingDroneSelection", "")
             if saved_drone_key:
                 # Find matching drone in combo box
                 saved_parts = saved_drone_key.split("|")
@@ -180,15 +166,12 @@ class ImageCapturePage(BasePage):
 
         drone_data = self.dialog.droneComboBox.itemData(index)
 
-        # Skip section headers - check if it's the special marker string
-        # Handle both string comparison and pandas Series
+        # Skip section headers
         if isinstance(drone_data, str) and drone_data == "__SECTION__":
             return
         elif isinstance(drone_data, pd.Series):
-            # If it's a Series, it's not a section header
             pass
         elif drone_data == "__SECTION__":
-            # Fallback for other types
             return
 
         # Handle default "Select Drone/Camera" option or None
@@ -201,7 +184,6 @@ class ImageCapturePage(BasePage):
         if drone_data is not None:
             # Ensure we have a pandas Series
             if not isinstance(drone_data, pd.Series):
-                # Try to convert if it's a dict or other type
                 if isinstance(drone_data, dict):
                     drone_data = pd.Series(drone_data)
                 else:
@@ -212,7 +194,6 @@ class ImageCapturePage(BasePage):
             self.wizard_data['drone'] = drone_data
 
             # Find all sensor configurations for this camera
-            # Use .get() with default, then try direct access
             make = None
             for key in ['Make', 'Manufacturer']:
                 if key in drone_data.index:
@@ -240,7 +221,7 @@ class ImageCapturePage(BasePage):
 
             # Save drone selection to settings
             drone_key = f"{make}|{model}"
-            self.settings_service.set_setting("ImageAnalysisDroneSelection", drone_key)
+            self.settings_service.set_setting("StreamingDroneSelection", drone_key)
 
             self._calculate_gsd()
         else:
@@ -248,7 +229,7 @@ class ImageCapturePage(BasePage):
             self.wizard_data['drone_sensors'] = []
             self.dialog.gsdTextEdit.setPlainText("--")
             # Clear saved selection if "Other" or "Select Drone/Camera" is selected
-            self.settings_service.set_setting("ImageAnalysisDroneSelection", "")
+            self.settings_service.set_setting("StreamingDroneSelection", "")
 
     def _on_altitude_changed(self, value):
         """Handle altitude slider change."""
@@ -291,8 +272,7 @@ class ImageCapturePage(BasePage):
     def _calculate_gsd(self):
         """Calculate and display GSD based on selected drone and altitude.
 
-        Calculates GSD for all sensor configurations of the selected camera.
-        Uses GSDService directly, following the same pattern as ImageService.
+        For streaming, we use default image dimensions since we don't have an image file.
         """
         if self.wizard_data.get('drone') is None or not self.wizard_data.get('drone_sensors'):
             self.dialog.gsdTextEdit.setPlainText("--")
@@ -318,29 +298,17 @@ class ImageCapturePage(BasePage):
             gsd_results = []
             self.wizard_data['gsd_list'] = []
 
-            # Create ImageService once if we have an image (reuse for all sensors)
-            image_service = None
-            if self.wizard_data.get('first_image_path'):
-                try:
-                    image_service = ImageService(self.wizard_data['first_image_path'])
-                except Exception as e:
-                    print(f"Error creating ImageService: {e}")
+            # For streaming, use default image dimensions (no image file available)
+            image_width = 4000  # Default
+            image_height = 3000  # Default
 
             # Calculate GSD for each sensor configuration
             for sensor_idx, drone_data in enumerate(self.wizard_data['drone_sensors']):
-                # Get camera parameters from drone data (following ImageService pattern)
-                # ImageService.get_average_gsd() gets:
-                # - focal_length from EXIF (not available in wizard)
-                # - sensor_w, sensor_h from camera_info DataFrame
-                # - image_width, image_height from EXIF
-
                 sensor_width_mm = None
                 sensor_height_mm = None
-                image_width = 4000  # Default
-                image_height = 3000  # Default
                 focal_length_mm = None
 
-                # Get sensor dimensions - ImageService uses 'sensor_w' and 'sensor_h' from camera_info
+                # Get sensor dimensions
                 if 'sensor_w' in drone_data.index:
                     val = drone_data['sensor_w']
                     if pd.notna(val) and val != '':
@@ -357,19 +325,7 @@ class ImageCapturePage(BasePage):
                         except (ValueError, TypeError):
                             pass
 
-                # Get image dimensions from EXIF if we have an image, otherwise from database
-                if image_service:
-                    try:
-                        exif_image_width = image_service.exif_data.get("Exif", {}).get(piexif.ExifIFD.PixelXDimension)
-                        exif_image_height = image_service.exif_data.get("Exif", {}).get(piexif.ExifIFD.PixelYDimension)
-                        if exif_image_width:
-                            image_width = exif_image_width
-                        if exif_image_height:
-                            image_height = exif_image_height
-                    except Exception:
-                        pass
-
-                # Fallback to database if image dimensions not available from EXIF
+                # Get image dimensions from database
                 if image_width == 4000 and 'Image Width' in drone_data.index:
                     val = drone_data['Image Width']
                     if pd.notna(val):
@@ -382,17 +338,7 @@ class ImageCapturePage(BasePage):
                         except (ValueError, TypeError):
                             pass
 
-                # Try to get focal length from first image if available
-                # Use ImageService.get_camera_intrinsics() which handles EXIF extraction
-                if not focal_length_mm and image_service:
-                    try:
-                        intrinsics = image_service.get_camera_intrinsics()
-                        if intrinsics:
-                            focal_length_mm = intrinsics['focal_length_mm']
-                    except Exception as e:
-                        print(f"Error getting focal length from image: {e}")
-
-                # Check for focal length in database (unlikely, but check anyway)
+                # Check for focal length in database
                 if not focal_length_mm:
                     for key in ['Focal Length', 'FocalLength', 'focal_length', 'Focal Length (mm)']:
                         if key in drone_data.index:
@@ -404,6 +350,14 @@ class ImageCapturePage(BasePage):
                                 except (ValueError, TypeError):
                                     continue
 
+                # For streaming videos from drones, use a reasonable default focal length if not found
+                # Most drone wide cameras use ~8-10mm focal length (focus at infinity)
+                if not focal_length_mm:
+                    # Default to 8.8mm which is common for DJI wide cameras
+                    # This is a reasonable approximation for drone video streams
+                    focal_length_mm = 8.8
+                    print(f"Using default focal length {focal_length_mm}mm for streaming video (focus at infinity)")
+
                 # Skip if missing sensor dimensions
                 if not sensor_width_mm or not sensor_height_mm:
                     continue
@@ -411,13 +365,11 @@ class ImageCapturePage(BasePage):
                 # Use GSDService if we have all required parameters
                 if focal_length_mm and sensor_width_mm and sensor_height_mm:
                     try:
-                        # Use GSDService exactly as ImageService.get_average_gsd() does
-                        # ImageService uses tilt_angle = 0 (nadir) when pitch is None
                         gsd_service = GSDService(
                             focal_length=focal_length_mm,
                             image_size=(image_width, image_height),
                             altitude=altitude_m,
-                            tilt_angle=0,  # Assume nadir (same as ImageService default when pitch is None)
+                            tilt_angle=0,  # Assume nadir
                             sensor=(sensor_width_mm, sensor_height_mm)
                         )
 
@@ -425,7 +377,6 @@ class ImageCapturePage(BasePage):
 
                         if avg_gsd_cm:
                             sensor_name = self._get_sensor_name(drone_data, sensor_idx)
-                            # Round to 2 decimal places like ImageService does
                             gsd_results.append(f"{sensor_name}: {round(avg_gsd_cm, 2):.2f} cm/pixel")
                             self.wizard_data['gsd_list'].append({
                                 'sensor_name': sensor_name,
@@ -436,12 +387,9 @@ class ImageCapturePage(BasePage):
                         print(f"Error calculating GSD for sensor {sensor_idx}: {e}")
                         continue
                 else:
-                    # Missing focal length
+                    # Missing sensor dimensions (focal length should always be available now with default)
                     sensor_name = self._get_sensor_name(drone_data, sensor_idx)
-                    if self.wizard_data.get('first_image_path'):
-                        gsd_results.append(f"{sensor_name}: Focal length not found in image EXIF")
-                    else:
-                        gsd_results.append(f"{sensor_name}: Select input directory to extract focal length from images")
+                    gsd_results.append(f"{sensor_name}: Sensor dimensions not available")
 
             # Display results
             if gsd_results:
@@ -449,9 +397,7 @@ class ImageCapturePage(BasePage):
                 self.wizard_data['gsd'] = None
             else:
                 error_msg = "-- (Missing camera data)\n\n"
-                error_msg += "Unable to calculate GSD. Sensor dimensions found, but:\n"
-                error_msg += "• Focal length is required (available from image EXIF data)\n\n"
-                error_msg += "GSD calculation requires an actual image file to extract focal length."
+                error_msg += "Unable to calculate GSD. Sensor dimensions are required."
                 self.dialog.gsdTextEdit.setPlainText(error_msg)
                 self.wizard_data['gsd'] = None
 
@@ -461,7 +407,6 @@ class ImageCapturePage(BasePage):
 
     def _get_sensor_name(self, drone_data, sensor_idx):
         """Get a descriptive name for the sensor configuration."""
-        # Try to identify sensor type
         sensor_parts = []
 
         # Check for Image Source (DJI)
@@ -495,198 +440,3 @@ class ImageCapturePage(BasePage):
 
         return " / ".join(sensor_parts) if sensor_parts else "Sensor"
 
-    def _scan_input_directory(self):
-        """Scan input directory for first image and extract metadata to populate defaults."""
-        input_dir = self.wizard_data.get('input_directory', '')
-        if not input_dir or not os.path.isdir(input_dir):
-            return
-
-        # Find first image file
-        image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.irg'}
-        first_image_path = None
-
-        try:
-            # Walk through directory to find first image
-            for root, dirs, files in os.walk(input_dir):
-                for file in sorted(files):  # Sort for consistent selection
-                    file_path = Path(file)
-                    if file_path.suffix.lower() in image_extensions:
-                        first_image_path = os.path.join(root, file)
-                        break
-                if first_image_path:
-                    break
-        except Exception as e:
-            print(f"Error scanning input directory: {e}")
-            return
-
-        if not first_image_path or not os.path.exists(first_image_path):
-            return
-
-        self.wizard_data['first_image_path'] = first_image_path
-
-        # Extract metadata from first image
-        try:
-            image_service = ImageService(first_image_path)
-
-            # Get altitude from image
-            altitude_m = image_service.get_relative_altitude('m')
-            if altitude_m and altitude_m > 0:
-                # Set altitude based on current unit preference
-                if self.wizard_data['altitude_unit'] == 'ft':
-                    altitude_ft = altitude_m * 3.28084
-                    altitude_ft = max(0, min(600, altitude_ft))  # Clamp to slider range
-                    self.dialog.altitudeSpinBox.setValue(int(altitude_ft))
-                    self.wizard_data['altitude'] = altitude_ft
-                else:
-                    altitude_m = max(0, min(183, altitude_m))  # Clamp to slider range
-                    self.dialog.altitudeSpinBox.setValue(int(altitude_m))
-                    self.wizard_data['altitude'] = altitude_m
-
-            # Get camera info to match drone selection
-            # ImageService._get_camera_info() already matches the image to the database
-            camera_info = image_service._get_camera_info()
-
-            # Use ImageService's drone_make property (already extracted)
-            make = image_service.drone_make
-
-            # Get model from EXIF (ImageService doesn't expose this as a property)
-            exif_model = image_service.exif_data.get("0th", {}).get(piexif.ImageIFD.Model)
-            model = None
-            if exif_model:
-                model = exif_model.decode('utf-8').strip().rstrip("\x00")
-
-            # If we have camera_info, use it directly to find the matching combo box item
-            # camera_info is already filtered to match the image, so we can use it directly
-            if camera_info is not None and not camera_info.empty:
-                # Get the first row from camera_info (it's already matched)
-                camera_row = camera_info.iloc[0]
-
-                # Try to find this exact row in the combo box by matching key fields
-                # We'll match on Manufacturer and Model (Exif) which should be unique
-                camera_manufacturer = None
-                camera_model_exif = None
-
-                for key in ['Manufacturer', 'Make']:
-                    if key in camera_row.index:
-                        val = camera_row[key]
-                        if pd.notna(val) and val != '':
-                            camera_manufacturer = str(val).strip()
-                            break
-
-                for key in ['Model (Exif)', 'Model']:
-                    if key in camera_row.index:
-                        val = camera_row[key]
-                        if pd.notna(val) and val != '':
-                            camera_model_exif = str(val).strip()
-                            break
-
-                # Try to find exact match in combo box
-                if camera_manufacturer and camera_model_exif:
-                    for i in range(self.dialog.droneComboBox.count()):
-                        drone_data = self.dialog.droneComboBox.itemData(i)
-
-                        # Skip section headers and None items
-                        if drone_data is None or (isinstance(drone_data, str) and drone_data == "__SECTION__"):
-                            continue
-
-                        if isinstance(drone_data, pd.Series):
-                            # Check if this row matches our camera_info row
-                            drone_manufacturer = None
-                            drone_model_exif = None
-
-                            for key in ['Manufacturer', 'Make']:
-                                if key in drone_data.index:
-                                    val = drone_data[key]
-                                    if pd.notna(val) and val != '':
-                                        drone_manufacturer = str(val).strip()
-                                        break
-
-                            for key in ['Model (Exif)', 'Model']:
-                                if key in drone_data.index:
-                                    val = drone_data[key]
-                                    if pd.notna(val) and val != '':
-                                        drone_model_exif = str(val).strip()
-                                        break
-
-                            # Exact match on manufacturer and model
-                            if (drone_manufacturer and drone_model_exif and
-                                    drone_manufacturer.lower() == camera_manufacturer.lower() and
-                                    drone_model_exif.lower() == camera_model_exif.lower()):
-                                self.dialog.droneComboBox.setCurrentIndex(i)
-                                print(
-                                    f"Matched camera using camera_info: "
-                                    f"{camera_manufacturer} {camera_model_exif} -> "
-                                    f"Selected index {i}"
-                                )
-                                # Recalculate GSD with focal length from image
-                                self._calculate_gsd()
-                                return  # Found exact match, we're done
-
-            # Fallback: Try to find matching camera in dropdown using make/model
-            if make and model:
-                make_lower = make.lower().strip()
-                model_lower = model.lower().strip()
-
-                best_match_index = None
-                best_match_score = 0
-
-                for i in range(self.dialog.droneComboBox.count()):
-                    drone_data = self.dialog.droneComboBox.itemData(i)
-
-                    # Skip section headers and None items
-                    if drone_data is None or (isinstance(drone_data, str) and drone_data == "__SECTION__"):
-                        continue
-
-                    if isinstance(drone_data, pd.Series):
-                        drone_make = None
-                        drone_model = None
-
-                        for key in ['Make', 'Manufacturer']:
-                            if key in drone_data.index:
-                                val = drone_data[key]
-                                if pd.notna(val) and val != '':
-                                    drone_make = str(val).strip()
-                                    break
-
-                        for key in ['Model', 'Model (Exif)']:
-                            if key in drone_data.index:
-                                val = drone_data[key]
-                                if pd.notna(val) and val != '':
-                                    drone_model = str(val).strip()
-                                    break
-
-                        if drone_make and drone_model:
-                            drone_make_lower = drone_make.lower()
-                            drone_model_lower = drone_model.lower()
-
-                            # Calculate match score
-                            score = 0
-
-                            # Exact match gets highest score
-                            if make_lower == drone_make_lower:
-                                score += 10
-                            elif make_lower in drone_make_lower or drone_make_lower in make_lower:
-                                score += 5
-
-                            if model_lower == drone_model_lower:
-                                score += 10
-                            elif model_lower in drone_model_lower or drone_model_lower in model_lower:
-                                score += 5
-
-                            # If we have a good match, use it
-                            if score > best_match_score:
-                                best_match_score = score
-                                best_match_index = i
-
-                # Select the best match if we found one
-                if best_match_index is not None and best_match_score >= 5:
-                    self.dialog.droneComboBox.setCurrentIndex(best_match_index)
-                    print(f"Matched camera: {make} {model} -> Selected index {best_match_index}")
-                else:
-                    print(f"Could not match camera: {make} {model} (best score: {best_match_score})")
-
-            # Recalculate GSD with focal length from image
-            self._calculate_gsd()
-
-        except Exception as e:
-            print(f"Error extracting metadata from first image: {e}")

@@ -17,7 +17,12 @@ if platform.system() == 'Windows':
                     ('app/algorithms.conf','.'),
                     ('app/drones.pkl', '.'),
                     ('app/xmp.pkl', '.'),
-                    ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
+                    # Color lists used by ColorListService (expects under app/)
+                    ('app/colors.pkl', 'app'),
+                    ('colors.csv', 'app'),
+                    # AI Person Detector models
+                    ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_640.onnx', 'ai_models'),
+                    ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_1024.onnx', 'ai_models')
                     ],
 
                 hiddenimports=[],
@@ -36,7 +41,12 @@ elif platform.system() == 'Darwin':
                         ('app/algorithms.conf','.'),
                         ('app/drones.pkl', '.'),
                         ('app/xmp.pkl', '.'),
-                        ('app/algorithms/AIPersonDetector/services/ai_person_model.onnx', 'ai_models')
+                        # Color lists used by ColorListService (expects under app/)
+                        ('app/colors.pkl', 'app'),
+                        ('colors.csv', 'app'),
+                        # AI Person Detector models
+                        ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_640.onnx', 'ai_models'),
+                        ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_1024.onnx', 'ai_models')
                         ],
                     hiddenimports=[],
                     hookspath=None,

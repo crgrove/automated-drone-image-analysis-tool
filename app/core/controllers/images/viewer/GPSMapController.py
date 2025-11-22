@@ -62,14 +62,17 @@ class GPSMapController(QObject):
                 current_gps_index = i
                 break
 
+        offline_only = self._is_offline_only()
+
         if self.map_dialog is None:
-            self.map_dialog = GPSMapDialog(self.parent, self.gps_data, current_gps_index)
+            self.map_dialog = GPSMapDialog(self.parent, self.gps_data, current_gps_index, offline_only=offline_only)
             self.map_dialog.image_selected.connect(self.on_map_image_selected)
             # Connect to dialog close event to update button state
             self.map_dialog.finished.connect(self.on_map_dialog_closed)
         else:
             # Update with latest data if dialog already exists
             self.map_dialog.update_gps_data(self.gps_data, current_gps_index)
+            self.map_dialog.set_offline_mode(offline_only)
 
         self.map_dialog.show()
         self.map_dialog.raise_()
@@ -83,6 +86,15 @@ class GPSMapController(QObject):
 
         # Show current AOI if one is selected
         self.update_aoi_on_map()
+
+    def _is_offline_only(self) -> bool:
+        """Return whether OfflineOnly preference is enabled."""
+        try:
+            if hasattr(self.parent, "settings_service"):
+                return bool(self.parent.settings_service.get_setting("OfflineOnly", False))
+        except Exception:
+            pass
+        return False
 
     def extract_gps_data(self):
         """

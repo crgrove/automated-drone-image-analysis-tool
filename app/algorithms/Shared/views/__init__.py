@@ -7,6 +7,9 @@ from .ColorPickerDialog import ColorPickerDialog
 from .ColorGradientWidget import ColorGradientWidget
 from .HSVColorRowWidget import HSVColorRowWidget
 from .ColorRangeDialog import ColorRangeDialog
+from .HSVColorRowWizardWidget import HSVColorRowWizardWidget
+from .HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
+from .ColorSelectionMenu import ColorSelectionMenu
 
 __all__ = [
     'ColorPickerImageViewer',
@@ -14,4 +17,7 @@ __all__ = [
     'ColorGradientWidget',
     'HSVColorRowWidget',
     'ColorRangeDialog',
+    'HSVColorRowWizardWidget',
+    'HSVColorRangeRangeViewer',
+    'ColorSelectionMenu',
 ]

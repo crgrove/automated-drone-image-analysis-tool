@@ -98,7 +98,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             page.load_data()
 
         # Set window title
-        self.setWindowTitle("ADIAT Setup Wizard")
+        self.setWindowTitle("ADIAT Image Analysis Guide")
 
         # Connect navigation signals
         self.continueButton.clicked.connect(self._on_continue)

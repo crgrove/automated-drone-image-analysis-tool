@@ -6,6 +6,7 @@ from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
 from core.controllers.SelectionDialog import SelectionDialog
 from core.controllers.images.MainWindow import MainWindow
 from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+from core.controllers.streaming.StreamingGuide import StreamingGuide
 from multiprocessing import freeze_support
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from PySide6.QtGui import QIcon
@@ -38,6 +39,23 @@ def main():
 
     wizard_shown = False
 
+    def _launch_stream_viewer(wizard_data=None):
+        algorithm_name = 'ColorAnomalyAndMotionDetection'
+        if wizard_data and wizard_data.get('algorithm'):
+            algorithm_name = wizard_data.get('algorithm')
+        try:
+            app._stream_viewer = StreamViewerWindow(algorithm_name=algorithm_name, theme='dark')
+            if wizard_data:
+                app._stream_viewer.apply_wizard_data(wizard_data)
+            app._stream_viewer.show()
+        except Exception as e:
+            QMessageBox.critical(
+                None,
+                "Error",
+                f"Failed to open Real-time Stream Detection:\n{str(e)}"
+            )
+            sys.exit(1)
+
     # Connect signal to launch MainWindow when Images is selected
     def _on_selection(choice: str):
         if choice == 'images':
@@ -49,18 +67,7 @@ def main():
                 # Re-raise so our global excepthook handles exit
                 raise
         elif choice == 'stream':
-            # Launch the Real-time streaming detection window (new architecture)
-            try:
-                # Default to ColorAnomalyAndMotionDetection algorithm
-                app._stream_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme='dark')
-                app._stream_viewer.show()
-            except Exception as e:
-                QMessageBox.critical(
-                    None,
-                    "Error",
-                    f"Failed to open Real-time Stream Detection:\n{str(e)}"
-                )
-                sys.exit(1)
+            _launch_stream_viewer()
 
     # Connect signal to show setup wizard when requested
     def _on_wizard_requested():
@@ -120,8 +127,26 @@ def main():
         
         dlg.accept()  # Close selection dialog (already hidden, but this ensures cleanup)
 
+    def _on_stream_wizard_requested():
+        wizard = StreamingGuide()
+        wizard_data_from_wizard = None
+
+        def _on_wizard_completed(wizard_data):
+            nonlocal wizard_data_from_wizard
+            wizard_data_from_wizard = wizard_data
+
+        wizard.wizardCompleted.connect(_on_wizard_completed)
+        wizard_result = wizard.exec()
+        dlg.selection = "stream"
+
+        if wizard_result == QDialog.Accepted and wizard_data_from_wizard:
+            _launch_stream_viewer(wizard_data_from_wizard)
+        else:
+            _launch_stream_viewer()
+
     dlg.selectionMade.connect(_on_selection)
     dlg.wizardRequested.connect(_on_wizard_requested)
+    dlg.streamWizardRequested.connect(_on_stream_wizard_requested)
     result = dlg.exec()
 
     # If dialog was closed without a selection (and wizard wasn't shown), exit the app

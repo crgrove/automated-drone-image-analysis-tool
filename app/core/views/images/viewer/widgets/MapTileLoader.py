@@ -27,9 +27,10 @@ class MapTileLoader(QObject):
     # Signal emitted when there's an error loading tiles
     tile_error = Signal(str)  # error message
 
-    def __init__(self):
+    def __init__(self, offline_only=False):
         """Initialize the tile loader."""
         super().__init__()
+        self.offline_only = offline_only
 
         # Tile cache directory
         self.cache_dir = Path(tempfile.gettempdir()) / "adiat_map_cache"
@@ -116,6 +117,10 @@ class MapTileLoader(QObject):
         """
         self.tile_source = source
 
+    def set_offline_only(self, offline_only: bool):
+        """Enable/disable offline-only mode (no new tile downloads)."""
+        self.offline_only = bool(offline_only)
+
     def load_tile(self, x_tile, y_tile, zoom):
         """
         Load a map tile (from cache or download).
@@ -134,8 +139,15 @@ class MapTileLoader(QObject):
             if not pixmap.isNull():
                 self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
                 return
+        # If offline, don't attempt network and show placeholder/error
+        if self.offline_only:
+            self.tile_error.emit("Offline mode: map tiles unavailable")
+            pixmap = QPixmap(self.tile_size, self.tile_size)
+            pixmap.fill(QColor(200, 200, 200))
+            self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
+            return
 
-        # Download tile
+        # Download tile when online
         self.download_tile(x_tile, y_tile, zoom)
 
     def download_tile(self, x_tile, y_tile, zoom):

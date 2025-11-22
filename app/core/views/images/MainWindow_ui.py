@@ -484,7 +484,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR", None))
-        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Analysis Setup Wizard", None))
+        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Image Analysis Wizard", None))
 #if QT_CONFIG(tooltip)
         self.actionImageAnalysisGuide.setToolTip(QCoreApplication.translate("MainWindow", u"Launch the Image Analysis Guide wizard to configure analysis settings.\n"
 "Opens a step-by-step wizard to:\n"

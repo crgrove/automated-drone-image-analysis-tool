@@ -17,7 +17,7 @@ from core.services.LoggerService import LoggerService
 from core.views.streaming.components import InputProcessingTab, RenderingTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
 from algorithms.Shared.views import HSVColorRowWidget, ColorRangeDialog
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
+from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 
 
 class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
@@ -129,6 +129,8 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         layout = QVBoxLayout(widget)
 
         grid = QGridLayout()
+        grid.setColumnMinimumWidth(0, 160)
+        grid.setColumnStretch(1, 1)
 
         grid.addWidget(QLabel("Min Area (px):"), 0, 0)
         self.min_area_spinbox = QSpinBox()

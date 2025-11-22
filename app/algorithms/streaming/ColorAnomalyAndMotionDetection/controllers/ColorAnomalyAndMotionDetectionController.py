@@ -241,7 +241,71 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
 
     def set_config(self, config: Dict[str, Any]):
         """Apply algorithm configuration."""
-        self._on_config_changed(config)
+        if not hasattr(self, 'integrated_controls'):
+            self._on_config_changed(config)
+            return
+        
+        # Update motion detection checkbox
+        if 'enable_motion' in config and hasattr(self.integrated_controls, 'enable_motion'):
+            self.integrated_controls.enable_motion.setChecked(bool(config['enable_motion']))
+        
+        # Update motion algorithm combo box
+        if 'motion_algorithm' in config and hasattr(self.integrated_controls, 'motion_algorithm'):
+            motion_algo = config['motion_algorithm']
+            # Handle both string and enum values
+            if isinstance(motion_algo, str):
+                # Map "MOG2 Background" to "MOG2" for combo box
+                if motion_algo == "MOG2 Background":
+                    motion_algo = "MOG2"
+                if motion_algo in ["FRAME_DIFF", "MOG2", "KNN"]:
+                    self.integrated_controls.motion_algorithm.setCurrentText(motion_algo)
+            else:
+                # If it's an enum, convert to string
+                algo_str = str(motion_algo).split('.')[-1]  # Get enum name
+                if algo_str in ["FRAME_DIFF", "MOG2", "KNN"]:
+                    self.integrated_controls.motion_algorithm.setCurrentText(algo_str)
+        
+        # Update motion threshold
+        if 'motion_threshold' in config and hasattr(self.integrated_controls, 'motion_threshold'):
+            self.integrated_controls.motion_threshold.setValue(config['motion_threshold'])
+        
+        # Update color quantization checkbox
+        if 'enable_color_quantization' in config and hasattr(self.integrated_controls, 'enable_color_quantization'):
+            self.integrated_controls.enable_color_quantization.setChecked(bool(config['enable_color_quantization']))
+        
+        # Update color rarity percentile slider
+        if 'color_rarity_percentile' in config and hasattr(self.integrated_controls, 'color_rarity_percentile'):
+            percentile = float(config['color_rarity_percentile'])
+            # Clamp to slider range (0-100)
+            percentile = max(0, min(100, int(percentile)))
+            self.integrated_controls.color_rarity_percentile.setValue(percentile)
+            # Update the label if the method exists
+            if hasattr(self.integrated_controls, 'update_color_percentile_label'):
+                self.integrated_controls.update_color_percentile_label()
+        
+        # Update detection area spinboxes
+        if 'min_detection_area' in config and hasattr(self.integrated_controls, 'min_detection_area'):
+            self.integrated_controls.min_detection_area.setValue(config['min_detection_area'])
+        if 'max_detection_area' in config and hasattr(self.integrated_controls, 'max_detection_area'):
+            self.integrated_controls.max_detection_area.setValue(config['max_detection_area'])
+        if 'color_min_detection_area' in config and hasattr(self.integrated_controls, 'color_min_detection_area'):
+            self.integrated_controls.color_min_detection_area.setValue(config['color_min_detection_area'])
+        if 'color_max_detection_area' in config and hasattr(self.integrated_controls, 'color_max_detection_area'):
+            self.integrated_controls.color_max_detection_area.setValue(config['color_max_detection_area'])
+        # Also handle min_area/max_area for compatibility
+        if 'min_area' in config and 'min_detection_area' not in config:
+            if hasattr(self.integrated_controls, 'min_detection_area'):
+                self.integrated_controls.min_detection_area.setValue(config['min_area'])
+        if 'max_area' in config and 'max_detection_area' not in config:
+            if hasattr(self.integrated_controls, 'max_detection_area'):
+                self.integrated_controls.max_detection_area.setValue(config['max_area'])
+        
+        # Get the updated config from the controls (includes all defaults)
+        # This ensures we have a complete config with all fields, not just wizard fields
+        updated_config = self.integrated_controls.get_config()
+        
+        # Apply the config to update the detector
+        self._on_config_changed(updated_config)
 
     def get_stats(self) -> Dict[str, str]:
         """Get algorithm-specific statistics."""

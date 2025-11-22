@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MotionDetectionWizard</class>
+ <widget class="QWidget" name="MotionDetectionWizard">
+  <layout class="QVBoxLayout" name="verticalLayout_root">
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>5</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+   <item>
+    <widget class="QGroupBox" name="groupBox_mode">
+     <property name="title"><string>Detection Mode</string></property>
+     <layout class="QVBoxLayout" name="verticalLayout_mode">
+      <item>
+       <widget class="QLabel" name="labelMode">
+        <property name="text"><string>Mode:</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="modeComboBox">
+        <item>
+         <property name="text"><string>Auto</string></property>
+        </item>
+        <item>
+         <property name="text"><string>Static Camera</string></property>
+        </item>
+        <item>
+         <property name="text"><string>Moving Camera</string></property>
+        </item>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_algorithm">
+     <property name="title"><string>Algorithm</string></property>
+     <layout class="QVBoxLayout" name="verticalLayout_algorithm">
+      <item>
+       <widget class="QLabel" name="labelAlgorithm">
+        <property name="text"><string>Algorithm:</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="algorithmComboBox">
+        <item>
+         <property name="text"><string>Frame Difference</string></property>
+        </item>
+        <item>
+         <property name="text"><string>MOG2 Background</string></property>
+        </item>
+        <item>
+         <property name="text"><string>KNN Background</string></property>
+        </item>
+        <item>
+         <property name="text"><string>Optical Flow</string></property>
+        </item>
+        <item>
+         <property name="text"><string>Feature Matching</string></property>
+        </item>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_parameters">
+     <property name="title"><string>Detection Parameters</string></property>
+     <layout class="QVBoxLayout" name="verticalLayout_parameters">
+      <item>
+       <widget class="QLabel" name="labelSensitivity">
+        <property name="text"><string>Sensitivity: 50%</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSlider" name="sensitivitySlider">
+        <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>100</number></property>
+        <property name="value"><number>50</number></property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_minArea">
+        <item>
+         <widget class="QLabel" name="labelMinArea">
+          <property name="text"><string>Min Area:</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="minAreaSpinBox">
+          <property name="minimum"><number>10</number></property>
+          <property name="maximum"><number>50000</number></property>
+          <property name="value"><number>500</number></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_maxArea">
+        <item>
+         <widget class="QLabel" name="labelMaxArea">
+          <property name="text"><string>Max Area:</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="maxAreaSpinBox">
+          <property name="minimum"><number>100</number></property>
+          <property name="maximum"><number>500000</number></property>
+          <property name="value"><number>100000</number></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+</ui>
+

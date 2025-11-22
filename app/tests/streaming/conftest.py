@@ -5,7 +5,7 @@ import os
 import pytest
 import numpy as np
 from PySide6.QtWidgets import QApplication
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 
 # Add the app directory to the Python path
 app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -88,3 +88,48 @@ def mock_recording_manager():
     manager.stop_recording = Mock(return_value=True)
     manager.is_recording = False
     return manager
+
+
+@pytest.fixture(autouse=True)
+def auto_close_color_dialogs():
+    """Automatically close any color selection dialogs that open during tests."""
+    from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
+    from PySide6.QtWidgets import QDialog
+    
+    # Patch ColorRangeDialog.exec() to automatically accept
+    original_exec = ColorRangeDialog.exec
+    
+    def mock_exec(self):
+        # Automatically accept the dialog
+        # Return Accepted status (which is 1 for QDialog.Accepted)
+        return QDialog.DialogCode.Accepted
+    
+    # Patch get_hsv_ranges to return default valid data
+    original_get_hsv_ranges = ColorRangeDialog.get_hsv_ranges
+    
+    def mock_get_hsv_ranges(self):
+        # Return default HSV range data that matches expected format
+        try:
+            # Try to call original first, but if it fails, return defaults
+            return original_get_hsv_ranges(self)
+        except (AttributeError, RuntimeError):
+            # Return default HSV range data
+            return {
+                'center_hsv': (0, 1, 1),
+                'h_range': (0, 1),
+                's_range': (0, 1),
+                'v_range': (0, 1),
+                'h': 0,
+                's': 1,
+                'v': 1,
+                'h_minus': 20/360,
+                'h_plus': 20/360,
+                's_minus': 0.2,
+                's_plus': 0.2,
+                'v_minus': 0.2,
+                'v_plus': 0.2
+            }
+    
+    with patch.object(ColorRangeDialog, 'exec', mock_exec), \
+         patch.object(ColorRangeDialog, 'get_hsv_ranges', mock_get_hsv_ranges):
+        yield

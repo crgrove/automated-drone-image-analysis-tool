@@ -49,51 +49,57 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         # Add actual tabs - Input & Processing moved to right before Rendering
         self.tabs.addTab(self._create_color_tab(), "Color Anomaly")
         self.tabs.addTab(self._create_motion_tab(), "Motion Detection")
-        self.tabs.addTab(self._create_fusion_tab(), "Fusion & Temporal")
-        self.tabs.addTab(self._create_fpr_tab(), "False Pos. Reduction")
+        self.tabs.addTab(self._create_fusion_tab(), "Fusion && Cleanup")
         # Use shared tabs for Input & Processing and Rendering
         self.input_processing_tab = InputProcessingTab()
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
-        self.tabs.addTab(self.input_processing_tab, "Input & Processing")
+        self.tabs.addTab(self.input_processing_tab, "Input && Processing")
         self.tabs.addTab(self.rendering_tab, "Rendering")
 
 
     def _create_motion_tab(self) -> QWidget:
-        """Create Motion Detection tab - matches original exactly."""
+        """Create Motion Detection tab with simplified default controls and advanced options."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
         # Enable Motion
         self.enable_motion = QCheckBox("Enable Motion Detection")
         self.enable_motion.setChecked(False)
-        self.enable_motion.setToolTip("Detect moving objects by analyzing frame-to-frame differences.\n"
-                                      "Works best for stationary cameras or slow-moving cameras.\n"
-                                      "Automatically pauses when excessive camera movement is detected.\n"
-                                      "Can be combined with Color Detection for more robust detection.")
+        self.enable_motion.setToolTip("Turn ON to highlight moving objects in the scene.\n"
+                                      "Most users can leave all other settings at their defaults.\n"
+                                      "Works best for stationary or slow-moving cameras and can be combined\n"
+                                      "with Color-Based Anomaly Detection for more robust results.")
         layout.addWidget(self.enable_motion)
+
+        # Container for advanced motion controls
+        self.advanced_motion_container = QWidget()
+        advanced_layout = QVBoxLayout(self.advanced_motion_container)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
 
         # Algorithm Selection
         algo_group = QGroupBox("Algorithm")
         algo_layout = QGridLayout(algo_group)
+        algo_layout.setColumnMinimumWidth(0, 160)
+        algo_layout.setColumnStretch(1, 1)
 
         algo_layout.addWidget(QLabel("Type:"), 0, 0)
         self.motion_algorithm = QComboBox()
         self.motion_algorithm.addItems(["FRAME_DIFF", "MOG2", "KNN"])
         self.motion_algorithm.setCurrentText("MOG2")
-        self.motion_algorithm.setToolTip("Motion detection algorithm:\n\n"
-                                         "• FRAME_DIFF: Simple frame differencing. Fast, sensitive to all motion.\n"
-                                         "  Good for: Quick tests, high-contrast scenes.\n\n"
-                                         "• MOG2: Gaussian mixture model (recommended). Adapts to lighting changes.\n"
-                                         "  Good for: General use, varying lighting, shadows optional.\n\n"
-                                         "• KNN: K-nearest neighbors. More robust to noise than MOG2.\n"
-                                         "  Good for: Noisy videos, complex backgrounds.")
+        self.motion_algorithm.setToolTip("Motion detection algorithm (advanced setting):\n\n"
+                                         "• FRAME_DIFF – Fast and simple; very sensitive to any motion.\n"
+                                         "• MOG2 – Balanced and adaptive (recommended for most scenes).\n"
+                                         "• KNN – More robust to noise and complex backgrounds.\n\n"
+                                         "If you are unsure, leave this set to MOG2.")
         algo_layout.addWidget(self.motion_algorithm, 0, 1)
 
-        layout.addWidget(algo_group)
+        advanced_layout.addWidget(algo_group)
 
-        # Detection Parameters
+        # Detection Parameters (advanced)
         param_group = QGroupBox("Detection Parameters")
         param_layout = QGridLayout(param_group)
+        param_layout.setColumnMinimumWidth(0, 160)
+        param_layout.setColumnStretch(1, 1)
 
         row = 0
         param_layout.addWidget(QLabel("Motion Threshold:"), row, 0)
@@ -105,30 +111,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
                                          "Higher values = less sensitive, only strong motion, fewer false positives.\n"
                                          "Recommended: 10 for general use, 5 for subtle motion, 15-20 for high contrast scenes.")
         param_layout.addWidget(self.motion_threshold, row, 1)
-
-        row += 1
-        param_layout.addWidget(QLabel("Min Area (px):"), row, 0)
-        self.min_detection_area = QSpinBox()
-        self.min_detection_area.setRange(1, 100000)
-        self.min_detection_area.setValue(5)
-        self.min_detection_area.setToolTip("Minimum detection area in pixels (1-100000).\n"
-                                           "Filters out very small detections (noise, insects, raindrops).\n"
-                                           "Lower values = detect smaller objects, more noise.\n"
-                                           "Higher values = only large objects, less noise.\n"
-                                           "Recommended: 5-10 for person detection, 50-100 for vehicle detection.")
-        param_layout.addWidget(self.min_detection_area, row, 1)
-
-        row += 1
-        param_layout.addWidget(QLabel("Max Area (px):"), row, 0)
-        self.max_detection_area = QSpinBox()
-        self.max_detection_area.setRange(10, 1000000)
-        self.max_detection_area.setValue(1000)
-        self.max_detection_area.setToolTip("Maximum detection area in pixels (10-1000000).\n"
-                                           "Filters out very large detections (shadows, clouds, global lighting changes).\n"
-                                           "Lower values = only small/medium objects.\n"
-                                           "Higher values = allow large objects.\n"
-                                           "Recommended: 1000 for people, 10000 for vehicles, higher for large objects.")
-        param_layout.addWidget(self.max_detection_area, row, 1)
 
         row += 1
         param_layout.addWidget(QLabel("Blur Kernel (odd):"), row, 0)
@@ -156,11 +138,13 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
                                                "Recommended: 3 for general use, 1 for precise edges, 5-7 for noisy videos.")
         param_layout.addWidget(self.morphology_kernel_size, row, 1)
 
-        layout.addWidget(param_group)
+        advanced_layout.addWidget(param_group)
 
         # Persistence Filter
         persist_group = QGroupBox("Persistence Filter")
         persist_layout = QGridLayout(persist_group)
+        persist_layout.setColumnMinimumWidth(0, 160)
+        persist_layout.setColumnStretch(1, 1)
 
         persist_layout.addWidget(QLabel("Window Frames (M):"), 0, 0)
         self.persistence_frames = QSpinBox()
@@ -181,14 +165,16 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
                                               "Higher values = more stringent, filters flickering false positives.\n"
                                               "Lower values = more lenient, detects brief/intermittent motion.\n"
                                               "Must be ≤ Window Frames.\n"
-                                              "Recommended: 2 (motion in 2 of last 3 frames)")
+                                              "Recommended: 2 (motion in 2 of last 3 frames).")
         persist_layout.addWidget(self.persistence_threshold, 1, 1)
 
-        layout.addWidget(persist_group)
+        advanced_layout.addWidget(persist_group)
 
         # Background Subtraction
         bg_group = QGroupBox("Background Subtraction (MOG2/KNN)")
         bg_layout = QGridLayout(bg_group)
+        bg_layout.setColumnMinimumWidth(0, 160)
+        bg_layout.setColumnStretch(1, 1)
 
         bg_layout.addWidget(QLabel("History Frames:"), 0, 0)
         self.bg_history = QSpinBox()
@@ -219,7 +205,37 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
                                           "Recommended: ON for outdoor scenes with strong shadows, OFF for speed.")
         bg_layout.addWidget(self.bg_detect_shadows, 2, 0, 1, 2)
 
-        layout.addWidget(bg_group)
+        advanced_layout.addWidget(bg_group)
+
+        # Object Size Filter (always shown)
+        size_group = QGroupBox("Object Size Filter")
+        size_layout = QGridLayout(size_group)
+        size_layout.setColumnMinimumWidth(0, 160)
+        size_layout.setColumnStretch(1, 1)
+
+        size_layout.addWidget(QLabel("Min Object Area (px):"), 0, 0)
+        self.min_detection_area = QSpinBox()
+        self.min_detection_area.setRange(1, 100000)
+        self.min_detection_area.setValue(5)
+        self.min_detection_area.setToolTip("Minimum detection area in pixels (1-100000).\n"
+                                           "Filters out very small detections such as noise, insects, or raindrops.\n"
+                                           "Lower values = detect smaller objects (more noise).\n"
+                                           "Higher values = only larger objects (less noise).\n"
+                                           "Recommended: 5-10 for person-sized motion, 50-100 for vehicles.")
+        size_layout.addWidget(self.min_detection_area, 0, 1)
+
+        size_layout.addWidget(QLabel("Max Object Area (px):"), 1, 0)
+        self.max_detection_area = QSpinBox()
+        self.max_detection_area.setRange(10, 1000000)
+        self.max_detection_area.setValue(1000)
+        self.max_detection_area.setToolTip("Maximum detection area in pixels (10-1000000).\n"
+                                           "Filters out very large regions such as full-frame lighting changes or giant shadows.\n"
+                                           "Lower values = only small/medium objects.\n"
+                                           "Higher values = allow large objects.\n"
+                                           "Recommended: 1000 for people, 10000 for vehicles, higher for very large objects.")
+        size_layout.addWidget(self.max_detection_area, 1, 1)
+
+        layout.addWidget(size_group)
 
         # Camera Movement
         cam_group = QGroupBox("Camera Movement Detection")
@@ -249,6 +265,18 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         cam_layout.addLayout(cam_thresh_layout)
 
         layout.addWidget(cam_group)
+
+        # Advanced toggle (placed after camera movement controls)
+        self.show_advanced_motion = QCheckBox("Show Advanced Motion Settings")
+        self.show_advanced_motion.setChecked(False)
+        self.show_advanced_motion.setToolTip("Advanced users can expand this to adjust the motion algorithm\n"
+                                             "and detailed thresholds (sensitivity, filters, background model).\n"
+                                             "If you are unsure, leave this unchecked and use the defaults.")
+
+        # Hide advanced controls by default
+        self.advanced_motion_container.setVisible(False)
+        layout.addWidget(self.show_advanced_motion)
+        layout.addWidget(self.advanced_motion_container)
         layout.addStretch()
 
         return widget
@@ -259,101 +287,127 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         layout = QVBoxLayout(widget)
 
         # Enable Color
-        self.enable_color_quantization = QCheckBox("Enable Color Anomaly Detection")
+        self.enable_color_quantization = QCheckBox("Enable Color-Based Anomaly Detection")
         self.enable_color_quantization.setChecked(True)
-        self.enable_color_quantization.setToolTip("Detect rare/unusual colors in the scene using color quantization.\n"
-                                                  "Finds colors that appear infrequently (statistical anomalies).\n"
+        self.enable_color_quantization.setToolTip("Detects pixels whose colors are statistically rare in the frame.\n"
+                                                  "Conceptually similar to MRMap's rarity-based detection for images.\n"
                                                   "Works well for: bright colored clothing, vehicles, equipment in natural scenes.\n"
                                                   "Can be combined with Motion Detection for more robust detection.")
         layout.addWidget(self.enable_color_quantization)
 
-        # Quantization Parameters
-        quant_group = QGroupBox("Quantization Parameters")
+        # Color rarity / quantization settings
+        quant_group = QGroupBox("Color Rarity Settings")
         quant_layout = QGridLayout(quant_group)
+        quant_layout.setColumnMinimumWidth(0, 160)
+        quant_layout.setColumnStretch(1, 1)
 
-        quant_layout.addWidget(QLabel("Quantization Bits:"), 0, 0)
+        quant_layout.addWidget(QLabel("Color Resolution (bins):"), 0, 0)
         bits_layout = QHBoxLayout()
         self.color_quantization_bits = QSlider(Qt.Horizontal)
         self.color_quantization_bits.setRange(3, 8)
         self.color_quantization_bits.setValue(4)
-        self.color_quantization_bits.setToolTip("Number of bits for color quantization (3-8 bits).\n"
-                                                "Controls color histogram resolution.\n"
-                                                "Lower bits (3-4) = fewer bins, faster, more grouping, less precise.\n"
-                                                "Higher bits (6-8) = more bins, slower, less grouping, more precise.\n"
-                                                "Recommended: 4 bits (512 colors) for general use, 5 bits for detailed scenes.")
+        self.color_quantization_bits.setToolTip("Controls how finely colors are grouped into histogram bins (3-8 bits).\n"
+                                                "Analogous to MRMap's color binning.\n"
+                                                "Lower values (3-4) = fewer bins → faster, more grouping, fewer but stronger detections.\n"
+                                                "Higher values (6-8) = more bins → slower, less grouping, more but weaker/smaller detections.\n"
+                                                "Recommended: 4-5 for a balanced number of detections; use lower for very clean results,\n"
+                                                "and higher only when you need to pull out very subtle color differences.")
         bits_layout.addWidget(self.color_quantization_bits)
         self.color_bits_label = QLabel("4 bits")
         bits_layout.addWidget(self.color_bits_label)
         quant_layout.addLayout(bits_layout, 0, 1)
 
-        quant_layout.addWidget(QLabel("Rarity Percentile:"), 1, 0)
+        quant_layout.addWidget(QLabel("Rarity Threshold (% of colors):"), 1, 0)
         percentile_layout = QHBoxLayout()
         self.color_rarity_percentile = QSlider(Qt.Horizontal)
         self.color_rarity_percentile.setRange(0, 100)
         self.color_rarity_percentile.setValue(30)  # Default 30%
-        self.color_rarity_percentile.setToolTip("Rarity threshold as percentile of color histogram (0-100%).\n"
-                                                "Detects colors that appear in fewer pixels than this percentile.\n"
-                                                "Lower values (10-20%) = only very rare colors (fewer detections).\n"
-                                                "Higher values (40-60%) = include more common colors (more detections).\n"
-                                                "Recommended: 30% for general use, 15-20% for high-specificity (bright objects only).")
+        self.color_rarity_percentile.setToolTip("Sensitivity threshold for how rare a color must be to be flagged (0-100%).\n"
+                                                "Computed from the distribution of color-bin counts in the frame, similar in role\n"
+                                                "to MRMap's detection threshold.\n"
+                                                "Lower values (10-20%) = stricter: only very rare colors (fewer detections).\n"
+                                                "Medium values (25-40%) = balanced (recommended for general use).\n"
+                                                "Higher values (40-60%) = more sensitive: includes more common colors (more detections).")
         percentile_layout.addWidget(self.color_rarity_percentile)
         self.color_percentile_label = QLabel("30%")
         percentile_layout.addWidget(self.color_percentile_label)
         quant_layout.addLayout(percentile_layout, 1, 1)
 
-        quant_layout.addWidget(QLabel("Min Area (px):"), 2, 0)
+        quant_layout.addWidget(QLabel("Min Object Area (px):"), 2, 0)
         self.color_min_detection_area = QSpinBox()
         self.color_min_detection_area.setRange(1, 10000)
         self.color_min_detection_area.setValue(15)
-        self.color_min_detection_area.setToolTip("Minimum detection area for color anomalies in pixels (1-10000).\n"
-                                                 "Filters out very small color patches (noise, specks).\n"
-                                                 "Lower values = detect smaller colored objects, more noise.\n"
-                                                 "Higher values = only larger colored regions, less noise.\n"
-                                                 "Recommended: 15 for person detection, 50 for vehicles.")
+        self.color_min_detection_area.setToolTip("Minimum area in pixels for a color anomaly to be treated as an object of interest.\n"
+                                                 "Conceptually matches MRMap's minimum AOI area.\n"
+                                                 "Lower values = detect smaller colored objects (more noise).\n"
+                                                 "Higher values = only larger colored regions (less noise).\n"
+                                                 "Recommended: 15 for person-sized targets, 50+ for vehicles or large objects.")
         quant_layout.addWidget(self.color_min_detection_area, 2, 1)
 
-        quant_layout.addWidget(QLabel("Max Area (px):"), 3, 0)
+        quant_layout.addWidget(QLabel("Max Object Area (px):"), 3, 0)
         self.color_max_detection_area = QSpinBox()
         self.color_max_detection_area.setRange(100, 1000000)
         self.color_max_detection_area.setValue(50000)
-        self.color_max_detection_area.setToolTip("Maximum detection area for color anomalies in pixels (100-1000000).\n"
-                                                 "Filters out very large color patches (false positives, large objects).\n"
+        self.color_max_detection_area.setToolTip("Maximum area in pixels for a color anomaly to be treated as an object of interest.\n"
+                                                 "Conceptually matches MRMap's maximum AOI area.\n"
                                                  "Lower values = only detect smaller colored objects.\n"
                                                  "Higher values = allow larger colored regions.\n"
-                                                 "Recommended: 50000 for general use, 10000 for small objects only.")
+                                                 "Recommended: 50000 for general use, 10000 for small-object-only searches.")
         quant_layout.addWidget(self.color_max_detection_area, 3, 1)
 
         layout.addWidget(quant_group)
 
         # Hue Expansion
-        hue_group = QGroupBox("Hue Expansion")
+        hue_group = QGroupBox("Color Match Expansion")
         hue_layout = QVBoxLayout(hue_group)
 
-        self.enable_hue_expansion = QCheckBox("Enable Hue Expansion")
+        self.enable_hue_expansion = QCheckBox("Allow Similar Colors (Hue Expansion)")
         self.enable_hue_expansion.setChecked(False)  # Default OFF
-        self.enable_hue_expansion.setToolTip("Expands detected rare colors to include similar hues.\n"
-                                             "Groups similar colors together (e.g., red and orange, blue and cyan).\n"
-                                             "Helps detect objects even if exact color varies slightly.\n"
-                                             "Recommended: OFF for specific colors (e.g., red jacket only),\n"
-                                             "ON for color families (e.g., any warm colors).")
+        self.enable_hue_expansion.setToolTip("Lets the detector treat similar colors as the same object.\n"
+                                             "For example, a red jacket that looks slightly orange in some frames will still be grouped together.\n"
+                                             "Turn this OFF if you only care about one very specific color shade.\n"
+                                             "Turn this ON if you want a whole family of colors (e.g., any warm reds/oranges).")
         hue_layout.addWidget(self.enable_hue_expansion)
 
         hue_range_layout = QHBoxLayout()
-        hue_range_layout.addWidget(QLabel("Expansion Range:"))
+        hue_range_layout.addWidget(QLabel("Color Match Range:"))
         self.hue_expansion_range = QSlider(Qt.Horizontal)
         self.hue_expansion_range.setRange(0, 30)
         self.hue_expansion_range.setValue(5)
-        self.hue_expansion_range.setToolTip("Hue expansion range in OpenCV hue units (0-30, ~0-60 degrees).\n"
-                                            "Expands rare hue detection by ±N hue values.\n"
-                                            "Larger values = wider color range, detect more variations.\n"
-                                            "Smaller values = narrower color range, more specific.\n"
-                                            "Recommended: 5 (~10°) for slight variations, 10-15 (~20-30°) for color families.")
+        self.hue_expansion_range.setToolTip("How wide to stretch the color match around each detected color.\n"
+                                            "Smaller values = stay very close to the original color (more specific).\n"
+                                            "Larger values = include a wider range of similar colors (more forgiving).\n"
+                                            "Recommended: low values for precise colors, higher values when lighting or camera color shifts a lot.")
         hue_range_layout.addWidget(self.hue_expansion_range)
         self.hue_range_label = QLabel("±5 (~10°)")
         hue_range_layout.addWidget(self.hue_range_label)
         hue_layout.addLayout(hue_range_layout)
 
         layout.addWidget(hue_group)
+
+        # Color Exclusion (moved from False Pos. Reduction tab)
+        exclusion_group = QGroupBox("Color Exclusion")
+        exclusion_layout = QVBoxLayout(exclusion_group)
+
+        self.enable_color_exclusion = QCheckBox("Enable Color Exclusion")
+        self.enable_color_exclusion.setChecked(False)
+        self.enable_color_exclusion.setToolTip("Exclude specific background colors from color anomaly detection.\n"
+                                               "Useful for ignoring dominant scene colors such as grass, sky, or buildings.\n"
+                                               "Click on the color wheel below to choose colors to ignore.\n"
+                                               "Selected colors are highlighted with a dark border.")
+        exclusion_layout.addWidget(self.enable_color_exclusion)
+
+        # Color wheel for hue selection (20° steps, 0-360°)
+        exclusion_layout.addWidget(QLabel("Click on color wheel to exclude colors (20° steps, 0-360°):"))
+
+        # Create color wheel widget
+        self.color_wheel = ColorWheelWidget(size=300)
+        self.color_wheel.setToolTip("Click on any color segment to toggle exclusion on/off.\n"
+                                    "Segments represent broad color ranges (e.g., blues, greens, reds).\n"
+                                    "Use this to teach the system which background colors to ignore.")
+        exclusion_layout.addWidget(self.color_wheel, alignment=Qt.AlignCenter)
+
+        layout.addWidget(exclusion_group)
         layout.addStretch()
 
         return widget
@@ -408,6 +462,8 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         temporal_layout.addWidget(self.enable_temporal_voting)
 
         window_layout = QGridLayout()
+        window_layout.setColumnMinimumWidth(0, 160)
+        window_layout.setColumnStretch(1, 1)
         window_layout.addWidget(QLabel("Window Frames (M):"), 0, 0)
         self.temporal_window_frames = QSpinBox()
         self.temporal_window_frames.setRange(2, 30)
@@ -431,39 +487,31 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         window_layout.addWidget(self.temporal_threshold_frames, 1, 1)
 
         temporal_layout.addLayout(window_layout)
-        layout.addWidget(temporal_group)
-        layout.addStretch()
 
-        return widget
-
-    def _create_fpr_tab(self) -> QWidget:
-        """Create False Positive Reduction tab - matches original exactly."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        # Detection cleanup (aspect ratio + clustering)
+        cleanup_group = QGroupBox("Detection Cleanup")
+        cleanup_layout = QVBoxLayout(cleanup_group)
 
         # Aspect Ratio Filter
-        aspect_group = QGroupBox("Aspect Ratio Filter")
-        aspect_layout = QVBoxLayout(aspect_group)
-
         self.enable_aspect_ratio_filter = QCheckBox("Enable Aspect Ratio Filtering")
         self.enable_aspect_ratio_filter.setChecked(False)  # Default OFF
-        self.enable_aspect_ratio_filter.setToolTip("Filters detections based on aspect ratio (width/height).\n"
-                                                   "Removes very thin/elongated detections (wires, shadows, cracks).\n"
-                                                   "Useful for filtering non-object shapes.\n"
-                                                   "Recommended: OFF by default, ON if many thin false positives.")
-        aspect_layout.addWidget(self.enable_aspect_ratio_filter)
+        self.enable_aspect_ratio_filter.setToolTip("Filter out very thin or stretched detections based on width/height.\n"
+                                                   "Useful for removing wires, long shadows, or other non-object shapes.\n"
+                                                   "Most users can leave this OFF unless you see many long skinny false detections.")
+        cleanup_layout.addWidget(self.enable_aspect_ratio_filter)
 
         ratio_layout = QGridLayout()
+        ratio_layout.setColumnMinimumWidth(0, 160)
+        ratio_layout.setColumnStretch(1, 1)
         ratio_layout.addWidget(QLabel("Min Ratio:"), 0, 0)
         self.min_aspect_ratio = QDoubleSpinBox()
         self.min_aspect_ratio.setRange(0.1, 10.0)
         self.min_aspect_ratio.setValue(0.2)
         self.min_aspect_ratio.setSingleStep(0.1)
-        self.min_aspect_ratio.setToolTip("Minimum aspect ratio (width/height) to keep (0.1-10.0).\n"
-                                         "Rejects very tall/thin vertical detections.\n"
-                                         "Example: 0.2 = reject if height > 5× width.\n"
-                                         "Lower values = allow thinner objects.\n"
-                                         "Recommended: 0.2 for filtering poles/wires, 0.5 for people.")
+        self.min_aspect_ratio.setToolTip("Minimum width/height ratio to keep (0.1-10.0).\n"
+                                         "Lower values = allow taller, thinner detections.\n"
+                                         "Higher values = require detections to be more square.\n"
+                                         "Example: 0.2 ≈ reject if height is more than 5× width.")
         ratio_layout.addWidget(self.min_aspect_ratio, 0, 1)
 
         ratio_layout.addWidget(QLabel("Max Ratio:"), 1, 0)
@@ -471,68 +519,41 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.max_aspect_ratio.setRange(0.1, 20.0)
         self.max_aspect_ratio.setValue(5.0)
         self.max_aspect_ratio.setSingleStep(0.1)
-        self.max_aspect_ratio.setToolTip("Maximum aspect ratio (width/height) to keep (0.1-20.0).\n"
-                                         "Rejects very wide/thin horizontal detections.\n"
-                                         "Example: 5.0 = reject if width > 5× height.\n"
-                                         "Higher values = allow wider objects.\n"
-                                         "Recommended: 5.0 for filtering shadows/lines, 10.0 for vehicles.")
+        self.max_aspect_ratio.setToolTip("Maximum width/height ratio to keep (0.1-20.0).\n"
+                                         "Lower values = reject very wide, thin detections.\n"
+                                         "Higher values = allow wider objects such as vehicles or long equipment.")
         ratio_layout.addWidget(self.max_aspect_ratio, 1, 1)
 
-        aspect_layout.addLayout(ratio_layout)
-        layout.addWidget(aspect_group)
+        cleanup_layout.addLayout(ratio_layout)
 
         # Detection Clustering
-        cluster_group = QGroupBox("Detection Clustering")
-        cluster_layout = QVBoxLayout(cluster_group)
+        clustering_group = QGroupBox("Detection Clustering")
+        clustering_layout = QVBoxLayout(clustering_group)
 
         self.enable_detection_clustering = QCheckBox("Enable Detection Clustering")
         self.enable_detection_clustering.setChecked(False)  # Default OFF
-        self.enable_detection_clustering.setToolTip("Combines nearby detections into single merged detection.\n"
-                                                    "Groups detections whose centroids are within specified distance.\n"
-                                                    "Merged detection encompasses all combined contours.\n"
-                                                    "Useful for: Combining scattered patches of same object.\n"
-                                                    "Recommended: OFF by default, ON if objects appear fragmented.")
-        cluster_layout.addWidget(self.enable_detection_clustering)
+        self.enable_detection_clustering.setToolTip("Optionally merge nearby detections into a single, larger detection.\n"
+                                                    "Useful when one object appears as many small adjacent detections.\n"
+                                                    "Most users can leave this OFF unless objects look fragmented.")
+        clustering_layout.addWidget(self.enable_detection_clustering)
 
         cluster_dist_layout = QGridLayout()
+        cluster_dist_layout.setColumnMinimumWidth(0, 160)
+        cluster_dist_layout.setColumnStretch(1, 1)
         cluster_dist_layout.addWidget(QLabel("Clustering Distance (px):"), 0, 0)
         self.clustering_distance = QSpinBox()
         self.clustering_distance.setRange(0, 500)
         self.clustering_distance.setValue(50)  # Default 50px
-        self.clustering_distance.setToolTip("Maximum centroid distance to merge detections (0-500 pixels).\n"
-                                            "Detections closer than this distance are combined into one.\n"
+        self.clustering_distance.setToolTip("Maximum distance between detection centers to merge them (0-500 pixels).\n"
                                             "Lower values = only merge very close detections.\n"
-                                            "Higher values = merge distant detections (may over-merge).\n"
-                                            "Recommended: 50px for people, 100px for vehicles at 720p.")
+                                            "Higher values = merge detections that are farther apart (may over-merge).")
         cluster_dist_layout.addWidget(self.clustering_distance, 0, 1)
 
-        cluster_layout.addLayout(cluster_dist_layout)
-        layout.addWidget(cluster_group)
+        clustering_layout.addLayout(cluster_dist_layout)
+        cleanup_layout.addWidget(clustering_group)
 
-        # Color Exclusion
-        exclusion_group = QGroupBox("Color Exclusion")
-        exclusion_layout = QVBoxLayout(exclusion_group)
-
-        self.enable_color_exclusion = QCheckBox("Enable Color Exclusion")
-        self.enable_color_exclusion.setChecked(False)
-        self.enable_color_exclusion.setToolTip("Excludes specific colors from detection (background learning).\n"
-                                               "Useful for ignoring known background colors (grass, sky, buildings).\n"
-                                               "Click on the color wheel below to select colors to exclude.\n"
-                                               "Selected colors are highlighted with a dark border.\n"
-                                               "Recommended: Use to filter out dominant environmental colors.")
-        exclusion_layout.addWidget(self.enable_color_exclusion)
-
-        # Color wheel for hue selection (20° steps, 0-360°)
-        exclusion_layout.addWidget(QLabel("Click on color wheel to exclude colors (20° steps, 0-360°):"))
-        
-        # Create color wheel widget
-        self.color_wheel = ColorWheelWidget(size=300)
-        self.color_wheel.setToolTip("Click on any color segment to toggle exclusion.\n"
-                                    "Selected segments are highlighted with a dark border.\n"
-                                    "Each segment represents a 20° hue range (±10° tolerance).")
-        exclusion_layout.addWidget(self.color_wheel, alignment=Qt.AlignCenter)
-
-        layout.addWidget(exclusion_group)
+        layout.addWidget(temporal_group)
+        layout.addWidget(cleanup_group)
         layout.addStretch()
 
         return widget
@@ -551,6 +572,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         # Motion
         self.enable_motion.toggled.connect(self.emit_config)
+        self.show_advanced_motion.toggled.connect(self.on_show_advanced_motion_toggled)
         self.motion_algorithm.currentTextChanged.connect(self.emit_config)
         self.motion_threshold.valueChanged.connect(self.emit_config)
         self.min_detection_area.valueChanged.connect(self.emit_config)
@@ -624,6 +646,10 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         value = self.hue_expansion_range.value()
         self.hue_range_label.setText(f"±{value} (~{value*2}°)")
         self.emit_config()
+
+    def on_show_advanced_motion_toggled(self, checked: bool):
+        """Show or hide advanced motion controls."""
+        self.advanced_motion_container.setVisible(checked)
 
 
     def emit_config(self):

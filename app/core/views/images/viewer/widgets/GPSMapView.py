@@ -27,9 +27,10 @@ class GPSMapView(QGraphicsView):
     # Signal emitted when a GPS point is clicked
     point_clicked = Signal(int)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, offline_only=False):
         """Initialize the GPS map view."""
         super().__init__(parent)
+        self.offline_only = bool(offline_only)
 
         # Create scene
         self.scene = QGraphicsScene()
@@ -45,7 +46,7 @@ class GPSMapView(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         # Map tile loader
-        self.tile_loader = MapTileLoader()
+        self.tile_loader = MapTileLoader(offline_only=self.offline_only)
         self.tile_loader.tile_loaded.connect(self.on_tile_loaded)
 
         # Map tiles storage - keep tiles from all zoom levels
@@ -100,6 +101,12 @@ class GPSMapView(QGraphicsView):
         # Install event filter on viewport to handle paint events
         if self.viewport():
             self.viewport().installEventFilter(self)
+
+    def set_offline_mode(self, offline_only: bool):
+        """Toggle offline behavior for tile loading."""
+        self.offline_only = bool(offline_only)
+        if hasattr(self, "tile_loader"):
+            self.tile_loader.set_offline_only(self.offline_only)
 
     def eventFilter(self, obj, event):
         """Filter events from the viewport to manage compass overlay."""

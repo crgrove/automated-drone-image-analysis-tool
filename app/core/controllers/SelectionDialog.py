@@ -12,19 +12,24 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
     Allows users to choose between Images and Streaming modes. Exposes a simple
     API where clicking a button records the selection and closes the dialog
     with accept(). Consumers can either connect to the selectionMade signal or
-    inspect the `selection` attribute after exec().
+    inspect the `selection` attribute after exec(). When setup guides are not
+    skipped, dedicated signals are emitted so callers can launch the guides
+    after the dialog closes.
 
     Attributes:
         selectionMade: Signal emitted when a selection is made. Emits the
             selection string ("images" or "stream").
         wizardRequested: Signal emitted when the setup wizard should be shown
             (for Images mode).
+        streamWizardRequested: Signal emitted when the streaming setup wizard
+            should be shown (for Streaming mode).
         selection: The current selection string ("images" or "stream") or None.
         settings_service: Instance of SettingsService for accessing settings.
     """
 
     selectionMade = Signal(str)
-    wizardRequested = Signal()  # Signal emitted when setup wizard should be shown
+    wizardRequested = Signal()  # Signal emitted when image setup wizard should be shown
+    streamWizardRequested = Signal()  # Signal emitted when streaming setup wizard should be shown
 
     def __init__(self, theme: str):
         """Initialize the selection dialog.
@@ -87,9 +92,16 @@ class SelectionDialog(QDialog, Ui_MediaSelector):
         the dialog. The viewer will be created in __main__.py via the signal handler.
         """
         self.selection = "stream"
-        self.selectionMade.emit(self.selection)
-        # Close the dialog - the viewer will be created in __main__.py via the signal handler
-        self.accept()
+
+        skip_wizard = self.settings_service.get_setting('SkipStreamingGuide', 'No')
+        skip_wizard_str = str(skip_wizard).strip()
+
+        if skip_wizard_str == 'Yes':
+            self.selectionMade.emit(self.selection)
+            self.accept()
+        else:
+            self.accept()
+            self.streamWizardRequested.emit()
 
     def _apply_icons(self, theme: str) -> None:
         """Apply themed icons to the dialog buttons.

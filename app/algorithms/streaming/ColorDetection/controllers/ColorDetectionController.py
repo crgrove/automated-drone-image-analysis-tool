@@ -214,6 +214,15 @@ class ColorDetectionController(StreamAlgorithmController):
             self.control_widget.color_ranges = config['color_ranges']
             if hasattr(self.control_widget, '_update_color_ranges_display'):
                 self.control_widget._update_color_ranges_display()
+        
+        # Set min_area and max_area on spinboxes if provided
+        if 'min_area' in config and hasattr(self.control_widget, 'min_area_spinbox'):
+            self.control_widget.min_area_spinbox.setValue(config['min_area'])
+        if 'max_area' in config and hasattr(self.control_widget, 'max_area_spinbox'):
+            self.control_widget.max_area_spinbox.setValue(config['max_area'])
+        if 'confidence_threshold' in config and hasattr(self.control_widget, 'confidence_spinbox'):
+            self.control_widget.confidence_spinbox.setValue(config['confidence_threshold'])
+        
         # Apply other config as needed
         self._on_config_changed(config)
 
@@ -230,5 +239,8 @@ class ColorDetectionController(StreamAlgorithmController):
 
     def cleanup(self):
         """Clean up algorithm resources."""
-        self.color_detector.cleanup()
+        # ColorDetectionService doesn't have a cleanup method - resources are managed automatically
+        # If cleanup is needed in the future, it can be added to the service
+        if hasattr(self.color_detector, 'cleanup'):
+            self.color_detector.cleanup()
         self.logger.info("ColorDetectionController cleaned up")

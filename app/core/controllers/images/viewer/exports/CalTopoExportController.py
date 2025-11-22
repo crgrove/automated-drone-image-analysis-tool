@@ -53,6 +53,17 @@ class CalTopoExportController:
             bool: True if export was successful, False otherwise
         """
         try:
+            if self._is_offline_only():
+                QMessageBox.information(
+                    self.parent,
+                    "Offline Mode Enabled",
+                    "Offline Only is turned on in Preferences:\n\n"
+                    "• Map tiles will not be retrieved.\n"
+                    "• CalTopo integration is disabled.\n\n"
+                    "Turn off Offline Only to export to CalTopo."
+                )
+                return False
+
             # Check if we have any flagged AOIs
             if not flagged_aois or sum(len(aois) for aois in flagged_aois.values()) == 0:
                 QMessageBox.information(
@@ -160,6 +171,15 @@ class CalTopoExportController:
                 f"An error occurred during CalTopo export:\n\n{str(e)}"
             )
             return False
+
+    def _is_offline_only(self) -> bool:
+        """Return whether OfflineOnly is enabled on the parent settings service."""
+        try:
+            if hasattr(self.parent, "settings_service"):
+                return bool(self.parent.settings_service.get_setting("OfflineOnly", False))
+        except Exception:
+            pass
+        return False
 
     def _prepare_markers(self, images, flagged_aois):
         """Prepare marker data from flagged AOIs.

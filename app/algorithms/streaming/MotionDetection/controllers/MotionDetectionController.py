@@ -418,5 +418,8 @@ class MotionDetectionController(StreamAlgorithmController):
 
     def cleanup(self):
         """Clean up algorithm resources."""
-        self.motion_detector.cleanup()
+        # MotionDetectionService doesn't have a cleanup method - resources are managed automatically
+        # If cleanup is needed in the future, it can be added to the service
+        if hasattr(self.motion_detector, 'cleanup'):
+            self.motion_detector.cleanup()
         self.logger.info("MotionDetectionController cleaned up")

@@ -21,7 +21,7 @@ class GPSMapDialog(QDialog):
     # Signal emitted when an image is selected from the map
     image_selected = Signal(int)
 
-    def __init__(self, parent, gps_data, current_image_index):
+    def __init__(self, parent, gps_data, current_image_index, offline_only=False):
         """
         Initialize the GPS map dialog.
 
@@ -33,6 +33,7 @@ class GPSMapDialog(QDialog):
         super().__init__(parent)
         self.gps_data = gps_data
         self.current_image_index = current_image_index
+        self.offline_only = bool(offline_only)
 
         self.setWindowTitle("GPS Map View")
         self.setModal(False)  # Non-modal so user can interact with main window
@@ -57,7 +58,7 @@ class GPSMapDialog(QDialog):
         layout.addWidget(self.info_label)
 
         # Create and add map view
-        self.map_view = GPSMapView(self)
+        self.map_view = GPSMapView(self, offline_only=self.offline_only)
         self.map_view.point_clicked.connect(self.on_point_clicked)
 
         # Connect to tile error signals
@@ -226,6 +227,12 @@ class GPSMapDialog(QDialog):
                 f"{error_msg}\n\nThe map will continue to work with cached tiles where available.",
                 QMessageBox.StandardButton.Ok
             )
+
+    def set_offline_mode(self, offline_only: bool):
+        """Update offline mode on the map view."""
+        self.offline_only = bool(offline_only)
+        if hasattr(self, "map_view"):
+            self.map_view.set_offline_mode(self.offline_only)
 
     def showEvent(self, event):
         """Handle dialog show event."""

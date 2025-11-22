@@ -37,6 +37,10 @@
       "app/core/views/images/viewer/ui"
     ],
     [
+      "resources/views/streaming/*.ui",
+      "app/core/views/streaming"
+    ],
+    [
       "resources/views/algorithms/RXAnomaly.ui",
       "app/algorithms/images/RXAnomaly/views"
     ],
@@ -107,6 +111,18 @@
     [
       "resources/views/components/*.ui",
       "app/core/views/components/"
+    ],
+    [
+      "resources/views/algorithms/MotionDetectionWizard.ui",
+      "app/algorithms/streaming/MotionDetection/views"
+    ],
+    [
+      "resources/views/algorithms/ColorDetectionWizard.ui",
+      "app/algorithms/streaming/ColorDetection/views"
+    ],
+    [
+      "resources/views/algorithms/ColorAnomalyAndMotionDetectionWizard.ui",
+      "app/algorithms/streaming/ColorAnomalyAndMotionDetection/views"
     ]
   ],
     "hooks": [],

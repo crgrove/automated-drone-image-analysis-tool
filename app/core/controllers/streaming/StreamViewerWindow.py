@@ -14,16 +14,21 @@ It provides:
 
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QLabel, QComboBox, QHBoxLayout,
                                QVBoxLayout, QPushButton, QLineEdit, QGroupBox, QWidget,
-                               QFileDialog)
-from PySide6.QtCore import Qt, QTimer, Slot, QSettings
-from typing import Optional, Dict, Any, List
+                               QFileDialog, QApplication, QDialog)
+from PySide6.QtCore import Qt, QTimer, Slot, QSettings, QUrl, QThread, QObject
+from PySide6.QtGui import QAction, QDesktopServices
+from typing import Optional, Dict, Any, List, Callable
 import numpy as np
 from types import SimpleNamespace
 import time
 
+import qdarktheme
+from core.controllers.Perferences import Preferences
+from core.services.SettingsService import SettingsService
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
 from core.controllers.streaming.components import StreamCoordinator, DetectionRenderer, StreamStatistics
+from core.controllers.streaming.components.FrameProcessingWorker import FrameProcessingWorker
 from core.controllers.streaming.shared_widgets import VideoDisplayWidget, DetectionThumbnailWidget, StreamControlWidget
 from core.views.streaming.components import PlaybackControlBar
 from core.controllers.streaming.base import StreamAlgorithmController
@@ -56,10 +61,15 @@ class StreamViewerWindow(QMainWindow):
 
         self.logger = LoggerService()
         self.settings = QSettings("ADIAT", "StreamViewer")
+        self.settings_service = SettingsService()
+        self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
         self.theme = theme
         self._maximized_applied = False
         # Store algorithm name - if None, will load default, if empty string, won't load
         self._initial_algorithm_name = algorithm_name if algorithm_name is not None else "ColorAnomalyAndMotionDetection"
+        self._pending_auto_record = False
+        self._pending_record_dir = None
+        self._pending_algorithm_options = None
 
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
@@ -88,9 +98,17 @@ class StreamViewerWindow(QMainWindow):
         # Current algorithm
         self.algorithm_widget: Optional[StreamAlgorithmController] = None
         self.current_algorithm_name: Optional[str] = None
+        
+        # Store algorithm configs for session persistence (forgotten on close)
+        self._algorithm_configs: Dict[str, Dict[str, Any]] = {}
+        
+        # Frame processing worker thread (moves algorithm processing off main thread)
+        self._processing_thread: Optional[QThread] = None
+        self._processing_worker: Optional[FrameProcessingWorker] = None
 
         # Setup custom widgets
         self.setup_custom_widgets()
+        self.setup_menus()
 
         # Connect core signals
         self.connect_signals()
@@ -139,6 +157,35 @@ class StreamViewerWindow(QMainWindow):
 
         # Add algorithm selection to Algorithm Controls section
         self._setup_algorithm_selection()
+
+    def setup_menus(self):
+        """Create top-level menus for navigation and help."""
+        menu_bar = self.menuBar()
+        menu_bar.clear()
+
+        # Primary navigation menu
+        primary_menu = menu_bar.addMenu("Menu")
+        self.action_streaming_guide = QAction("Streaming Analysis Wizard", self)
+        self.action_image_analysis = QAction("Image Analysis", self)
+        self.action_preferences = QAction("Preferences", self)
+        primary_menu.addAction(self.action_streaming_guide)
+        primary_menu.addSeparator()
+        primary_menu.addAction(self.action_image_analysis)
+        primary_menu.addAction(self.action_preferences)
+
+        # Help menu
+        help_menu = menu_bar.addMenu("Help")
+        self.action_manual = QAction("Manual", self)
+        self.action_community = QAction("Community Forum", self)
+        help_menu.addAction(self.action_manual)
+        help_menu.addAction(self.action_community)
+
+        # Wire actions
+        self.action_streaming_guide.triggered.connect(self._open_streaming_guide)
+        self.action_image_analysis.triggered.connect(self._open_image_analysis)
+        self.action_preferences.triggered.connect(self._open_preferences)
+        self.action_manual.triggered.connect(self._open_manual)
+        self.action_community.triggered.connect(self._open_community_forum)
 
     def _setup_recording_widget(self):
         """Setup recording widget in its own section between Algorithm Controls and Statistics."""
@@ -239,10 +286,18 @@ class StreamViewerWindow(QMainWindow):
         # Populate with available algorithms from registry
         registry = self._algorithm_registry()
         algorithm_options = []
-        for key in ("ColorAnomalyAndMotionDetection", "ColorDetection"):
+        preferred_order = [
+            "ColorAnomalyAndMotionDetection",
+            "ColorDetection",
+            "MotionDetection",
+        ]
+        for key in preferred_order:
             if key in registry:
                 label = registry[key].get("label", key)
                 algorithm_options.append((label, key))
+        for key, cfg in registry.items():
+            if key not in [k for _, k in algorithm_options]:
+                algorithm_options.append((cfg.get("label", key), key))
 
         # Add to combo box
         for label, key in algorithm_options:
@@ -283,6 +338,190 @@ class StreamViewerWindow(QMainWindow):
         self.playback_controls.playPauseToggled.connect(self.on_play_pause_toggled)
         self.playback_controls.seekRequested.connect(self.on_seek_requested)
 
+    def apply_wizard_data(self, wizard_data: dict) -> None:
+        """Apply wizard selections to the viewer and optionally auto-connect."""
+        if not wizard_data:
+            return
+
+        stream_type = wizard_data.get("stream_type")
+        if stream_type:
+            idx = self.stream_controls.type_combo.findText(stream_type)
+            if idx >= 0:
+                self.stream_controls.type_combo.setCurrentIndex(idx)
+
+        stream_url = wizard_data.get("stream_url")
+        if stream_url:
+            self.stream_controls.url_input.setText(stream_url)
+
+        recording_dir = wizard_data.get("recording_dir") or "./recordings"
+        if hasattr(self, "recording_dir_edit"):
+            self.recording_dir_edit.setText(recording_dir)
+        self.settings.setValue("recording/output_dir", recording_dir)
+        self.settings.sync()
+
+        algorithm = wizard_data.get("algorithm")
+        algorithm_options = wizard_data.get("algorithm_options") or {}
+        
+        # Calculate and set min/max area from object size and GSD (like MainWindow does)
+        # GSD is stored in gsd_list as a list of sensor GSD values
+        gsd_list = wizard_data.get('gsd_list', [])
+        if wizard_data.get('object_size_min') and wizard_data.get('object_size_max') and gsd_list:
+            # Use the first GSD value from the list (or average if multiple sensors)
+            # Each item in gsd_list is a dict with 'gsd' key in cm/pixel
+            gsd_values = [item.get('gsd') for item in gsd_list if item.get('gsd')]
+            if gsd_values:
+                # Use the first GSD value (or could average them)
+                gsd_cm_per_pixel = gsd_values[0]
+
+                object_size_min_ft = wizard_data['object_size_min']
+                object_size_max_ft = wizard_data['object_size_max']
+
+                # Convert object size from feet to cm, then to pixels
+                # object_size_cm = object_size_ft * 30.48
+                # pixels = object_size_cm / gsd_cm_per_pixel
+                # area_pixels = pixels^2
+                min_pixels = (object_size_min_ft * 30.48) / gsd_cm_per_pixel
+                max_pixels = (object_size_max_ft * 30.48) / gsd_cm_per_pixel
+                min_area = max(10, int((min_pixels * min_pixels) / 250))
+                max_area = max(100, int(max_pixels * max_pixels))
+
+                # Merge calculated min/max area into algorithm options
+                # Map to algorithm-specific field names
+                algorithm_options['min_area'] = min_area
+                algorithm_options['max_area'] = max_area
+                # ColorAnomalyAndMotionDetection uses min_detection_area/max_detection_area
+                algorithm_options['min_detection_area'] = min_area
+                algorithm_options['max_detection_area'] = max_area
+                # Also set color-specific areas for ColorAnomalyAndMotionDetection
+                algorithm_options['color_min_detection_area'] = min_area
+                algorithm_options['color_max_detection_area'] = max_area
+        
+        if algorithm:
+            # Store algorithm options BEFORE loading algorithm (like MainWindow does)
+            self._pending_algorithm_options = algorithm_options
+            
+            if hasattr(self, "algorithm_combo"):
+                for i in range(self.algorithm_combo.count()):
+                    if self.algorithm_combo.itemData(i) == algorithm:
+                        self.algorithm_combo.setCurrentIndex(i)
+                        break
+            
+            # Check if algorithm is already loaded
+            if algorithm == self.current_algorithm_name and self.algorithm_widget:
+                # Algorithm already loaded - apply options immediately
+                QApplication.processEvents()
+                self._apply_algorithm_options(algorithm_options)
+                self._pending_algorithm_options = None
+            else:
+                # Load algorithm (will apply pending options in load_algorithm)
+                self.on_algorithm_selected(algorithm)
+
+        resolution = wizard_data.get("processing_resolution")
+        if resolution:
+            self.settings_service.set_setting("StreamingProcessingResolution", resolution)
+
+        self._pending_auto_record = bool(wizard_data.get("auto_record"))
+        self._pending_record_dir = recording_dir
+
+        if wizard_data.get("auto_connect") and stream_url:
+            combo_text = self.stream_controls.type_combo.currentText()
+            stream_type_map = {
+                "File": StreamType.FILE,
+                "HDMI Capture": StreamType.HDMI_CAPTURE,
+                "RTMP Stream": StreamType.RTMP,
+            }
+            selected_type = stream_type_map.get(combo_text, StreamType.FILE)
+            self.on_connect_requested(stream_url, selected_type)
+
+    def _apply_algorithm_options(self, options: dict):
+        """Apply algorithm options from wizard to the current algorithm widget.
+        
+        Args:
+            options: Dictionary of algorithm options from wizard
+        """
+        if not self.algorithm_widget or not options:
+            return
+        
+        try:
+            # Try set_config first (used by algorithm controllers)
+            if hasattr(self.algorithm_widget, 'set_config'):
+                self.algorithm_widget.set_config(options)
+                self.logger.info(f"Applied algorithm options via set_config: {list(options.keys())}")
+            # Fallback to load_options (used by wizard controllers)
+            elif hasattr(self.algorithm_widget, 'load_options'):
+                self.algorithm_widget.load_options(options)
+                self.logger.info(f"Applied algorithm options via load_options: {list(options.keys())}")
+            else:
+                self.logger.warning(f"Algorithm widget {type(self.algorithm_widget)} has no set_config or load_options method")
+        except Exception as e:
+            self.logger.error(f"Error applying algorithm options: {e}")
+
+    def _open_streaming_guide(self):
+        """Open the Streaming Analysis Guide wizard."""
+        try:
+            from core.controllers.streaming.StreamingGuide import StreamingGuide
+            
+            wizard = StreamingGuide(self)
+            wizard_data_from_wizard = None
+
+            def _on_wizard_completed(wizard_data):
+                nonlocal wizard_data_from_wizard
+                wizard_data_from_wizard = wizard_data
+
+            wizard.wizardCompleted.connect(_on_wizard_completed)
+            wizard_result = wizard.exec()
+
+            # If wizard was completed (not cancelled), apply the wizard data
+            if wizard_result == QDialog.Accepted and wizard_data_from_wizard:
+                self.apply_wizard_data(wizard_data_from_wizard)
+        except Exception as e:
+            self.logger.error(f"Error opening Streaming Analysis Guide: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Streaming Analysis Guide:\n{str(e)}")
+
+    def _open_image_analysis(self):
+        """Open the Image Analysis main window and close this streaming viewer."""
+        try:
+            from core.controllers.images.MainWindow import MainWindow  # Local import avoids circular dependency
+
+            main_window = MainWindow(qdarktheme, self.app_version)
+            app = QApplication.instance()
+            if app:
+                app._main_window = main_window
+            main_window.show()
+            self.close()
+        except Exception as e:
+            self.logger.error(f"Error opening Image Analysis: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Image Analysis:\n{str(e)}")
+
+    def _open_preferences(self):
+        """Open the Preferences dialog."""
+        try:
+            pref = Preferences(self)
+            pref.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening Preferences: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Preferences:\n{str(e)}")
+
+    def _open_manual(self):
+        """Open the user manual in the default browser."""
+        try:
+            url = QUrl("https://www.texsar.org/automated-drone-image-analysis-tool/")
+            QDesktopServices.openUrl(url)
+            self.logger.info("Help documentation opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Help URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+
+    def _open_community_forum(self):
+        """Open the community forum link in the default browser."""
+        try:
+            url = QUrl("https://discord.gg/UWxu9Dk8")
+            QDesktopServices.openUrl(url)
+            self.logger.info("Community forum opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Community Forum URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Community Forum:\n{str(e)}")
+
     def load_algorithm(self, algorithm_name: str):
         """
         Load a streaming detection algorithm.
@@ -293,6 +532,19 @@ class StreamViewerWindow(QMainWindow):
         try:
             self.logger.info(f"Loading algorithm: {algorithm_name}")
 
+            # Save current algorithm config before removing it
+            if self.algorithm_widget and self.current_algorithm_name:
+                try:
+                    if hasattr(self.algorithm_widget, 'get_config'):
+                        saved_config = self.algorithm_widget.get_config()
+                        self._algorithm_configs[self.current_algorithm_name] = saved_config
+                        self.logger.info(f"Saved config for algorithm: {self.current_algorithm_name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to save config for {self.current_algorithm_name}: {e}")
+            
+            # Stop and cleanup processing worker thread
+            self._cleanup_processing_worker()
+            
             # Remove existing algorithm if any
             if self.algorithm_widget:
                 try:
@@ -333,8 +585,30 @@ class StreamViewerWindow(QMainWindow):
                         self.algorithm_combo.blockSignals(False)
                         break
 
+            # Ensure the algorithm widget's layout is activated before adding to parent
+            # This ensures its size hint is calculated immediately
+            if hasattr(self.algorithm_widget, 'layout') and self.algorithm_widget.layout():
+                self.algorithm_widget.layout().activate()
+            
             # Add to layout
             self.ui.algorithmControlLayout.addWidget(self.algorithm_widget)
+            
+            # Activate the parent layout to force immediate size calculation
+            self.ui.algorithmControlLayout.activate()
+            
+            # Get the scroll area from the splitter (it's the second widget)
+            # The issue: QScrollArea with setWidgetResizable(True) only shows scroll bars
+            # when the widget's minimumSizeHint() exceeds the viewport. This calculation
+            # is deferred until layout activation. We force it now.
+            if self.ui.splitter.count() > 1:
+                scroll_area = self.ui.splitter.widget(1)
+                if scroll_area and hasattr(scroll_area, 'widget'):
+                    right_panel = scroll_area.widget()
+                    if right_panel and hasattr(right_panel, 'layout') and right_panel.layout():
+                        # Activate the right panel's layout to calculate size hints
+                        right_panel.layout().activate()
+                        # Force scroll area to recalculate and check for scroll bars
+                        scroll_area.updateGeometry()
 
             # Connect algorithm signals
             self.algorithm_widget.detectionsReady.connect(self.on_detections_ready)
@@ -342,13 +616,289 @@ class StreamViewerWindow(QMainWindow):
             self.algorithm_widget.statusUpdate.connect(self.on_status_update)
             self.algorithm_widget.requestRecording.connect(self.on_recording_request)
 
+            # Setup frame processing worker thread (moves heavy computation off main thread)
+            self._setup_processing_worker()
+
             self.logger.info(f"Algorithm loaded: {algorithm_name}")
             self.ui.statusbar.showMessage(f"Loaded: {algorithm_name}")
+            
+            # Restore saved config for this algorithm if available (session persistence)
+            # Only restore if we don't have pending wizard options (wizard takes priority)
+            if hasattr(self, '_pending_algorithm_options') and self._pending_algorithm_options:
+                # Wizard options take priority - apply them
+                self._apply_algorithm_options(self._pending_algorithm_options)
+                self._pending_algorithm_options = None
+            elif algorithm_name in self._algorithm_configs:
+                # Restore previously saved config for this algorithm
+                saved_config = self._algorithm_configs[algorithm_name]
+                self.logger.info(f"Restoring saved config for algorithm: {algorithm_name}")
+                self._apply_algorithm_options(saved_config)
 
         except Exception as e:
             error_msg = f"Error loading algorithm: {str(e)}"
             self.logger.error(error_msg)
             QMessageBox.critical(self, "Algorithm Load Error", error_msg)
+    
+    def _get_algorithm_service(self) -> Optional[QObject]:
+        """
+        Get the algorithm service object that can be moved to a worker thread.
+        
+        Returns:
+            The service QObject, or None if not available
+        """
+        if not self.algorithm_widget:
+            return None
+        
+        # Different algorithms expose their services differently
+        # ColorDetectionController has color_detector
+        if hasattr(self.algorithm_widget, 'color_detector'):
+            return self.algorithm_widget.color_detector
+        
+        # ColorAnomalyAndMotionDetectionController has integrated_detector
+        if hasattr(self.algorithm_widget, 'integrated_detector'):
+            return self.algorithm_widget.integrated_detector
+        
+        # MotionDetectionController has motion_detector
+        if hasattr(self.algorithm_widget, 'motion_detector'):
+            return self.algorithm_widget.motion_detector
+        
+        return None
+    
+    def _create_processing_function(self, service: QObject) -> Callable:
+        """
+        Create a processing function that uses the service to process frames.
+        
+        This function will be called in the worker thread, so it should only
+        use the service object (which is moved to the worker thread).
+        
+        Args:
+            service: The algorithm service QObject
+            
+        Returns:
+            A function that processes a frame and returns detections
+        """
+        # ColorDetectionService
+        if hasattr(service, 'detect_colors'):
+            def process_color(frame: np.ndarray, timestamp: float) -> List[Dict]:
+                detections = service.detect_colors(frame, timestamp)
+                # Convert to standard format
+                detection_dicts = []
+                for detection in detections:
+                    color_id = detection.color_id if detection.color_id is not None else 0
+                    detection_dicts.append({
+                        'bbox': detection.bbox,
+                        'area': detection.area,
+                        'confidence': detection.confidence,
+                        'class_name': f"Color_{color_id}",
+                        'color_id': color_id,
+                        'mean_color': detection.mean_color
+                    })
+                return detection_dicts
+            return process_color
+        
+        # ColorAnomalyAndMotionDetectionOrchestrator
+        if hasattr(service, 'process_frame'):
+            # Check if it returns (annotated_frame, detections, timings)
+            def process_integrated(frame: np.ndarray, timestamp: float) -> List[Dict]:
+                annotated_frame, detections, timings = service.process_frame(frame, timestamp)
+                # Convert to standard format
+                detection_dicts = []
+                for detection in detections:
+                    detection_dicts.append({
+                        'bbox': detection.bbox,
+                        'centroid': detection.centroid,
+                        'area': detection.area,
+                        'confidence': detection.confidence,
+                        'class_name': detection.detection_type,
+                        'detection_type': detection.detection_type,
+                        'timestamp': detection.timestamp,
+                        'metadata': detection.metadata
+                    })
+                return detection_dicts
+            return process_integrated
+        
+        # MotionDetectionService
+        if hasattr(service, 'detect_motion'):
+            def process_motion(frame: np.ndarray, timestamp: float) -> List[Dict]:
+                detections = service.detect_motion(frame, timestamp)
+                # Convert to standard format
+                detection_dicts = []
+                for detection in detections:
+                    detection_dicts.append({
+                        'bbox': detection.bbox,
+                        'area': detection.area,
+                        'confidence': detection.confidence,
+                        'class_name': detection.detection_type,
+                        'detection_type': detection.detection_type,
+                        'timestamp': detection.timestamp,
+                        'metadata': detection.metadata
+                    })
+                return detection_dicts
+            return process_motion
+        
+        # Fallback: use controller's process_frame (but this won't work from worker thread)
+        # So we return None to indicate we can't use worker thread
+        return None
+    
+    def _setup_processing_worker(self):
+        """Set up the frame processing worker thread."""
+        # Clean up any existing worker
+        self._cleanup_processing_worker()
+        
+        if not self.algorithm_widget:
+            return
+        
+        # Get the algorithm service
+        service = self._get_algorithm_service()
+        if not service:
+            self.logger.warning("Algorithm service not found, processing will run on main thread")
+            return
+        
+        # Create processing function
+        processing_function = self._create_processing_function(service)
+        if not processing_function:
+            self.logger.warning("Could not create processing function, processing will run on main thread")
+            return
+        
+        try:
+            # Create worker thread
+            self._processing_thread = QThread()
+            self._processing_worker = FrameProcessingWorker(processing_function)
+            
+            # Move service and worker to thread
+            service.moveToThread(self._processing_thread)
+            self._processing_worker.moveToThread(self._processing_thread)
+            
+            # Connect worker signals
+            self._processing_worker.frameProcessed.connect(self._on_worker_frame_processed, Qt.QueuedConnection)
+            self._processing_worker.errorOccurred.connect(self._on_worker_error, Qt.QueuedConnection)
+            
+            # Connect thread finished signal
+            self._processing_thread.finished.connect(self._processing_thread.deleteLater)
+            
+            # Start thread
+            self._processing_thread.start()
+            
+            self.logger.info("Frame processing worker thread started")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to setup processing worker: {e}")
+            self._cleanup_processing_worker()
+    
+    def _cleanup_processing_worker(self):
+        """Clean up the frame processing worker thread."""
+        # Stop the worker first (thread-safe via signal)
+        if self._processing_worker:
+            try:
+                self._processing_worker.stop()
+            except RuntimeError:
+                # Worker may already be deleted, ignore
+                pass
+        
+        # Stop and cleanup thread
+        if self._processing_thread:
+            if self._processing_thread.isRunning():
+                self._processing_thread.quit()
+                if not self._processing_thread.wait(2000):  # Wait up to 2 seconds
+                    self.logger.warning("Processing thread didn't stop gracefully, terminating")
+                    self._processing_thread.terminate()
+                    self._processing_thread.wait(1000)
+            # Thread will delete itself via deleteLater() connected to finished signal
+            self._processing_thread = None
+        
+        # Disconnect signals after thread is stopped to prevent queued signals from accessing deleted objects
+        if self._processing_worker:
+            try:
+                self._processing_worker.frameProcessed.disconnect()
+                self._processing_worker.errorOccurred.disconnect()
+                self._processing_worker.processFrameRequested.disconnect()
+                self._processing_worker.stopRequested.disconnect()
+            except (RuntimeError, TypeError):
+                # Signals may already be disconnected, ignore
+                pass
+        
+        # Move service back to main thread after thread is stopped
+        service = self._get_algorithm_service()
+        if service:
+            try:
+                service.moveToThread(None)  # Move back to main thread
+            except RuntimeError:
+                # Service may already be deleted or moved, ignore
+                pass
+        
+        # Clear worker reference (worker will be deleted when thread is deleted)
+        self._processing_worker = None
+    
+    @Slot(np.ndarray, list, float)
+    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float):
+        """Handle frame processed by worker thread."""
+        # This runs on main thread (via QueuedConnection)
+        self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
+        self._latest_detections_for_rendering = detections
+        
+        rendered_frame = None
+        if not self.algorithm_renders_frame:
+            # Render detections using the shared renderer (on main thread)
+            rendered_frame = self.detection_renderer.render(frame, detections)
+            # Update display with rendered frame
+            self.video_display.update_frame(rendered_frame)
+        
+        # Update thumbnails
+        if detections:
+            # Convert detection dicts to objects with required attributes for tracker
+            detection_objects = []
+            for det_dict in detections:
+                obj = SimpleNamespace()
+                obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
+                
+                if 'centroid' in det_dict:
+                    obj.centroid = det_dict['centroid']
+                else:
+                    x, y, w, h = obj.bbox
+                    obj.centroid = (x + w // 2, y + h // 2)
+                
+                obj.area = det_dict.get('area', 0.0)
+                obj.confidence = det_dict.get('confidence', 0.0)
+                obj.metadata = det_dict.get('metadata', {})
+                for key, value in det_dict.items():
+                    if not hasattr(obj, key):
+                        setattr(obj, key, value)
+                
+                detection_objects.append(obj)
+            
+            processing_resolution = None
+            original_resolution = None
+            for det in detection_objects:
+                metadata = getattr(det, "metadata", {}) or {}
+                if metadata and processing_resolution is None:
+                    processing_resolution = metadata.get('processing_resolution')
+                if metadata and original_resolution is None:
+                    original_resolution = metadata.get('original_resolution')
+                if processing_resolution and original_resolution:
+                    break
+            
+            self.thumbnail_widget.update_thumbnails(
+                frame,
+                detection_objects,
+                processing_resolution=processing_resolution,
+                original_resolution=original_resolution
+            )
+        
+        # Record frame if recording
+        if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
+            if rendered_frame is None:
+                rendered_frame = frame
+            self.stream_coordinator.record_frame(rendered_frame, detections)
+        
+        # Emit detections via controller (for compatibility with existing signal connections)
+        if self.algorithm_widget:
+            # Emit signal directly (we're already on main thread)
+            self.algorithm_widget.detectionsReady.emit(detections)
+    
+    @Slot(str)
+    def _on_worker_error(self, error_msg: str):
+        """Handle error from worker thread."""
+        self.logger.error(f"Worker thread error: {error_msg}")
 
     def _get_algorithm_config(self, algorithm_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -416,8 +966,14 @@ class StreamViewerWindow(QMainWindow):
     @Slot(str)
     def on_algorithm_selected(self, algorithm_name: str):
         """Handle user selection of a streaming algorithm."""
+        # If algorithm is already loaded, still apply pending options if any
         if algorithm_name == self.current_algorithm_name:
+            if hasattr(self, '_pending_algorithm_options') and self._pending_algorithm_options:
+                QApplication.processEvents()
+                self._apply_algorithm_options(self._pending_algorithm_options)
+                self._pending_algorithm_options = None
             return
+        
         self.logger.info(f"Switching algorithm to: {algorithm_name}")
         self.load_algorithm(algorithm_name)
         if not self.algorithm_widget:
@@ -472,6 +1028,11 @@ class StreamViewerWindow(QMainWindow):
                 # Get stream resolution (placeholder)
                 resolution = (1920, 1080)
                 self.algorithm_widget.on_stream_connected(resolution)
+
+            if self._pending_auto_record:
+                record_dir = self._pending_record_dir or self.recording_dir_edit.text().strip() or "./recordings"
+                self.on_start_recording_requested(record_dir)
+                self._pending_auto_record = False
         else:
             self.ui.infoPanel.append(f"✗ Disconnected: {message}")
 
@@ -493,79 +1054,93 @@ class StreamViewerWindow(QMainWindow):
 
         # Process frame with algorithm if loaded
         if self.algorithm_widget:
-            start_time = time.time()
+            # Use worker thread if available, otherwise fall back to main thread
+            use_worker = False
+            if self._processing_worker and self._processing_thread and self._processing_thread.isRunning():
+                # Process frame in worker thread (non-blocking)
+                # Emit signal to request processing in worker thread
+                try:
+                    self._processing_worker.processFrameRequested.emit(frame, timestamp)
+                    use_worker = True
+                except RuntimeError:
+                    # Worker may have been deleted, fall back to main thread processing
+                    use_worker = False
+            
+            if not use_worker:
+                # Fallback to main thread processing (for compatibility)
+                start_time = time.time()
 
-            try:
-                # Process frame
-                detections = self.algorithm_widget.process_frame(frame, timestamp)
+                try:
+                    # Process frame
+                    detections = self.algorithm_widget.process_frame(frame, timestamp)
 
-                # Record processing completion
-                processing_time_ms = (time.time() - start_time) * 1000
-                self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
+                    # Record processing completion
+                    processing_time_ms = (time.time() - start_time) * 1000
+                    self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
 
-                self._latest_detections_for_rendering = detections
+                    self._latest_detections_for_rendering = detections
 
-                rendered_frame = None
-                if not self.algorithm_renders_frame:
-                    # Render detections using the shared renderer
-                    rendered_frame = self.detection_renderer.render(frame, detections)
+                    rendered_frame = None
+                    if not self.algorithm_renders_frame:
+                        # Render detections using the shared renderer
+                        rendered_frame = self.detection_renderer.render(frame, detections)
 
-                    # Update display with rendered frame
-                    self.video_display.update_frame(rendered_frame)
+                        # Update display with rendered frame
+                        self.video_display.update_frame(rendered_frame)
 
-                # Update thumbnails
-                if detections:
-                    # Convert detection dicts to objects with required attributes for tracker
-                    detection_objects = []
-                    for det_dict in detections:
-                        # Create object with required attributes (bbox, centroid, metadata)
-                        obj = SimpleNamespace()
-                        obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
+                    # Update thumbnails
+                    if detections:
+                        # Convert detection dicts to objects with required attributes for tracker
+                        detection_objects = []
+                        for det_dict in detections:
+                            # Create object with required attributes (bbox, centroid, metadata)
+                            obj = SimpleNamespace()
+                            obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
 
-                        # Calculate centroid from bbox if not provided
-                        if 'centroid' in det_dict:
-                            obj.centroid = det_dict['centroid']
-                        else:
-                            # Calculate from bbox: (x, y, width, height) -> centroid
-                            x, y, w, h = obj.bbox
-                            obj.centroid = (x + w // 2, y + h // 2)
+                            # Calculate centroid from bbox if not provided
+                            if 'centroid' in det_dict:
+                                obj.centroid = det_dict['centroid']
+                            else:
+                                # Calculate from bbox: (x, y, width, height) -> centroid
+                                x, y, w, h = obj.bbox
+                                obj.centroid = (x + w // 2, y + h // 2)
 
-                        obj.area = det_dict.get('area', 0.0)
-                        obj.confidence = det_dict.get('confidence', 0.0)
-                        obj.metadata = det_dict.get('metadata', {})
-                        # Copy any other attributes
-                        for key, value in det_dict.items():
-                            if not hasattr(obj, key):
-                                setattr(obj, key, value)
+                            obj.area = det_dict.get('area', 0.0)
+                            obj.confidence = det_dict.get('confidence', 0.0)
+                            obj.metadata = det_dict.get('metadata', {})
+                            # Copy any other attributes
+                            for key, value in det_dict.items():
+                                if not hasattr(obj, key):
+                                    setattr(obj, key, value)
 
-                        detection_objects.append(obj)
+                            detection_objects.append(obj)
 
-                    processing_resolution = None
-                    original_resolution = None
-                    for det in detection_objects:
-                        metadata = getattr(det, "metadata", {}) or {}
-                        if metadata and processing_resolution is None:
-                            processing_resolution = metadata.get('processing_resolution')
-                        if metadata and original_resolution is None:
-                            original_resolution = metadata.get('original_resolution')
-                        if processing_resolution and original_resolution:
-                            break
+                        processing_resolution = None
+                        original_resolution = None
+                        for det in detection_objects:
+                            metadata = getattr(det, "metadata", {}) or {}
+                            if metadata and processing_resolution is None:
+                                processing_resolution = metadata.get('processing_resolution')
+                            if metadata and original_resolution is None:
+                                original_resolution = metadata.get('original_resolution')
+                            if processing_resolution and original_resolution:
+                                break
 
-                    self.thumbnail_widget.update_thumbnails(
-                        frame,
-                        detection_objects,
-                        processing_resolution=processing_resolution,
-                        original_resolution=original_resolution
-                    )
+                        self.thumbnail_widget.update_thumbnails(
+                            frame,
+                            detection_objects,
+                            processing_resolution=processing_resolution,
+                            original_resolution=original_resolution
+                        )
 
-                # Record frame if recording (when rendering is handled here)
-                if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
-                    if rendered_frame is None:
-                        rendered_frame = frame
-                    self.stream_coordinator.record_frame(rendered_frame, detections)
+                    # Record frame if recording (when rendering is handled here)
+                    if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
+                        if rendered_frame is None:
+                            rendered_frame = frame
+                        self.stream_coordinator.record_frame(rendered_frame, detections)
 
-            except Exception as e:
-                self.logger.error(f"Error processing frame: {str(e)}")
+                except Exception as e:
+                    self.logger.error(f"Error processing frame: {str(e)}")
         else:
             # No algorithm loaded, just display frame
             self.video_display.update_frame(frame)
@@ -730,6 +1305,23 @@ class StreamViewerWindow(QMainWindow):
         }
         self.stream_controls.update_performance(perf_payload)
 
+    def update_theme(self, theme: str):
+        """
+        Apply the requested theme to the streaming viewer.
+
+        Args:
+            theme: Theme name ('Light' or 'Dark')
+        """
+        normalized = (theme or "dark").lower()
+        self.theme = normalized
+        try:
+            if normalized == "light":
+                qdarktheme.setup_theme("light")
+            else:
+                qdarktheme.setup_theme("dark")
+        except Exception as e:
+            self.logger.error(f"Error applying theme: {e}")
+
     def showEvent(self, event):
         """Ensure the viewer launches maximized on first show."""
         super().showEvent(event)
@@ -741,8 +1333,23 @@ class StreamViewerWindow(QMainWindow):
         """Handle window close event."""
         self.logger.info("Closing StreamViewerWindow")
 
+        # Save current algorithm config before closing (though we'll clear it anyway)
+        if self.algorithm_widget and self.current_algorithm_name:
+            try:
+                if hasattr(self.algorithm_widget, 'get_config'):
+                    saved_config = self.algorithm_widget.get_config()
+                    self._algorithm_configs[self.current_algorithm_name] = saved_config
+            except Exception as e:
+                self.logger.warning(f"Failed to save config on close: {e}")
+
+        # Clear algorithm configs (forget settings on close)
+        self._algorithm_configs.clear()
+
         # Cleanup
         self.update_timer.stop()
+        
+        # Cleanup processing worker thread
+        self._cleanup_processing_worker()
 
         if self.algorithm_widget:
             self.algorithm_widget.cleanup()
