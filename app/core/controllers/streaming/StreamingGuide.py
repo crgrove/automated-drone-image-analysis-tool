@@ -73,7 +73,7 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
         self.continueButton.clicked.connect(self._on_continue)
         self.backButton.clicked.connect(self._on_back)
         self.cancelButton.clicked.connect(self.reject)
-        
+
         # Connect skip guide checkbox (in button area, shared across pages)
         if hasattr(self, "skipGuideCheckBox"):
             from PySide6.QtCore import Qt
@@ -84,7 +84,7 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
             self.pages[self.current_page].on_enter()
 
         self._update_navigation_buttons()
-    
+
     def _on_skip_guide_changed(self, state: int) -> None:
         """Handle skip guide checkbox change in button area."""
         from PySide6.QtCore import Qt

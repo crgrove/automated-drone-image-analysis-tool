@@ -20,7 +20,7 @@ from .shared_types import Detection, MotionAlgorithm, ColorAnomalyAndMotionDetec
 class MotionDetectionService(QObject):
     """
     Motion detection service for detecting moving objects in video streams.
-    
+
     Supports multiple algorithms:
     - FRAME_DIFF: Simple frame differencing
     - MOG2: Gaussian mixture model (best for static cameras)
@@ -31,20 +31,20 @@ class MotionDetectionService(QObject):
         super().__init__()
         self.logger = LoggerService()
         self.config_lock = Lock()
-        
+
         # Previous frame for frame differencing
         self._prev_gray: Optional[np.ndarray] = None
-        
+
         # Pre-compute morphology kernels for efficiency
         self._morph_kernel_cache: dict = {}
-        
+
         # Background subtractors (initialized with default config)
         # Initialize with default config to ensure they're ready for use
         default_config = ColorAnomalyAndMotionDetectionConfig()
         self._bg_subtractor_mog2: Optional[cv2.BackgroundSubtractorMOG2] = None
         self._bg_subtractor_knn: Optional[cv2.BackgroundSubtractorKNN] = None
         self._init_background_subtractors(default_config)
-        
+
         # Persistence filter state
         self._detection_masks = []
         self._persistence_frames = 3
@@ -54,14 +54,14 @@ class MotionDetectionService(QObject):
         with self.config_lock:
             old_persistence = self._persistence_frames
             self._persistence_frames = config.persistence_frames
-            
+
             # Update persistence deque size if changed
             if old_persistence != config.persistence_frames:
                 self._detection_masks = deque(
                     list(self._detection_masks) if hasattr(self._detection_masks, '__iter__') else [],
                     maxlen=config.persistence_frames
                 )
-            
+
             # Reinitialize background subtractors if parameters changed
             self._init_background_subtractors(config)
 
@@ -89,23 +89,23 @@ class MotionDetectionService(QObject):
             )
         return self._morph_kernel_cache[size]
 
-    def detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
+    def detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                max_detections: int = 0) -> List[Detection]:
         """
         Detect motion in a grayscale frame.
-        
+
         Args:
             frame_gray: Grayscale frame
             config: Detection configuration
             max_detections: Maximum number of detections to return (0 = unlimited)
-            
+
         Returns:
             List of Detection objects
         """
         with self.config_lock:
             if not config.enable_motion:
                 return []
-            
+
             # Select algorithm
             if config.motion_algorithm == MotionAlgorithm.MOG2:
                 return self._mog2_detect(frame_gray, config, max_detections)
@@ -114,7 +114,7 @@ class MotionDetectionService(QObject):
             else:  # FRAME_DIFF
                 return self._baseline_detect_720p(frame_gray, config, max_detections)
 
-    def _baseline_detect_720p(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
+    def _baseline_detect_720p(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                               max_detections: int = 0) -> List[Detection]:
         """Frame differencing detection."""
         detections = []
@@ -173,8 +173,8 @@ class MotionDetectionService(QObject):
         self._prev_gray = frame_gray.copy()
         return detections
 
-    def _mog2_detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
-                    max_detections: int = 0) -> List[Detection]:
+    def _mog2_detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                     max_detections: int = 0) -> List[Detection]:
         """MOG2 background subtraction detection."""
         detections = []
 
@@ -228,8 +228,8 @@ class MotionDetectionService(QObject):
 
         return detections
 
-    def _knn_detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
-                   max_detections: int = 0) -> List[Detection]:
+    def _knn_detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                    max_detections: int = 0) -> List[Detection]:
         """KNN background subtraction detection."""
         detections = []
 
@@ -286,29 +286,29 @@ class MotionDetectionService(QObject):
     def check_camera_movement(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig) -> bool:
         """
         Check if camera is moving by analyzing frame differences.
-        
+
         Args:
             frame_gray: Grayscale frame
             config: Detection configuration
-            
+
         Returns:
             True if camera movement detected, False otherwise
         """
         if not config.pause_on_camera_movement or self._prev_gray is None:
             return False
-            
+
         if self._prev_gray.shape != frame_gray.shape:
             return False
-            
+
         # Quick frame difference check
         diff = cv2.absdiff(self._prev_gray, frame_gray)
         _, diff_mask = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
-        
+
         # Calculate percentage of frame that changed
         changed_pixels = np.count_nonzero(diff_mask)
         total_pixels = diff_mask.size
         change_ratio = changed_pixels / total_pixels
-        
+
         # If more than threshold of frame changed, assume camera movement
         return change_ratio > config.camera_movement_threshold
 
@@ -316,4 +316,3 @@ class MotionDetectionService(QObject):
         """Reset motion detection state."""
         self._prev_gray = None
         self._detection_masks = []
-

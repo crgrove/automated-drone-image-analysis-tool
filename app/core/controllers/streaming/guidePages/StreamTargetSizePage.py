@@ -54,4 +54,3 @@ class StreamTargetSizePage(BasePage):
         """Handle object size range slider change."""
         self.wizard_data['object_size_min'] = min_value
         self.wizard_data['object_size_max'] = max_value
-

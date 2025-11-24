@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QDialog, QFrame
 
 class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
     """Controller for the HSV Color Range Range Viewer Dialog.
-    
+
     Supports both single color (backward compatible) and multiple color ranges.
     """
 
@@ -43,11 +43,11 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
                 s_range = 50
             if v_range is None:
                 v_range = 50
-                
+
             target_rgb_color = np.uint8([[target_rgb_color]])  # Shape: (1,1,3)
             target_color_hsv = cv2.cvtColor(target_rgb_color, cv2.COLOR_RGB2HSV)[0][0]
             palettes = self.generate_palettes(target_color_hsv, h_range, s_range, v_range)
-        
+
         self.populate_image(palettes["selected"][2], True)
         self.populate_image(palettes["selected"][1], True)
         self.populate_image(palettes["selected"][0], True)
@@ -111,14 +111,14 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
     def generate_palettes_multi(self, hsv_ranges_list):
         """
         Generates color palettes for multiple HSV color ranges, combining them with OR logic.
-        
+
         Args:
             hsv_ranges_list (list[dict]): List of HSV range configs. Each dict should have:
                 'rgb': (r, g, b) tuple
                 'hue_minus', 'hue_plus': int (0-179)
                 'sat_minus', 'sat_plus': int (0-255)
                 'val_minus', 'val_plus': int (0-255)
-        
+
         Returns:
             dict: A dictionary with numpy arrays for selected and unselected color ranges.
         """
@@ -155,11 +155,11 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
     def generate_combined_hsv_mask(self, img, hsv_ranges_list):
         """
         Generates a combined mask for pixels that match ANY of the configured HSV ranges.
-        
+
         Args:
             img (numpy.ndarray): HSV palette image to be processed.
             hsv_ranges_list (list[dict]): List of HSV range configs.
-        
+
         Returns:
             numpy.ndarray: Combined mask (0/255) where any HSV range matches.
         """

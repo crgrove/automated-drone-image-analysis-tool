@@ -64,7 +64,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.identifierColor = (0, 255, 0)
         self._auto_start_requested = False
         self.HistogramImgWidget.setVisible(False)
-        self.KMeansWidget.setVisible(False)
         self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
         self._load_algorithms()
 
@@ -133,7 +132,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
         self.histogramButton.clicked.connect(self._histogramButton_clicked)
-        self.kMeansCheckbox.stateChanged.connect(self._kMeansCheckbox_change)
 
         # Store previous valid values
         self._previous_min_area = self.minAreaSpinBox.value()
@@ -379,12 +377,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         resolution_text = self.processingResolutionCombo.currentText()
         self.settings_service.set_setting('ProcessingResolution', resolution_text)
 
-    def _kMeansCheckbox_change(self):
-        """
-        Shows or hides the number of clusters spinbox for kMeans Clustering based on checkbox state.
-        """
-        self.KMeansWidget.setVisible(self.kMeansCheckbox.isChecked())
-
     def _startButton_clicked(self):
         """
         Starts the image analysis process.
@@ -405,7 +397,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             options = self.algorithmWidget.get_options()
             hist_ref_path = self.histogramLine.text() if self.histogramCheckbox.isChecked() else None
-            kmeans_clusters = self.clustersSpinBox.value() if self.kMeansCheckbox.isChecked() else None
+            kmeans_clusters = None  # K-Means clustering UI removed; feature disabled in MainWindow
 
             self.settings_service.set_setting('MinObjectArea', self.minAreaSpinBox.value())
             self.settings_service.set_setting('MaxObjectArea', self.maxAreaSpinBox.value())
@@ -594,10 +586,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if settings['hist_ref_path'] != "":
                 self.histogramCheckbox.setChecked(True)
                 self.histogramLine.setText(settings['hist_ref_path'])
-        if 'kmeans_clusters' in settings:
-            if settings['kmeans_clusters'] != 0:
-                self.kMeansCheckbox.setChecked(True)
-                self.clustersSpinBox.setValue(settings['kmeans_clusters'])
         if 'algorithm' in settings:
             self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
             self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
@@ -740,18 +728,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             # Get theme from settings
             theme = self.settings_service.get_setting('Theme', 'Dark').lower()
-            
+
             # Open the streaming viewer window
             streaming_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme=theme)
-            
+
             # Store on QApplication instance (like __main__.py does)
             app = QApplication.instance()
             if app:
                 app._stream_viewer = streaming_viewer
-            
+
             streaming_viewer.show()
             self.logger.info("Streaming Detector opened")
-            
+
             # Hide the main window instead of closing to prevent closeEvent from firing
             # This prevents closeEvent from closing all windows including the StreamViewerWindow
             self.hide()

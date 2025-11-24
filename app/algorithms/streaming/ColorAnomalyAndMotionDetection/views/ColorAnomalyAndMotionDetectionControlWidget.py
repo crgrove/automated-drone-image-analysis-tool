@@ -29,11 +29,11 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         # Setup UI structure
         self.setObjectName("ColorAnomalyAndMotionDetectionControlWidget")
-        
+
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Tab widget
         self.tabs = QTabWidget(self)
         main_layout.addWidget(self.tabs)
@@ -55,7 +55,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
         self.tabs.addTab(self.input_processing_tab, "Input && Processing")
         self.tabs.addTab(self.rendering_tab, "Rendering")
-
 
     def _create_motion_tab(self) -> QWidget:
         """Create Motion Detection tab with simplified default controls and advanced options."""
@@ -558,7 +557,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         return widget
 
-
     def connect_signals(self):
         """Connect all control signals."""
         # Processing (from shared InputProcessingTab)
@@ -610,7 +608,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.enable_detection_clustering.toggled.connect(self.emit_config)
         self.clustering_distance.valueChanged.connect(self.emit_config)
         self.enable_color_exclusion.toggled.connect(self.emit_config)
-        
+
         # Color wheel selection changes
         self.color_wheel.selectionChanged.connect(self.emit_config)
 
@@ -650,7 +648,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
     def on_show_advanced_motion_toggled(self, checked: bool):
         """Show or hide advanced motion controls."""
         self.advanced_motion_container.setVisible(checked)
-
 
     def emit_config(self):
         """Emit current configuration."""

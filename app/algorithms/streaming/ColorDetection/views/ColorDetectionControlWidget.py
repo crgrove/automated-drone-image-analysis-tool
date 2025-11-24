@@ -76,7 +76,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.tabs.addTab(self.input_processing_tab, "Input & Processing")
         self.tabs.addTab(self.rendering_tab, "Rendering")
 
-
     def _create_color_selection_tab(self) -> QWidget:
         """Create color selection tab matching screenshot - inline editing with HSV ranges."""
         widget = QWidget()
@@ -160,20 +159,19 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.confidence_spinbox.setSingleStep(0.05)
         self.confidence_spinbox.setValue(0.5)
         self.confidence_spinbox.setToolTip("Minimum confidence score to accept a detection (0.0-1.0).\n"
-                                          "Confidence is calculated from:\n"
-                                          "• Size score: area relative to max area\n"
-                                          "• Shape score: solidity (how compact/regular the shape is)\n"
-                                          "• Final: average of both scores\n\n"
-                                          "Lower values (0.0-0.3) = accept more detections, including weak/fragmented ones.\n"
-                                          "Higher values (0.7-1.0) = only high-quality detections, well-formed shapes.\n"
-                                          "Recommended: 0.5 for balanced filtering, 0.3 for more detections, 0.7 for strict quality.")
+                                           "Confidence is calculated from:\n"
+                                           "• Size score: area relative to max area\n"
+                                           "• Shape score: solidity (how compact/regular the shape is)\n"
+                                           "• Final: average of both scores\n\n"
+                                           "Lower values (0.0-0.3) = accept more detections, including weak/fragmented ones.\n"
+                                           "Higher values (0.7-1.0) = only high-quality detections, well-formed shapes.\n"
+                                           "Recommended: 0.5 for balanced filtering, 0.3 for more detections, 0.7 for strict quality.")
         grid.addWidget(self.confidence_spinbox, 2, 1)
 
         layout.addLayout(grid)
         layout.addStretch()
 
         return widget
-
 
     def connect_signals(self):
         """Connect all control signals."""

@@ -8,7 +8,7 @@ analysis results or start a new analysis.
 import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QWidget, QFrame, QMessageBox, QApplication
 )
 from PySide6.QtGui import QFont
@@ -24,7 +24,7 @@ class ReviewOrNewPage(BasePage):
         # The page is now defined in the .ui file, so we access it via the dialog
         # The UI file creates these as attributes of the dialog
         self.pageWidget = self.dialog.pageReviewOrNew
-        
+
         # Access UI widgets directly from the dialog (they're created by setupUi)
         self.reviewButton = self.dialog.reviewButton
         self.newAnalysisButton = self.dialog.newAnalysisButton
@@ -33,7 +33,7 @@ class ReviewOrNewPage(BasePage):
         self.fileSelectorWidget = self.dialog.fileSelectorWidget
         self.filePathLabel = self.dialog.filePathLabel
         self.browseFileButton = self.dialog.browseFileButton
-        
+
         # Ensure file selector is initially hidden
         self.fileSelectorWidget.setVisible(False)
 
@@ -108,14 +108,14 @@ class ReviewOrNewPage(BasePage):
         last_dir = self.settings_service.get_setting('OutputFolder', '')
         if not last_dir:
             last_dir = os.path.expanduser('~')
-        
+
         file_path, _ = QFileDialog.getOpenFileName(
             self.dialog,
             "Select ADIAT Results File",
             last_dir,
             "XML Files (*.xml);;All Files (*)"
         )
-        
+
         if file_path:
             # Validate that it's an ADIAT results file
             if not os.path.basename(file_path).startswith('ADIAT_Data'):
@@ -130,22 +130,21 @@ class ReviewOrNewPage(BasePage):
                 )
                 if reply == QMessageBox.No:
                     return
-            
+
             # Save file path
             if os.name == 'nt':
                 file_path = file_path.replace('/', '\\')
-            
+
             self.wizard_data['review_file_path'] = file_path
             self.filePathLabel.setText(file_path)
-            
+
             # Update navigation buttons
             if hasattr(self, 'on_validation_changed'):
                 self.on_validation_changed()
-            
+
             # Give focus to the "Load Results" button (continue button)
             # This will be enabled now that a file is selected
             self.dialog.continueButton.setFocus()
-            
+
             # If file is selected and review mode is active, we can proceed
             # The continue button should now be enabled
-

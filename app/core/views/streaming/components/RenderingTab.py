@@ -122,4 +122,3 @@ class RenderingTab(QWidget):
 
         layout.addWidget(overlay_group)
         layout.addStretch()
-

@@ -273,7 +273,9 @@ class DjiThermalParserService:
             app_root = sys._MEIPASS
         else:
             # Running from source code
-            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            # File is at: app/core/services/thermal/thermalParserServices/DjiThermalParserService.py
+            # Need to go up 5 levels to get to app/
+            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
         folder_plugin = os.path.join(app_root, 'external')
         system = platform.system()

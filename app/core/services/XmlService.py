@@ -68,7 +68,7 @@ class XmlService:
 
             settings['options'] = {}
             options_xml = settings_xml.find('options')
-            if options_xml:
+            if options_xml is not None:
                 for option in options_xml:
                     settings['options'][option.get('name')] = option.get('value')
 

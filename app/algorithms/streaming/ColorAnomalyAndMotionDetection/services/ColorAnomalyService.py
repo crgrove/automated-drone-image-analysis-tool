@@ -19,7 +19,7 @@ from .shared_types import Detection, ColorAnomalyAndMotionDetectionConfig
 class ColorAnomalyService(QObject):
     """
     Color anomaly detection service for detecting rare/unusual colors in video streams.
-    
+
     Uses histogram-based color quantization to identify colors that appear infrequently.
     """
 
@@ -27,7 +27,7 @@ class ColorAnomalyService(QObject):
         super().__init__()
         self.logger = LoggerService()
         self.config_lock = Lock()
-        
+
         # Pre-compute morphology kernels for efficiency
         self._morph_kernel_cache: dict = {}
 
@@ -44,26 +44,26 @@ class ColorAnomalyService(QObject):
             )
         return self._morph_kernel_cache[size]
 
-    def detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
+    def detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                max_detections: int = 0) -> List[Detection]:
         """
         Detect color anomalies in a BGR frame.
-        
+
         Args:
             frame_bgr: BGR color frame (already scaled to processing resolution)
             config: Detection configuration
             max_detections: Maximum number of detections to return (0 = unlimited)
-            
+
         Returns:
             List of Detection objects for rare color regions
         """
         with self.config_lock:
             if not config.enable_color_quantization:
                 return []
-            
+
             return self._color_quantization_detect(frame_bgr, config, max_detections)
 
-    def _color_quantization_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig, 
+    def _color_quantization_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                                    max_detections: int = 0) -> List[Detection]:
         """Color quantization anomaly detection."""
         detections = []
@@ -272,4 +272,3 @@ class ColorAnomalyService(QObject):
             return expanded_detection
 
         return detection
-

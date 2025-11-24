@@ -37,7 +37,7 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
         motion_group.addButton(self.radioMotionNo)
         motion_group.addButton(self.radioMotionYes)
         self.radioMotionNo.setChecked(True)  # Default to No
-        
+
         # Color detection checkbox
         self.enableColorCheckBox.setChecked(True)
 
@@ -50,16 +50,16 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
         layout = QVBoxLayout(placeholder)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.aggressivenessSlider)
-        
+
         # Set default to Moderate (index 2)
         self.aggressivenessSlider.setValue(2)
 
     def get_options(self):
         """Get algorithm options.
-        
+
         Converts UI state into algorithm-specific options dictionary.
         Maps aggressiveness presets to color_rarity_percentile values.
-        
+
         Returns:
             Dictionary containing algorithm options including color_rarity_percentile,
             and wizard-specific metadata.
@@ -69,13 +69,13 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
             'enable_color_quantization': self.enableColorCheckBox.isChecked(),
             'motion_algorithm': 'MOG2 Background',  # Default algorithm
         }
-        
+
         # Map aggressiveness index to color_rarity_percentile
         # Higher percentile = more conservative (only very rare colors)
         # Lower percentile = more aggressive (less rare colors)
         aggr_index = self.aggressivenessSlider.value()
         aggr_label, _ = self.aggressivenessSlider.getCurrentPreset()
-        
+
         # Map aggressiveness index (0-4) to percentile values
         # Very Conservative (0) -> 80 (only very rare colors)
         # Conservative (1) -> 50
@@ -84,13 +84,13 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
         # Very Aggressive (4) -> 5 (even common colors)
         percentile_map = {0: 80.0, 1: 50.0, 2: 30.0, 3: 15.0, 4: 5.0}
         color_rarity_percentile = percentile_map.get(aggr_index, 30.0)
-        
+
         options['color_rarity_percentile'] = color_rarity_percentile
-        
+
         # Additional wizard fields retained for reference
         options['aggressiveness_index'] = aggr_index
         options['aggressiveness_label'] = aggr_label
-        
+
         return options
 
     def validate(self):
@@ -102,7 +102,7 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
 
     def load_options(self, options):
         """Load options into UI.
-        
+
         Restores UI state from a previously saved options dictionary.
         Handles both old format (direct color_rarity_percentile) and new format
         (aggressiveness_index).
@@ -137,4 +137,3 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
             else:
                 index = 4  # Very Aggressive
             self.aggressivenessSlider.setValue(index)
-

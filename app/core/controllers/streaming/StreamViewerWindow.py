@@ -98,10 +98,10 @@ class StreamViewerWindow(QMainWindow):
         # Current algorithm
         self.algorithm_widget: Optional[StreamAlgorithmController] = None
         self.current_algorithm_name: Optional[str] = None
-        
+
         # Store algorithm configs for session persistence (forgotten on close)
         self._algorithm_configs: Dict[str, Dict[str, Any]] = {}
-        
+
         # Frame processing worker thread (moves algorithm processing off main thread)
         self._processing_thread: Optional[QThread] = None
         self._processing_worker: Optional[FrameProcessingWorker] = None
@@ -361,7 +361,7 @@ class StreamViewerWindow(QMainWindow):
 
         algorithm = wizard_data.get("algorithm")
         algorithm_options = wizard_data.get("algorithm_options") or {}
-        
+
         # Calculate and set min/max area from object size and GSD (like MainWindow does)
         # GSD is stored in gsd_list as a list of sensor GSD values
         gsd_list = wizard_data.get('gsd_list', [])
@@ -395,17 +395,17 @@ class StreamViewerWindow(QMainWindow):
                 # Also set color-specific areas for ColorAnomalyAndMotionDetection
                 algorithm_options['color_min_detection_area'] = min_area
                 algorithm_options['color_max_detection_area'] = max_area
-        
+
         if algorithm:
             # Store algorithm options BEFORE loading algorithm (like MainWindow does)
             self._pending_algorithm_options = algorithm_options
-            
+
             if hasattr(self, "algorithm_combo"):
                 for i in range(self.algorithm_combo.count()):
                     if self.algorithm_combo.itemData(i) == algorithm:
                         self.algorithm_combo.setCurrentIndex(i)
                         break
-            
+
             # Check if algorithm is already loaded
             if algorithm == self.current_algorithm_name and self.algorithm_widget:
                 # Algorithm already loaded - apply options immediately
@@ -435,13 +435,13 @@ class StreamViewerWindow(QMainWindow):
 
     def _apply_algorithm_options(self, options: dict):
         """Apply algorithm options from wizard to the current algorithm widget.
-        
+
         Args:
             options: Dictionary of algorithm options from wizard
         """
         if not self.algorithm_widget or not options:
             return
-        
+
         try:
             # Try set_config first (used by algorithm controllers)
             if hasattr(self.algorithm_widget, 'set_config'):
@@ -460,7 +460,7 @@ class StreamViewerWindow(QMainWindow):
         """Open the Streaming Analysis Guide wizard."""
         try:
             from core.controllers.streaming.StreamingGuide import StreamingGuide
-            
+
             wizard = StreamingGuide(self)
             wizard_data_from_wizard = None
 
@@ -541,10 +541,10 @@ class StreamViewerWindow(QMainWindow):
                         self.logger.info(f"Saved config for algorithm: {self.current_algorithm_name}")
                 except Exception as e:
                     self.logger.warning(f"Failed to save config for {self.current_algorithm_name}: {e}")
-            
+
             # Stop and cleanup processing worker thread
             self._cleanup_processing_worker()
-            
+
             # Remove existing algorithm if any
             if self.algorithm_widget:
                 try:
@@ -589,13 +589,13 @@ class StreamViewerWindow(QMainWindow):
             # This ensures its size hint is calculated immediately
             if hasattr(self.algorithm_widget, 'layout') and self.algorithm_widget.layout():
                 self.algorithm_widget.layout().activate()
-            
+
             # Add to layout
             self.ui.algorithmControlLayout.addWidget(self.algorithm_widget)
-            
+
             # Activate the parent layout to force immediate size calculation
             self.ui.algorithmControlLayout.activate()
-            
+
             # Get the scroll area from the splitter (it's the second widget)
             # The issue: QScrollArea with setWidgetResizable(True) only shows scroll bars
             # when the widget's minimumSizeHint() exceeds the viewport. This calculation
@@ -621,7 +621,7 @@ class StreamViewerWindow(QMainWindow):
 
             self.logger.info(f"Algorithm loaded: {algorithm_name}")
             self.ui.statusbar.showMessage(f"Loaded: {algorithm_name}")
-            
+
             # Restore saved config for this algorithm if available (session persistence)
             # Only restore if we don't have pending wizard options (wizard takes priority)
             if hasattr(self, '_pending_algorithm_options') and self._pending_algorithm_options:
@@ -638,42 +638,42 @@ class StreamViewerWindow(QMainWindow):
             error_msg = f"Error loading algorithm: {str(e)}"
             self.logger.error(error_msg)
             QMessageBox.critical(self, "Algorithm Load Error", error_msg)
-    
+
     def _get_algorithm_service(self) -> Optional[QObject]:
         """
         Get the algorithm service object that can be moved to a worker thread.
-        
+
         Returns:
             The service QObject, or None if not available
         """
         if not self.algorithm_widget:
             return None
-        
+
         # Different algorithms expose their services differently
         # ColorDetectionController has color_detector
         if hasattr(self.algorithm_widget, 'color_detector'):
             return self.algorithm_widget.color_detector
-        
+
         # ColorAnomalyAndMotionDetectionController has integrated_detector
         if hasattr(self.algorithm_widget, 'integrated_detector'):
             return self.algorithm_widget.integrated_detector
-        
+
         # MotionDetectionController has motion_detector
         if hasattr(self.algorithm_widget, 'motion_detector'):
             return self.algorithm_widget.motion_detector
-        
+
         return None
-    
+
     def _create_processing_function(self, service: QObject) -> Callable:
         """
         Create a processing function that uses the service to process frames.
-        
+
         This function will be called in the worker thread, so it should only
         use the service object (which is moved to the worker thread).
-        
+
         Args:
             service: The algorithm service QObject
-            
+
         Returns:
             A function that processes a frame and returns detections
         """
@@ -695,7 +695,7 @@ class StreamViewerWindow(QMainWindow):
                     })
                 return detection_dicts
             return process_color
-        
+
         # ColorAnomalyAndMotionDetectionOrchestrator
         if hasattr(service, 'process_frame'):
             # Check if it returns (annotated_frame, detections, timings)
@@ -716,7 +716,7 @@ class StreamViewerWindow(QMainWindow):
                     })
                 return detection_dicts
             return process_integrated
-        
+
         # MotionDetectionService
         if hasattr(service, 'detect_motion'):
             def process_motion(frame: np.ndarray, timestamp: float) -> List[Dict]:
@@ -735,56 +735,56 @@ class StreamViewerWindow(QMainWindow):
                     })
                 return detection_dicts
             return process_motion
-        
+
         # Fallback: use controller's process_frame (but this won't work from worker thread)
         # So we return None to indicate we can't use worker thread
         return None
-    
+
     def _setup_processing_worker(self):
         """Set up the frame processing worker thread."""
         # Clean up any existing worker
         self._cleanup_processing_worker()
-        
+
         if not self.algorithm_widget:
             return
-        
+
         # Get the algorithm service
         service = self._get_algorithm_service()
         if not service:
             self.logger.warning("Algorithm service not found, processing will run on main thread")
             return
-        
+
         # Create processing function
         processing_function = self._create_processing_function(service)
         if not processing_function:
             self.logger.warning("Could not create processing function, processing will run on main thread")
             return
-        
+
         try:
             # Create worker thread
             self._processing_thread = QThread()
             self._processing_worker = FrameProcessingWorker(processing_function)
-            
+
             # Move service and worker to thread
             service.moveToThread(self._processing_thread)
             self._processing_worker.moveToThread(self._processing_thread)
-            
+
             # Connect worker signals
             self._processing_worker.frameProcessed.connect(self._on_worker_frame_processed, Qt.QueuedConnection)
             self._processing_worker.errorOccurred.connect(self._on_worker_error, Qt.QueuedConnection)
-            
+
             # Connect thread finished signal
             self._processing_thread.finished.connect(self._processing_thread.deleteLater)
-            
+
             # Start thread
             self._processing_thread.start()
-            
+
             self.logger.info("Frame processing worker thread started")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to setup processing worker: {e}")
             self._cleanup_processing_worker()
-    
+
     def _cleanup_processing_worker(self):
         """Clean up the frame processing worker thread."""
         # Stop the worker first (thread-safe via signal)
@@ -794,7 +794,7 @@ class StreamViewerWindow(QMainWindow):
             except RuntimeError:
                 # Worker may already be deleted, ignore
                 pass
-        
+
         # Stop and cleanup thread
         if self._processing_thread:
             if self._processing_thread.isRunning():
@@ -805,7 +805,7 @@ class StreamViewerWindow(QMainWindow):
                     self._processing_thread.wait(1000)
             # Thread will delete itself via deleteLater() connected to finished signal
             self._processing_thread = None
-        
+
         # Disconnect signals after thread is stopped to prevent queued signals from accessing deleted objects
         if self._processing_worker:
             try:
@@ -816,7 +816,7 @@ class StreamViewerWindow(QMainWindow):
             except (RuntimeError, TypeError):
                 # Signals may already be disconnected, ignore
                 pass
-        
+
         # Move service back to main thread after thread is stopped
         service = self._get_algorithm_service()
         if service:
@@ -825,24 +825,24 @@ class StreamViewerWindow(QMainWindow):
             except RuntimeError:
                 # Service may already be deleted or moved, ignore
                 pass
-        
+
         # Clear worker reference (worker will be deleted when thread is deleted)
         self._processing_worker = None
-    
+
     @Slot(np.ndarray, list, float)
     def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float):
         """Handle frame processed by worker thread."""
         # This runs on main thread (via QueuedConnection)
         self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
         self._latest_detections_for_rendering = detections
-        
+
         rendered_frame = None
         if not self.algorithm_renders_frame:
             # Render detections using the shared renderer (on main thread)
             rendered_frame = self.detection_renderer.render(frame, detections)
             # Update display with rendered frame
             self.video_display.update_frame(rendered_frame)
-        
+
         # Update thumbnails
         if detections:
             # Convert detection dicts to objects with required attributes for tracker
@@ -850,22 +850,22 @@ class StreamViewerWindow(QMainWindow):
             for det_dict in detections:
                 obj = SimpleNamespace()
                 obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
-                
+
                 if 'centroid' in det_dict:
                     obj.centroid = det_dict['centroid']
                 else:
                     x, y, w, h = obj.bbox
                     obj.centroid = (x + w // 2, y + h // 2)
-                
+
                 obj.area = det_dict.get('area', 0.0)
                 obj.confidence = det_dict.get('confidence', 0.0)
                 obj.metadata = det_dict.get('metadata', {})
                 for key, value in det_dict.items():
                     if not hasattr(obj, key):
                         setattr(obj, key, value)
-                
+
                 detection_objects.append(obj)
-            
+
             processing_resolution = None
             original_resolution = None
             for det in detection_objects:
@@ -876,25 +876,25 @@ class StreamViewerWindow(QMainWindow):
                     original_resolution = metadata.get('original_resolution')
                 if processing_resolution and original_resolution:
                     break
-            
+
             self.thumbnail_widget.update_thumbnails(
                 frame,
                 detection_objects,
                 processing_resolution=processing_resolution,
                 original_resolution=original_resolution
             )
-        
+
         # Record frame if recording
         if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
             if rendered_frame is None:
                 rendered_frame = frame
             self.stream_coordinator.record_frame(rendered_frame, detections)
-        
+
         # Emit detections via controller (for compatibility with existing signal connections)
         if self.algorithm_widget:
             # Emit signal directly (we're already on main thread)
             self.algorithm_widget.detectionsReady.emit(detections)
-    
+
     @Slot(str)
     def _on_worker_error(self, error_msg: str):
         """Handle error from worker thread."""
@@ -973,7 +973,7 @@ class StreamViewerWindow(QMainWindow):
                 self._apply_algorithm_options(self._pending_algorithm_options)
                 self._pending_algorithm_options = None
             return
-        
+
         self.logger.info(f"Switching algorithm to: {algorithm_name}")
         self.load_algorithm(algorithm_name)
         if not self.algorithm_widget:
@@ -1065,7 +1065,7 @@ class StreamViewerWindow(QMainWindow):
                 except RuntimeError:
                     # Worker may have been deleted, fall back to main thread processing
                     use_worker = False
-            
+
             if not use_worker:
                 # Fallback to main thread processing (for compatibility)
                 start_time = time.time()
@@ -1347,7 +1347,7 @@ class StreamViewerWindow(QMainWindow):
 
         # Cleanup
         self.update_timer.stop()
-        
+
         # Cleanup processing worker thread
         self._cleanup_processing_worker()
 

@@ -169,8 +169,6 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
         if not self.color_rows:
             return
 
-        from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
-
         hsv_ranges_list = []
         for row in self.color_rows:
             color = row.get_color()
@@ -299,4 +297,3 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                         }
 
                     self.add_color_row(color, from_hsv_picker=(hsv_ranges is not None), hsv_ranges=hsv_ranges)
-

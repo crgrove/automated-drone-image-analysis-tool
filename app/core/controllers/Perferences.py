@@ -47,7 +47,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
         offline_only = self.parent.settings_service.get_setting('OfflineOnly', False)
-        self.offlineOnlyCheckBox.setChecked(bool(offline_only))
+        if hasattr(self, 'offlineOnlyCheckBox'):
+            self.offlineOnlyCheckBox.setChecked(bool(offline_only))
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -59,7 +60,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
-        self.offlineOnlyCheckBox.toggled.connect(self._update_offline_only)
+        if hasattr(self, 'offlineOnlyCheckBox'):
+            self.offlineOnlyCheckBox.toggled.connect(self._update_offline_only)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
 
     def _update_max_aois(self):

@@ -29,5 +29,6 @@ def test_get_setting(settings_service):
 
     with patch.object(settings_service, 'settings', mock_qsettings):
         value = settings_service.get_setting('test_key')
-        mock_qsettings.value.assert_called_once_with('test_key')
+        # get_setting calls settings.value(name, default_value)
+        mock_qsettings.value.assert_called_once_with('test_key', None)
         assert value == 'test_value'

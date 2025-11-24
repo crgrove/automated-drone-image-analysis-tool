@@ -10,16 +10,15 @@ Usage:
     python demo_rtmp_usage.py --color rtmp://your-server:1935/live/stream
 """
 
+from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
+from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QApplication
 import sys
 import os
 import argparse
 
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
-
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QTimer
-from core.controllers.RTMPColorDetectionViewer import RTMPColorDetectionViewer
 
 
 def demo_color_detection(rtmp_url=None):

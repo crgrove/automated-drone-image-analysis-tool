@@ -159,3 +159,12 @@ class UIStyleController:
                 self.parent.rotate_image_open,
                 "rotateActive"
             )
+
+    def update_gallery_mode_button_style(self):
+        """Update the Gallery Mode button styling based on its checked state."""
+        if hasattr(self.parent, 'galleryModeButton'):
+            self.update_toolbutton_style(
+                self.parent.galleryModeButton,
+                self.parent.galleryModeButton.isChecked(),
+                "buttonActive"
+            )

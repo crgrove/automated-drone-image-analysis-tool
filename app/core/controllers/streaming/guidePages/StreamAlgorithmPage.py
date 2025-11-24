@@ -168,7 +168,6 @@ class StreamAlgorithmPage(BasePage):
             if hasattr(self, "on_validation_changed"):
                 self.on_validation_changed()
 
-
     @staticmethod
     def _algorithm_registry() -> dict:
         """Return algorithm registry (kept for compatibility)."""

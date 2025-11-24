@@ -120,4 +120,3 @@ class ColorAnomalyAndMotionDetectionConfig:
     # Color exclusion (background learning)
     enable_color_exclusion: bool = False
     excluded_hue_ranges: List[Tuple[float, float]] = field(default_factory=list)
-

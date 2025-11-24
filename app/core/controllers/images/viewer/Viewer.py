@@ -46,14 +46,14 @@ from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
 from core.views.components.Toggle import Toggle
 from PySide6.QtWidgets import (
     QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication, QLabel,
-    QHBoxLayout, QWidget, QProgressDialog
+    QHBoxLayout, QWidget, QProgressDialog, QVBoxLayout
 )
 from PySide6.QtCore import (
     Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
 )
 from PySide6.QtGui import (
     QImage, QIntValidator, QPixmap, QIcon, QPainter, QFont, QPen,
-    QPalette, QColor, QDesktopServices, QBrush, QCursor
+    QPalette, QColor, QDesktopServices, QBrush, QCursor, QMovie
 )
 from urllib.parse import quote_plus
 from pathlib import Path
@@ -123,7 +123,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.settings_service = SettingsService()
 
         # Ensure review metadata exists (capture reviewer name if needed)
-        self._ensure_review_metadata()
+        #self._ensure_review_metadata()
 
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
@@ -210,6 +210,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         # scale bar (will be used by overlay widget)
         self.scaleBar = ScaleBarWidget()
 
+        # Gallery loading overlay (will be created when needed)
+        self.gallery_loading_overlay = None
+
         # ---- load everything ----
         self._load_images()
 
@@ -274,6 +277,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.gallery_controller.clear_cache()
             if hasattr(self.gallery_controller, 'model'):
                 self.gallery_controller.model.cleanup()
+
+        # Clean up gallery loading overlay
+        if hasattr(self, 'gallery_loading_overlay') and self.gallery_loading_overlay:
+            self.gallery_loading_overlay.deleteLater()
+            self.gallery_loading_overlay = None
 
         # Close GPS map window if open
         if hasattr(self, 'gps_map_controller'):
@@ -392,10 +400,19 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'image_gallery_splitter'):
             self.gallery_controller.save_splitter_position(self.image_gallery_splitter)
 
-    def _toggle_gallery_mode(self):
-        """Toggle between single-image and gallery view modes."""
-        # Delegate to GalleryController
-        self.gallery_controller.toggle_gallery_mode()
+    def _on_gallery_mode_clicked(self):
+        """Handle Gallery Mode button click - update styling and toggle gallery mode."""
+        # The button's checked state drives the gallery mode
+        if hasattr(self, 'galleryModeButton'):
+            should_be_in_gallery_mode = self.galleryModeButton.isChecked()
+            # Only toggle if states don't match (to avoid double-toggling)
+            if should_be_in_gallery_mode != self.gallery_mode:
+                self.gallery_controller.toggle_gallery_mode()
+        else:
+            # Fallback: toggle directly if button doesn't exist
+            self.gallery_controller.toggle_gallery_mode()
+        # Update button styling after state change
+        self._update_gallery_mode_button_style()
 
     def _generate_cache(self):
         """Generate thumbnail and color caches for this dataset."""
@@ -583,6 +600,11 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Delegate to GalleryController
             self.gallery_controller.update_gallery_geometry(self.gallery_widget)
 
+        # Update gallery loading overlay position if visible
+        if (hasattr(self, 'gallery_loading_overlay') and self.gallery_loading_overlay and
+                self.gallery_loading_overlay.isVisible()):
+            self._update_gallery_overlay_position()
+
         # Handle main image resizing (original functionality)
         if self.main_image is not None and not self.main_image._is_destroyed:
             if event.oldSize() != event.size():
@@ -608,7 +630,13 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._hide_image_change(False)
         if e.key() == Qt.Key_G and e.modifiers() == Qt.NoModifier:
             # Toggle gallery mode with 'G' key
-            self._toggle_gallery_mode()
+            if hasattr(self, 'galleryModeButton'):
+                # Simulate a real button click so signals fire exactly as if user clicked
+                self.galleryModeButton.click()
+            else:
+                # Fallback if button doesn't exist
+                self.gallery_controller.toggle_gallery_mode()
+                self._update_gallery_mode_button_style()
         if e.key() == Qt.Key_H and e.modifiers() == Qt.ControlModifier:
             self._open_image_adjustment_dialog()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
@@ -706,6 +734,14 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.ui_style_controller.update_measure_button_style()
             self.ui_style_controller.update_gps_map_button_style()
             self.ui_style_controller.update_rotate_image_button_style()
+
+            # Connect the Gallery Mode button
+            if hasattr(self, 'galleryModeButton'):
+                self.galleryModeButton.setCheckable(True)
+                self.galleryModeButton.clicked.connect(self._on_gallery_mode_clicked)
+                self.galleryModeButton.setToolTip("Toggle Gallery Mode (G)\nShows all AOIs from all images in a grid view")
+                # Initialize button styling
+                self._update_gallery_mode_button_style()
 
             # Connect the POIs button
             if hasattr(self, 'showPOIsButton'):
@@ -1153,6 +1189,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Delegate to UIStyleController
         self.ui_style_controller.update_show_aois_button_style()
 
+    def _update_gallery_mode_button_style(self):
+        """Update the Gallery Mode button styling based on gallery mode state."""
+        # Delegate to UIStyleController
+        self.ui_style_controller.update_gallery_mode_button_style()
+        # Sync button checked state with gallery_mode
+        if hasattr(self, 'galleryModeButton') and hasattr(self, 'gallery_mode'):
+            self.galleryModeButton.setChecked(self.gallery_mode)
+
     def _toggle_magnifying_glass(self, x, y):
         """Toggle the magnifying glass on/off when middle mouse button is pressed.
 
@@ -1311,6 +1355,83 @@ class Viewer(QMainWindow, Ui_Viewer):
         # For now, just log it
         self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
 
+    def _create_gallery_loading_overlay(self):
+        """Create a loading overlay widget for the gallery."""
+        if self.gallery_loading_overlay:
+            return self.gallery_loading_overlay
+
+        # Create overlay widget as a child of aoiFrame
+        if not hasattr(self, 'aoiFrame') or not self.aoiFrame:
+            return None
+
+        overlay = QWidget(self.aoiFrame)
+        overlay.setObjectName("galleryLoadingOverlay")
+        overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)  # Block mouse events
+        overlay.setStyleSheet("""
+            QWidget#galleryLoadingOverlay {
+                background-color: rgba(0, 0, 0, 180);
+                border-radius: 8px;
+            }
+        """)
+
+        # Create layout for overlay content
+        layout = QVBoxLayout(overlay)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(15)
+
+        # Add spinning loader
+        spinner_label = QLabel(overlay)
+        spinner_label.setAlignment(Qt.AlignCenter)
+        spinner_movie = QMovie(":/icons/loading.gif")
+        if spinner_movie.isValid():
+            spinner_movie.setScaledSize(QSize(50, 50))
+            spinner_label.setMovie(spinner_movie)
+            spinner_movie.start()
+        else:
+            # Fallback if GIF not available - show text spinner
+            spinner_label.setText("⏳")
+            spinner_label.setFont(QFont("Arial", 24))
+
+        # Add message label
+        message_label = QLabel("Loading gallery...", overlay)
+        message_label.setAlignment(Qt.AlignCenter)
+        message_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+
+        layout.addWidget(spinner_label)
+        layout.addWidget(message_label)
+
+        overlay.hide()  # Start hidden
+        self.gallery_loading_overlay = overlay
+        return overlay
+
+    def show_gallery_loading_overlay(self):
+        """Show the loading overlay over the gallery."""
+        overlay = self._create_gallery_loading_overlay()
+        if overlay and hasattr(self, 'aoiFrame') and self.aoiFrame:
+            # Position overlay to cover the gallery area
+            self._update_gallery_overlay_position()
+            overlay.raise_()  # Bring to front
+            overlay.show()
+            QApplication.processEvents()
+
+    def _update_gallery_overlay_position(self):
+        """Update the position and size of the gallery loading overlay."""
+        if (hasattr(self, 'gallery_loading_overlay') and self.gallery_loading_overlay and
+                hasattr(self, 'aoiFrame') and self.aoiFrame):
+            aoi_frame_rect = self.aoiFrame.rect()
+            self.gallery_loading_overlay.setGeometry(0, 0, aoi_frame_rect.width(), aoi_frame_rect.height())
+
+    def hide_gallery_loading_overlay(self):
+        """Hide the loading overlay."""
+        if hasattr(self, 'gallery_loading_overlay') and self.gallery_loading_overlay:
+            self.gallery_loading_overlay.hide()
+
     def _apply_icons(self):
         """Apply themed icons to all buttons in the viewer."""
         self.magnifyButton.setIcon(IconHelper.create_icon('fa6s.magnifying-glass', self.theme))
@@ -1323,6 +1444,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.nextImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-right', self.theme))
         self.filterButton.setIcon(IconHelper.create_icon('fa6s.filter', self.theme))
         self.helpButton.setIcon(IconHelper.create_icon('fa6s.question', self.theme, options=[{'scale_factor': 1.5}]))
+        if hasattr(self, 'galleryModeButton'):
+            self.galleryModeButton.setIcon(IconHelper.create_icon('fa5s.th-large', self.theme))
         self.showPOIsButton.setIcon(IconHelper.create_icon('mdi.scatter-plot', self.theme))
         self.showAOIsButton.setIcon(IconHelper.create_icon('fa6.circle', self.theme))
         self.GPSMapButton.setIcon(IconHelper.create_icon('fa6s.map-location-dot', self.theme))

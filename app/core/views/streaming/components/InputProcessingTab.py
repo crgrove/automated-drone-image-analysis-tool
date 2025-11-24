@@ -129,4 +129,3 @@ class InputProcessingTab(QWidget):
             return self.resolution_presets[preset_name]
         else:
             return (1280, 720)  # Default
-

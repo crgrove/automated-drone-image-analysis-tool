@@ -38,6 +38,20 @@ class HSVColorRangeService(AlgorithmService):
             # Ensure shape (1,1,3) for cv2.cvtColor
             rgb_color = np.uint8([[selected_color]])
             self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
+        else:
+            # Check for hsv_configs format and use first config's selected_color
+            hsv_configs = self.options.get('hsv_configs')
+            if hsv_configs:
+                if isinstance(hsv_configs, str):
+                    hsv_configs = literal_eval(hsv_configs)
+                if hsv_configs and isinstance(hsv_configs[0], dict):
+                    first_config = hsv_configs[0]
+                    selected_color = first_config.get('selected_color')
+                    if selected_color:
+                        if isinstance(selected_color, str):
+                            selected_color = literal_eval(selected_color)
+                        rgb_color = np.uint8([[selected_color]])
+                        self.target_color_hsv = cv2.cvtColor(rgb_color, cv2.COLOR_RGB2HSV)[0][0]
 
     def _create_mask_from_hsv_ranges(self, hsv_image, hsv_ranges):
         """Create a mask from HSV range data.

@@ -244,11 +244,11 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         if not hasattr(self, 'integrated_controls'):
             self._on_config_changed(config)
             return
-        
+
         # Update motion detection checkbox
         if 'enable_motion' in config and hasattr(self.integrated_controls, 'enable_motion'):
             self.integrated_controls.enable_motion.setChecked(bool(config['enable_motion']))
-        
+
         # Update motion algorithm combo box
         if 'motion_algorithm' in config and hasattr(self.integrated_controls, 'motion_algorithm'):
             motion_algo = config['motion_algorithm']
@@ -264,15 +264,15 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
                 algo_str = str(motion_algo).split('.')[-1]  # Get enum name
                 if algo_str in ["FRAME_DIFF", "MOG2", "KNN"]:
                     self.integrated_controls.motion_algorithm.setCurrentText(algo_str)
-        
+
         # Update motion threshold
         if 'motion_threshold' in config and hasattr(self.integrated_controls, 'motion_threshold'):
             self.integrated_controls.motion_threshold.setValue(config['motion_threshold'])
-        
+
         # Update color quantization checkbox
         if 'enable_color_quantization' in config and hasattr(self.integrated_controls, 'enable_color_quantization'):
             self.integrated_controls.enable_color_quantization.setChecked(bool(config['enable_color_quantization']))
-        
+
         # Update color rarity percentile slider
         if 'color_rarity_percentile' in config and hasattr(self.integrated_controls, 'color_rarity_percentile'):
             percentile = float(config['color_rarity_percentile'])
@@ -282,7 +282,7 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             # Update the label if the method exists
             if hasattr(self.integrated_controls, 'update_color_percentile_label'):
                 self.integrated_controls.update_color_percentile_label()
-        
+
         # Update detection area spinboxes
         if 'min_detection_area' in config and hasattr(self.integrated_controls, 'min_detection_area'):
             self.integrated_controls.min_detection_area.setValue(config['min_detection_area'])
@@ -299,11 +299,11 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         if 'max_area' in config and 'max_detection_area' not in config:
             if hasattr(self.integrated_controls, 'max_detection_area'):
                 self.integrated_controls.max_detection_area.setValue(config['max_area'])
-        
+
         # Get the updated config from the controls (includes all defaults)
         # This ensures we have a complete config with all fields, not just wizard fields
         updated_config = self.integrated_controls.get_config()
-        
+
         # Apply the config to update the detector
         self._on_config_changed(updated_config)
 

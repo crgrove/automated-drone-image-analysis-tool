@@ -28,7 +28,7 @@ class Ui_MainWindow(object):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.setEnabled(True)
-        MainWindow.resize(888, 835)
+        MainWindow.resize(888, 861)
         font = QFont()
         font.setPointSize(10)
         MainWindow.setFont(font)
@@ -246,40 +246,6 @@ class Ui_MainWindow(object):
         self.verticalLayout.setSpacing(4)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
-        self.KMeansLayout = QHBoxLayout()
-        self.KMeansLayout.setObjectName(u"KMeansLayout")
-        self.kMeansCheckbox = QCheckBox(self.AdvancedFeaturesWidget)
-        self.kMeansCheckbox.setObjectName(u"kMeansCheckbox")
-        self.kMeansCheckbox.setMaximumSize(QSize(16777215, 16777215))
-        self.kMeansCheckbox.setFont(font)
-
-        self.KMeansLayout.addWidget(self.kMeansCheckbox)
-
-        self.KMeansWidget = QWidget(self.AdvancedFeaturesWidget)
-        self.KMeansWidget.setObjectName(u"KMeansWidget")
-        self.horizontalLayout = QHBoxLayout(self.KMeansWidget)
-        self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.clustersLabel = QLabel(self.KMeansWidget)
-        self.clustersLabel.setObjectName(u"clustersLabel")
-        self.clustersLabel.setFont(font)
-
-        self.horizontalLayout.addWidget(self.clustersLabel)
-
-        self.clustersSpinBox = QSpinBox(self.KMeansWidget)
-        self.clustersSpinBox.setObjectName(u"clustersSpinBox")
-        self.clustersSpinBox.setFont(font)
-        self.clustersSpinBox.setMinimum(2)
-        self.clustersSpinBox.setMaximum(100)
-        self.clustersSpinBox.setValue(10)
-
-        self.horizontalLayout.addWidget(self.clustersSpinBox)
-
-
-        self.KMeansLayout.addWidget(self.KMeansWidget)
-
-
-        self.verticalLayout.addLayout(self.KMeansLayout)
-
         self.HistogramLayout = QHBoxLayout()
         self.HistogramLayout.setObjectName(u"HistogramLayout")
         self.histogramCheckbox = QCheckBox(self.AdvancedFeaturesWidget)
@@ -465,7 +431,6 @@ class Ui_MainWindow(object):
         self.mainBar.addAction(self.menuHelp.menuAction())
         self.menuFile.addAction(self.actionImageAnalysisGuide)
         self.menuFile.addAction(self.actionStreaming)
-        self.menuFile.addAction(self.actionCoordinator)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionLoadFile)
         self.menuFile.addAction(self.actionPreferences)
@@ -484,7 +449,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR", None))
-        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Image Analysis Wizard", None))
+        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Analysis Setup Wizard", None))
 #if QT_CONFIG(tooltip)
         self.actionImageAnalysisGuide.setToolTip(QCoreApplication.translate("MainWindow", u"Launch the Image Analysis Guide wizard to configure analysis settings.\n"
 "Opens a step-by-step wizard to:\n"
@@ -691,32 +656,6 @@ class Ui_MainWindow(object):
 "\u2022 Recommended: Set to number of CPU cores or slightly higher\n"
 "\u2022 For systems with limited RAM, reduce this value to prevent memory issues\n"
 "Each process analyzes one image at a time, so more processes = more parallel image processing.", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(tooltip)
-        self.kMeansCheckbox.setToolTip(QCoreApplication.translate("MainWindow", u"Enable K-Means clustering preprocessing on images before detection.\n"
-"K-Means clustering reduces image colors to a specified number of dominant colors:\n"
-"\u2022 Simplifies image complexity for better detection\n"
-"\u2022 Groups similar pixels into clusters\n"
-"\u2022 Can improve detection of specific colored objects\n"
-"\u2022 Reduces noise and color variations\n"
-"When enabled, specify the number of color clusters to use.\n"
-"Useful for images with complex color patterns or when targeting specific colors.", None))
-#endif // QT_CONFIG(tooltip)
-        self.kMeansCheckbox.setText(QCoreApplication.translate("MainWindow", u"Use K-Means Clustering", None))
-#if QT_CONFIG(tooltip)
-        self.clustersLabel.setToolTip(QCoreApplication.translate("MainWindow", u"Number of color clusters to use in K-Means preprocessing.\n"
-"Determines how many dominant colors the image is reduced to.", None))
-#endif // QT_CONFIG(tooltip)
-        self.clustersLabel.setText(QCoreApplication.translate("MainWindow", u"Number of Clusters (Colors)", None))
-#if QT_CONFIG(tooltip)
-        self.clustersSpinBox.setToolTip(QCoreApplication.translate("MainWindow", u"Set the number of color clusters for K-Means preprocessing.\n"
-"\u2022 Range: 2 to 100 clusters\n"
-"\u2022 Default: 10 clusters\n"
-"The image will be reduced to this many dominant colors:\n"
-"\u2022 Lower values (2-5): Aggressive color reduction, simpler images\n"
-"\u2022 Medium values (6-15): Balanced reduction, good for most cases\n"
-"\u2022 Higher values (16-100): Subtle reduction, preserves more color detail\n"
-"Start with 10 and adjust based on your image complexity and detection needs.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.histogramCheckbox.setToolTip(QCoreApplication.translate("MainWindow", u"Enable histogram normalization preprocessing on images before detection.\n"

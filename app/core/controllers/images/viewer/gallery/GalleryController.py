@@ -94,7 +94,7 @@ class GalleryController:
 
         This flattens all AOIs from all loaded images and applies global
         filtering and sorting. Color calculation is done in background thread
-        with progress dialog.
+        with loading overlay.
         """
         try:
             self.logger.debug("===== load_all_aois() called =====")
@@ -108,6 +108,10 @@ class GalleryController:
                 self.logger.debug("Images list is empty, skipping gallery load")
                 return
 
+            # Show loading overlay immediately
+            if hasattr(self.parent, 'show_gallery_loading_overlay'):
+                self.parent.show_gallery_loading_overlay()
+
             # Collect all AOIs from all images
             all_aois = self._collect_all_aois()
             self.logger.debug(f"Collected {len(all_aois)} AOIs")
@@ -116,15 +120,18 @@ class GalleryController:
             self.model.set_aoi_items(all_aois, skip_color_calc=True)
             self.logger.debug("Set AOI items in model")
 
-            # Start color calculation in background with progress dialog
+            # Start color calculation in background with loading overlay
             self._start_color_calculation_with_progress(all_aois)
 
         except Exception as e:
             self.logger.error(f"Error loading AOIs in gallery: {e}")
+            # Hide overlay on error
+            if hasattr(self.parent, 'hide_gallery_loading_overlay'):
+                self.parent.hide_gallery_loading_overlay()
 
     def _start_color_calculation_with_progress(self, all_aois):
         """
-        Start color calculation with progress dialog.
+        Start color calculation with loading overlay.
 
         Uses main thread but processEvents() to keep UI responsive.
 
@@ -143,40 +150,11 @@ class GalleryController:
                 self.color_calc_progress_dialog.close()
                 self.color_calc_progress_dialog = None
 
-            # Get parent widget - use the main viewer window
-            parent_widget = self.parent if self.parent else None
-
-            # Create progress dialog
-            self.logger.debug("Creating new progress dialog")
-            self.color_calc_progress_dialog = QProgressDialog(
-                "Initializing gallery view...",
-                "Cancel",
-                0, 100,
-                parent_widget
-            )
-
-            if not self.color_calc_progress_dialog:
-                raise ValueError("Failed to create progress dialog")
-
-            self.color_calc_progress_dialog.setWindowTitle("Loading Gallery")
-            self.color_calc_progress_dialog.setWindowModality(Qt.WindowModal)
-            self.color_calc_progress_dialog.setMinimumDuration(0)  # Show immediately
-            self.color_calc_progress_dialog.setAutoClose(True)
-            self.color_calc_progress_dialog.setAutoReset(False)
-
-            # Connect cancel button
-            self.color_calc_progress_dialog.canceled.connect(self._on_color_calc_cancelled)
-
-            # Connect model signals to progress dialog
-            self.model.color_calc_progress.connect(self._on_color_calc_progress)
-            self.model.color_calc_message.connect(self._on_color_calc_message)
+            # Loading overlay is already shown in load_all_aois()
+            # Just connect model signals (no progress updates needed for overlay)
             self.model.color_calc_complete.connect(self._on_color_calc_complete)
 
-            # Explicitly show the dialog and process events to ensure it's visible
-            self.color_calc_progress_dialog.show()
-            QApplication.processEvents()
-
-            # Start color calculation - processEvents() above ensures dialog is visible
+            # Start color calculation
             self.model._precalculate_color_info()
 
         except Exception as e:
@@ -184,27 +162,23 @@ class GalleryController:
             self.logger.error(traceback.format_exc())
             # Cleanup
             self._disconnect_color_calc_signals()
-            if self.color_calc_progress_dialog:
-                self.color_calc_progress_dialog.close()
-                self.color_calc_progress_dialog = None
-            # Fallback: calculate synchronously without dialog
+            if hasattr(self.parent, 'hide_gallery_loading_overlay'):
+                self.parent.hide_gallery_loading_overlay()
+            # Fallback: calculate synchronously without overlay
             self.model._precalculate_color_info()
             self._finalize_gallery_load()
 
     def _on_color_calc_progress(self, current, total):
         """Handle color calculation progress update."""
-        if self.color_calc_progress_dialog and not self.color_calc_progress_dialog.wasCanceled():
-            percent = int((current / total) * 100) if total > 0 else 0
-            self.color_calc_progress_dialog.setValue(percent)
-            # Process events to keep dialog responsive
-            QApplication.processEvents()
+        # Progress updates no longer needed with overlay
+        # Keep method for compatibility but don't do anything
+        pass
 
     def _on_color_calc_message(self, message):
         """Handle color calculation status message."""
-        if self.color_calc_progress_dialog and not self.color_calc_progress_dialog.wasCanceled():
-            self.color_calc_progress_dialog.setLabelText(message)
-            # Process events to keep dialog responsive
-            QApplication.processEvents()
+        # Message updates no longer needed with overlay
+        # Keep method for compatibility but don't do anything
+        pass
 
     def _disconnect_color_calc_signals(self):
         """Disconnect all color calculation signal connections."""
@@ -240,7 +214,11 @@ class GalleryController:
             # Disconnect signals first
             self._disconnect_color_calc_signals()
 
-            # Close progress dialog
+            # Hide loading overlay
+            if hasattr(self.parent, 'hide_gallery_loading_overlay'):
+                self.parent.hide_gallery_loading_overlay()
+
+            # Close progress dialog if it exists (for backwards compatibility)
             if self.color_calc_progress_dialog:
                 self.logger.debug("Closing progress dialog (complete)")
                 self.color_calc_progress_dialog.setValue(100)
@@ -261,7 +239,11 @@ class GalleryController:
         # Disconnect signals
         self._disconnect_color_calc_signals()
 
-        # Close progress dialog
+        # Hide loading overlay
+        if hasattr(self.parent, 'hide_gallery_loading_overlay'):
+            self.parent.hide_gallery_loading_overlay()
+
+        # Close progress dialog if it exists (for backwards compatibility)
         if self.color_calc_progress_dialog:
             self.logger.debug("Closing progress dialog (cancelled)")
             self.color_calc_progress_dialog.close()
@@ -909,6 +891,10 @@ class GalleryController:
                     gallery_view.scheduleDelayedItemsLayout()
                     gallery_view.viewport().update()
 
+                # Update loading overlay position if visible
+                if hasattr(self.parent, '_update_gallery_overlay_position'):
+                    self.parent._update_gallery_overlay_position()
+
         except Exception as e:
             self.logger.debug(f"Error updating gallery geometry: {e}")
 
@@ -924,6 +910,23 @@ class GalleryController:
             self.logger.debug(f"Set splitter to single column: [{image_width}, {single_column_width}]")
         except Exception as e:
             self.logger.debug(f"Error setting splitter to single column: {e}")
+
+    def _set_splitter_cursor(self, splitter, cursor):
+        """Set the cursor on the splitter and its handle to prevent drag cursor when disabled."""
+        try:
+            # Set cursor on the splitter widget itself
+            splitter.setCursor(cursor)
+            # Also set cursor on the handle if it exists
+            # For a horizontal splitter with 2 widgets, the handle is at index 1
+            try:
+                handle = splitter.handle(1)
+                if handle:
+                    handle.setCursor(cursor)
+            except Exception:
+                # Handle might not exist if width is 0, that's okay
+                pass
+        except Exception as e:
+            self.logger.debug(f"Error setting splitter cursor: {e}")
 
     def save_splitter_position(self, splitter):
         """Save current splitter position to settings based on current view mode."""
@@ -948,6 +951,17 @@ class GalleryController:
     def on_splitter_moved(self, pos, index, splitter, gallery_widget):
         """Handle splitter movement with snapping to column widths."""
         try:
+            # Check if we're in single-image mode (not gallery mode)
+            # If so, lock the splitter to the default single-column width
+            if not hasattr(self.parent, 'gallery_mode') or not self.parent.gallery_mode:
+                # Single-image mode: lock to default width
+                self.set_splitter_to_single_column(splitter)
+                # Resize main image and reposition overlay
+                if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
+                    self.parent._resize_main_image_and_reposition_overlay()
+                return
+
+            # Gallery mode: allow resizing with snapping to column widths
             # Get current sizes
             sizes = splitter.sizes()
             if len(sizes) != 2:
@@ -996,7 +1010,10 @@ class GalleryController:
     def setup_splitter_layout(self, splitter):
         """Configure splitter layout for gallery mode."""
         try:
-            splitter.setHandleWidth(4)
+            # Start in single-image mode, so disable handle initially
+            splitter.setHandleWidth(0)  # Disabled in single-image mode
+            # Set cursor to arrow to prevent drag cursor from appearing
+            self._set_splitter_cursor(splitter, Qt.ArrowCursor)
             splitter.setChildrenCollapsible(False)
 
             # Set stretch factors (image expands, gallery stays preferred size)
@@ -1090,6 +1107,18 @@ class GalleryController:
 
             if self.parent.gallery_mode:
                 # Switch to gallery view
+                # Enable splitter handle for resizing
+                if hasattr(self.parent, 'image_gallery_splitter'):
+                    self.parent.image_gallery_splitter.setHandleWidth(4)
+                    # Explicitly set resize cursor on the handle for gallery mode
+                    try:
+                        handle = self.parent.image_gallery_splitter.handle(1)
+                        if handle:
+                            # Set the resize cursor explicitly
+                            handle.setCursor(Qt.SplitHCursor)  # Horizontal resize cursor
+                    except Exception:
+                        pass
+
                 # Remove fixed width constraints - splitter handles sizing
                 self.parent.aoiFrame.setMinimumWidth(250)  # Just ensure minimum
                 self.parent.aoiFrame.setMaximumWidth(16777215)  # Remove max constraint
@@ -1196,8 +1225,11 @@ class GalleryController:
 
             else:
                 # Switch to single-image view
-                # Set splitter to single column width
+                # Disable splitter handle to prevent dragging
                 if hasattr(self.parent, 'image_gallery_splitter'):
+                    self.parent.image_gallery_splitter.setHandleWidth(0)  # Disable handle
+                    # Set cursor to arrow to prevent drag cursor from appearing
+                    self._set_splitter_cursor(self.parent.image_gallery_splitter, Qt.ArrowCursor)
                     self.set_splitter_to_single_column(self.parent.image_gallery_splitter)
                     # Resize main image and reposition overlay
                     if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):

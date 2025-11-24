@@ -1,4 +1,4 @@
 [flake8]
 max-line-length = 160
 extend-ignore = F401, E402
-exclude = dist, .vs, .venv, resource, build, *_ui.py, *_rc.py
+exclude = dist, .vs, .venv, resource, build, *_ui.py, *_rc.py, .pyside_env

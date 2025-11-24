@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>888</width>
-    <height>835</height>
+    <height>861</height>
    </rect>
   </property>
   <property name="font">
@@ -493,88 +493,6 @@ Each process analyzes one image at a time, so more processes = more parallel ima
              <property name="bottomMargin">
               <number>0</number>
              </property>
-             <item>
-              <layout class="QHBoxLayout" name="KMeansLayout">
-               <item>
-                <widget class="QCheckBox" name="kMeansCheckbox">
-                 <property name="maximumSize">
-                  <size>
-                   <width>16777215</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="font">
-                  <font>
-                   <pointsize>10</pointsize>
-                  </font>
-                 </property>
-                 <property name="toolTip">
-                  <string>Enable K-Means clustering preprocessing on images before detection.
-K-Means clustering reduces image colors to a specified number of dominant colors:
-• Simplifies image complexity for better detection
-• Groups similar pixels into clusters
-• Can improve detection of specific colored objects
-• Reduces noise and color variations
-When enabled, specify the number of color clusters to use.
-Useful for images with complex color patterns or when targeting specific colors.</string>
-                 </property>
-                 <property name="text">
-                  <string>Use K-Means Clustering</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QWidget" name="KMeansWidget" native="true">
-                 <layout class="QHBoxLayout" name="horizontalLayout">
-                  <item>
-                   <widget class="QLabel" name="clustersLabel">
-                    <property name="font">
-                     <font>
-                      <pointsize>10</pointsize>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Number of color clusters to use in K-Means preprocessing.
-Determines how many dominant colors the image is reduced to.</string>
-                    </property>
-                    <property name="text">
-                     <string>Number of Clusters (Colors)</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QSpinBox" name="clustersSpinBox">
-                    <property name="font">
-                     <font>
-                      <pointsize>10</pointsize>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Set the number of color clusters for K-Means preprocessing.
-• Range: 2 to 100 clusters
-• Default: 10 clusters
-The image will be reduced to this many dominant colors:
-• Lower values (2-5): Aggressive color reduction, simpler images
-• Medium values (6-15): Balanced reduction, good for most cases
-• Higher values (16-100): Subtle reduction, preserves more color detail
-Start with 10 and adjust based on your image complexity and detection needs.</string>
-                    </property>
-                    <property name="minimum">
-                     <number>2</number>
-                    </property>
-                    <property name="maximum">
-                     <number>100</number>
-                    </property>
-                    <property name="value">
-                     <number>10</number>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-              </layout>
-             </item>
              <item>
               <layout class="QHBoxLayout" name="HistogramLayout">
                <item>
@@ -1116,17 +1034,7 @@ Use to review, verify, and export analysis results.</string>
        </font>
       </property>
       <property name="toolTip">
-       <string>Processing status and output log window.
-Displays real-time information during image analysis:
-• Current processing status and progress
-• Images being analyzed with filenames
-• Detection counts per image
-• Processing errors and warnings
-• Completion status and summary statistics
-• Total processing time and performance metrics
-• File save locations and output paths
-The window auto-scrolls to show the latest output.
-Use to monitor processing progress and troubleshoot issues.</string>
+       <string/>
       </property>
       <property name="readOnly">
        <bool>true</bool>
@@ -1154,7 +1062,6 @@ Use to monitor processing progress and troubleshoot issues.</string>
     </property>
     <addaction name="actionImageAnalysisGuide"/>
     <addaction name="actionStreaming"/>
-    <addaction name="actionCoordinator"/>
     <addaction name="separator"/>
     <addaction name="actionLoadFile"/>
     <addaction name="actionPreferences"/>

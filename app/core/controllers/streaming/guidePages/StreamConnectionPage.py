@@ -20,13 +20,13 @@ class StreamConnectionPage(BasePage):
             self.dialog.labelHdmiDevices.setVisible(False)
             self.dialog.deviceComboBox.setVisible(False)
             self.dialog.scanDevicesButton.setVisible(False)
-        
+
         # Create resolution slider with user-friendly labels
         # Map: 25% = 480p, 50% = 720p, 75% = 1080p, 100% = 4K
         if hasattr(self.dialog, "resolutionSliderWidget"):
             layout = QVBoxLayout(self.dialog.resolutionSliderWidget)
             layout.setContentsMargins(0, 0, 0, 0)
-            
+
             # Presets: (label, percentage_value)
             resolution_presets = [
                 ("480p", 25),
@@ -34,7 +34,7 @@ class StreamConnectionPage(BasePage):
                 ("1080p", 75),
                 ("4K", 100)
             ]
-            
+
             self.resolution_slider = TextLabeledSlider(
                 parent=self.dialog.resolutionSliderWidget,
                 presets=resolution_presets
@@ -72,7 +72,7 @@ class StreamConnectionPage(BasePage):
             default_resolution = int(default_resolution_str.rstrip('%'))
         except (ValueError, AttributeError):
             default_resolution = 75
-        
+
         # Get current resolution from wizard_data (as integer) or use default
         current_resolution = self.wizard_data.get("processing_resolution")
         if current_resolution is None:
@@ -83,12 +83,12 @@ class StreamConnectionPage(BasePage):
                 current_resolution = int(current_resolution.rstrip('%'))
             except (ValueError, AttributeError):
                 current_resolution = default_resolution
-        
+
         # Map percentage to slider index
         # 25% = index 0 (480p), 50% = index 1 (720p), 75% = index 2 (1080p), 100% = index 3 (4K)
         resolution_to_index = {25: 0, 50: 1, 75: 2, 100: 3}
         slider_index = resolution_to_index.get(current_resolution, 2)  # Default to 1080p
-        
+
         if hasattr(self, "resolution_slider"):
             self.resolution_slider.setValue(slider_index)
 
@@ -237,7 +237,7 @@ class StreamConnectionPage(BasePage):
         )
         if file_path:
             self.dialog.streamUrlLineEdit.setText(file_path)
-    
+
     def _on_resolution_changed(self, index: int) -> None:
         """Handle resolution slider change."""
         # Map slider index to percentage value

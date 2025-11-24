@@ -86,4 +86,3 @@ class MotionDetectionWizardController(QWidget, Ui_MotionDetectionWizard):
 
         if 'max_area' in options:
             self.maxAreaSpinBox.setValue(options['max_area'])
-

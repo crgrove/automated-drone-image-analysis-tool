@@ -41,14 +41,13 @@ class StreamAlgorithmParametersPage(BasePage):
                 skip_val = str(skip_raw).strip().lower() == "yes"
             self.dialog.skipGuideCheckBox.setChecked(skip_val)
 
-
     def save_data(self):
         """Save algorithm parameters to wizard_data."""
         # Ensure object size (min_area/max_area) is applied before saving
         # This handles cases where object size was changed after visiting this page
         if self.algorithm_widget:
             self._apply_object_size_to_algorithm()
-        
+
         if self.algorithm_widget and self.active_algorithm:
             # Get options from the algorithm widget (wizard controllers use get_options)
             if hasattr(self.algorithm_widget, 'get_options'):
@@ -60,7 +59,7 @@ class StreamAlgorithmParametersPage(BasePage):
                 self.wizard_data['algorithm_config'] = config
             # Store algorithm name for reference
             self.wizard_data['algorithm_name'] = self.active_algorithm
-        
+
         # Save skip guide preference
         if hasattr(self.dialog, "skipGuideCheckBox"):
             from PySide6.QtCore import Qt
@@ -80,7 +79,7 @@ class StreamAlgorithmParametersPage(BasePage):
             "Color Detection": "ColorDetection",
             "Color Anomaly & Motion Detection": "ColorAnomalyAndMotionDetection"
         }
-        
+
         # If it's a display name, convert to key; otherwise use as-is
         algorithm_key = algorithm_map.get(selected_algorithm, selected_algorithm)
         self.active_algorithm = algorithm_key
@@ -118,9 +117,18 @@ class StreamAlgorithmParametersPage(BasePage):
         try:
             # Import the algorithm wizard controller dynamically
             algorithm_wizard_modules = {
-                "MotionDetection": "algorithms.streaming.MotionDetection.controllers.MotionDetectionWizardController",
-                "ColorDetection": "algorithms.streaming.ColorDetection.controllers.ColorDetectionWizardController",
-                "ColorAnomalyAndMotionDetection": "algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController"
+                "MotionDetection": (
+                    "algorithms.streaming.MotionDetection.controllers."
+                    "MotionDetectionWizardController"
+                ),
+                "ColorDetection": (
+                    "algorithms.streaming.ColorDetection.controllers."
+                    "ColorDetectionWizardController"
+                ),
+                "ColorAnomalyAndMotionDetection": (
+                    "algorithms.streaming.ColorAnomalyAndMotionDetection.controllers."
+                    "ColorAnomalyAndMotionDetectionWizardController"
+                )
             }
 
             module_path = algorithm_wizard_modules.get(current_algorithm_name)
@@ -152,15 +160,16 @@ class StreamAlgorithmParametersPage(BasePage):
                 # List all attributes to help debug
                 all_attrs = [attr for attr in dir(module) if not attr.startswith('_')]
                 available_classes = [attr for attr in all_attrs if isinstance(getattr(module, attr, None), type)]
-                raise ValueError(f"Class '{class_name}' not found in module '{module_name}'. Available classes: {available_classes}, All attributes: {all_attrs[:20]}")
-            
+                raise ValueError(
+                    f"Class '{class_name}' not found in module '{module_name}'. Available classes: {available_classes}, All attributes: {all_attrs[:20]}")
+
             controller_class = getattr(module, class_name)
             logger.info(f"Got controller_class: {controller_class}, type: {type(controller_class)}, callable: {callable(controller_class)}")
-            
+
             # Check if it's a module (common mistake)
             if isinstance(controller_class, type(module)):
                 raise ValueError(f"'{class_name}' from '{module_name}' is a module, not a class. This usually means there's a package/namespace conflict.")
-            
+
             # Verify it's actually a class
             if not isinstance(controller_class, type):
                 raise ValueError(f"'{class_name}' from '{module_name}' is not a class (got {type(controller_class)}, value: {controller_class})")
@@ -259,7 +268,7 @@ class StreamAlgorithmParametersPage(BasePage):
                 return False
 
         return True
-    
+
     def _on_skip_changed(self, state: int) -> None:
         """Handle skip guide checkbox change."""
         from PySide6.QtCore import Qt
@@ -267,7 +276,7 @@ class StreamAlgorithmParametersPage(BasePage):
 
     def _apply_object_size_to_algorithm(self):
         """Calculate and apply min/max area from object size and GSD to algorithm widget.
-        
+
         If GSD cannot be calculated, this method returns early and the algorithm widget
         will use its default min/max area values (same behavior as Image Analysis Guide).
         """
@@ -277,7 +286,7 @@ class StreamAlgorithmParametersPage(BasePage):
         # Get object size from wizard_data
         object_size_min_ft = self.wizard_data.get('object_size_min')
         object_size_max_ft = self.wizard_data.get('object_size_max')
-        
+
         if not object_size_min_ft or not object_size_max_ft:
             # No object size specified - algorithm will use defaults
             return
@@ -302,7 +311,7 @@ class StreamAlgorithmParametersPage(BasePage):
         # area_pixels = pixels^2
         min_pixels = (object_size_min_ft * 30.48) / gsd_cm_per_pixel
         max_pixels = (object_size_max_ft * 30.48) / gsd_cm_per_pixel
-        
+
         # Calculate area in pixels (square the linear dimension)
         # For min_area, use the same formula as MainWindow (divide by 250 for scaling)
         min_area = max(10, int((min_pixels * min_pixels) / 250))
@@ -314,10 +323,10 @@ class StreamAlgorithmParametersPage(BasePage):
             existing_options = {}
             if hasattr(self.algorithm_widget, 'get_options'):
                 existing_options = self.algorithm_widget.get_options() or {}
-            
+
             # Update with calculated min/max area
             existing_options['min_area'] = min_area
             existing_options['max_area'] = max_area
-            
+
             # Load the updated options
             self.algorithm_widget.load_options(existing_options)

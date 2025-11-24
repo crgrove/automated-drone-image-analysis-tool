@@ -171,7 +171,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             # Validate that file is selected
             if not self.pages[0].validate():
                 return  # Don't proceed if validation fails
-            
+
             # Emit review signal and close wizard
             review_file = self.wizard_data.get('review_file_path')
             if review_file:
@@ -198,7 +198,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
                 self.pages[self.current_page].on_enter()
 
             self._update_navigation_buttons()
-            
+
             # Set focus to an appropriate widget on the new page (not the close button)
             self._set_focus_on_page()
         else:

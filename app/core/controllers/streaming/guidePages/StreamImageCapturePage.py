@@ -131,12 +131,12 @@ class StreamImageCapturePage(BasePage):
                                     model = drone_data[key]
                                     if pd.notna(model):
                                         break
-                            if (make and model and 
-                                str(make).strip() == saved_make.strip() and 
-                                str(model).strip() == saved_model.strip()):
+                            if (make and model and
+                                str(make).strip() == saved_make.strip() and
+                                    str(model).strip() == saved_model.strip()):
                                 self.dialog.droneComboBox.setCurrentIndex(i)
                                 return  # Found and set, exit early
-            
+
             # Set default selection to first item (Select Drone/Camera)
             self.dialog.droneComboBox.setCurrentIndex(0)
 
@@ -284,7 +284,7 @@ class StreamImageCapturePage(BasePage):
             if altitude is None:
                 altitude = self.dialog.altitudeSlider.value()
                 self.wizard_data['altitude'] = altitude
-            
+
             altitude_unit = self.wizard_data.get('altitude_unit', 'ft')
             if altitude_unit == 'ft':
                 altitude_m = altitude / 3.28084
@@ -439,4 +439,3 @@ class StreamImageCapturePage(BasePage):
                 sensor_parts.append("Primary")
 
         return " / ".join(sensor_parts) if sensor_parts else "Sensor"
-

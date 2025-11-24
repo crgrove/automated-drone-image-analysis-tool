@@ -26,14 +26,14 @@ from .ColorAnomalyService import ColorAnomalyService
 class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
     """
     Orchestrator that coordinates motion and color anomaly detection services.
-    
+
     Provides:
     - Unified interface for combined detection
     - Fusion of motion and color detections
     - Temporal smoothing and voting
     - False positive reduction filters
     - Frame rendering and annotation
-    
+
     Signals:
         frameProcessed: Emitted when frame is processed (annotated_frame, detections, metrics)
         performanceUpdate: Emitted with performance metrics
@@ -54,7 +54,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Sub-services
         self.motion_service = MotionDetectionService()
         self.color_service = ColorAnomalyService()
-        
+
         # Initialize services with default config
         self.motion_service.update_config(self.config)
         self.color_service.update_config(self.config)
@@ -397,11 +397,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
     def process_frame(self, frame: np.ndarray, timestamp: float) -> Tuple[np.ndarray, List[Detection], StageTimings]:
         """
         Process a frame through the color anomaly and motion detection pipeline.
-        
+
         Args:
             frame: Input BGR frame
             timestamp: Frame timestamp
-            
+
         Returns:
             Tuple of (annotated_frame, detections, timings)
         """
@@ -679,4 +679,3 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self._fps_start_time = time.time()
         self.motion_service.reset()
         self.logger.info("Performance metrics reset")
-

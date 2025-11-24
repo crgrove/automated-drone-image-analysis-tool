@@ -95,18 +95,16 @@ def auto_close_color_dialogs():
     """Automatically close any color selection dialogs that open during tests."""
     from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
     from PySide6.QtWidgets import QDialog
-    
+
     # Patch ColorRangeDialog.exec() to automatically accept
-    original_exec = ColorRangeDialog.exec
-    
     def mock_exec(self):
         # Automatically accept the dialog
         # Return Accepted status (which is 1 for QDialog.Accepted)
         return QDialog.DialogCode.Accepted
-    
+
     # Patch get_hsv_ranges to return default valid data
     original_get_hsv_ranges = ColorRangeDialog.get_hsv_ranges
-    
+
     def mock_get_hsv_ranges(self):
         # Return default HSV range data that matches expected format
         try:
@@ -129,7 +127,7 @@ def auto_close_color_dialogs():
                 'v_minus': 0.2,
                 'v_plus': 0.2
             }
-    
+
     with patch.object(ColorRangeDialog, 'exec', mock_exec), \
-         patch.object(ColorRangeDialog, 'get_hsv_ranges', mock_get_hsv_ranges):
+            patch.object(ColorRangeDialog, 'get_hsv_ranges', mock_get_hsv_ranges):
         yield

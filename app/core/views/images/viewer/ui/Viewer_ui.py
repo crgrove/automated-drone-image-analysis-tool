@@ -131,6 +131,14 @@ class Ui_Viewer(object):
 
         self.horizontalLayout_5.addItem(self.horizontalSpacer_3)
 
+        self.galleryModeButton = QToolButton(self.mainHeaderWidget)
+        self.galleryModeButton.setObjectName(u"galleryModeButton")
+        self.galleryModeButton.setIconSize(QSize(25, 25))
+        self.galleryModeButton.setCheckable(True)
+        self.galleryModeButton.setChecked(False)
+
+        self.horizontalLayout_5.addWidget(self.galleryModeButton)
+
         self.showPOIsButton = QToolButton(self.mainHeaderWidget)
         self.showPOIsButton.setObjectName(u"showPOIsButton")
         self.showPOIsButton.setIconSize(QSize(25, 25))
@@ -550,6 +558,11 @@ class Ui_Viewer(object):
 "Use to compare original image with detection results.", None))
 #endif // QT_CONFIG(tooltip)
         self.showOverlayCheckBox.setText(QCoreApplication.translate("Viewer", u"Show Overlay", None))
+#if QT_CONFIG(tooltip)
+        self.galleryModeButton.setToolTip(QCoreApplication.translate("Viewer", u"Toggle Gallery Mode (G)\n"
+"Shows all AOIs from all images in a grid view", None))
+#endif // QT_CONFIG(tooltip)
+        self.galleryModeButton.setText("")
 #if QT_CONFIG(tooltip)
         self.showPOIsButton.setToolTip(QCoreApplication.translate("Viewer", u"Highlight Pixels of Interest(H)", None))
 #endif // QT_CONFIG(tooltip)

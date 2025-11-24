@@ -60,7 +60,7 @@ class AIPersonDetectorService(AlgorithmService):
                 self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model_V2_1024.onnx')
             else:
                 # Not frozen (dev)
-                self.model_path = path.abspath(path.join(path.dirname(__file__), 'best_mixed_logged.onnx'))
+                self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model_V2_1024.onnx'))
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """Process a single image to detect people, aggregate results, and identify areas of interest.

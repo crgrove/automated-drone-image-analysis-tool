@@ -441,14 +441,14 @@ class HSVColorRowWizardWidget(QWidget):
                 # Persist selected ranges and set mode
                 self.hsv_ranges = hsv_data
                 self.from_hsv_picker = True
-                
+
                 # Update color from HSV floats BEFORE applying mode visibility
                 # Block signals to prevent _on_color_changed from clearing HSV ranges
                 self.colorSwatch.blockSignals(True)
                 self.color = QColor.fromHsvF(hsv_data['h'], hsv_data['s'], hsv_data['v'])
                 self.colorSwatch.setColor(self.color)
                 self.colorSwatch.blockSignals(False)
-                
+
                 # Now apply mode visibility and update display
                 self._apply_mode_visibility()
                 self._update_hsv_ranges_display()

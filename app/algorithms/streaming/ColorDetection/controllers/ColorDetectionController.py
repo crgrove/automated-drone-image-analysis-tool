@@ -160,7 +160,7 @@ class ColorDetectionController(StreamAlgorithmController):
             config.hue_threshold = first_range.get('hue_plus', 20)
             config.saturation_threshold = first_range.get('sat_plus', 50)
             config.value_threshold = first_range.get('val_plus', 50)
-            
+
             # Convert all color ranges to hsv_ranges_list format for multi-color detection
             # The service expects hsv_ranges_list with normalized values (0-1)
             hsv_ranges_list = []
@@ -173,7 +173,7 @@ class ColorDetectionController(StreamAlgorithmController):
                 else:
                     # Fallback if color is not QColor
                     h, s, v = 0.0, 1.0, 1.0
-                
+
                 # Convert thresholds from OpenCV format to normalized format
                 # hue_minus/hue_plus are in 0-179 range, convert to normalized 0-1
                 h_minus = color_range.get('hue_minus', 20) / 179.0
@@ -184,7 +184,7 @@ class ColorDetectionController(StreamAlgorithmController):
                 # val_minus/val_plus are in 0-255 range, convert to normalized 0-1
                 v_minus = color_range.get('val_minus', 50) / 255.0
                 v_plus = color_range.get('val_plus', 50) / 255.0
-                
+
                 hsv_ranges_list.append({
                     'h': h,
                     's': s,
@@ -196,7 +196,7 @@ class ColorDetectionController(StreamAlgorithmController):
                     'v_minus': v_minus,
                     'v_plus': v_plus
                 })
-            
+
             config.hsv_ranges_list = hsv_ranges_list
 
         return config
@@ -214,7 +214,7 @@ class ColorDetectionController(StreamAlgorithmController):
             self.control_widget.color_ranges = config['color_ranges']
             if hasattr(self.control_widget, '_update_color_ranges_display'):
                 self.control_widget._update_color_ranges_display()
-        
+
         # Set min_area and max_area on spinboxes if provided
         if 'min_area' in config and hasattr(self.control_widget, 'min_area_spinbox'):
             self.control_widget.min_area_spinbox.setValue(config['min_area'])
@@ -222,7 +222,7 @@ class ColorDetectionController(StreamAlgorithmController):
             self.control_widget.max_area_spinbox.setValue(config['max_area'])
         if 'confidence_threshold' in config and hasattr(self.control_widget, 'confidence_spinbox'):
             self.control_widget.confidence_spinbox.setValue(config['confidence_threshold'])
-        
+
         # Apply other config as needed
         self._on_config_changed(config)
 

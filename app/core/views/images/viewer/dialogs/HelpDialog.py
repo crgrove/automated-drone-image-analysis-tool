@@ -93,12 +93,21 @@ class HelpDialog(QDialog):
 
         # Get icons from toolbar buttons
         button_mapping = {
+            'gallery': 'galleryModeButton',
+            'show_aois': 'showAOIsButton',
+            'show_pois': 'showPOIsButton',
+            'gps_map': 'GPSMapButton',
+            'rotate': 'rotateImageButton',
             'adjustments': 'adjustmentsButton',
             'measure': 'measureButton',
             'magnify': 'magnifyButton',
             'kml': 'kmlButton',
             'pdf': 'pdfButton',
-            'zip': 'zipButton'
+            'zip': 'zipButton',
+            'filter': 'filterButton',
+            'previous': 'previousImageButton',
+            'next': 'nextImageButton',
+            'help': 'helpButton'
         }
 
         for key, button_name in button_mapping.items():
@@ -238,39 +247,75 @@ class HelpDialog(QDialog):
             <div class="section">
                 <h2>🔘 Toolbar Buttons</h2>
 
-                <h3>Image Tools</h3>
+                <h3>View & Analysis Controls</h3>
                 <table>
                     <tr>
-                        <td>{icon_html('adjustments')} Adjustments</td>
-                        <td>Open image adjustment dialog (exposure, highlights, shadows, and clarity)</td>
+                        <td>{icon_html('gallery')} Gallery Mode</td>
+                        <td>Toggle Gallery layout (same as G key) to browse all AOIs in a grid.</td>
                     </tr>
                     <tr>
-                        <td>{icon_html('measure')} Measure</td>
-                        <td>Measure distances on the image</td>
+                        <td>{icon_html('show_aois')} Show AOIs</td>
+                        <td>Show or hide AOI circles in the viewer (same as C key).</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('show_pois')} Show POIs</td>
+                        <td>Highlight pixels of interest on the main image (same as H key).</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('gps_map')} GPS Map</td>
+                        <td>Open the interactive GPS map window to visualize image locations.</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('rotate')} North View</td>
+                        <td>View the image rotated to true north based on drone heading (same as R key).</td>
                     </tr>
                     <tr>
                         <td>{icon_html('magnify')} Magnify</td>
-                        <td>Toggle magnifying glass tool (shows zoomed view at cursor)</td>
+                        <td>Toggle the magnifying glass to inspect fine details at the cursor.</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('adjustments')} Adjustments</td>
+                        <td>Open the image adjustments dialog (exposure, highlights, shadows, clarity).</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('measure')} Measure</td>
+                        <td>Open the measurement tool for distance/area measurements.</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('help')} Help</td>
+                        <td>Show this Viewer Help dialog.</td>
                     </tr>
                 </table>
 
-                <h3>Export Tools</h3>
+                <h3>Export & Sharing</h3>
                 <table>
                     <tr>
-                        <td>{icon_html('kml')} KML Export</td>
-                        <td>Export results to KML format for viewing in Google Earth</td>
+                        <td>{icon_html('kml')} Map Export</td>
+                        <td>Open the export dialog to generate KML files or upload directly to CalTopo.</td>
                     </tr>
                     <tr>
                         <td>{icon_html('pdf')} PDF Export</td>
-                        <td>Generate PDF report with images and AOIs</td>
+                        <td>Create a PDF report with AOIs, comments, and imagery.</td>
                     </tr>
                     <tr>
                         <td>{icon_html('zip')} ZIP Export</td>
-                        <td>Export images and data as ZIP archive</td>
+                        <td>Export images, AOI cutouts, and metadata as a ZIP archive.</td>
+                    </tr>
+                </table>
+
+                <h3>Navigation & Filtering</h3>
+                <table>
+                    <tr>
+                        <td>{icon_html('previous')} Previous Image</td>
+                        <td>Navigate to the previous image (respects Skip Hidden).</td>
                     </tr>
                     <tr>
-                        <td>{icon_html('caltopo')} CalTopo Export</td>
-                        <td>Export AOIs to CalTopo for mapping integration</td>
+                        <td>{icon_html('next')} Next Image</td>
+                        <td>Navigate to the next image (respects Skip Hidden).</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('filter')} Filter AOIs</td>
+                        <td>Open the AOI filter dialog to show only AOIs that match specific criteria.</td>
                     </tr>
                 </table>
             </div>

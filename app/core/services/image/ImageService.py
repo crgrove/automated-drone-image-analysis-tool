@@ -494,7 +494,8 @@ class ImageService:
             cv2.circle(image_copy, center, r, bgr, thickness=2)
 
             # Add confidence label if available
-            if "confidence" in aoi:
+            # Turning off for now
+            if "confidence" in aoi and False:
                 confidence = aoi["confidence"]
                 # Position label above the AOI circle
                 label_pos = (int(cx - r), int(cy - r - 10))

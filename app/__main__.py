@@ -16,7 +16,7 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-version = '2.0.0'
+version = '2.0.0 Beta'
 
 
 def main():
@@ -95,13 +95,13 @@ def main():
         # After wizard completes (or is cancelled), proceed with MainWindow
         # Whether accepted or cancelled, open MainWindow
         dlg.selection = "images"  # Set selection so dialog knows what was chosen
-        
+
         # Check if review was requested
         if review_file_path:
             # Review mode: open MainWindow, load XML, and open Viewer
             app._main_window = MainWindow(qdarktheme, version)
             app._main_window.show()
-            
+
             # Load the XML file
             try:
                 app._main_window._process_xml_file(review_file_path)
@@ -124,7 +124,7 @@ def main():
                 app._main_window.populate_from_wizard_data(wizard_data_from_wizard)
 
             app._main_window.show()
-        
+
         dlg.accept()  # Close selection dialog (already hidden, but this ensures cleanup)
 
     def _on_stream_wizard_requested():
