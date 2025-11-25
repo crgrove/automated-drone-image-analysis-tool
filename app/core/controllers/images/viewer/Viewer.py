@@ -123,7 +123,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.settings_service = SettingsService()
 
         # Ensure review metadata exists (capture reviewer name if needed)
-        #self._ensure_review_metadata()
+        # self._ensure_review_metadata()
 
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))

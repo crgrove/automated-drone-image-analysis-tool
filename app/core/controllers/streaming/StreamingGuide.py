@@ -28,6 +28,15 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
         self.current_page = 0
         self.total_pages = 6
 
+        skip_setting = self.settings_service.get_setting("SkipStreamingGuide", "No")
+        skip_guide = False
+        if isinstance(skip_setting, str):
+            skip_guide = skip_setting.strip().lower() in {"yes", "true", "1"}
+        elif isinstance(skip_setting, bool):
+            skip_guide = skip_setting
+        else:
+            skip_guide = bool(skip_setting)
+
         # Initialize wizard_data - algorithm starts as None and will be set by user selection
         # This ensures it resets between wizard sessions but persists when going back/forward
         self.wizard_data = {
@@ -36,7 +45,7 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
             "auto_connect": False,
             "algorithm": None,
             "processing_resolution": 75,  # Changed to integer for slider (25, 50, 75, 100)
-            "skip_guide": False,
+            "skip_guide": skip_guide,
             "object_size_min": 1,
             "object_size_max": 6,
             "altitude": 100,  # Default altitude in feet
@@ -54,6 +63,9 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
             StreamAlgorithmPage(self.wizard_data, self.settings_service, self),
             StreamAlgorithmParametersPage(self.wizard_data, self.settings_service, self),
         ]
+
+        if hasattr(self, "skipGuideCheckBox"):
+            self.skipGuideCheckBox.setChecked(skip_guide)
 
         # Allow pages to trigger validation updates
         self.pages[0].on_validation_changed = self._update_navigation_buttons

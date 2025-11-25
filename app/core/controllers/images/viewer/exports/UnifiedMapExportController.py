@@ -474,7 +474,7 @@ class UnifiedMapExportController:
                     "Only image locations and flagged AOIs will be exported.\n\n"
                     "Continue with export?",
                     QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
+                    QMessageBox.Yes
                 )
                 if reply != QMessageBox.Yes:
                     return
@@ -483,26 +483,13 @@ class UnifiedMapExportController:
             # We'll need to prepare the markers based on selections
             caltopo_controller = CalTopoExportController(self.parent, self.logger)
 
-            # For now, we'll use the existing CalTopo export which handles flagged AOIs
-            # We need to enhance it to also support image locations
-            # For the initial implementation, let's just call the existing export
-            # and show a message about which data will be included
-
-            if include_locations and not include_flagged_aois:
-                QMessageBox.information(
-                    self.parent,
-                    "Coming Soon",
-                    "Image location export to CalTopo is coming soon.\n\n"
-                    "For now, please select 'Flagged Areas of Interest' for CalTopo export."
-                )
-                return
-
-            # Export flagged AOIs using existing functionality
-            if include_flagged_aois:
-                caltopo_controller.export_to_caltopo(
-                    self.parent.images,
-                    self.parent.aoi_controller.flagged_aois
-                )
+            # Export markers based on selections
+            caltopo_controller.export_to_caltopo(
+                self.parent.images,
+                self.parent.aoi_controller.flagged_aois,
+                include_flagged_aois=include_flagged_aois,
+                include_locations=include_locations
+            )
 
         except Exception as e:
             self.logger.error(f"Error exporting to CalTopo: {str(e)}")

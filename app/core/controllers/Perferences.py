@@ -46,9 +46,9 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
-        offline_only = self.parent.settings_service.get_setting('OfflineOnly', False)
+        offline_only = self.parent.settings_service.get_bool_setting('OfflineOnly', False)
         if hasattr(self, 'offlineOnlyCheckBox'):
-            self.offlineOnlyCheckBox.setChecked(bool(offline_only))
+            self.offlineOnlyCheckBox.setChecked(offline_only)
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 

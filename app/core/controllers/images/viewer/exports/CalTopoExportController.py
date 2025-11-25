@@ -5,20 +5,20 @@ This controller coordinates the authentication, map selection, and export
 of flagged AOIs to CalTopo maps.
 """
 
-from PySide6.QtWidgets import QMessageBox, QProgressDialog, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-from PySide6.QtCore import Qt, QEventLoop, QTimer
+import json
+import base64
+import os
+
+from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QTimer
 from core.services.export.CalTopoService import CalTopoService
 from core.views.images.viewer.dialogs.CalTopoAuthDialog import CalTopoAuthDialog
-from core.views.images.viewer.dialogs.CalTopoMapDialog import CalTopoMapDialog
+from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
-import json
-import traceback
-import copy
-import simplekml
 
 
 class CalTopoExportController:
@@ -26,7 +26,7 @@ class CalTopoExportController:
     Controller for managing CalTopo export functionality.
 
     Handles authentication flow, map selection, and export of flagged AOIs
-    to CalTopo maps as markers/waypoints.
+    and/or image locations to CalTopo maps as markers/waypoints.
     """
 
     def __init__(self, parent_widget, logger=None):
@@ -41,13 +41,15 @@ class CalTopoExportController:
         self.logger = logger or LoggerService()
         self.caltopo_service = CalTopoService()
 
-    def export_to_caltopo(self, images, flagged_aois):
+    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False):
         """
-        Export flagged AOIs to CalTopo.
+        Export data to CalTopo.
 
         Args:
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
+            include_flagged_aois (bool): Include flagged AOIs as markers
+            include_locations (bool): Include drone/image locations as markers
 
         Returns:
             bool: True if export was successful, False otherwise
@@ -64,45 +66,62 @@ class CalTopoExportController:
                 )
                 return False
 
-            # Check if we have any flagged AOIs
-            if not flagged_aois or sum(len(aois) for aois in flagged_aois.values()) == 0:
+            if not include_flagged_aois and not include_locations:
                 QMessageBox.information(
                     self.parent,
-                    "No Flagged AOIs",
-                    "No flagged AOIs to export. Please flag some AOIs first using the 'F' key."
+                    "Nothing Selected",
+                    "Select at least one data type (flagged AOIs or drone/image locations) to export."
                 )
                 return False
 
-            # Step 1: Prepare markers from flagged AOIs FIRST
-            markers = self._prepare_markers(images, flagged_aois)
+            # Step 1: Prepare markers based on selections
+            markers = []
+            if include_flagged_aois:
+                markers.extend(self._prepare_markers(images, flagged_aois))
+            if include_locations:
+                markers.extend(self._prepare_location_markers(images))
 
             if not markers:
-                # Provide more helpful error message
-                total_flagged = sum(len(aois) for aois in flagged_aois.values())
-                QMessageBox.warning(
+                if include_flagged_aois and include_locations:
+                    message = (
+                        "No flagged AOIs or geotagged image locations are available.\n"
+                        "Flag some AOIs with the 'F' key or ensure your images have GPS metadata."
+                    )
+                elif include_flagged_aois:
+                    total_flagged = sum(len(aois) for aois in flagged_aois.values())
+                    message = (
+                        f"Found {total_flagged} flagged AOI(s), but could not extract GPS coordinates.\n\n"
+                        "This usually means:\n"
+                        "• The images don't have GPS data in their EXIF metadata\n"
+                        "• The image files have been moved or renamed\n\n"
+                        "Please ensure your images have GPS coordinates embedded."
+                    )
+                else:
+                    message = (
+                        "No geotagged drone/image locations were found.\n"
+                        "Ensure your images contain GPS metadata and try again."
+                    )
+
+                QMessageBox.information(
                     self.parent,
-                    "No Markers to Export",
-                    f"Found {total_flagged} flagged AOI(s), but could not extract GPS coordinates.\n\n"
-                    f"This usually means:\n"
-                    f"• The images don't have GPS data in their EXIF metadata\n"
-                    f"• The image files have been moved or renamed\n\n"
-                    f"Please ensure your images have GPS coordinates embedded."
+                    "Nothing to Export",
+                    message
                 )
                 return False
 
-            # Step 2: Show login dialog - will stay open for marker creation
-            auth_dialog = CalTopoAuthDialog(self.parent)
-
+            # Step 2: Always use the embedded browser session for export
+            # This ensures we use the exact cookies/tokens CalTopo expects.
             selected_map_id = None
             export_result = {'success': False}
 
-            def on_authenticated(cookies):
-                nonlocal selected_map_id
-                # Extract map ID from cookies dict
-                selected_map_id = cookies.get('__map_id')
-                # We don't save cookies anymore - JavaScript uses them directly from browser
+            auth_dialog = CalTopoAuthDialog(self.parent)
 
-                # Check if we got a map ID
+            def on_authenticated(payload):
+                nonlocal selected_map_id
+
+                if isinstance(payload, dict):
+                    selected_map_id = payload.get('map_id') or payload.get('__map_id')
+
                 if not selected_map_id:
                     QMessageBox.warning(
                         auth_dialog,
@@ -113,25 +132,29 @@ class CalTopoExportController:
                     )
                     return
 
-                # Use JavaScript in the authenticated browser to make POST requests
-                # This automatically includes all cookies (including HttpOnly ones)
+                # Close the auth dialog first (user is done with it)
+                auth_dialog.accept()
 
-                success_count = self._export_markers_via_javascript(
+                # Use JavaScript running inside the authenticated browser session
+                # so all CalTopo cookies/tokens (including HttpOnly) are honored.
+                success_count, cancelled = self._export_markers_via_javascript(
                     auth_dialog.web_view,
                     selected_map_id,
                     markers
                 )
 
-                export_result['success'] = (success_count > 0)
+                export_result['success'] = success_count > 0
                 export_result['success_count'] = success_count
                 export_result['total_count'] = len(markers)
-
-                # Now we can close the dialog
-                auth_dialog.accept()
+                export_result['cancelled'] = cancelled
 
             auth_dialog.authenticated.connect(on_authenticated)
 
             if auth_dialog.exec() != CalTopoAuthDialog.Accepted:
+                return False
+
+            # If we still don't have a map ID after authentication, user cancelled
+            if not selected_map_id:
                 return False
 
             # Step 3: Show result
@@ -176,7 +199,7 @@ class CalTopoExportController:
         """Return whether OfflineOnly is enabled on the parent settings service."""
         try:
             if hasattr(self.parent, "settings_service"):
-                return bool(self.parent.settings_service.get_setting("OfflineOnly", False))
+                return self.parent.settings_service.get_bool_setting("OfflineOnly", False)
         except Exception:
             pass
         return False
@@ -334,611 +357,345 @@ class CalTopoExportController:
                     'lon': aoi_lon,
                     'title': marker_title,
                     'description': description,
-                    'rgb': marker_rgb  # RGB tuple (R, G, B) or None
+                    'rgb': marker_rgb,  # RGB tuple (R, G, B) or None
+                    'image_path': image_path  # Include source image for photo upload
                 }
 
                 markers.append(marker)
 
         return markers
 
+    def _prepare_location_markers(self, images):
+        """Prepare marker data for drone/image locations."""
+        markers = []
+
+        for img_idx, image in enumerate(images):
+            if image.get('hidden', False):
+                continue
+
+            image_name = image.get('name', f'Image {img_idx + 1}')
+            image_path = image.get('path', '')
+            if not image_path:
+                continue
+
+            try:
+                image_service = ImageService(image_path, image.get('mask_path', ''))
+                image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
+
+                if not image_gps:
+                    continue
+
+                custom_alt = None
+                if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+                    custom_alt = self.parent.custom_agl_altitude_ft
+
+                if custom_alt is not None and custom_alt > 0:
+                    altitude_ft = custom_alt
+                else:
+                    altitude_ft = image_service.get_relative_altitude(distance_unit='ft')
+
+                gimbal_pitch = image_service.get_camera_pitch()
+                gimbal_yaw = image_service.get_camera_yaw()
+
+                description = "Drone/Image Location\n"
+                description += f"Image: {image_name}\n"
+                description += f"GPS: {image_gps['latitude']:.6f}, {image_gps['longitude']:.6f}\n"
+
+                if altitude_ft:
+                    description += f"Altitude: {altitude_ft:.1f} ft AGL\n"
+                if gimbal_pitch is not None:
+                    description += f"Gimbal Pitch: {gimbal_pitch:.1f}°\n"
+                if gimbal_yaw is not None:
+                    description += f"Gimbal Yaw: {gimbal_yaw:.1f}°\n"
+
+                markers.append({
+                    'lat': image_gps['latitude'],
+                    'lon': image_gps['longitude'],
+                    'title': image_name,
+                    'description': description,
+                    'marker_color': '1E88E5',
+                    'marker_symbol': 'info'
+                })
+            except Exception:
+                continue
+
+        return markers
+
     def _export_markers_via_javascript(self, web_view, map_id, markers):
-        """Export markers using JavaScript fetch() which includes all cookies automatically.
+        """Export markers using JavaScript fetch() inside the authenticated browser.
+
+        This uses the same browser session (cookies, tokens, HttpOnly cookies, etc.)
+        that CalTopo itself is using, which is more robust than recreating it in
+        a separate Python requests.Session.
 
         Args:
-            web_view: QWebEngineView instance with authenticated session
-            map_id: CalTopo map ID
-            markers: List of marker dictionaries
+            web_view: QWebEngineView instance with authenticated CalTopo session
+            map_id (str): CalTopo map ID
+            markers (list): Marker dictionaries
 
         Returns:
-            int: Number of successfully created markers
+            tuple: (success_count, cancelled)
         """
+        total = len(markers)
+        if total == 0:
+            return 0, False
+
+        # Create progress dialog similar to KML export
+        progress_dialog = ExportProgressDialog(
+            self.parent,
+            title="Exporting to CalTopo",
+            total_items=total
+        )
+        progress_dialog.set_title("Exporting markers to CalTopo...")
+        progress_dialog.set_status(f"Preparing to export {total} marker(s)...")
+
+        # Show progress dialog
+        progress_dialog.show()
+        QApplication.processEvents()
+
         success_count = 0
+        cancelled = False
 
-        for i, marker in enumerate(markers):
+        for index, marker in enumerate(markers, start=1):
+            # Check if cancelled
+            if progress_dialog.is_cancelled():
+                cancelled = True
+                break
 
-            # Determine marker color from AOI RGB or use default red
-            marker_color = 'FF0000'  # Default red
-            if marker.get('rgb'):
-                r, g, b = marker['rgb']
-                marker_color = f'{r:02X}{g:02X}{b:02X}'
+            # Update progress
+            progress_dialog.update_progress(
+                index - 1,
+                total,
+                f"Exporting marker {index} of {total}: {marker.get('title', 'Unknown')[:40]}..."
+            )
+            QApplication.processEvents()
+            # Determine marker color
+            marker_color = marker.get('marker_color')
+            if not marker_color and marker.get('rgb'):
+                try:
+                    r, g, b = marker['rgb']
+                    marker_color = f"{r:02X}{g:02X}{b:02X}"
+                except Exception:
+                    marker_color = None
+            if not marker_color:
+                marker_color = "FF0000"
 
-            # Create the marker payload
-            # Using 'info' (information/circle icon) with AOI's color
-            marker_payload = {
-                'type': 'Feature',
-                'class': None,
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [marker['lon'], marker['lat']]
-                },
-                'properties': {
-                    'title': marker['title'],
-                    'description': marker.get('description', ''),
-                    'marker-size': '1',
-                    'marker-symbol': 'info',  # Information/circle icon
-                    'marker-color': marker_color,  # AOI's RGB color
-                    'marker-rotation': None
-                }
+            # Build CalTopo-style marker properties
+            marker_properties = {
+                "title": marker.get("title", ""),
+                "description": marker.get("description", ""),
+                "marker-size": str(marker.get("marker_size", "1")),
+                "marker-symbol": marker.get("marker_symbol", "a:4"),
+                "marker-color": marker_color,
+                "marker-rotation": marker.get("marker_rotation", 0),
             }
 
-            # JavaScript to make POST request using fetch()
-            # fetch() automatically includes all cookies (including HttpOnly)
-            # Must use .then() instead of async/await for QWebEngineView compatibility
+            marker_payload = {
+                "type": "Feature",
+                "class": None,
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [marker["lon"], marker["lat"]],
+                },
+                "properties": marker_properties,
+            }
+
+            # Prepare photo data if needed
+            has_photo = marker.get('image_path') and os.path.exists(marker.get('image_path', ''))
+            base64_image_data = None
+            photo_filename = None
+
+            if has_photo:
+                try:
+                    image_path = marker['image_path']
+                    photo_filename = os.path.basename(image_path)
+                    with open(image_path, "rb") as img_file:
+                        image_bytes = img_file.read()
+                        base64_image_data = base64.b64encode(image_bytes).decode("utf-8")
+                except Exception:
+                    has_photo = False
+
+            # Create marker and optionally photo in one JavaScript call
+            base64_js = json.dumps(base64_image_data) if base64_image_data else "null"
+            photo_desc_js = json.dumps(marker.get('description', ''))
+
             js_code = f"""
-            new Promise((resolve, reject) => {{
+            (async function() {{
+                // STEP 1: Create marker
                 const markerData = {json.dumps(marker_payload)};
+                const markerFormData = new URLSearchParams();
+                markerFormData.append('json', JSON.stringify(markerData));
 
-                // Create form data (CalTopo expects json parameter)
-                const formData = new URLSearchParams();
-                formData.append('json', JSON.stringify(markerData));
-
-                fetch('/api/v1/map/{map_id}/Marker', {{
-                    method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-                    }},
-                    body: formData.toString()
-                }})
-                .then(response => {{
-                    const statusCode = response.status;
-                    return response.text().then(responseText => {{
-                        console.log('Marker POST response:', statusCode, responseText);
-
-                        if (statusCode === 200 || statusCode === 201) {{
-                            resolve('success:' + statusCode);
-                        }} else {{
-                            resolve('error:' + statusCode + ':' + responseText);
-                        }}
+                let markerId = null;
+                try {{
+                    const markerResponse = await fetch('/api/v1/map/{map_id}/Marker', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                        }},
+                        credentials: 'include',
+                        body: markerFormData.toString()
                     }});
-                }})
-                .catch(e => {{
-                    console.error('Marker POST error:', e);
-                    resolve('error:exception:' + e.toString());
-                }});
-            }});
+
+                    if (markerResponse.ok) {{
+                        const markerText = await markerResponse.text();
+                        try {{
+                            const markerData = JSON.parse(markerText);
+                            if (markerData.result && markerData.result.id) {{
+                                markerId = markerData.result.id;
+                            }}
+                        }} catch (e) {{
+                            // Ignore parse errors
+                        }}
+                    }} else {{
+                        return 'error:marker:' + markerResponse.status;
+                    }}
+                }} catch (e) {{
+                    return 'error:marker:exception:' + e.toString();
+                }}
+
+                // STEP 2: Upload photo if we have one and marker was created
+                if (markerId && {json.dumps(has_photo)}) {{
+                    try {{
+                        // Get creator ID
+                        let creatorId = 'ADIAT_User';
+                        try {{
+                            const mapResponse = await fetch('/api/v1/map/{map_id}/since/0', {{
+                                method: 'GET',
+                                credentials: 'include'
+                            }});
+                            if (mapResponse.ok) {{
+                                const mapData = await mapResponse.json();
+                                if (mapData && mapData.result && mapData.result.state && mapData.result.state.features) {{
+                                    for (let feature of mapData.result.state.features) {{
+                                        if (feature.properties && feature.properties.creator) {{
+                                            creatorId = feature.properties.creator;
+                                            break;
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }} catch (e) {{
+                            // Use fallback
+                        }}
+
+                        const mediaId = crypto.randomUUID();
+                        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        const base64Data = {base64_js};
+
+                        // Step 2.1: Create media object
+                        const mediaMetadataPayload = {{
+                            properties: {{
+                                creator: creatorId,
+                                filename: {json.dumps(photo_filename)},
+                                exifCreatedTZ: timezone
+                            }}
+                        }};
+                        const step1FormData = new URLSearchParams();
+                        step1FormData.append('json', JSON.stringify(mediaMetadataPayload));
+                        const step1Response = await fetch(window.location.origin + '/api/v1/media/' + mediaId, {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
+                            credentials: 'include',
+                            body: step1FormData.toString()
+                        }});
+                        if (!step1Response.ok) {{
+                            return 'success:' + markerId;
+                        }}
+
+                        // Step 2.2: Upload image data
+                        const mediaDataPayload = {{ data: base64Data }};
+                        const step2FormData = new URLSearchParams();
+                        step2FormData.append('json', JSON.stringify(mediaDataPayload));
+                        const step2Response = await fetch(window.location.origin + '/api/v1/media/' + mediaId + '/data', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
+                            credentials: 'include',
+                            body: step2FormData.toString()
+                        }});
+                        if (!step2Response.ok) {{
+                            return 'success:' + markerId;
+                        }}
+
+                        // Step 2.3: Attach media to map
+                        const mediaObjectPayload = {{
+                            type: 'Feature',
+                            geometry: {{
+                                type: 'Point',
+                                coordinates: [{marker['lon']}, {marker['lat']}]
+                            }},
+                            properties: {{
+                                parentId: 'Marker:' + markerId,
+                                backendMediaId: mediaId,
+                                created: Date.now(),
+                                title: {json.dumps(photo_filename)},
+                                heading: null,
+                                description: {photo_desc_js},
+                                'marker-symbol': 'aperture',
+                                'marker-color': '#FFFFFF',
+                                'marker-size': 1
+                            }}
+                        }};
+                        const step3FormData = new URLSearchParams();
+                        step3FormData.append('json', JSON.stringify(mediaObjectPayload));
+                        const step3Response = await fetch(window.location.origin + '/api/v1/map/{map_id}/MapMediaObject', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
+                            credentials: 'include',
+                            body: step3FormData.toString()
+                        }});
+                        if (!step3Response.ok) {{
+                            return 'success:' + markerId;
+                        }}
+                    }} catch (e) {{
+                        return 'success:' + markerId;
+                    }}
+                }}
+
+                return 'success:' + markerId;
+            }})();
             """
 
-            result_container = {'result': None}
+            result_container = {"result": None}
 
             def callback(result):
-                result_container['result'] = result
+                result_container["result"] = result
 
             web_view.page().runJavaScript(js_code, callback)
 
-            # Wait for result with longer timeout for Promise to resolve
-            loop = QEventLoop()
-            QTimer.singleShot(5000, loop.quit)  # 5 second timeout for network request
-            timer = QTimer()
-
-            def check():
-                if result_container['result'] is not None:
-                    loop.quit()
-            timer.timeout.connect(check)
-            timer.start(100)
-            loop.exec()
-            timer.stop()
-
-            result = result_container['result']
-
-            # If result is empty/None but we didn't get an error, assume success
-            # (The markers ARE being created, just the callback isn't working properly)
-            if result is None or result == '':
-                # No callback received - but markers are likely created
-                # Assume success (we've confirmed markers appear in CalTopo)
-                success_count += 1
-            elif 'success' in str(result):
-                success_count += 1
-            elif 'error' in str(result):
-                # Error occurred
-                pass
-            else:
-                # Unknown response, assume success
-                success_count += 1
-
-            # Small delay between requests
-            loop2 = QEventLoop()
-            QTimer.singleShot(200, loop2.quit)
-            loop2.exec()
-
-        return success_count
-
-    def _install_function_interceptor(self, web_view):
-        """Inject an interceptor that captures CalTopo's internal function calls.
-
-        Args:
-            web_view: QWebEngineView instance with CalTopo loaded
-
-        Returns:
-            str: Status message
-        """
-        js_interceptor = """
-        (function() {
-            // Store intercepted calls
-            window.CALTOPO_INTERCEPTED_CALLS = [];
-
-            // Try to find and intercept CalTopo's state object
-            var checkInterval = setInterval(function() {
-                if (typeof state !== 'undefined') {
-                    clearInterval(checkInterval);
-                    console.log('=== FOUND CALTOPO STATE OBJECT ===');
-                    console.log('State properties:', Object.keys(state).slice(0, 20));
-
-                    // Look for marker/feature adding functions
-                    var functionNames = [];
-                    for (var key in state) {
-                        if (typeof state[key] === 'function') {
-                            functionNames.push(key);
-                        }
-                    }
-                    console.log('State functions:', functionNames.slice(0, 30));
-
-                    // Intercept common function names
-                    var targetFunctions = ['addFeature', 'addMarker', 'createFeature', 'newFeature',
-                                          'addObject', 'createMarker', 'save', 'update'];
-
-                    targetFunctions.forEach(function(funcName) {
-                        if (state[funcName] && typeof state[funcName] === 'function') {
-                            console.log('Intercepting state.' + funcName);
-                            var originalFunc = state[funcName];
-                            state[funcName] = function() {
-                                console.log('=== INTERCEPTED: state.' + funcName + ' ===');
-                                console.log('Arguments:', arguments);
-                                if (arguments.length > 0) {
-                                    console.log('First argument:', arguments[0]);
-                                }
-
-                                // Store the call
-                                window.CALTOPO_INTERCEPTED_CALLS.push({
-                                    function: funcName,
-                                    args: Array.from(arguments).map(arg => {
-                                        try {
-                                            return JSON.parse(JSON.stringify(arg));
-                                        } catch (e) {
-                                            return String(arg);
-                                        }
-                                    })
-                                });
-
-                                // Call original
-                                return originalFunc.apply(state, arguments);
-                            };
-                        }
-                    });
-
-                    console.log('=== INTERCEPTION READY ===');
-                    console.log('Now add a marker manually (Shift+M) and the function calls will be captured!');
-                }
-            }, 100);
-
-            // Timeout after 5 seconds
-            setTimeout(function() {
-                clearInterval(checkInterval);
-            }, 5000);
-
-            return 'Interceptor installing...';
-        })();
-        """
-
-        result_container = {'result': None}
-
-        def callback(result):
-            result_container['result'] = result
-            print(f"DEBUG: Interceptor installation: {result}")
-
-        web_view.page().runJavaScript(js_interceptor, callback)
-
-        # Wait for installation
-        loop = QEventLoop()
-        QTimer.singleShot(2000, loop.quit)
-        loop.exec()
-
-        return result_container['result']
-
-    def _get_intercepted_calls(self, web_view):
-        """Get the intercepted function calls.
-
-        Args:
-            web_view: QWebEngineView instance
-
-        Returns:
-            list: Intercepted calls
-        """
-        js_get_calls = """
-        (function() {
-            if (window.CALTOPO_INTERCEPTED_CALLS && window.CALTOPO_INTERCEPTED_CALLS.length > 0) {
-                return JSON.stringify(window.CALTOPO_INTERCEPTED_CALLS);
-            }
-            return null;
-        })();
-        """
-
-        result_container = {'result': None}
-
-        def callback(result):
-            result_container['result'] = result
-
-        web_view.page().runJavaScript(js_get_calls, callback)
-
-        loop = QEventLoop()
-        QTimer.singleShot(1000, loop.quit)
-        timer = QTimer()
-
-        def check():
-            if result_container['result'] is not None:
-                loop.quit()
-        timer.timeout.connect(check)
-        timer.start(100)
-        loop.exec()
-        timer.stop()
-
-        if result_container['result']:
-            try:
-                return json.loads(result_container['result'])
-            except Exception:
-                pass
-
-        return None
-
-    def _export_via_browser(self, web_view, map_id, markers):
-        """Export markers by intercepting and replaying CalTopo's own function calls.
-
-        Args:
-            web_view: QWebEngineView instance with CalTopo loaded
-            map_id: CalTopo map ID
-            markers: List of marker dictionaries
-
-        Returns:
-            bool: True if export was successful, False otherwise
-        """
-        try:
-            print(f"DEBUG: Starting interceptor-based marker creation for {len(markers)} markers")
-
-            # Install the function interceptor
-            print("DEBUG: Installing function interceptor...")
-            self._install_function_interceptor(web_view)
-
-            # Show instructions to user - NON-MODAL so they can interact with CalTopo
-            instruction_dialog = QDialog(web_view)
-            instruction_dialog.setWindowTitle("Record CalTopo Marker Creation")
-            instruction_dialog.setModal(False)  # NON-MODAL!
-
-            layout = QVBoxLayout()
-
-            label = QLabel(
-                f"<b>Function interceptor installed!</b><br><br>"
-                f"Please manually add ONE marker in the CalTopo window:<br>"
-                f"1. Press <b>Shift+M</b> in the CalTopo window<br>"
-                f"2. Fill in any title (e.g., 'Test')<br>"
-                f"3. Submit the form to create the marker<br>"
-                f"4. Click <b>OK</b> below after the marker is created<br><br>"
-                f"I'll capture the exact function call CalTopo uses,<br>"
-                f"then replay it for all {len(markers)} of your flagged AOIs."
-            )
-            label.setWordWrap(True)
-            layout.addWidget(label)
-
-            button_layout = QHBoxLayout()
-            ok_button = QPushButton("OK - I've Added a Marker")
-            cancel_button = QPushButton("Cancel")
-            button_layout.addWidget(ok_button)
-            button_layout.addWidget(cancel_button)
-            layout.addLayout(button_layout)
-
-            instruction_dialog.setLayout(layout)
-
-            result_container = {'clicked_ok': False}
-
-            def on_ok():
-                result_container['clicked_ok'] = True
-                instruction_dialog.accept()
-
-            def on_cancel():
-                instruction_dialog.reject()
-
-            ok_button.clicked.connect(on_ok)
-            cancel_button.clicked.connect(on_cancel)
-
-            # Show non-modal dialog
-            instruction_dialog.show()
-            instruction_dialog.raise_()
-            instruction_dialog.activateWindow()
-
-            # Wait for user to click OK or Cancel
-            loop = QEventLoop()
-            instruction_dialog.finished.connect(loop.quit)
-            loop.exec()
-
-            if not result_container['clicked_ok']:
-                return False
-
-            # Get the intercepted calls
-            print("DEBUG: Retrieving intercepted function calls...")
-            intercepted = self._get_intercepted_calls(web_view)
-
-            if not intercepted or len(intercepted) == 0:
-                print("DEBUG: No intercepted calls found")
-                QMessageBox.warning(
-                    self.parent,
-                    "No Calls Intercepted",
-                    "Could not capture the marker creation function.\n\n"
-                    "Please check the console output to see what's available."
-                )
-                return False
-
-            print(f"DEBUG: Captured {len(intercepted)} function call(s):")
-            for call in intercepted:
-                print(f"  - {call.get('function')}() with {len(call.get('args', []))} argument(s)")
-                print(f"    Args: {call.get('args')}")
-
-            # Use the captured function to add all our markers
-            return self._replay_captured_calls(web_view, intercepted, markers)
-
-        except Exception as e:
-            print(f"ERROR: Browser automation failed: {e}")
-            traceback.print_exc()
-            return False
-
-    def _replay_captured_calls(self, web_view, intercepted_calls, markers):
-        """Replay the captured function calls for all markers.
-
-        Args:
-            web_view: QWebEngineView instance
-            intercepted_calls: List of intercepted function calls
-            markers: List of marker dictionaries
-
-        Returns:
-            bool: True if successful
-        """
-        try:
-            # Find the most likely marker creation call
-            marker_call = None
-            for call in intercepted_calls:
-                func_name = call.get('function', '')
-                # Look for functions likely to create markers
-                if any(keyword in func_name.lower() for keyword in ['add', 'create', 'new', 'save']):
-                    marker_call = call
+            # Wait for completion
+            import time
+            for _ in range(100):  # 5 seconds max
+                QApplication.processEvents()
+                if result_container["result"] is not None:
                     break
+                time.sleep(0.05)
 
-            if not marker_call:
-                # Just use the last call
-                marker_call = intercepted_calls[-1]
+            result = result_container["result"]
+            if result and isinstance(result, str) and "success" in result:
+                success_count += 1
 
-            func_name = marker_call.get('function')
-            original_args = marker_call.get('args', [])
+            # No delay between requests - let them queue up naturally
+            # Just process events to keep UI responsive
+            if index % 5 == 0:  # Only process events every 5 markers
+                QApplication.processEvents()
 
-            print(f"DEBUG: Using function: state.{func_name}()")
-            print(f"DEBUG: Original args template: {original_args}")
+        # Final progress update
+        if not cancelled:
+            progress_dialog.update_progress(
+                total,
+                total,
+                f"Export complete: {success_count} of {total} marker(s) exported"
+            )
+            QApplication.processEvents()
+            QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
+        else:
+            progress_dialog.reject()
 
-            success_count = 0
+        # Block until dialog closes
+        progress_dialog.exec()
 
-            for i, marker in enumerate(markers):
-                print(f"DEBUG: Replaying call for marker {i+1}/{len(markers)}: {marker['title']}")
-
-                # Create modified args based on the original template
-                # Try to intelligently substitute lat/lon/title/description
-                modified_args = self._substitute_marker_data(original_args, marker)
-
-                # Build JavaScript to call the function
-                js_code = f"""
-                (function() {{
-                    try {{
-                        if (typeof state === 'undefined' || !state.{func_name}) {{
-                            return 'error: function not found';
-                        }}
-
-                        var args = {json.dumps(modified_args)};
-                        var result = state.{func_name}.apply(state, args);
-
-                        return 'success';
-                    }} catch (e) {{
-                        return 'error: ' + e.toString();
-                    }}
-                }})();
-                """
-
-                result_container = {'result': None}
-
-                def callback(result):
-                    result_container['result'] = result
-                    print(f"DEBUG: Marker {i+1} result: {result}")
-
-                web_view.page().runJavaScript(js_code, callback)
-
-                # Wait for result
-                loop = QEventLoop()
-                QTimer.singleShot(1000, loop.quit)
-                timer = QTimer()
-
-                def check():
-                    if result_container['result'] is not None:
-                        loop.quit()
-                timer.timeout.connect(check)
-                timer.start(100)
-                loop.exec()
-                timer.stop()
-
-                if result_container['result'] and 'success' in str(result_container['result']):
-                    success_count += 1
-
-                # Small delay between markers
-                QTimer.singleShot(200, lambda: None)
-
-            print(f"DEBUG: Successfully replayed {success_count}/{len(markers)} markers")
-            return success_count > 0
-
-        except Exception as e:
-            print(f"ERROR: Replay failed: {e}")
-            traceback.print_exc()
-            return False
-
-    def _substitute_marker_data(self, original_args, marker):
-        """Substitute marker data into the original argument template.
-
-        Args:
-            original_args: Original arguments from intercepted call
-            marker: Marker dictionary with lat, lon, title, description
-
-        Returns:
-            list: Modified arguments
-        """
-        if not original_args:
-            # If no args, create a standard GeoJSON feature
-            return [{
-                'type': 'Feature',
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [marker['lon'], marker['lat']]
-                },
-                'properties': {
-                    'title': marker['title'],
-                    'description': marker.get('description', '')
-                }
-            }]
-
-        modified = copy.deepcopy(original_args)
-
-        # Recursively replace lat/lon/title/description in the structure
-        def replace_in_obj(obj):
-            if isinstance(obj, dict):
-                for key, value in obj.items():
-                    # Replace coordinate arrays
-                    if key == 'coordinates' and isinstance(value, list) and len(value) == 2:
-                        obj[key] = [marker['lon'], marker['lat']]
-                    # Replace title
-                    elif key == 'title' and isinstance(value, str):
-                        obj[key] = marker['title']
-                    # Replace description
-                    elif key in ['description', 'desc', 'comment'] and isinstance(value, str):
-                        obj[key] = marker.get('description', '')
-                    # Replace individual lat/lon
-                    elif key in ['lat', 'latitude'] and isinstance(value, (int, float)):
-                        obj[key] = marker['lat']
-                    elif key in ['lon', 'lng', 'longitude'] and isinstance(value, (int, float)):
-                        obj[key] = marker['lon']
-                    # Recurse
-                    elif isinstance(value, (dict, list)):
-                        replace_in_obj(value)
-            elif isinstance(obj, list):
-                for item in obj:
-                    if isinstance(item, (dict, list)):
-                        replace_in_obj(item)
-
-        for arg in modified:
-            replace_in_obj(arg)
-
-        return modified
-
-    def _add_markers_by_clicking(self, web_view, markers):
-        """Add markers by simulating clicks at coordinates on the map.
-
-        Args:
-            web_view: QWebEngineView instance
-            markers: List of marker dictionaries
-
-        Returns:
-            bool: True if successful
-        """
-        try:
-            success_count = 0
-
-            for i, marker in enumerate(markers):
-                print(f"DEBUG: Adding marker {i+1}/{len(markers)}: {marker['title']}")
-
-                # JavaScript to add marker by clicking on map at lat/lon
-                js_code = f"""
-                (function() {{
-                    try {{
-                        var lat = {marker['lat']};
-                        var lon = {marker['lon']};
-                        var title = {json.dumps(marker['title'])};
-                        var desc = {json.dumps(marker.get('description', ''))};
-
-                        // Try to find CalTopo's map object and add marker directly
-                        // This varies by CalTopo's implementation
-
-                        // Approach 1: Check if there's a global map or state object
-                        if (typeof state !== 'undefined') {{
-                            console.log('Found state object, properties:', Object.keys(state));
-
-                            // Try to find add marker function
-                            if (state.addMarker) {{
-                                state.addMarker({{lat: lat, lon: lon, title: title, description: desc}});
-                                return 'success_state_addMarker';
-                            }}
-                            if (state.addFeature) {{
-                                state.addFeature({{
-                                    type: 'Feature',
-                                    geometry: {{type: 'Point', coordinates: [lon, lat]}},
-                                    properties: {{title: title, description: desc}}
-                                }});
-                                return 'success_state_addFeature';
-                            }}
-                        }}
-
-                        // Return what we found
-                        var found = [];
-                        if (typeof state !== 'undefined') found.push('state');
-                        if (typeof map !== 'undefined') found.push('map');
-                        if (typeof mapState !== 'undefined') found.push('mapState');
-
-                        return 'available: ' + found.join(', ');
-                    }} catch (e) {{
-                        return 'error: ' + e.toString();
-                    }}
-                }})();
-                """
-
-                result_container = {'result': None}
-
-                def callback(result):
-                    result_container['result'] = result
-                    print(f"DEBUG: Marker {i+1} result: {result}")
-
-                web_view.page().runJavaScript(js_code, callback)
-
-                # Wait for result
-                loop = QEventLoop()
-                QTimer.singleShot(1000, loop.quit)
-                timer = QTimer()
-
-                def check():
-                    if result_container['result'] is not None:
-                        loop.quit()
-                timer.timeout.connect(check)
-                timer.start(100)
-                loop.exec()
-                timer.stop()
-
-                if result_container['result'] and 'success' in str(result_container['result']):
-                    success_count += 1
-
-            print(f"DEBUG: Added {success_count}/{len(markers)} markers")
-            return success_count > 0
-
-        except Exception as e:
-            print(f"ERROR: Click-based automation failed: {e}")
-            traceback.print_exc()
-            return False
+        return success_count, cancelled
 
     def logout_from_caltopo(self):
         """Log out from CalTopo by clearing session."""

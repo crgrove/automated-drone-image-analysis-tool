@@ -342,6 +342,43 @@ Applies to altitude displays, GSD calculations, and distance measurements.</stri
        </widget>
       </item>
       <item>
+      <widget class="QWidget" name="offlineWidget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_offline">
+        <item>
+         <widget class="QLabel" name="offlineModeLabel">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Toggle Offline Only mode.
+When enabled, the app skips any network calls (map tiles, CalTopo exports) and works with cached data only.</string>
+          </property>
+          <property name="text">
+           <string>Offline Only Mode:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="offlineOnlyCheckBox">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Disable online functionality (tile downloads, CalTopo integration) and work entirely offline.</string>
+          </property>
+          <property name="text">
+           <string>Enable</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
        <layout class="QHBoxLayout" name="droneSensorLabelsWidget">
         <property name="leftMargin">
          <number>9</number>

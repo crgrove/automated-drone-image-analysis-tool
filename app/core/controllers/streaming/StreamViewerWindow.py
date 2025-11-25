@@ -74,6 +74,9 @@ class StreamViewerWindow(QMainWindow):
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
         self.ui.setupUi(self)
+        self.setWindowTitle(
+            f"ADIAT - Real-Time Stream Detection v{self.app_version} - Sponsored by TEXSAR"
+        )
 
         # Setup tooltip stylesheet
         self.setStyleSheet("""

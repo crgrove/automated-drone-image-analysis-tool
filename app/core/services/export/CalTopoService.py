@@ -6,12 +6,10 @@ creation on CalTopo maps.
 """
 
 import json
-import os
 import requests
-import uuid
-import base64
 import re
-import traceback
+from http.cookiejar import Cookie
+from typing import Any, Dict, List, Union
 from PySide6.QtCore import QSettings
 
 
@@ -32,36 +30,139 @@ class CalTopoService:
         self.settings = QSettings("ADIAT", "CalTopo")
         self._load_session()
 
+    def _serialize_cookies(self):
+        """Convert the current cookie jar into a JSON-serializable list."""
+        serialized = []
+        for cookie in self.session.cookies:
+            serialized.append({
+                'name': cookie.name,
+                'value': cookie.value,
+                'domain': cookie.domain,
+                'path': cookie.path,
+                'secure': cookie.secure,
+                'expires': cookie.expires,
+                'rest': cookie._rest,
+                'version': cookie.version,
+                'port': cookie.port,
+                'port_specified': cookie.port_specified,
+                'domain_initial_dot': cookie.domain_initial_dot,
+                'domain_specified': cookie.domain_specified,
+                'path_specified': cookie.path_specified,
+                'discard': cookie.discard,
+                'comment': cookie.comment,
+                'comment_url': cookie.comment_url
+            })
+        return serialized
+
+    def _deserialize_cookies(self, serialized):
+        """Populate the session cookie jar from serialized data."""
+        self.session.cookies.clear()
+        if not serialized:
+            return
+
+        for cookie_data in serialized:
+            try:
+                # Ensure we have required fields
+                if 'name' not in cookie_data or 'value' not in cookie_data:
+                    continue
+
+                # Normalize domain - ensure it works with requests
+                domain = cookie_data.get('domain', '.caltopo.com')
+                # Remove leading dot if present for requests library compatibility
+                if domain.startswith('.'):
+                    domain = domain[1:]
+
+                cookie = Cookie(
+                    version=cookie_data.get('version', 0),
+                    name=cookie_data['name'],
+                    value=cookie_data['value'],
+                    port=cookie_data.get('port'),
+                    port_specified=cookie_data.get('port_specified', False),
+                    domain=domain,
+                    domain_specified=cookie_data.get('domain_specified', bool(domain)),
+                    domain_initial_dot=cookie_data.get('domain_initial_dot', False),
+                    path=cookie_data.get('path', '/'),
+                    path_specified=cookie_data.get('path_specified', bool(cookie_data.get('path'))),
+                    secure=cookie_data.get('secure', False),
+                    expires=cookie_data.get('expires'),
+                    discard=cookie_data.get('discard', False),
+                    comment=cookie_data.get('comment'),
+                    comment_url=cookie_data.get('comment_url'),
+                    rest=cookie_data.get('rest') or {},
+                    rfc2109=False
+                )
+                self.session.cookies.set_cookie(cookie)
+            except (KeyError, Exception):
+                continue
+
+    def _persist_session_cookies(self):
+        """Persist the current cookie jar to settings."""
+        serialized = self._serialize_cookies()
+        self.settings.setValue("session_cookies", json.dumps(serialized))
+
     def _load_session(self):
         """Load saved session cookies from settings."""
         cookies_json = self.settings.value("session_cookies", "")
         if cookies_json:
             try:
                 cookies = json.loads(cookies_json)
-                for cookie in cookies:
-                    self.session.cookies.set(**cookie)
+                self._deserialize_cookies(cookies)
             except json.JSONDecodeError:
                 pass
 
-    def save_session(self, cookies_dict):
-        """Save session cookies to settings.
+    def _normalize_cookies(self, cookies_payload: Union[Dict[str, Any], List[Dict[str, Any]]]):
+        """Normalize cookies from various formats into a list of cookie dicts."""
+        if not cookies_payload:
+            return []
+
+        if isinstance(cookies_payload, list):
+            return cookies_payload
+
+        # Support structures like {'cookies': [...]}
+        if isinstance(cookies_payload, dict):
+            if 'cookies' in cookies_payload and isinstance(cookies_payload['cookies'], list):
+                return cookies_payload['cookies']
+
+            # Legacy dict of name -> value
+            normalized = []
+            for name, value in cookies_payload.items():
+                if name.startswith('__'):
+                    continue
+                normalized.append({
+                    'name': name,
+                    'value': value,
+                    'domain': 'caltopo.com',  # No leading dot for requests compatibility
+                    'path': '/',
+                    'secure': True,
+                    'expires': None,
+                    'rest': {},
+                    'discard': True,
+                    'version': 0,
+                    'port': None,
+                    'port_specified': False,
+                    'domain_initial_dot': False,
+                    'domain_specified': True,
+                    'path_specified': True,
+                    'comment': None,
+                    'comment_url': None
+                })
+            return normalized
+
+        return []
+
+    def save_session(self, cookies_payload: Union[Dict[str, Any], List[Dict[str, Any]]]):
+        """Persist cookies captured from the CalTopo web view.
 
         Args:
-            cookies_dict: Dictionary of cookies from the web view
+            cookies_payload: List or dict containing cookie metadata
         """
-        # Convert cookies to serializable format
-        cookies_list = []
-        for name, value in cookies_dict.items():
-            cookies_list.append({
-                'name': name,
-                'value': value,
-                'domain': '.caltopo.com'
-            })
+        cookies_list = self._normalize_cookies(cookies_payload)
+        if not cookies_list:
+            return
 
-        print(f"DEBUG CalTopo: Saving {len(cookies_list)} cookies")
-        self.settings.setValue("session_cookies", json.dumps(cookies_list))
-        self._load_session()
-        print(f"DEBUG CalTopo: Session cookies loaded. Current cookies: {list(self.session.cookies.keys())}")
+        # Load cookies into the current session so new requests use them immediately
+        self._deserialize_cookies(cookies_list)
+        self._persist_session_cookies()
 
     def clear_session(self):
         """Clear stored session data."""
@@ -110,8 +211,7 @@ class CalTopoService:
                         })
                 return maps
             return []
-        except Exception as e:
-            print(f"Error fetching maps: {e}")
+        except Exception:
             return []
 
     def _get_csrf_token(self, map_id):
@@ -132,22 +232,16 @@ class CalTopoService:
 
             # Look for CSRF token in cookies
             csrf_token = self.session.cookies.get('csrftoken') or self.session.cookies.get('XSRF-TOKEN')
-
             if csrf_token:
-                print(f"DEBUG CalTopo: Found CSRF token: {csrf_token[:20]}...")
                 return csrf_token
 
             # Try to parse from page content
             csrf_match = re.search(r'csrf[_-]?token["\']?\s*[:=]\s*["\']([^"\']+)', response.text, re.IGNORECASE)
             if csrf_match:
-                token = csrf_match.group(1)
-                print(f"DEBUG CalTopo: Extracted CSRF token from page: {token[:20]}...")
-                return token
+                return csrf_match.group(1)
 
-            print("DEBUG CalTopo: No CSRF token found")
             return None
-        except Exception as e:
-            print(f"DEBUG CalTopo: Error getting CSRF token: {e}")
+        except Exception:
             return None
 
     def add_marker_to_map(self, map_id, marker_data):
@@ -163,6 +257,15 @@ class CalTopoService:
         try:
             # CalTopo marker format (GeoJSON Feature)
             # Based on actual network traffic capture from CalTopo web interface
+            marker_properties = {
+                'title': marker_data.get('title', ''),
+                'description': marker_data.get('description', ''),
+                'marker-size': marker_data.get('marker_size', '1'),
+                'marker-symbol': marker_data.get('marker_symbol', 'a:4'),
+                'marker-color': marker_data.get('marker_color', 'FF0000'),
+                'marker-rotation': marker_data.get('marker_rotation', 0)
+            }
+
             marker_payload = {
                 'type': 'Feature',
                 'class': None,  # Required by CalTopo
@@ -170,14 +273,7 @@ class CalTopoService:
                     'type': 'Point',
                     'coordinates': [marker_data['lon'], marker_data['lat']]
                 },
-                'properties': {
-                    'title': marker_data.get('title', ''),
-                    'description': marker_data.get('description', ''),
-                    'marker-size': '1',
-                    'marker-symbol': 'a:4',  # CalTopo's default marker symbol
-                    'marker-color': 'FF0000',
-                    'marker-rotation': 0
-                }
+                'properties': marker_properties
             }
 
             url = f"{self.CALTOPO_API_BASE}/map/{map_id}/Marker"
@@ -201,12 +297,6 @@ class CalTopoService:
                 'json': json.dumps(marker_payload)
             }
 
-            print(f"DEBUG CalTopo: Posting marker to {url}")
-            print(f"DEBUG CalTopo: Payload: {marker_payload}")
-            print(f"DEBUG CalTopo: Form data: {form_data}")
-            print(f"DEBUG CalTopo: Cookies: {list(self.session.cookies.keys())}")
-            print(f"DEBUG CalTopo: Headers: {headers}")
-
             response = self.session.post(
                 url,
                 data=form_data,  # Use 'data' for form encoding, not 'json'
@@ -214,37 +304,17 @@ class CalTopoService:
                 timeout=10
             )
 
-            print(f"DEBUG CalTopo: Response status: {response.status_code}")
-            print(f"DEBUG CalTopo: Response headers: {dict(response.headers)}")
-            print(f"DEBUG CalTopo: Response text: {response.text[:500] if response.text else '(empty)'}")
-
             return response.status_code in [200, 201]
-        except Exception as e:
-            print(f"Error adding marker: {e}")
-            traceback.print_exc()
+        except Exception:
             return False
-
-    def add_markers_batch(self, map_id, markers):
-        """Add multiple markers to a CalTopo map.
-
-        Args:
-            map_id (str): CalTopo map ID
-            markers (list): List of marker data dictionaries
-
-        Returns:
-            tuple: (success_count, total_count)
-        """
-        success_count = 0
-        total_count = len(markers)
-
-        for marker in markers:
-            if self.add_marker_to_map(map_id, marker):
-                success_count += 1
-
-        return success_count, total_count
 
     def upload_photo_waypoint(self, map_id, photo_data, team_id, marker_id):
         """Upload a photo waypoint to a CalTopo map.
+
+        NOTE: This method is deprecated and not currently used.
+        Photo uploads should be done via JavaScript in the authenticated browser session,
+        similar to marker uploads. This method remains for reference but the requests-based
+        approach doesn't work reliably due to session/authentication issues.
 
         Args:
             map_id (str): CalTopo map ID
@@ -253,108 +323,6 @@ class CalTopoService:
             marker_id (str): Marker ID to attach the photo to
 
         Returns:
-            bool: True if successful, False otherwise
+            bool: Always returns False as this method is deprecated
         """
-        try:
-            # Step 1: Create backend media object
-            media_id = str(uuid.uuid4())
-
-            # Extract filename from image path
-            image_path = photo_data.get('image_path')
-            if not image_path:
-                print("Error: No image_path provided in photo_data")
-                return False
-
-            filename = os.path.basename(image_path)
-
-            media_metadata_payload = {
-                "properties": {
-                    "creator": team_id,
-                    "filename": filename
-                }
-            }
-
-            print(f"DEBUG CalTopo: Creating media object {media_id}")
-            media_response = self.session.post(
-                f"{self.CALTOPO_API_BASE}/media/{media_id}",
-                json=media_metadata_payload,
-                timeout=10
-            )
-
-            if media_response.status_code not in [200, 201]:
-                print(f"Error creating media object: {media_response.status_code} - {media_response.text}")
-                return False
-
-            # Step 2: Upload media data (base64 encoded image)
-            try:
-                with open(image_path, "rb") as img_file:
-                    base64_data = base64.b64encode(img_file.read()).decode()
-            except Exception as e:
-                print(f"Error reading image file {image_path}: {e}")
-                return False
-
-            media_data_payload = {"data": base64_data}
-
-            print(f"DEBUG CalTopo: Uploading media data for {media_id}")
-            data_response = self.session.post(
-                f"{self.CALTOPO_API_BASE}/media/{media_id}/data",
-                json=media_data_payload,
-                timeout=30  # Longer timeout for image upload
-            )
-
-            if data_response.status_code not in [200, 201]:
-                print(f"Error uploading media data: {data_response.status_code} - {data_response.text}")
-                return False
-
-            # Step 3: Attach media object to map as MapMediaObject
-            media_object_payload = {
-                "type": "Feature",
-                "id": None,
-                "geometry": None,
-                "properties": {
-                    "parentId": "Marker" + marker_id,
-                    "backendMediaId": media_id,
-                    "title": filename,
-                    "heading": None,
-                    "description": photo_data.get('description', ''),
-                    "marker-symbol": "aperture",
-                    "marker-color": "#FFFFFF",
-                    "marker-size": 1,
-                }
-            }
-
-            # Get CSRF token for the request
-            csrf_token = self._get_csrf_token(map_id)
-
-            # Prepare headers
-            headers = {
-                'Referer': f'{self.CALTOPO_BASE_URL}/m/{map_id}',
-                'Origin': self.CALTOPO_BASE_URL
-            }
-
-            if csrf_token:
-                headers['X-CSRFToken'] = csrf_token
-                headers['X-XSRF-TOKEN'] = csrf_token
-
-            # CalTopo expects form-urlencoded data with JSON as 'json' parameter
-            form_data = {
-                'json': json.dumps(media_object_payload)
-            }
-
-            print(f"DEBUG CalTopo: Attaching media object to map {map_id}")
-            attach_response = self.session.post(
-                f"{self.CALTOPO_API_BASE}/map/{map_id}/MapMediaObject",
-                data=form_data,
-                headers=headers,
-                timeout=10
-            )
-
-            print(f"DEBUG CalTopo: Attach response status: {attach_response.status_code}")
-            print(f"DEBUG CalTopo: Attach response text: {attach_response.text[:500] if attach_response.text else '(empty)'}")
-
-            return attach_response.status_code in [200, 201]
-
-        except Exception as e:
-            print(f"Error uploading photo waypoint: {e}")
-            traceback.print_exc()
-            return False
+        return False

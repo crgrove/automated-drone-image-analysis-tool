@@ -91,7 +91,7 @@ class GPSMapController(QObject):
         """Return whether OfflineOnly preference is enabled."""
         try:
             if hasattr(self.parent, "settings_service"):
-                return bool(self.parent.settings_service.get_setting("OfflineOnly", False))
+                return self.parent.settings_service.get_bool_setting("OfflineOnly", False)
         except Exception:
             pass
         return False

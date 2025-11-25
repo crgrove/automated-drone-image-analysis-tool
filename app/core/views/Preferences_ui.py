@@ -15,7 +15,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QAbstractButton, QApplication, QComboBox, QDialog,
+from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QComboBox, QDialog,
     QDialogButtonBox, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QSpacerItem, QSpinBox, QVBoxLayout,
     QWidget)
@@ -172,6 +172,25 @@ class Ui_Preferences(object):
 
         self.verticalLayout_2.addWidget(self.distanceWidget)
 
+        self.offlineWidget = QWidget(self.mainWidget)
+        self.offlineWidget.setObjectName(u"offlineWidget")
+        self.horizontalLayout_offline = QHBoxLayout(self.offlineWidget)
+        self.horizontalLayout_offline.setObjectName(u"horizontalLayout_offline")
+        self.offlineModeLabel = QLabel(self.offlineWidget)
+        self.offlineModeLabel.setObjectName(u"offlineModeLabel")
+        self.offlineModeLabel.setFont(font)
+
+        self.horizontalLayout_offline.addWidget(self.offlineModeLabel)
+
+        self.offlineOnlyCheckBox = QCheckBox(self.offlineWidget)
+        self.offlineOnlyCheckBox.setObjectName(u"offlineOnlyCheckBox")
+        self.offlineOnlyCheckBox.setFont(font)
+
+        self.horizontalLayout_offline.addWidget(self.offlineOnlyCheckBox)
+
+
+        self.verticalLayout_2.addWidget(self.offlineWidget)
+
         self.droneSensorLabelsWidget = QHBoxLayout()
         self.droneSensorLabelsWidget.setObjectName(u"droneSensorLabelsWidget")
         self.droneSensorLabelsWidget.setContentsMargins(9, 9, 9, 9)
@@ -321,6 +340,15 @@ class Ui_Preferences(object):
 "  - Common in US aviation and surveying\n"
 "Applies to altitude displays, GSD calculations, and distance measurements.", None))
 #endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.offlineModeLabel.setToolTip(QCoreApplication.translate("Preferences", u"Toggle Offline Only mode.\n"
+"When enabled, the app skips any network calls (map tiles, CalTopo exports) and works with cached data only.", None))
+#endif // QT_CONFIG(tooltip)
+        self.offlineModeLabel.setText(QCoreApplication.translate("Preferences", u"Offline Only Mode:", None))
+#if QT_CONFIG(tooltip)
+        self.offlineOnlyCheckBox.setToolTip(QCoreApplication.translate("Preferences", u"Disable online functionality (tile downloads, CalTopo integration) and work entirely offline.", None))
+#endif // QT_CONFIG(tooltip)
+        self.offlineOnlyCheckBox.setText(QCoreApplication.translate("Preferences", u"Enable", None))
 #if QT_CONFIG(tooltip)
         self.droneSensorLabel.setToolTip(QCoreApplication.translate("Preferences", u"Version of the current drone sensor configuration file.\n"
 "Contains camera specifications, sensor dimensions, and focal length data for different drone models.", None))
