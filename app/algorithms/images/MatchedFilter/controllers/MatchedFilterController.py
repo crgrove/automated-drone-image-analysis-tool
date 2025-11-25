@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 
 from core.services.LoggerService import LoggerService
 from core.services.color.CustomColorsService import get_custom_colors_service
+from core.services.color.RecentColorsService import get_recent_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
@@ -47,14 +48,18 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
         self.viewRangeButton.hide()  # Hide until at least one color is added
 
-        # Common color selection menu (RGB mode)
+        # Common color selection menu (RGB mode, but use MATCHED_FILTER for recent colors)
         self.color_selection_menu = ColorSelectionMenu(
             self,
             on_color_selected=self._on_color_selected_from_menu,
             get_default_qcolor=self._get_default_qcolor,
-            mode='RGB'
+            on_recent_color_selected=self._on_recent_color_selected,
+            mode='MATCHED_FILTER'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
+        
+        # Recent colors service
+        self.recent_colors_service = get_recent_colors_service()
 
         self._apply_icons(theme)
 
@@ -103,6 +108,20 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
     def _on_color_selected_from_menu(self, color: QColor):
         """Handle color chosen from the shared color selection menu."""
         self.add_color_row(color)
+        
+        # Don't track immediately - let user adjust threshold first
+        # Colors will be tracked when actually used (via get_options)
+    
+    def _on_recent_color_selected(self, color_data: dict):
+        """Handle selection from recent colors list."""
+        try:
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            r, g, b = selected_color
+            color = QColor(r, g, b)
+            threshold = color_data.get('match_filter_threshold', 0.3)
+            self.add_color_row(color, threshold)
+        except Exception as e:
+            self.logger.error(f"Error handling recent color selection: {e}")
 
     def add_color_from_image(self):
         """
@@ -244,10 +263,18 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
         for row in self.color_rows:
             rgb = row.get_rgb()
             threshold = row.get_threshold()
-            color_configs.append({
+            color_config = {
                 'selected_color': rgb,
                 'match_filter_threshold': threshold
-            })
+            }
+            color_configs.append(color_config)
+            
+            # Track this color in recent colors (it's being used for processing)
+            try:
+                self.recent_colors_service.add_matched_filter_color(color_config)
+            except Exception as e:
+                self.logger.error(f"Error tracking recent color: {e}")
+        
         options['color_configs'] = color_configs
 
         # Legacy format: use first color for backward compatibility

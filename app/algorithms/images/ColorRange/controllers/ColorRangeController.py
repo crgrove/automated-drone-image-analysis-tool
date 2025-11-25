@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
 from core.services.color.CustomColorsService import get_custom_colors_service
+from core.services.color.RecentColorsService import get_recent_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
@@ -53,9 +54,13 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             self,
             on_color_selected=self._on_color_selected_from_menu,
             get_default_qcolor=self._get_default_qcolor,
+            on_recent_color_selected=self._on_recent_color_selected,
             mode='RGB'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
+        
+        # Recent colors service
+        self.recent_colors_service = get_recent_colors_service()
 
         self._apply_icons(theme)
 
@@ -119,6 +124,34 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
     def _on_color_selected_from_menu(self, color: QColor):
         """Handle color chosen from the shared color selection menu."""
         self.add_color_row(color)
+        
+        # Don't track immediately - let user adjust ranges first
+        # Colors will be tracked when actually used (via get_options)
+    
+    def _on_recent_color_selected(self, color_data: dict):
+        """Handle selection from recent colors list."""
+        try:
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            r, g, b = selected_color
+            color = QColor(r, g, b)
+            
+            # Try to get color_range from data
+            color_range = color_data.get('color_range')
+            if color_range and len(color_range) == 2:
+                min_rgb, max_rgb = color_range[0], color_range[1]
+                if isinstance(min_rgb, (list, tuple)) and isinstance(max_rgb, (list, tuple)):
+                    self.add_color_row(
+                        color,
+                        r_min=min_rgb[0], r_max=max_rgb[0],
+                        g_min=min_rgb[1], g_max=max_rgb[1],
+                        b_min=min_rgb[2], b_max=max_rgb[2]
+                    )
+                    return
+            
+            # Fallback: use default ranges
+            self.add_color_row(color)
+        except Exception as e:
+            self.logger.error(f"Error handling recent color selection: {e}")
 
     def add_color_row(self, color, r_min=None, r_max=None, g_min=None, g_max=None, b_min=None, b_max=None):
         """
@@ -249,11 +282,19 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             rgb = row.get_rgb()
             ranges = row.get_ranges()
             min_rgb, max_rgb = row.get_color_range()
-            color_ranges.append({
+            color_config = {
                 'selected_color': rgb,
                 'range_values': ranges,
                 'color_range': [min_rgb, max_rgb]
-            })
+            }
+            color_ranges.append(color_config)
+            
+            # Track this color in recent colors (it's being used for processing)
+            try:
+                self.recent_colors_service.add_rgb_color(color_config)
+            except Exception as e:
+                self.logger.error(f"Error tracking recent color: {e}")
+        
         options['color_ranges'] = color_ranges
 
         # Legacy format: use first color for backward compatibility

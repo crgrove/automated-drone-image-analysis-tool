@@ -242,6 +242,22 @@ Use to filter out small artifacts and noise in detection results.</string>
                 </widget>
                </item>
                <item>
+                <spacer name="horizontalSpacer_2">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeType">
+                  <enum>QSizePolicy::Fixed</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
                 <widget class="QLabel" name="maxAreaLabel">
                  <property name="font">
                   <font>
@@ -260,6 +276,9 @@ Objects larger than this will be ignored.</string>
                </item>
                <item>
                 <widget class="QSpinBox" name="maxAreaSpinBox">
+                 <property name="enabled">
+                  <bool>false</bool>
+                 </property>
                  <property name="font">
                   <font>
                    <pointsize>10</pointsize>
@@ -294,63 +313,22 @@ Use to exclude very large false positive detections like shadows or terrain feat
                 </widget>
                </item>
                <item>
-                <widget class="QLabel" name="processingResolutionLabel">
+                <widget class="QCheckBox" name="maxAreaNoLimitCheckbox">
                  <property name="font">
                   <font>
                    <pointsize>10</pointsize>
                   </font>
                  </property>
                  <property name="toolTip">
-                  <string>Resolution at which images are processed.
-Lower resolutions = faster processing but may miss small objects.</string>
+                  <string>Disable the maximum size filter and allow detections of any size.</string>
                  </property>
                  <property name="text">
-                  <string>Processing Resolution:</string>
+                  <string>No max limit</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
                  </property>
                 </widget>
-               </item>
-               <item>
-                <widget class="QComboBox" name="processingResolutionCombo">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="font">
-                  <font>
-                   <pointsize>10</pointsize>
-                  </font>
-                 </property>
-                 <property name="toolTip">
-                  <string>Select processing resolution as percentage of original image size:
-• 100%: Original resolution (no scaling, highest quality, slowest)
-• 75%: High quality (~56% of pixels, ~1.8x faster)
-• 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED
-• 33%: Fast processing (~11% of pixels, ~9x faster)
-• 25%: Very fast (6% of pixels, ~16x faster)
-• 10%: Ultra fast (1% of pixels, ~100x faster)
-
-Percentage scaling preserves original aspect ratio.
-Works with any image size, orientation, or aspect ratio.
-
-Min/Max Area values are always specified in original resolution.
-All results are returned in original resolution coordinates.</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <spacer name="horizontalSpacer_2">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>40</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
                </item>
               </layout>
              </widget>
@@ -454,6 +432,52 @@ Each process analyzes one image at a time, so more processes = more parallel ima
                  </property>
                  <property name="value">
                   <number>10</number>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="processingResolutionLabel">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Resolution at which images are processed.
+Lower resolutions = faster processing but may miss small objects.</string>
+                 </property>
+                 <property name="text">
+                  <string>Processing Resolution:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="processingResolutionCombo">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Select processing resolution as percentage of original image size:
+• 100%: Original resolution (no scaling, highest quality, slowest)
+• 75%: High quality (~56% of pixels, ~1.8x faster)
+• 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED
+• 33%: Fast processing (~11% of pixels, ~9x faster)
+• 25%: Very fast (6% of pixels, ~16x faster)
+• 10%: Ultra fast (1% of pixels, ~100x faster)
+
+Percentage scaling preserves original aspect ratio.
+Works with any image size, orientation, or aspect ratio.
+
+Min/Max Area values are always specified in original resolution.
+All results are returned in original resolution coordinates.</string>
                  </property>
                 </widget>
                </item>
@@ -1079,7 +1103,7 @@ Use to review, verify, and export analysis results.</string>
   </widget>
   <action name="actionImageAnalysisGuide">
    <property name="text">
-    <string>Analysis Setup Wizard</string>
+    <string>Image Analysis Wizard</string>
    </property>
    <property name="toolTip">
     <string>Launch the Image Analysis Guide wizard to configure analysis settings.

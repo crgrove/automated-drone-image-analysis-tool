@@ -70,6 +70,7 @@ class StreamViewerWindow(QMainWindow):
         self._pending_auto_record = False
         self._pending_record_dir = None
         self._pending_algorithm_options = None
+        self._pending_processing_resolution = None  # Desired resolution from wizard (to be capped to native)
 
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
@@ -399,6 +400,33 @@ class StreamViewerWindow(QMainWindow):
                 algorithm_options['color_min_detection_area'] = min_area
                 algorithm_options['color_max_detection_area'] = max_area
 
+        # Convert wizard's processing resolution (percentage) to actual dimensions
+        resolution = wizard_data.get("processing_resolution")
+        if resolution:
+            # Map wizard percentage values to actual dimensions
+            # 25 = 480p, 50 = 720p, 75 = 1080p, 100 = 4K
+            resolution_map = {
+                25: (854, 480),      # 480p
+                50: (1280, 720),     # 720p
+                75: (1920, 1080),    # 1080p
+                100: (3840, 2160)    # 4K
+            }
+            
+            # Get dimensions from map
+            if isinstance(resolution, (int, float)) and resolution in resolution_map:
+                processing_width, processing_height = resolution_map[resolution]
+                
+                # Store as pending - will be capped to native resolution when first frame arrives
+                self._pending_processing_resolution = (processing_width, processing_height)
+                
+                # Add to algorithm options (will be updated with capped value when stream connects)
+                algorithm_options['processing_width'] = processing_width
+                algorithm_options['processing_height'] = processing_height
+                algorithm_options['processing_resolution'] = (processing_width, processing_height)
+            
+            # Save the setting (keep as percentage for wizard persistence)
+            self.settings_service.set_setting("StreamingProcessingResolution", resolution)
+
         if algorithm:
             # Store algorithm options BEFORE loading algorithm (like MainWindow does)
             self._pending_algorithm_options = algorithm_options
@@ -418,10 +446,6 @@ class StreamViewerWindow(QMainWindow):
             else:
                 # Load algorithm (will apply pending options in load_algorithm)
                 self.on_algorithm_selected(algorithm)
-
-        resolution = wizard_data.get("processing_resolution")
-        if resolution:
-            self.settings_service.set_setting("StreamingProcessingResolution", resolution)
 
         self._pending_auto_record = bool(wizard_data.get("auto_record"))
         self._pending_record_dir = recording_dir
@@ -1028,8 +1052,8 @@ class StreamViewerWindow(QMainWindow):
 
             # Notify algorithm
             if self.algorithm_widget:
-                # Get stream resolution (placeholder)
-                resolution = (1920, 1080)
+                # Get stream resolution from stream_info if available, otherwise use placeholder
+                resolution = self.stream_coordinator.stream_info.get('resolution') or (1920, 1080)
                 self.algorithm_widget.on_stream_connected(resolution)
 
             if self._pending_auto_record:
@@ -1048,12 +1072,44 @@ class StreamViewerWindow(QMainWindow):
 
             # Reset statistics
             self.stream_statistics.reset()
+            
+            # Clear pending resolution (will be reapplied on next connection if wizard runs again)
+            self._pending_processing_resolution = None
 
     @Slot(np.ndarray, float)
     def on_frame_received(self, frame: np.ndarray, timestamp: float):
         """Handle frame received from stream."""
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
+        
+        # Apply resolution capping on first frame (to prevent upscaling)
+        if self._pending_processing_resolution is not None:
+            # Get native video resolution from frame
+            native_height, native_width = frame.shape[:2]
+            desired_width, desired_height = self._pending_processing_resolution
+            
+            # Cap to native resolution (never upscale)
+            capped_width = min(desired_width, native_width)
+            capped_height = min(desired_height, native_height)
+            
+            # Only update if capping actually changed the resolution
+            if capped_width < desired_width or capped_height < desired_height:
+                self.logger.info(
+                    f"Capping processing resolution from {desired_width}x{desired_height} "
+                    f"to {capped_width}x{capped_height} (native: {native_width}x{native_height})"
+                )
+                
+                # Update algorithm with capped resolution
+                if self.algorithm_widget:
+                    capped_config = {
+                        'processing_width': capped_width,
+                        'processing_height': capped_height,
+                        'processing_resolution': (capped_width, capped_height)
+                    }
+                    self._apply_algorithm_options(capped_config)
+            
+            # Clear pending resolution (only apply once)
+            self._pending_processing_resolution = None
 
         # Process frame with algorithm if loaded
         if self.algorithm_widget:

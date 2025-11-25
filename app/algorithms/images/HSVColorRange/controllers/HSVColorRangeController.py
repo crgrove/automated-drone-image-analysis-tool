@@ -9,6 +9,7 @@ from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController i
 from core.services.LoggerService import LoggerService
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.CustomColorsService import get_custom_colors_service
+from core.services.color.RecentColorsService import get_recent_colors_service
 from helpers.IconHelper import IconHelper
 
 from PySide6.QtGui import QColor
@@ -133,9 +134,13 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             on_hsv_selected=self._on_hsv_selected_from_menu,
             get_initial_hsv=self._get_initial_hsv,
             get_initial_ranges=self._get_initial_ranges,
+            on_recent_color_selected=self._on_recent_color_selected,
             mode='HSV'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
+        
+        # Recent colors service
+        self.recent_colors_service = get_recent_colors_service()
 
         self._apply_icons(theme)
 
@@ -201,6 +206,9 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         if not color.isValid():
             return
         self.add_color_row(color)
+        
+        # Don't track immediately - let user adjust ranges first
+        # Colors will be tracked when actually used (via get_options)
 
     def _on_hsv_selected_from_menu(self, hsv_data: dict):
         """Handle HSV range selection from HSV picker."""
@@ -213,8 +221,21 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             h, s, v = hsv_data['h'], hsv_data['s'], hsv_data['v']
             color = QColor.fromHsvF(h, s, v)
             self.add_color_row(color, hsv_ranges=hsv_data)
+            
+            # Don't track immediately - colors will be tracked when actually used (via get_options)
         except Exception as e:
             self.logger.error(f"Error handling HSV selection: {e}")
+    
+    def _on_recent_color_selected(self, color_data: dict):
+        """Handle selection from recent colors list."""
+        try:
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            r, g, b = selected_color
+            color = QColor(r, g, b)
+            hsv_ranges = color_data.get('hsv_ranges')
+            self.add_color_row(color, hsv_ranges=hsv_ranges)
+        except Exception as e:
+            self.logger.error(f"Error handling recent color selection: {e}")
 
     def add_color_row(self, color, h_minus=None, h_plus=None, s_minus=None, s_plus=None,
                       v_minus=None, v_plus=None, hsv_ranges=None):
@@ -366,10 +387,18 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         for row in self.color_rows:
             hsv_ranges = row.get_hsv_ranges()
             rgb = row.get_rgb()
-            hsv_configs.append({
+            hsv_config = {
                 'selected_color': rgb,
                 'hsv_ranges': hsv_ranges
-            })
+            }
+            hsv_configs.append(hsv_config)
+            
+            # Track this color in recent colors (it's being used for processing)
+            try:
+                self.recent_colors_service.add_hsv_color(hsv_config)
+            except Exception as e:
+                self.logger.error(f"Error tracking recent color: {e}")
+        
         options['hsv_configs'] = hsv_configs
 
         # Legacy format: use first color for backward compatibility

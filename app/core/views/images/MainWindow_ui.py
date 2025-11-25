@@ -154,6 +154,10 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_2.addWidget(self.minAreaSpinBox)
 
+        self.horizontalSpacer_2 = QSpacerItem(60, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_2.addItem(self.horizontalSpacer_2)
+
         self.maxAreaLabel = QLabel(self.widget)
         self.maxAreaLabel.setObjectName(u"maxAreaLabel")
         font1 = QFont()
@@ -165,6 +169,7 @@ class Ui_MainWindow(object):
 
         self.maxAreaSpinBox = QSpinBox(self.widget)
         self.maxAreaSpinBox.setObjectName(u"maxAreaSpinBox")
+        self.maxAreaSpinBox.setEnabled(False)
         self.maxAreaSpinBox.setFont(font)
         self.maxAreaSpinBox.setMinimum(0)
         self.maxAreaSpinBox.setMaximum(99999)
@@ -173,26 +178,12 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_2.addWidget(self.maxAreaSpinBox)
 
-        self.processingResolutionLabel = QLabel(self.widget)
-        self.processingResolutionLabel.setObjectName(u"processingResolutionLabel")
-        self.processingResolutionLabel.setFont(font)
+        self.maxAreaNoLimitCheckbox = QCheckBox(self.widget)
+        self.maxAreaNoLimitCheckbox.setObjectName(u"maxAreaNoLimitCheckbox")
+        self.maxAreaNoLimitCheckbox.setFont(font)
+        self.maxAreaNoLimitCheckbox.setChecked(True)
 
-        self.horizontalLayout_2.addWidget(self.processingResolutionLabel)
-
-        self.processingResolutionCombo = QComboBox(self.widget)
-        self.processingResolutionCombo.setObjectName(u"processingResolutionCombo")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-        sizePolicy1.setHorizontalStretch(0)
-        sizePolicy1.setVerticalStretch(0)
-        sizePolicy1.setHeightForWidth(self.processingResolutionCombo.sizePolicy().hasHeightForWidth())
-        self.processingResolutionCombo.setSizePolicy(sizePolicy1)
-        self.processingResolutionCombo.setFont(font)
-
-        self.horizontalLayout_2.addWidget(self.processingResolutionCombo)
-
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_2.addItem(self.horizontalSpacer_2)
+        self.horizontalLayout_2.addWidget(self.maxAreaNoLimitCheckbox)
 
 
         self.verticalLayout_5.addWidget(self.widget)
@@ -229,6 +220,23 @@ class Ui_MainWindow(object):
         self.maxProcessesSpinBox.setValue(10)
 
         self.horizontalLayout_4.addWidget(self.maxProcessesSpinBox)
+
+        self.processingResolutionLabel = QLabel(self.widget_2)
+        self.processingResolutionLabel.setObjectName(u"processingResolutionLabel")
+        self.processingResolutionLabel.setFont(font)
+
+        self.horizontalLayout_4.addWidget(self.processingResolutionLabel)
+
+        self.processingResolutionCombo = QComboBox(self.widget_2)
+        self.processingResolutionCombo.setObjectName(u"processingResolutionCombo")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.processingResolutionCombo.sizePolicy().hasHeightForWidth())
+        self.processingResolutionCombo.setSizePolicy(sizePolicy1)
+        self.processingResolutionCombo.setFont(font)
+
+        self.horizontalLayout_4.addWidget(self.processingResolutionCombo)
 
         self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -449,7 +457,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR", None))
-        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Analysis Setup Wizard", None))
+        self.actionImageAnalysisGuide.setText(QCoreApplication.translate("MainWindow", u"Image Analysis Wizard", None))
 #if QT_CONFIG(tooltip)
         self.actionImageAnalysisGuide.setToolTip(QCoreApplication.translate("MainWindow", u"Launch the Image Analysis Guide wizard to configure analysis settings.\n"
 "Opens a step-by-step wizard to:\n"
@@ -606,25 +614,9 @@ class Ui_MainWindow(object):
 #endif // QT_CONFIG(tooltip)
         self.maxAreaSpinBox.setSpecialValueText(QCoreApplication.translate("MainWindow", u"None", None))
 #if QT_CONFIG(tooltip)
-        self.processingResolutionLabel.setToolTip(QCoreApplication.translate("MainWindow", u"Resolution at which images are processed.\n"
-"Lower resolutions = faster processing but may miss small objects.", None))
+        self.maxAreaNoLimitCheckbox.setToolTip(QCoreApplication.translate("MainWindow", u"Disable the maximum size filter and allow detections of any size.", None))
 #endif // QT_CONFIG(tooltip)
-        self.processingResolutionLabel.setText(QCoreApplication.translate("MainWindow", u"Processing Resolution:", None))
-#if QT_CONFIG(tooltip)
-        self.processingResolutionCombo.setToolTip(QCoreApplication.translate("MainWindow", u"Select processing resolution as percentage of original image size:\n"
-"\u2022 100%: Original resolution (no scaling, highest quality, slowest)\n"
-"\u2022 75%: High quality (~56% of pixels, ~1.8x faster)\n"
-"\u2022 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED\n"
-"\u2022 33%: Fast processing (~11% of pixels, ~9x faster)\n"
-"\u2022 25%: Very fast (6% of pixels, ~16x faster)\n"
-"\u2022 10%: Ultra fast (1% of pixels, ~100x faster)\n"
-"\n"
-"Percentage scaling preserves original aspect ratio.\n"
-"Works with any image size, orientation, or aspect ratio.\n"
-"\n"
-"Min/Max Area values are always specified in original resolution.\n"
-"All results are returned in original resolution coordinates.", None))
-#endif // QT_CONFIG(tooltip)
+        self.maxAreaNoLimitCheckbox.setText(QCoreApplication.translate("MainWindow", u"No max limit", None))
 #if QT_CONFIG(tooltip)
         self.identifierColor.setToolTip(QCoreApplication.translate("MainWindow", u"Color used to mark and identify detected objects in output images.\n"
 "Click the color button to select a different color.", None))
@@ -656,6 +648,26 @@ class Ui_MainWindow(object):
 "\u2022 Recommended: Set to number of CPU cores or slightly higher\n"
 "\u2022 For systems with limited RAM, reduce this value to prevent memory issues\n"
 "Each process analyzes one image at a time, so more processes = more parallel image processing.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.processingResolutionLabel.setToolTip(QCoreApplication.translate("MainWindow", u"Resolution at which images are processed.\n"
+"Lower resolutions = faster processing but may miss small objects.", None))
+#endif // QT_CONFIG(tooltip)
+        self.processingResolutionLabel.setText(QCoreApplication.translate("MainWindow", u"Processing Resolution:", None))
+#if QT_CONFIG(tooltip)
+        self.processingResolutionCombo.setToolTip(QCoreApplication.translate("MainWindow", u"Select processing resolution as percentage of original image size:\n"
+"\u2022 100%: Original resolution (no scaling, highest quality, slowest)\n"
+"\u2022 75%: High quality (~56% of pixels, ~1.8x faster)\n"
+"\u2022 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED\n"
+"\u2022 33%: Fast processing (~11% of pixels, ~9x faster)\n"
+"\u2022 25%: Very fast (6% of pixels, ~16x faster)\n"
+"\u2022 10%: Ultra fast (1% of pixels, ~100x faster)\n"
+"\n"
+"Percentage scaling preserves original aspect ratio.\n"
+"Works with any image size, orientation, or aspect ratio.\n"
+"\n"
+"Min/Max Area values are always specified in original resolution.\n"
+"All results are returned in original resolution coordinates.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.histogramCheckbox.setToolTip(QCoreApplication.translate("MainWindow", u"Enable histogram normalization preprocessing on images before detection.\n"
@@ -910,17 +922,7 @@ class Ui_MainWindow(object):
         self.viewResultsButton.setText(QCoreApplication.translate("MainWindow", u" View Results", None))
         self.viewResultsButton.setProperty(u"iconName", QCoreApplication.translate("MainWindow", u"search", None))
 #if QT_CONFIG(tooltip)
-        self.outputWindow.setToolTip(QCoreApplication.translate("MainWindow", u"Processing status and output log window.\n"
-"Displays real-time information during image analysis:\n"
-"\u2022 Current processing status and progress\n"
-"\u2022 Images being analyzed with filenames\n"
-"\u2022 Detection counts per image\n"
-"\u2022 Processing errors and warnings\n"
-"\u2022 Completion status and summary statistics\n"
-"\u2022 Total processing time and performance metrics\n"
-"\u2022 File save locations and output paths\n"
-"The window auto-scrolls to show the latest output.\n"
-"Use to monitor processing progress and troubleshoot issues.", None))
+        self.outputWindow.setToolTip("")
 #endif // QT_CONFIG(tooltip)
         self.menuFile.setTitle(QCoreApplication.translate("MainWindow", u"Menu", None))
         self.menuHelp.setTitle(QCoreApplication.translate("MainWindow", u"Help", None))

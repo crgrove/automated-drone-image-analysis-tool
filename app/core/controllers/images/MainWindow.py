@@ -123,6 +123,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Connect to editingFinished instead of valueChanged for deferred validation
         self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
         self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
+        
+        # Initialize last non-zero max area value for restoration
+        initial_max_value = self.maxAreaSpinBox.value()
+        self._last_non_zero_max_area = initial_max_value if initial_max_value > 0 else 1000
+        
+        # Ensure spinbox state matches checkbox state on initialization
+        # Checkbox is checked by default in UI, so spinbox should be disabled and set to 0
+        if self.maxAreaNoLimitCheckbox.isChecked():
+            self.maxAreaSpinBox.setValue(0)
+            self.maxAreaSpinBox.setEnabled(False)
+        else:
+            # If checkbox somehow not checked, ensure spinbox is enabled
+            self.maxAreaSpinBox.setEnabled(True)
+        
+        # NOW connect signals after initial state is set
+        self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_valueChanged)
+        self.maxAreaNoLimitCheckbox.stateChanged.connect(self._maxAreaNoLimitCheckbox_changed)
+        
         # Store original values to detect actual changes
         self._minAreaOriginal = self.minAreaSpinBox.value()
         self._maxAreaOriginal = self.maxAreaSpinBox.value()
@@ -368,6 +386,54 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Update stored original value
         self._maxAreaOriginal = max_val
+        # Ensure the checkbox matches any manual changes to the spinbox
+        self._sync_max_area_no_limit_ui(max_val)
+
+    def _maxAreaSpinBox_valueChanged(self, value):
+        """
+        Keeps the \"No max limit\" checkbox synchronized with the spinbox value.
+        """
+        self._sync_max_area_no_limit_ui(value, from_value_change=True)
+
+    def _maxAreaNoLimitCheckbox_changed(self, state):
+        """
+        Enables or disables the max area spinbox when the \"No max limit\" checkbox is toggled.
+        When checked: sets spinbox to 0 (None) and disables it.
+        When unchecked: restores previous value and enables the spinbox.
+        """
+        checked = state == Qt.Checked
+        if checked:
+            # Store current value if it's greater than 0 before setting to None
+            if self.maxAreaSpinBox.value() > 0:
+                self._last_non_zero_max_area = self.maxAreaSpinBox.value()
+            # Block signals to prevent recursive calls during update
+            self.maxAreaSpinBox.blockSignals(True)
+            self.maxAreaSpinBox.setValue(0)
+            self.maxAreaSpinBox.setEnabled(False)
+            self.maxAreaSpinBox.blockSignals(False)
+        else:
+            # Restore previous non-zero value
+            restore_value = self._last_non_zero_max_area
+            if not isinstance(restore_value, int) or restore_value <= 0:
+                restore_value = max(self.minAreaSpinBox.value() + 1, 1000)
+            # Block signals to prevent recursive calls during update
+            self.maxAreaSpinBox.blockSignals(True)
+            self.maxAreaSpinBox.setValue(restore_value)
+            self.maxAreaSpinBox.setEnabled(True)
+            self.maxAreaSpinBox.blockSignals(False)
+            self.maxAreaSpinBox.setFocus()
+
+    def _sync_max_area_no_limit_ui(self, max_value, from_value_change=False):
+        """
+        Updates the max-area controls to reflect whether there is an active ceiling.
+        """
+        no_limit = max_value == 0
+        if not no_limit and from_value_change:
+            self._last_non_zero_max_area = max_value
+        self.maxAreaSpinBox.setEnabled(not no_limit)
+        block = self.maxAreaNoLimitCheckbox.blockSignals(True)
+        self.maxAreaNoLimitCheckbox.setChecked(no_limit)
+        self.maxAreaNoLimitCheckbox.blockSignals(block)
 
     def _processingResolutionCombo_changed(self):
         """
