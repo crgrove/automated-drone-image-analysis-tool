@@ -192,7 +192,7 @@ class AlgorithmSelectionPage(BasePage):
         elif not state['specific_color'] and state['complex_background'] is None:
             state['complex_background'] = answer
             if answer:  # Yes - complex
-                self.selected_algorithm = "MRMap Algorithm"
+                self.selected_algorithm = "MRMap"
             else:  # No - simple
                 self.selected_algorithm = "RX Anomaly"
             self._show_algorithm_result()

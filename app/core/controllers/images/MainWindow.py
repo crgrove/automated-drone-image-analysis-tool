@@ -667,6 +667,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             wizard_data (dict): Dictionary containing wizard configuration data.
         """
+        self.logger.info(f"populate_from_wizard_data called with keys: {wizard_data.keys()}")
+        self.logger.info(f"auto_start in wizard_data: {wizard_data.get('auto_start', 'NOT SET')}")
+        
         # Set input and output directories
         if wizard_data.get('input_directory'):
             self.inputFolderLine.setText(wizard_data['input_directory'])
@@ -752,9 +755,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                             self.algorithmWidget.load_options(wizard_data['algorithm_options'])
                     break
 
-        # Note: Auto-start is handled after show() is called in __main__.py
-        # Store the flag for later use
+        # Mark for auto-start if requested (will execute in showEvent after window is visible)
         self._auto_start_requested = wizard_data.get('auto_start', False)
+        if self._auto_start_requested:
+            self.logger.info("Auto-start requested from wizard - will execute after window is shown")
 
     def _open_image_analysis_guide(self):
         """
@@ -765,8 +769,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Connect to wizard completion to populate this MainWindow
         def _on_wizard_completed(wizard_data):
+            # Mark for auto-start when opened from menu (same behavior as startup wizard)
+            wizard_data['auto_start'] = True
+            self.logger.info("Wizard completed from menu - setting auto_start=True")
+            
             # Populate this MainWindow with wizard data
             self.populate_from_wizard_data(wizard_data)
+            
+            # Since the window is already visible (opened from menu), showEvent won't fire again
+            # So we need to manually trigger the auto-start if requested
+            if self._auto_start_requested and self.isVisible():
+                self.logger.info("Window already visible - executing auto-start immediately")
+                self._auto_start_requested = False  # Prevent re-execution
+                self._startButton_clicked()
 
         wizard.wizardCompleted.connect(_on_wizard_completed)
         wizard.exec()
@@ -861,11 +876,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Handle window show event. Auto-start processing if requested from wizard.
         """
         super().showEvent(event)
+        
+        self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
+        
+        # Only execute auto-start on first show event (window is now visible and ready)
         if self._auto_start_requested:
-            # Process events to ensure UI is fully rendered
-            QApplication.processEvents()
+            self.logger.info("Executing auto-start processing after window shown")
+            self._auto_start_requested = False  # Prevent re-execution
+            
+            # Log current state for debugging
+            self.logger.info(f"Input folder: {self.inputFolderLine.text()}")
+            self.logger.info(f"Output folder: {self.outputFolderLine.text()}")
+            self.logger.info(f"Algorithm widget exists: {self.algorithmWidget is not None}")
+            
             self._startButton_clicked()
-            self._auto_start_requested = False
+        else:
+            self.logger.info("Auto-start not requested or already executed")
 
     def closeEvent(self, event):
         """
