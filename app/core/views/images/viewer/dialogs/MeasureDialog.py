@@ -59,6 +59,11 @@ class MeasureDialog(QDialog):
         """Set up the dialog UI."""
         self.setWindowTitle("Measure Distance")
         self.setModal(False)
+        
+        # Set window flags to keep dialog on top (especially important on macOS)
+        # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        
         self.setMinimumWidth(300)
 
         # Main layout

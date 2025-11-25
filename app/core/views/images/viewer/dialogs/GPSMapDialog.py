@@ -37,6 +37,11 @@ class GPSMapDialog(QDialog):
 
         self.setWindowTitle("GPS Map View")
         self.setModal(False)  # Non-modal so user can interact with main window
+        
+        # Set window flags to keep dialog on top (especially important on macOS)
+        # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        
         self.resize(800, 600)
 
         self.setup_ui()

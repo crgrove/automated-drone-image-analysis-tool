@@ -80,6 +80,11 @@ class ImageAdjustmentDialog(QDialog):
         """Create UI widgets programmatically."""
         self.setWindowTitle("Image Adjustment")
         self.setModal(False)
+        
+        # Set window flags to keep dialog on top (especially important on macOS)
+        # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        
         self.resize(400, 400)
 
         # Main layout

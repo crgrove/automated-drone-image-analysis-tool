@@ -83,7 +83,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Populate processing resolution combo box (widget now created from .ui file)
         for preset_name in self.resolution_presets.keys():
             self.processingResolutionCombo.addItem(preset_name)
-
+        
+        self.processingResolutionCombo.setMinimumWidth(80)
         self._set_defaults(version)
 
         # Global Options layout remains as defined in the .ui
