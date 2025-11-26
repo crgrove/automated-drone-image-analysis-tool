@@ -372,9 +372,11 @@ class PdfGeneratorService:
             original_path = img.get('original_path', image_path) if 'original_path' in img else image_path
 
             # Reuse ImageService if already created (optimization)
+            # Use original_path to ensure GPS/EXIF data is available
             cache_key = original_path
             if cache_key not in self._image_service_cache:
-                image_service = ImageService(image_path, mask_path)
+                # Use original_path instead of image_path to ensure GPS metadata is available
+                image_service = ImageService(original_path, mask_path)
                 self._image_service_cache[cache_key] = image_service
             else:
                 image_service = self._image_service_cache[cache_key]
@@ -390,8 +392,8 @@ class PdfGeneratorService:
             bearing = image_service.get_camera_yaw() or 0
 
             # Get GPS and other metadata from original image
-            gps_coords = LocationInfo.get_gps(full_path=original_path)
-            position_str = image_service.get_position(self.viewer.position_format) if gps_coords else "N/A"
+            # ImageService now uses original_path, so GPS should be available
+            position_str = image_service.get_position(self.viewer.position_format) or "N/A"
             agl_str = f"{image_service.get_relative_altitude(self.viewer.distance_unit)}{self.viewer.distance_unit}"
             orientation_str = f"{bearing}°"
             gsd_str = f"{image_service.get_average_gsd()}cm/px"

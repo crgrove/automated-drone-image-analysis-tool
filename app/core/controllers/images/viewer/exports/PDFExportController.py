@@ -5,7 +5,7 @@ This controller manages the export of flagged AOIs to PDF format with
 background processing and progress tracking.
 """
 
-from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox, QApplication
+from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox, QApplication, QWidget
 from PySide6.QtCore import QThread, Signal
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
 from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
@@ -174,9 +174,26 @@ class PDFExportController:
             # Count total flagged AOIs for progress dialog
             total_aois = sum(len(img.get('areas_of_interest', [])) for img in filtered_images)
 
+            # Validate parent widget - ensure it's a valid QWidget instance
+            # This prevents access violations in test environments where the parent
+            # might not be fully initialized or might be a mock object
+            parent_widget = self.parent
+            if parent_widget is not None:
+                # Check if it's a valid QWidget and not deleted
+                if not isinstance(parent_widget, QWidget):
+                    parent_widget = None
+                else:
+                    # Additional check: ensure widget is not deleted
+                    try:
+                        # Try to access a property that requires valid widget
+                        _ = parent_widget.isWidgetType()
+                    except (RuntimeError, AttributeError):
+                        # Widget has been deleted or is invalid
+                        parent_widget = None
+
             # Create and show the progress dialog
             self.progress_dialog = ExportProgressDialog(
-                self.parent,
+                parent_widget,
                 title="Generating PDF Report",
                 total_items=total_aois
             )

@@ -37,7 +37,6 @@ download_*.py
 fix_*.py
 detect_*.py
 diagnose_*.py
-test_*.py
 profile_*.py
 check_*.py
 clean_*.py

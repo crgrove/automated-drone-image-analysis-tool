@@ -5,7 +5,7 @@ Shows progress bar, status message, and cancel button during export operations.
 Can be used for PDF exports, KML exports, and other export operations.
 """
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QProgressBar
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QProgressBar, QWidget
 from PySide6.QtCore import Qt, Signal
 
 
@@ -29,6 +29,18 @@ class ExportProgressDialog(QDialog):
             title: Title for the dialog window
             total_items: Total number of items to process
         """
+        # Validate parent widget to prevent access violations
+        # This is especially important in test environments
+        if parent is not None and not isinstance(parent, QWidget):
+            parent = None
+        elif parent is not None:
+            # Additional check: ensure widget is not deleted
+            try:
+                _ = parent.isWidgetType()
+            except (RuntimeError, AttributeError):
+                # Widget has been deleted or is invalid
+                parent = None
+        
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -61,8 +73,7 @@ class ExportProgressDialog(QDialog):
 
         # Cancel button
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.clicked.connect(self.on_cancel_clicked)
-
+        
         # Add widgets to layout
         layout.addWidget(self.title_label)
         layout.addWidget(self.progress_bar)
@@ -71,6 +82,10 @@ class ExportProgressDialog(QDialog):
         layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
 
         self.setLayout(layout)
+        
+        # Connect signal after layout is set to ensure widget hierarchy is established
+        # This helps avoid access violations in test environments
+        self.cancel_button.clicked.connect(self.on_cancel_clicked)
 
     def on_cancel_clicked(self):
         """Handle cancel button click."""
