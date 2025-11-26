@@ -753,7 +753,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Connect the AOIs button
             if hasattr(self, 'showAOIsButton'):
                 self.showAOIsButton.clicked.connect(self._on_show_aois_clicked)
-                self.showAOIsButton.setToolTip("Toggle AOI Circles (C)")
+                self.showAOIsButton.setToolTip("Toggle AOI Circles")
                 # Initialize button styling
                 self._update_show_aois_button_style()
 

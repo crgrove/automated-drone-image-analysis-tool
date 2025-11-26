@@ -260,7 +260,7 @@ class HelpDialog(QDialog):
                     </tr>
                     <tr>
                         <td>{icon_html('show_aois')} Show AOIs</td>
-                        <td>Show or hide AOI circles in the viewer (same as C key).</td>
+                        <td>Show or hide AOI circles in the viewer.</td>
                     </tr>
                     <tr>
                         <td>{icon_html('show_pois')} Show POIs</td>
