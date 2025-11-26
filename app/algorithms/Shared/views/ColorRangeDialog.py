@@ -11,10 +11,11 @@ from typing import Tuple, Optional
 import sys
 
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen
+from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen, QScreen
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QFrame, QCheckBox, QGroupBox,
-                               QSizePolicy, QGridLayout, QColorDialog, QApplication)
+                               QSizePolicy, QGridLayout, QColorDialog, QApplication,
+                               QScrollArea)
 
 from algorithms.images.HSVColorRange.views.HSVRangePickerWidget import HSVRangePickerWidget
 from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColorRangeAssistant
@@ -34,11 +35,13 @@ class ColorRangeDialog(QDialog):
 
         self.setWindowTitle("HSV Color Range Selection")
         self.setModal(True)
-        self.resize(1000, 800)
-
+        
         # Store initial values
         self.original_image = initial_image
         self.processed_image = None
+        
+        # Determine appropriate dialog size based on screen
+        self._set_initial_size()
 
         # Initialize ranges
         if initial_ranges is None:
@@ -74,6 +77,34 @@ class ColorRangeDialog(QDialog):
         if self.original_image is not None:
             self.update_preview()
 
+    def _set_initial_size(self):
+        """Set initial dialog size based on available screen space."""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                screen_height = screen_geometry.height()
+                screen_width = screen_geometry.width()
+                
+                # Set maximum size to prevent dialog from being too large
+                max_width = 1000
+                max_height = 950
+                
+                # Use 90% of screen space or max size, whichever is smaller
+                desired_height = min(int(screen_height * 0.9), max_height)
+                desired_width = min(int(screen_width * 0.9), max_width)
+                
+                self.resize(desired_width, desired_height)
+                # Set maximum size to prevent expanding beyond this
+                self.setMaximumSize(max_width, max_height)
+                return
+        except Exception as e:
+            print(f"Warning: Could not determine screen size: {e}")
+        
+        # Fallback to a reasonable default
+        self.resize(1000, 900)
+        self.setMaximumSize(1000, 950)
+    
     def setup_ui(self):
         """Setup the dialog UI."""
         main_layout = QVBoxLayout(self)
@@ -83,12 +114,24 @@ class ColorRangeDialog(QDialog):
         # Main content area
         content_layout = QHBoxLayout()
 
-        # Left side - Color picker
+        # Left side - Color picker in scroll area
         picker_group = QGroupBox("Color Range Selection")
         picker_layout = QVBoxLayout(picker_group)
 
-        self.color_picker = HSVRangePickerWidget()
-        picker_layout.addWidget(self.color_picker)
+        # Determine scale factor based on screen size
+        scale_factor = self._get_scale_factor()
+        
+        # Create the color picker widget with scaled dimensions
+        self.color_picker = self._create_scaled_picker(scale_factor)
+        
+        # Create scroll area for the color picker
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.color_picker)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        picker_layout.addWidget(scroll_area)
 
         content_layout.addWidget(picker_group)
 
@@ -102,6 +145,58 @@ class ColorRangeDialog(QDialog):
         # Bottom buttons
         button_layout = self.create_button_layout()
         main_layout.addLayout(button_layout)
+    
+    def _get_scale_factor(self):
+        """Determine the scale factor based on screen height."""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.availableGeometry()
+                screen_height = screen_geometry.height()
+                
+                # Only scale down if screen is really small (< 800 pixels)
+                # This is for small laptop screens, tablets, etc.
+                if screen_height < 800:
+                    return 0.9
+        except Exception as e:
+            print(f"Warning: Could not determine screen size: {e}")
+        
+        return 1.0  # No scaling by default
+    
+    def _create_scaled_picker(self, scale_factor):
+        """Create an HSVRangePickerWidget with scaled dimensions."""
+        # Create the widget
+        picker = HSVRangePickerWidget()
+        
+        if scale_factor < 1.0:
+            # Scale the ring and square sizes before UI setup
+            picker.hue_ring_size = int(picker.hue_ring_size * scale_factor)
+            picker.sv_square_size = int(picker.sv_square_size * scale_factor)
+            
+            # Clear and recreate the UI with scaled dimensions
+            old_layout = picker.layout()
+            if old_layout:
+                # Remove all widgets from the layout
+                while old_layout.count():
+                    item = old_layout.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
+                # Delete the old layout
+                from PySide6.QtWidgets import QWidget
+                QWidget().setLayout(old_layout)
+            
+            # Recreate UI with new scaled dimensions
+            picker.setup_ui()
+            
+            # Update the minimum size
+            original_min_width = 800
+            original_min_height = 750
+            picker.setMinimumSize(
+                int(original_min_width * scale_factor),
+                int(original_min_height * scale_factor)
+            )
+        
+        return picker
 
     def create_preview_panel(self):
         """Create the image preview panel."""
