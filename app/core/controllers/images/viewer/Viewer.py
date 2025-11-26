@@ -662,9 +662,34 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.last_mouse_pos.x(), self.last_mouse_pos.y()
             )
 
-            # If an AOI is found at the cursor, select it
+            # If an AOI is found at the cursor
             if aoi_index >= 0:
-                self.aoi_controller.select_aoi(aoi_index, visible_index)
+                # Check if the AOI is visible (not filtered out)
+                if visible_index >= 0:
+                    # AOI is visible in single-image mode, select it
+                    self.aoi_controller.select_aoi(aoi_index, visible_index)
+                else:
+                    # AOI is filtered out in single-image view
+                    # Check if we're in gallery mode and the AOI is visible there
+                    if hasattr(self, 'gallery_mode') and self.gallery_mode and hasattr(self, 'gallery_controller'):
+                        # Try to find and select the AOI in gallery view
+                        gallery_row = self.gallery_controller.model.aoi_to_row.get(
+                            (self.current_image, aoi_index), -1
+                        )
+                        if gallery_row >= 0:
+                            # AOI is visible in gallery, select it there
+                            self.gallery_controller.ui_component.gallery_view.setCurrentIndex(
+                                self.gallery_controller.model.index(gallery_row, 0)
+                            )
+                            return
+                    # AOI is not visible in either view, show error
+                    QMessageBox.information(
+                        self,
+                        "AOI Not Visible",
+                        "The AOI at the cursor position cannot be selected because "
+                        "it is currently hidden due to active filters.\n\n"
+                        "To select this AOI, please clear or adjust your filters."
+                    )
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
             self.aoi_controller.toggle_aoi_flag()
