@@ -246,11 +246,11 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             return
 
         # Update processing resolution in InputProcessingTab
-        if ('processing_width' in config and 'processing_height' in config and 
-            hasattr(self.integrated_controls, 'input_processing_tab')):
+        if ('processing_width' in config and 'processing_height' in config and
+                hasattr(self.integrated_controls, 'input_processing_tab')):
             width = config['processing_width']
             height = config['processing_height']
-            
+
             # Map dimensions to preset names
             resolution_map = {
                 (854, 480): "854x480",
@@ -265,7 +265,7 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
                 (5120, 2880): "5120x2880",
                 (7680, 4320): "7680x4320"
             }
-            
+
             preset_name = resolution_map.get((width, height))
             if preset_name:
                 self.integrated_controls.input_processing_tab.resolution_preset.setCurrentText(preset_name)

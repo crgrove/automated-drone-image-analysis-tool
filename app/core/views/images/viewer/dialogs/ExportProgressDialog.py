@@ -40,7 +40,7 @@ class ExportProgressDialog(QDialog):
             except (RuntimeError, AttributeError):
                 # Widget has been deleted or is invalid
                 parent = None
-        
+
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -73,7 +73,7 @@ class ExportProgressDialog(QDialog):
 
         # Cancel button
         self.cancel_button = QPushButton("Cancel")
-        
+
         # Add widgets to layout
         layout.addWidget(self.title_label)
         layout.addWidget(self.progress_bar)
@@ -82,7 +82,7 @@ class ExportProgressDialog(QDialog):
         layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
 
         self.setLayout(layout)
-        
+
         # Connect signal after layout is set to ensure widget hierarchy is established
         # This helps avoid access violations in test environments
         self.cancel_button.clicked.connect(self.on_cancel_clicked)

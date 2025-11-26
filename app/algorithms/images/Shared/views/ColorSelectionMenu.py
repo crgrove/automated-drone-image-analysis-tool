@@ -112,7 +112,7 @@ class ColorSelectionMenu:
         if dialog.exec() == ColorRangeDialog.Accepted:
             hsv_data = dialog.get_hsv_ranges()
             self.on_hsv_selected(hsv_data)
-    
+
     def _select_from_recent_colors(self) -> None:
         """Open the recent colors dialog."""
         # Get recent colors based on mode
@@ -125,9 +125,9 @@ class ColorSelectionMenu:
         else:  # RGB
             recent_colors = self._recent_colors_service.get_recent_rgb_colors()
             dialog_mode = 'RGB'
-        
+
         dialog = RecentColorsDialog(recent_colors, dialog_mode, self.parent)
-        
+
         if dialog.exec():
             color_data = dialog.get_selected_color_data()
             if color_data:

@@ -354,7 +354,7 @@ def testPdfGenerator(main_window, testData, qtbot):
         mock_progress_dialog.exec.return_value = QDialog.DialogCode.Accepted
         mock_progress_dialog.show.return_value = None
         mock_progress_dialog.cancel_requested = MagicMock()
-        
+
         # Mock PDFExportDialog instantiation and other components
         with patch('core.controllers.images.viewer.exports.PDFExportController.PDFExportDialog') as mock_dialog_class, \
                 patch.object(QFileDialog, 'getSaveFileName', return_value=("/path/to/report.pdf", "pdf")), \

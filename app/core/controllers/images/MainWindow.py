@@ -83,7 +83,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Populate processing resolution combo box (widget now created from .ui file)
         for preset_name in self.resolution_presets.keys():
             self.processingResolutionCombo.addItem(preset_name)
-        
+
         self.processingResolutionCombo.setMinimumWidth(80)
         self._set_defaults(version)
 
@@ -124,11 +124,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Connect to editingFinished instead of valueChanged for deferred validation
         self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
         self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
-        
+
         # Initialize last non-zero max area value for restoration
         initial_max_value = self.maxAreaSpinBox.value()
         self._last_non_zero_max_area = initial_max_value if initial_max_value > 0 else 1000
-        
+
         # Ensure spinbox state matches checkbox state on initialization
         # Checkbox is checked by default in UI, so spinbox should be disabled and set to 0
         if self.maxAreaNoLimitCheckbox.isChecked():
@@ -137,11 +137,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             # If checkbox somehow not checked, ensure spinbox is enabled
             self.maxAreaSpinBox.setEnabled(True)
-        
+
         # NOW connect signals after initial state is set
         self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_valueChanged)
         self.maxAreaNoLimitCheckbox.stateChanged.connect(self._maxAreaNoLimitCheckbox_changed)
-        
+
         # Store original values to detect actual changes
         self._minAreaOriginal = self.minAreaSpinBox.value()
         self._maxAreaOriginal = self.maxAreaSpinBox.value()
@@ -670,7 +670,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.logger.info(f"populate_from_wizard_data called with keys: {wizard_data.keys()}")
         self.logger.info(f"auto_start in wizard_data: {wizard_data.get('auto_start', 'NOT SET')}")
-        
+
         # Set input and output directories
         if wizard_data.get('input_directory'):
             self.inputFolderLine.setText(wizard_data['input_directory'])
@@ -773,10 +773,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Mark for auto-start when opened from menu (same behavior as startup wizard)
             wizard_data['auto_start'] = True
             self.logger.info("Wizard completed from menu - setting auto_start=True")
-            
+
             # Populate this MainWindow with wizard data
             self.populate_from_wizard_data(wizard_data)
-            
+
             # Since the window is already visible (opened from menu), showEvent won't fire again
             # So we need to manually trigger the auto-start if requested
             if self._auto_start_requested and self.isVisible():
@@ -877,19 +877,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Handle window show event. Auto-start processing if requested from wizard.
         """
         super().showEvent(event)
-        
+
         self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
-        
+
         # Only execute auto-start on first show event (window is now visible and ready)
         if self._auto_start_requested:
             self.logger.info("Executing auto-start processing after window shown")
             self._auto_start_requested = False  # Prevent re-execution
-            
+
             # Log current state for debugging
             self.logger.info(f"Input folder: {self.inputFolderLine.text()}")
             self.logger.info(f"Output folder: {self.outputFolderLine.text()}")
             self.logger.info(f"Algorithm widget exists: {self.algorithmWidget is not None}")
-            
+
             self._startButton_clicked()
         else:
             self.logger.info("Auto-start not requested or already executed")

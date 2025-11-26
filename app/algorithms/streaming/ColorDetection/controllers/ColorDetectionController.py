@@ -210,11 +210,11 @@ class ColorDetectionController(StreamAlgorithmController):
     def set_config(self, config: Dict[str, Any]):
         """Apply algorithm configuration."""
         # Update processing resolution in InputProcessingTab
-        if ('processing_width' in config and 'processing_height' in config and 
-            hasattr(self.control_widget, 'input_processing_tab')):
+        if ('processing_width' in config and 'processing_height' in config and
+                hasattr(self.control_widget, 'input_processing_tab')):
             width = config['processing_width']
             height = config['processing_height']
-            
+
             # Map dimensions to preset names
             resolution_map = {
                 (854, 480): "854x480",
@@ -229,7 +229,7 @@ class ColorDetectionController(StreamAlgorithmController):
                 (5120, 2880): "5120x2880",
                 (7680, 4320): "7680x4320"
             }
-            
+
             preset_name = resolution_map.get((width, height))
             if preset_name:
                 self.control_widget.input_processing_tab.resolution_preset.setCurrentText(preset_name)
@@ -238,7 +238,7 @@ class ColorDetectionController(StreamAlgorithmController):
                 self.control_widget.input_processing_tab.resolution_preset.setCurrentText("Custom")
                 self.control_widget.input_processing_tab.processing_width.setValue(width)
                 self.control_widget.input_processing_tab.processing_height.setValue(height)
-        
+
         # Update control widget with config
         if 'color_ranges' in config:
             self.control_widget.color_ranges = config['color_ranges']

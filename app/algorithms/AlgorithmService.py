@@ -439,7 +439,7 @@ class AlgorithmService:
 
         return str(output_path)
 
-    def store_mask(self, input_file, output_file, mask, temperature_data=None):
+    def store_mask(self, input_file, output_file, mask, temperature_data=None, target_shape=None):
         """
         Saves the detection mask as a TIFF file with temperature data embedded as additional bands.
 
@@ -448,6 +448,8 @@ class AlgorithmService:
             output_file (str): Path to save the mask (will be saved as .tif extension).
             mask (np.ndarray): Binary mask of detected pixels (0 or 255).
             temperature_data (np.ndarray or list, optional): Temperature matrix to store as additional bands.
+            target_shape (tuple, optional): Target (height, width) to resize mask and thermal data to.
+                Used when visual image is upscaled (e.g., DJI 1280x1024) vs thermal (640x512).
         """
         path = Path(output_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -459,6 +461,17 @@ class AlgorithmService:
         if len(mask.shape) == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
 
+        # If target_shape provided, upscale mask and thermal data to match visual image resolution
+        # This handles DJI upscaled images where visual (1280x1024) != thermal (640x512)
+        if target_shape is not None and target_shape[:2] != mask.shape[:2]:
+            print(f"Info: Upscaling mask from {mask.shape[:2]} to visual image resolution {target_shape[:2]}")
+            print("      (DJI upscaled image: ensuring viewer can query all pixels)")
+            mask = cv2.resize(
+                mask,
+                (target_shape[1], target_shape[0]),
+                interpolation=cv2.INTER_NEAREST  # Use NEAREST for binary mask
+            )
+
         bands = []
 
         # First band: mask (uint8)
@@ -469,13 +482,14 @@ class AlgorithmService:
             if not isinstance(temperature_data, np.ndarray):
                 temperature_data = np.array(temperature_data)
 
-            # Resize if mismatch
+            # Upscale temperature data to match mask resolution (which matches visual image)
             if temperature_data.shape[:2] != mask.shape[:2]:
-                print(f"Warning: Temperature data shape {temperature_data.shape} doesn't match mask shape {mask.shape}")
+                print(f"Info: Upscaling thermal data from {temperature_data.shape[:2]} to {mask.shape[:2]}")
+                print("      Using bilinear interpolation to preserve temperature values")
                 temperature_data = cv2.resize(
                     temperature_data.astype(np.float32),
                     (mask.shape[1], mask.shape[0]),
-                    interpolation=cv2.INTER_LINEAR
+                    interpolation=cv2.INTER_LINEAR  # Bilinear for smooth temperature interpolation
                 )
 
             # Always float32 for thermal

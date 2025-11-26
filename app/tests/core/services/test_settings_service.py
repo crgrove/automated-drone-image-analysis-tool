@@ -12,7 +12,7 @@ def settings_service():
 
 def test_settings_service_initialization():
     with patch.object(QSettings, '__init__', return_value=None) as mock_qsettings, \
-         patch.object(SettingsService, '_migrate_old_settings'):
+            patch.object(SettingsService, '_migrate_old_settings'):
         service = SettingsService()  # Instantiate the service
         assert service is not None
         mock_qsettings.assert_called_once_with('ADIAT', 'ADIAT')  # Ensure QSettings was initialized with both org and app name
@@ -45,15 +45,21 @@ def test_migrate_old_settings():
         'key2': 'value2',
         'RecentRGBColors': [{'selected_color': (255, 0, 0)}]
     }.get(key)
-    
+
     # Create mock for new settings
     mock_new_settings = MagicMock()
     mock_new_settings.value.return_value = False  # settings_migrated not set yet
-    
-    with patch.object(QSettings, '__new__') as mock_qsettings_new:
-        # First call creates the new settings, second call creates the old settings
-        mock_qsettings_new.side_effect = [mock_new_settings, mock_old_settings]
-        
+
+    def qsettings_side_effect(*args, **kwargs):
+        # If called with two args ('ADIAT', 'ADIAT'), return new settings
+        if len(args) == 2:
+            return mock_new_settings
+        # If called with one arg ('ADIAT'), return old settings
+        else:
+            return mock_old_settings
+
+    with patch('core.services.SettingsService.QtCore.QSettings', side_effect=qsettings_side_effect):
+        # Instantiate service to trigger migration
         service = SettingsService()
         
         # Verify that migration was attempted
@@ -64,10 +70,22 @@ def test_migrate_old_settings():
 
 def test_migrate_old_settings_already_migrated():
     """Test that migration is skipped if already done."""
-    mock_settings = MagicMock()
-    mock_settings.value.return_value = True  # settings_migrated already set
+    mock_new_settings = MagicMock()
+    mock_new_settings.value.return_value = True  # settings_migrated already set
     
-    with patch.object(QSettings, '__new__', return_value=mock_settings):
+    mock_old_settings = MagicMock()
+
+    def qsettings_side_effect(*args, **kwargs):
+        # If called with two args ('ADIAT', 'ADIAT'), return new settings
+        if len(args) == 2:
+            return mock_new_settings
+        # If called with one arg ('ADIAT'), return old settings
+        else:
+            return mock_old_settings
+
+    with patch('core.services.SettingsService.QtCore.QSettings', side_effect=qsettings_side_effect):
+        # Instantiate service
         service = SettingsService()
-        # Verify allKeys was never called (migration skipped)
-        mock_settings.allKeys.assert_not_called()
+        
+        # Verify allKeys was never called on old settings (migration skipped)
+        mock_old_settings.allKeys.assert_not_called()

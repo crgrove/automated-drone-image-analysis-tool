@@ -23,11 +23,11 @@ class HelpDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Viewer Help")
         self.setModal(False)
-        
+
         # Set window flags to keep dialog on top (especially important on macOS)
         # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        
+
         self.resize(800, 700)
         self.parent_viewer = parent
 

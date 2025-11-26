@@ -138,7 +138,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             mode='HSV'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
-        
+
         # Recent colors service
         self.recent_colors_service = get_recent_colors_service()
 
@@ -206,7 +206,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         if not color.isValid():
             return
         self.add_color_row(color)
-        
+
         # Don't track immediately - let user adjust ranges first
         # Colors will be tracked when actually used (via get_options)
 
@@ -221,11 +221,11 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             h, s, v = hsv_data['h'], hsv_data['s'], hsv_data['v']
             color = QColor.fromHsvF(h, s, v)
             self.add_color_row(color, hsv_ranges=hsv_data)
-            
+
             # Don't track immediately - colors will be tracked when actually used (via get_options)
         except Exception as e:
             self.logger.error(f"Error handling HSV selection: {e}")
-    
+
     def _on_recent_color_selected(self, color_data: dict):
         """Handle selection from recent colors list."""
         try:
@@ -392,13 +392,13 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
                 'hsv_ranges': hsv_ranges
             }
             hsv_configs.append(hsv_config)
-            
+
             # Track this color in recent colors (it's being used for processing)
             try:
                 self.recent_colors_service.add_hsv_color(hsv_config)
             except Exception as e:
                 self.logger.error(f"Error tracking recent color: {e}")
-        
+
         options['hsv_configs'] = hsv_configs
 
         # Legacy format: use first color for backward compatibility

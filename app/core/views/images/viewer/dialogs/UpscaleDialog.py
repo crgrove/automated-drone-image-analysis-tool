@@ -181,7 +181,7 @@ class UpscaleDialog(QDialog):
         # Set up the dialog
         self.setWindowTitle(f"Upscaled View - {current_level}x")
         self.setModal(False)  # Non-modal so user can interact with main window
-        
+
         # Set window flags to keep dialog on top (especially important on macOS)
         # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)

@@ -58,7 +58,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             mode='RGB'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
-        
+
         # Recent colors service
         self.recent_colors_service = get_recent_colors_service()
 
@@ -124,17 +124,17 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
     def _on_color_selected_from_menu(self, color: QColor):
         """Handle color chosen from the shared color selection menu."""
         self.add_color_row(color)
-        
+
         # Don't track immediately - let user adjust ranges first
         # Colors will be tracked when actually used (via get_options)
-    
+
     def _on_recent_color_selected(self, color_data: dict):
         """Handle selection from recent colors list."""
         try:
             selected_color = color_data.get('selected_color', (255, 0, 0))
             r, g, b = selected_color
             color = QColor(r, g, b)
-            
+
             # Try to get color_range from data
             color_range = color_data.get('color_range')
             if color_range and len(color_range) == 2:
@@ -147,7 +147,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
                         b_min=min_rgb[2], b_max=max_rgb[2]
                     )
                     return
-            
+
             # Fallback: use default ranges
             self.add_color_row(color)
         except Exception as e:
@@ -288,13 +288,13 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
                 'color_range': [min_rgb, max_rgb]
             }
             color_ranges.append(color_config)
-            
+
             # Track this color in recent colors (it's being used for processing)
             try:
                 self.recent_colors_service.add_rgb_color(color_config)
             except Exception as e:
                 self.logger.error(f"Error tracking recent color: {e}")
-        
+
         options['color_ranges'] = color_ranges
 
         # Legacy format: use first color for backward compatibility

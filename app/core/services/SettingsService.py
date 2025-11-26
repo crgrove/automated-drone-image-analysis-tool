@@ -70,30 +70,30 @@ class SettingsService:
                 return False
             return default_value
         return bool(value)
-    
+
     def _migrate_old_settings(self):
         """Migrate settings from old single-parameter QSettings format to new format.
-        
+
         This ensures existing user settings are preserved when upgrading to the
         properly formatted QSettings initialization.
         """
         # Check if migration has already been done
         if self.settings.value('settings_migrated', False):
             return
-        
+
         # Try to load from old settings format
         old_settings = QtCore.QSettings('ADIAT')
-        
+
         # Get all keys from old settings
         old_keys = old_settings.allKeys()
-        
+
         if old_keys:
             # Migrate each setting
             for key in old_keys:
                 value = old_settings.value(key)
                 if value is not None:
                     self.settings.setValue(key, value)
-            
+
             # Mark migration as complete
             self.settings.setValue('settings_migrated', True)
             self.settings.sync()

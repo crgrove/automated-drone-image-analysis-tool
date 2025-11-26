@@ -57,7 +57,7 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
             mode='MATCHED_FILTER'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
-        
+
         # Recent colors service
         self.recent_colors_service = get_recent_colors_service()
 
@@ -108,10 +108,10 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
     def _on_color_selected_from_menu(self, color: QColor):
         """Handle color chosen from the shared color selection menu."""
         self.add_color_row(color)
-        
+
         # Don't track immediately - let user adjust threshold first
         # Colors will be tracked when actually used (via get_options)
-    
+
     def _on_recent_color_selected(self, color_data: dict):
         """Handle selection from recent colors list."""
         try:
@@ -268,13 +268,13 @@ class MatchedFilterController(QWidget, Ui_MatchedFilter, AlgorithmController):
                 'match_filter_threshold': threshold
             }
             color_configs.append(color_config)
-            
+
             # Track this color in recent colors (it's being used for processing)
             try:
                 self.recent_colors_service.add_matched_filter_color(color_config)
             except Exception as e:
                 self.logger.error(f"Error tracking recent color: {e}")
-        
+
         options['color_configs'] = color_configs
 
         # Legacy format: use first color for backward compatibility

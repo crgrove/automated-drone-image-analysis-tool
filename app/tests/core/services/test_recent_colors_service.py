@@ -38,9 +38,9 @@ def test_add_hsv_color(recent_colors_service, mock_settings_service):
             'v_plus': 0.1
         }
     }
-    
+
     recent_colors_service.add_hsv_color(color_data)
-    
+
     # Verify set_setting was called
     mock_settings_service.set_setting.assert_called_once()
     call_args = mock_settings_service.set_setting.call_args
@@ -56,9 +56,9 @@ def test_add_rgb_color(recent_colors_service, mock_settings_service):
         'range_values': (10, 10, 10),
         'color_range': [[245, 0, 0], [255, 10, 10]]
     }
-    
+
     recent_colors_service.add_rgb_color(color_data)
-    
+
     # Verify set_setting was called
     mock_settings_service.set_setting.assert_called_once()
     call_args = mock_settings_service.set_setting.call_args
@@ -73,9 +73,9 @@ def test_add_matched_filter_color(recent_colors_service, mock_settings_service):
         'selected_color': (255, 0, 0),
         'match_filter_threshold': 0.3
     }
-    
+
     recent_colors_service.add_matched_filter_color(color_data)
-    
+
     # Verify set_setting was called
     mock_settings_service.set_setting.assert_called_once()
     call_args = mock_settings_service.set_setting.call_args
@@ -91,9 +91,9 @@ def test_get_recent_hsv_colors(recent_colors_service, mock_settings_service):
         {'selected_color': (0, 255, 0), 'hsv_ranges': {}}
     ]
     mock_settings_service.get_setting.return_value = expected_colors
-    
+
     result = recent_colors_service.get_recent_hsv_colors()
-    
+
     assert result == expected_colors
     mock_settings_service.get_setting.assert_called_once_with('RecentHSVColors')
 
@@ -105,9 +105,9 @@ def test_get_recent_rgb_colors(recent_colors_service, mock_settings_service):
         {'selected_color': (0, 255, 0), 'range_values': (20, 20, 20)}
     ]
     mock_settings_service.get_setting.return_value = expected_colors
-    
+
     result = recent_colors_service.get_recent_rgb_colors()
-    
+
     assert result == expected_colors
     mock_settings_service.get_setting.assert_called_once_with('RecentRGBColors')
 
@@ -119,11 +119,11 @@ def test_remove_duplicate_color(recent_colors_service, mock_settings_service):
         {'selected_color': (0, 255, 0), 'hsv_ranges': {'h': 0.3}}
     ]
     mock_settings_service.get_setting.return_value = existing_colors
-    
+
     # Add the same color as the first one
     new_color = {'selected_color': (255, 0, 0), 'hsv_ranges': {'h': 0.6}}
     recent_colors_service.add_hsv_color(new_color)
-    
+
     # Verify the duplicate was removed and new one added at front
     call_args = mock_settings_service.set_setting.call_args
     saved_colors = call_args[0][1]
@@ -140,11 +140,11 @@ def test_max_recent_colors_limit(recent_colors_service, mock_settings_service):
         for i in range(10)
     ]
     mock_settings_service.get_setting.return_value = existing_colors
-    
+
     # Add a new color
     new_color = {'selected_color': (255, 255, 255), 'hsv_ranges': {}}
     recent_colors_service.add_hsv_color(new_color)
-    
+
     # Verify only 10 colors are kept
     call_args = mock_settings_service.set_setting.call_args
     saved_colors = call_args[0][1]
@@ -158,4 +158,3 @@ def test_singleton_pattern():
     service1 = get_recent_colors_service()
     service2 = get_recent_colors_service()
     assert service1 is service2
-
