@@ -708,6 +708,18 @@ class StreamViewerWindow(QMainWindow):
         if hasattr(service, 'detect_colors'):
             def process_color(frame: np.ndarray, timestamp: float) -> List[Dict]:
                 detections = service.detect_colors(frame, timestamp)
+
+                # Create annotated frame directly on the worker thread so the emitted
+                # frame already contains algorithm-rendered overlays.
+                try:
+                    annotated_frame = service.create_annotated_frame(frame, detections)
+                    if annotated_frame is not None and annotated_frame is not frame:
+                        # Copy annotated frame back into the original buffer that will be emitted
+                        np.copyto(frame, annotated_frame)
+                except Exception:
+                    # Fall back silently if annotation fails – raw frame will be shown
+                    pass
+
                 # Convert to standard format
                 detection_dicts = []
                 for detection in detections:
@@ -728,6 +740,15 @@ class StreamViewerWindow(QMainWindow):
             # Check if it returns (annotated_frame, detections, timings)
             def process_integrated(frame: np.ndarray, timestamp: float) -> List[Dict]:
                 annotated_frame, detections, timings = service.process_frame(frame, timestamp)
+
+                # Ensure the annotated frame is what gets displayed when the algorithm
+                # provides its own rendering (copy onto the outgoing buffer).
+                try:
+                    if annotated_frame is not None and annotated_frame is not frame:
+                        np.copyto(frame, annotated_frame)
+                except Exception:
+                    pass
+
                 # Convert to standard format
                 detection_dicts = []
                 for detection in detections:
@@ -869,6 +890,9 @@ class StreamViewerWindow(QMainWindow):
             rendered_frame = self.detection_renderer.render(frame, detections)
             # Update display with rendered frame
             self.video_display.update_frame(rendered_frame)
+        else:
+            # Algorithm already rendered onto the frame (e.g., ColorDetection)
+            self.video_display.update_frame(frame)
 
         # Update thumbnails
         if detections:
@@ -912,10 +936,13 @@ class StreamViewerWindow(QMainWindow):
             )
 
         # Record frame if recording
-        if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
-            if rendered_frame is None:
-                rendered_frame = frame
-            self.stream_coordinator.record_frame(rendered_frame, detections)
+        if self.stream_coordinator.is_recording:
+            if not self.algorithm_renders_frame:
+                if rendered_frame is None:
+                    rendered_frame = frame
+                self.stream_coordinator.record_frame(rendered_frame, detections)
+            else:
+                self.stream_coordinator.record_frame(frame, detections)
 
         # Emit detections via controller (for compatibility with existing signal connections)
         if self.algorithm_widget:

@@ -50,7 +50,11 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.connect_signals()
 
     def _add_default_range(self):
-        """Add default red color range."""
+        """Add default red color range with OpenCV format values."""
+        # Default tolerance ranges in OpenCV format:
+        # - hue_minus/plus: 20 (0-179 range, ±20 is moderate for hue)
+        # - sat_minus/plus: 50 (0-255 range, ±19.6% moderate tolerance)
+        # - val_minus/plus: 50 (0-255 range, ±19.6% moderate tolerance)
         default_range = {
             'name': 'Red',
             'color': QColor(255, 0, 0),
@@ -299,6 +303,25 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         if not hasattr(self, 'color_ranges_layout'):
             return
 
+        # IMPORTANT: Sync self.color_ranges from existing widgets BEFORE clearing them
+        # This ensures that any user modifications to the widgets are preserved
+        # Sync as many widgets as exist (may be fewer than color_ranges if we're adding a new one)
+        if self.color_range_widgets:
+            for i, widget in enumerate(self.color_range_widgets):
+                # Only update if this index exists in color_ranges
+                if i < len(self.color_ranges):
+                    hsv_ranges = widget.get_hsv_ranges()
+                    color = widget.get_color()
+                    
+                    # Update self.color_ranges with current widget values
+                    self.color_ranges[i]['color'] = color
+                    self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
+                    self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                    self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
+                    self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
+                    self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
+                    self.color_ranges[i]['val_plus'] = int(hsv_ranges['v_plus'] * 255)
+
         # Clear existing widgets
         for widget in self.color_range_widgets:
             widget.setParent(None)
@@ -311,16 +334,30 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             if isinstance(color, tuple):
                 color = QColor(color[0], color[1], color[2])
 
-            # HSVColorRowWidget expects h_minus/h_plus in 0-179, s_minus/s_plus in 0-100%, v_minus/v_plus in 0-100%
+            # Get HSV values from color for the widget
+            h, s, v, _ = color.getHsvF()
+            
+            # Build hsv_ranges dict in normalized 0-1 format expected by HSVColorRowWidget
+            # hue_minus/hue_plus are in 0-179 range (OpenCV), convert to 0-1 fractional
+            # sat_minus/sat_plus are in 0-255 range (OpenCV), convert to 0-1 fractional
+            # val_minus/val_plus are in 0-255 range (OpenCV), convert to 0-1 fractional
+            hsv_ranges_dict = {
+                'h': h,
+                's': s,
+                'v': v,
+                'h_minus': color_range.get('hue_minus', 20) / 179.0,
+                'h_plus': color_range.get('hue_plus', 20) / 179.0,
+                's_minus': color_range.get('sat_minus', 50) / 255.0,
+                's_plus': color_range.get('sat_plus', 50) / 255.0,
+                'v_minus': color_range.get('val_minus', 50) / 255.0,
+                'v_plus': color_range.get('val_plus', 50) / 255.0
+            }
+            
+            # HSVColorRowWidget expects hsv_ranges dict in normalized 0-1 format
             row_widget = HSVColorRowWidget(
                 parent=self,
                 color=color,
-                h_minus=color_range.get('hue_minus', 20),
-                h_plus=color_range.get('hue_plus', 20),
-                s_minus=int(color_range.get('sat_minus', 50) * 100 / 255),  # Convert 0-255 to 0-100%
-                s_plus=int(color_range.get('sat_plus', 50) * 100 / 255),
-                v_minus=int(color_range.get('val_minus', 50) * 100 / 255),
-                v_plus=int(color_range.get('val_plus', 50) * 100 / 255)
+                hsv_ranges=hsv_ranges_dict
             )
             row_widget.changed.connect(self._emit_config_changed)
             row_widget.delete_requested.connect(lambda w=row_widget: self._on_remove_color_range(w))

@@ -42,9 +42,11 @@ class ColorDetectionController(StreamAlgorithmController):
         super().__init__(algorithm_config, theme, parent)
 
         self.logger = LoggerService()
+        self.provides_custom_rendering = True
 
         # Initialize color detector service
-        self.color_detector = ColorDetectionService()
+        # IMPORTANT: Don't pass parent so it can be moved to worker thread
+        self.color_detector = ColorDetectionService(parent=None)
 
         # State
         self.detection_count = 0
@@ -52,9 +54,13 @@ class ColorDetectionController(StreamAlgorithmController):
         # Connect detector signals
         self.color_detector.detectionsReady.connect(self._on_detections_ready)
         self.color_detector.performanceUpdate.connect(self._on_performance_update)
-        self.provides_custom_rendering = True
 
-        self.logger.info("ColorDetectionController initialized")
+        # Apply initial config from widget to service (setup_ui was called in super().__init__)
+        if hasattr(self, 'control_widget'):
+            initial_config = self.control_widget.get_config()
+            self._on_config_changed(initial_config)
+
+        self.logger.info(f"ColorDetectionController initialized (provides_custom_rendering={self.provides_custom_rendering})")
 
     def setup_ui(self):
         """Setup the algorithm-specific UI."""
@@ -66,6 +72,11 @@ class ColorDetectionController(StreamAlgorithmController):
         self.control_widget = ColorDetectionControlWidget()
         self.control_widget.configChanged.connect(self._on_config_changed)
         layout.addWidget(self.control_widget)
+        
+        # Apply initial config from widget to service (if detector is initialized)
+        if hasattr(self, 'color_detector'):
+            initial_config = self.control_widget.get_config()
+            self._on_config_changed(initial_config)
 
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict]:
         """
@@ -102,12 +113,15 @@ class ColorDetectionController(StreamAlgorithmController):
 
             # Create and emit annotated frame
             annotated_frame = self.color_detector.create_annotated_frame(frame, detections)
+            self.logger.debug(f"Emitting frameProcessed signal (frame shape: {annotated_frame.shape})")
             self.frameProcessed.emit(annotated_frame)
 
             return detection_dicts
 
         except Exception as e:
             self.logger.error(f"Error processing frame: {e}")
+            # Still emit the original frame so video display doesn't freeze
+            self.frameProcessed.emit(frame.copy())
             return []
 
     @Slot(list, float, np.ndarray)

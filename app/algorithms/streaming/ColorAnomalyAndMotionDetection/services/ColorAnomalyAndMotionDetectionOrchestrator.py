@@ -72,9 +72,6 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Temporal voting state
         self._temporal_detection_history: deque = deque(maxlen=self.config.temporal_window_frames)
 
-        # Previous frame for camera movement detection
-        self._prev_gray: Optional[np.ndarray] = None
-
         self.logger.info("Color anomaly and motion detection orchestrator initialized")
 
     def update_config(self, config: ColorAnomalyAndMotionDetectionConfig):
@@ -450,9 +447,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         # Check for camera movement
         detection_start = time.perf_counter()
-        is_camera_moving = False
-        if config.pause_on_camera_movement and self._prev_gray is not None:
-            is_camera_moving = self.motion_service.check_camera_movement(processing_gray, config)
+        is_camera_moving = self.motion_service.check_camera_movement(processing_gray, config)
 
         # Calculate early stopping limit
         max_to_detect = config.max_detections_to_render * 2 if config.max_detections_to_render > 0 else 0
@@ -472,9 +467,6 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         timings.color_detection_ms = (time.perf_counter() - color_start) * 1000
 
         timings.detection_ms = (time.perf_counter() - detection_start) * 1000
-
-        # Store current frame for next camera movement check
-        self._prev_gray = processing_gray.copy()
 
         # Fusion & Temporal Smoothing
         fusion_start = time.perf_counter()

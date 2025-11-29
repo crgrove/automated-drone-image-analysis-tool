@@ -294,10 +294,17 @@ class MotionDetectionService(QObject):
         Returns:
             True if camera movement detected, False otherwise
         """
-        if not config.pause_on_camera_movement or self._prev_gray is None:
+        if not config.pause_on_camera_movement:
+            return False
+
+        if self._prev_gray is None:
+            # First frame - store it and return no movement
+            self._prev_gray = frame_gray.copy()
             return False
 
         if self._prev_gray.shape != frame_gray.shape:
+            # Shape mismatch - update and return no movement
+            self._prev_gray = frame_gray.copy()
             return False
 
         # Quick frame difference check
@@ -308,6 +315,9 @@ class MotionDetectionService(QObject):
         changed_pixels = np.count_nonzero(diff_mask)
         total_pixels = diff_mask.size
         change_ratio = changed_pixels / total_pixels
+
+        # Update previous frame for next check (important: do this regardless of result)
+        self._prev_gray = frame_gray.copy()
 
         # If more than threshold of frame changed, assume camera movement
         return change_ratio > config.camera_movement_threshold

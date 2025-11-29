@@ -7,6 +7,9 @@ from core.controllers.SelectionDialog import SelectionDialog
 from core.controllers.images.MainWindow import MainWindow
 from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
 from core.controllers.streaming.StreamingGuide import StreamingGuide
+from core.services.SettingsService import SettingsService
+from core.services.LoggerService import LoggerService
+from helpers.PickleHelper import PickleHelper
 from multiprocessing import freeze_support
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from PySide6.QtGui import QIcon
@@ -17,6 +20,46 @@ os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
 version = '2.0.0 Beta'
+
+
+def check_and_update_pickle_files(app_version):
+    """Check pickle file versions and update if necessary.
+    
+    This function runs at application startup to ensure that pickle files
+    (drones.pkl and xmp.pkl) are up-to-date with the current app version.
+    
+    Args:
+        app_version (str): The current application version string.
+    """
+    logger = LoggerService()
+    settings_service = SettingsService()
+    
+    try:
+        current_version = settings_service.get_setting('app_version')
+        
+        # Copy drones.pkl if:
+        # 1. No app version is stored (first run)
+        # 2. No drone sensor file exists in AppData
+        # 3. New app version is greater than stored version
+        if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
+            settings_service.set_setting('app_version', app_version)
+            PickleHelper.copy_pickle('drones.pkl')
+            logger.info(f"Copied drones.pkl to AppData (first run or missing file)")
+        else:
+            current_version_int = PickleHelper.version_to_int(current_version)
+            new_version_int = PickleHelper.version_to_int(app_version)
+            if new_version_int > current_version_int:
+                settings_service.set_setting('app_version', app_version)
+                PickleHelper.copy_pickle('drones.pkl')
+                logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
+        
+        # Ensure xmp.pkl exists
+        if PickleHelper.get_xmp_mapping() is None:
+            PickleHelper.copy_pickle('xmp.pkl')
+            logger.info("Copied xmp.pkl to AppData")
+            
+    except Exception as e:
+        logger.error(f"Error checking/updating pickle files: {e}")
 
 
 def main():
@@ -33,6 +76,9 @@ def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
+    
+    # Check and update pickle files on every startup
+    check_and_update_pickle_files(version)
 
     # Show selection dialog first; launch MainWindow when Images is chosen
     dlg = SelectionDialog('Dark')

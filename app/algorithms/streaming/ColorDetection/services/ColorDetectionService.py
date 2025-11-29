@@ -167,8 +167,8 @@ class ColorDetectionService(QObject):
     performanceUpdate = Signal(dict)  # processing_time, fps, detections_count
     configurationChanged = Signal(dict)  # current config state
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.logger = LoggerService()
 
         # Detection configuration
