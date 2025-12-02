@@ -667,7 +667,17 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.aoi_controller.select_aoi(aoi_index, visible_index)
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
-            self.aoi_controller.toggle_aoi_flag()
+            # Check if we're in gallery mode
+            if hasattr(self, 'gallery_mode') and self.gallery_mode:
+                # Use gallery controller for flagging
+                if hasattr(self, 'gallery_controller') and self.gallery_controller:
+                    self.logger.debug(f"F key pressed in gallery mode, calling gallery_controller.toggle_aoi_flag()")
+                    self.gallery_controller.toggle_aoi_flag()
+                else:
+                    self.logger.warning(f"F key pressed in gallery mode but gallery_controller not available")
+            else:
+                # Use single-image AOI controller for flagging
+                self.aoi_controller.toggle_aoi_flag()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.NoModifier:
             # Show GPS map with 'M' key
             self.gps_map_controller.show_map()

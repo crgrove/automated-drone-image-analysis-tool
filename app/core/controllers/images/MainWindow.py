@@ -784,7 +784,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._auto_start_requested = False  # Prevent re-execution
                 self._startButton_clicked()
 
+        # Connect to review requested signal to load existing results
+        def _on_review_requested(file_path):
+            """Handle review request - load XML file and open viewer."""
+            try:
+                self.logger.info(f"Review requested for file: {file_path}")
+                # Load the XML file
+                self._process_xml_file(file_path)
+                # Automatically open the Viewer
+                self._viewResultsButton_clicked()
+            except Exception as e:
+                self.logger.error(f"Error loading results file: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error Loading Results",
+                    f"Failed to load results file:\n{str(e)}"
+                )
+
         wizard.wizardCompleted.connect(_on_wizard_completed)
+        wizard.reviewRequested.connect(_on_review_requested)
         wizard.exec()
 
         # Wizard closed - MainWindow remains open

@@ -830,6 +830,164 @@ class GalleryController:
         except Exception as e:
             self.logger.error(f"Error syncing selection from AOI controller: {e}")
 
+    def toggle_aoi_flag(self):
+        """Toggle the flag status of the currently selected AOI in the gallery."""
+        self.logger.debug("===== toggle_aoi_flag() called =====")
+        
+        if not self.ui_component:
+            self.logger.warning("toggle_aoi_flag: ui_component is None")
+            return
+        
+        if not self.ui_component.gallery_view:
+            self.logger.warning("toggle_aoi_flag: gallery_view is None")
+            return
+
+        current_index = self.ui_component.gallery_view.currentIndex()
+        self.logger.debug(f"toggle_aoi_flag: current_index.isValid() = {current_index.isValid()}, row = {current_index.row() if current_index.isValid() else 'N/A'}")
+        
+        if not current_index.isValid():
+            self.logger.warning("toggle_aoi_flag: No valid current index in gallery")
+            return
+
+        aoi_info = self.model.get_aoi_info(current_index)
+        self.logger.debug(f"toggle_aoi_flag: aoi_info = {aoi_info}")
+        
+        if aoi_info:
+            image_idx, aoi_idx, _ = aoi_info
+            self.logger.info(f"Toggling flag for gallery item at row {current_index.row()}: image {image_idx}, AOI {aoi_idx}")
+            self.toggle_aoi_flag_by_index(image_idx, aoi_idx)
+        else:
+            self.logger.error(f"Could not get AOI info for index at row {current_index.row()}")
+
+    def toggle_aoi_flag_by_index(self, image_idx, aoi_idx):
+        """
+        Toggle the flag status of the specified AOI without launching dialogs.
+
+        Args:
+            image_idx: Index of the image containing the AOI
+            aoi_idx: Index of the AOI within the image
+        """
+        if image_idx is None or image_idx < 0 or aoi_idx is None or aoi_idx < 0:
+            return
+
+        # Use the AOI controller's flagged_aois dictionary to maintain consistency
+        if not hasattr(self.parent, 'aoi_controller'):
+            return
+
+        aoi_ctrl = self.parent.aoi_controller
+
+        # Get or create flagged set for the image
+        if image_idx not in aoi_ctrl.flagged_aois:
+            aoi_ctrl.flagged_aois[image_idx] = set()
+
+        flagged_set = aoi_ctrl.flagged_aois[image_idx]
+
+        # Toggle flag status
+        is_now_flagged = aoi_idx not in flagged_set
+        if is_now_flagged:
+            flagged_set.add(aoi_idx)
+        else:
+            flagged_set.remove(aoi_idx)
+
+        # Save to XML using the AOI controller's method
+        aoi_ctrl.save_flagged_aoi_to_xml(image_idx, aoi_idx, is_now_flagged)
+
+        # Update the AOI data in the images list
+        if (hasattr(self.parent, 'images') and 
+                0 <= image_idx < len(self.parent.images)):
+            image = self.parent.images[image_idx]
+            if 'areas_of_interest' in image and 0 <= aoi_idx < len(image['areas_of_interest']):
+                aoi = image['areas_of_interest'][aoi_idx]
+                aoi['flagged'] = is_now_flagged
+
+        # Check if we need to reload gallery due to filtering
+        needs_reload = self.filter_flagged_only  # If filtering by flagged status, need to reload
+        
+        if needs_reload:
+            # Save which AOI we just toggled so we can reselect it
+            toggled_key = (image_idx, aoi_idx)
+            # Reload the gallery with current filters
+            self.load_all_aois()
+            # Try to reselect the toggled item (if it's still visible after filtering)
+            if toggled_key in self.model.aoi_to_row:
+                row = self.model.aoi_to_row[toggled_key]
+                self.ui_component.gallery_view.setCurrentIndex(self.model.index(row, 0))
+        else:
+            # Just refresh the flag display without reloading
+            self._refresh_gallery_flag_display(image_idx, aoi_idx)
+
+        # Update GPS map if it's open to reflect flagged status change
+        if hasattr(self.parent, 'gps_map_controller') and self.parent.gps_map_controller.map_dialog:
+            if self.parent.gps_map_controller.map_dialog.isVisible():
+                # Re-extract GPS data to update has_flagged status
+                self.parent.gps_map_controller.extract_gps_data()
+                # Find the image index in GPS data
+                gps_index = None
+                for i, data in enumerate(self.parent.gps_map_controller.gps_data):
+                    if data['index'] == image_idx:
+                        gps_index = i
+                        break
+                # Update the map with refreshed data
+                if gps_index is not None:
+                    self.parent.gps_map_controller.map_dialog.update_gps_data(
+                        self.parent.gps_map_controller.gps_data,
+                        gps_index
+                    )
+
+        # Always refresh the AOI display if we're viewing this image (regardless of mode)
+        # This ensures flags are visible when switching back to single-image mode
+        if (hasattr(self.parent, 'current_image') and
+                self.parent.current_image == image_idx):
+            if hasattr(self.parent, 'aoi_controller') and self.parent.aoi_controller.ui_component:
+                self.parent.aoi_controller.ui_component.refresh_aoi_display()
+
+    def _refresh_gallery_flag_display(self, image_idx, aoi_idx):
+        """Refresh the gallery display for a specific AOI's flag status."""
+        try:
+            if not self.model or not self.ui_component or not self.ui_component.gallery_view:
+                return
+
+            # Save the current selection to restore it after update
+            current_index = self.ui_component.gallery_view.currentIndex()
+            current_row = current_index.row() if current_index.isValid() else -1
+            
+            # Update the AOI data in the model's items list
+            cache_key = (image_idx, aoi_idx)
+            if cache_key in self.model.aoi_to_row:
+                row = self.model.aoi_to_row[cache_key]
+                self.logger.debug(f"Refreshing flag display for image {image_idx}, AOI {aoi_idx} at row {row} (current selection: row {current_row})")
+                
+                # Update the aoi_data in the model's items list
+                if 0 <= row < len(self.model.aoi_items):
+                    _, _, aoi_data = self.model.aoi_items[row]
+                    # Get the current flagged status from the images list
+                    if (hasattr(self.parent, 'images') and 
+                            0 <= image_idx < len(self.parent.images)):
+                        image = self.parent.images[image_idx]
+                        if 'areas_of_interest' in image and 0 <= aoi_idx < len(image['areas_of_interest']):
+                            aoi_data['flagged'] = image['areas_of_interest'][aoi_idx].get('flagged', False)
+
+                index = self.model.index(row, 0)
+                # Block signals temporarily to prevent selection changes
+                self.ui_component.gallery_view.blockSignals(True)
+                # Emit dataChanged to trigger repaint
+                self.model.dataChanged.emit(index, index, [Qt.UserRole, Qt.DecorationRole])
+                # Restore the selection
+                if current_index.isValid():
+                    self.ui_component.gallery_view.setCurrentIndex(current_index)
+                    self.logger.debug(f"Restored selection to row {current_index.row()}")
+                # Re-enable signals
+                self.ui_component.gallery_view.blockSignals(False)
+                # Also update the viewport
+                self.ui_component.gallery_view.viewport().update()
+            else:
+                self.logger.warning(f"Could not find row for image {image_idx}, AOI {aoi_idx} in model")
+
+        except Exception as e:
+            self.logger.error(f"Error refreshing gallery flag display: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
     def setup_gallery_mode_ui(self):
         """Set up the gallery mode UI."""
         try:
@@ -1176,6 +1334,10 @@ class GalleryController:
                 self.parent.gallery_widget.setVisible(True)
                 self.parent.gallery_widget.show()
                 self.parent.gallery_widget.raise_()
+                
+                # Give focus to gallery view so keyboard shortcuts work
+                if self.ui_component and self.ui_component.gallery_view:
+                    self.ui_component.gallery_view.setFocus()
 
                 # Only sync if filters have changed
                 if hasattr(self.parent, '_last_filter_sync'):
@@ -1248,6 +1410,10 @@ class GalleryController:
 
                 # Restore single-image mode header title
                 self._restore_single_image_header()
+                
+                # Refresh AOI display to show any flag changes made in gallery mode
+                if hasattr(self.parent, 'aoi_controller') and self.parent.aoi_controller.ui_component:
+                    self.parent.aoi_controller.ui_component.refresh_aoi_display()
 
                 self.logger.info("Switched to single-image view mode")
 

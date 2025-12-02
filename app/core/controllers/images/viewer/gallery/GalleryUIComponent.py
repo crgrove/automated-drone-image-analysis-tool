@@ -8,9 +8,9 @@ and visual rendering of AOIs from all loaded images.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QListView, QPushButton, QFrame,
                                QAbstractItemView, QStyledItemDelegate, QStyle,
-                               QStyleOptionViewItem)
+                               QStyleOptionViewItem, QApplication)
 from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent, QObject
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon
+from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon, QKeyEvent
 import qtawesome as qta
 
 from core.services.LoggerService import LoggerService
@@ -26,6 +26,11 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         # Cache the size hint for consistency and performance
         # Only thumbnail + spacing, no text overlay needed
         self._cached_size_hint = QSize(190, 190)
+        self.gallery_controller = None  # Will be set by GalleryUIComponent
+        
+        # Create flag icons (same as single-image mode)
+        self.flag_icon_active = qta.icon('fa6s.flag', color='#FF7043').pixmap(16, 16)
+        self.flag_icon_inactive = qta.icon('fa6s.flag', color='#808080').pixmap(16, 16)
 
     def sizeHint(self, option, index):
         """Return the size hint for each item."""
@@ -83,21 +88,30 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             painter.setPen(QPen(QColor(100, 100, 100), 1))
             painter.drawRect(thumbnail_rect)
 
-            # Draw flagged indicator
+            # Draw flag icon in bottom-right corner (same as single-image mode)
             flagged = aoi_data.get('flagged', False)
-            if flagged:
-                flag_rect = QRect(thumbnail_rect.right() - 30, thumbnail_rect.top() + 5, 25, 25)
-                painter.fillRect(flag_rect, QColor(255, 50, 50, 200))
-                painter.setPen(QPen(QColor(255, 255, 255), 2))
-                painter.drawText(flag_rect, Qt.AlignCenter, "🚩")
+            flag_icon = self.flag_icon_active if flagged else self.flag_icon_inactive
+            flag_x = thumbnail_rect.right() - 20
+            flag_y = thumbnail_rect.bottom() - 20
+            painter.drawPixmap(flag_x, flag_y, flag_icon)
 
-            # Draw comment indicator
+            # Draw comment indicator in top-left corner
             comment = aoi_data.get('user_comment', '').strip()
             if comment:
-                comment_rect = QRect(thumbnail_rect.left() + 5, thumbnail_rect.top() + 5, 25, 25)
-                painter.fillRect(comment_rect, QColor(50, 150, 255, 200))
-                painter.setPen(QPen(QColor(255, 255, 255), 2))
-                painter.drawText(comment_rect, Qt.AlignCenter, "💬")
+                # Use similar icon approach for comments
+                comment_x = thumbnail_rect.left() + 5
+                comment_y = thumbnail_rect.top() + 5
+                # Draw a simple colored circle to indicate comment
+                painter.setBrush(QColor(255, 215, 0))  # Gold color for comments
+                painter.setPen(QPen(QColor(255, 255, 255), 1))
+                painter.drawEllipse(comment_x, comment_y, 16, 16)
+                # Draw text indicator
+                painter.setPen(QPen(QColor(0, 0, 0), 2))
+                font = painter.font()
+                font.setPointSize(8)
+                font.setBold(True)
+                painter.setFont(font)
+                painter.drawText(QRect(comment_x, comment_y, 16, 16), Qt.AlignCenter, "C")
 
             # Draw color swatch indicator (bottom-left corner of thumbnail)
             color_info = user_data.get('color_info')
@@ -201,12 +215,26 @@ class GalleryUIComponent(QObject):
         self.gallery_view.setSelectionMode(QAbstractItemView.SingleSelection)
         self.gallery_view.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.gallery_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Enable keyboard focus so keyboard shortcuts work
+        self.gallery_view.setFocusPolicy(Qt.StrongFocus)
+        
+        # Override keyPressEvent to forward F key to parent window (like QtImageViewer does)
+        original_keyPressEvent = self.gallery_view.keyPressEvent
+        def keyPressEvent(event):
+            if event.key() == Qt.Key_F and event.modifiers() == Qt.NoModifier:
+                # Forward F key to parent window's keyPressEvent
+                if self.gallery_view.window():
+                    self.gallery_view.window().keyPressEvent(event)
+                return
+            original_keyPressEvent(event)
+        self.gallery_view.keyPressEvent = keyPressEvent
 
         # Set fixed grid size for consistent columns
         self.gallery_view.setGridSize(QSize(200, 200))  # Width, Height (thumbnail + spacing)
 
         # Set custom delegate
         delegate = AOIGalleryDelegate(self.gallery_view)
+        delegate.gallery_controller = self.gallery_controller
         self.gallery_view.setItemDelegate(delegate)
 
         # Style the view
@@ -228,7 +256,7 @@ class GalleryUIComponent(QObject):
         self.gallery_view.clicked.connect(self._on_item_clicked)
         self.gallery_view.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
-        # Listen for layout/visibility changes to know when the view is ready
+        # Listen for layout/visibility changes and handle flag button clicks
         self.gallery_view.installEventFilter(self)
         self.gallery_view.viewport().installEventFilter(self)
 
@@ -313,6 +341,11 @@ class GalleryUIComponent(QObject):
         try:
             if not index.isValid():
                 return
+
+            # Set the clicked item as the current selection (needed for keyboard shortcuts)
+            self.gallery_view.setCurrentIndex(index)
+            # Give focus to the gallery view so keyboard shortcuts work
+            self.gallery_view.setFocus()
 
             # Get AOI info from model
             model = self.gallery_view.model()
@@ -401,8 +434,65 @@ class GalleryUIComponent(QObject):
             self.logger.debug(f"Error in _on_model_ready: {e}")
 
     def eventFilter(self, obj, event):
-        """Watch for the first time the view/viewport has a valid size."""
+        """Watch for the first time the view/viewport has a valid size, handle flag button clicks, and keyboard events."""
         try:
+            # Handle mouse clicks on flag button
+            if (obj == self.gallery_view.viewport() and 
+                    event.type() == QEvent.MouseButtonPress and
+                    event.button() == Qt.LeftButton):
+                # Get the item at the click position
+                index = self.gallery_view.indexAt(event.pos())
+                if index.isValid():
+                    # Get model and delegate
+                    model = self.gallery_view.model()
+                    delegate = self.gallery_view.itemDelegate()
+                    
+                    if model and delegate and hasattr(delegate, 'gallery_controller'):
+                        # Get item rect
+                        option = QStyleOptionViewItem()
+                        option.initFrom(self.gallery_view)
+                        option.rect = self.gallery_view.visualRect(index)
+                        
+                        # Check if click is on flag button using delegate's logic
+                        user_data = index.data(Qt.UserRole)
+                        if user_data:
+                            aoi_data = user_data.get('aoi_data', {})
+                            image_idx = user_data.get('image_idx')
+                            aoi_idx = user_data.get('aoi_idx')
+                            
+                            if image_idx is not None and aoi_idx is not None:
+                                # Calculate thumbnail rect
+                                thumbnail_size = QSize(180, 180)
+                                item_spacing = 10
+                                thumbnail_rect = QRect(
+                                    option.rect.left() + item_spacing // 2,
+                                    option.rect.top() + item_spacing // 2,
+                                    thumbnail_size.width(),
+                                    thumbnail_size.height()
+                                )
+                                
+                                # Check if click is on flag button (bottom-right corner, 16x16 icon)
+                                flag_rect = QRect(thumbnail_rect.right() - 20, thumbnail_rect.bottom() - 20, 16, 16)
+                                if flag_rect.contains(event.pos()):
+                                    # Ensure this item is selected before toggling
+                                    if self.gallery_view.currentIndex() != index:
+                                        self.gallery_view.setCurrentIndex(index)
+                                    # Toggle flag
+                                    if delegate.gallery_controller:
+                                        delegate.gallery_controller.toggle_aoi_flag_by_index(image_idx, aoi_idx)
+                                    # Prevent the click from propagating to cause other selections
+                                    event.accept()
+                                    return True
+                                
+                                # Check if click is on comment button (top-left corner, 16x16 icon)
+                                comment_rect = QRect(thumbnail_rect.left() + 5, thumbnail_rect.top() + 5, 16, 16)
+                                if comment_rect.contains(event.pos()):
+                                    # Could add comment editing here in the future
+                                    # For now, just accept the event to prevent item selection
+                                    event.accept()
+                                    return True
+            
+            # Watch for the first time the view/viewport has a valid size
             if event.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest):
                 if (self.gallery_widget and self.gallery_widget.isVisible() and
                         not self._initial_thumbnails_loaded):

@@ -5,7 +5,7 @@ This model provides a flattened view of all AOIs from all images, supporting
 lazy loading and efficient rendering of large datasets.
 """
 
-from PySide6.QtCore import QAbstractListModel, Qt, QModelIndex, QSize, QThread, Signal, Slot
+from PySide6.QtCore import QAbstractListModel, Qt, QModelIndex, QSize, QThread, Signal, Slot, QTimer
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QPixmap, QIcon, QImage, QColor
 import numpy as np
@@ -79,6 +79,14 @@ class AOIGalleryModel(QAbstractListModel):
 
         # Cancellation flag for color calculation
         self._cancel_color_calc = False
+
+        # Batch queuing timer for thumbnails (to avoid blocking UI)
+        self._batch_queue_timer = QTimer()
+        self._batch_queue_timer.setSingleShot(False)
+        self._batch_queue_timer.timeout.connect(self._process_batch_queue)
+        self._batch_queue_items = []  # List of (start_row, end_row, high_priority) tuples to queue
+        self._batch_queue_index = 0  # Current position in batch queue
+        self._batch_size = 50  # Queue 50 thumbnails per batch
 
     def set_viewer(self, viewer):
         """Set reference to the parent viewer."""
@@ -282,18 +290,17 @@ class AOIGalleryModel(QAbstractListModel):
         return self.placeholder_icon
 
     def _queue_visible_thumbnails(self):
-        """Queue visible thumbnails for priority loading."""
-        # Queue thumbnails for all items initially
-        # This ensures thumbnails start loading even if viewport isn't ready yet
-        # The UI component will later prioritize visible items via _load_visible_thumbnails()
-        if self.viewer and len(self.aoi_items) > 0:
-            # Queue ALL items - this ensures every thumbnail gets queued
-            # The thumbnail loader will handle duplicates and prioritize based on high_priority flag
-            self.queue_thumbnails_for_range(0, len(self.aoi_items) - 1, high_priority=False)
+        """Queue visible thumbnails for priority loading (asynchronously to avoid blocking UI)."""
+        # Don't queue all items at once - this blocks the UI with large datasets
+        # Instead, only queue visible items initially, and let the UI component
+        # trigger loading of visible thumbnails when the view is ready
+        # The UI component will call _load_visible_thumbnails() which queues visible items
+        # For now, do nothing - let the UI component handle it
+        pass
 
     def queue_thumbnails_for_range(self, start_row: int, end_row: int, high_priority: bool = False):
         """
-        Queue thumbnails for a range of rows.
+        Queue thumbnails for a range of rows (batched to avoid blocking UI).
 
         Args:
             start_row: Start row index
@@ -303,6 +310,84 @@ class AOIGalleryModel(QAbstractListModel):
         if not self.viewer:
             return
 
+        # Clamp to valid range
+        start_row = max(0, start_row)
+        end_row = min(end_row, len(self.aoi_items) - 1)
+        
+        if start_row > end_row or len(self.aoi_items) == 0:
+            return
+
+        # For high priority (visible) items, queue immediately in small batches
+        # For low priority (off-screen) items, use batched async queuing
+        if high_priority:
+            # Queue visible items immediately but in small batches to avoid blocking
+            self._queue_range_batched(start_row, end_row, high_priority=True, batch_size=20)
+        else:
+            # Queue off-screen items asynchronously using timer
+            self._queue_range_batched(start_row, end_row, high_priority=False, batch_size=50)
+
+    def _queue_range_batched(self, start_row: int, end_row: int, high_priority: bool, batch_size: int):
+        """
+        Queue thumbnails for a range in batches to avoid blocking the UI.
+
+        Args:
+            start_row: Start row index
+            end_row: End row index (inclusive)
+            high_priority: Whether these are high priority
+            batch_size: Number of items to queue per batch
+        """
+        # Process in batches to avoid blocking UI
+        current_row = start_row
+        total_rows = end_row - start_row + 1
+        
+        # Process first batch immediately (for high priority visible items)
+        batch_end = min(current_row + batch_size - 1, end_row)
+        self._process_thumbnail_queue_batch(current_row, batch_end, high_priority)
+        current_row = batch_end + 1
+        
+        # If there are more items, queue them asynchronously
+        if current_row <= end_row:
+            # Add remaining items to batch queue
+            self._batch_queue_items.append((current_row, end_row, high_priority))
+            
+            # Start timer if not already running
+            if not self._batch_queue_timer.isActive():
+                self._batch_queue_timer.start(10)  # Process every 10ms
+
+    def _process_batch_queue(self):
+        """Process the next batch of thumbnail queue items."""
+        if not self._batch_queue_items:
+            self._batch_queue_timer.stop()
+            return
+        
+        # Process one batch from the queue
+        start_row, end_row, high_priority = self._batch_queue_items[0]
+        batch_size = 20 if high_priority else 50
+        
+        # Process a batch
+        batch_end = min(start_row + batch_size - 1, end_row)
+        self._process_thumbnail_queue_batch(start_row, batch_end, high_priority)
+        
+        # Update or remove the queue item
+        if batch_end >= end_row:
+            # This range is complete, remove it
+            self._batch_queue_items.pop(0)
+        else:
+            # Update start_row for next batch
+            self._batch_queue_items[0] = (batch_end + 1, end_row, high_priority)
+        
+        # Allow UI to process events between batches
+        QApplication.processEvents()
+
+    def _process_thumbnail_queue_batch(self, start_row: int, end_row: int, high_priority: bool):
+        """
+        Process a single batch of thumbnail queueing.
+
+        Args:
+            start_row: Start row index
+            end_row: End row index (inclusive)
+            high_priority: Whether these are high priority
+        """
         for row in range(start_row, min(end_row + 1, len(self.aoi_items))):
             if row < 0 or row >= len(self.aoi_items):
                 continue
@@ -503,6 +588,11 @@ class AOIGalleryModel(QAbstractListModel):
 
     def cleanup(self):
         """Cleanup resources when model is destroyed."""
+        # Stop batch queue timer
+        if hasattr(self, '_batch_queue_timer'):
+            self._batch_queue_timer.stop()
+            self._batch_queue_items.clear()
+        
         if hasattr(self, 'thumbnail_loader'):
             self.thumbnail_loader.shutdown()
 
