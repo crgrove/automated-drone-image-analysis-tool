@@ -69,19 +69,17 @@ class ColorAnomalyService(QObject):
         detections = []
         timestamp = time.time()
 
-        # OPTIMIZATION: Downsample 2x for color analysis (4x fewer pixels = 4x faster)
-        h_orig, w_orig = frame_bgr.shape[:2]
-        downsampled = cv2.resize(frame_bgr, (w_orig // 2, h_orig // 2), interpolation=cv2.INTER_LINEAR)
+        # Use frame at processing resolution (no downsampling - respects user-specified resolution)
+        h, w = frame_bgr.shape[:2]
 
         # Step 1: Quantize colors
         bits = config.color_quantization_bits
         scale = 2 ** (8 - bits)
 
         # Quantize by dividing and rounding
-        quantized = (downsampled // scale).astype(np.uint8)
+        quantized = (frame_bgr // scale).astype(np.uint8)
 
         # Step 2: Build histogram
-        h, w = quantized.shape[:2]
         bins_per_channel = 2 ** bits
 
         # Vectorized index computation
@@ -109,11 +107,8 @@ class ColorAnomalyService(QObject):
         rare_bins = (histogram > 0) & (histogram < threshold)
         rare_bins[0] = False  # Don't mark bin 0 as rare
 
-        # Step 4: Create binary mask of rare color pixels
-        rare_mask_small = rare_bins[color_indices].astype(np.uint8) * 255
-
-        # Upscale mask back to original processing resolution
-        rare_mask = cv2.resize(rare_mask_small, (w_orig, h_orig), interpolation=cv2.INTER_NEAREST)
+        # Step 4: Create binary mask of rare color pixels at processing resolution
+        rare_mask = rare_bins[color_indices].astype(np.uint8) * 255
 
         # Morphology to clean up noise
         morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
@@ -150,11 +145,9 @@ class ColorAnomalyService(QObject):
             else:
                 dominant_color = (0, 0, 0)
 
-            # Confidence based on rarity
-            cy_down = cy // 2
-            cx_down = cx // 2
-            if 0 <= cy_down < h and 0 <= cx_down < w:
-                bin_idx = color_indices[cy_down, cx_down]
+            # Confidence based on rarity (use full resolution coordinates)
+            if 0 <= cy < h and 0 <= cx < w:
+                bin_idx = color_indices[cy, cx]
                 bin_count = histogram[bin_idx]
                 rarity = 1.0 - (bin_count / total_pixels)
                 confidence = min(1.0, rarity * 2.0)

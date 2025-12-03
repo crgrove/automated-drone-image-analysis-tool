@@ -89,6 +89,24 @@ class MapExportDialog(QDialog):
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
 
+        # CalTopo-specific options
+        self.caltopo_options_group = QGroupBox("CalTopo Options")
+        caltopo_options_layout = QVBoxLayout()
+
+        self.include_images = QCheckBox("Include Images")
+        self.include_images.setChecked(True)  # Default: on
+        self.include_images.setToolTip("Upload photos to CalTopo markers (CalTopo only)")
+        self.include_images.setEnabled(False)  # Disabled by default, enabled when CalTopo is selected
+
+        caltopo_options_layout.addWidget(self.include_images)
+        self.caltopo_options_group.setLayout(caltopo_options_layout)
+        layout.addWidget(self.caltopo_options_group)
+
+        # Connect export type changes to enable/disable CalTopo options
+        self.kml_radio.toggled.connect(self._on_export_type_changed)
+        self.caltopo_radio.toggled.connect(self._on_export_type_changed)
+        self._on_export_type_changed()  # Set initial state
+
         # Buttons
         button_layout = QHBoxLayout()
         button_layout.addStretch()
@@ -139,3 +157,18 @@ class MapExportDialog(QDialog):
             bool: True if coverage area should be included
         """
         return self.include_coverage.isChecked()
+
+    def should_include_images(self):
+        """
+        Check if images should be included (CalTopo only).
+
+        Returns:
+            bool: True if images should be uploaded to CalTopo markers
+        """
+        return self.include_images.isChecked()
+
+    def _on_export_type_changed(self):
+        """Handle export type radio button changes."""
+        is_caltopo = self.caltopo_radio.isChecked()
+        self.include_images.setEnabled(is_caltopo)
+        self.caltopo_options_group.setEnabled(is_caltopo)

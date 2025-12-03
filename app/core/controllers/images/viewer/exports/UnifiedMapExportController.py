@@ -331,6 +331,7 @@ class UnifiedMapExportController:
             include_locations = dialog.should_include_locations()
             include_flagged_aois = dialog.should_include_flagged_aois()
             include_coverage = dialog.should_include_coverage()
+            include_images = dialog.should_include_images() if export_type == 'caltopo' else False
 
             # Validate selections
             if not (include_locations or include_flagged_aois or include_coverage):
@@ -345,7 +346,7 @@ class UnifiedMapExportController:
             if export_type == 'kml':
                 self._export_to_kml(include_locations, include_flagged_aois, include_coverage)
             else:  # caltopo
-                self._export_to_caltopo(include_locations, include_flagged_aois, include_coverage)
+                self._export_to_caltopo(include_locations, include_flagged_aois, include_coverage, include_images)
 
         except Exception as e:
             self.logger.error(f"Error in unified map export: {str(e)}")
@@ -443,52 +444,28 @@ class UnifiedMapExportController:
                 f"Failed to export to KML:\n{str(e)}"
             )
 
-    def _export_to_caltopo(self, include_locations, include_flagged_aois, include_coverage):
+    def _export_to_caltopo(self, include_locations, include_flagged_aois, include_coverage, include_images=True):
         """
         Export to CalTopo.
 
         Args:
             include_locations: Whether to include image locations
             include_flagged_aois: Whether to include flagged AOIs
-            include_coverage: Whether to include coverage extent (not yet supported for CalTopo)
+            include_coverage: Whether to include coverage extent polygons
+            include_images: Whether to upload photos to CalTopo markers
         """
         try:
-            # CalTopo export currently only supports markers, not polygons
-            # So we can export locations and flagged AOIs, but not coverage extent
-            if include_coverage and not (include_locations or include_flagged_aois):
-                QMessageBox.warning(
-                    self.parent,
-                    "CalTopo Export Limitation",
-                    "CalTopo export currently only supports point markers (image locations and flagged AOIs).\n\n"
-                    "Coverage extent polygons are not yet supported for CalTopo export.\n"
-                    "Please also select image locations or flagged AOIs, or export to KML instead."
-                )
-                return
-
-            if include_coverage:
-                # Warn user that coverage extent won't be included
-                reply = QMessageBox.question(
-                    self.parent,
-                    "Coverage Extent Not Supported",
-                    "CalTopo export does not support coverage extent polygons.\n\n"
-                    "Only image locations and flagged AOIs will be exported.\n\n"
-                    "Continue with export?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
-                )
-                if reply != QMessageBox.Yes:
-                    return
-
             # Use the existing CalTopo export controller
-            # We'll need to prepare the markers based on selections
             caltopo_controller = CalTopoExportController(self.parent, self.logger)
 
-            # Export markers based on selections
+            # Export markers and polygons based on selections
             caltopo_controller.export_to_caltopo(
                 self.parent.images,
                 self.parent.aoi_controller.flagged_aois,
                 include_flagged_aois=include_flagged_aois,
-                include_locations=include_locations
+                include_locations=include_locations,
+                include_coverage_area=include_coverage,
+                include_images=include_images
             )
 
         except Exception as e:

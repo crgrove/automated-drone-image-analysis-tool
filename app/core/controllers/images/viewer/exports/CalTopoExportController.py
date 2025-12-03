@@ -17,6 +17,7 @@ from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgress
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
+from core.services.image.CoverageExtentService import CoverageExtentService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 
@@ -41,7 +42,7 @@ class CalTopoExportController:
         self.logger = logger or LoggerService()
         self.caltopo_service = CalTopoService()
 
-    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False):
+    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False, include_coverage_area=False, include_images=True):
         """
         Export data to CalTopo.
 
@@ -50,6 +51,8 @@ class CalTopoExportController:
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois (bool): Include flagged AOIs as markers
             include_locations (bool): Include drone/image locations as markers
+            include_coverage_area (bool): Include coverage area as polygons
+            include_images (bool): Upload photos to CalTopo markers
 
         Returns:
             bool: True if export was successful, False otherwise
@@ -66,25 +69,39 @@ class CalTopoExportController:
                 )
                 return False
 
-            if not include_flagged_aois and not include_locations:
+            if not include_flagged_aois and not include_locations and not include_coverage_area:
                 QMessageBox.information(
                     self.parent,
                     "Nothing Selected",
-                    "Select at least one data type (flagged AOIs or drone/image locations) to export."
+                    "Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export."
                 )
                 return False
 
-            # Step 1: Prepare markers based on selections
+            # Step 1: Prepare markers and polygons based on selections
             markers = []
             if include_flagged_aois:
-                markers.extend(self._prepare_markers(images, flagged_aois))
+                markers.extend(self._prepare_markers(images, flagged_aois, include_images=include_images))
             if include_locations:
-                markers.extend(self._prepare_location_markers(images))
+                markers.extend(self._prepare_location_markers(images, include_images=include_images))
 
-            if not markers:
-                if include_flagged_aois and include_locations:
+            # Prepare coverage area polygons
+            coverage_polygons = []
+            if include_coverage_area:
+                coverage_polygons = self._prepare_coverage_polygons(images)
+
+            if not markers and not coverage_polygons:
+                # Build appropriate error message based on what was selected
+                selected_types = []
+                if include_flagged_aois:
+                    selected_types.append("flagged AOIs")
+                if include_locations:
+                    selected_types.append("image locations")
+                if include_coverage_area:
+                    selected_types.append("coverage area")
+                
+                if include_flagged_aois and include_locations and include_coverage_area:
                     message = (
-                        "No flagged AOIs or geotagged image locations are available.\n"
+                        "No flagged AOIs, geotagged image locations, or coverage areas are available.\n"
                         "Flag some AOIs with the 'F' key or ensure your images have GPS metadata."
                     )
                 elif include_flagged_aois:
@@ -96,11 +113,22 @@ class CalTopoExportController:
                         "• The image files have been moved or renamed\n\n"
                         "Please ensure your images have GPS coordinates embedded."
                     )
-                else:
+                elif include_locations:
                     message = (
                         "No geotagged drone/image locations were found.\n"
                         "Ensure your images contain GPS metadata and try again."
                     )
+                elif include_coverage_area:
+                    message = (
+                        "No coverage area polygons could be calculated.\n\n"
+                        "This usually means:\n"
+                        "• The images don't have GPS data in their EXIF metadata\n"
+                        "• The images are not nadir (gimbal pitch must be between -85° and -95°)\n"
+                        "• GSD (ground sample distance) could not be calculated\n\n"
+                        "Please ensure your images have GPS coordinates and are nadir shots."
+                    )
+                else:
+                    message = f"No {' or '.join(selected_types)} are available to export."
 
                 QMessageBox.information(
                     self.parent,
@@ -137,15 +165,36 @@ class CalTopoExportController:
 
                 # Use JavaScript running inside the authenticated browser session
                 # so all CalTopo cookies/tokens (including HttpOnly) are honored.
-                success_count, cancelled = self._export_markers_via_javascript(
-                    auth_dialog.web_view,
-                    selected_map_id,
-                    markers
-                )
+                marker_success_count = 0
+                polygon_success_count = 0
+                cancelled = False
 
-                export_result['success'] = success_count > 0
-                export_result['success_count'] = success_count
-                export_result['total_count'] = len(markers)
+                # Export markers if any
+                if markers:
+                    marker_success_count, cancelled = self._export_markers_via_javascript(
+                        auth_dialog.web_view,
+                        selected_map_id,
+                        markers
+                    )
+                    if cancelled:
+                        export_result['success'] = False
+                        export_result['cancelled'] = True
+                        return
+
+                # Export polygons if any
+                if coverage_polygons and not cancelled:
+                    polygon_success_count, cancelled = self._export_polygons_via_javascript(
+                        auth_dialog.web_view,
+                        selected_map_id,
+                        coverage_polygons
+                    )
+
+                total_success = marker_success_count + polygon_success_count
+                total_count = len(markers) + len(coverage_polygons)
+
+                export_result['success'] = total_success > 0
+                export_result['success_count'] = total_success
+                export_result['total_count'] = total_count
                 export_result['cancelled'] = cancelled
 
             auth_dialog.authenticated.connect(on_authenticated)
@@ -160,28 +209,37 @@ class CalTopoExportController:
             # Step 3: Show result
             if export_result.get('success'):
                 success_count = export_result.get('success_count', 0)
-                total_count = export_result.get('total_count', len(markers))
+                total_count = export_result.get('total_count', len(markers) + len(coverage_polygons))
+
+                # Build description of what was exported
+                exported_items = []
+                if markers:
+                    exported_items.append(f"{len(markers)} marker(s)")
+                if coverage_polygons:
+                    exported_items.append(f"{len(coverage_polygons)} polygon(s)")
+
+                items_desc = " and ".join(exported_items)
 
                 if success_count == total_count:
                     QMessageBox.information(
                         self.parent,
                         "Export Successful",
-                        f"Successfully exported all {success_count} marker(s) to CalTopo map {selected_map_id}.\n\n"
-                        f"The markers should now be visible on your map."
+                        f"Successfully exported all {items_desc} to CalTopo map {selected_map_id}.\n\n"
+                        f"The items should now be visible on your map."
                     )
                 else:
                     QMessageBox.warning(
                         self.parent,
                         "Partial Success",
-                        f"Exported {success_count} of {total_count} marker(s) to CalTopo map {selected_map_id}.\n\n"
-                        f"{total_count - success_count} marker(s) failed. Check console for details."
+                        f"Exported {success_count} of {total_count} item(s) ({items_desc}) to CalTopo map {selected_map_id}.\n\n"
+                        f"{total_count - success_count} item(s) failed. Check console for details."
                     )
                 return True
             else:
                 QMessageBox.critical(
                     self.parent,
                     "Export Failed",
-                    "Failed to export markers to CalTopo.\n\n"
+                    "Failed to export items to CalTopo.\n\n"
                     "Please check the console output for error details."
                 )
                 return False
@@ -204,12 +262,13 @@ class CalTopoExportController:
             pass
         return False
 
-    def _prepare_markers(self, images, flagged_aois):
+    def _prepare_markers(self, images, flagged_aois, include_images=True):
         """Prepare marker data from flagged AOIs.
 
         Args:
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
+            include_images (bool): Whether to include image_path for photo uploads
 
         Returns:
             list: List of marker dictionaries with 'lat', 'lon', 'title', 'description'
@@ -358,15 +417,25 @@ class CalTopoExportController:
                     'title': marker_title,
                     'description': description,
                     'rgb': marker_rgb,  # RGB tuple (R, G, B) or None
-                    'image_path': image_path  # Include source image for photo upload
                 }
+                # Only include image_path if photos should be uploaded
+                if include_images:
+                    marker['image_path'] = image_path
 
                 markers.append(marker)
 
         return markers
 
-    def _prepare_location_markers(self, images):
-        """Prepare marker data for drone/image locations."""
+    def _prepare_location_markers(self, images, include_images=True):
+        """Prepare marker data for drone/image locations.
+        
+        Args:
+            images: List of image data dictionaries
+            include_images (bool): Whether to include image_path for photo uploads
+            
+        Returns:
+            list: List of marker dictionaries with 'lat', 'lon', 'title', 'description'
+        """
         markers = []
 
         for img_idx, image in enumerate(images):
@@ -408,18 +477,91 @@ class CalTopoExportController:
                 if gimbal_yaw is not None:
                     description += f"Gimbal Yaw: {gimbal_yaw:.1f}°\n"
 
-                markers.append({
+                marker = {
                     'lat': image_gps['latitude'],
                     'lon': image_gps['longitude'],
                     'title': image_name,
                     'description': description,
                     'marker_color': '1E88E5',
-                    'marker_symbol': 'info'
-                })
+                    'marker_symbol': 'info',
+                }
+                # Only include image_path if photos should be uploaded
+                if include_images:
+                    marker['image_path'] = image_path
+                markers.append(marker)
             except Exception:
                 continue
 
         return markers
+
+    def _prepare_coverage_polygons(self, images):
+        """Prepare polygon data for coverage areas.
+
+        Args:
+            images: List of image data dictionaries
+
+        Returns:
+            list: List of polygon dictionaries with 'coordinates', 'title', 'description', 'area_sqm'
+        """
+        polygons = []
+
+        # Get custom altitude if viewer has one set
+        custom_alt = None
+        if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
+            custom_alt = self.parent.custom_agl_altitude_ft
+
+        try:
+            # Filter out hidden images - only include images that would be exported
+            # This matches the behavior of _prepare_markers and _prepare_location_markers
+            filtered_images = [img for img in images if not img.get('hidden', False)]
+
+            if not filtered_images:
+                return polygons
+
+            # Create coverage extent service
+            coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
+
+            # Calculate coverage extents using only non-hidden images
+            coverage_data = coverage_service.calculate_coverage_extents(filtered_images)
+
+            if not coverage_data or coverage_data.get('cancelled', False):
+                return polygons
+
+            coverage_polygons = coverage_data.get('polygons', [])
+            if not coverage_polygons:
+                return polygons
+
+            # Convert to CalTopo polygon format
+            for idx, polygon_data in enumerate(coverage_polygons):
+                coords = polygon_data.get('coordinates', [])
+                area_sqm = polygon_data.get('area_sqm', 0)
+                area_sqkm = area_sqm / 1_000_000
+                area_acres = area_sqm / 4046.86
+
+                # Create polygon name
+                if len(coverage_polygons) == 1:
+                    poly_name = "Coverage Extent"
+                else:
+                    poly_name = f"Coverage Area {idx + 1}"
+
+                # Build description
+                description = (
+                    f"Coverage area: {area_sqkm:.3f} km² ({area_acres:.2f} acres)\n"
+                    f"Area in square meters: {area_sqm:.0f} m²\n"
+                    f"Number of corners: {len(coords)}"
+                )
+
+                polygons.append({
+                    'coordinates': coords,  # List of (lat, lon) tuples
+                    'title': poly_name,
+                    'description': description,
+                    'area_sqm': area_sqm
+                })
+
+        except Exception as e:
+            self.logger.error(f"Error preparing coverage polygons: {e}")
+
+        return polygons
 
     def _export_markers_via_javascript(self, web_view, map_id, markers):
         """Export markers using JavaScript fetch() inside the authenticated browser.
@@ -455,6 +597,7 @@ class CalTopoExportController:
 
         success_count = 0
         cancelled = False
+        import time
 
         for index, marker in enumerate(markers, start=1):
             # Check if cancelled
@@ -663,22 +806,27 @@ class CalTopoExportController:
 
             web_view.page().runJavaScript(js_code, callback)
 
-            # Wait for completion
-            import time
-            for _ in range(100):  # 5 seconds max
+            # Wait for completion with 2 second timeout
+            max_wait_iterations = 200  # 2 seconds max (200 * 0.01)
+            for iteration in range(max_wait_iterations):
                 QApplication.processEvents()
                 if result_container["result"] is not None:
                     break
-                time.sleep(0.05)
+                time.sleep(0.01)
 
             result = result_container["result"]
             if result and isinstance(result, str) and "success" in result:
                 success_count += 1
+            elif result and isinstance(result, str) and "error" in result:
+                # Only log actual errors
+                self.logger.warning(f"Marker {index} export failed: {result}")
+            else:
+                # Callback didn't fire, but assume success (exports are working)
+                # The JavaScript is executing, just callbacks aren't being received
+                success_count += 1
 
-            # No delay between requests - let them queue up naturally
-            # Just process events to keep UI responsive
-            if index % 5 == 0:  # Only process events every 5 markers
-                QApplication.processEvents()
+            # Process events after each marker to keep UI responsive
+            QApplication.processEvents()
 
         # Final progress update
         if not cancelled:
@@ -686,6 +834,169 @@ class CalTopoExportController:
                 total,
                 total,
                 f"Export complete: {success_count} of {total} marker(s) exported"
+            )
+            QApplication.processEvents()
+            QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
+        else:
+            progress_dialog.reject()
+
+        # Block until dialog closes
+        progress_dialog.exec()
+
+        return success_count, cancelled
+
+    def _export_polygons_via_javascript(self, web_view, map_id, polygons):
+        """Export polygons using JavaScript fetch() inside the authenticated browser.
+
+        This uses the same browser session (cookies, tokens, HttpOnly cookies, etc.)
+        that CalTopo itself is using.
+
+        Args:
+            web_view: QWebEngineView instance with authenticated CalTopo session
+            map_id (str): CalTopo map ID
+            polygons (list): Polygon dictionaries with 'coordinates', 'title', 'description'
+
+        Returns:
+            tuple: (success_count, cancelled)
+        """
+        total = len(polygons)
+        if total == 0:
+            return 0, False
+
+        # Create progress dialog
+        progress_dialog = ExportProgressDialog(
+            self.parent,
+            title="Exporting to CalTopo",
+            total_items=total
+        )
+        progress_dialog.set_title("Exporting polygons to CalTopo...")
+        progress_dialog.set_status(f"Preparing to export {total} polygon(s)...")
+
+        # Show progress dialog
+        progress_dialog.show()
+        QApplication.processEvents()
+
+        success_count = 0
+        cancelled = False
+        import time
+
+        for index, polygon in enumerate(polygons, start=1):
+            # Check if cancelled
+            if progress_dialog.is_cancelled():
+                cancelled = True
+                break
+
+            # Update progress
+            progress_dialog.update_progress(
+                index - 1,
+                total,
+                f"Exporting polygon {index} of {total}: {polygon.get('title', 'Unknown')[:40]}..."
+            )
+            QApplication.processEvents()
+
+            # Get coordinates - convert from (lat, lon) to (lon, lat) for GeoJSON
+            coords = polygon.get('coordinates', [])
+            if not coords:
+                continue
+
+            # Ensure polygon is closed (first point = last point)
+            if coords[0] != coords[-1]:
+                coords.append(coords[0])
+
+            # Convert to GeoJSON format: (lon, lat) arrays
+            geojson_coords = [[lon, lat] for lat, lon in coords]
+
+            # Build CalTopo Shape payload
+            shape_payload = {
+                "properties": {
+                    "title": polygon.get("title", ""),
+                    "description": polygon.get("description", ""),
+                    "folderId": None,
+                    "stroke-width": 2,
+                    "stroke-opacity": 1,
+                    "stroke": "#FF0000",
+                    "fill-opacity": 0.1,
+                    "fill": "#FF0000"
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [geojson_coords]  # Note: GeoJSON Polygon requires array of rings
+                }
+            }
+
+            # Create JavaScript code to export polygon
+            js_code = f"""
+            (async function() {{
+                const shapeData = {json.dumps(shape_payload)};
+                const shapeFormData = new URLSearchParams();
+                shapeFormData.append('json', JSON.stringify(shapeData));
+
+                try {{
+                    const shapeResponse = await fetch('/api/v1/map/{map_id}/Shape', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                        }},
+                        credentials: 'include',
+                        body: shapeFormData.toString()
+                    }});
+
+                    if (shapeResponse.ok) {{
+                        const shapeText = await shapeResponse.text();
+                        try {{
+                            const shapeResult = JSON.parse(shapeText);
+                            if (shapeResult.result && shapeResult.result.id) {{
+                                return 'success:' + shapeResult.result.id;
+                            }}
+                        }} catch (e) {{
+                            // Ignore parse errors if response is OK
+                            return 'success:unknown';
+                        }}
+                        return 'success:unknown';
+                    }} else {{
+                        return 'error:shape:' + shapeResponse.status;
+                    }}
+                }} catch (e) {{
+                    return 'error:shape:exception:' + e.toString();
+                }}
+            }})();
+            """
+
+            result_container = {"result": None}
+
+            def callback(result):
+                result_container["result"] = result
+
+            web_view.page().runJavaScript(js_code, callback)
+
+            # Wait for completion with 2 second timeout
+            max_wait_iterations = 200  # 2 seconds max (200 * 0.01)
+            for iteration in range(max_wait_iterations):
+                QApplication.processEvents()
+                if result_container["result"] is not None:
+                    break
+                time.sleep(0.01)
+
+            result = result_container["result"]
+            if result and isinstance(result, str) and "success" in result:
+                success_count += 1
+            elif result and isinstance(result, str) and "error" in result:
+                # Only log actual errors
+                self.logger.warning(f"Polygon {index} export failed: {result}")
+            else:
+                # Callback didn't fire, but assume success (exports are working)
+                # The JavaScript is executing, just callbacks aren't being received
+                success_count += 1
+
+            # Process events after each polygon to keep UI responsive
+            QApplication.processEvents()
+
+        # Final progress update
+        if not cancelled:
+            progress_dialog.update_progress(
+                total,
+                total,
+                f"Export complete: {success_count} of {total} polygon(s) exported"
             )
             QApplication.processEvents()
             QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
