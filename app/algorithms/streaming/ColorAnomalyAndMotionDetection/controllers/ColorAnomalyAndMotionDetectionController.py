@@ -190,7 +190,6 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             processing_height=processing_height,
             enable_motion=ui_config.get('enable_motion', base_config.enable_motion),
             enable_color_quantization=ui_config.get('enable_color_quantization', base_config.enable_color_quantization),
-            use_threaded_capture=ui_config.get('use_threaded_capture', base_config.use_threaded_capture),
             motion_algorithm=motion_algorithm,
             min_detection_area=ui_config.get('min_detection_area', base_config.min_detection_area),
             max_detection_area=ui_config.get('max_detection_area', base_config.max_detection_area),
@@ -223,7 +222,6 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             clustering_distance=ui_config.get('clustering_distance', base_config.clustering_distance),
             enable_color_exclusion=ui_config.get('enable_color_exclusion', base_config.enable_color_exclusion),
             excluded_hue_ranges=ui_config.get('excluded_hue_ranges', base_config.excluded_hue_ranges),
-            show_timing_overlay=ui_config.get('show_timing_overlay', base_config.show_timing_overlay),
             show_detections=ui_config.get('show_detections', base_config.show_detections),
             max_detections_to_render=ui_config.get('max_detections_to_render', base_config.max_detections_to_render),
             render_shape=ui_config.get('render_shape', base_config.render_shape),
@@ -250,30 +248,17 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
                 hasattr(self.integrated_controls, 'input_processing_tab')):
             width = config['processing_width']
             height = config['processing_height']
+            self.integrated_controls.input_processing_tab.set_processing_resolution(width, height)
 
-            # Map dimensions to preset names
-            resolution_map = {
-                (854, 480): "854x480",
-                (640, 360): "640x360",
-                (960, 540): "960x540",
-                (1280, 720): "1280x720",
-                (1600, 900): "1600x900",
-                (1920, 1080): "1920x1080",
-                (2560, 1440): "2560x1440",
-                (3200, 1800): "3200x1800",
-                (3840, 2160): "3840x2160",
-                (5120, 2880): "5120x2880",
-                (7680, 4320): "7680x4320"
-            }
-
-            preset_name = resolution_map.get((width, height))
-            if preset_name:
-                self.integrated_controls.input_processing_tab.resolution_preset.setCurrentText(preset_name)
-            else:
-                # Use custom if dimensions don't match any preset
-                self.integrated_controls.input_processing_tab.resolution_preset.setCurrentText("Custom")
-                self.integrated_controls.input_processing_tab.processing_width.setValue(width)
-                self.integrated_controls.input_processing_tab.processing_height.setValue(height)
+        # Update rendering config in RenderingTab
+        if hasattr(self.integrated_controls, 'rendering_tab'):
+            rendering_config = {}
+            for key in ['render_shape', 'render_text', 'render_contours', 
+                       'use_detection_color_for_rendering', 'max_detections_to_render']:
+                if key in config:
+                    rendering_config[key] = config[key]
+            if rendering_config:
+                self.integrated_controls.rendering_tab.set_config(rendering_config)
 
         # Update motion detection checkbox
         if 'enable_motion' in config and hasattr(self.integrated_controls, 'enable_motion'):

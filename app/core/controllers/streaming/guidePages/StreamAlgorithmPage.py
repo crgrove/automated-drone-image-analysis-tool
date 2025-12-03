@@ -154,7 +154,6 @@ class StreamAlgorithmPage(BasePage):
         if self.selected_algorithm:
             # Map algorithm key to display name
             algorithm_names = {
-                "MotionDetection": "Motion Detection",
                 "ColorDetection": "Color Detection",
                 "ColorAnomalyAndMotionDetection": "Color Anomaly & Motion Detection"
             }
@@ -172,9 +171,6 @@ class StreamAlgorithmPage(BasePage):
     def _algorithm_registry() -> dict:
         """Return algorithm registry (kept for compatibility)."""
         return {
-            "MotionDetection": {
-                "label": "Motion Detection",
-            },
             "ColorDetection": {
                 "label": "Color Detection",
             },

@@ -72,10 +72,9 @@ class StreamAlgorithmParametersPage(BasePage):
         if not selected_algorithm:
             return
 
-        # The algorithm is already stored as a key (MotionDetection, ColorDetection, etc.)
+        # The algorithm is already stored as a key (ColorDetection, etc.)
         # but might be a display name, so map it if needed
         algorithm_map = {
-            "Motion Detection": "MotionDetection",
             "Color Detection": "ColorDetection",
             "Color Anomaly & Motion Detection": "ColorAnomalyAndMotionDetection"
         }
@@ -117,10 +116,6 @@ class StreamAlgorithmParametersPage(BasePage):
         try:
             # Import the algorithm wizard controller dynamically
             algorithm_wizard_modules = {
-                "MotionDetection": (
-                    "algorithms.streaming.MotionDetection.controllers."
-                    "MotionDetectionWizardController"
-                ),
                 "ColorDetection": (
                     "algorithms.streaming.ColorDetection.controllers."
                     "ColorDetectionWizardController"
@@ -184,7 +179,6 @@ class StreamAlgorithmParametersPage(BasePage):
                 page_title_widget = getattr(self.dialog, 'labelPageAlgorithmParametersTitle', None)
                 if page_title_widget is not None:
                     algorithm_labels = {
-                        "MotionDetection": "Motion Detection",
                         "ColorDetection": "Color Detection",
                         "ColorAnomalyAndMotionDetection": "Color Anomaly & Motion Detection"
                     }

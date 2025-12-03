@@ -52,7 +52,6 @@ class ColorAnomalyAndMotionDetectionConfig:
 
     # Performance settings
     max_fps: Optional[int] = None
-    use_threaded_capture: bool = False
 
     # Motion algorithm selection
     motion_algorithm: MotionAlgorithm = MotionAlgorithm.MOG2
@@ -75,7 +74,6 @@ class ColorAnomalyAndMotionDetectionConfig:
     bg_detect_shadows: bool = False
 
     # Display options
-    show_timing_overlay: bool = True
     show_detections: bool = True
     max_detections_to_render: int = 20
 

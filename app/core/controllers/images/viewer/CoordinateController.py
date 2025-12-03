@@ -13,7 +13,7 @@ import numpy as np
 from urllib.parse import quote_plus
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QDialog, QApplication
-from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QUrl
+from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QUrl, QPoint
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QThread
 
@@ -46,6 +46,9 @@ class CoordinateController:
 
         # North-oriented image popup window
         self.north_oriented_popup = None
+        
+        # Track current coordinates popup
+        self.current_coords_popup = None
 
     def on_coordinates_clicked(self, link):
         """Handle clicks on GPS coordinates in the status bar."""
@@ -57,8 +60,19 @@ class CoordinateController:
         # Show coordinates popup
         self.show_coordinates_popup(coord_text)
 
-    def show_coordinates_popup(self, coord_text):
-        """Show a small popup with coordinate sharing options."""
+    def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None):
+        """Show a small popup with coordinate sharing options.
+        
+        Args:
+            coord_text: Formatted coordinate string to display
+            anchor_widget: Optional widget to anchor the popup to (for single-image mode)
+            anchor_point: Optional QPoint in global coordinates to anchor the popup to (for gallery mode)
+        """
+        # Close any existing popup
+        if self.current_coords_popup:
+            self.current_coords_popup.close()
+            self.current_coords_popup = None
+        
         # Create popup widget
         popup = QWidget(self.parent, Qt.Popup)
         popup.setStyleSheet("""
@@ -101,69 +115,98 @@ class CoordinateController:
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Buttons
+        # Helper function to close popup after action
+        def close_popup():
+            if popup:
+                popup.close()
+                if self.current_coords_popup == popup:
+                    self.current_coords_popup = None
+
+        # Buttons with close handlers
+        def make_action_handler(action_func, *args):
+            def handler():
+                action_func(*args)
+                close_popup()
+            return handler
+
         copy_btn = QPushButton("📋 Copy coordinates")
-        copy_btn.clicked.connect(lambda: self.copy_coords_to_clipboard(coord_text))
+        copy_btn.clicked.connect(make_action_handler(self.copy_coords_to_clipboard, coord_text))
         layout.addWidget(copy_btn)
 
         maps_btn = QPushButton("🗺️ Open in Google Maps")
-        maps_btn.clicked.connect(self.open_in_maps)
+        maps_btn.clicked.connect(make_action_handler(self.open_in_maps))
         layout.addWidget(maps_btn)
 
         earth_btn = QPushButton("🌍 View in Google Earth")
-        earth_btn.clicked.connect(self.open_in_earth)
+        earth_btn.clicked.connect(make_action_handler(self.open_in_earth))
         layout.addWidget(earth_btn)
 
         whatsapp_btn = QPushButton("📱 Send via WhatsApp")
-        whatsapp_btn.clicked.connect(self.share_whatsapp)
+        whatsapp_btn.clicked.connect(make_action_handler(self.share_whatsapp))
         layout.addWidget(whatsapp_btn)
 
         telegram_btn = QPushButton("📨 Send via Telegram")
-        telegram_btn.clicked.connect(self.share_telegram)
+        telegram_btn.clicked.connect(make_action_handler(self.share_telegram))
         layout.addWidget(telegram_btn)
 
-        # Position popup near the status bar
+        # Position popup near anchor point/widget or status bar
         popup.adjustSize()
-        statusbar_pos = self.parent.statusBarWidget.mapToGlobal(self.parent.statusBarWidget.rect().bottomLeft())
-        popup_pos = self.parent.mapFromGlobal(statusbar_pos)
+        
+        if anchor_point:
+            # Use provided global anchor point (gallery mode)
+            popup_x = anchor_point.x() - popup.width()  # Position to the left of anchor
+            popup_y = anchor_point.y() - popup.height()  # Position above anchor
+        elif anchor_widget:
+            # Use provided widget (single-image mode)
+            widget_global_pos = anchor_widget.mapToGlobal(anchor_widget.rect().bottomRight())
+            popup_x = widget_global_pos.x() - popup.width()  # Position to the left of widget
+            popup_y = widget_global_pos.y() - popup.height()  # Position above widget
+        else:
+            # Default: position near the status bar
+            statusbar_pos = self.parent.statusBarWidget.mapToGlobal(self.parent.statusBarWidget.rect().bottomLeft())
+            popup_pos = self.parent.mapFromGlobal(statusbar_pos)
+            popup_x = popup_pos.x()
+            popup_y = popup_pos.y() - popup.height()
 
         # Ensure popup doesn't go off-screen
         screen_geometry = self.parent.screen().geometry()
-        popup_x = max(screen_geometry.x(), min(popup_pos.x(), screen_geometry.right() - popup.width()))
-        popup_y = max(screen_geometry.y(), min(popup_pos.y() - popup.height(), screen_geometry.bottom() - popup.height()))
+        popup_x = max(screen_geometry.x(), min(popup_x, screen_geometry.right() - popup.width()))
+        popup_y = max(screen_geometry.y(), min(popup_y, screen_geometry.bottom() - popup.height()))
 
         popup.move(popup_x, popup_y)
 
+        # Store reference to current popup
+        self.current_coords_popup = popup
+        
         # Show popup
         popup.show()
 
         # Auto-close when clicking outside
         popup.setFocus()
 
-        # Use a simple timer to auto-close the popup after 5 seconds
-        close_timer = QTimer(popup)
-        close_timer.setSingleShot(True)
-        close_timer.timeout.connect(popup.close)
-        close_timer.start(5000)  # 5 seconds
-
         # Install a simple event filter to close popup when clicking outside
-        popup.installEventFilter(self.create_simple_popup_filter(popup))
+        popup.installEventFilter(self.create_simple_popup_filter(popup, self))
 
-    def create_simple_popup_filter(self, popup):
+    def create_simple_popup_filter(self, popup, parent_controller):
         """Create a simple event filter to close the popup when clicking outside."""
         class SimplePopupFilter(QObject):
-            def __init__(self, popup_widget):
+            def __init__(self, popup_widget, controller):
                 super().__init__()
                 self.popup = popup_widget
+                self.parent_controller = controller
 
             def eventFilter(self, obj, event):
                 if event.type() == QEvent.MouseButtonPress:
                     if not self.popup.geometry().contains(event.globalPos()):
                         self.popup.close()
+                        # Clear reference if this popup is closed
+                        if hasattr(self, 'parent_controller'):
+                            if self.parent_controller.current_coords_popup == self.popup:
+                                self.parent_controller.current_coords_popup = None
                         return True
                 return False
 
-        return SimplePopupFilter(popup)
+        return SimplePopupFilter(popup, parent_controller)
 
     def copy_coords_to_clipboard(self, coord_text=None):
         """Copy coordinates to clipboard."""

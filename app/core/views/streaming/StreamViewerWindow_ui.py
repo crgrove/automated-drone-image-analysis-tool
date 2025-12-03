@@ -113,18 +113,6 @@ class Ui_StreamViewerWindow:
         self.recordingLayout.addWidget(self.recordingPlaceholder)
         right_layout.addWidget(self.recordingGroup)
         
-        # Stats group
-        statsGroup = QGroupBox("Statistics")
-        statsGroup.setObjectName("statsGroup")
-        statsLayout = QVBoxLayout(statsGroup)
-        
-        self.statsLabel = QLabel("No stream connected")
-        self.statsLabel.setObjectName("statsLabel")
-        self.statsLabel.setWordWrap(True)
-        statsLayout.addWidget(self.statsLabel)
-        
-        right_layout.addWidget(statsGroup)
-        
         right_layout.addStretch()
         
         # Wrap the right control panel in a scroll area to keep all controls reachable
@@ -153,5 +141,4 @@ class Ui_StreamViewerWindow:
         """Set UI text/translations."""
         StreamViewerWindow.setWindowTitle("ADIAT - Real-Time Stream Detection")
         self.infoPanel.setPlaceholderText("Stream information and logs will appear here...")
-        self.statsLabel.setText("No stream connected")
 

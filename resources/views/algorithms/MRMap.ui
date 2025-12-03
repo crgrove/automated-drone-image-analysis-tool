@@ -128,7 +128,7 @@ Recommended: 4-9 segments for typical drone imagery.</string>
           </font>
          </property>
          <property name="text">
-          <string>Colorspace:</string>
+          <string>Color Space:</string>
          </property>
         </widget>
        </item>
@@ -258,12 +258,6 @@ Controls the sensitivity of feature detection across multiple resolutions.</stri
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="minimum">
-          <number>1</number>
-         </property>
-         <property name="maximum">
-          <number>200</number>
-         </property>
          <property name="toolTip">
           <string>Adjust the detection threshold for MR Map algorithm.
 • Range: 1 to 200
@@ -275,6 +269,12 @@ The MR Map algorithm detects features at multiple spatial resolutions:
 • Higher values (151-200): Less sensitive, only detects prominent features
 Threshold controls how distinct a feature must be to be detected.
 Note: Slider appearance is inverted - move left for stricter, right for more lenient.</string>
+         </property>
+         <property name="minimum">
+          <number>1</number>
+         </property>
+         <property name="maximum">
+          <number>200</number>
          </property>
          <property name="pageStep">
           <number>1</number>
@@ -310,7 +310,6 @@ Note: Slider appearance is inverted - move left for stricter, right for more len
          <property name="font">
           <font>
            <pointsize>10</pointsize>
-           <weight>75</weight>
            <bold>true</bold>
           </font>
          </property>

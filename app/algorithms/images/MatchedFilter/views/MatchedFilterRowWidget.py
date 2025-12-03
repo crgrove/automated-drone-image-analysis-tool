@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
                                QSlider, QPushButton, QSizePolicy, QColorDialog)
+import qtawesome as qta
 from core.services.color.CustomColorsService import get_custom_colors_service
 
 
@@ -136,12 +137,13 @@ class MatchedFilterRowWidget(QWidget):
         layout.addLayout(threshold_layout, 1)  # Stretch factor to expand
 
         # Column 4: Delete button
-        self.deleteButton = QPushButton("✕", self)
+        self.deleteButton = QPushButton(self)
         self.deleteButton.setObjectName("deleteButton")
         self.deleteButton.setMinimumSize(28, 28)
         self.deleteButton.setMaximumSize(28, 28)
         # Fixed policy ensures space is reserved at end of row
         self.deleteButton.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.deleteButton.setIcon(qta.icon('fa6s.xmark', color='white'))
         self.deleteButton.setStyleSheet("""
             QPushButton#deleteButton {
                 background-color: #d32f2f;

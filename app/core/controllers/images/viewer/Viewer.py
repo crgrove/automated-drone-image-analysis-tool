@@ -91,11 +91,14 @@ class Viewer(QMainWindow, Ui_Viewer):
             theme (str): The current active theme.
         """
         super().__init__()
+        self.settings_service = SettingsService()
+        self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
         self._threads = []
         self.main_image = None
         self.logger = LoggerService()
         self.theme = theme  # Store theme before calling _add_Toggles
         self.setupUi(self)
+        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
         self._add_Toggles()
         # self._adjust_ui_sizing()
         # ---------------- settings / data ----------------
@@ -551,6 +554,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.help_dialog.show()
         self.help_dialog.raise_()
         self.help_dialog.activateWindow()
+    
+    def _close_help_dialog_if_open(self):
+        """Close the help dialog if it's open. Called before opening other dialogs."""
+        if hasattr(self, 'help_dialog') and self.help_dialog and self.help_dialog.isVisible():
+            self.help_dialog.close()
 
     def showEvent(self, event):
         """Handle the show event - widget is now visible."""
@@ -1007,6 +1015,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         if self.main_image is None:
             return
 
+        # Close help dialog if open to prevent blocking
+        self._close_help_dialog_if_open()
+
         # Get current pixmap from the image viewer
         current_pixmap = self.main_image.pixmap()
         if current_pixmap is None:
@@ -1054,6 +1065,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Extract visible portion of zoomed image and open upscale dialog."""
         if self.main_image is None or not self.main_image.hasImage():
             return
+
+        # Close help dialog if open to prevent blocking
+        self._close_help_dialog_if_open()
 
         try:
             # Get the currently visible viewport in scene coordinates
@@ -1269,6 +1283,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Opens the measure dialog for distance measurement."""
         if self.main_image is None or not self.main_image.hasImage():
             return
+
+        # Close help dialog if open to prevent blocking
+        self._close_help_dialog_if_open()
 
         # Try to get GSD from current image if we don't have a stored value
         if self.current_gsd is None:

@@ -163,9 +163,6 @@ class TestColorAnomalyAndMotionDetectionController:
                 'render_contours': False,
                 'use_detection_color_for_rendering': True,
                 'max_detections_to_render': 100,
-                'show_timing_overlay': False,
-                'show_detection_thumbnails': False,
-                'use_threaded_capture': True,
                 'render_at_processing_res': True
             }
 

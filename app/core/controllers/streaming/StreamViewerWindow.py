@@ -21,6 +21,7 @@ from typing import Optional, Dict, Any, List, Callable
 import numpy as np
 from types import SimpleNamespace
 import time
+import os
 
 import qdarktheme
 from core.controllers.Perferences import Preferences
@@ -75,9 +76,7 @@ class StreamViewerWindow(QMainWindow):
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
         self.ui.setupUi(self)
-        self.setWindowTitle(
-            f"ADIAT - Real-Time Stream Detection v{self.app_version} - Sponsored by TEXSAR"
-        )
+        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
 
         # Setup tooltip stylesheet
         self.setStyleSheet("""
@@ -192,7 +191,7 @@ class StreamViewerWindow(QMainWindow):
         self.action_community.triggered.connect(self._open_community_forum)
 
     def _setup_recording_widget(self):
-        """Setup recording widget in its own section between Algorithm Controls and Statistics."""
+        """Setup recording widget in its own section between Algorithm Controls and the bottom of the panel."""
         # Create recording widget
         recording_widget = QWidget()
         recording_layout = QVBoxLayout(recording_widget)
@@ -223,7 +222,8 @@ class StreamViewerWindow(QMainWindow):
         # Recording directory selector
         dir_layout = QHBoxLayout()
         dir_label = QLabel("Save to:")
-        self.recording_dir_edit = QLineEdit("./recordings")
+        default_recording_dir = os.path.expanduser("~")
+        self.recording_dir_edit = QLineEdit(default_recording_dir)
         self.recording_dir_edit.setToolTip("Directory where video recordings will be saved.")
         self.recording_dir_browse = QPushButton("Browse...")
         self.recording_dir_browse.setToolTip("Choose a folder to store recordings.")
@@ -242,7 +242,22 @@ class StreamViewerWindow(QMainWindow):
         self.ui.recordingPlaceholder.deleteLater()
 
         # Set initial directory from settings
-        saved_dir = self.settings.value("recording/output_dir", "./recordings")
+        default_recording_dir = os.path.expanduser("~")
+        saved_dir = self.settings.value("recording/output_dir", default_recording_dir)
+        # Migrate old default "./recordings" or "/recordings" to new default (user's home directory)
+        # Normalize paths for comparison
+        if saved_dir:
+            saved_dir_normalized = os.path.normpath(saved_dir).replace('\\', '/')
+            old_defaults = ["./recordings", "/recordings", "recordings"]
+            old_defaults_normalized = [os.path.normpath(d).replace('\\', '/') for d in old_defaults]
+            if saved_dir_normalized in old_defaults_normalized or saved_dir_normalized.endswith('/recordings'):
+                saved_dir = default_recording_dir
+                self.settings.setValue("recording/output_dir", saved_dir)
+                self.settings.sync()
+        else:
+            saved_dir = default_recording_dir
+            self.settings.setValue("recording/output_dir", saved_dir)
+            self.settings.sync()
         self.recording_dir_edit.setText(saved_dir)
 
         # Connect signals
@@ -253,7 +268,8 @@ class StreamViewerWindow(QMainWindow):
 
     def _emit_start_recording(self):
         """Emit start recording signal with directory."""
-        directory = self.recording_dir_edit.text().strip() or "./recordings"
+        default_recording_dir = os.path.expanduser("~")
+        directory = self.recording_dir_edit.text().strip() or default_recording_dir
         self.on_start_recording_requested(directory)
 
     def _browse_recording_directory(self):
@@ -266,7 +282,8 @@ class StreamViewerWindow(QMainWindow):
 
     def _on_recording_directory_changed(self, directory: str):
         """Handle recording directory change."""
-        cleaned = directory.strip() or "./recordings"
+        default_recording_dir = os.path.expanduser("~")
+        cleaned = directory.strip() or default_recording_dir
         if cleaned != directory:
             self.recording_dir_edit.setText(cleaned)
         self.settings.setValue("recording/output_dir", cleaned)
@@ -293,7 +310,6 @@ class StreamViewerWindow(QMainWindow):
         preferred_order = [
             "ColorAnomalyAndMotionDetection",
             "ColorDetection",
-            "MotionDetection",
         ]
         for key in preferred_order:
             if key in registry:
@@ -357,7 +373,8 @@ class StreamViewerWindow(QMainWindow):
         if stream_url:
             self.stream_controls.url_input.setText(stream_url)
 
-        recording_dir = wizard_data.get("recording_dir") or "./recordings"
+        default_recording_dir = os.path.expanduser("~")
+        recording_dir = wizard_data.get("recording_dir") or default_recording_dir
         if hasattr(self, "recording_dir_edit"):
             self.recording_dir_edit.setText(recording_dir)
         self.settings.setValue("recording/output_dir", recording_dir)
@@ -510,7 +527,7 @@ class StreamViewerWindow(QMainWindow):
         try:
             from core.controllers.images.MainWindow import MainWindow  # Local import avoids circular dependency
 
-            main_window = MainWindow(qdarktheme, self.app_version)
+            main_window = MainWindow(qdarktheme)
             app = QApplication.instance()
             if app:
                 app._main_window = main_window
@@ -970,11 +987,6 @@ class StreamViewerWindow(QMainWindow):
     def _algorithm_registry(self) -> Dict[str, Dict[str, Any]]:
         """Return the available streaming algorithms."""
         return {
-            'MotionDetection': {
-                'label': 'Motion Detection',
-                'controller': 'MotionDetectionController',
-                'module': 'algorithms.streaming.MotionDetection.controllers.MotionDetectionController'
-            },
             'ColorDetection': {
                 'label': 'Color Detection',
                 'controller': 'ColorDetectionController',
@@ -1033,7 +1045,6 @@ class StreamViewerWindow(QMainWindow):
         if not self.algorithm_widget:
             return
         self.stream_statistics.reset()
-        self.ui.statsLabel.setText("Switching algorithm...")
         self._latest_detections_for_rendering = []
         self._last_algorithm_frame = None
         self.thumbnail_widget.clear_thumbnails()
@@ -1084,7 +1095,8 @@ class StreamViewerWindow(QMainWindow):
                 self.algorithm_widget.on_stream_connected(resolution)
 
             if self._pending_auto_record:
-                record_dir = self._pending_record_dir or self.recording_dir_edit.text().strip() or "./recordings"
+                default_recording_dir = os.path.expanduser("~")
+                record_dir = self._pending_record_dir or self.recording_dir_edit.text().strip() or default_recording_dir
                 self.on_start_recording_requested(record_dir)
                 self._pending_auto_record = False
         else:
@@ -1270,7 +1282,8 @@ class StreamViewerWindow(QMainWindow):
     @Slot(str)
     def on_start_recording_requested(self, directory: str):
         """Start recording with provided directory."""
-        output_dir = directory or "./recordings"
+        default_recording_dir = os.path.expanduser("~")
+        output_dir = directory or default_recording_dir
         self.settings.setValue("recording/output_dir", output_dir)
         self.settings.sync()
         self.stream_coordinator.start_recording(output_dir)
@@ -1283,7 +1296,8 @@ class StreamViewerWindow(QMainWindow):
     @Slot(str)
     def on_recording_directory_changed(self, directory: str):
         """Persist recording directory changes."""
-        output_dir = directory or "./recordings"
+        default_recording_dir = os.path.expanduser("~")
+        output_dir = directory or default_recording_dir
         self.settings.setValue("recording/output_dir", output_dir)
         self.settings.sync()
 
@@ -1291,7 +1305,8 @@ class StreamViewerWindow(QMainWindow):
     def on_recording_toggled(self, start: bool):
         """Handle recording toggle from algorithms."""
         if start:
-            directory = self.recording_dir_edit.text().strip() or "./recordings"
+            default_recording_dir = os.path.expanduser("~")
+            directory = self.recording_dir_edit.text().strip() or default_recording_dir
             self.on_start_recording_requested(directory)
         else:
             self.on_stop_recording_requested()
@@ -1373,12 +1388,6 @@ class StreamViewerWindow(QMainWindow):
 
     def update_statistics_display(self):
         """Update statistics display."""
-        stats_dict = self.stream_statistics.get_stats_dict()
-
-        # Update detailed stats panel
-        stats_text = "\n".join([f"{key}: {value}" for key, value in stats_dict.items()])
-        self.ui.statsLabel.setText(stats_text)
-
         # Update performance section in stream controls
         stats_obj = self.stream_statistics.get_stats()
         perf_payload = {
@@ -1386,6 +1395,8 @@ class StreamViewerWindow(QMainWindow):
             "avg_fps": stats_obj.processing_fps,
             "current_processing_time_ms": stats_obj.avg_processing_time_ms,
             "avg_processing_time_ms": stats_obj.avg_processing_time_ms,
+            "latency_ms": stats_obj.latency_ms,
+            "total_frames": stats_obj.total_frames,
             "detection_count": stats_obj.detection_count,
             "dropped_frames": stats_obj.dropped_frames,
         }

@@ -361,7 +361,7 @@ QToolButton:checked { border-color: #4CAF50; background-color: #1b2d44; }</strin
             </font>
            </property>
            <property name="text">
-            <string>Stream URL / Path:</string>
+            <string>Stream URL/Path:</string>
            </property>
           </widget>
          </item>

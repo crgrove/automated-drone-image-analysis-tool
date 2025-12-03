@@ -20,7 +20,7 @@ class TestColorDetectionControlWidget:
         widget = ColorDetectionControlWidget()
 
         assert widget is not None
-        assert len(widget.color_ranges) > 0  # Should have default red range
+        assert len(widget.color_ranges) == 0  # Should start with no color ranges
         assert hasattr(widget, 'tabs')
 
     def test_get_config(self, qapp):

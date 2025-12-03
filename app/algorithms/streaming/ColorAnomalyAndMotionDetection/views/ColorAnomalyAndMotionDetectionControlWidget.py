@@ -565,7 +565,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.input_processing_tab.resolution_preset.currentTextChanged.connect(self.emit_config)
         self.input_processing_tab.processing_width.valueChanged.connect(self.emit_config)
         self.input_processing_tab.processing_height.valueChanged.connect(self.emit_config)
-        self.input_processing_tab.threaded_capture.toggled.connect(self.emit_config)
         self.input_processing_tab.render_at_processing_res.toggled.connect(self.emit_config)
 
         # Motion
@@ -618,8 +617,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.rendering_tab.render_contours.toggled.connect(self.emit_config)
         self.rendering_tab.use_detection_color.toggled.connect(self.emit_config)
         self.rendering_tab.max_detections_to_render.valueChanged.connect(self.emit_config)
-        self.rendering_tab.show_timing_overlay.toggled.connect(self.emit_config)
-        self.rendering_tab.show_detection_thumbnails.toggled.connect(self.emit_config)
 
     def update_camera_movement_label(self):
         """Update camera movement threshold label."""
@@ -672,7 +669,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         }
 
         # Map shape names to indices
-        shape_map = {"Box": 0, "Circle": 1, "Dot": 2, "Off": 3}
 
         # Build excluded hue ranges from color wheel selection
         excluded_hue_ranges = []
@@ -698,7 +694,6 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         config = {
             'processing_width': processing_width,
             'processing_height': processing_height,
-            'use_threaded_capture': self.input_processing_tab.threaded_capture.isChecked(),
             'render_at_processing_res': self.input_processing_tab.render_at_processing_res.isChecked(),
 
             'enable_motion': self.enable_motion.isChecked(),
@@ -738,13 +733,8 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             'enable_color_exclusion': self.enable_color_exclusion.isChecked(),
             'excluded_hue_ranges': excluded_hue_ranges,
 
-            'render_shape': shape_map[self.rendering_tab.render_shape.currentText()],
-            'render_text': self.rendering_tab.render_text.isChecked(),
-            'render_contours': self.rendering_tab.render_contours.isChecked(),
-            'use_detection_color_for_rendering': self.rendering_tab.use_detection_color.isChecked(),
-            'max_detections_to_render': self.rendering_tab.max_detections_to_render.value(),
-            'show_timing_overlay': self.rendering_tab.show_timing_overlay.isChecked(),
-            'show_detection_thumbnails': self.rendering_tab.show_detection_thumbnails.isChecked(),
+            # Rendering (from shared RenderingTab)
+            **self.rendering_tab.get_config(),
         }
 
         return config

@@ -104,9 +104,8 @@ def app():
 def main_window(qtbot):
     if not _MAIN_WINDOW_AVAILABLE:
         pytest.skip("MainWindow dependencies not available")
-    version = "2.0.0 Beta"
     # qdarktheme.setup_theme()  # Not needed with PySide6, theme is set via stylesheet
-    mw = MainWindow(qdarktheme, version)
+    mw = MainWindow(qdarktheme)
     mw.show()
     qtbot.addWidget(mw)
 

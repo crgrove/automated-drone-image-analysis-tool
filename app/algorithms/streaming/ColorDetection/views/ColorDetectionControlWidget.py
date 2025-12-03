@@ -34,9 +34,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.current_range_index = 0
         self.color_range_widgets = []  # Store row widgets
 
-        # Initialize with one default red range
-        self._add_default_range()
-
         # Setup UI from UI file
         self.setupUi(self)
 
@@ -48,24 +45,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         # Connect signals
         self.connect_signals()
-
-    def _add_default_range(self):
-        """Add default red color range with OpenCV format values."""
-        # Default tolerance ranges in OpenCV format:
-        # - hue_minus/plus: 20 (0-179 range, ±20 is moderate for hue)
-        # - sat_minus/plus: 50 (0-255 range, ±19.6% moderate tolerance)
-        # - val_minus/plus: 50 (0-255 range, ±19.6% moderate tolerance)
-        default_range = {
-            'name': 'Red',
-            'color': QColor(255, 0, 0),
-            'hue_minus': 20,
-            'hue_plus': 20,
-            'sat_minus': 50,
-            'sat_plus': 50,
-            'val_minus': 50,
-            'val_plus': 50
-        }
-        self.color_ranges.append(default_range)
 
     def _populate_tabs(self):
         """Populate tabs with control panels."""
@@ -135,7 +114,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         grid.setColumnMinimumWidth(0, 160)
         grid.setColumnStretch(1, 1)
 
-        grid.addWidget(QLabel("Min Area (px):"), 0, 0)
+        grid.addWidget(QLabel("Min Object Area (px):"), 0, 0)
         self.min_area_spinbox = QSpinBox()
         self.min_area_spinbox.setRange(10, 50000)
         self.min_area_spinbox.setValue(10)
@@ -146,7 +125,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                                          "Recommended: 100 for general use, 50 for small objects, 200-500 for large objects.")
         grid.addWidget(self.min_area_spinbox, 0, 1)
 
-        grid.addWidget(QLabel("Max Area (px):"), 1, 0)
+        grid.addWidget(QLabel("Max Object Area (px):"), 1, 0)
         self.max_area_spinbox = QSpinBox()
         self.max_area_spinbox.setRange(100, 500000)
         self.max_area_spinbox.setValue(100000)
@@ -185,7 +164,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.input_processing_tab.resolution_preset.currentTextChanged.connect(self._emit_config_changed)
         self.input_processing_tab.processing_width.valueChanged.connect(self._emit_config_changed)
         self.input_processing_tab.processing_height.valueChanged.connect(self._emit_config_changed)
-        self.input_processing_tab.threaded_capture.toggled.connect(self._emit_config_changed)
         self.input_processing_tab.render_at_processing_res.toggled.connect(self._emit_config_changed)
 
         # Color selection
@@ -206,8 +184,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.rendering_tab.render_contours.toggled.connect(self._emit_config_changed)
         self.rendering_tab.use_detection_color.toggled.connect(self._emit_config_changed)
         self.rendering_tab.max_detections_to_render.valueChanged.connect(self._emit_config_changed)
-        self.rendering_tab.show_timing_overlay.toggled.connect(self._emit_config_changed)
-        self.rendering_tab.show_detection_thumbnails.toggled.connect(self._emit_config_changed)
 
     def _on_add_color(self):
         """Add a new color range using HSV ColorRange dialog."""
@@ -377,14 +353,8 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         else:
             processing_resolution = (processing_width, processing_height)
 
-        # Map render shape to enum value (0=Box, 1=Circle, 2=Dot, 3=Off)
-        shape_map = {
-            "Box": 0,
-            "Circle": 1,
-            "Dot": 2,
-            "Off": 3
-        }
-        render_shape = shape_map.get(self.rendering_tab.render_shape.currentText(), 1)
+        # Get rendering config from shared RenderingTab
+        rendering_config = self.rendering_tab.get_config()
 
         # Get updated color ranges from row widgets
         # Collect color ranges from widgets
@@ -423,7 +393,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             'processing_resolution': processing_resolution,
             'processing_width': processing_width if processing_width != 99999 else None,
             'processing_height': processing_height if processing_height != 99999 else None,
-            'threaded_capture': self.input_processing_tab.threaded_capture.isChecked(),
             'render_at_processing_res': self.input_processing_tab.render_at_processing_res.isChecked(),
 
             # Color Selection
@@ -435,12 +404,6 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             'confidence_threshold': self.confidence_spinbox.value() if hasattr(self, 'confidence_spinbox') else 0.5,
 
             # Rendering (from shared RenderingTab)
-            'render_shape': render_shape,
-            'render_text': self.rendering_tab.render_text.isChecked(),
-            'render_contours': self.rendering_tab.render_contours.isChecked(),
-            'use_detection_color_for_rendering': self.rendering_tab.use_detection_color.isChecked(),
-            'max_detections_to_render': self.rendering_tab.max_detections_to_render.value(),
-            'show_timing_overlay': self.rendering_tab.show_timing_overlay.isChecked(),
-            'show_detection_thumbnails': self.rendering_tab.show_detection_thumbnails.isChecked(),
+            **rendering_config,
         }
         return config

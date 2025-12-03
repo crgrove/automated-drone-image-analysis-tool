@@ -7,8 +7,7 @@ from algorithms.streaming.ColorDetection.services.ColorDetectionService import (
     FusionMode,
     Detection,
     HSVConfig,
-    FrameQueue,
-    ThreadedCaptureWorker
+    FrameQueue
 )
 
 __all__ = [
@@ -18,6 +17,5 @@ __all__ = [
     'FusionMode',
     'Detection',
     'HSVConfig',
-    'FrameQueue',
-    'ThreadedCaptureWorker'
+    'FrameQueue'
 ]

@@ -331,34 +331,26 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         if not self.color_rows:
             return
 
-        # Build color config list for viewer
-        color_configs = []
+        # Build HSV ranges list for viewer (multi-color mode)
+        hsv_ranges_list = []
         for row in self.color_rows:
             hsv_ranges = row.get_hsv_ranges()
             rgb = row.get_rgb()
-            # Calculate average ranges for viewer (backward compatibility)
-            h_avg = int((hsv_ranges['h_minus'] * 179 + hsv_ranges['h_plus'] * 179) / 2)
-            s_avg = int((hsv_ranges['s_minus'] * 255 + hsv_ranges['s_plus'] * 255) / 2)
-            v_avg = int((hsv_ranges['v_minus'] * 255 + hsv_ranges['v_plus'] * 255) / 2)
-
-            color_configs.append({
-                'selected_color': rgb,
-                'hue_threshold': h_avg,
-                'saturation_threshold': s_avg,
-                'value_threshold': v_avg,
-                'hsv_ranges': hsv_ranges
+            
+            # Convert fractional ranges (0-1) to OpenCV format (0-179 for hue, 0-255 for sat/val)
+            hsv_ranges_list.append({
+                'rgb': rgb,
+                'hue_minus': int(hsv_ranges['h_minus'] * 179),  # Convert fractional to OpenCV (0-179)
+                'hue_plus': int(hsv_ranges['h_plus'] * 179),
+                'sat_minus': int(hsv_ranges['s_minus'] * 255),  # Convert fractional to OpenCV (0-255)
+                'sat_plus': int(hsv_ranges['s_plus'] * 255),
+                'val_minus': int(hsv_ranges['v_minus'] * 255),
+                'val_plus': int(hsv_ranges['v_plus'] * 255)
             })
 
-        # For now, use first color for backward compatibility with viewer
-        # TODO: Update viewer to handle multiple colors
-        if color_configs:
-            first_config = color_configs[0]
-            rangeDialog = HSVColorRangeRangeViewer(
-                first_config['selected_color'],
-                first_config['hue_threshold'],
-                first_config['saturation_threshold'],
-                first_config['value_threshold']
-            )
+        # Pass all colors to viewer using multi-color mode
+        if hsv_ranges_list:
+            rangeDialog = HSVColorRangeRangeViewer(hsv_ranges_list=hsv_ranges_list)
             rangeDialog.exec()
 
     def get_options(self):

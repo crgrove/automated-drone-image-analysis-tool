@@ -385,6 +385,19 @@ class AOIUIComponent:
         comment_icon.mousePressEvent = make_comment_click_handler(original_index)
         info_layout.addWidget(comment_icon)
 
+        # Location icon (always visible) - at the end
+        location_icon = qta.icon('fa6s.location-dot', color='#4CAF50')
+        location_label = QLabel()
+        location_label.setCursor(Qt.PointingHandCursor)
+        location_label.setToolTip("Calculate and show GPS location for this AOI")
+        location_label.setPixmap(location_icon.pixmap(16, 16))
+
+        def make_location_click_handler(aoi_idx, widget=location_label):
+            return lambda event: self.aoi_controller.show_aoi_location(aoi_idx, anchor_widget=widget)
+
+        location_label.mousePressEvent = make_location_click_handler(original_index)
+        info_layout.addWidget(location_label)
+
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         info_widget.customContextMenuRequested.connect(

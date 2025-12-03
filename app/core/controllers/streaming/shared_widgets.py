@@ -530,18 +530,38 @@ class StreamControlWidget(QWidget):
         connection_group.setToolTip("Configure and connect to video source (file, HDMI capture, or RTMP stream)")
         connection_layout = QGridLayout(connection_group)
 
-        # Stream URL with browse button for files
-        connection_layout.addWidget(QLabel("Stream URL:"), 0, 0)
+        # Stream type (moved to row 0)
+        connection_layout.addWidget(QLabel("Stream Type:"), 0, 0)
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
+        self.type_combo.setToolTip("Select the type of video source:\n"
+                                   "• File: Pre-recorded video file with timeline controls\n"
+                                   "• HDMI Capture: Live capture from HDMI capture device\n"
+                                   "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
+        connection_layout.addWidget(self.type_combo, 0, 1)
 
+        # Stream URL/Path (moved to row 1)
+        connection_layout.addWidget(QLabel("Stream URL/Path:"), 1, 0)
+
+        # Container for URL input - can be QLineEdit or QComboBox
         url_layout = QHBoxLayout()
+        
+        # QLineEdit for File and RTMP
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Click to browse for video file...")
         self.url_input.setText("")  # Default empty for file selection
         self.url_input.setToolTip("Enter or browse for the video source:\n"
                                   "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
-                                  "• HDMI Capture: Enter device index (0, 1, 2, etc.)\n"
                                   "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)")
         url_layout.addWidget(self.url_input, 1)
+
+        # QComboBox for HDMI Capture (hidden by default)
+        self.hdmi_device_combo = QComboBox()
+        self.hdmi_device_combo.setToolTip("Select HDMI capture device")
+        self.hdmi_device_combo.setVisible(False)
+        self.hdmi_device_combo.addItem("Scanning for devices...", None)
+        self.hdmi_device_combo.setEnabled(False)
+        url_layout.addWidget(self.hdmi_device_combo, 1)
 
         self.browse_button = QPushButton("Browse...")
         self.browse_button.setVisible(True)  # Visible by default since File is default
@@ -549,17 +569,13 @@ class StreamControlWidget(QWidget):
                                       "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM")
         url_layout.addWidget(self.browse_button)
 
-        connection_layout.addLayout(url_layout, 0, 1)
+        # Scan button for HDMI devices (hidden by default)
+        self.scan_button = QPushButton("Scan...")
+        self.scan_button.setVisible(False)
+        self.scan_button.setToolTip("Scan for available HDMI capture devices")
+        url_layout.addWidget(self.scan_button)
 
-        # Stream type
-        connection_layout.addWidget(QLabel("Stream Type:"), 1, 0)
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
-        self.type_combo.setToolTip("Select the type of video source:\n"
-                                   "• File: Pre-recorded video file with timeline controls\n"
-                                   "• HDMI Capture: Live capture from HDMI capture device\n"
-                                   "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
-        connection_layout.addWidget(self.type_combo, 1, 1)
+        connection_layout.addLayout(url_layout, 1, 1)
 
         # Connection buttons
         button_layout = QHBoxLayout()
@@ -586,14 +602,20 @@ class StreamControlWidget(QWidget):
 
         self.fps_label = QLabel("FPS: --")
         self.fps_label.setToolTip("Frames per second being processed")
-        self.latency_label = QLabel("Processing: -- ms")
-        self.latency_label.setToolTip("Time in milliseconds to process each frame")
+        self.processing_label = QLabel("Processing: -- ms")
+        self.processing_label.setToolTip("Time in milliseconds to process each frame")
+        self.latency_label = QLabel("Latency: -- ms")
+        self.latency_label.setToolTip("End-to-end latency from frame capture to display")
+        self.total_frames_label = QLabel("Total Frames: --")
+        self.total_frames_label.setToolTip("Total number of frames processed")
         self.detections_label = QLabel("Detections: --")
         self.detections_label.setToolTip("Number of detections in current frame")
 
         performance_layout.addWidget(self.fps_label, 0, 0)
-        performance_layout.addWidget(self.latency_label, 0, 1)
-        performance_layout.addWidget(self.detections_label, 1, 0)
+        performance_layout.addWidget(self.processing_label, 0, 1)
+        performance_layout.addWidget(self.latency_label, 1, 0)
+        performance_layout.addWidget(self.total_frames_label, 1, 1)
+        performance_layout.addWidget(self.detections_label, 2, 0)
 
         # Recording group (optional)
         if self.include_recording:
@@ -653,6 +675,8 @@ class StreamControlWidget(QWidget):
         self.disconnect_button.clicked.connect(self.disconnectRequested.emit)
         self.type_combo.currentTextChanged.connect(self.on_stream_type_changed)
         self.browse_button.clicked.connect(self.browse_for_file)
+        self.scan_button.clicked.connect(self._scan_hdmi_devices)
+        self.hdmi_device_combo.currentIndexChanged.connect(self._on_hdmi_device_selected)
         self.url_input.mousePressEvent = self.on_url_input_clicked
         if self.include_recording:
             self.start_recording_btn.clicked.connect(self._emit_start_recording)
@@ -663,27 +687,51 @@ class StreamControlWidget(QWidget):
     def on_stream_type_changed(self, stream_type: str):
         """Handle stream type selection changes."""
         if stream_type == "HDMI Capture":
-            self.url_input.setPlaceholderText("Device index (0, 1, 2, etc.)")
-            self.url_input.setText("0")
+            # Show HDMI device combo, hide URL input
+            self.url_input.setVisible(False)
+            self.hdmi_device_combo.setVisible(True)
             self.browse_button.setVisible(False)
+            self.scan_button.setVisible(True)
+            # Ensure devices are scanned
+            if self.hdmi_device_combo.count() <= 1:  # Only placeholder item
+                self._scan_hdmi_devices()
         elif stream_type == "File":
+            # Show URL input, hide HDMI combo
+            self.url_input.setVisible(True)
+            self.hdmi_device_combo.setVisible(False)
             self.url_input.setPlaceholderText("Click to browse for video file...")
             self.url_input.setText("")
             self.browse_button.setVisible(True)
+            self.scan_button.setVisible(False)
         elif stream_type == "RTMP Stream":
+            # Show URL input, hide HDMI combo
+            self.url_input.setVisible(True)
+            self.hdmi_device_combo.setVisible(False)
             self.url_input.setPlaceholderText("rtmp://server:port/app/stream")
             self.url_input.setText("")
             self.browse_button.setVisible(False)
+            self.scan_button.setVisible(False)
 
     def request_connect(self):
         """Request stream connection."""
-        url = self.url_input.text().strip()
-        if not url:
-            QMessageBox.warning(self, "Invalid URL", "Please enter a valid stream URL.")
-            return
+        combo_text = self.type_combo.currentText()
+        
+        # Get URL from appropriate widget
+        if combo_text == "HDMI Capture":
+            # Get device index from HDMI combo box
+            device_index = self.hdmi_device_combo.currentData()
+            if device_index is None:
+                QMessageBox.warning(self, "Invalid Device", "Please select a valid HDMI capture device.")
+                return
+            url = str(device_index)
+        else:
+            # Get URL from text input
+            url = self.url_input.text().strip()
+            if not url:
+                QMessageBox.warning(self, "Invalid URL", "Please enter a valid stream URL.")
+                return
 
         # Map combo box text to StreamType enum
-        combo_text = self.type_combo.currentText()
         stream_type_map = {
             "File": StreamType.FILE,
             "HDMI Capture": StreamType.HDMI_CAPTURE,
@@ -771,6 +819,45 @@ class StreamControlWidget(QWidget):
             self.recording_dir_edit.setText(selected_dir)
             self.recordingDirectoryChanged.emit(selected_dir)
 
+    def _scan_hdmi_devices(self):
+        """Scan for available HDMI capture devices using OpenCV."""
+        self.hdmi_device_combo.clear()
+        self.hdmi_device_combo.setEnabled(False)
+        self.hdmi_device_combo.addItem("Scanning for devices...", None)
+        
+        try:
+            found_any = False
+            max_devices = 10
+            for index in range(max_devices):
+                cap = cv2.VideoCapture(index)
+                if cap is not None and cap.isOpened():
+                    found_any = True
+                    label = f"Device {index}"
+                    self.hdmi_device_combo.addItem(label, index)
+                    cap.release()
+                else:
+                    if cap is not None:
+                        cap.release()
+
+            if not found_any:
+                self.hdmi_device_combo.clear()
+                self.hdmi_device_combo.addItem("No capture devices found", None)
+                self.hdmi_device_combo.setEnabled(False)
+            else:
+                self.hdmi_device_combo.setEnabled(True)
+                # Select first device by default
+                if self.hdmi_device_combo.count() > 0:
+                    self.hdmi_device_combo.setCurrentIndex(0)
+        except Exception as e:
+            self.hdmi_device_combo.clear()
+            self.hdmi_device_combo.addItem(f"Error scanning devices: {str(e)}", None)
+            self.hdmi_device_combo.setEnabled(False)
+
+    def _on_hdmi_device_selected(self, index: int):
+        """Handle HDMI device selection from combo box."""
+        # Device index is stored in itemData, which is automatically used in request_connect
+        pass
+
     def _on_recording_directory_changed(self, directory: str):
         """Handle manual edits to recording directory."""
         cleaned = directory.strip()
@@ -784,10 +871,14 @@ class StreamControlWidget(QWidget):
         """Update performance display."""
         fps = stats.get('fps', stats.get('avg_fps', 0))
         processing_time = stats.get('current_processing_time_ms', stats.get('avg_processing_time_ms', stats.get('total_ms', 0)))
+        latency = stats.get('latency_ms', 0)
+        total_frames = stats.get('total_frames', 0)
         detection_count = stats.get('detection_count', stats.get('detections', 0))
 
         self.fps_label.setText(f"FPS: {fps:.1f}")
-        self.latency_label.setText(f"Processing: {processing_time:.1f} ms")
+        self.processing_label.setText(f"Processing: {processing_time:.1f} ms")
+        self.latency_label.setText(f"Latency: {latency:.1f} ms")
+        self.total_frames_label.setText(f"Total Frames: {total_frames}")
         self.detections_label.setText(f"Detections: {detection_count}")
 
     def browse_for_file(self):

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Viewer.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -138,6 +138,13 @@ class Ui_Viewer(object):
         self.galleryModeButton.setChecked(False)
 
         self.horizontalLayout_5.addWidget(self.galleryModeButton)
+
+        self.line_2 = QFrame(self.mainHeaderWidget)
+        self.line_2.setObjectName(u"line_2")
+        self.line_2.setFrameShape(QFrame.Shape.VLine)
+        self.line_2.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self.horizontalLayout_5.addWidget(self.line_2)
 
         self.showPOIsButton = QToolButton(self.mainHeaderWidget)
         self.showPOIsButton.setObjectName(u"showPOIsButton")
@@ -398,7 +405,7 @@ class Ui_Viewer(object):
         self.thumbnailScrollArea.setWidgetResizable(True)
         self.scrollAreaWidgetContents = QWidget()
         self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
-        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 1222, 96))
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 1230, 96))
         sizePolicy.setHeightForWidth(self.scrollAreaWidgetContents.sizePolicy().hasHeightForWidth())
         self.scrollAreaWidgetContents.setSizePolicy(sizePolicy)
         self.scrollAreaWidgetContents.setMinimumSize(QSize(0, 96))

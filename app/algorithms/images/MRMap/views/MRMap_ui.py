@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'MRMap.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -173,7 +173,7 @@ class Ui_MRMap(object):
 "Higher segment counts improve detection in images with varying features across the scene.\n"
 "Recommended: 4-9 segments for typical drone imagery.", None))
 #endif // QT_CONFIG(tooltip)
-        self.colorspaceLabel.setText(QCoreApplication.translate("MRMap", u"Colorspace:", None))
+        self.colorspaceLabel.setText(QCoreApplication.translate("MRMap", u"Color Space:", None))
         self.colorspaceComboBox.setItemText(0, QCoreApplication.translate("MRMap", u"RGB", None))
         self.colorspaceComboBox.setItemText(1, QCoreApplication.translate("MRMap", u"HSV", None))
         self.colorspaceComboBox.setItemText(2, QCoreApplication.translate("MRMap", u"LAB", None))

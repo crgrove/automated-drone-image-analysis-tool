@@ -7,7 +7,7 @@ color anomaly and motion detection with fusion, temporal smoothing, and filterin
 
 from core.services.LoggerService import LoggerService
 from core.services.streaming.StreamingUtils import (
-    FrameQueue, PerformanceMetrics, StageTimings, TimingOverlayRenderer
+    FrameQueue, PerformanceMetrics, StageTimings
 )
 from PySide6.QtCore import QObject, Signal
 from threading import Lock
@@ -62,7 +62,6 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Performance tracking
         self.metrics = PerformanceMetrics()
         self.frame_queue = FrameQueue()
-        self.timing_renderer = TimingOverlayRenderer()
 
         # FPS calculation
         self._fps_counter = 0
@@ -608,9 +607,6 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                         (w//2 - 210, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # Add timing overlay
-        if config.show_timing_overlay:
-            annotated_frame = self.timing_renderer.render(annotated_frame, self.metrics, timings)
 
         # Upscale if rendered at processing res
         if config.render_at_processing_res and scale_factor < 1.0:

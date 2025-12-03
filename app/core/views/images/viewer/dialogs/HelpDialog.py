@@ -24,9 +24,9 @@ class HelpDialog(QDialog):
         self.setWindowTitle("Viewer Help")
         self.setModal(False)
 
-        # Set window flags to keep dialog on top (especially important on macOS)
-        # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        # Don't use WindowStaysOnTopHint as it blocks modal dialogs
+        # The dialog will stay visible but won't interfere with other dialogs
+        # Users can bring it to front by clicking on it if needed
 
         self.resize(800, 700)
         self.parent_viewer = parent
@@ -225,11 +225,6 @@ class HelpDialog(QDialog):
                         <td>Upscale currently visible portion of image</td>
                     </tr>
                     <tr>
-                        <td>Shift + E</td>
-                        <td>Export coverage extent KML (generates polygons showing
-                            geographic area covered by all images)</td>
-                    </tr>
-                    <tr>
                         <td>Shift + O</td>
                         <td>Override altitude for all images (manually set custom
                             AGL altitude for GSD calculations)</td>
@@ -250,7 +245,7 @@ class HelpDialog(QDialog):
             </div>
 
             <div class="section">
-                <h2>🔘 Toolbar Buttons</h2>
+                <h2>Toolbar Buttons</h2>
 
                 <h3>View & Analysis Controls</h3>
                 <table>
@@ -285,10 +280,6 @@ class HelpDialog(QDialog):
                     <tr>
                         <td>{icon_html('measure')} Measure</td>
                         <td>Open the measurement tool for distance/area measurements.</td>
-                    </tr>
-                    <tr>
-                        <td>{icon_html('help')} Help</td>
-                        <td>Show this Viewer Help dialog.</td>
                     </tr>
                 </table>
 
@@ -356,10 +347,6 @@ class HelpDialog(QDialog):
 
                 <h3>Main Image Area</h3>
                 <table>
-                    <tr>
-                        <td>Left Click</td>
-                        <td>Create new AOI (circle mode) at cursor location</td>
-                    </tr>
                     <tr>
                         <td>Left Click + Drag</td>
                         <td>Draw a rectangle to zoom to that section</td>

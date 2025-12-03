@@ -18,8 +18,58 @@ import sys
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
+version = '2.0.0'
 
-version = '2.0.0 Beta'
+
+def update_app_version(app_version):
+    """Update the app version setting if necessary.
+    
+    Updates the version setting if:
+    1. No version is stored (first run)
+    2. New app version is greater than stored version
+    3. App version is full (release) and stored version is Beta
+    
+    Args:
+        app_version (str): The current application version string.
+    """
+    logger = LoggerService()
+    settings_service = SettingsService()
+    
+    try:
+        current_version = settings_service.get_setting('app_version')
+        
+        # Update version if not set (first run)
+        if current_version is None:
+            settings_service.set_setting('app_version', app_version)
+            logger.info(f"Set app version to {app_version} (first run)")
+            return
+        
+        # Parse versions to check for Beta -> Full upgrade
+        try:
+            current_tuple = PickleHelper._version_to_tuple(current_version)
+            app_tuple = PickleHelper._version_to_tuple(app_version)
+            
+            # Check if app version is full (label_val = 0) and current is Beta (label_val = 2)
+            is_app_full = app_tuple[3] == 0  # label_val = 0 means release/full
+            is_current_beta = current_tuple[3] == 2  # label_val = 2 means Beta
+            
+            # Update if: numeric version is greater OR (app is full AND current is Beta)
+            current_version_int = PickleHelper.version_to_int(current_version)
+            new_version_int = PickleHelper.version_to_int(app_version)
+            
+            if new_version_int > current_version_int or (is_app_full and is_current_beta):
+                settings_service.set_setting('app_version', app_version)
+                if is_app_full and is_current_beta:
+                    logger.info(f"Updated app version from Beta to full release: {current_version} -> {app_version}")
+                else:
+                    logger.info(f"Updated app version: {current_version} -> {app_version}")
+        except (ValueError, AttributeError) as e:
+            # If version parsing fails, update to current version
+            logger.warning(f"Failed to parse version strings, updating to {app_version}: {e}")
+            settings_service.set_setting('app_version', app_version)
+            
+    except Exception as e:
+        logger.error(f"Error updating app version: {e}")
 
 
 def check_and_update_pickle_files(app_version):
@@ -42,14 +92,12 @@ def check_and_update_pickle_files(app_version):
         # 2. No drone sensor file exists in AppData
         # 3. New app version is greater than stored version
         if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
-            settings_service.set_setting('app_version', app_version)
             PickleHelper.copy_pickle('drones.pkl')
             logger.info(f"Copied drones.pkl to AppData (first run or missing file)")
         else:
             current_version_int = PickleHelper.version_to_int(current_version)
             new_version_int = PickleHelper.version_to_int(app_version)
             if new_version_int > current_version_int:
-                settings_service.set_setting('app_version', app_version)
                 PickleHelper.copy_pickle('drones.pkl')
                 logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
         
@@ -77,8 +125,11 @@ def main():
     qdarktheme.setup_theme()
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
     
-    # Check and update pickle files on every startup
+    # Check and update pickle files on every startup (must be before version update)
     check_and_update_pickle_files(version)
+    
+    # Update app version setting (independent of pickle operations)
+    update_app_version(version)
 
     # Show selection dialog first; launch MainWindow when Images is chosen
     dlg = SelectionDialog('Dark')
@@ -107,7 +158,7 @@ def main():
         if choice == 'images':
             # Wrap startup in a try so any init error raises to excepthook
             try:
-                app._main_window = MainWindow(qdarktheme, version)
+                app._main_window = MainWindow(qdarktheme)
                 app._main_window.show()
             except Exception:
                 # Re-raise so our global excepthook handles exit
@@ -145,7 +196,7 @@ def main():
         # Check if review was requested
         if review_file_path:
             # Review mode: open MainWindow, load XML, and open Viewer
-            app._main_window = MainWindow(qdarktheme, version)
+            app._main_window = MainWindow(qdarktheme)
             app._main_window.show()
 
             # Load the XML file
@@ -161,7 +212,7 @@ def main():
                 )
         else:
             # Normal wizard flow
-            app._main_window = MainWindow(qdarktheme, version)
+            app._main_window = MainWindow(qdarktheme)
 
             # Populate MainWindow with wizard data if wizard was completed (not cancelled)
             if wizard_result == QDialog.Accepted and wizard_data_from_wizard:

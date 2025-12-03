@@ -26,7 +26,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
 from core.services.streaming.StreamingUtils import (
-    FrameQueue, ThreadedCaptureWorker, PerformanceMetrics, StageTimings, TimingOverlayRenderer
+    FrameQueue, PerformanceMetrics, StageTimings
 )
 from enum import Enum
 from collections import deque
@@ -91,8 +91,6 @@ class HSVConfig:
     processing_resolution: Optional[Tuple[int, int]] = None  # (width, height) to downsample for color detection
     motion_processing_resolution: Optional[Tuple[int, int]] = None  # Separate (width, height) for motion detection (None = use processing_resolution)
 
-    # Threaded Capture Options
-    use_threaded_capture: bool = False  # Use background thread for capture
     target_capture_fps: Optional[float] = None  # Optional FPS limit for capture
 
     # Hue Expansion Options
@@ -146,7 +144,6 @@ class HSVConfig:
     max_motion_detections: int = 5  # Limit motion detection processing (0 = unlimited, recommended: 5-100 for performance)
 
     # Overlay Options
-    show_timing_overlay: bool = False  # Display FPS and timing information
     show_detections: bool = True  # Toggle detection rendering
 
 
@@ -207,8 +204,6 @@ class ColorDetectionService(QObject):
         self._original_frame = None  # Original high resolution frame
         self._current_scale_factor = 1.0  # Scale factor between processing and original
 
-        # Threaded capture
-        self._capture_worker = None  # ThreadedCaptureWorker instance
 
         self.logger.info(f"Color detector initialized (GPU: {self._gpu_available})")
 
@@ -421,7 +416,6 @@ class ColorDetectionService(QObject):
                         hsv_ranges=config.hsv_ranges,
                         hsv_ranges_list=config.hsv_ranges_list,
                         processing_resolution=None,  # Already at target resolution
-                        use_threaded_capture=config.use_threaded_capture,
                         target_capture_fps=config.target_capture_fps,
                         # Hue expansion
                         enable_hue_expansion=config.enable_hue_expansion,
@@ -464,7 +458,6 @@ class ColorDetectionService(QObject):
                         render_at_processing_res=config.render_at_processing_res,
                         use_detection_color_for_rendering=config.use_detection_color_for_rendering,
                         max_detections_to_render=config.max_detections_to_render,
-                        show_timing_overlay=config.show_timing_overlay,
                         show_detections=config.show_detections
                     )
                 else:
@@ -511,7 +504,6 @@ class ColorDetectionService(QObject):
                         hsv_ranges_list=config.hsv_ranges_list,
                         processing_resolution=None,  # Already at target resolution
                         motion_processing_resolution=None,  # Already at target resolution
-                        use_threaded_capture=config.use_threaded_capture,
                         target_capture_fps=config.target_capture_fps,
                         # Hue expansion
                         enable_hue_expansion=config.enable_hue_expansion,
@@ -554,7 +546,6 @@ class ColorDetectionService(QObject):
                         render_at_processing_res=config.render_at_processing_res,
                         use_detection_color_for_rendering=config.use_detection_color_for_rendering,
                         max_detections_to_render=config.max_detections_to_render,
-                        show_timing_overlay=config.show_timing_overlay,
                         show_detections=config.show_detections
                     )
 
@@ -1820,18 +1811,6 @@ class ColorDetectionService(QObject):
                 # Text
                 cv2.putText(annotated, label, (x + 2, y - 4),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-
-        # Add timing overlay if enabled
-        if self._config.show_timing_overlay:
-            # Calculate FPS
-            if len(self._processing_times) > 0:
-                avg_time = sum(self._processing_times) / len(self._processing_times)
-                fps = 1.0 / avg_time if avg_time > 0 else 0
-
-                timing_text = f"FPS: {fps:.1f} | Avg: {avg_time*1000:.1f}ms"
-                # Use annotated frame height (not original frame) for correct positioning
-                cv2.putText(annotated, timing_text, (10, annotated.shape[0] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
         # Add detection count and config info
         info_text = f"Detections: {len(detections)}"

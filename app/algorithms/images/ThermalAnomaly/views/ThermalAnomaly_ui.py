@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'ThermalAnomaly.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -60,23 +60,11 @@ class Ui_ThermalAnomaly(object):
 
         self.horizontalLayout_3.addWidget(self.anomalySpinBox)
 
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_3.addItem(self.horizontalSpacer)
-
-
-        self.horizontalLayout_4.addLayout(self.horizontalLayout_3)
-
-
-        self.verticalLayout.addLayout(self.horizontalLayout_4)
-
-        self.horizontalLayout = QHBoxLayout()
-        self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.segmentsLabel = QLabel(ThermalAnomaly)
         self.segmentsLabel.setObjectName(u"segmentsLabel")
         self.segmentsLabel.setFont(font)
 
-        self.horizontalLayout.addWidget(self.segmentsLabel)
+        self.horizontalLayout_3.addWidget(self.segmentsLabel)
 
         self.segmentsComboBox = QComboBox(ThermalAnomaly)
         self.segmentsComboBox.addItem("")
@@ -96,14 +84,17 @@ class Ui_ThermalAnomaly(object):
         self.segmentsComboBox.setMinimumSize(QSize(30, 0))
         self.segmentsComboBox.setFont(font)
 
-        self.horizontalLayout.addWidget(self.segmentsComboBox)
+        self.horizontalLayout_3.addWidget(self.segmentsComboBox)
 
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-        self.horizontalLayout.addItem(self.horizontalSpacer_2)
+        self.horizontalLayout_3.addItem(self.horizontalSpacer)
 
 
-        self.verticalLayout.addLayout(self.horizontalLayout)
+        self.horizontalLayout_4.addLayout(self.horizontalLayout_3)
+
+
+        self.verticalLayout.addLayout(self.horizontalLayout_4)
 
 
         self.retranslateUi(ThermalAnomaly)

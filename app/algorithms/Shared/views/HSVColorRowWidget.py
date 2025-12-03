@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIntValidator, QPainter, QFont, QFontMetrics
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
                                QLineEdit, QPushButton, QSizePolicy, QColorDialog)
+import qtawesome as qta
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
 from core.services.color.CustomColorsService import get_custom_colors_service
 from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
@@ -318,11 +319,12 @@ class HSVColorRowWidget(QWidget):
         layout.addWidget(self.gradientWidget)
 
         # Column 4: Delete button
-        self.deleteButton = QPushButton("✕", self)
+        self.deleteButton = QPushButton(self)
         self.deleteButton.setObjectName("deleteButton")
         self.deleteButton.setMinimumSize(28, 28)
         self.deleteButton.setMaximumSize(28, 28)
         self.deleteButton.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.deleteButton.setIcon(qta.icon('fa6s.xmark', color='white'))
         self.deleteButton.setStyleSheet("""
             QPushButton#deleteButton {
                 background-color: #d32f2f;

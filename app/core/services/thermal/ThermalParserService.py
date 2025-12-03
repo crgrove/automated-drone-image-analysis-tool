@@ -33,6 +33,7 @@ class ThermalParserService:
     ]
 
     AUTEL_MODELS = [
+        'XL726',
         'XK729',
         'XL709',
         'XL801',
@@ -94,6 +95,7 @@ class ThermalParserService:
         """
         data = MetaDataHelper.get_meta_data_exiftool(full_path)
         meta_fields = {k.split(':')[1].strip(): v for k, v in data.items() if ':' in k}
+        print(meta_fields)
         camera_model, platform = self._get_model_and_platform(meta_fields)
         assert camera_model != "Not Supported", "Camera Model is not supported"
 

@@ -41,14 +41,13 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert hasattr(widget, 'input_processing_tab')
         assert hasattr(widget.input_processing_tab, 'resolution_preset')
         assert widget.input_processing_tab.resolution_preset.count() > 0
-        assert "1280x720" in [widget.input_processing_tab.resolution_preset.itemText(i) for i in range(widget.input_processing_tab.resolution_preset.count())]
+        assert "720P (1280x720)" in [widget.input_processing_tab.resolution_preset.itemText(i) for i in range(widget.input_processing_tab.resolution_preset.count())]
 
         # Check custom resolution inputs exist
         assert hasattr(widget.input_processing_tab, 'processing_width')
         assert hasattr(widget.input_processing_tab, 'processing_height')
 
         # Check performance options
-        assert hasattr(widget.input_processing_tab, 'threaded_capture')
         assert hasattr(widget.input_processing_tab, 'render_at_processing_res')
         # Note: enable_morphology is not in UI (removed per user request)
 
@@ -171,11 +170,6 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert hasattr(widget.rendering_tab, 'max_detections_to_render')
         assert widget.rendering_tab.max_detections_to_render.value() == 100  # Default 100
 
-        # Check overlay options
-        assert hasattr(widget.rendering_tab, 'show_timing_overlay')
-        assert widget.rendering_tab.show_timing_overlay.isChecked() is False  # Default OFF
-        assert hasattr(widget.rendering_tab, 'show_detection_thumbnails')
-        assert widget.rendering_tab.show_detection_thumbnails.isChecked() is False  # Default OFF
 
     def test_default_values(self, qapp):
         """Test that default values match original implementation."""
@@ -183,7 +177,6 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         config = widget.get_config()
 
         # Input tab defaults
-        assert config['use_threaded_capture'] is True
         assert config['render_at_processing_res'] is True
         # Note: enable_morphology not in UI, uses service default
 
@@ -222,7 +215,6 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert config['render_shape'] == 1  # Circle
         assert config['use_detection_color_for_rendering'] is True
         assert config['max_detections_to_render'] == 100
-        assert config['show_timing_overlay'] is False
 
     def test_resolution_preset_changes(self, qapp):
         """Test resolution preset changes."""
@@ -234,7 +226,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert widget.input_processing_tab.processing_height.isEnabled() is True
 
         # Test preset disables inputs and sets values
-        widget.input_processing_tab.resolution_preset.setCurrentText("1920x1080")
+        widget.input_processing_tab.resolution_preset.setCurrentText("1080P (1920x1080)")
         assert widget.input_processing_tab.processing_width.isEnabled() is False
         assert widget.input_processing_tab.processing_height.isEnabled() is False
         assert widget.input_processing_tab.processing_width.value() == 1920

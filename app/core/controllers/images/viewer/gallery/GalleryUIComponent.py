@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QListView, QPushButton, QFrame,
                                QAbstractItemView, QStyledItemDelegate, QStyle,
                                QStyleOptionViewItem, QApplication)
-from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent, QObject
+from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent, QObject, QPoint
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon, QKeyEvent
 import qtawesome as qta
 
@@ -31,6 +31,9 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         # Create flag icons (same as single-image mode)
         self.flag_icon_active = qta.icon('fa6s.flag', color='#FF7043').pixmap(16, 16)
         self.flag_icon_inactive = qta.icon('fa6s.flag', color='#808080').pixmap(16, 16)
+        
+        # Create location icon
+        self.location_icon = qta.icon('fa6s.location-dot', color='#4CAF50').pixmap(16, 16)
 
     def sizeHint(self, option, index):
         """Return the size hint for each item."""
@@ -88,12 +91,17 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             painter.setPen(QPen(QColor(100, 100, 100), 1))
             painter.drawRect(thumbnail_rect)
 
-            # Draw flag icon in bottom-right corner (same as single-image mode)
+            # Draw flag icon first (to the left of location)
             flagged = aoi_data.get('flagged', False)
             flag_icon = self.flag_icon_active if flagged else self.flag_icon_inactive
-            flag_x = thumbnail_rect.right() - 20
+            flag_x = thumbnail_rect.right() - 40
             flag_y = thumbnail_rect.bottom() - 20
             painter.drawPixmap(flag_x, flag_y, flag_icon)
+            
+            # Draw location icon in bottom-right corner - at the end
+            location_x = thumbnail_rect.right() - 20
+            location_y = thumbnail_rect.bottom() - 20
+            painter.drawPixmap(location_x, location_y, self.location_icon)
 
             # Draw comment indicator in top-left corner
             comment = aoi_data.get('user_comment', '').strip()
@@ -471,8 +479,8 @@ class GalleryUIComponent(QObject):
                                     thumbnail_size.height()
                                 )
                                 
-                                # Check if click is on flag button (bottom-right corner, 16x16 icon)
-                                flag_rect = QRect(thumbnail_rect.right() - 20, thumbnail_rect.bottom() - 20, 16, 16)
+                                # Check if click is on flag button (to the left of location, 16x16 icon)
+                                flag_rect = QRect(thumbnail_rect.right() - 40, thumbnail_rect.bottom() - 20, 16, 16)
                                 if flag_rect.contains(event.pos()):
                                     # Ensure this item is selected before toggling
                                     if self.gallery_view.currentIndex() != index:
@@ -481,6 +489,21 @@ class GalleryUIComponent(QObject):
                                     if delegate.gallery_controller:
                                         delegate.gallery_controller.toggle_aoi_flag_by_index(image_idx, aoi_idx)
                                     # Prevent the click from propagating to cause other selections
+                                    event.accept()
+                                    return True
+                                
+                                # Check if click is on location button (bottom-right corner, 16x16 icon) - at the end
+                                location_rect = QRect(thumbnail_rect.right() - 20, thumbnail_rect.bottom() - 20, 16, 16)
+                                if location_rect.contains(event.pos()):
+                                    # Ensure this item is selected
+                                    if self.gallery_view.currentIndex() != index:
+                                        self.gallery_view.setCurrentIndex(index)
+                                    # Show AOI location - get the visual rect for anchoring
+                                    visual_rect = self.gallery_view.visualRect(index)
+                                    anchor_point = self.gallery_view.mapToGlobal(visual_rect.bottomRight())
+                                    if delegate.gallery_controller and hasattr(delegate.gallery_controller.parent, 'aoi_controller'):
+                                        delegate.gallery_controller.parent.aoi_controller.show_aoi_location(aoi_idx, image_idx, anchor_point=anchor_point)
+                                    # Prevent the click from propagating
                                     event.accept()
                                     return True
                                 

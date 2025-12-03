@@ -98,27 +98,64 @@ class RenderingTab(QWidget):
         limit_layout.addWidget(self.max_detections_to_render, 0, 1)
 
         layout.addWidget(limit_group)
-
-        # Overlay Options
-        overlay_group = QGroupBox("Overlay Options")
-        overlay_layout = QVBoxLayout(overlay_group)
-
-        self.show_timing_overlay = QCheckBox("Show Timing Overlay (FPS, metrics)")
-        self.show_timing_overlay.setChecked(False)  # Default OFF
-        self.show_timing_overlay.setToolTip("Displays detailed timing information on video overlay.\n"
-                                            "Shows: FPS, processing time, detection counts, pipeline breakdown.\n"
-                                            "Useful for performance tuning and debugging.\n"
-                                            "Recommended: OFF for clean view, ON when optimizing performance.")
-        overlay_layout.addWidget(self.show_timing_overlay)
-
-        self.show_detection_thumbnails = QCheckBox("Show Detection Thumbnails (auto-fit window width)")
-        self.show_detection_thumbnails.setChecked(False)  # Default OFF
-        self.show_detection_thumbnails.setToolTip("Shows zoomed thumbnails of detected objects below video.\n"
-                                                  "Number of thumbnails adjusts automatically to window width (1-20).\n"
-                                                  "Thumbnails persist for 2 seconds minimum (reduces flicker).\n"
-                                                  "Useful for: Close-up view of detections, tracking specific objects.\n"
-                                                  "Recommended: ON for analysis, OFF for clean display.")
-        overlay_layout.addWidget(self.show_detection_thumbnails)
-
-        layout.addWidget(overlay_group)
         layout.addStretch()
+
+    def get_config(self) -> dict:
+        """
+        Get current rendering configuration.
+        
+        Returns:
+            Dictionary with rendering configuration values
+        """
+        # Map shape text to integer (0=Box, 1=Circle, 2=Dot, 3=Off)
+        shape_map = {
+            "Box": 0,
+            "Circle": 1,
+            "Dot": 2,
+            "Off": 3
+        }
+        
+        config = {
+            'render_shape': shape_map.get(self.render_shape.currentText(), 1),
+            'render_text': self.render_text.isChecked(),
+            'render_contours': self.render_contours.isChecked(),
+            'max_detections_to_render': self.max_detections_to_render.value(),
+        }
+        
+        # Only include if the option exists
+        if self.show_detection_color_option and hasattr(self, 'use_detection_color'):
+            config['use_detection_color_for_rendering'] = self.use_detection_color.isChecked()
+        
+        return config
+
+    def set_config(self, config: dict):
+        """
+        Set rendering configuration from dictionary.
+        
+        Args:
+            config: Dictionary with rendering configuration values
+        """
+        # Map integer to shape text (0=Box, 1=Circle, 2=Dot, 3=Off)
+        shape_map = {
+            0: "Box",
+            1: "Circle",
+            2: "Dot",
+            3: "Off"
+        }
+        
+        if 'render_shape' in config:
+            shape_text = shape_map.get(config['render_shape'], "Circle")
+            self.render_shape.setCurrentText(shape_text)
+        
+        if 'render_text' in config:
+            self.render_text.setChecked(bool(config['render_text']))
+        
+        if 'render_contours' in config:
+            self.render_contours.setChecked(bool(config['render_contours']))
+        
+        if 'max_detections_to_render' in config:
+            self.max_detections_to_render.setValue(config['max_detections_to_render'])
+        
+        if 'use_detection_color_for_rendering' in config and self.show_detection_color_option:
+            if hasattr(self, 'use_detection_color'):
+                self.use_detection_color.setChecked(bool(config['use_detection_color_for_rendering']))

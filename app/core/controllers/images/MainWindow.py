@@ -42,13 +42,12 @@ os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 class MainWindow(QMainWindow, Ui_MainWindow):
     """Controller for the Main Window (QMainWindow)."""
 
-    def __init__(self, theme, version):
+    def __init__(self, theme):
         """
         Initializes the ADIAT Main Window.
 
         Args:
             theme (qdarktheme): Instance of qdarktheme to toggle light/dark mode.
-            version (str): App version to display in the main window title bar.
         """
         self.logger = LoggerService()
         QMainWindow.__init__(self)
@@ -57,14 +56,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
 
         self.setStylesheets()
-
+        self.settings_service = SettingsService()
+        self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
         self.__threads = []
         self.images = None
         self.algorithmWidget = None
         self.identifierColor = (0, 255, 0)
         self._auto_start_requested = False
         self.HistogramImgWidget.setVisible(False)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR")
+        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
         self._load_algorithms()
 
         self.results_path = ''
@@ -85,7 +85,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.processingResolutionCombo.addItem(preset_name)
 
         self.processingResolutionCombo.setMinimumWidth(80)
-        self._set_defaults(version)
+        self._set_defaults()
 
         # Global Options layout remains as defined in the .ui
 
@@ -946,7 +946,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.viewResultsButton.setEnabled(enabled)
 
-    def _set_defaults(self, version):
+    def _set_defaults(self):
         """
         Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
         """
@@ -1003,7 +1003,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.settings_service.set_setting('Theme', 'Dark')
             theme = 'Dark'
         self.update_theme(theme)
-        # Note: Pickle file version checking is now handled in __main__.py at startup
 
     def update_theme(self, theme):
         """
