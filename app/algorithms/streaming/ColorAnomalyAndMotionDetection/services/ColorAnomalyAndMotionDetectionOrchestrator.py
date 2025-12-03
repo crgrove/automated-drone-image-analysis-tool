@@ -366,7 +366,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                 w = max(1, min(w, w_frame - x))
                 h = max(1, min(h, h_frame - y))
 
-                region_hsv = frame_hsv[y:y+h, x:x+w]
+                region_hsv = frame_hsv[y:y + h, x:x + w]
                 if region_hsv.size > 0:
                     hue_value = float(region_hsv[:, :, 0].mean())
 
@@ -581,11 +581,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
                 if config.render_text:
                     if detection.detection_type == 'fused':
-                        label = f"#{i+1} FUSED {int(detection.area)}px"
+                        label = f"#{i + 1} FUSED {int(detection.area)}px"
                     elif detection.detection_type == 'color_anomaly':
-                        label = f"#{i+1} COLOR {int(detection.area)}px"
+                        label = f"#{i + 1} COLOR {int(detection.area)}px"
                     else:
-                        label = f"#{i+1} MOTION {int(detection.area)}px"
+                        label = f"#{i + 1} MOTION {int(detection.area)}px"
                     cv2.putText(annotated_frame, label, (x_scaled, max(15, y_scaled - 5)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
 
@@ -601,12 +601,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             cv2.rectangle(overlay, (0, 0), (w, 80), (0, 0, 0), -1)
             cv2.addWeighted(overlay, 0.7, annotated_frame, 0.3, 0, annotated_frame)
             cv2.putText(annotated_frame, "CAMERA MOVEMENT DETECTED",
-                        (w//2 - 190, 30),
+                        (w // 2 - 190, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2, cv2.LINE_AA)
             cv2.putText(annotated_frame, "Motion detection paused (color still active)",
-                        (w//2 - 210, 60),
+                        (w // 2 - 210, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-
 
         # Upscale if rendered at processing res
         if config.render_at_processing_res and scale_factor < 1.0:

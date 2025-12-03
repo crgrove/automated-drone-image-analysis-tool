@@ -211,7 +211,7 @@ class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmCo
         hsv_ranges_list = []
         for row in self.color_rows:
             rgb = row.get_rgb()
-            
+
             if hasattr(row, 'has_hsv_ranges') and row.has_hsv_ranges():
                 # HSV picker mode: ranges are in fractional format (0-1), convert to OpenCV format
                 ranges = row.get_hsv_ranges_fractional()

@@ -198,7 +198,7 @@ class PdfGeneratorService:
             # Add overview map
             map_bytes = self._generate_overview_map()
             if map_bytes:
-                map_img = Image(map_bytes, width=7*inch, height=5.25*inch)
+                map_img = Image(map_bytes, width=7 * inch, height=5.25 * inch)
                 map_img.hAlign = 'CENTER'
                 self.story.append(map_img)
                 self.story.append(Spacer(1, 20))
@@ -454,7 +454,7 @@ class PdfGeneratorService:
                     composite_bytes = BytesIO(buffer)
 
                     # Use full page width
-                    composite_img_obj = Image(composite_bytes, width=7.5*inch, height=6*inch)
+                    composite_img_obj = Image(composite_bytes, width=7.5 * inch, height=6 * inch)
                     composite_img_obj.hAlign = 'CENTER'
                     self.story.append(composite_img_obj)
                     self.story.append(Spacer(1, 10))
@@ -615,7 +615,7 @@ class PdfGeneratorService:
             # Draw connections between points (chronologically)
             for i in range(len(gps_locations) - 1):
                 pt1 = lat_lon_to_pixel(gps_locations[i]['lat'], gps_locations[i]['lon'])
-                pt2 = lat_lon_to_pixel(gps_locations[i+1]['lat'], gps_locations[i+1]['lon'])
+                pt2 = lat_lon_to_pixel(gps_locations[i + 1]['lat'], gps_locations[i + 1]['lon'])
                 cv2.line(map_img, pt1, pt2, (255, 255, 255), 3)  # White line with border
                 cv2.line(map_img, pt1, pt2, (150, 150, 150), 2)
 
@@ -748,13 +748,13 @@ class PdfGeneratorService:
                             y_offset = (ty - min_tile_y) * tile_size
 
                             # Place tile
-                            tile_canvas[y_offset:y_offset+tile_size, x_offset:x_offset+tile_size] = tile_img
+                            tile_canvas[y_offset:y_offset + tile_size, x_offset:x_offset + tile_size] = tile_img
                     except Exception as e:
                         self.logger.error(f"Error downloading tile ({tx}, {ty}): {e}")
                         # Place gray tile as fallback
                         x_offset = (tx - min_tile_x) * tile_size
                         y_offset = (ty - min_tile_y) * tile_size
-                        tile_canvas[y_offset:y_offset+tile_size, x_offset:x_offset+tile_size] = np.ones((tile_size, tile_size, 3), dtype=np.uint8) * 230
+                        tile_canvas[y_offset:y_offset + tile_size, x_offset:x_offset + tile_size] = np.ones((tile_size, tile_size, 3), dtype=np.uint8) * 230
 
             # Convert geographic bounds to pixel coordinates in tile canvas
             min_lat_pixel_y = self._lat_to_pixel_y(min_lat, zoom, tile_size)
@@ -1169,12 +1169,12 @@ class PdfGeneratorService:
             # Place closeup (6x) image bottom left (fill left half)
             closeup_y = full_h + 20
             closeup_x = 0
-            composite[closeup_y:closeup_y+closeup_scaled_h, closeup_x:closeup_x+closeup_scaled_w] = closeup_scaled
+            composite[closeup_y:closeup_y + closeup_scaled_h, closeup_x:closeup_x + closeup_scaled_w] = closeup_scaled
 
             # Place medium (3x) image bottom right (fill right half)
             medium_y = full_h + 20
             medium_x = composite_w // 2
-            composite[medium_y:medium_y+medium_scaled_h, medium_x:medium_x+medium_scaled_w] = medium_scaled
+            composite[medium_y:medium_y + medium_scaled_h, medium_x:medium_x + medium_scaled_w] = medium_scaled
 
             # Calculate AOI positions in composite image
             full_aoi_composite = (full_aoi_pos[0], full_aoi_pos[1])
@@ -1186,7 +1186,7 @@ class PdfGeneratorService:
                 # Calculate direction vector
                 dx = circle_center[0] - start_pt[0]
                 dy = circle_center[1] - start_pt[1]
-                distance = math.sqrt(dx*dx + dy*dy)
+                distance = math.sqrt(dx * dx + dy * dy)
 
                 if distance == 0:
                     return circle_center

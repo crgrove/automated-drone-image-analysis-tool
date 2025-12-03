@@ -46,7 +46,7 @@ def test_get_threshold(rx_anomaly_service):
         thresholds.append(threshold)
 
     # Thresholds should increase with sensitivity
-    assert all(thresholds[i] <= thresholds[i+1] for i in range(len(thresholds)-1))
+    assert all(thresholds[i] <= thresholds[i + 1] for i in range(len(thresholds) - 1))
 
 
 def test_process_image(rx_anomaly_service, test_image):

@@ -545,7 +545,7 @@ class StreamControlWidget(QWidget):
 
         # Container for URL input - can be QLineEdit or QComboBox
         url_layout = QHBoxLayout()
-        
+
         # QLineEdit for File and RTMP
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Click to browse for video file...")
@@ -715,7 +715,7 @@ class StreamControlWidget(QWidget):
     def request_connect(self):
         """Request stream connection."""
         combo_text = self.type_combo.currentText()
-        
+
         # Get URL from appropriate widget
         if combo_text == "HDMI Capture":
             # Get device index from HDMI combo box
@@ -824,7 +824,7 @@ class StreamControlWidget(QWidget):
         self.hdmi_device_combo.clear()
         self.hdmi_device_combo.setEnabled(False)
         self.hdmi_device_combo.addItem("Scanning for devices...", None)
-        
+
         try:
             found_any = False
             max_devices = 10

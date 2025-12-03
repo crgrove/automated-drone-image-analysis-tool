@@ -72,7 +72,7 @@ class ColorDetectionController(StreamAlgorithmController):
         self.control_widget = ColorDetectionControlWidget()
         self.control_widget.configChanged.connect(self._on_config_changed)
         layout.addWidget(self.control_widget)
-        
+
         # Apply initial config from widget to service (if detector is initialized)
         if hasattr(self, 'color_detector'):
             initial_config = self.control_widget.get_config()
@@ -233,8 +233,8 @@ class ColorDetectionController(StreamAlgorithmController):
         # Update rendering config in RenderingTab
         if hasattr(self.control_widget, 'rendering_tab'):
             rendering_config = {}
-            for key in ['render_shape', 'render_text', 'render_contours', 
-                       'use_detection_color_for_rendering', 'max_detections_to_render']:
+            for key in ['render_shape', 'render_text', 'render_contours',
+                        'use_detection_color_for_rendering', 'max_detections_to_render']:
                 if key in config:
                     rendering_config[key] = config[key]
             if rendering_config:

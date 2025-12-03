@@ -229,9 +229,8 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
     def _set_focus_on_page(self):
         """Set focus to an appropriate widget on the current page."""
         if self.current_page == 1:  # DirectoriesPage
-            # Focus on the first input directory button or line edit
-            if hasattr(self, 'inputDirectoryButton'):
-                self.inputDirectoryButton.setFocus()
+            # Don't set focus - let on_enter() handle clearing focus
+            pass
         elif self.current_page == 2:  # ImageCapturePage
             # Focus on the drone combo box
             if hasattr(self, 'droneComboBox'):
@@ -298,8 +297,12 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             # Save drone selection (could save model name)
             pass
 
-        # Save altitude unit preference
-        self.settings_service.set_setting('DistanceUnit', self.wizard_data['altitude_unit'])
+        # Save altitude unit preference (convert 'ft'/'m' to 'Feet'/'Meters' format)
+        altitude_unit = self.wizard_data.get('altitude_unit', 'ft')
+        if altitude_unit == 'm':
+            self.settings_service.set_setting('DistanceUnit', 'Meters')
+        else:
+            self.settings_service.set_setting('DistanceUnit', 'Feet')
 
         # Save max processes
         self.settings_service.set_setting('MaxProcesses', str(self.wizard_data['max_processes']))
@@ -317,8 +320,15 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         if self.wizard_data.get('processing_resolution'):
             self.settings_service.set_setting('ProcessingResolution', self.wizard_data['processing_resolution'])
 
+        # Convert QColor to tuple before emitting signal to ensure proper serialization
+        # This ensures the color is in a consistent format when received by MainWindow
+        wizard_data_copy = self.wizard_data.copy()
+        if isinstance(wizard_data_copy.get('identifier_color'), QColor):
+            color_obj = wizard_data_copy['identifier_color']
+            wizard_data_copy['identifier_color'] = (color_obj.red(), color_obj.green(), color_obj.blue())
+
         # Emit signal with wizard data
-        self.wizardCompleted.emit(self.wizard_data)
+        self.wizardCompleted.emit(wizard_data_copy)
 
         # Accept dialog
         self.accept()

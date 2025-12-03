@@ -253,8 +253,8 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         # Update rendering config in RenderingTab
         if hasattr(self.integrated_controls, 'rendering_tab'):
             rendering_config = {}
-            for key in ['render_shape', 'render_text', 'render_contours', 
-                       'use_detection_color_for_rendering', 'max_detections_to_render']:
+            for key in ['render_shape', 'render_text', 'render_contours',
+                        'use_detection_color_for_rendering', 'max_detections_to_render']:
                 if key in config:
                     rendering_config[key] = config[key]
             if rendering_config:

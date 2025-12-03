@@ -32,8 +32,8 @@ class SlidingWindowSlicer:
         slices = []
         for y in ys:
             for x in xs:
-                x2 = min(x+slice_size, w)
-                y2 = min(y+slice_size, h)
+                x2 = min(x + slice_size, w)
+                y2 = min(y + slice_size, h)
                 slices.append((x, y, x2, y2))
         return slices
 

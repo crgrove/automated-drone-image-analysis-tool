@@ -40,8 +40,8 @@ class HSVRangePickerWidget(QWidget):
         self.v = 1.0
 
         # Range values (0-1 range)
-        self.h_minus = 20/360
-        self.h_plus = 20/360
+        self.h_minus = 20 / 360
+        self.h_plus = 20 / 360
         self.s_minus = 0.2
         self.s_plus = 0.2
         self.v_minus = 0.2
@@ -633,7 +633,7 @@ class HSVRangePickerWidget(QWidget):
 
     def reset_to_default(self):
         """Reset to default red color with standard ranges."""
-        self.h_minus = self.h_plus = 20/360
+        self.h_minus = self.h_plus = 20 / 360
         self.s_minus = self.s_plus = 0.2
         self.v_minus = self.v_plus = 0.2
         self.set_hsv(0, 1, 1)  # Pure red
@@ -661,7 +661,7 @@ class HSVRangePickerWidget(QWidget):
 
     def rgb_to_hsv(self, r, g, b):
         """Convert RGB to HSV (0-1 range)."""
-        return colorsys.rgb_to_hsv(r/255, g/255, b/255)
+        return colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
 
     def rgb_to_hex(self, r, g, b):
         """Convert RGB to hex string."""
@@ -672,9 +672,9 @@ class HSVRangePickerWidget(QWidget):
         try:
             hex_value = hex_value.lstrip('#')
             if len(hex_value) == 3:
-                hex_value = ''.join([c*2 for c in hex_value])
+                hex_value = ''.join([c * 2 for c in hex_value])
             if len(hex_value) == 6:
-                return tuple(int(hex_value[i:i+2], 16) for i in (0, 2, 4))
+                return tuple(int(hex_value[i:i + 2], 16) for i in (0, 2, 4))
         except (ValueError, TypeError):
             pass
         return None
@@ -792,7 +792,7 @@ class SVSquareWidget(QWidget):
         painter.setBrush(QBrush(QColor(255, 255, 255)))
 
         for pos, _ in handles:
-            handle_rect = QRect(pos.x() - handle_size//2, pos.y() - handle_size//2,
+            handle_rect = QRect(pos.x() - handle_size // 2, pos.y() - handle_size // 2,
                                 handle_size, handle_size)
             painter.drawEllipse(handle_rect)
 
@@ -917,8 +917,8 @@ class HueRingWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.h = 0.0
-        self.h_minus = 20/360
-        self.h_plus = 20/360
+        self.h_minus = 20 / 360
+        self.h_plus = 20 / 360
 
         self.dragging_hue = False
         self.dragging_left = False
@@ -1052,7 +1052,7 @@ class HueRingWidget(QWidget):
             # Check which element was clicked
             dx = pos.x() - center.x()
             dy = pos.y() - center.y()
-            distance = math.sqrt(dx*dx + dy*dy)
+            distance = math.sqrt(dx * dx + dy * dy)
 
             size = min(self.width(), self.height()) - 20
             outer_radius = size * 0.4

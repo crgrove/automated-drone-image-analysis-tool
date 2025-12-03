@@ -367,7 +367,7 @@ class BearingCalculationService(QObject):
 
         # Check for monotonic timestamps (warn but don't fail)
         for i in range(1, len(track_points)):
-            if track_points[i].timestamp < track_points[i-1].timestamp:
+            if track_points[i].timestamp < track_points[i - 1].timestamp:
                 self._logger.warning(f"Track has non-monotonic timestamps at index {i}")
 
         return track_points
@@ -424,7 +424,7 @@ class BearingCalculationService(QObject):
                 quality = 'gap'  # Outside track range
             else:
                 # Between trackpoints k-1 and k
-                p1, p2 = track[k-1], track[k]
+                p1, p2 = track[k - 1], track[k]
 
                 # Calculate segment bearing
                 bearing = GeodesicHelper.initial_course(
@@ -588,7 +588,7 @@ class BearingCalculationService(QObject):
 
             elif i == N - 1:
                 bearing = GeodesicHelper.initial_course(
-                    imgs_with_gps[N-2]['lat'], imgs_with_gps[N-2]['lon'],
+                    imgs_with_gps[N - 2]['lat'], imgs_with_gps[N - 2]['lon'],
                     lat, lon
                 )
                 source = 'auto_prev_next'
@@ -599,8 +599,8 @@ class BearingCalculationService(QObject):
                 # Key insight: Drone doesn't take pictures during turns, so there are gaps
                 # We need to check ANGULAR alignment, not perpendicular distance
 
-                prev_img = imgs_with_gps[i-1]
-                next_img = imgs_with_gps[i+1]
+                prev_img = imgs_with_gps[i - 1]
+                next_img = imgs_with_gps[i + 1]
 
                 # Angular threshold for considering points aligned (degrees)
                 # Tighter threshold to avoid GPS noise causing misalignment
@@ -743,8 +743,8 @@ class BearingCalculationService(QObject):
 
         for i in range(1, len(images) - 1):
             lat, lon = images[i]['lat'], images[i]['lon']
-            prev_lat, prev_lon = images[i-1]['lat'], images[i-1]['lon']
-            next_lat, next_lon = images[i+1]['lat'], images[i+1]['lon']
+            prev_lat, prev_lon = images[i - 1]['lat'], images[i - 1]['lon']
+            next_lat, next_lon = images[i + 1]['lat'], images[i + 1]['lon']
 
             d = GeodesicHelper.point_to_segment_distance(
                 lat, lon, prev_lat, prev_lon, next_lat, next_lon

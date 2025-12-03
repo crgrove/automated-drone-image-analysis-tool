@@ -41,7 +41,8 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert hasattr(widget, 'input_processing_tab')
         assert hasattr(widget.input_processing_tab, 'resolution_preset')
         assert widget.input_processing_tab.resolution_preset.count() > 0
-        assert "720P (1280x720)" in [widget.input_processing_tab.resolution_preset.itemText(i) for i in range(widget.input_processing_tab.resolution_preset.count())]
+        assert "720P (1280x720)" in [widget.input_processing_tab.resolution_preset.itemText(i)
+                                     for i in range(widget.input_processing_tab.resolution_preset.count())]
 
         # Check custom resolution inputs exist
         assert hasattr(widget.input_processing_tab, 'processing_width')
@@ -169,7 +170,6 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         # Check performance limits
         assert hasattr(widget.rendering_tab, 'max_detections_to_render')
         assert widget.rendering_tab.max_detections_to_render.value() == 100  # Default 100
-
 
     def test_default_values(self, qapp):
         """Test that default values match original implementation."""

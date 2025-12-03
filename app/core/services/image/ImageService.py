@@ -482,8 +482,9 @@ class ImageService:
         """
         image_copy = self.img_array.copy()
 
-        # Expect identifier_color as RGB; OpenCV uses BGR
-        bgr = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
+        # Image is already in RGB format (converted at line 50), so use color as-is
+        # cv2.circle will interpret the color in the same format as the image (RGB)
+        color = (int(identifier_color[0]), int(identifier_color[1]), int(identifier_color[2]))
 
         for aoi in areas_of_interest or []:
             # Get center and radius for circle drawing
@@ -491,7 +492,7 @@ class ImageService:
             r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
 
-            cv2.circle(image_copy, center, r, bgr, thickness=2)
+            cv2.circle(image_copy, center, r, color, thickness=2)
 
             # Add confidence label if available
             # Turning off for now

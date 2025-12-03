@@ -16,7 +16,7 @@ class RangeSlider(QWidget):
     # Signal emitted when the range values change
     rangeChanged = Signal(int, int)  # min_value, max_value
 
-    # Define the 7 snap-to points with their labels
+    # Define the 7 snap-to points with their labels (values in sqft)
     SNAP_POINTS = [
         (1, "Small\nArticle\n(1 sqft)"),
         (3, "Small\nDog\n(3 sqft)"),
@@ -27,8 +27,11 @@ class RangeSlider(QWidget):
         (1000, "Medium\nBuilding\n(1000 sqft)")
     ]
 
-    def __init__(self, parent=None, minimum=1, maximum=1000, min_value=3, max_value=100):
+    def __init__(self, parent=None, minimum=1, maximum=1000, min_value=3, max_value=100, unit='ft'):
         super().__init__(parent)
+
+        # Store unit preference ('ft' or 'm')
+        self._unit = unit
 
         # Find closest snap points for initial values
         self._min_value = self._snap_to_point(min_value)
@@ -87,6 +90,45 @@ class RangeSlider(QWidget):
             if snap_value == value:
                 return i
         return 0
+
+    def _format_label(self, value_sqft, base_label):
+        """Format label with unit conversion if needed."""
+        # Extract the base label text (before the unit part in parentheses)
+        # Labels are like "Small\nArticle\n(1 sqft)" - extract "Small\nArticle"
+        lines = base_label.split('\n')
+        # Find the line with the unit (contains parentheses)
+        base_lines = []
+        for line in lines:
+            if '(' in line and 'sqft' in line:
+                # This is the unit line, skip it
+                break
+            base_lines.append(line)
+
+        base_text = '\n'.join(base_lines)
+
+        # Format the unit part
+        if self._unit == 'm':
+            # Convert sqft to sqm: 1 sqft = 0.092903 sqm
+            value_sqm = value_sqft * 0.092903
+            # Format with appropriate precision
+            if value_sqm < 1:
+                value_str = f"{value_sqm:.2f}"
+            elif value_sqm < 10:
+                value_str = f"{value_sqm:.2f}"
+            else:
+                value_str = f"{value_sqm:.1f}"
+            unit_str = "sqm"
+        else:
+            value_str = str(value_sqft)
+            unit_str = "sqft"
+
+        return f"{base_text}\n({value_str} {unit_str})"
+
+    def setUnit(self, unit):
+        """Set the unit for display ('ft' or 'm')."""
+        if unit != self._unit:
+            self._unit = unit
+            self.update()  # Redraw with new labels
 
     def minValue(self):
         """Get the current minimum value."""
@@ -332,7 +374,7 @@ class RangeSlider(QWidget):
         fm = painter.fontMetrics()
 
         # Calculate the actual height needed for labels
-        max_lines = max(len(label_text.split('\n')) for _, label_text in self.SNAP_POINTS)
+        max_lines = max(len(self._format_label(value, label).split('\n')) for value, label in self.SNAP_POINTS)
         line_height = fm.height() + 2
         # Account for font ascent at top and descent at bottom
         actual_label_height = max_lines * line_height + fm.ascent() + 5  # Top padding + ascent
@@ -373,7 +415,8 @@ class RangeSlider(QWidget):
         # Draw tick marks and labels for all 7 snap points
         painter.setPen(QPen(self._tick_color, 1))
 
-        for snap_value, label_text in self.SNAP_POINTS:
+        for snap_value, base_label in self.SNAP_POINTS:
+            label_text = self._format_label(snap_value, base_label)
             tick_pos = self._value_to_position(snap_value)
 
             # Draw tick mark

@@ -46,7 +46,7 @@ class CoordinateController:
 
         # North-oriented image popup window
         self.north_oriented_popup = None
-        
+
         # Track current coordinates popup
         self.current_coords_popup = None
 
@@ -62,7 +62,7 @@ class CoordinateController:
 
     def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None):
         """Show a small popup with coordinate sharing options.
-        
+
         Args:
             coord_text: Formatted coordinate string to display
             anchor_widget: Optional widget to anchor the popup to (for single-image mode)
@@ -72,7 +72,7 @@ class CoordinateController:
         if self.current_coords_popup:
             self.current_coords_popup.close()
             self.current_coords_popup = None
-        
+
         # Create popup widget
         popup = QWidget(self.parent, Qt.Popup)
         popup.setStyleSheet("""
@@ -151,7 +151,7 @@ class CoordinateController:
 
         # Position popup near anchor point/widget or status bar
         popup.adjustSize()
-        
+
         if anchor_point:
             # Use provided global anchor point (gallery mode)
             popup_x = anchor_point.x() - popup.width()  # Position to the left of anchor
@@ -177,7 +177,7 @@ class CoordinateController:
 
         # Store reference to current popup
         self.current_coords_popup = popup
-        
+
         # Show popup
         popup.show()
 

@@ -80,8 +80,7 @@ class RXAnomalyWizardController(QWidget, Ui_RXAnomalyWizard, AlgorithmController
         complex_scene, aggr_index, aggr_label = self._read_ui_state()
 
         # Map aggressiveness text index to numeric sensitivity (best-guess mapping)
-        # 0..4 -> 90, 70, 50, 30, 10
-        sensitivity_map = {0: 1, 1: 3, 2: 5, 3: 7, 4: 9}
+        sensitivity_map = {0: 9, 1: 7, 2: 5, 3: 3, 4: 1}
         sensitivity = sensitivity_map.get(aggr_index, 5)
 
         # Map complex scene to segments (best guess)

@@ -118,7 +118,7 @@ class QtImageViewer(QGraphicsView):
         super().closeEvent(event)
 
     def keyPressEvent(self, ev):
-        plus_keys = {Qt.Key_Plus,  Qt.Key_Equal}
+        plus_keys = {Qt.Key_Plus, Qt.Key_Equal}
         minus_keys = {Qt.Key_Minus, Qt.Key_Underscore}
 
         # ---------------- zoom‑IN ----------------
@@ -727,8 +727,8 @@ class QtImageViewer(QGraphicsView):
             self.setDragMode(QGraphicsView.NoDrag)
 
             # tiny rubber‑band → treat as click
-            if max(abs(ev.position().x()-self._pixelPosition.x()),
-                   abs(ev.position().y()-self._pixelPosition.y())) <= 3:
+            if max(abs(ev.position().x() - self._pixelPosition.x()),
+                   abs(ev.position().y() - self._pixelPosition.y())) <= 3:
                 pass
             else:
                 validated_rect = self._validate_zoom_rect(zoomRect)
@@ -920,7 +920,7 @@ class QtImageViewer(QGraphicsView):
             return
         for x, y in xy_iterable:
             spot = EllipseROI(self)
-            spot.setRect(x - radius, y - radius, 2*radius, 2*radius)
+            spot.setRect(x - radius, y - radius, 2 * radius, 2 * radius)
             self.scene.addItem(spot)
             self.ROIs.append(spot)
 

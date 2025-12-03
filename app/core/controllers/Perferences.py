@@ -45,7 +45,16 @@ class Preferences(QDialog, Ui_Preferences):
         self.AOIRadiusSpinBox.setValue(self.parent.settings_service.get_setting('AOIRadius'))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
-        self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        # Load distance unit with default of 'Feet' if not set
+        # Also handle legacy 'ft'/'m' values and convert to 'Feet'/'Meters'
+        distance_unit = self.parent.settings_service.get_setting('DistanceUnit', 'Feet')
+        if distance_unit == 'ft':
+            distance_unit = 'Feet'
+            self.parent.settings_service.set_setting('DistanceUnit', 'Feet')  # Migrate to new format
+        elif distance_unit == 'm':
+            distance_unit = 'Meters'
+            self.parent.settings_service.set_setting('DistanceUnit', 'Meters')  # Migrate to new format
+        self.distanceComboBox.setCurrentText(distance_unit)
         offline_only = self.parent.settings_service.get_bool_setting('OfflineOnly', False)
         if hasattr(self, 'offlineOnlyCheckBox'):
             self.offlineOnlyCheckBox.setChecked(offline_only)

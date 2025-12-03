@@ -210,7 +210,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             val_plus = int(hsv_data['v_plus'] * 255)
 
             new_range = {
-                'name': f"Color_{len(self.color_ranges)+1}",
+                'name': f"Color_{len(self.color_ranges) + 1}",
                 'color': color,
                 'hue_minus': hue_minus,
                 'hue_plus': hue_plus,
@@ -288,7 +288,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 if i < len(self.color_ranges):
                     hsv_ranges = widget.get_hsv_ranges()
                     color = widget.get_color()
-                    
+
                     # Update self.color_ranges with current widget values
                     self.color_ranges[i]['color'] = color
                     self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
@@ -312,7 +312,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
             # Get HSV values from color for the widget
             h, s, v, _ = color.getHsvF()
-            
+
             # Build hsv_ranges dict in normalized 0-1 format expected by HSVColorRowWidget
             # hue_minus/hue_plus are in 0-179 range (OpenCV), convert to 0-1 fractional
             # sat_minus/sat_plus are in 0-255 range (OpenCV), convert to 0-1 fractional
@@ -328,7 +328,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 'v_minus': color_range.get('val_minus', 50) / 255.0,
                 'v_plus': color_range.get('val_plus', 50) / 255.0
             }
-            
+
             # HSVColorRowWidget expects hsv_ranges dict in normalized 0-1 format
             row_widget = HSVColorRowWidget(
                 parent=self,
@@ -376,7 +376,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             val_plus = int(hsv_ranges['v_plus'] * 255)
 
             updated_color_ranges.append({
-                'name': f"Color_{len(updated_color_ranges)+1}",
+                'name': f"Color_{len(updated_color_ranges) + 1}",
                 'color': color,
                 'hue_minus': hue_minus,
                 'hue_plus': hue_plus,

@@ -76,7 +76,7 @@ class MRMapService(AlgorithmService):
             ch0, ch1, ch2 = img_converted[:, :, 0], img_converted[:, :, 1], img_converted[:, :, 2]
             # Compute bin counts for each pixel
             bin_counts = hist.bin_count(ch0, ch1, ch2)
-            bin_counts = bin_counts * ((8000*6000) / (width * height))
+            bin_counts = bin_counts * ((8000 * 6000) / (width * height))
             # Adjust counts based on image size
             # adjusted_counts = bin_counts * (STANDARD_IMAGE_SIZE / (width * height))
 
@@ -153,7 +153,7 @@ class MRMapService(AlgorithmService):
 
         # Draw all combined rectangles
         for rect in anomaly_rectangles:
-            mask[rect[1]:rect[3]+1, rect[0]:rect[2]+1] = 255
+            mask[rect[1]:rect[3] + 1, rect[0]:rect[2] + 1] = 255
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 

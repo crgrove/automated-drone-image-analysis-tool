@@ -23,40 +23,40 @@ version = '2.0.0'
 
 def update_app_version(app_version):
     """Update the app version setting if necessary.
-    
+
     Updates the version setting if:
     1. No version is stored (first run)
     2. New app version is greater than stored version
     3. App version is full (release) and stored version is Beta
-    
+
     Args:
         app_version (str): The current application version string.
     """
     logger = LoggerService()
     settings_service = SettingsService()
-    
+
     try:
         current_version = settings_service.get_setting('app_version')
-        
+
         # Update version if not set (first run)
         if current_version is None:
             settings_service.set_setting('app_version', app_version)
             logger.info(f"Set app version to {app_version} (first run)")
             return
-        
+
         # Parse versions to check for Beta -> Full upgrade
         try:
             current_tuple = PickleHelper._version_to_tuple(current_version)
             app_tuple = PickleHelper._version_to_tuple(app_version)
-            
+
             # Check if app version is full (label_val = 0) and current is Beta (label_val = 2)
             is_app_full = app_tuple[3] == 0  # label_val = 0 means release/full
             is_current_beta = current_tuple[3] == 2  # label_val = 2 means Beta
-            
+
             # Update if: numeric version is greater OR (app is full AND current is Beta)
             current_version_int = PickleHelper.version_to_int(current_version)
             new_version_int = PickleHelper.version_to_int(app_version)
-            
+
             if new_version_int > current_version_int or (is_app_full and is_current_beta):
                 settings_service.set_setting('app_version', app_version)
                 if is_app_full and is_current_beta:
@@ -67,45 +67,105 @@ def update_app_version(app_version):
             # If version parsing fails, update to current version
             logger.warning(f"Failed to parse version strings, updating to {app_version}: {e}")
             settings_service.set_setting('app_version', app_version)
-            
+
     except Exception as e:
         logger.error(f"Error updating app version: {e}")
 
 
+def initialize_default_settings():
+    """Initialize default application settings if they don't exist.
+
+    This should be called early in application startup, before any windows
+    are created, to ensure settings are available throughout the application.
+    """
+    logger = LoggerService()
+    settings_service = SettingsService()
+
+    try:
+        # MaxAOIs
+        max_aois = settings_service.get_setting('MaxAOIs')
+        if not isinstance(max_aois, int):
+            settings_service.set_setting('MaxAOIs', 100)
+
+        # AOIRadius
+        aoi_radius = settings_service.get_setting('AOIRadius')
+        if not isinstance(aoi_radius, int):
+            settings_service.set_setting('AOIRadius', 15)
+
+        # PositionFormat
+        position_format = settings_service.get_setting('PositionFormat')
+        if not isinstance(position_format, str):
+            settings_service.set_setting('PositionFormat', 'Lat/Long - Decimal Degrees')
+
+        # TemperatureUnit
+        temperature_unit = settings_service.get_setting('TemperatureUnit')
+        if not isinstance(temperature_unit, str):
+            settings_service.set_setting('TemperatureUnit', 'Fahrenheit')
+
+        # DistanceUnit
+        distance_unit = settings_service.get_setting('DistanceUnit')
+        logger.info(f"initialize_default_settings: DistanceUnit = {repr(distance_unit)}")
+        # Set default if not set, is None, empty, or not a valid value
+        if distance_unit is None or (isinstance(distance_unit, str) and distance_unit == ''):
+            # Setting doesn't exist or is empty - set default to 'Feet'
+            logger.info("initialize_default_settings: Setting DistanceUnit to 'Feet' (was None or empty)")
+            settings_service.set_setting('DistanceUnit', 'Feet')
+        elif isinstance(distance_unit, str):
+            # Check if it's a legacy value that needs migration
+            if distance_unit in ('ft', 'm'):
+                settings_service.set_setting('DistanceUnit', 'Feet' if distance_unit == 'ft' else 'Meters')
+            elif distance_unit not in ('Feet', 'Meters'):
+                # Invalid value - set default to 'Feet'
+                settings_service.set_setting('DistanceUnit', 'Feet')
+        else:
+            # Not a string (unexpected type) - set default to 'Feet'
+            settings_service.set_setting('DistanceUnit', 'Feet')
+
+        # Theme
+        theme = settings_service.get_setting('Theme')
+        if theme is None:
+            settings_service.set_setting('Theme', 'Dark')
+
+    except Exception as e:
+        logger.error(f"Error initializing default settings: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+
 def check_and_update_pickle_files(app_version):
     """Check pickle file versions and update if necessary.
-    
+
     This function runs at application startup to ensure that pickle files
     (drones.pkl and xmp.pkl) are up-to-date with the current app version.
-    
+
     Args:
         app_version (str): The current application version string.
     """
     logger = LoggerService()
     settings_service = SettingsService()
-    
+
     try:
         current_version = settings_service.get_setting('app_version')
-        
+
         # Copy drones.pkl if:
         # 1. No app version is stored (first run)
         # 2. No drone sensor file exists in AppData
         # 3. New app version is greater than stored version
         if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
             PickleHelper.copy_pickle('drones.pkl')
-            logger.info(f"Copied drones.pkl to AppData (first run or missing file)")
+            logger.info("Copied drones.pkl to AppData (first run or missing file)")
         else:
             current_version_int = PickleHelper.version_to_int(current_version)
             new_version_int = PickleHelper.version_to_int(app_version)
             if new_version_int > current_version_int:
                 PickleHelper.copy_pickle('drones.pkl')
                 logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
-        
+
         # Ensure xmp.pkl exists
         if PickleHelper.get_xmp_mapping() is None:
             PickleHelper.copy_pickle('xmp.pkl')
             logger.info("Copied xmp.pkl to AppData")
-            
+
     except Exception as e:
         logger.error(f"Error checking/updating pickle files: {e}")
 
@@ -124,10 +184,13 @@ def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
-    
+
+    # Initialize default settings early (before any windows are created)
+    initialize_default_settings()
+
     # Check and update pickle files on every startup (must be before version update)
     check_and_update_pickle_files(version)
-    
+
     # Update app version setting (independent of pickle operations)
     update_app_version(version)
 

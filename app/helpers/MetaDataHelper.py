@@ -333,18 +333,18 @@ class MetaDataHelper:
                 return None
             chunks, total = [], None
             i = 2
-            while i + 4 <= len(data) and data[i] == 0xFF and data[i+1] != 0xDA:
-                marker = data[i:i+2]
-                L = struct.unpack(">H", data[i+2:i+4])[0]
+            while i + 4 <= len(data) and data[i] == 0xFF and data[i + 1] != 0xDA:
+                marker = data[i:i + 2]
+                L = struct.unpack(">H", data[i + 2:i + 4])[0]
                 seg_end = i + 2 + L
                 if marker == b"\xFF\xE1":
-                    payload = data[i+4:seg_end]
+                    payload = data[i + 4:seg_end]
                     if payload.startswith(_XMP_EXT_HDR):
-                        g = payload[len(_XMP_EXT_HDR):len(_XMP_EXT_HDR)+32].decode('ascii', 'ignore')
+                        g = payload[len(_XMP_EXT_HDR):len(_XMP_EXT_HDR) + 32].decode('ascii', 'ignore')
                         if g == guid:
-                            tlen = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+32:len(_XMP_EXT_HDR)+36])[0]
-                            off = struct.unpack(">I", payload[len(_XMP_EXT_HDR)+36:len(_XMP_EXT_HDR)+40])[0]
-                            chunk = payload[len(_XMP_EXT_HDR)+40:]
+                            tlen = struct.unpack(">I", payload[len(_XMP_EXT_HDR) + 32:len(_XMP_EXT_HDR) + 36])[0]
+                            off = struct.unpack(">I", payload[len(_XMP_EXT_HDR) + 36:len(_XMP_EXT_HDR) + 40])[0]
+                            chunk = payload[len(_XMP_EXT_HDR) + 40:]
                             total = tlen if total is None else total
                             chunks.append((off, bytes(chunk)))
                 i = seg_end
@@ -352,7 +352,7 @@ class MetaDataHelper:
                 return None
             buf = bytearray(total)
             for off, ch in sorted(chunks, key=lambda x: x[0]):
-                buf[off:off+len(ch)] = ch
+                buf[off:off + len(ch)] = ch
             return bytes(buf)
 
         with open(file_path, 'rb') as f:
@@ -743,12 +743,12 @@ class MetaDataHelper:
         i = 2
         replaced = False
 
-        while i + 4 <= len(data) and data[i] == 0xFF and data[i+1] != 0xDA:
-            marker = data[i:i+2]
-            seg_len = struct.unpack(">H", data[i+2:i+4])[0]
+        while i + 4 <= len(data) and data[i] == 0xFF and data[i + 1] != 0xDA:
+            marker = data[i:i + 2]
+            seg_len = struct.unpack(">H", data[i + 2:i + 4])[0]
             seg_start = i
             seg_end = i + 2 + seg_len
-            seg_payload = data[i+4:seg_end]
+            seg_payload = data[i + 4:seg_end]
 
             if marker == b"\xFF\xE1" and match_header and seg_payload.startswith(match_header):
                 # replace matching APP1

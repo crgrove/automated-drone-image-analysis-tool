@@ -226,7 +226,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
             if hasattr(row, 'hsv_ranges') and row.hsv_ranges:
                 hsv_data = row.hsv_ranges
                 color_range = {
-                    'name': f"Color_{len(options['color_ranges'])+1}",
+                    'name': f"Color_{len(options['color_ranges']) + 1}",
                     'color': color,
                     'rgb': rgb,
                     'hue_minus': hsv_data.get('h_minus', 20),
@@ -240,7 +240,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                 # Use tolerance-based ranges
                 tolerance_value = row.get_tolerance_value()
                 color_range = {
-                    'name': f"Color_{len(options['color_ranges'])+1}",
+                    'name': f"Color_{len(options['color_ranges']) + 1}",
                     'color': color,
                     'rgb': rgb,
                     'hue_minus': tolerance_value,

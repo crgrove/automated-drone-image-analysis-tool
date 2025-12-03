@@ -262,11 +262,41 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
 
+    def _normalize_color(self, color):
+        """
+        Normalize color to a tuple of integers (R, G, B).
+
+        Args:
+            color: Can be QColor, tuple, list, or string representation
+
+        Returns:
+            tuple: (R, G, B) tuple of integers in range 0-255
+        """
+        if isinstance(color, QColor):
+            return (color.red(), color.green(), color.blue())
+        elif isinstance(color, (tuple, list)):
+            # Ensure all values are integers
+            return (int(color[0]), int(color[1]), int(color[2]))
+        elif isinstance(color, str):
+            # Try to parse string like "255,0,0" or "(255, 0, 0)"
+            try:
+                # Remove parentheses if present
+                color_str = color.strip('()')
+                parts = [int(x.strip()) for x in color_str.split(',')]
+                if len(parts) == 3:
+                    return tuple(parts)
+            except (ValueError, AttributeError):
+                pass
+        # Default fallback
+        return (0, 255, 0)  # Default green
+
     def _identifierButton_clicked(self):
         """
         Opens a color selector dialog for setting the object identifier color.
         """
-        color = QColorDialog().getColor()
+        # Get current color to show in picker
+        current_color = QColor(*self.identifierColor) if isinstance(self.identifierColor, (tuple, list)) else QColor(0, 255, 0)
+        color = QColorDialog.getColor(current_color, self, "Select AOI Highlight Color")
         if color.isValid():
             self.identifierColor = (color.red(), color.green(), color.blue())
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
@@ -479,9 +509,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             resolution_text = self.processingResolutionCombo.currentText()
             processing_resolution = self.resolution_presets.get(resolution_text, 1.0)
 
+            # Normalize identifier color to ensure it's a tuple of integers (R, G, B)
+            identifier_color = self._normalize_color(self.identifierColor)
+
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
-                self.identifierColor, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
+                identifier_color, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
                 max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options,
                 self.maxAreaSpinBox.value(), processing_resolution
             )
@@ -677,13 +710,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if wizard_data.get('output_directory'):
             self.outputFolderLine.setText(wizard_data['output_directory'])
 
-        # Set identifier color
+        # Set identifier color - normalize to ensure consistent format
         if wizard_data.get('identifier_color'):
-            color = wizard_data['identifier_color']
-            if isinstance(color, QColor):
-                self.identifierColor = (color.red(), color.green(), color.blue())
-            else:
-                self.identifierColor = color
+            self.identifierColor = self._normalize_color(wizard_data['identifier_color'])
             qcolor = QColor(*self.identifierColor)
             self.identifierColorButton.setStyleSheet("background-color: " + qcolor.name() + ";")
 
@@ -711,7 +740,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # area_pixels = pixels^2
                 min_pixels = (object_size_min_ft * 30.48) / gsd_cm_per_pixel
                 max_pixels = (object_size_max_ft * 30.48) / gsd_cm_per_pixel
-                min_area = max(10, int(min_pixels * min_pixels)/250)
+                min_area = max(10, int(min_pixels * min_pixels) / 250)
                 max_area = max(100, int(max_pixels * max_pixels))
 
                 self.minAreaSpinBox.setValue(min_area)
@@ -973,35 +1002,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxProcessesSpinBox.setValue(max_processes)
 
         id_color = self.settings_service.get_setting('IdentifierColor')
-        if isinstance(id_color, tuple):
-            self.identifierColor = id_color
+        if id_color:
+            # Normalize color from settings (could be tuple, string, etc.)
+            self.identifierColor = self._normalize_color(id_color)
             color = QColor(*self.identifierColor)
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
 
-        max_aois = self.settings_service.get_setting('MaxAOIs')
-        if not isinstance(max_aois, int):
-            self.settings_service.set_setting('MaxAOIs', 100)
+        # Note: Default settings (MaxAOIs, AOIRadius, PositionFormat, TemperatureUnit,
+        # DistanceUnit, Theme) are now initialized in __main__.py before MainWindow is created.
+        # Only UI-specific initialization remains here.
 
-        aoi_radius = self.settings_service.get_setting('AOIRadius')
-        if not isinstance(aoi_radius, int):
-            self.settings_service.set_setting('AOIRadius', 15)
-
-        position_format = self.settings_service.get_setting('PositionFormat')
-        if not isinstance(position_format, str):
-            self.settings_service.set_setting('PositionFormat', 'Lat/Long - Decimal Degrees')
-
-        temperature_unit = self.settings_service.get_setting('TemperatureUnit')
-        if not isinstance(temperature_unit, str):
-            self.settings_service.set_setting('TemperatureUnit', 'Fahrenheit')
-
-        distance_unit = self.settings_service.get_setting('DistanceUnit')
-        if not isinstance(distance_unit, str):
-            self.settings_service.set_setting('DistanceUnit', 'Meters')
-
-        theme = self.settings_service.get_setting('Theme')
-        if theme is None:
-            self.settings_service.set_setting('Theme', 'Dark')
-            theme = 'Dark'
+        theme = self.settings_service.get_setting('Theme', 'Dark')
         self.update_theme(theme)
 
     def update_theme(self, theme):

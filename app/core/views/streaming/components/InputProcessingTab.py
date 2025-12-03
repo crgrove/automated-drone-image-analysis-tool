@@ -77,7 +77,9 @@ class InputProcessingTab(QWidget):
         self.processing_height.setValue(720)
         self.processing_height.setEnabled(False)
         self.processing_height.setToolTip(
-            "Custom processing height in pixels (240-2160).\nOnly enabled when 'Custom' resolution is selected.\nLower values = faster processing, less detail.")
+            "Custom processing height in pixels (240-2160).\n"
+            "Only enabled when 'Custom' resolution is selected.\n"
+            "Lower values = faster processing, less detail.")
         custom_layout.addWidget(self.processing_height, 1, 1)
 
         # Hide width/height inputs by default (only show when Custom is selected)
@@ -143,9 +145,9 @@ class InputProcessingTab(QWidget):
     def set_processing_resolution(self, width: int, height: int):
         """
         Set processing resolution from width and height values.
-        
+
         Maps the dimensions to a preset if available, otherwise uses Custom mode.
-        
+
         Args:
             width: Processing width in pixels
             height: Processing height in pixels
@@ -163,7 +165,7 @@ class InputProcessingTab(QWidget):
             (640, 360): "360P (640x360)",
             (426, 240): "240P (426x240)"
         }
-        
+
         preset_name = resolution_map.get((width, height))
         if preset_name:
             self.resolution_preset.setCurrentText(preset_name)

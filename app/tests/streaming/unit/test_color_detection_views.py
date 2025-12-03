@@ -50,8 +50,8 @@ class TestColorDetectionControlWidget:
                 'h': 0.0,  # Red in normalized 0-1
                 's': 1.0,
                 'v': 1.0,
-                'h_minus': 20/360.0,  # Fixed: should be normalized 0-1, not 0-179
-                'h_plus': 20/360.0,
+                'h_minus': 20 / 360.0,  # Fixed: should be normalized 0-1, not 0-179
+                'h_plus': 20 / 360.0,
                 's_minus': 0.2,  # Fixed: should be normalized 0-1, not 0-255
                 's_plus': 0.2,
                 'v_minus': 0.2,

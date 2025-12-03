@@ -66,7 +66,7 @@ class GSDService:
         R_tilt = np.array([
             [1, 0, 0],
             [0, np.cos(tilt), -np.sin(tilt)],
-            [0, np.sin(tilt),  np.cos(tilt)],
+            [0, np.sin(tilt), np.cos(tilt)],
         ])
         p1_world = R_tilt @ p1_cam
         p2_world = R_tilt @ p2_cam

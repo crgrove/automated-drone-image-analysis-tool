@@ -47,14 +47,14 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
         options = dict()
         confidence_index, aggr_label, aggr_value = self._read_ui_state()
 
-        # Map slider index to confidence value (0.01 - 1.0)
-        # Index 0 (Very Confident) = 0.9, Index 4 (Very Permissive) = 0.1
+        # Map slider index to confidence value (0 - 100)
+        # Index 0 (Very Confident) = 90, Index 4 (Very Permissive) = 10
         confidence_map = {
-            0: 0.9,   # Very Confident
-            1: 0.7,   # Confident
-            2: 0.5,   # Balanced
-            3: 0.3,   # Permissive
-            4: 0.1    # Very Permissive
+            0: 90,   # Very Confident
+            1: 70,   # Confident
+            2: 50,   # Balanced
+            3: 30,   # Permissive
+            4: 10    # Very Permissive
         }
 
         # Service-expected fields

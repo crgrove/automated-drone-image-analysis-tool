@@ -204,7 +204,6 @@ class ColorDetectionService(QObject):
         self._original_frame = None  # Original high resolution frame
         self._current_scale_factor = 1.0  # Scale factor between processing and original
 
-
         self.logger.info(f"Color detector initialized (GPU: {self._gpu_available})")
 
     def _check_gpu_availability(self) -> bool:
@@ -887,7 +886,7 @@ class ColorDetectionService(QObject):
 
             # Calculate bounding box and centroid
             x, y, w, h = cv2.boundingRect(contour)
-            centroid = (int(x + w/2), int(y + h/2))
+            centroid = (int(x + w / 2), int(y + h / 2))
 
             # Calculate confidence based on contour properties
             hull = cv2.convexHull(contour)
@@ -1032,7 +1031,7 @@ class ColorDetectionService(QObject):
 
                 # Calculate bounding box and centroid
                 x, y, w, h = cv2.boundingRect(contour)
-                centroid = (int(x + w/2), int(y + h/2))
+                centroid = (int(x + w / 2), int(y + h / 2))
 
                 # Confidence based on area
                 confidence = min(area / config.max_detection_area, 1.0)
@@ -1117,7 +1116,7 @@ class ColorDetectionService(QObject):
                     continue
 
                 x, y, w, h = cv2.boundingRect(contour)
-                centroid = (int(x + w/2), int(y + h/2))
+                centroid = (int(x + w / 2), int(y + h / 2))
                 confidence = min(area / config.max_detection_area, 1.0)
 
                 # Filter by motion confidence threshold
@@ -1197,7 +1196,7 @@ class ColorDetectionService(QObject):
                     continue
 
                 x, y, w, h = cv2.boundingRect(contour)
-                centroid = (int(x + w/2), int(y + h/2))
+                centroid = (int(x + w / 2), int(y + h / 2))
                 confidence = min(area / config.max_detection_area, 1.0)
 
                 # Filter by motion confidence threshold
@@ -1285,8 +1284,8 @@ class ColorDetectionService(QObject):
             if is_moving:
                 self.logger.debug(
                     f"Camera movement detected: "
-                    f"MAD={mad_normalized*100:.1f}% (threshold: {mad_threshold*100:.1f}%), "
-                    f"Pixel change={change_ratio*100:.1f}% (threshold: {config.camera_movement_threshold*100:.1f}%)"
+                    f"MAD={mad_normalized * 100:.1f}% (threshold: {mad_threshold * 100:.1f}%), "
+                    f"Pixel change={change_ratio * 100:.1f}% (threshold: {config.camera_movement_threshold * 100:.1f}%)"
                 )
 
             return is_moving
@@ -1456,7 +1455,7 @@ class ColorDetectionService(QObject):
                     h = y2 - y
 
                     # Merged properties
-                    centroid = (int(x + w/2), int(y + h/2))
+                    centroid = (int(x + w / 2), int(y + h / 2))
                     area = sum(d.area for d in cluster)
                     confidence = max(d.confidence for d in cluster)
 
@@ -1664,7 +1663,7 @@ class ColorDetectionService(QObject):
             h = y2_max - y
 
             # Merged properties
-            centroid = (int(x + w/2), int(y + h/2))
+            centroid = (int(x + w / 2), int(y + h / 2))
             area = det1.area + det2.area
             confidence = (det1.confidence + det2.confidence) / 2
 
@@ -1791,7 +1790,7 @@ class ColorDetectionService(QObject):
 
             # Render text labels if enabled
             if self._config.render_text and self._config.render_shape != 3:
-                label = f"#{i+1}"
+                label = f"#{i + 1}"
                 if detection.detection_type != "color":
                     label += f" [{detection.detection_type}]"
                 label += f" {detection.confidence:.2f}"

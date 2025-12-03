@@ -81,7 +81,7 @@ class BearingRecoveryDialog(QDialog):
 
         self._setup_ui()
         self._apply_styles()
-        
+
         # Check if there's only one image - skip bearing recovery if so
         if len(self.images) <= 1:
             QTimer.singleShot(0, self._skip_single_image)
@@ -343,14 +343,14 @@ class BearingRecoveryDialog(QDialog):
     def _skip_single_image(self):
         """Skip bearing recovery for single image and close dialog."""
         self._logger.info("Skipping bearing recovery: only one image in result set")
-        
+
         QMessageBox.information(
             self,
             "Bearing Recovery Not Needed",
             "Bearing recovery requires multiple images to calculate direction of travel.\n\n"
             "With only one image, bearing recovery cannot be performed."
         )
-        
+
         # Reject dialog to skip recovery
         self.reject()
 

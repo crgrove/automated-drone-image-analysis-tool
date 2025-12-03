@@ -27,11 +27,11 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         # Only thumbnail + spacing, no text overlay needed
         self._cached_size_hint = QSize(190, 190)
         self.gallery_controller = None  # Will be set by GalleryUIComponent
-        
+
         # Create flag icons (same as single-image mode)
         self.flag_icon_active = qta.icon('fa6s.flag', color='#FF7043').pixmap(16, 16)
         self.flag_icon_inactive = qta.icon('fa6s.flag', color='#808080').pixmap(16, 16)
-        
+
         # Create location icon
         self.location_icon = qta.icon('fa6s.location-dot', color='#4CAF50').pixmap(16, 16)
 
@@ -97,7 +97,7 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             flag_x = thumbnail_rect.right() - 40
             flag_y = thumbnail_rect.bottom() - 20
             painter.drawPixmap(flag_x, flag_y, flag_icon)
-            
+
             # Draw location icon in bottom-right corner - at the end
             location_x = thumbnail_rect.right() - 20
             location_y = thumbnail_rect.bottom() - 20
@@ -225,9 +225,10 @@ class GalleryUIComponent(QObject):
         self.gallery_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # Enable keyboard focus so keyboard shortcuts work
         self.gallery_view.setFocusPolicy(Qt.StrongFocus)
-        
+
         # Override keyPressEvent to forward F key to parent window (like QtImageViewer does)
         original_keyPressEvent = self.gallery_view.keyPressEvent
+
         def keyPressEvent(event):
             if event.key() == Qt.Key_F and event.modifiers() == Qt.NoModifier:
                 # Forward F key to parent window's keyPressEvent
@@ -445,7 +446,7 @@ class GalleryUIComponent(QObject):
         """Watch for the first time the view/viewport has a valid size, handle flag button clicks, and keyboard events."""
         try:
             # Handle mouse clicks on flag button
-            if (obj == self.gallery_view.viewport() and 
+            if (obj == self.gallery_view.viewport() and
                     event.type() == QEvent.MouseButtonPress and
                     event.button() == Qt.LeftButton):
                 # Get the item at the click position
@@ -454,20 +455,19 @@ class GalleryUIComponent(QObject):
                     # Get model and delegate
                     model = self.gallery_view.model()
                     delegate = self.gallery_view.itemDelegate()
-                    
+
                     if model and delegate and hasattr(delegate, 'gallery_controller'):
                         # Get item rect
                         option = QStyleOptionViewItem()
                         option.initFrom(self.gallery_view)
                         option.rect = self.gallery_view.visualRect(index)
-                        
+
                         # Check if click is on flag button using delegate's logic
                         user_data = index.data(Qt.UserRole)
                         if user_data:
-                            aoi_data = user_data.get('aoi_data', {})
                             image_idx = user_data.get('image_idx')
                             aoi_idx = user_data.get('aoi_idx')
-                            
+
                             if image_idx is not None and aoi_idx is not None:
                                 # Calculate thumbnail rect
                                 thumbnail_size = QSize(180, 180)
@@ -478,7 +478,7 @@ class GalleryUIComponent(QObject):
                                     thumbnail_size.width(),
                                     thumbnail_size.height()
                                 )
-                                
+
                                 # Check if click is on flag button (to the left of location, 16x16 icon)
                                 flag_rect = QRect(thumbnail_rect.right() - 40, thumbnail_rect.bottom() - 20, 16, 16)
                                 if flag_rect.contains(event.pos()):
@@ -491,7 +491,7 @@ class GalleryUIComponent(QObject):
                                     # Prevent the click from propagating to cause other selections
                                     event.accept()
                                     return True
-                                
+
                                 # Check if click is on location button (bottom-right corner, 16x16 icon) - at the end
                                 location_rect = QRect(thumbnail_rect.right() - 20, thumbnail_rect.bottom() - 20, 16, 16)
                                 if location_rect.contains(event.pos()):
@@ -506,7 +506,7 @@ class GalleryUIComponent(QObject):
                                     # Prevent the click from propagating
                                     event.accept()
                                     return True
-                                
+
                                 # Check if click is on comment button (top-left corner, 16x16 icon)
                                 comment_rect = QRect(thumbnail_rect.left() + 5, thumbnail_rect.top() + 5, 16, 16)
                                 if comment_rect.contains(event.pos()):
@@ -514,7 +514,7 @@ class GalleryUIComponent(QObject):
                                     # For now, just accept the event to prevent item selection
                                     event.accept()
                                     return True
-            
+
             # Watch for the first time the view/viewport has a valid size
             if event.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest):
                 if (self.gallery_widget and self.gallery_widget.isVisible() and

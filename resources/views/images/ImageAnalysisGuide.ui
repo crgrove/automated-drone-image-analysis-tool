@@ -150,14 +150,14 @@
            <number>15</number>
           </property>
           <item>
-           <widget class="QPushButton" name="reviewButton">
+           <widget class="QPushButton" name="newAnalysisButton">
             <property name="font">
              <font>
               <pointsize>11</pointsize>
              </font>
             </property>
             <property name="text">
-             <string>Review Existing Image Analysis</string>
+             <string>Start New Image Analysis</string>
             </property>
             <property name="minimumSize">
              <size>
@@ -168,14 +168,14 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="newAnalysisButton">
+           <widget class="QPushButton" name="reviewButton">
             <property name="font">
              <font>
               <pointsize>11</pointsize>
              </font>
             </property>
             <property name="text">
-             <string>Start New Image Analysis</string>
+             <string>Review Existing Image Analysis</string>
             </property>
             <property name="minimumSize">
              <size>

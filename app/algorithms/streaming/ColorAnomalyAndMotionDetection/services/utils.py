@@ -11,4 +11,4 @@ def format_timing_summary(timings: StageTimings) -> str:
             f"color={timings.color_detection_ms:.1f}ms, "
             f"render={timings.render_ms:.1f}ms, "
             f"total={timings.total_ms:.1f}ms, "
-            f"FPS={1000.0/timings.total_ms if timings.total_ms > 0 else 0:.1f}")
+            f"FPS={1000.0 / timings.total_ms if timings.total_ms > 0 else 0:.1f}")

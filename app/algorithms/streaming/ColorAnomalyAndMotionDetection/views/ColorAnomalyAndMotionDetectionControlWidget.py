@@ -639,7 +639,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
     def update_hue_range_label(self):
         """Update hue expansion range label."""
         value = self.hue_expansion_range.value()
-        self.hue_range_label.setText(f"±{value} (~{value*2}°)")
+        self.hue_range_label.setText(f"±{value} (~{value * 2}°)")
         self.emit_config()
 
     def on_show_advanced_motion_toggled(self, checked: bool):

@@ -25,11 +25,12 @@ class ImageCapturePage(BasePage):
     def setup_ui(self):
         """Initialize UI components."""
         # Set default altitude unit based on preference
-        distance_unit = self.settings_service.get_setting('DistanceUnit', 'ft')
-        if distance_unit == 'm':
+        # Handle both 'Meters'/'Feet' (from UI) and 'm'/'ft' (legacy/internal) formats
+        distance_unit = self.settings_service.get_setting('DistanceUnit', 'Feet')
+        if distance_unit in ('Meters', 'm'):
             self.dialog.altitudeUnitComboBox.setCurrentIndex(1)
             self.wizard_data['altitude_unit'] = 'm'
-        else:
+        else:  # 'Feet' or 'ft' or default
             self.dialog.altitudeUnitComboBox.setCurrentIndex(0)
             self.wizard_data['altitude_unit'] = 'ft'
 
@@ -160,18 +161,46 @@ class ImageCapturePage(BasePage):
 
     def _load_preferences(self):
         """Load existing preferences if available."""
-        # Load distance unit preference
-        distance_unit = self.settings_service.get_setting('DistanceUnit', 'ft')
-        if distance_unit == 'm':
-            self.dialog.altitudeUnitComboBox.setCurrentIndex(1)
-            # Convert altitude slider to meters (approximate)
-            current_ft = self.dialog.altitudeSlider.value()
-            current_m = int(current_ft / 3.28084)
+        # Load distance unit preference (already set in setup_ui, but ensure altitude is converted)
+        # Handle both 'Meters'/'Feet' (from UI) and 'm'/'ft' (legacy/internal) formats
+        distance_unit = self.settings_service.get_setting('DistanceUnit', 'Feet')
+        preferred_unit = 'm' if distance_unit in ('Meters', 'm') else 'ft'
+
+        # Get current altitude value (default is 100 feet)
+        current_altitude = self.wizard_data.get('altitude', self.dialog.altitudeSlider.value())
+
+        # Convert altitude value based on preferred unit
+        # The default altitude (100) is always in feet, so if preference is meters, convert it
+        if preferred_unit == 'm':
+            # If altitude value looks like it's in feet (> 50 is reasonable threshold for meters),
+            # convert it to meters. Otherwise assume it's already in meters.
+            if current_altitude > 50:
+                # Likely in feet, convert to meters
+                altitude_m = int(current_altitude / 3.28084)
+            else:
+                # Likely already in meters
+                altitude_m = int(current_altitude)
+            altitude_m = max(0, min(183, altitude_m))  # Clamp to slider range
             self.dialog.altitudeSlider.setMaximum(183)  # ~600ft in meters
             self.dialog.altitudeSpinBox.setMaximum(183)
-            self.dialog.altitudeSlider.setValue(min(current_m, 183))
-        else:
-            self.dialog.altitudeUnitComboBox.setCurrentIndex(0)
+            self.dialog.altitudeSlider.setValue(altitude_m)
+            self.dialog.altitudeSpinBox.setValue(altitude_m)
+            self.wizard_data['altitude'] = altitude_m
+        else:  # preferred_unit == 'ft'
+            # If altitude value looks like it's in meters (< 50), convert it to feet
+            # Otherwise assume it's already in feet
+            if current_altitude < 50:
+                # Likely in meters, convert to feet
+                altitude_ft = int(current_altitude * 3.28084)
+            else:
+                # Likely already in feet
+                altitude_ft = int(current_altitude)
+            altitude_ft = max(0, min(600, altitude_ft))  # Clamp to slider range
+            self.dialog.altitudeSlider.setMaximum(600)
+            self.dialog.altitudeSpinBox.setMaximum(600)
+            self.dialog.altitudeSlider.setValue(altitude_ft)
+            self.dialog.altitudeSpinBox.setValue(altitude_ft)
+            self.wizard_data['altitude'] = altitude_ft
 
     def _on_drone_changed(self, index):
         """Handle drone selection change."""

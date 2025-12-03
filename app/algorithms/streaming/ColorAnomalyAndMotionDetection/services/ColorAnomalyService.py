@@ -143,7 +143,7 @@ class ColorAnomalyService(QObject):
                 cx, cy = x + w_box // 2, y + h_box // 2
 
             # Get dominant color in this region
-            region = frame_bgr[y:y+h_box, x:x+w_box]
+            region = frame_bgr[y:y + h_box, x:x + w_box]
             if region.size > 0:
                 mean_color = region.mean(axis=(0, 1)).astype(int)
                 dominant_color = tuple(mean_color.tolist())
@@ -207,7 +207,7 @@ class ColorAnomalyService(QObject):
             return detection
 
         # Extract hue from detection region
-        region_hsv = frame_hsv[y:y+h, x:x+w]
+        region_hsv = frame_hsv[y:y + h, x:x + w]
         mean_hue = float(region_hsv[:, :, 0].mean())
 
         # Create mask of pixels with similar hue in entire frame

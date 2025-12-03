@@ -107,19 +107,19 @@ class Ui_ImageAnalysisGuide(object):
         self.verticalLayout_buttonContainer = QVBoxLayout(self.buttonContainer)
         self.verticalLayout_buttonContainer.setSpacing(15)
         self.verticalLayout_buttonContainer.setObjectName(u"verticalLayout_buttonContainer")
-        self.reviewButton = QPushButton(self.buttonContainer)
-        self.reviewButton.setObjectName(u"reviewButton")
-        self.reviewButton.setFont(font2)
-        self.reviewButton.setMinimumSize(QSize(0, 50))
-
-        self.verticalLayout_buttonContainer.addWidget(self.reviewButton)
-
         self.newAnalysisButton = QPushButton(self.buttonContainer)
         self.newAnalysisButton.setObjectName(u"newAnalysisButton")
         self.newAnalysisButton.setFont(font2)
         self.newAnalysisButton.setMinimumSize(QSize(0, 50))
 
         self.verticalLayout_buttonContainer.addWidget(self.newAnalysisButton)
+
+        self.reviewButton = QPushButton(self.buttonContainer)
+        self.reviewButton.setObjectName(u"reviewButton")
+        self.reviewButton.setFont(font2)
+        self.reviewButton.setMinimumSize(QSize(0, 50))
+
+        self.verticalLayout_buttonContainer.addWidget(self.reviewButton)
 
 
         self.verticalLayout_reviewOrNew.addWidget(self.buttonContainer)
@@ -712,8 +712,8 @@ class Ui_ImageAnalysisGuide(object):
         self.filePathLabel.setText(QCoreApplication.translate("ImageAnalysisGuide", u"No file selected", None))
         self.browseFileButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Browse...", None))
         self.labelInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"What would you like to do?", None))
-        self.reviewButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Review Existing Image Analysis", None))
         self.newAnalysisButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Start New Image Analysis", None))
+        self.reviewButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Review Existing Image Analysis", None))
         self.labelPage0Title.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Select Directories", None))
         self.labelInputDirectory.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Where are the images you want to analyze?", None))
         self.inputDirectoryButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Browse...", None))

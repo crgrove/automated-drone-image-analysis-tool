@@ -36,7 +36,7 @@ class ScaleBarWidget(QWidget):
         # bar + end caps
         painter.drawLine(start, mid_y, end, mid_y)
         painter.drawLine(start, mid_y - 5, start, mid_y + 5)
-        painter.drawLine(end,   mid_y - 5, end,   mid_y + 5)
+        painter.drawLine(end, mid_y - 5, end, mid_y + 5)
 
         # label
         painter.setFont(QFont("Arial", 10))

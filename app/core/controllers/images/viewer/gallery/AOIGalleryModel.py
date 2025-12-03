@@ -313,7 +313,7 @@ class AOIGalleryModel(QAbstractListModel):
         # Clamp to valid range
         start_row = max(0, start_row)
         end_row = min(end_row, len(self.aoi_items) - 1)
-        
+
         if start_row > end_row or len(self.aoi_items) == 0:
             return
 
@@ -338,18 +338,17 @@ class AOIGalleryModel(QAbstractListModel):
         """
         # Process in batches to avoid blocking UI
         current_row = start_row
-        total_rows = end_row - start_row + 1
-        
+
         # Process first batch immediately (for high priority visible items)
         batch_end = min(current_row + batch_size - 1, end_row)
         self._process_thumbnail_queue_batch(current_row, batch_end, high_priority)
         current_row = batch_end + 1
-        
+
         # If there are more items, queue them asynchronously
         if current_row <= end_row:
             # Add remaining items to batch queue
             self._batch_queue_items.append((current_row, end_row, high_priority))
-            
+
             # Start timer if not already running
             if not self._batch_queue_timer.isActive():
                 self._batch_queue_timer.start(10)  # Process every 10ms
@@ -359,15 +358,15 @@ class AOIGalleryModel(QAbstractListModel):
         if not self._batch_queue_items:
             self._batch_queue_timer.stop()
             return
-        
+
         # Process one batch from the queue
         start_row, end_row, high_priority = self._batch_queue_items[0]
         batch_size = 20 if high_priority else 50
-        
+
         # Process a batch
         batch_end = min(start_row + batch_size - 1, end_row)
         self._process_thumbnail_queue_batch(start_row, batch_end, high_priority)
-        
+
         # Update or remove the queue item
         if batch_end >= end_row:
             # This range is complete, remove it
@@ -375,7 +374,7 @@ class AOIGalleryModel(QAbstractListModel):
         else:
             # Update start_row for next batch
             self._batch_queue_items[0] = (batch_end + 1, end_row, high_priority)
-        
+
         # Allow UI to process events between batches
         QApplication.processEvents()
 
@@ -592,7 +591,7 @@ class AOIGalleryModel(QAbstractListModel):
         if hasattr(self, '_batch_queue_timer'):
             self._batch_queue_timer.stop()
             self._batch_queue_items.clear()
-        
+
         if hasattr(self, 'thumbnail_loader'):
             self.thumbnail_loader.shutdown()
 

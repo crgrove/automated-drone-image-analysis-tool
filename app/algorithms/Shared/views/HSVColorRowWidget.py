@@ -175,12 +175,12 @@ class HSVColorRowWidget(QWidget):
                 'h': h,
                 's': s,
                 'v': v,
-                'h_minus': hsv_ranges.get('h_minus', 20/179),
-                'h_plus': hsv_ranges.get('h_plus', 20/179),
-                's_minus': hsv_ranges.get('s_minus', 50/100),  # Default 50% = 0.5
-                's_plus': hsv_ranges.get('s_plus', 50/100),  # Default 50% = 0.5
-                'v_minus': hsv_ranges.get('v_minus', 50/100),  # Default 50% = 0.5
-                'v_plus': hsv_ranges.get('v_plus', 50/100)  # Default 50% = 0.5
+                'h_minus': hsv_ranges.get('h_minus', 20 / 179),
+                'h_plus': hsv_ranges.get('h_plus', 20 / 179),
+                's_minus': hsv_ranges.get('s_minus', 50 / 100),  # Default 50% = 0.5
+                's_plus': hsv_ranges.get('s_plus', 50 / 100),  # Default 50% = 0.5
+                'v_minus': hsv_ranges.get('v_minus', 50 / 100),  # Default 50% = 0.5
+                'v_plus': hsv_ranges.get('v_plus', 50 / 100)  # Default 50% = 0.5
             }
             # DO NOT overwrite self.color - use the passed-in color which is the source of truth
         else:
@@ -192,12 +192,12 @@ class HSVColorRowWidget(QWidget):
                 'h': h,
                 's': s,
                 'v': v,
-                'h_minus': (h_minus / 179) if h_minus is not None else (20/179),
-                'h_plus': (h_plus / 179) if h_plus is not None else (20/179),
-                's_minus': (s_minus / 100) if s_minus is not None else (50/100),  # Convert from percentage
-                's_plus': (s_plus / 100) if s_plus is not None else (50/100),  # Convert from percentage
-                'v_minus': (v_minus / 100) if v_minus is not None else (50/100),  # Convert from percentage
-                'v_plus': (v_plus / 100) if v_plus is not None else (50/100)  # Convert from percentage
+                'h_minus': (h_minus / 179) if h_minus is not None else (20 / 179),
+                'h_plus': (h_plus / 179) if h_plus is not None else (20 / 179),
+                's_minus': (s_minus / 100) if s_minus is not None else (50 / 100),  # Convert from percentage
+                's_plus': (s_plus / 100) if s_plus is not None else (50 / 100),  # Convert from percentage
+                'v_minus': (v_minus / 100) if v_minus is not None else (50 / 100),  # Convert from percentage
+                'v_plus': (v_plus / 100) if v_plus is not None else (50 / 100)  # Convert from percentage
             }
 
         self._setup_ui()
@@ -426,12 +426,12 @@ class HSVColorRowWidget(QWidget):
         self._hsv_window['v'] = v
 
         # Update min/max to ±50% for S/V, ±20 for H (defaults)
-        self._hsv_window['h_minus'] = 20/179
-        self._hsv_window['h_plus'] = 20/179
-        self._hsv_window['s_minus'] = 50/100
-        self._hsv_window['s_plus'] = 50/100
-        self._hsv_window['v_minus'] = 50/100
-        self._hsv_window['v_plus'] = 50/100
+        self._hsv_window['h_minus'] = 20 / 179
+        self._hsv_window['h_plus'] = 20 / 179
+        self._hsv_window['s_minus'] = 50 / 100
+        self._hsv_window['s_plus'] = 50 / 100
+        self._hsv_window['v_minus'] = 50 / 100
+        self._hsv_window['v_plus'] = 50 / 100
 
         # Update UI
         self._update_inputs()
@@ -637,12 +637,12 @@ class HSVColorRowWidget(QWidget):
         self._hsv_window['v'] = v
 
         # Set default ranges (±50% for S/V, ±20 for H)
-        self._hsv_window['h_minus'] = 20/179
-        self._hsv_window['h_plus'] = 20/179
-        self._hsv_window['s_minus'] = 50/100
-        self._hsv_window['s_plus'] = 50/100
-        self._hsv_window['v_minus'] = 50/100
-        self._hsv_window['v_plus'] = 50/100
+        self._hsv_window['h_minus'] = 20 / 179
+        self._hsv_window['h_plus'] = 20 / 179
+        self._hsv_window['s_minus'] = 50 / 100
+        self._hsv_window['s_plus'] = 50 / 100
+        self._hsv_window['v_minus'] = 50 / 100
+        self._hsv_window['v_plus'] = 50 / 100
 
         self._update_inputs()
         self._update_display()

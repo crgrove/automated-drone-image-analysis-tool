@@ -103,7 +103,7 @@ class RenderingTab(QWidget):
     def get_config(self) -> dict:
         """
         Get current rendering configuration.
-        
+
         Returns:
             Dictionary with rendering configuration values
         """
@@ -114,24 +114,24 @@ class RenderingTab(QWidget):
             "Dot": 2,
             "Off": 3
         }
-        
+
         config = {
             'render_shape': shape_map.get(self.render_shape.currentText(), 1),
             'render_text': self.render_text.isChecked(),
             'render_contours': self.render_contours.isChecked(),
             'max_detections_to_render': self.max_detections_to_render.value(),
         }
-        
+
         # Only include if the option exists
         if self.show_detection_color_option and hasattr(self, 'use_detection_color'):
             config['use_detection_color_for_rendering'] = self.use_detection_color.isChecked()
-        
+
         return config
 
     def set_config(self, config: dict):
         """
         Set rendering configuration from dictionary.
-        
+
         Args:
             config: Dictionary with rendering configuration values
         """
@@ -142,20 +142,20 @@ class RenderingTab(QWidget):
             2: "Dot",
             3: "Off"
         }
-        
+
         if 'render_shape' in config:
             shape_text = shape_map.get(config['render_shape'], "Circle")
             self.render_shape.setCurrentText(shape_text)
-        
+
         if 'render_text' in config:
             self.render_text.setChecked(bool(config['render_text']))
-        
+
         if 'render_contours' in config:
             self.render_contours.setChecked(bool(config['render_contours']))
-        
+
         if 'max_detections_to_render' in config:
             self.max_detections_to_render.setValue(config['max_detections_to_render'])
-        
+
         if 'use_detection_color_for_rendering' in config and self.show_detection_color_option:
             if hasattr(self, 'use_detection_color'):
                 self.use_detection_color.setChecked(bool(config['use_detection_color_for_rendering']))

@@ -345,7 +345,7 @@ class FastImageViewer(QGraphicsView):
                     hsv_values = []
                     for dy in range(-self.radius, self.radius + 1):
                         for dx in range(-self.radius, self.radius + 1):
-                            if dx*dx + dy*dy <= self.radius*self.radius:
+                            if dx * dx + dy * dy <= self.radius * self.radius:
                                 px, py = center_x + dx, center_y + dy
                                 if 0 <= px < w and 0 <= py < h:
                                     hsv_values.append(self.image_hsv[py, px])
@@ -439,7 +439,7 @@ class FastImageViewer(QGraphicsView):
                 self.scale(scale_factor, scale_factor)
             else:
                 # Zoom out
-                self.scale(1/scale_factor, 1/scale_factor)
+                self.scale(1 / scale_factor, 1 / scale_factor)
 
             # Update cursor for new zoom level
             self.update_custom_cursor()
@@ -1337,12 +1337,12 @@ class HSVColorRangeAssistant(QDialog):
         hex_color = "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
         self.color_preview.setStyleSheet(f"background-color: {hex_color}; border: 1px solid black;")
         self.hex_label.setText(hex_color.upper())
-        self.hsv_label.setText(f"H:{h*2} S:{int(s/2.55)} V:{int(v/2.55)}")
+        self.hsv_label.setText(f"H:{h * 2} S:{int(s / 2.55)} V:{int(v / 2.55)}")
 
         # Update center labels
-        self.h_center_label.setText(f"{h*2}°")
-        self.s_center_label.setText(f"{int(s/2.55)}%")
-        self.v_center_label.setText(f"{int(v/2.55)}%")
+        self.h_center_label.setText(f"{h * 2}°")
+        self.s_center_label.setText(f"{int(s / 2.55)}%")
+        self.v_center_label.setText(f"{int(v / 2.55)}%")
 
         # Calculate final ranges
         h_low = max(0, h - self.hsv_ranges['h_minus'])
@@ -1353,9 +1353,9 @@ class HSVColorRangeAssistant(QDialog):
         v_high = min(255, v + self.hsv_ranges['v_plus'])
 
         # Update range labels
-        self.h_range_label.setText(f"{int(h_low*2)}°-{int(h_high*2)}°")
-        self.s_range_label.setText(f"{int(s_low/2.55)}%-{int(s_high/2.55)}%")
-        self.v_range_label.setText(f"{int(v_low/2.55)}%-{int(v_high/2.55)}%")
+        self.h_range_label.setText(f"{int(h_low * 2)}°-{int(h_high * 2)}°")
+        self.s_range_label.setText(f"{int(s_low / 2.55)}%-{int(s_high / 2.55)}%")
+        self.v_range_label.setText(f"{int(v_low / 2.55)}%-{int(v_high / 2.55)}%")
 
         # Check and update warning labels
         self.check_range_warnings()

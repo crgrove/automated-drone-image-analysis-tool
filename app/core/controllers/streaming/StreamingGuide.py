@@ -162,6 +162,13 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
         skip_value = "Yes" if self.wizard_data.get("skip_guide", False) else "No"
         self.settings_service.set_setting("SkipStreamingGuide", skip_value)
 
+        # Save altitude unit preference (convert 'ft'/'m' to 'Feet'/'Meters' format)
+        altitude_unit = self.wizard_data.get('altitude_unit', 'ft')
+        if altitude_unit == 'm':
+            self.settings_service.set_setting('DistanceUnit', 'Meters')
+        else:
+            self.settings_service.set_setting('DistanceUnit', 'Feet')
+
         self.wizardCompleted.emit(self.wizard_data)
         self.accept()
 

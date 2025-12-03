@@ -34,6 +34,10 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         self.logger = LoggerService()
         self.setupUi(self)
 
+        # Match RGB Color Range layout spacing and margins
+        self.verticalLayout.setSpacing(6)
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+
         # Hide old single-color UI elements (hide widgets, not layouts)
         if hasattr(self, 'colorSample'):
             self.colorSample.hide()
@@ -193,12 +197,12 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             }
         # Default ranges
         return {
-            'h_minus': 20/179,
-            'h_plus': 20/179,
-            's_minus': 50/255,
-            's_plus': 50/255,
-            'v_minus': 50/255,
-            'v_plus': 50/255
+            'h_minus': 20 / 179,
+            'h_plus': 20 / 179,
+            's_minus': 50 / 255,
+            's_plus': 50 / 255,
+            'v_minus': 50 / 255,
+            'v_plus': 50 / 255
         }
 
     def _on_color_selected_from_menu(self, color: QColor):
@@ -336,7 +340,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         for row in self.color_rows:
             hsv_ranges = row.get_hsv_ranges()
             rgb = row.get_rgb()
-            
+
             # Convert fractional ranges (0-1) to OpenCV format (0-179 for hue, 0-255 for sat/val)
             hsv_ranges_list.append({
                 'rgb': rgb,

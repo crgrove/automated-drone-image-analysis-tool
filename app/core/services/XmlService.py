@@ -53,7 +53,11 @@ class XmlService:
 
             def safe_eval(value, default=(0, 0, 0)):
                 """Helper function to safely evaluate a tuple, handling 'None' values."""
-                return literal_eval(value) if value and value != "None" else default
+                result = literal_eval(value) if value and value != "None" else default
+                # Normalize to tuple of integers to ensure consistent format
+                if isinstance(result, (tuple, list)) and len(result) >= 3:
+                    return (int(result[0]), int(result[1]), int(result[2]))
+                return default
             settings['output_dir'] = settings_xml.get('output_dir', "")
             settings['input_dir'] = settings_xml.get('input_dir', "")
             settings['num_processes'] = safe_int(settings_xml.get('num_processes'), 1)

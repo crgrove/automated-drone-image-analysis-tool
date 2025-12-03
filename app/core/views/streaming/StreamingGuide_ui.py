@@ -631,7 +631,7 @@ class Ui_StreamingGuide(object):
         self.labelRtmpDescription.setText(QCoreApplication.translate("StreamingGuide", u"RTMP: Connect to a live network stream (rtmp://server:port/app/key).", None))
         self.labelPageConnectionTitle.setText(QCoreApplication.translate("StreamingGuide", u"Connection Details", None))
         self.labelConnectionInstructions.setText(QCoreApplication.translate("StreamingGuide", u"Provide the path or URL for your selected stream type. You can optionally auto-connect when the guide is finished.", None))
-        self.labelStreamUrl.setText(QCoreApplication.translate("StreamingGuide", u"Stream URLPath:", None))
+        self.labelStreamUrl.setText(QCoreApplication.translate("StreamingGuide", u"Stream URL/Path:", None))
         self.streamUrlLineEdit.setPlaceholderText(QCoreApplication.translate("StreamingGuide", u"Click Browse to select a file or enter a URL...", None))
         self.browseButton.setText(QCoreApplication.translate("StreamingGuide", u"Browse...", None))
         self.labelAutoConnect.setText(QCoreApplication.translate("StreamingGuide", u"Auto Connect:", None))

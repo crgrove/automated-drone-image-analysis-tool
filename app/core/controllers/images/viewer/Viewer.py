@@ -554,7 +554,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.help_dialog.show()
         self.help_dialog.raise_()
         self.help_dialog.activateWindow()
-    
+
     def _close_help_dialog_if_open(self):
         """Close the help dialog if it's open. Called before opening other dialogs."""
         if hasattr(self, 'help_dialog') and self.help_dialog and self.help_dialog.isVisible():
@@ -679,10 +679,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             if hasattr(self, 'gallery_mode') and self.gallery_mode:
                 # Use gallery controller for flagging
                 if hasattr(self, 'gallery_controller') and self.gallery_controller:
-                    self.logger.debug(f"F key pressed in gallery mode, calling gallery_controller.toggle_aoi_flag()")
+                    self.logger.debug("F key pressed in gallery mode, calling gallery_controller.toggle_aoi_flag()")
                     self.gallery_controller.toggle_aoi_flag()
                 else:
-                    self.logger.warning(f"F key pressed in gallery mode but gallery_controller not available")
+                    self.logger.warning("F key pressed in gallery mode but gallery_controller not available")
             else:
                 # Use single-image AOI controller for flagging
                 self.aoi_controller.toggle_aoi_flag()

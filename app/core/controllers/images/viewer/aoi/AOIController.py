@@ -596,7 +596,7 @@ class AOIController:
 
     def show_aoi_location(self, aoi_index, image_idx=None, anchor_widget=None, anchor_point=None):
         """Calculate and show GPS location for an AOI.
-        
+
         Args:
             aoi_index: Index of the AOI
             image_idx: Optional image index (for gallery mode). If None, uses current image.
@@ -607,41 +607,41 @@ class AOIController:
             # Use provided image index or current image
             if image_idx is None:
                 image_idx = self.parent.current_image
-            
+
             if image_idx < 0 or image_idx >= len(self.parent.images):
                 self.parent.status_controller.show_toast("Invalid image index", 3000, color="#F44336")
                 return
-            
+
             image = self.parent.images[image_idx]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
                 self.parent.status_controller.show_toast("Invalid AOI index", 3000, color="#F44336")
                 return
-            
+
             aoi = image['areas_of_interest'][aoi_index]
-            
+
             # Use AOIService for GPS calculation
             aoi_service = AOIService(image)
-            
+
             # Get custom altitude if available
             custom_alt_ft = None
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
-            
+
             # Calculate AOI GPS coordinates
             result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
-            
+
             if not result:
                 self.parent.status_controller.show_toast("Could not calculate AOI location", 3000, color="#F44336")
                 return
-            
+
             lat, lon = result
-            
+
             # Get position format preference
             position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
-            
+
             # Format coordinates
             coord_text = LocationInfo.format_coordinates(lat, lon, position_format)
-            
+
             # Show popup using coordinate controller's method
             if hasattr(self.parent, 'coordinate_controller'):
                 # Store decimal coordinates for sharing (needed for coordinate controller methods)
@@ -650,7 +650,7 @@ class AOIController:
             else:
                 # Fallback: show simple message
                 self.parent.status_controller.show_toast(f"AOI Location: {coord_text}", 5000, color="#00C853")
-            
+
         except Exception as e:
             self.logger.error(f"Error showing AOI location: {e}")
             self.parent.status_controller.show_toast(f"Error calculating location: {str(e)}", 3000, color="#F44336")

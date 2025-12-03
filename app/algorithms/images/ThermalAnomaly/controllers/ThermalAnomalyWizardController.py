@@ -40,17 +40,16 @@ class ThermalAnomalyWizardController(QWidget, Ui_ThermalAnomalyWizard, Algorithm
         type_group.addButton(self.radioTypeBoth)
 
         # Labeled preset slider (Very Conservative .. Very Aggressive)
-        self.aggressivenessSlider = TextLabeledSlider(self)
         # Allow labels to be overridden from config; default to desired set
         default_labels = [
-            "Very\nConservative", "Conservative", "Moderate",
-            "Aggressive", "Very\nAggressive"
+            "Very \nConservative", "Conservative", "Moderate",
+            "Aggressive", "Very \nAggressive"
         ]
         labels = self.config.get('aggressiveness_labels', default_labels)
-        # Add space between "Very" and next word with line break
-        labels = [label.replace("Very\n", "Very \n") for label in labels]
-        if isinstance(labels, list):
-            self.aggressivenessSlider.setTextLabels(labels)
+        # Add space between "Very" and next word with line break if not already present
+        labels = [label.replace("Very\n", "Very \n") if "\n" in label and "Very \n" not in label else label for label in labels]
+        # Pass presets to constructor so multiline is detected at init time (like RXAnomaly)
+        self.aggressivenessSlider = TextLabeledSlider(self, presets=labels)
         # Put slider into placeholder
         placeholder = self.aggressivenessSliderPlaceholder
         layout = QVBoxLayout(placeholder)
@@ -77,9 +76,7 @@ class ThermalAnomalyWizardController(QWidget, Ui_ThermalAnomalyWizard, Algorithm
 
         # Map aggressiveness index (0..4) to standard deviation threshold
         # Threshold is the width of the range (in standard deviations) that can be labeled as an anomaly
-        # More aggressive = wider range = more standard deviations = higher threshold
-        # Very Conservative -> 1σ (narrow range), Very Aggressive -> 8σ (wide range)
-        threshold_map = {0: 1, 1: 2, 2: 4, 3: 6, 4: 8}
+        threshold_map = {0: 8, 1: 6, 2: 4, 3: 2, 4: 1}
         threshold = threshold_map.get(aggr_index, 4)
 
         # Map complex scene to segments (best guess)

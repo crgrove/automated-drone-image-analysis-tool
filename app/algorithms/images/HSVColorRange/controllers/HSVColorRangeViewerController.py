@@ -104,7 +104,7 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         unselected_low = cv2.bitwise_and(low, low, mask=inverse_low_mask)
 
         return {
-            "selected":   [selected_high, selected_med, selected_low],
+            "selected": [selected_high, selected_med, selected_low],
             "unselected": [unselected_high, unselected_med, unselected_low]
         }
 
@@ -148,7 +148,7 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
         unselected_low = cv2.bitwise_and(low, low, mask=inverse_low_mask)
 
         return {
-            "selected":   [selected_high, selected_med, selected_low],
+            "selected": [selected_high, selected_med, selected_low],
             "unselected": [unselected_high, unselected_med, unselected_low]
         }
 

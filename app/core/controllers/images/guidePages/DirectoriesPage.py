@@ -18,6 +18,12 @@ class DirectoriesPage(BasePage):
         self.dialog.inputDirectoryButton.setFocusPolicy(Qt.NoFocus)
         self.dialog.outputDirectoryButton.setFocusPolicy(Qt.NoFocus)
 
+    def on_enter(self):
+        """Called when the page is entered - clear focus from all buttons."""
+        # Clear focus from the dialog to ensure no buttons have focus
+        if self.dialog.focusWidget():
+            self.dialog.focusWidget().clearFocus()
+
     def connect_signals(self):
         """Connect UI signals to handlers."""
         self.dialog.inputDirectoryButton.clicked.connect(self._on_input_directory_browse)

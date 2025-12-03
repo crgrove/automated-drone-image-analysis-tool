@@ -340,7 +340,7 @@ class AOIFilterDialog(QDialog):
             r, g, b = colorsys.hsv_to_rgb(self.color_hue / 360.0, 1.0, 1.0)
             self.color_preview.setStyleSheet(f"""
                 QLabel {{
-                    background-color: rgb({int(r*255)}, {int(g*255)}, {int(b*255)});
+                    background-color: rgb({int(r * 255)}, {int(g * 255)}, {int(b * 255)});
                     border: 1px solid gray;
                 }}
             """)

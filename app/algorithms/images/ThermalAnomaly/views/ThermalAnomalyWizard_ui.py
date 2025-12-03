@@ -22,7 +22,7 @@ class Ui_ThermalAnomalyWizard(object):
     def setupUi(self, ThermalAnomalyWizard):
         if not ThermalAnomalyWizard.objectName():
             ThermalAnomalyWizard.setObjectName(u"ThermalAnomalyWizard")
-        ThermalAnomalyWizard.resize(800, 296)
+        ThermalAnomalyWizard.resize(618, 348)
         self.verticalLayout_root = QVBoxLayout(ThermalAnomalyWizard)
         self.verticalLayout_root.setObjectName(u"verticalLayout_root")
         self.verticalLayout_root.setContentsMargins(0, 5, 0, 0)
@@ -123,7 +123,7 @@ class Ui_ThermalAnomalyWizard(object):
         self.labelNote = QLabel(self.widgetAggressiveness)
         self.labelNote.setObjectName(u"labelNote")
         font2 = QFont()
-        font2.setPointSize(10)
+        font2.setPointSize(11)
         font2.setItalic(True)
         self.labelNote.setFont(font2)
         self.labelNote.setWordWrap(True)

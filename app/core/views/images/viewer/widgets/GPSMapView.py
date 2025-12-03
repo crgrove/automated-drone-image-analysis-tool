@@ -229,8 +229,8 @@ class GPSMapView(QGraphicsView):
         p.setBrush(QBrush(QColor(255, 0, 0)))
         north_arrow = QPainterPath()
         north_arrow.moveTo(0, -arrow_length)
-        north_arrow.lineTo(-arrow_width/2, 0)
-        north_arrow.lineTo(arrow_width/2, 0)
+        north_arrow.lineTo(-arrow_width / 2, 0)
+        north_arrow.lineTo(arrow_width / 2, 0)
         north_arrow.closeSubpath()
         p.drawPath(north_arrow)
 
@@ -239,8 +239,8 @@ class GPSMapView(QGraphicsView):
         p.setBrush(QBrush(QColor(255, 255, 255)))
         south_arrow = QPainterPath()
         south_arrow.moveTo(0, arrow_length)
-        south_arrow.lineTo(-arrow_width/2, 0)
-        south_arrow.lineTo(arrow_width/2, 0)
+        south_arrow.lineTo(-arrow_width / 2, 0)
+        south_arrow.lineTo(arrow_width / 2, 0)
         south_arrow.closeSubpath()
         p.drawPath(south_arrow)
 
@@ -249,16 +249,16 @@ class GPSMapView(QGraphicsView):
         p.setBrush(QBrush(QColor(180, 180, 180)))
         east_arrow = QPainterPath()
         east_arrow.moveTo(arrow_length * 0.7, 0)
-        east_arrow.lineTo(0, -arrow_width/2 * 0.7)
-        east_arrow.lineTo(0, arrow_width/2 * 0.7)
+        east_arrow.lineTo(0, -arrow_width / 2 * 0.7)
+        east_arrow.lineTo(0, arrow_width / 2 * 0.7)
         east_arrow.closeSubpath()
         p.drawPath(east_arrow)
 
         # Draw west arrow (gray)
         west_arrow = QPainterPath()
         west_arrow.moveTo(-arrow_length * 0.7, 0)
-        west_arrow.lineTo(0, -arrow_width/2 * 0.7)
-        west_arrow.lineTo(0, arrow_width/2 * 0.7)
+        west_arrow.lineTo(0, -arrow_width / 2 * 0.7)
+        west_arrow.lineTo(0, arrow_width / 2 * 0.7)
         west_arrow.closeSubpath()
         p.drawPath(west_arrow)
 
@@ -301,7 +301,7 @@ class GPSMapView(QGraphicsView):
             else:
                 p.setPen(QPen(QColor(255, 255, 255)))  # White for others
 
-            p.drawText(QPointF(label_x - text_width/2, label_y + text_height/3), label_text)
+            p.drawText(QPointF(label_x - text_width / 2, label_y + text_height / 3), label_text)
 
         p.end()
 
@@ -437,7 +437,7 @@ class GPSMapView(QGraphicsView):
 
         # Set scene rect
         world_size = 256 * (2 ** self.current_zoom)
-        self.scene.setSceneRect(-world_size/2, -world_size/2, world_size * 2, world_size * 2)
+        self.scene.setSceneRect(-world_size / 2, -world_size / 2, world_size * 2, world_size * 2)
 
         # Load tiles and draw points
         self.load_visible_tiles()
@@ -602,7 +602,7 @@ class GPSMapView(QGraphicsView):
                 size, color, border_color, border_width, z_value = 6, QColor(0, 255, 0), QColor(0, 0, 0), 1, 10
 
             # Create point item
-            point_item = QGraphicsEllipseItem(-size/2, -size/2, size, size)
+            point_item = QGraphicsEllipseItem(-size / 2, -size / 2, size, size)
             point_item.setPos(scene_point)
             point_item.setBrush(QBrush(color))
             point_item.setPen(QPen(border_color, border_width))
@@ -693,7 +693,7 @@ class GPSMapView(QGraphicsView):
             else:
                 size, color, border_color, border_width, z_value = 6, QColor(0, 255, 0), QColor(0, 0, 0), 1, 10
 
-            item.setRect(-size/2, -size/2, size, size)
+            item.setRect(-size / 2, -size / 2, size, size)
             item.setBrush(QBrush(color))
             item.setPen(QPen(border_color, border_width))
             item.setZValue(z_value)
@@ -953,7 +953,7 @@ class GPSMapView(QGraphicsView):
 
         # Update scene rect
         world_size = 256 * (2 ** self.current_zoom)
-        self.scene.setSceneRect(-world_size/2, -world_size/2, world_size * 2, world_size * 2)
+        self.scene.setSceneRect(-world_size / 2, -world_size / 2, world_size * 2, world_size * 2)
 
         # Update GPS point positions
         for i, point_item in enumerate(self.point_items):
@@ -1201,7 +1201,7 @@ class GPSMapView(QGraphicsView):
 
         # Create marker
         size = 14
-        self.aoi_marker = QGraphicsRectItem(-size/2, -size/2, size, size)
+        self.aoi_marker = QGraphicsRectItem(-size / 2, -size / 2, size, size)
         self.aoi_marker.setPos(scene_point)
 
         color = QColor(identifier_color[0], identifier_color[1], identifier_color[2])

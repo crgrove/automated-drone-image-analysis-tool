@@ -60,8 +60,8 @@ def test_migrate_old_settings():
 
     with patch('core.services.SettingsService.QtCore.QSettings', side_effect=qsettings_side_effect):
         # Instantiate service to trigger migration
-        service = SettingsService()
-        
+        SettingsService()
+
         # Verify that migration was attempted
         mock_old_settings.allKeys.assert_called_once()
         # Verify that values were copied
@@ -72,7 +72,7 @@ def test_migrate_old_settings_already_migrated():
     """Test that migration is skipped if already done."""
     mock_new_settings = MagicMock()
     mock_new_settings.value.return_value = True  # settings_migrated already set
-    
+
     mock_old_settings = MagicMock()
 
     def qsettings_side_effect(*args, **kwargs):
@@ -85,7 +85,7 @@ def test_migrate_old_settings_already_migrated():
 
     with patch('core.services.SettingsService.QtCore.QSettings', side_effect=qsettings_side_effect):
         # Instantiate service
-        service = SettingsService()
-        
+        SettingsService()
+
         # Verify allKeys was never called on old settings (migration skipped)
         mock_old_settings.allKeys.assert_not_called()

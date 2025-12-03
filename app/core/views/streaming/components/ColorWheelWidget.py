@@ -111,7 +111,7 @@ class ColorWheelWidget(QWidget):
         # Calculate distance from center
         dx = x - self.center_x
         dy = y - self.center_y
-        distance = math.sqrt(dx*dx + dy*dy)
+        distance = math.sqrt(dx * dx + dy * dy)
 
         # Check if click is within wheel bounds
         if distance < self.inner_radius or distance > self.outer_radius:

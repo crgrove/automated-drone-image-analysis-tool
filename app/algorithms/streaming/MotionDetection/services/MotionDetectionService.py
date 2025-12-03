@@ -331,8 +331,8 @@ class MotionDetectionService(QObject):
         # Downsample further for faster optical flow
         h, w = gray.shape
         scale = 0.25  # Process at 1/4 resolution
-        small_prev = cv2.resize(self._prev_gray, (int(w*scale), int(h*scale)))
-        small_curr = cv2.resize(gray, (int(w*scale), int(h*scale)))
+        small_prev = cv2.resize(self._prev_gray, (int(w * scale), int(h * scale)))
+        small_curr = cv2.resize(gray, (int(w * scale), int(h * scale)))
 
         # Calculate optical flow on downsampled images
         flow = cv2.calcOpticalFlowFarneback(
@@ -371,8 +371,8 @@ class MotionDetectionService(QObject):
             h, w = prev_gray.shape
             if w > 640:
                 scale = 640 / w
-                small_prev = cv2.resize(prev_gray, (int(w*scale), int(h*scale)))
-                small_curr = cv2.resize(curr_gray, (int(w*scale), int(h*scale)))
+                small_prev = cv2.resize(prev_gray, (int(w * scale), int(h * scale)))
+                small_curr = cv2.resize(curr_gray, (int(w * scale), int(h * scale)))
             else:
                 small_prev = prev_gray
                 small_curr = curr_gray
@@ -628,7 +628,7 @@ class MotionDetectionService(QObject):
                 cx, cy = x + w // 2, y + h // 2
 
             # Calculate average velocity in region
-            roi_flow = flow[y:y+h, x:x+w]
+            roi_flow = flow[y:y + h, x:x + w]
             avg_velocity = np.mean(roi_flow, axis=(0, 1))
 
             detection = MotionDetection(
@@ -636,7 +636,7 @@ class MotionDetectionService(QObject):
                 centroid=(cx, cy),
                 area=area,
                 velocity=tuple(avg_velocity),
-                confidence=min(1.0, np.mean(magnitude[y:y+h, x:x+w]) / 50),
+                confidence=min(1.0, np.mean(magnitude[y:y + h, x:x + w]) / 50),
                 timestamp=time.time(),
                 is_compensated=(self._current_mode == DetectionMode.MOVING),
                 contour=contour

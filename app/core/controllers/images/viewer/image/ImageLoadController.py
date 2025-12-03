@@ -332,7 +332,7 @@ class ImageLoadController:
         error_msg = f"Error loading image {self.parent.current_image + 1}: {str(e)}"
         self.logger.error(error_msg)
         self.logger.error(f"Traceback:\n{traceback.format_exc()}")
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("ERROR IN VIEWER - load_image()")
         print(f"Image index: {self.parent.current_image}")
         if image:
@@ -340,6 +340,6 @@ class ImageLoadController:
             print(f"Mask path: {image.get('mask_path', 'N/A')}")
         print(f"Error: {str(e)}")
         print(f"Traceback:\n{traceback.format_exc()}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         # Show error to user
         QMessageBox.critical(self.parent, "Error Loading Image", error_msg)
