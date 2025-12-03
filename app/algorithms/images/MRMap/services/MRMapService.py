@@ -69,7 +69,7 @@ class MRMapService(AlgorithmService):
             else:  # RGB (default)
                 img_converted = img
 
-            hist = Histogram(img_converted)
+            hist = Histogram(img_converted, self.colorspace)
 
             # Extract channels (order depends on colorspace)
             # For all colorspaces, channels are in order [0, 1, 2]
@@ -312,43 +312,119 @@ class MRMapService(AlgorithmService):
 
 
 class Histogram:
-    """Histogram class for quantized RGB color analysis.
+    """Histogram class for quantized color analysis.
 
-    Creates a quantized 3D histogram of RGB color values for efficient
-    bin counting and rarity analysis.
+    Creates a quantized 3D histogram of color values for efficient
+    bin counting and rarity analysis. Supports RGB, HSV, and LAB color spaces
+    with color-space-aware quantization.
 
     Attributes:
         image_array: Original image array.
-        mapping: Quantization mapping from 256 shades to bins.
+        colorspace: Color space of the image ('RGB', 'HSV', or 'LAB').
+        mapping: Quantization mapping from 256 shades to bins (per channel).
         q_histogram: Quantized 3D histogram array.
     """
 
-    def __init__(self, image):
+    def __init__(self, image, colorspace='RGB'):
         """Initialize histogram with image data.
 
         Args:
             image: Image array to analyze.
+            colorspace: Color space of the image ('RGB', 'HSV', or 'LAB').
         """
         self.image_array = image
+        self.colorspace = colorspace
 
-        # Use a smaller integer type for bin mapping
-        bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
-        self.mapping = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)  # Reduce dtype size
+        # Create color-space-aware quantization mappings
+        self.mapping_ch0, self.mapping_ch1, self.mapping_ch2 = self._create_mappings()
 
         self.q_histogram = None
         self.create_histogram()
 
+    def _create_mappings(self):
+        """Create color-space-aware quantization mappings for each channel.
+
+        Returns:
+            Tuple of (mapping_ch0, mapping_ch1, mapping_ch2) where each mapping
+            is a numpy array that maps 0-255 values to bin indices 0-25.
+        """
+        if self.colorspace == 'HSV':
+            # HSV: H (0-179), S (0-255), V (0-255)
+            # H channel: Map 0-179 to 26 bins more effectively
+            # Use full range of H values (0-179) instead of wasting bins on 180-255
+            h_max = 180  # OpenCV HSV H channel max value
+            h_bin_size = h_max / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS
+            mapping_h = np.clip((np.arange(MAX_SHADES) / h_bin_size).astype(np.uint8), 
+                               0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
+            
+            # S and V channels: Standard mapping (0-255)
+            bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
+            mapping_sv = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)
+            mapping_sv = np.clip(mapping_sv, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
+            
+            return mapping_h, mapping_sv, mapping_sv
+
+        elif self.colorspace == 'LAB':
+            # LAB: L (0-255), A (0-255, centered ~128), B (0-255, centered ~128)
+            # L channel: Standard mapping (0-255) - lightness uses full range
+            bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
+            mapping_l = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)
+            mapping_l = np.clip(mapping_l, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
+            
+            # A and B channels: Use non-uniform quantization to better capture
+            # the typical distribution centered around 128 (neutral gray)
+            # This provides finer resolution in the common range (64-192) while
+            # still covering the full range (0-255)
+            # Strategy: Use more bins in the center range, fewer at extremes
+            mapping_ab = np.zeros(MAX_SHADES, dtype=np.uint8)
+            
+            # Create a non-uniform binning that emphasizes the center
+            # Split into 3 regions: low (0-64), center (65-192), high (193-255)
+            # Center gets more bins since that's where most values cluster
+            center_bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS // 2  # 13 bins for center
+            low_bins = (NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - center_bins) // 2  # 6 bins for low
+            high_bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - center_bins - low_bins  # 7 bins for high
+            
+            # Low range: 0-64 (inclusive, 65 values) -> bins 0 to low_bins-1
+            low_range = np.arange(0, 65)
+            mapping_ab[low_range] = np.clip(
+                (low_range * low_bins / 65).astype(np.uint8),
+                0, low_bins - 1
+            )
+            
+            # Center range: 65-192 (inclusive, 128 values) -> bins low_bins to low_bins+center_bins-1
+            center_range = np.arange(65, 193)
+            mapping_ab[center_range] = np.clip(
+                (low_bins + ((center_range - 65) * center_bins / 128).astype(np.uint8)),
+                low_bins, low_bins + center_bins - 1
+            )
+            
+            # High range: 193-255 (inclusive, 63 values) -> bins low_bins+center_bins to NUMBER_OF_QUANTIZED_HISTOGRAM_BINS-1
+            high_range = np.arange(193, 256)
+            mapping_ab[high_range] = np.clip(
+                (low_bins + center_bins + ((high_range - 193) * high_bins / 63).astype(np.uint8)),
+                low_bins + center_bins, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1
+            )
+            
+            return mapping_l, mapping_ab, mapping_ab
+
+        else:  # RGB/BGR
+            # RGB: All channels use standard mapping (0-255)
+            bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
+            mapping = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)
+            mapping = np.clip(mapping, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
+            return mapping, mapping, mapping
+
     def create_histogram(self):
         """Create quantized 3D histogram from image.
 
-        Maps RGB pixel values to quantized bins and computes histogram
-        for efficient bin count lookups.
+        Maps pixel values to quantized bins using color-space-aware mappings
+        and computes histogram for efficient bin count lookups.
         """
-        # Directly map pixel values to quantized bins
-        # Works with any 3-channel colorspace (BGR, HSV, LAB, etc.)
-        ch0_mapped = self.mapping[self.image_array[:, :, 0]]
-        ch1_mapped = self.mapping[self.image_array[:, :, 1]]
-        ch2_mapped = self.mapping[self.image_array[:, :, 2]]
+        # Use channel-specific mappings for better quantization
+        ch0_mapped = self.mapping_ch0[self.image_array[:, :, 0]]
+        ch1_mapped = self.mapping_ch1[self.image_array[:, :, 1]]
+        ch2_mapped = self.mapping_ch2[self.image_array[:, :, 2]]
 
         # Compute histogram directly without storing a large intermediate array
         self.q_histogram, _ = np.histogramdd(
@@ -367,8 +443,9 @@ class Histogram:
         Returns:
             numpy.ndarray: Bin counts for each pixel
         """
-        q0 = self.mapping[ch0]
-        q1 = self.mapping[ch1]
-        q2 = self.mapping[ch2]
+        # Use channel-specific mappings
+        q0 = self.mapping_ch0[ch0]
+        q1 = self.mapping_ch1[ch1]
+        q2 = self.mapping_ch2[ch2]
 
         return self.q_histogram[q0, q1, q2]
