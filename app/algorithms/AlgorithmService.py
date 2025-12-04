@@ -46,22 +46,25 @@ class AlgorithmService:
         self.scale_factor = 1.0  # Default: no scaling
 
     def set_scale_factor(self, scale_factor):
-        """Set the scale factor for coordinate transformation from processing to original resolution.
+        """
+        Set the scale factor for coordinate transformation from processing to original resolution.
 
         Args:
             scale_factor: The scale factor used when downscaling the image for processing.
+                A value of 1.0 means no scaling, 0.5 means half resolution, etc.
         """
         self.scale_factor = scale_factor
 
     def transform_to_original_coords(self, x, y):
-        """Transform coordinates from processing resolution back to original resolution.
+        """
+        Transform coordinates from processing resolution back to original resolution.
 
         Args:
             x: X coordinate in processing resolution.
             y: Y coordinate in processing resolution.
 
         Returns:
-            Tuple of (x, y) coordinates in original resolution as integers.
+            Tuple[int, int]: Tuple of (x, y) coordinates in original resolution as integers.
         """
         if self.scale_factor == 1.0:
             return int(x), int(y)
@@ -69,13 +72,14 @@ class AlgorithmService:
         return int(x * inverse_scale), int(y * inverse_scale)
 
     def transform_contour_to_original(self, contour):
-        """Transform a contour from processing resolution back to original resolution.
+        """
+        Transform a contour from processing resolution back to original resolution.
 
         Args:
             contour: Contour in processing resolution as numpy array.
 
         Returns:
-            Contour scaled to original resolution as numpy array of int32.
+            numpy.ndarray: Contour scaled to original resolution as numpy array of int32.
         """
         if self.scale_factor == 1.0:
             return contour
@@ -100,6 +104,16 @@ class AlgorithmService:
         raise NotImplementedError
 
     def collect_pixels_of_interest(self, mask):
+        """
+        Collect pixel coordinates from a binary mask.
+
+        Args:
+            mask: Binary mask array where non-zero values indicate pixels of interest.
+
+        Returns:
+            numpy.ndarray: Array of (x, y) coordinates of pixels of interest.
+                Shape is (N, 2) where N is the number of pixels.
+        """
         coords = np.argwhere(mask > 0)
         return coords[:, [1, 0]]
 
@@ -412,7 +426,8 @@ class AlgorithmService:
             print(f"Error generating AOI cache: {e}")
 
     def _construct_output_path(self, full_path, input_dir, output_dir):
-        """Construct an output path by replacing the input directory with the output directory.
+        """
+        Construct an output path by replacing the input directory with the output directory.
 
         Args:
             full_path (str): Full path to the input file

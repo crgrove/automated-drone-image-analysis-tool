@@ -4,6 +4,9 @@ Wizard controller for Color Detection algorithm.
 Provides a simplified, guided interface for configuring HSV color detection.
 """
 
+import cv2
+import numpy as np
+
 from PySide6.QtWidgets import QWidget, QLabel, QSizePolicy, QPushButton, QDialog
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, Signal
@@ -91,9 +94,6 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
 
     def _on_hsv_selected_from_picker(self, hsv_data: dict):
         """Handle HSV color range selected from HSV picker dialog."""
-        import cv2
-        import numpy as np
-
         # Extract the center HSV color from the data
         if 'center_hsv' in hsv_data:
             h, s, v = hsv_data['center_hsv']

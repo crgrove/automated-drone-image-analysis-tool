@@ -13,7 +13,11 @@ class PDFSettingsService:
     """Service for managing PDF export settings persistence."""
 
     def __init__(self):
-        """Initialize the PDF settings service."""
+        """
+        Initialize the PDF settings service.
+
+        Sets up the service and determines the path to the configuration file.
+        """
         self.config_path = self._get_config_path()
 
     def _get_config_path(self):

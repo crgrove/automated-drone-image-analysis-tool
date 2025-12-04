@@ -15,7 +15,7 @@ from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QBrush, QPen, QScre
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QFrame, QCheckBox, QGroupBox,
                                QSizePolicy, QGridLayout, QColorDialog, QApplication,
-                               QScrollArea)
+                               QScrollArea, QWidget)
 
 from algorithms.images.HSVColorRange.views.HSVRangePickerWidget import HSVRangePickerWidget
 from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColorRangeAssistant
@@ -182,7 +182,6 @@ class ColorRangeDialog(QDialog):
                     if item.widget():
                         item.widget().deleteLater()
                 # Delete the old layout
-                from PySide6.QtWidgets import QWidget
                 QWidget().setLayout(old_layout)
 
             # Recreate UI with new scaled dimensions

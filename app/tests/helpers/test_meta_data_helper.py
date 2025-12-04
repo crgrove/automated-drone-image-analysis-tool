@@ -3,6 +3,8 @@ import platform
 import piexif
 import json
 import numpy as np
+import tempfile
+import os
 from unittest.mock import patch, MagicMock, mock_open
 from os import path
 from PIL import Image
@@ -118,9 +120,6 @@ def test_get_xmp_data(example_image_path):
 
 def test_embed_xmp_xml(example_destination_path):
     """Test embedding XMP XML data into an image file."""
-    import tempfile
-    import os
-
     # Create a temporary destination file
     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
         # Write some dummy JPEG data

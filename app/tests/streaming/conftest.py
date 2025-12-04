@@ -4,8 +4,10 @@ import sys
 import os
 import pytest
 import numpy as np
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 from unittest.mock import Mock, MagicMock, patch
+
+from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 
 # Add the app directory to the Python path
 app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -93,10 +95,8 @@ def mock_recording_manager():
 @pytest.fixture(autouse=True)
 def auto_close_color_dialogs():
     """Automatically close any color selection dialogs that open during tests."""
-    from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
-    from PySide6.QtWidgets import QDialog
-
     # Patch ColorRangeDialog.exec() to automatically accept
+
     def mock_exec(self):
         # Automatically accept the dialog
         # Return Accepted status (which is 1 for QDialog.Accepted)

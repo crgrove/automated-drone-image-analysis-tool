@@ -16,7 +16,7 @@ from PySide6.QtGui import QFont
 class CalTopoMethodDialog(QDialog):
     """
     Dialog for selecting CalTopo export method.
-    
+
     Provides options to choose between:
     - Browser-based authentication (traditional login)
     - API-based authentication (recommended for Teams accounts)
@@ -25,7 +25,7 @@ class CalTopoMethodDialog(QDialog):
     def __init__(self, parent=None):
         """
         Initialize the CalTopo method selection dialog.
-        
+
         Args:
             parent: Parent widget
         """
@@ -33,11 +33,16 @@ class CalTopoMethodDialog(QDialog):
         self.setWindowTitle("CalTopo Export Method")
         self.setMinimumWidth(450)
         self.setModal(True)
-        
+
         self._setup_ui()
 
     def _setup_ui(self):
-        """Set up the dialog UI."""
+        """
+        Set up the dialog UI.
+
+        Creates and configures all UI elements including title, description,
+        radio buttons for method selection, and action buttons.
+        """
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
 
@@ -113,9 +118,8 @@ class CalTopoMethodDialog(QDialog):
     def get_selected_method(self):
         """
         Get the selected export method.
-        
+
         Returns:
             str: 'api' or 'browser'
         """
         return 'api' if self.api_radio.isChecked() else 'browser'
-

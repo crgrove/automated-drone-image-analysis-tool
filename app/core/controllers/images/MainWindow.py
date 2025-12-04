@@ -13,8 +13,7 @@ from core.services.SettingsService import SettingsService
 from core.services.AnalyzeService import AnalyzeService
 from core.services.LoggerService import LoggerService
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
-# Import streaming detection controllers (now using new architecture)
-from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+# StreamViewerWindow imported lazily in _open_streaming_detector() to avoid circular dependency
 from core.controllers.images.VideoParser import VideoParser
 from core.controllers.Perferences import Preferences
 from core.controllers.images.viewer.Viewer import Viewer
@@ -855,6 +854,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Closes the Main Window and opens the Streaming Detector window.
         """
         try:
+            # Lazy import to avoid circular dependency with StreamViewerWindow
+            from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+
             # Get theme from settings
             theme = self.settings_service.get_setting('Theme', 'Dark').lower()
 

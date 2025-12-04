@@ -3,6 +3,8 @@ import os
 import pytest
 import importlib
 import platform
+import time
+import traceback
 from PySide6.QtWidgets import QApplication
 
 # Add the app directory to the Python path
@@ -155,10 +157,8 @@ def main_window(qtbot):
         qtbot.wait(200)  # Give time for cleanup
 
         # Small delay to ensure processes are fully terminated
-        import time
         time.sleep(0.1)
     except Exception as e:
         # Don't fail tests on cleanup errors, but log them
-        import traceback
         print(f"Warning: Cleanup error in main_window fixture: {e}")
         traceback.print_exc()

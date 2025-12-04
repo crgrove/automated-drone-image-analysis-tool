@@ -1,8 +1,14 @@
 """Connection details page for the streaming setup wizard."""
 
 import os
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 from .BasePage import BasePage
 from core.views.components.LabeledSlider import TextLabeledSlider
@@ -168,9 +174,7 @@ class StreamConnectionPage(BasePage):
 
     def _on_scan_devices_clicked(self) -> None:
         """Scan for available HDMI capture devices using OpenCV."""
-        try:
-            import cv2
-        except Exception:
+        if cv2 is None:
             # If OpenCV is not available, we cannot scan
             self.dialog.deviceComboBox.clear()
             self.dialog.deviceComboBox.addItem("OpenCV not available; enter index manually.", None)

@@ -245,6 +245,12 @@ class MetaDataHelper:
         """
         Get XMP data using ExifTool first (for bundled exe compatibility),
         falling back to direct file parsing if ExifTool fails.
+
+        Args:
+            file_path: Path to image file.
+
+        Returns:
+            dict: Merged XMP data dictionary containing all XMP fields.
         """
         # Try using ExifTool first (works better in bundled exe)
         try:
@@ -556,7 +562,14 @@ class MetaDataHelper:
     def add_xmp_field(destination_file: str, namespace_uri: str, tag_name: str, value_str: str, threshold: int = 48000):
         """
         Store a tag either in the base XMP or the Extended XMP if it exceeds threshold.
-        - threshold default (~48KB) leaves headroom for headers.
+
+        Args:
+            destination_file: Path to image file where XMP will be embedded.
+            namespace_uri: XML namespace URI for the tag.
+            tag_name: Name of the XMP tag to add.
+            value_str: String value to store in the tag.
+            threshold: Size threshold in bytes. If value exceeds this, it's stored
+                in Extended XMP. Default (~48KB) leaves headroom for headers.
         """
         # 1) Build/parse the current base XMP
         xmp_segment = MetaDataHelper.extract_xmp(destination_file)
@@ -657,8 +670,14 @@ class MetaDataHelper:
     def embed_extended_xmp(extended_xml_bytes: bytes, destination_file: str, guid: str):
         """
         Write the Extended XMP packet split across multiple APP1 segments.
+
         Each APP1 payload layout:
         EXT_HDR + GUID(32 ASCII) + total_len(4 BE) + chunk_offset(4 BE) + chunk
+
+        Args:
+            extended_xml_bytes: Extended XMP XML content as bytes.
+            destination_file: Path to image file where Extended XMP will be embedded.
+            guid: 32-character GUID string identifying the Extended XMP packet.
         """
         with open(destination_file, "rb") as f:
             data = f.read()
@@ -729,14 +748,32 @@ class MetaDataHelper:
         return xmp_dict
 
     def _make_guid(data_bytes: bytes) -> str:
-        # Spec uses a 128-bit GUID. MD5 of the extended packet is common practice.
+        """
+        Generate a 128-bit GUID from data bytes.
+
+        Args:
+            data_bytes: Data bytes to generate GUID from.
+
+        Returns:
+            str: 32-character uppercase hexadecimal GUID string.
+
+        Note:
+            Spec uses a 128-bit GUID. MD5 of the extended packet is common practice.
+        """
         return hashlib.md5(data_bytes).hexdigest().upper()  # 32 ASCII hex chars
 
     @staticmethod
     def _insert_or_replace_app1_segment(data: bytes, payload: bytes, match_header: bytes = None) -> bytes:
         """
         Insert (or replace if match_header is found) an APP1 segment in a JPEG.
-        payload is the bytes AFTER the 2-byte length (i.e., the APP1 data excluding marker+len).
+
+        Args:
+            data: JPEG file data as bytes.
+            payload: APP1 payload bytes (AFTER the 2-byte length, excluding marker+len).
+            match_header: Optional header bytes to match for replacement. If None, always inserts.
+
+        Returns:
+            bytes: Modified JPEG data with APP1 segment inserted or replaced.
         """
         out = bytearray()
         out += data[:2]  # SOI
@@ -771,6 +808,10 @@ class MetaDataHelper:
     def embed_xmp_xml(base_xmp_xml_bytes: bytes, destination_file: str):
         """
         Replace/insert the standard XMP APP1 segment (single packet).
+
+        Args:
+            base_xmp_xml_bytes: Base XMP XML content as bytes.
+            destination_file: Path to image file where XMP will be embedded.
         """
         std_payload = _XMP_STD_HDR + base_xmp_xml_bytes
         with open(destination_file, "rb") as f:

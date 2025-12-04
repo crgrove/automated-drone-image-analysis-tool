@@ -15,6 +15,7 @@ from core.controllers.images.viewer.exports.CalTopoExportController import CalTo
 from PySide6.QtCore import QThread, Signal
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
+from core.views.images.viewer.dialogs.CalTopoMethodDialog import CalTopoMethodDialog
 from helpers.LocationInfo import LocationInfo
 import simplekml
 import traceback
@@ -347,12 +348,11 @@ class UnifiedMapExportController:
                 self._export_to_kml(include_locations, include_flagged_aois, include_coverage)
             else:  # caltopo
                 # Show method selection dialog
-                from core.views.images.viewer.dialogs.CalTopoMethodDialog import CalTopoMethodDialog
                 method_dialog = CalTopoMethodDialog(self.parent)
-                
+
                 if method_dialog.exec() != QDialog.Accepted:
                     return  # User cancelled method selection
-                
+
                 method = method_dialog.get_selected_method()
                 if method == 'api':
                     self._export_to_caltopo_via_api(include_locations, include_flagged_aois, include_coverage, include_images)

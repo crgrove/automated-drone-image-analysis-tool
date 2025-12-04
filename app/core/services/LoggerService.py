@@ -48,7 +48,8 @@ class LoggerService:
         self.logger.addHandler(fileHandler)
 
     def info(self, message):
-        """Log an info message.
+        """
+        Log an info message.
 
         Args:
             message: The info message to log.
@@ -57,7 +58,8 @@ class LoggerService:
         self.logger.info(message)
 
     def debug(self, message):
-        """Log a debug message.
+        """
+        Log a debug message.
 
         Args:
             message: The debug message to log.
@@ -66,7 +68,8 @@ class LoggerService:
         self.logger.debug(message)
 
     def warning(self, message):
-        """Log a warning message.
+        """
+        Log a warning message.
 
         Args:
             message: The warning message to log.
@@ -75,7 +78,8 @@ class LoggerService:
         self.logger.warning(message)
 
     def error(self, message):
-        """Log an error message along with the traceback.
+        """
+        Log an error message along with the traceback.
 
         Args:
             message: The error message to log.

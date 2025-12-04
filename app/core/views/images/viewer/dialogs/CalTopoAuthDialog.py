@@ -5,6 +5,9 @@ This dialog provides an in-app browser for CalTopo authentication
 using QWebEngineView with improved performance and UX.
 """
 
+import sys
+import traceback
+
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox, QProgressBar, QApplication
 from PySide6.QtCore import Qt, Signal, QUrl, QStandardPaths, QTimer, QEventLoop, QPoint, QSize
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -18,14 +21,27 @@ class CalTopoWebEnginePage(QWebEnginePage):
     """Custom QWebEnginePage that captures console messages."""
 
     def __init__(self, profile, parent, log_callback=None):
-        """Initialize with optional log callback for displaying messages."""
+        """
+        Initialize with optional log callback for displaying messages.
+
+        Args:
+            profile: QWebEngineProfile instance
+            parent: Parent widget
+            log_callback: Optional callback function for displaying log messages
+        """
         super().__init__(profile, parent)
         self.log_callback = log_callback
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
-        """Capture JavaScript console messages and print them to Python console/terminal."""
-        import sys
+        """
+        Capture JavaScript console messages and print them to Python console/terminal.
 
+        Args:
+            level: JavaScript console message level
+            message: Message text
+            lineNumber: Line number where message originated
+            sourceID: Source file identifier
+        """
         level_names = {
             QWebEnginePage.JavaScriptConsoleMessageLevel.InfoMessageLevel: "INFO",
             QWebEnginePage.JavaScriptConsoleMessageLevel.WarningMessageLevel: "WARNING",
@@ -104,7 +120,12 @@ class CalTopoAuthDialog(QDialog):
         QTimer.singleShot(100, self._lazy_load_web_view)
 
     def _position_relative_to_parent(self):
-        """Position dialog centered on parent window's screen."""
+        """
+        Position dialog centered on parent window's screen.
+
+        Calculates the dialog position to center it on the parent window,
+        ensuring it stays within screen bounds.
+        """
         if self.parent():
             parent_geometry = self.parent().geometry()
             parent_center = parent_geometry.center()
@@ -133,7 +154,12 @@ class CalTopoAuthDialog(QDialog):
             self.resize(dialog_size)
 
     def setup_ui(self):
-        """Set up the dialog UI."""
+        """
+        Set up the dialog UI.
+
+        Creates and arranges all UI elements including map info label,
+        web view container, and action buttons.
+        """
         layout = QVBoxLayout()
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
@@ -177,7 +203,12 @@ class CalTopoAuthDialog(QDialog):
         self.setLayout(layout)
 
     def _lazy_load_web_view(self):
-        """Lazy-load the web view to avoid blocking dialog display."""
+        """
+        Lazy-load the web view to avoid blocking dialog display.
+
+        Creates the QWebEngineView with persistent profile for cookie storage,
+        sets up cookie monitoring, and loads the CalTopo login page.
+        """
         if self._web_view_loaded:
             return
 
@@ -225,7 +256,6 @@ class CalTopoAuthDialog(QDialog):
 
         except Exception as e:
             print(f"ERROR: Failed to initialize web view: {e}")
-            import traceback
             traceback.print_exc()
             QMessageBox.critical(
                 self,
@@ -234,7 +264,14 @@ class CalTopoAuthDialog(QDialog):
             )
 
     def _on_cookie_added(self, cookie):
-        """Called when a cookie is added to the store."""
+        """
+        Called when a cookie is added to the store.
+
+        Args:
+            cookie: QNetworkCookie instance that was added.
+
+        Tracks CalTopo-related cookies for later extraction.
+        """
         domain = cookie.domain()
 
         # Track all caltopo.com cookies (including .caltopo.com with leading dot)
@@ -245,12 +282,24 @@ class CalTopoAuthDialog(QDialog):
             self._cookies_from_store[key] = cookie_dict
 
     def _on_load_progress(self, progress):
-        """Handle web view load progress."""
+        """
+        Handle web view load progress.
+
+        Args:
+            progress: Load progress percentage (0-100).
+        """
         # Just monitor progress, no UI updates needed
         pass
 
     def _on_load_finished(self, success):
-        """Handle web view load completion."""
+        """
+        Handle web view load completion.
+
+        Args:
+            success: True if page loaded successfully, False otherwise.
+
+        Shows a warning message if the page failed to load.
+        """
         if not success:
             QMessageBox.warning(
                 self,
@@ -290,7 +339,13 @@ class CalTopoAuthDialog(QDialog):
             )
 
     def on_manual_done_clicked(self):
-        """Handle manual 'I'm Logged In' button click."""
+        """
+        Handle manual 'I'm Logged In' button click.
+
+        Validates that a map is selected and the web view is ready,
+        then triggers cookie extraction after a short delay to ensure
+        cookies are set.
+        """
         if not self.map_id:
             QMessageBox.warning(
                 self,
@@ -318,7 +373,13 @@ class CalTopoAuthDialog(QDialog):
         QTimer.singleShot(1000, self.extract_all_cookies)
 
     def extract_all_cookies(self):
-        """Extract ALL cookies using JavaScript and cookie store."""
+        """
+        Extract ALL cookies using JavaScript and cookie store.
+
+        Combines cookies from both JavaScript (document.cookie) and
+        the cookie store (including HttpOnly cookies). Emits the
+        authenticated signal with the collected cookies and map information.
+        """
         if not self.profile or not self.web_view:
             QMessageBox.warning(
                 self,
@@ -415,7 +476,12 @@ class CalTopoAuthDialog(QDialog):
         self.web_view.page().runJavaScript(js_code, on_js_result)
 
     def _extract_cookies_from_store(self):
-        """Extract cookies from the cookie store (includes HttpOnly cookies)."""
+        """
+        Extract cookies from the cookie store (includes HttpOnly cookies).
+
+        Uses loadAllCookies() to trigger cookieAdded signals for all
+        existing cookies, then combines them with JavaScript-extracted cookies.
+        """
         cookie_store = self.profile.cookieStore()
         loop = QEventLoop()
         cookies_loaded = False
@@ -502,7 +568,11 @@ class CalTopoAuthDialog(QDialog):
         self.accept()
 
     def _reset_button(self):
-        """Reset the button to its original state."""
+        """
+        Reset the button to its original state.
+
+        Re-enables the manual done button and restores its original text.
+        """
         self.manual_done_button.setEnabled(True)
         self.manual_done_button.setText("I'm Logged In - Export Data")
 
@@ -515,7 +585,16 @@ class CalTopoAuthDialog(QDialog):
         return self.map_id
 
     def _cookie_to_dict(self, cookie):
-        """Convert QNetworkCookie to a serializable dict."""
+        """
+        Convert QNetworkCookie to a serializable dict.
+
+        Args:
+            cookie: QNetworkCookie instance to convert.
+
+        Returns:
+            dict: Dictionary containing all cookie attributes in a format
+                compatible with the requests library.
+        """
         name = cookie.name().data().decode('utf-8')
         value = cookie.value().data().decode('utf-8')
         domain = cookie.domain() or 'caltopo.com'

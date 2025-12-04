@@ -12,6 +12,9 @@ from PySide6.QtCore import Qt
 from unittest.mock import patch, MagicMock
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
+from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
+from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
+
 # Try to import dependencies, skip tests if not available
 try:
     from core.controllers.images.VideoParser import VideoParser
@@ -338,8 +341,6 @@ def testPdfGenerator(main_window, testData, qtbot):
         assert main_window.viewer.pdfButton is not None
 
         # Patch the new PDF export system components
-        from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
-        from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
 
         # Create a mock PDFExportDialog instance
         mock_pdf_dialog = MagicMock()

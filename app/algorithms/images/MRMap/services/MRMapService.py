@@ -354,14 +354,14 @@ class Histogram:
             # Use full range of H values (0-179) instead of wasting bins on 180-255
             h_max = 180  # OpenCV HSV H channel max value
             h_bin_size = h_max / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS
-            mapping_h = np.clip((np.arange(MAX_SHADES) / h_bin_size).astype(np.uint8), 
-                               0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
-            
+            mapping_h = np.clip((np.arange(MAX_SHADES) / h_bin_size).astype(np.uint8),
+                                0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
+
             # S and V channels: Standard mapping (0-255)
             bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
             mapping_sv = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)
             mapping_sv = np.clip(mapping_sv, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
-            
+
             return mapping_h, mapping_sv, mapping_sv
 
         elif self.colorspace == 'LAB':
@@ -370,42 +370,42 @@ class Histogram:
             bin_size = math.ceil(MAX_SHADES / NUMBER_OF_QUANTIZED_HISTOGRAM_BINS)
             mapping_l = (np.arange(MAX_SHADES) / bin_size).astype(np.uint8)
             mapping_l = np.clip(mapping_l, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
-            
+
             # A and B channels: Use non-uniform quantization to better capture
             # the typical distribution centered around 128 (neutral gray)
             # This provides finer resolution in the common range (64-192) while
             # still covering the full range (0-255)
             # Strategy: Use more bins in the center range, fewer at extremes
             mapping_ab = np.zeros(MAX_SHADES, dtype=np.uint8)
-            
+
             # Create a non-uniform binning that emphasizes the center
             # Split into 3 regions: low (0-64), center (65-192), high (193-255)
             # Center gets more bins since that's where most values cluster
             center_bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS // 2  # 13 bins for center
             low_bins = (NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - center_bins) // 2  # 6 bins for low
             high_bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - center_bins - low_bins  # 7 bins for high
-            
+
             # Low range: 0-64 (inclusive, 65 values) -> bins 0 to low_bins-1
             low_range = np.arange(0, 65)
             mapping_ab[low_range] = np.clip(
                 (low_range * low_bins / 65).astype(np.uint8),
                 0, low_bins - 1
             )
-            
+
             # Center range: 65-192 (inclusive, 128 values) -> bins low_bins to low_bins+center_bins-1
             center_range = np.arange(65, 193)
             mapping_ab[center_range] = np.clip(
                 (low_bins + ((center_range - 65) * center_bins / 128).astype(np.uint8)),
                 low_bins, low_bins + center_bins - 1
             )
-            
+
             # High range: 193-255 (inclusive, 63 values) -> bins low_bins+center_bins to NUMBER_OF_QUANTIZED_HISTOGRAM_BINS-1
             high_range = np.arange(193, 256)
             mapping_ab[high_range] = np.clip(
                 (low_bins + center_bins + ((high_range - 193) * high_bins / 63).astype(np.uint8)),
                 low_bins + center_bins, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1
             )
-            
+
             return mapping_l, mapping_ab, mapping_ab
 
         else:  # RGB/BGR

@@ -988,7 +988,6 @@ class GalleryController:
 
         except Exception as e:
             self.logger.error(f"Error refreshing gallery flag display: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
 
     def setup_gallery_mode_ui(self):

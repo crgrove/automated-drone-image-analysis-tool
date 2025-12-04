@@ -7,6 +7,8 @@ import sys
 from unittest.mock import Mock, MagicMock, patch
 from PySide6.QtWidgets import QApplication
 
+from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+
 # Mock dependencies before importing
 sys.modules['qtawesome'] = MagicMock()
 sys.modules['helpers.IconHelper'] = MagicMock()
@@ -20,8 +22,6 @@ class TestWizardThresholdMapping:
     @patch('core.controllers.streaming.StreamViewerWindow.StreamStatistics')
     def test_moderate_aggressiveness_sets_30_percent_threshold(self, mock_stats, mock_renderer, mock_coord, qapp):
         """Test that Moderate aggressiveness (index 2) sets threshold to 30%."""
-        from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
-
         viewer = StreamViewerWindow(algorithm_name="ColorAnomalyAndMotionDetection", theme="dark")
         try:
             QApplication.processEvents()
@@ -60,8 +60,6 @@ class TestWizardThresholdMapping:
     @patch('core.controllers.streaming.StreamViewerWindow.StreamStatistics')
     def test_all_aggressiveness_levels_map_correctly(self, mock_stats, mock_renderer, mock_coord, qapp):
         """Test all aggressiveness levels map to correct threshold values."""
-        from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
-
         test_cases = [
             (80.0, "Very Conservative"),
             (50.0, "Conservative"),
@@ -107,8 +105,6 @@ class TestWizardThresholdMapping:
     @patch('core.controllers.streaming.StreamViewerWindow.StreamStatistics')
     def test_color_quantization_bits_persists(self, mock_stats, mock_renderer, mock_coord, qapp):
         """Test that color quantization bits setting persists."""
-        from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
-
         viewer = StreamViewerWindow(algorithm_name="ColorAnomalyAndMotionDetection", theme="dark")
         try:
             QApplication.processEvents()

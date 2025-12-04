@@ -1,5 +1,7 @@
 """Algorithm Parameters page for the Streaming Guide wizard."""
 
+import importlib
+
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel
 from PySide6.QtCore import Qt
 from core.services.LoggerService import LoggerService
@@ -27,7 +29,6 @@ class StreamAlgorithmParametersPage(BasePage):
         # Algorithm widget signals are connected when the widget is loaded
         # Connect skip guide checkbox if it exists
         if hasattr(self.dialog, "skipGuideCheckBox"):
-            from PySide6.QtCore import Qt
             self.dialog.skipGuideCheckBox.stateChanged.connect(self._on_skip_changed)
 
     def load_data(self):
@@ -62,7 +63,6 @@ class StreamAlgorithmParametersPage(BasePage):
 
         # Save skip guide preference
         if hasattr(self.dialog, "skipGuideCheckBox"):
-            from PySide6.QtCore import Qt
             self.wizard_data["skip_guide"] = self.dialog.skipGuideCheckBox.isChecked()
 
     def on_enter(self):
@@ -133,7 +133,6 @@ class StreamAlgorithmParametersPage(BasePage):
             # Import the module and get the wizard controller class
             # The module_path is the full path to the module (e.g., algorithms.streaming.MotionDetection.controllers.MotionDetectionWizardController)
             # The class name is the same as the module name (last part)
-            import importlib
             module_parts = module_path.split('.')
             module_name = module_path  # Import the full module path
             class_name = module_parts[-1]  # Class name is the last part
@@ -265,7 +264,6 @@ class StreamAlgorithmParametersPage(BasePage):
 
     def _on_skip_changed(self, state: int) -> None:
         """Handle skip guide checkbox change."""
-        from PySide6.QtCore import Qt
         self.wizard_data["skip_guide"] = state == Qt.Checked
 
     def _apply_object_size_to_algorithm(self):

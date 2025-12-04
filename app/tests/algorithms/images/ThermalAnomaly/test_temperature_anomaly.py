@@ -1,5 +1,6 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
+from unittest.mock import patch, MagicMock
 
 
 def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_available):
@@ -28,9 +29,6 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_availabl
     assert main_window.viewResultsButton.isEnabled()
     # Patch BearingRecoveryDialog to automatically skip (returns Rejected = Skip)
     # This prevents the modal dialog from blocking test execution
-    from PySide6.QtWidgets import QDialog
-    from unittest.mock import patch, MagicMock
-
     # Create a mock dialog that returns Rejected when exec() is called (Skip action)
     mock_dialog = MagicMock()
     mock_dialog.exec.return_value = QDialog.DialogCode.Rejected

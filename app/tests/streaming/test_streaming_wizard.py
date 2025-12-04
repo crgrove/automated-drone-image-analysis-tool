@@ -24,7 +24,7 @@ from core.controllers.streaming.StreamingGuide import StreamingGuide
 import pytest
 import sys
 from unittest.mock import Mock, MagicMock, patch, call
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt
 
 # Mock dependencies before importing
@@ -113,8 +113,6 @@ class TestStreamingGuide:
     def test_aggressiveness_mapping(self, mock_slider_class, qapp):
         """Test aggressiveness slider maps to correct percentile values."""
         # Create mock slider that behaves like a QWidget
-        from PySide6.QtWidgets import QWidget
-
         class MockSlider(QWidget):
             def __init__(self):
                 super().__init__()
@@ -157,8 +155,6 @@ class TestStreamingGuide:
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_get_options_includes_all_fields(self, mock_slider_class, qapp):
         """Test get_options returns all required fields."""
-        from PySide6.QtWidgets import QWidget
-
         class MockSlider(QWidget):
             def __init__(self):
                 super().__init__()
@@ -198,8 +194,6 @@ class TestStreamingGuide:
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_load_options_restores_state(self, mock_slider_class, qapp):
         """Test load_options correctly restores wizard state."""
-        from PySide6.QtWidgets import QWidget
-
         class MockSlider(QWidget):
             def __init__(self):
                 super().__init__()
@@ -241,8 +235,6 @@ class TestStreamingGuide:
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_load_options_from_percentile(self, mock_slider_class, qapp):
         """Test load_options can restore from percentile value (backward compatibility)."""
-        from PySide6.QtWidgets import QWidget
-
         class MockSlider(QWidget):
             def __init__(self):
                 super().__init__()
@@ -281,8 +273,6 @@ class TestStreamingGuide:
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_validation_requires_at_least_one_detection_method(self, mock_slider_class, qapp):
         """Test validation requires at least one detection method enabled."""
-        from PySide6.QtWidgets import QWidget
-
         class MockSlider(QWidget):
             def __init__(self):
                 super().__init__()
@@ -493,8 +483,6 @@ class TestStreamAlgorithmParametersPage:
 
     def test_apply_object_size_to_algorithm(self, qapp, mock_settings_service, wizard_data):
         """Test object size is correctly applied to algorithm widget."""
-        from unittest.mock import Mock
-
         # Create mock dialog and page
         dialog = Mock()
         dialog.algorithmParametersContainer = Mock()

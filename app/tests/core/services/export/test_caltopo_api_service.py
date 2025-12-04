@@ -43,9 +43,9 @@ def test_sign_request(caltopo_api_service, sample_credentials):
     expires = int(time.time() * 1000) + 120000
     payload_string = ""
     credential_secret = sample_credentials['credential_secret']
-    
+
     signature = caltopo_api_service._sign_request(method, url, expires, payload_string, credential_secret)
-    
+
     assert signature is not None
     assert isinstance(signature, str)
     # Verify it's base64 encoded
@@ -63,9 +63,9 @@ def test_sign_request_with_payload(caltopo_api_service, sample_credentials):
     payload = {"type": "Feature", "properties": {"title": "Test"}}
     payload_string = json.dumps(payload)
     credential_secret = sample_credentials['credential_secret']
-    
+
     signature = caltopo_api_service._sign_request(method, url, expires, payload_string, credential_secret)
-    
+
     assert signature is not None
     # Same payload should produce same signature
     signature2 = caltopo_api_service._sign_request(method, url, expires, payload_string, credential_secret)
@@ -79,14 +79,14 @@ def test_api_request_get_success(mock_get, caltopo_api_service, sample_credentia
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"data": "test"}}
     mock_get.return_value = mock_response
-    
+
     success, result = caltopo_api_service._api_request(
         "GET",
         "/api/v1/acct/ABC123/since/0",
         sample_credentials['credential_id'],
         sample_credentials['credential_secret']
     )
-    
+
     assert success is True
     assert result == {"data": "test"}
     mock_get.assert_called_once()
@@ -99,7 +99,7 @@ def test_api_request_post_success(mock_post, caltopo_api_service, sample_credent
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"id": "marker123"}}
     mock_post.return_value = mock_response
-    
+
     payload = {"type": "Feature", "properties": {"title": "Test"}}
     success, result = caltopo_api_service._api_request(
         "POST",
@@ -108,7 +108,7 @@ def test_api_request_post_success(mock_post, caltopo_api_service, sample_credent
         sample_credentials['credential_secret'],
         payload
     )
-    
+
     assert success is True
     assert result == {"id": "marker123"}
     mock_post.assert_called_once()
@@ -120,14 +120,14 @@ def test_api_request_get_failure(mock_get, caltopo_api_service, sample_credentia
     mock_response = MagicMock()
     mock_response.status_code = 401
     mock_get.return_value = mock_response
-    
+
     success, result = caltopo_api_service._api_request(
         "GET",
         "/api/v1/acct/ABC123/since/0",
         sample_credentials['credential_id'],
         sample_credentials['credential_secret']
     )
-    
+
     assert success is False
     assert result is None
 
@@ -154,13 +154,13 @@ def test_get_account_data_success(mock_get, caltopo_api_service, sample_credenti
         }
     }
     mock_get.return_value = mock_response
-    
+
     success, account_data = caltopo_api_service.get_account_data(
         sample_credentials['team_id'],
         sample_credentials['credential_id'],
         sample_credentials['credential_secret']
     )
-    
+
     assert success is True
     assert account_data is not None
     assert account_data.get('team_id') == sample_credentials['team_id']
@@ -174,7 +174,7 @@ def test_add_marker_via_api_success(mock_post, caltopo_api_service, sample_crede
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"id": "marker123"}}
     mock_post.return_value = mock_response
-    
+
     marker_data = {
         "lat": 37.7749,
         "lon": -122.4194,
@@ -182,7 +182,7 @@ def test_add_marker_via_api_success(mock_post, caltopo_api_service, sample_crede
         "description": "Test description",
         "marker_color": "FF0000"
     }
-    
+
     success, marker_id = caltopo_api_service.add_marker_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -190,7 +190,7 @@ def test_add_marker_via_api_success(mock_post, caltopo_api_service, sample_crede
         sample_credentials['credential_secret'],
         marker_data
     )
-    
+
     assert success is True
     assert marker_id == "marker123"
     mock_post.assert_called_once()
@@ -203,14 +203,14 @@ def test_add_marker_via_api_with_rgb_color(mock_post, caltopo_api_service, sampl
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"id": "marker123"}}
     mock_post.return_value = mock_response
-    
+
     marker_data = {
         "lat": 37.7749,
         "lon": -122.4194,
         "title": "Test Marker",
         "rgb": (255, 0, 128)  # Should convert to FF0080
     }
-    
+
     success, marker_id = caltopo_api_service.add_marker_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -218,7 +218,7 @@ def test_add_marker_via_api_with_rgb_color(mock_post, caltopo_api_service, sampl
         sample_credentials['credential_secret'],
         marker_data
     )
-    
+
     assert success is True
     # Verify the call was made with correct color
     call_args = mock_post.call_args
@@ -232,7 +232,7 @@ def test_add_polygon_via_api_success(mock_post, caltopo_api_service, sample_cred
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"id": "polygon123"}}
     mock_post.return_value = mock_response
-    
+
     polygon_data = {
         "coordinates": [
             (37.7749, -122.4194),
@@ -243,7 +243,7 @@ def test_add_polygon_via_api_success(mock_post, caltopo_api_service, sample_cred
         "title": "Test Polygon",
         "description": "Test description"
     }
-    
+
     success, polygon_id = caltopo_api_service.add_polygon_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -251,7 +251,7 @@ def test_add_polygon_via_api_success(mock_post, caltopo_api_service, sample_cred
         sample_credentials['credential_secret'],
         polygon_data
     )
-    
+
     assert success is True
     assert polygon_id == "polygon123"
 
@@ -263,7 +263,7 @@ def test_add_polygon_via_api_closes_polygon(mock_post, caltopo_api_service, samp
     mock_response.status_code = 200
     mock_response.json.return_value = {"result": {"id": "polygon123"}}
     mock_post.return_value = mock_response
-    
+
     # Polygon not closed (first != last)
     polygon_data = {
         "coordinates": [
@@ -273,7 +273,7 @@ def test_add_polygon_via_api_closes_polygon(mock_post, caltopo_api_service, samp
         ],
         "title": "Test Polygon"
     }
-    
+
     success, polygon_id = caltopo_api_service.add_polygon_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -281,7 +281,7 @@ def test_add_polygon_via_api_closes_polygon(mock_post, caltopo_api_service, samp
         sample_credentials['credential_secret'],
         polygon_data
     )
-    
+
     assert success is True
     # Verify the polygon was closed in the request
     call_args = mock_post.call_args
@@ -295,7 +295,7 @@ def test_add_polygon_via_api_empty_coordinates(mock_post, caltopo_api_service, s
         "coordinates": [],
         "title": "Test Polygon"
     }
-    
+
     success, polygon_id = caltopo_api_service.add_polygon_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -303,7 +303,7 @@ def test_add_polygon_via_api_empty_coordinates(mock_post, caltopo_api_service, s
         sample_credentials['credential_secret'],
         polygon_data
     )
-    
+
     assert success is False
     assert polygon_id is None
     mock_post.assert_not_called()
@@ -320,7 +320,7 @@ def test_upload_photo_via_api_success(mock_file, mock_post, caltopo_api_service,
         MagicMock(status_code=200, json=lambda: {"result": {"id": "media123"}})  # Media object
     ]
     mock_post.side_effect = responses
-    
+
     success, media_id = caltopo_api_service.upload_photo_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -333,7 +333,7 @@ def test_upload_photo_via_api_success(mock_file, mock_post, caltopo_api_service,
         description="Test description",
         marker_id="marker123"
     )
-    
+
     assert success is True
     assert media_id == "media123"
     assert mock_post.call_count == 3  # Three API calls for photo upload
@@ -346,7 +346,7 @@ def test_upload_photo_via_api_failure_on_metadata(mock_file, mock_post, caltopo_
     mock_response = MagicMock()
     mock_response.status_code = 400
     mock_post.return_value = mock_response
-    
+
     success, media_id = caltopo_api_service.upload_photo_via_api(
         "MAP123",
         sample_credentials['team_id'],
@@ -356,7 +356,7 @@ def test_upload_photo_via_api_failure_on_metadata(mock_file, mock_post, caltopo_
         37.7749,
         -122.4194
     )
-    
+
     assert success is False
     assert media_id is None
     assert mock_post.call_count == 1  # Only first call made
@@ -375,7 +375,7 @@ def test_upload_photo_via_api_file_error(mock_file, mock_post, caltopo_api_servi
         37.7749,
         -122.4194
     )
-    
+
     assert success is False
     assert media_id is None
     mock_post.assert_not_called()
@@ -387,14 +387,13 @@ def test_api_request_delete(mock_delete, caltopo_api_service, sample_credentials
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_delete.return_value = mock_response
-    
+
     success, result = caltopo_api_service._api_request(
         "DELETE",
         "/api/v1/map/MAP123/Marker/MARKER123",
         sample_credentials['credential_id'],
         sample_credentials['credential_secret']
     )
-    
+
     assert success is True
     mock_delete.assert_called_once()
-

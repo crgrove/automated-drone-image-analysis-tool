@@ -8,7 +8,6 @@ thresholds and cooldown periods to prevent alert spam.
 # Set environment variable to avoid numpy._core issues - MUST be first
 from core.services.LoggerService import LoggerService
 from algorithms.streaming.ColorDetection.services import Detection
-from PySide6.QtMultimedia import QSound
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
 from PySide6.QtCore import QObject, QTimer, Signal, Qt, QMetaObject
@@ -19,6 +18,14 @@ import threading
 import time
 import os
 import importlib
+
+# QSound is optional - may not be available in all PySide6 builds
+QSound = None
+try:
+    from PySide6.QtMultimedia import QSound
+except ImportError:
+    # QSound not available - audio alerts will use system sounds only
+    pass
 
 winsound = None
 try:
@@ -223,13 +230,16 @@ class AlertManager(QObject):
 
         self.logger.info("Alert manager initialized")
 
-    def _init_audio_system(self) -> Optional[QSound]:
+    def _init_audio_system(self) -> Optional[Any]:
         """Initialize audio system for alerts.
 
         Returns:
-            QSound instance if custom audio file is configured, None otherwise.
+            QSound instance if custom audio file is configured and QSound is available, None otherwise.
         """
         try:
+            if QSound is None:
+                # QSound not available - will use system sounds
+                return None
             if self.config.audio_file and os.path.exists(self.config.audio_file):
                 return QSound(self.config.audio_file)
             else:

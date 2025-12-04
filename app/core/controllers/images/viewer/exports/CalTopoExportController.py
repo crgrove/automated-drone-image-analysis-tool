@@ -8,6 +8,7 @@ of flagged AOIs to CalTopo maps.
 import json
 import base64
 import os
+import time
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer, QThread, Signal
@@ -28,15 +29,15 @@ from helpers.MetaDataHelper import MetaDataHelper
 
 class CalTopoAccountDataThread(QThread):
     """Thread for fetching CalTopo account data."""
-    
+
     finished = Signal(bool, dict)  # success, account_data
     errorOccurred = Signal(str)
     progressUpdated = Signal(int, int, str)
-    
+
     def __init__(self, api_service, team_id, credential_id, credential_secret):
         """
         Initialize the account data thread.
-        
+
         Args:
             api_service: CalTopoAPIService instance
             team_id: Team ID
@@ -48,9 +49,14 @@ class CalTopoAccountDataThread(QThread):
         self.team_id = team_id
         self.credential_id = credential_id
         self.credential_secret = credential_secret
-    
+
     def run(self):
-        """Execute the account data fetch."""
+        """
+        Execute the account data fetch.
+
+        Fetches account data from the CalTopo API using the provided credentials.
+        Emits progress updates and signals completion or error.
+        """
         try:
             self.progressUpdated.emit(0, 100, "Connecting to CalTopo API...")
             success, account_data = self.api_service.get_account_data(
@@ -67,17 +73,17 @@ class CalTopoAccountDataThread(QThread):
 
 class CalTopoDataPreparationThread(QThread):
     """Thread for preparing CalTopo export data (markers and polygons)."""
-    
+
     finished = Signal(list, list)  # markers, polygons
     errorOccurred = Signal(str)
     progressUpdated = Signal(int, int, str)
     canceled = Signal()
-    
-    def __init__(self, controller, images, flagged_aois, include_flagged_aois, 
+
+    def __init__(self, controller, images, flagged_aois, include_flagged_aois,
                  include_locations, include_coverage_area, include_images):
         """
         Initialize the data preparation thread.
-        
+
         Args:
             controller: CalTopoExportController instance (for accessing preparation methods)
             images: List of image data dictionaries
@@ -96,21 +102,35 @@ class CalTopoDataPreparationThread(QThread):
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
         self._cancelled = False
-    
+
     def cancel(self):
-        """Cancel the preparation operation."""
+        """
+        Cancel the preparation operation.
+
+        Sets the cancellation flag to stop the thread execution.
+        """
         self._cancelled = True
-    
+
     def is_cancelled(self):
-        """Check if operation is cancelled."""
+        """
+        Check if operation is cancelled.
+
+        Returns:
+            bool: True if the operation has been cancelled, False otherwise.
+        """
         return self._cancelled
-    
+
     def run(self):
-        """Execute the data preparation."""
+        """
+        Execute the data preparation.
+
+        Prepares markers and polygons for CalTopo export based on the configured
+        options. Emits progress updates and signals completion or error.
+        """
         try:
             markers = []
             polygons = []
-            
+
             if self.include_flagged_aois:
                 if self.is_cancelled():
                     self.canceled.emit()
@@ -119,42 +139,42 @@ class CalTopoDataPreparationThread(QThread):
                 markers.extend(self.controller._prepare_markers(
                     self.images, self.flagged_aois, include_images=self.include_images
                 ))
-            
+
             if self.include_locations and not self.is_cancelled():
                 self.progressUpdated.emit(33, 100, "Preparing location markers...")
                 markers.extend(self.controller._prepare_location_markers(
                     self.images, include_images=self.include_images
                 ))
-            
+
             if self.include_coverage_area and not self.is_cancelled():
                 self.progressUpdated.emit(66, 100, "Calculating coverage polygons...")
                 polygons.extend(self.controller._prepare_coverage_polygons(self.images))
-            
+
             if self.is_cancelled():
                 self.canceled.emit()
                 return
-            
+
             self.progressUpdated.emit(100, 100, "Data preparation complete")
             self.finished.emit(markers, polygons)
-            
+
         except Exception as e:
             self.errorOccurred.emit(str(e))
 
 
 class CalTopoAPIExportThread(QThread):
     """Thread for exporting to CalTopo via API."""
-    
+
     finished = Signal(bool, int, int)  # success, success_count, total_count
     errorOccurred = Signal(str)
     progressUpdated = Signal(int, int, str)
     canceled = Signal()
-    
+
     def __init__(self, api_service, controller, map_id, team_id, credential_id, credential_secret,
-                 images, flagged_aois, include_flagged_aois, include_locations, 
+                 images, flagged_aois, include_flagged_aois, include_locations,
                  include_coverage_area, include_images):
         """
         Initialize the CalTopo API export thread.
-        
+
         Args:
             api_service: CalTopoAPIService instance
             controller: CalTopoExportController instance (for accessing preparation methods)
@@ -183,22 +203,31 @@ class CalTopoAPIExportThread(QThread):
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
         self._cancelled = False
-    
+
     def cancel(self):
-        """Cancel the export operation."""
+        """
+        Cancel the export operation.
+
+        Sets the cancellation flag to stop the thread execution.
+        """
         self._cancelled = True
-    
+
     def is_cancelled(self):
-        """Check if operation is cancelled."""
+        """
+        Check if operation is cancelled.
+
+        Returns:
+            bool: True if the operation has been cancelled, False otherwise.
+        """
         return self._cancelled
-    
+
     def run(self):
         """Execute the export operation (preparation and export both happen in thread)."""
         try:
             # Step 1: Prepare markers and polygons (all heavy work happens in thread)
             markers = []
             polygons = []
-            
+
             if self.include_flagged_aois:
                 if self.is_cancelled():
                     self.canceled.emit()
@@ -207,34 +236,34 @@ class CalTopoAPIExportThread(QThread):
                 markers.extend(self.controller._prepare_markers(
                     self.images, self.flagged_aois, include_images=self.include_images
                 ))
-            
+
             if self.include_locations and not self.is_cancelled():
                 self.progressUpdated.emit(20, 100, "Preparing location markers...")
                 markers.extend(self.controller._prepare_location_markers(
                     self.images, include_images=self.include_images
                 ))
-            
+
             if self.include_coverage_area and not self.is_cancelled():
                 self.progressUpdated.emit(40, 100, "Calculating coverage polygons...")
                 polygons.extend(self.controller._prepare_coverage_polygons(self.images))
-            
+
             if self.is_cancelled():
                 self.canceled.emit()
                 return
-            
+
             # Step 2: Export markers and polygons
             marker_success_count = 0
             polygon_success_count = 0
             total = len(markers) + len(polygons)
             current = 0
-            
+
             # Export markers
             if markers:
                 for index, marker in enumerate(markers, start=1):
                     if self.is_cancelled():
                         self.canceled.emit()
                         return
-                    
+
                     # Progress: 50% + (index/total_markers * 40%) for markers
                     progress = 50 + int((index / len(markers)) * 40)
                     self.progressUpdated.emit(
@@ -242,15 +271,15 @@ class CalTopoAPIExportThread(QThread):
                         100,
                         f"Exporting marker {index} of {len(markers)}: {marker.get('title', 'Unknown')[:40]}..."
                     )
-                    
+
                     # Export marker
                     success, marker_id = self.api_service.add_marker_via_api(
                         self.map_id, self.team_id, self.credential_id, self.credential_secret, marker
                     )
-                    
+
                     if success:
                         marker_success_count += 1
-                        
+
                         # Upload photo if available
                         if marker.get('image_path') and os.path.exists(marker.get('image_path', '')):
                             self.api_service.upload_photo_via_api(
@@ -261,16 +290,16 @@ class CalTopoAPIExportThread(QThread):
                                 description=marker.get('description', ''),
                                 marker_id=marker_id
                             )
-                    
+
                     current += 1
-            
+
             # Export polygons
             if polygons and not self.is_cancelled():
                 for index, polygon in enumerate(polygons, start=1):
                     if self.is_cancelled():
                         self.canceled.emit()
                         return
-                    
+
                     # Progress: 90% + (index/total_polygons * 10%) for polygons
                     progress = 90 + int((index / len(polygons)) * 10) if polygons else 90
                     self.progressUpdated.emit(
@@ -278,24 +307,24 @@ class CalTopoAPIExportThread(QThread):
                         100,
                         f"Exporting polygon {index} of {len(polygons)}: {polygon.get('title', 'Unknown')[:40]}..."
                     )
-                    
+
                     # Export polygon
                     success, _ = self.api_service.add_polygon_via_api(
                         self.map_id, self.team_id, self.credential_id, self.credential_secret, polygon
                     )
-                    
+
                     if success:
                         polygon_success_count += 1
-                    
+
                     current += 1
-            
+
             if self.is_cancelled():
                 self.canceled.emit()
                 return
-            
+
             total_success = marker_success_count + polygon_success_count
             self.finished.emit(total_success > 0, total_success, total)
-            
+
         except Exception as e:
             self.errorOccurred.emit(str(e))
 
@@ -365,29 +394,29 @@ class CalTopoExportController:
             )
             prep_dialog.set_title("Preparing data for export...")
             prep_dialog.set_status("Processing images and AOIs...")
-            
+
             markers = []
             coverage_polygons = []
             prep_error = None
-            
+
             def on_prep_progress(current, total, message):
                 prep_dialog.update_progress(current, total, message)
                 QApplication.processEvents()
-            
+
             def on_prep_finished(markers_result, polygons_result):
                 nonlocal markers, coverage_polygons
                 markers = markers_result
                 coverage_polygons = polygons_result
                 prep_dialog.accept()
-            
+
             def on_prep_error(error_message):
                 nonlocal prep_error
                 prep_error = error_message
                 prep_dialog.reject()
-            
+
             def on_prep_cancelled():
                 prep_dialog.reject()
-            
+
             prep_thread = CalTopoDataPreparationThread(
                 self, images, flagged_aois, include_flagged_aois,
                 include_locations, include_coverage_area, include_images
@@ -397,14 +426,14 @@ class CalTopoExportController:
             prep_thread.errorOccurred.connect(on_prep_error)
             prep_thread.canceled.connect(on_prep_cancelled)
             prep_dialog.cancel_requested.connect(prep_thread.cancel)
-            
+
             prep_thread.start()
             prep_dialog.show()
             QApplication.processEvents()
             prep_dialog.exec()
-            
+
             prep_thread.wait()
-            
+
             if prep_error:
                 QMessageBox.critical(
                     self.parent,
@@ -422,7 +451,7 @@ class CalTopoExportController:
                     selected_types.append("image locations")
                 if include_coverage_area:
                     selected_types.append("coverage area")
-                
+
                 if include_flagged_aois and include_locations and include_coverage_area:
                     message = (
                         "No flagged AOIs, geotagged image locations, or coverage areas are available.\n"
@@ -752,11 +781,11 @@ class CalTopoExportController:
 
     def _prepare_location_markers(self, images, include_images=True):
         """Prepare marker data for drone/image locations.
-        
+
         Args:
             images: List of image data dictionaries
             include_images (bool): Whether to include image_path for photo uploads
-            
+
         Returns:
             list: List of marker dictionaries with 'lat', 'lon', 'title', 'description'
         """
@@ -921,7 +950,6 @@ class CalTopoExportController:
 
         success_count = 0
         cancelled = False
-        import time
 
         for index, marker in enumerate(markers, start=1):
             # Check if cancelled
@@ -1202,7 +1230,6 @@ class CalTopoExportController:
 
         success_count = 0
         cancelled = False
-        import time
 
         for index, polygon in enumerate(polygons, start=1):
             # Check if cancelled
@@ -1341,7 +1368,7 @@ class CalTopoExportController:
             "Successfully logged out from CalTopo."
         )
 
-    def export_to_caltopo_via_api(self, images, flagged_aois, include_flagged_aois=True, 
+    def export_to_caltopo_via_api(self, images, flagged_aois, include_flagged_aois=True,
                                   include_locations=False, include_coverage_area=False, include_images=True):
         """
         Export data to CalTopo using the official Team API.
@@ -1403,38 +1430,38 @@ class CalTopoExportController:
             )
             loading_dialog.set_title("Connecting to CalTopo...")
             loading_dialog.set_status("Fetching account data and maps...")
-            
+
             account_data = None
             account_success = False
             account_error = None
-            
+
             def on_account_progress(current, total, message):
                 loading_dialog.update_progress(current, total, message)
                 QApplication.processEvents()
-            
+
             def on_account_finished(success, data):
                 nonlocal account_data, account_success
                 account_data = data
                 account_success = success
                 loading_dialog.accept()
-            
+
             def on_account_error(error_message):
                 nonlocal account_error
                 account_error = error_message
                 loading_dialog.reject()
-            
+
             account_thread = CalTopoAccountDataThread(
                 self.caltopo_api_service, team_id, credential_id, credential_secret
             )
             account_thread.progressUpdated.connect(on_account_progress)
             account_thread.finished.connect(on_account_finished)
             account_thread.errorOccurred.connect(on_account_error)
-            
+
             account_thread.start()
             loading_dialog.show()
             QApplication.processEvents()
             loading_dialog.exec()
-            
+
             account_thread.wait()
 
             if account_error:
@@ -1453,9 +1480,8 @@ class CalTopoExportController:
                     "Please check your credentials and try again."
                 )
                 return False
-            
+
             # Debug: Log account data structure
-            import json
             self.logger.info(f"Account data keys: {list(account_data.keys()) if account_data else 'None'}")
             if account_data:
                 state = account_data.get('state', {})
@@ -1468,7 +1494,7 @@ class CalTopoExportController:
 
             # Show map selection dialog (pass credential helper and API service for update functionality)
             map_dialog = CalTopoAPIMapDialog(
-                self.parent, 
+                self.parent,
                 account_data=account_data,
                 credential_helper=self.credential_helper,
                 api_service=self.caltopo_api_service
@@ -1486,7 +1512,7 @@ class CalTopoExportController:
             # Step 3: Export markers and polygons via API in a separate thread
             # (Data preparation happens inside the thread, just like KML export)
             return self._export_via_api_threaded(
-                map_id, map_team_id, credential_id, credential_secret, 
+                map_id, map_team_id, credential_id, credential_secret,
                 images, flagged_aois, include_flagged_aois, include_locations,
                 include_coverage_area, include_images
             )
@@ -1504,7 +1530,7 @@ class CalTopoExportController:
                                  images, flagged_aois, include_flagged_aois, include_locations,
                                  include_coverage_area, include_images):
         """Export markers and polygons via API in a separate thread.
-        
+
         Args:
             map_id: CalTopo map ID
             team_id: Team ID
@@ -1516,7 +1542,7 @@ class CalTopoExportController:
             include_locations: Whether to include locations
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
-            
+
         Returns:
             bool: True if export was successful, False otherwise
         """
@@ -1528,7 +1554,7 @@ class CalTopoExportController:
         )
         progress_dialog.set_title("Exporting to CalTopo...")
         progress_dialog.set_status("Preparing data and exporting...")
-        
+
         # Create export thread (preparation and export both happen in thread)
         export_thread = CalTopoAPIExportThread(
             self.caltopo_api_service,
@@ -1544,19 +1570,19 @@ class CalTopoExportController:
             include_coverage_area,
             include_images
         )
-        
+
         # Store result for return value
         self._export_result = False
-        
+
         # Connect signals
         def on_progress_updated(current, total, message):
             progress_dialog.update_progress(current, total, message)
             QApplication.processEvents()
-        
+
         def on_finished(success, success_count, total_count):
             progress_dialog.accept()
             self._export_result = success
-            
+
             if success:
                 if success_count == total_count:
                     QMessageBox.information(
@@ -1579,7 +1605,7 @@ class CalTopoExportController:
                     "Failed to export items to CalTopo.\n\n"
                     "Please check the console output for error details."
                 )
-        
+
         def on_error(error_message):
             progress_dialog.reject()
             self._export_result = False
@@ -1589,27 +1615,27 @@ class CalTopoExportController:
                 "Export Error",
                 f"An error occurred during CalTopo API export:\n\n{error_message}"
             )
-        
+
         def on_cancelled():
             progress_dialog.reject()
             self._export_result = False
-        
+
         export_thread.progressUpdated.connect(on_progress_updated)
         export_thread.finished.connect(on_finished)
         export_thread.errorOccurred.connect(on_error)
         export_thread.canceled.connect(on_cancelled)
-        
+
         # Connect cancel button
         progress_dialog.cancel_requested.connect(export_thread.cancel)
-        
+
         # Start the thread
         export_thread.start()
-        
+
         # Show progress dialog and block until it's closed
         progress_dialog.exec()
-        
+
         # Wait for thread to finish if it's still running
         if export_thread.isRunning():
             export_thread.wait()
-        
+
         return self._export_result

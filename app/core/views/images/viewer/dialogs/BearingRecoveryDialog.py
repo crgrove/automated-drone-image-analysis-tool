@@ -36,6 +36,15 @@ class BearingCalculationWorker(QThread):
         images: List[Dict[str, Any]],
         track_file: Optional[str] = None
     ):
+        """
+        Initialize the bearing calculation worker thread.
+
+        Args:
+            service: BearingCalculationService instance for performing calculations.
+            mode: Calculation mode ('track' or 'auto').
+            images: List of image dictionaries to process.
+            track_file: Optional path to track file for track-based calculation.
+        """
         super().__init__()
         self.service = service
         self.mode = mode
@@ -43,7 +52,12 @@ class BearingCalculationWorker(QThread):
         self.track_file = track_file
 
     def run(self):
-        """Run bearing calculation in background thread."""
+        """
+        Run bearing calculation in background thread.
+
+        Connects service signals and starts the appropriate calculation method
+        based on the mode (track file or auto-calculation).
+        """
         # Connect signals
         self.service.progress_updated.connect(self.progress.emit)
         self.service.calculation_complete.connect(self.finished.emit)
@@ -68,6 +82,13 @@ class BearingRecoveryDialog(QDialog):
     """
 
     def __init__(self, parent=None, images: List[Dict[str, Any]] = None):
+        """
+        Initialize the bearing recovery dialog.
+
+        Args:
+            parent: Parent widget.
+            images: List of image dictionaries missing bearing information.
+        """
         super().__init__(parent)
         self.images = images or []
         self.results: Optional[Dict[str, BearingResult]] = None
@@ -87,7 +108,12 @@ class BearingRecoveryDialog(QDialog):
             QTimer.singleShot(0, self._skip_single_image)
 
     def _setup_ui(self):
-        """Setup dialog UI."""
+        """
+        Set up the dialog UI.
+
+        Creates and arranges all UI elements including title, description,
+        mode selection buttons, progress indicators, and action buttons.
+        """
         layout = QVBoxLayout(self)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
@@ -171,7 +197,11 @@ class BearingRecoveryDialog(QDialog):
         layout.addLayout(bottom_layout)
 
     def _apply_styles(self):
-        """Apply custom styles matching application theme."""
+        """
+        Apply custom styles matching application theme.
+
+        Sets dark theme stylesheet for the dialog and all child widgets.
+        """
         self.setStyleSheet("""
             QDialog {
                 background-color: #2b2b2b;
@@ -215,7 +245,12 @@ class BearingRecoveryDialog(QDialog):
         """)
 
     def _on_load_track(self):
-        """Handle load track file button click."""
+        """
+        Handle load track file button click.
+
+        Opens a file dialog to select a track file (KML/GPX/CSV) and
+        starts the bearing calculation with the selected file.
+        """
         # Open file dialog
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -228,13 +263,23 @@ class BearingRecoveryDialog(QDialog):
             self._start_calculation('track', track_file=file_path)
 
     def _on_auto_calculate(self):
-        """Handle auto-calculate button click."""
+        """
+        Handle auto-calculate button click.
+
+        Starts automatic bearing calculation using only image GPS coordinates.
+        """
         # Skip pre-validation - let the service extract GPS and validate
         # This allows deferred GPS extraction for better performance
         self._start_calculation('auto')
 
     def _start_calculation(self, mode: str, track_file: Optional[str] = None):
-        """Start bearing calculation in background thread."""
+        """
+        Start bearing calculation in background thread.
+
+        Args:
+            mode: Calculation mode ('track' or 'auto').
+            track_file: Optional path to track file for track-based calculation.
+        """
         # Hide mode selection, show progress
         self.track_button.setEnabled(False)
         self.auto_button.setEnabled(False)
@@ -253,13 +298,27 @@ class BearingRecoveryDialog(QDialog):
         self.worker.start()
 
     def _on_progress(self, current: int, total: int, message: str):
-        """Update progress bar."""
+        """
+        Update progress bar.
+
+        Args:
+            current: Current progress value.
+            total: Total progress value.
+            message: Progress message to display.
+        """
         self.progress_label.setText(f"{message} ({current}/{total})")
         progress_pct = int((current / total) * 100) if total > 0 else 0
         self.progress_bar.setValue(progress_pct)
 
     def _on_calculation_complete(self, results: Dict[str, BearingResult]):
-        """Handle successful calculation completion."""
+        """
+        Handle successful calculation completion.
+
+        Args:
+            results: Dictionary mapping image paths to BearingResult objects.
+
+        Shows a summary message and accepts the dialog.
+        """
         self.results = results
 
         # Count results by source and quality
@@ -302,7 +361,14 @@ class BearingRecoveryDialog(QDialog):
         self.accept()
 
     def _on_calculation_error(self, error_msg: str):
-        """Handle calculation error."""
+        """
+        Handle calculation error.
+
+        Args:
+            error_msg: Error message describing what went wrong.
+
+        Resets the UI and displays an error message to the user.
+        """
         self._logger.error(f"Bearing calculation failed: {error_msg}")
 
         # Reset UI
@@ -321,7 +387,11 @@ class BearingRecoveryDialog(QDialog):
         )
 
     def _on_calculation_cancelled(self):
-        """Handle calculation cancellation."""
+        """
+        Handle calculation cancellation.
+
+        Resets the UI to allow the user to try again or skip.
+        """
         self._logger.info("Bearing calculation cancelled by user")
 
         # Reset UI
@@ -334,14 +404,23 @@ class BearingRecoveryDialog(QDialog):
         self.progress_label.setText("Cancelled")
 
     def _on_cancel(self):
-        """Handle cancel button click during calculation."""
+        """
+        Handle cancel button click during calculation.
+
+        Cancels the ongoing calculation if a worker thread is running.
+        """
         if self.worker and self.worker.isRunning():
             self.service.cancel()
             self.cancel_button.setEnabled(False)
             self.progress_label.setText("Cancelling...")
 
     def _skip_single_image(self):
-        """Skip bearing recovery for single image and close dialog."""
+        """
+        Skip bearing recovery for single image and close dialog.
+
+        Shows an informational message explaining that bearing recovery
+        requires multiple images, then closes the dialog.
+        """
         self._logger.info("Skipping bearing recovery: only one image in result set")
 
         QMessageBox.information(
@@ -355,7 +434,12 @@ class BearingRecoveryDialog(QDialog):
         self.reject()
 
     def _show_help(self):
-        """Show help dialog explaining bearing recovery."""
+        """
+        Show help dialog explaining bearing recovery.
+
+        Displays an informational dialog with details about what bearing
+        recovery is, why it's important, and how the different methods work.
+        """
         help_text = """
 <h3>What is Bearing Recovery?</h3>
 
@@ -394,5 +478,11 @@ Proceed without bearing recovery. Some features may not work correctly.</p>
         msg.exec()
 
     def get_results(self) -> Optional[Dict[str, BearingResult]]:
-        """Get calculation results after dialog is accepted."""
+        """
+        Get calculation results after dialog is accepted.
+
+        Returns:
+            Optional[Dict[str, BearingResult]]: Dictionary mapping image paths to
+                BearingResult objects if dialog was accepted, None otherwise.
+        """
         return self.results

@@ -1,5 +1,6 @@
 import pytest
 import json
+import os
 from unittest.mock import patch, mock_open
 from core.services.ConfigService import ConfigService
 
@@ -73,7 +74,6 @@ def test_get_algorithms_empty_config():
 
 def test_config_service_with_real_file_path():
     """Test ConfigService with the actual algorithms.conf file."""
-    import os
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
                                'algorithms.conf')
 

@@ -19,7 +19,7 @@ from urllib.parse import urlencode
 class CalTopoAPIService:
     """
     Service for interacting with CalTopo Team API.
-    
+
     Handles signed requests, account data retrieval, and map object creation
     using service account credentials.
     """
@@ -28,7 +28,11 @@ class CalTopoAPIService:
     DEFAULT_TIMEOUT_MS = 2 * 60 * 1000  # 2 minutes
 
     def __init__(self):
-        """Initialize the CalTopo API service."""
+        """
+        Initialize the CalTopo API service.
+
+        Sets up the service for making authenticated API requests to CalTopo.
+        """
         pass
 
     def _sign_request(self, method: str, url: str, expires: int, payload_string: str, credential_secret: str) -> str:
@@ -110,11 +114,11 @@ class CalTopoAPIService:
             else:
                 return False, None
 
-        except Exception as e:
+        except Exception:
             return False, None
 
     def get_account_data(self, team_id: str, credential_id: str, credential_secret: str,
-                        timestamp: int = 0) -> Tuple[bool, Optional[Dict]]:
+                         timestamp: int = 0) -> Tuple[bool, Optional[Dict]]:
         """Get account data from CalTopo API.
 
         Args:
@@ -133,7 +137,7 @@ class CalTopoAPIService:
         return success, result
 
     def add_marker_via_api(self, map_id: str, team_id: str, credential_id: str, credential_secret: str,
-                          marker_data: Dict) -> Tuple[bool, Optional[str]]:
+                           marker_data: Dict) -> Tuple[bool, Optional[str]]:
         """Add a marker to a map using the API.
 
         Args:
@@ -183,7 +187,7 @@ class CalTopoAPIService:
         return False, None
 
     def add_polygon_via_api(self, map_id: str, team_id: str, credential_id: str, credential_secret: str,
-                           polygon_data: Dict) -> Tuple[bool, Optional[str]]:
+                            polygon_data: Dict) -> Tuple[bool, Optional[str]]:
         """Add a polygon to a map using the API.
 
         Args:
@@ -232,8 +236,8 @@ class CalTopoAPIService:
         return False, None
 
     def upload_photo_via_api(self, map_id: str, team_id: str, credential_id: str, credential_secret: str,
-                            photo_path: str, lat: float, lon: float, title: str = None,
-                            description: str = "", marker_id: str = None) -> Tuple[bool, Optional[str]]:
+                             photo_path: str, lat: float, lon: float, title: str = None,
+                             description: str = "", marker_id: str = None) -> Tuple[bool, Optional[str]]:
         """Upload a photo to a map using the API.
 
         Args:
@@ -306,4 +310,3 @@ class CalTopoAPIService:
 
         except Exception:
             return False, None
-

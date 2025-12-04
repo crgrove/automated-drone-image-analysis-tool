@@ -25,6 +25,8 @@ import os
 
 import qdarktheme
 from core.controllers.Perferences import Preferences
+from core.controllers.streaming.StreamingGuide import StreamingGuide
+# MainWindow imported lazily in _open_image_analysis() to avoid circular dependency
 from core.services.SettingsService import SettingsService
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
@@ -503,8 +505,6 @@ class StreamViewerWindow(QMainWindow):
     def _open_streaming_guide(self):
         """Open the Streaming Analysis Guide wizard."""
         try:
-            from core.controllers.streaming.StreamingGuide import StreamingGuide
-
             wizard = StreamingGuide(self)
             wizard_data_from_wizard = None
 
@@ -525,8 +525,8 @@ class StreamViewerWindow(QMainWindow):
     def _open_image_analysis(self):
         """Open the Image Analysis main window and close this streaming viewer."""
         try:
-            from core.controllers.images.MainWindow import MainWindow  # Local import avoids circular dependency
-
+            # Lazy import to avoid circular dependency with MainWindow
+            from core.controllers.images.MainWindow import MainWindow
             main_window = MainWindow(qdarktheme)
             app = QApplication.instance()
             if app:

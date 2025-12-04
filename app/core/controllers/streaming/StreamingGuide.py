@@ -1,6 +1,6 @@
 """Wizard dialog for configuring streaming detection before launch."""
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QDialog
 
 from core.views.streaming.StreamingGuide_ui import Ui_StreamingGuide
@@ -88,7 +88,6 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
 
         # Connect skip guide checkbox (in button area, shared across pages)
         if hasattr(self, "skipGuideCheckBox"):
-            from PySide6.QtCore import Qt
             self.skipGuideCheckBox.stateChanged.connect(self._on_skip_guide_changed)
 
         # Call on_enter for the initial page
@@ -99,7 +98,6 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
 
     def _on_skip_guide_changed(self, state: int) -> None:
         """Handle skip guide checkbox change in button area."""
-        from PySide6.QtCore import Qt
         self.wizard_data["skip_guide"] = state == Qt.Checked
 
     def _on_continue(self) -> None:

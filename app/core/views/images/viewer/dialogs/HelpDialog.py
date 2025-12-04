@@ -34,7 +34,12 @@ class HelpDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
-        """Set up the dialog UI."""
+        """
+        Set up the dialog UI.
+
+        Creates and arranges all UI elements including the scrollable
+        help content area and close button.
+        """
         layout = QVBoxLayout()
 
         # Create scrollable text area

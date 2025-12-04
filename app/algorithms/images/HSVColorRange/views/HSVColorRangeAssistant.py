@@ -1462,7 +1462,8 @@ class HSVColorRangeAssistant(QDialog):
         self.h_warning_label.setVisible(h_range > 30)
 
     def show_help(self):
-        """Show help dialog with instructions.
+        """
+        Show help dialog with instructions.
 
         Displays a comprehensive help dialog explaining how to use the
         HSV Color Range Assistant tool, including navigation, selection,
@@ -1504,7 +1505,8 @@ Click on the BROWSE button to open an image.</p>
         msg.exec()
 
     def accept(self):
-        """Accept and emit ranges.
+        """
+        Accept and emit ranges.
 
         Overrides QDialog.accept() to emit the rangeAccepted signal with
         the current HSV ranges before closing the dialog.

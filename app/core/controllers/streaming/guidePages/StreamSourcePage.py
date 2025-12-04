@@ -3,6 +3,7 @@
 from PySide6.QtWidgets import QButtonGroup
 
 from .BasePage import BasePage
+from helpers.IconHelper import IconHelper
 
 
 class StreamSourcePage(BasePage):
@@ -11,8 +12,6 @@ class StreamSourcePage(BasePage):
     def setup_ui(self) -> None:
         # Apply icons if available (non-critical)
         try:
-            from helpers.IconHelper import IconHelper
-
             self.dialog.fileButton.setIcon(IconHelper.create_icon("fa6s.folder-open", "Dark"))
             self.dialog.hdmiButton.setIcon(IconHelper.create_icon("fa6s.video", "Dark"))
             self.dialog.rtmpButton.setIcon(IconHelper.create_icon("fa6s.wifi", "Dark"))

@@ -228,6 +228,11 @@ class PickleHelper:
 
     @classmethod
     def force_reload(cls):
-        """Forces reloading of the drone metadata pickle on next access."""
+        """
+        Force reloading of the drone metadata pickle on next access.
+
+        Clears the cached dataframes so they will be reloaded from disk
+        on the next call to get_drone_sensor_info() or get_xmp_mapping().
+        """
         cls._drones_df = None
         cls._xmp_df = None

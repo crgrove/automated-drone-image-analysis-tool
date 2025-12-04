@@ -173,7 +173,15 @@ class GeodesicHelper:
 
     @staticmethod
     def normalize_angle_deg(angle: float) -> float:
-        """Normalize angle to [0, 360) range."""
+        """
+        Normalize angle to [0, 360) range.
+
+        Args:
+            angle: Angle in degrees (can be any value).
+
+        Returns:
+            Normalized angle in degrees [0, 360).
+        """
         return (angle % 360.0 + 360.0) % 360.0
 
     @staticmethod

@@ -25,13 +25,22 @@ class CalTopoService:
     CALTOPO_API_BASE = "https://caltopo.com/api/v1"
 
     def __init__(self):
-        """Initialize the CalTopo service."""
+        """
+        Initialize the CalTopo service.
+
+        Sets up the HTTP session and loads any previously saved session cookies.
+        """
         self.session = requests.Session()
         self.settings = QSettings("ADIAT", "CalTopo")
         self._load_session()
 
     def _serialize_cookies(self):
-        """Convert the current cookie jar into a JSON-serializable list."""
+        """
+        Convert the current cookie jar into a JSON-serializable list.
+
+        Returns:
+            list: List of dictionaries containing cookie attributes.
+        """
         serialized = []
         for cookie in self.session.cookies:
             serialized.append({
@@ -55,7 +64,12 @@ class CalTopoService:
         return serialized
 
     def _deserialize_cookies(self, serialized):
-        """Populate the session cookie jar from serialized data."""
+        """
+        Populate the session cookie jar from serialized data.
+
+        Args:
+            serialized: List of cookie dictionaries to deserialize.
+        """
         self.session.cookies.clear()
         if not serialized:
             return
@@ -96,12 +110,20 @@ class CalTopoService:
                 continue
 
     def _persist_session_cookies(self):
-        """Persist the current cookie jar to settings."""
+        """
+        Persist the current cookie jar to settings.
+
+        Saves the serialized cookies to QSettings for later retrieval.
+        """
         serialized = self._serialize_cookies()
         self.settings.setValue("session_cookies", json.dumps(serialized))
 
     def _load_session(self):
-        """Load saved session cookies from settings."""
+        """
+        Load saved session cookies from settings.
+
+        Attempts to restore previously saved session cookies from QSettings.
+        """
         cookies_json = self.settings.value("session_cookies", "")
         if cookies_json:
             try:
@@ -111,7 +133,15 @@ class CalTopoService:
                 pass
 
     def _normalize_cookies(self, cookies_payload: Union[Dict[str, Any], List[Dict[str, Any]]]):
-        """Normalize cookies from various formats into a list of cookie dicts."""
+        """
+        Normalize cookies from various formats into a list of cookie dicts.
+
+        Args:
+            cookies_payload: Cookies in various formats (list, dict, or nested dict).
+
+        Returns:
+            list: Normalized list of cookie dictionaries.
+        """
         if not cookies_payload:
             return []
 
@@ -165,12 +195,17 @@ class CalTopoService:
         self._persist_session_cookies()
 
     def clear_session(self):
-        """Clear stored session data."""
+        """
+        Clear stored session data.
+
+        Removes saved cookies from settings and clears the current session.
+        """
         self.settings.remove("session_cookies")
         self.session.cookies.clear()
 
     def is_authenticated(self):
-        """Check if user has valid session.
+        """
+        Check if user has valid session.
 
         Returns:
             bool: True if session appears valid, False otherwise
@@ -186,7 +221,8 @@ class CalTopoService:
             return False
 
     def get_user_maps(self):
-        """Retrieve list of user's CalTopo maps.
+        """
+        Retrieve list of user's CalTopo maps.
 
         Returns:
             list: List of map dictionaries with 'id', 'title', 'modified' keys
@@ -215,7 +251,8 @@ class CalTopoService:
             return []
 
     def _get_csrf_token(self, map_id):
-        """Try to get CSRF token from CalTopo map page.
+        """
+        Try to get CSRF token from CalTopo map page.
 
         Args:
             map_id (str): CalTopo map ID
@@ -245,7 +282,8 @@ class CalTopoService:
             return None
 
     def add_marker_to_map(self, map_id, marker_data):
-        """Add a marker/waypoint to a CalTopo map.
+        """
+        Add a marker/waypoint to a CalTopo map.
 
         Args:
             map_id (str): CalTopo map ID
@@ -309,7 +347,8 @@ class CalTopoService:
             return False
 
     def upload_photo_waypoint(self, map_id, photo_data, team_id, marker_id):
-        """Upload a photo waypoint to a CalTopo map.
+        """
+        Upload a photo waypoint to a CalTopo map.
 
         NOTE: This method is deprecated and not currently used.
         Photo uploads should be done via JavaScript in the authenticated browser session,

@@ -10,7 +10,11 @@ class ZipBundleService:
     """
 
     def __init__(self):
-        """Initialize the ZipBundleService."""
+        """
+        Initialize the ZipBundleService.
+
+        Sets up the service for creating ZIP archive files.
+        """
         pass
 
     def generate_zip_file(self, file_paths, output_path):

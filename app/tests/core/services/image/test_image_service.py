@@ -12,6 +12,11 @@ import os
 from unittest.mock import patch, MagicMock
 from core.services.image.ImageService import ImageService
 
+try:
+    import tifffile
+except ImportError:
+    tifffile = None
+
 
 @pytest.fixture
 def image_service():
@@ -229,6 +234,10 @@ def test_get_thermal_data_no_mask(image_service):
 
 def test_get_thermal_data_with_mask():
     """Test getting thermal data from mask file."""
+    # Skip test if tifffile is not available
+    if tifffile is None:
+        pytest.skip("tifffile is not available")
+
     # Create a temporary test image
     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
         test_img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -236,7 +245,6 @@ def test_get_thermal_data_with_mask():
         tmp_path = tmp_file.name
 
     # Create a temporary mask file with thermal data
-    import tifffile
     with tempfile.NamedTemporaryFile(suffix='.tif', delete=False) as tmp_mask:
         # Create a 3-band TIFF: band 0 = mask, band 1 = temperature data
         mask_data = np.zeros((2, 100, 100), dtype=np.float32)

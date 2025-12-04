@@ -13,43 +13,46 @@ def test_get_cpu_count():
     """Test getting CPU count."""
     count = CPUService.get_cpu_count()
 
-    assert count > 0
+    # Should return at least 1
+    assert count >= 1
     assert isinstance(count, int)
 
 
+def test_get_cpu_count_with_mock():
+    """Test getting CPU count with mocked os.cpu_count."""
+    with patch('os.cpu_count', return_value=8):
+        count = CPUService.get_cpu_count()
+        assert count == 8
+
+
 def test_get_cpu_count_fallback():
-    """Test CPU count with fallback mechanisms."""
-    with patch('os.cpu_count', side_effect=AttributeError):
-        with patch('multiprocessing.cpu_count', return_value=4):
-            count = CPUService.get_cpu_count()
-            assert count == 4
+    """Test fallback to multiprocessing when os.cpu_count fails."""
+    with patch('os.cpu_count', side_effect=AttributeError), \
+            patch('multiprocessing.cpu_count', return_value=4):
+        count = CPUService.get_cpu_count()
+        assert count == 4
 
 
 def test_get_cpu_count_default():
-    """Test CPU count defaults to 1 if all methods fail."""
-    with patch('os.cpu_count', side_effect=AttributeError):
-        with patch('multiprocessing.cpu_count', side_effect=OSError):
-            count = CPUService.get_cpu_count()
-            assert count == 1
+    """Test default to 1 when all methods fail."""
+    with patch('os.cpu_count', return_value=None), \
+            patch('multiprocessing.cpu_count', side_effect=OSError):
+        count = CPUService.get_cpu_count()
+        assert count == 1
 
 
 def test_get_recommended_process_count():
     """Test getting recommended process count."""
-    recommended = CPUService.get_recommended_process_count()
-
-    assert recommended > 0
-    assert isinstance(recommended, int)
+    with patch('core.services.CPUService.CPUService.get_cpu_count', return_value=8):
+        recommended = CPUService.get_recommended_process_count()
+        # Should be CPU count - 1, but at least 1
+        assert recommended == 7
+        assert recommended >= 1
 
 
 def test_get_recommended_process_count_single_core():
     """Test recommended process count with single core."""
-    with patch.object(CPUService, 'get_cpu_count', return_value=1):
+    with patch('core.services.CPUService.CPUService.get_cpu_count', return_value=1):
         recommended = CPUService.get_recommended_process_count()
+        # Should still be at least 1
         assert recommended == 1
-
-
-def test_get_recommended_process_count_multi_core():
-    """Test recommended process count with multiple cores."""
-    with patch.object(CPUService, 'get_cpu_count', return_value=8):
-        recommended = CPUService.get_recommended_process_count()
-        assert recommended == 7  # CPU count - 1

@@ -128,7 +128,6 @@ def initialize_default_settings():
 
     except Exception as e:
         logger.error(f"Error initializing default settings: {e}")
-        import traceback
         logger.error(traceback.format_exc())
 
 
@@ -200,6 +199,13 @@ def main():
     wizard_shown = False
 
     def _launch_stream_viewer(wizard_data=None):
+        """
+        Launch the stream viewer window with optional wizard data.
+
+        Args:
+            wizard_data: Optional dictionary containing wizard configuration data.
+                If provided, the algorithm name will be extracted from this data.
+        """
         algorithm_name = 'ColorAnomalyAndMotionDetection'
         if wizard_data and wizard_data.get('algorithm'):
             algorithm_name = wizard_data.get('algorithm')
@@ -218,6 +224,12 @@ def main():
 
     # Connect signal to launch MainWindow when Images is selected
     def _on_selection(choice: str):
+        """
+        Handle selection choice from the initial dialog.
+
+        Args:
+            choice: String indicating the selected option ('images' or 'stream').
+        """
         if choice == 'images':
             # Wrap startup in a try so any init error raises to excepthook
             try:
@@ -231,6 +243,11 @@ def main():
 
     # Connect signal to show setup wizard when requested
     def _on_wizard_requested():
+        """
+        Handle request to show the image analysis guide wizard.
+
+        Sets the wizard_shown flag and launches the ImageAnalysisGuide.
+        """
         nonlocal wizard_shown
         wizard_shown = True
         # Dialog is already hidden, now show wizard
@@ -288,6 +305,12 @@ def main():
         dlg.accept()  # Close selection dialog (already hidden, but this ensures cleanup)
 
     def _on_stream_wizard_requested():
+        """
+        Handle request to show the streaming guide wizard.
+
+        Creates and shows the StreamingGuide dialog, then launches the stream
+        viewer with the wizard data if the wizard is accepted.
+        """
         wizard = StreamingGuide()
         wizard_data_from_wizard = None
 

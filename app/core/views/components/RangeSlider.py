@@ -72,7 +72,15 @@ class RangeSlider(QWidget):
         self._temp_slider.setStyleSheet("")  # Ensure it gets the theme stylesheet
 
     def _snap_to_point(self, value):
-        """Snap a value to the nearest snap point."""
+        """
+        Snap a value to the nearest snap point.
+
+        Args:
+            value: Value to snap.
+
+        Returns:
+            int: Nearest snap point value.
+        """
         closest_value = self.SNAP_POINTS[0][0]
         min_distance = abs(value - closest_value)
 
@@ -85,14 +93,31 @@ class RangeSlider(QWidget):
         return closest_value
 
     def _get_snap_index(self, value):
-        """Get the index of a snap point value."""
+        """
+        Get the index of a snap point value.
+
+        Args:
+            value: Snap point value to find index for.
+
+        Returns:
+            int: Index of the snap point, or 0 if not found.
+        """
         for i, (snap_value, _) in enumerate(self.SNAP_POINTS):
             if snap_value == value:
                 return i
         return 0
 
     def _format_label(self, value_sqft, base_label):
-        """Format label with unit conversion if needed."""
+        """
+        Format label with unit conversion if needed.
+
+        Args:
+            value_sqft: Value in square feet.
+            base_label: Base label text to format.
+
+        Returns:
+            str: Formatted label with unit conversion applied if needed.
+        """
         # Extract the base label text (before the unit part in parentheses)
         # Labels are like "Small\nArticle\n(1 sqft)" - extract "Small\nArticle"
         lines = base_label.split('\n')
@@ -125,21 +150,45 @@ class RangeSlider(QWidget):
         return f"{base_text}\n({value_str} {unit_str})"
 
     def setUnit(self, unit):
-        """Set the unit for display ('ft' or 'm')."""
+        """
+        Set the unit for display ('ft' or 'm').
+
+        Args:
+            unit: Unit string ('ft' or 'm').
+
+        Triggers a redraw of the widget with updated labels.
+        """
         if unit != self._unit:
             self._unit = unit
             self.update()  # Redraw with new labels
 
     def minValue(self):
-        """Get the current minimum value."""
+        """
+        Get the current minimum value.
+
+        Returns:
+            int: Current minimum value.
+        """
         return self._min_value
 
     def maxValue(self):
-        """Get the current maximum value."""
+        """
+        Get the current maximum value.
+
+        Returns:
+            int: Current maximum value.
+        """
         return self._max_value
 
     def setMinValue(self, value):
-        """Set the minimum value, snapping to nearest point."""
+        """
+        Set the minimum value, snapping to nearest point.
+
+        Args:
+            value: Desired minimum value (will be snapped to nearest snap point).
+
+        Updates the widget and emits rangeChanged signal if value changes.
+        """
         snapped = self._snap_to_point(value)
         # Ensure it doesn't exceed max
         if snapped < self._max_value:
@@ -149,7 +198,14 @@ class RangeSlider(QWidget):
                 self.rangeChanged.emit(self._min_value, self._max_value)
 
     def setMaxValue(self, value):
-        """Set the maximum value, snapping to nearest point."""
+        """
+        Set the maximum value, snapping to nearest point.
+
+        Args:
+            value: Desired maximum value (will be snapped to nearest snap point).
+
+        Updates the widget and emits rangeChanged signal if value changes.
+        """
         snapped = self._snap_to_point(value)
         # Ensure it doesn't go below min
         if snapped > self._min_value:
@@ -159,7 +215,15 @@ class RangeSlider(QWidget):
                 self.rangeChanged.emit(self._min_value, self._max_value)
 
     def setRange(self, min_val, max_val):
-        """Set both min and max values at once, snapping to points."""
+        """
+        Set both min and max values at once, snapping to points.
+
+        Args:
+            min_val: Desired minimum value (will be snapped).
+            max_val: Desired maximum value (will be snapped).
+
+        Updates the widget and emits rangeChanged signal if values change.
+        """
         min_snapped = self._snap_to_point(min_val)
         max_snapped = self._snap_to_point(max_val)
 
@@ -184,7 +248,15 @@ class RangeSlider(QWidget):
             self.rangeChanged.emit(self._min_value, self._max_value)
 
     def _value_to_position(self, value):
-        """Convert a snap point value to a pixel position on the track."""
+        """
+        Convert a snap point value to a pixel position on the track.
+
+        Args:
+            value: Snap point value to convert.
+
+        Returns:
+            float: Pixel position on the track.
+        """
         width = self.width() - 2 * self._track_margin
         snap_index = self._get_snap_index(value)
         # Distribute evenly across the track
@@ -192,7 +264,15 @@ class RangeSlider(QWidget):
         return self._track_margin + ratio * width
 
     def _position_to_snap_value(self, position):
-        """Convert a pixel position to the nearest snap point value."""
+        """
+        Convert a pixel position to the nearest snap point value.
+
+        Args:
+            position: Pixel position on the track.
+
+        Returns:
+            int: Nearest snap point value.
+        """
         width = self.width() - 2 * self._track_margin
         if width <= 0:
             return self.SNAP_POINTS[0][0]
@@ -207,7 +287,15 @@ class RangeSlider(QWidget):
         return self.SNAP_POINTS[snap_index][0]
 
     def _get_handle_rect(self, position):
-        """Get the bounding rectangle for a handle at the given position."""
+        """
+        Get the bounding rectangle for a handle at the given position.
+
+        Args:
+            position: Pixel position of the handle center.
+
+        Returns:
+            QRectF: Bounding rectangle for the handle.
+        """
         # Calculate the same center_y as in paintEvent
         font = QFont()
         font.setPointSize(11)
@@ -226,7 +314,15 @@ class RangeSlider(QWidget):
         )
 
     def _handle_at_position(self, pos):
-        """Check if a handle is at the given mouse position. Returns 'min', 'max', or None."""
+        """
+        Check if a handle is at the given mouse position.
+
+        Args:
+            pos: Mouse position (QPoint).
+
+        Returns:
+            str or None: 'min', 'max', or None if no handle at position.
+        """
         min_pos = self._value_to_position(self._min_value)
         max_pos = self._value_to_position(self._max_value)
 
@@ -244,7 +340,14 @@ class RangeSlider(QWidget):
         return None
 
     def mousePressEvent(self, event):
-        """Handle mouse press events."""
+        """
+        Handle mouse press events.
+
+        Args:
+            event: QMouseEvent instance.
+
+        Initiates dragging if a handle is clicked.
+        """
         if event.button() == Qt.LeftButton:
             self._dragging_handle = self._handle_at_position(event.pos())
             if self._dragging_handle:
@@ -269,7 +372,14 @@ class RangeSlider(QWidget):
                     self.setMaxValue(clicked_value)
 
     def mouseMoveEvent(self, event):
-        """Handle mouse move events."""
+        """
+        Handle mouse move events.
+
+        Args:
+            event: QMouseEvent instance.
+
+        Updates handle positions during dragging or changes cursor when hovering.
+        """
         if self._dragging_handle:
             new_value = self._position_to_snap_value(event.pos().x())
 
@@ -286,14 +396,26 @@ class RangeSlider(QWidget):
                 self.setCursor(Qt.ArrowCursor)
 
     def mouseReleaseEvent(self, event):
-        """Handle mouse release events."""
+        """
+        Handle mouse release events.
+
+        Args:
+            event: QMouseEvent instance.
+
+        Stops dragging and resets cursor.
+        """
         if event.button() == Qt.LeftButton:
             self._dragging_handle = None
             self._drag_start_pos = None
             self.setCursor(Qt.ArrowCursor)
 
     def _get_theme_colors(self):
-        """Get colors from the application palette and QSlider widget."""
+        """
+        Get colors from the application palette and QSlider widget.
+
+        Returns:
+            dict: Dictionary containing theme colors for the slider.
+        """
         palette = QApplication.palette()
 
         # Try to get the actual slider color from qdarktheme
