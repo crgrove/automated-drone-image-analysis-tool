@@ -502,7 +502,7 @@ class VideoDisplayWidget(QLabel):
 class StreamControlWidget(QWidget):
     """Shared stream connection and control widget with optional recording controls."""
 
-    connectRequested = Signal(str, str)  # url, stream_type
+    connectRequested = Signal(str, object)  # url, stream_type (StreamType enum)
     disconnectRequested = Signal()
     startRecordingRequested = Signal(str)
     stopRecordingRequested = Signal()
