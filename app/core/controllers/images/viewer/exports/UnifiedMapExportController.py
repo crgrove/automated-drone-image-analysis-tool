@@ -346,7 +346,18 @@ class UnifiedMapExportController:
             if export_type == 'kml':
                 self._export_to_kml(include_locations, include_flagged_aois, include_coverage)
             else:  # caltopo
-                self._export_to_caltopo(include_locations, include_flagged_aois, include_coverage, include_images)
+                # Show method selection dialog
+                from core.views.images.viewer.dialogs.CalTopoMethodDialog import CalTopoMethodDialog
+                method_dialog = CalTopoMethodDialog(self.parent)
+                
+                if method_dialog.exec() != QDialog.Accepted:
+                    return  # User cancelled method selection
+                
+                method = method_dialog.get_selected_method()
+                if method == 'api':
+                    self._export_to_caltopo_via_api(include_locations, include_flagged_aois, include_coverage, include_images)
+                else:  # browser
+                    self._export_to_caltopo(include_locations, include_flagged_aois, include_coverage, include_images)
 
         except Exception as e:
             self.logger.error(f"Error in unified map export: {str(e)}")
@@ -446,7 +457,7 @@ class UnifiedMapExportController:
 
     def _export_to_caltopo(self, include_locations, include_flagged_aois, include_coverage, include_images=True):
         """
-        Export to CalTopo.
+        Export to CalTopo using browser-based authentication.
 
         Args:
             include_locations: Whether to include image locations
@@ -470,6 +481,38 @@ class UnifiedMapExportController:
 
         except Exception as e:
             self.logger.error(f"Error exporting to CalTopo: {str(e)}")
+            QMessageBox.critical(
+                self.parent,
+                "Export Error",
+                f"Failed to export to CalTopo:\n{str(e)}"
+            )
+
+    def _export_to_caltopo_via_api(self, include_locations, include_flagged_aois, include_coverage, include_images=True):
+        """
+        Export to CalTopo using API-based authentication.
+
+        Args:
+            include_locations: Whether to include image locations
+            include_flagged_aois: Whether to include flagged AOIs
+            include_coverage: Whether to include coverage extent polygons
+            include_images: Whether to upload photos to CalTopo markers
+        """
+        try:
+            # Use the CalTopo export controller with API method
+            caltopo_controller = CalTopoExportController(self.parent, self.logger)
+
+            # Export markers and polygons based on selections using API
+            caltopo_controller.export_to_caltopo_via_api(
+                self.parent.images,
+                self.parent.aoi_controller.flagged_aois,
+                include_flagged_aois=include_flagged_aois,
+                include_locations=include_locations,
+                include_coverage_area=include_coverage,
+                include_images=include_images
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error exporting to CalTopo via API: {str(e)}")
             QMessageBox.critical(
                 self.parent,
                 "Export Error",
