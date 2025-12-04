@@ -11,20 +11,50 @@ Contains reusable widgets and components used across multiple streaming viewers:
 import numpy as np
 import cv2
 import time
-from typing import List, Dict, Optional, Any
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any, Tuple
 from PySide6.QtWidgets import (QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout,
                                QGroupBox, QLineEdit, QPushButton, QComboBox, QFileDialog,
                                QMessageBox, QSizePolicy)
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QObject
 from core.services.streaming.RTMPStreamService import StreamType
 from core.services.LoggerService import LoggerService
 
 
-class DetectionTracker:
+@dataclass
+class Track:
+    """Represents a tracked detection with static thumbnail for gallery display.
+
+    The thumbnail is captured once when the track is first created, preventing
+    the 'moving thumbnail' issue where thumbnails drift as the object moves.
+    """
+    track_id: int
+    bbox: Tuple[int, int, int, int]  # (x, y, w, h)
+    centroid: Tuple[int, int]
+
+    # Static thumbnail - captured ONCE with .copy() to prevent memory leak
+    thumbnail: np.ndarray
+
+    # Metadata for click-to-seek functionality
+    first_frame_index: int
+    first_timestamp: float  # seconds
+
+    # Tracking state
+    frames_seen: int = 1
+    is_confirmed: bool = False
+    saved_to_gallery: bool = False
+    detection_type: str = "detection"
+    confidence: float = 0.0
+
+
+class DetectionTracker(QObject):
     """Tracks detections across frames to maintain stable thumbnail assignments with ghost memory and minimum display duration."""
 
-    def __init__(self, max_slots=7, distance_threshold=100.0, ghost_frames=60, ghost_distance_multiplier=3.0, min_display_frames=60):
+    # Signal emitted when a track is confirmed (seen for confirmation_threshold frames)
+    track_confirmed = Signal(object)  # Emits Track object
+
+    def __init__(self, max_slots=7, distance_threshold=100.0, ghost_frames=60, ghost_distance_multiplier=3.0, min_display_frames=60, parent=None):
         """
         Initialize detection tracker.
 
@@ -35,7 +65,10 @@ class DetectionTracker:
             ghost_distance_multiplier: Multiplier for ghost matching threshold (handles camera pans)
                                       Default 3.0 means ghosts can match up to 300px away (for 100px threshold)
             min_display_frames: Minimum frames to display a thumbnail before it can be replaced (default 60 = ~2s at 30fps)
+            parent: Parent QObject
         """
+        super().__init__(parent)
+
         self.max_slots = max_slots
         self.distance_threshold = distance_threshold
         self.ghost_frames = ghost_frames
@@ -64,6 +97,15 @@ class DetectionTracker:
 
         # Frame counter
         self.frame_count = 0
+
+        # Track storage for gallery: {track_id: Track}
+        self.tracks: Dict[int, Track] = {}
+
+        # Configurable confirmation threshold (frames before appearing in gallery)
+        self.confirmation_threshold: int = 5
+
+        # Maximum tracks to store (memory management)
+        self.max_tracks: int = 200
 
     def update(self, current_detections: List) -> Dict[int, any]:
         """
@@ -290,14 +332,92 @@ class DetectionTracker:
         return matched_detections
 
     def clear(self):
-        """Clear all tracking state including ghost memory and display info."""
+        """Clear all tracking state including ghost memory, display info, and tracks."""
         self.slot_assignments.clear()
         self.slot_display_info.clear()
         self.previous_detections.clear()
         self.id_to_slot.clear()
         self.ghost_detections.clear()
+        self.tracks.clear()
         self.next_id = 0
         self.frame_count = 0
+
+    def set_confirmation_threshold(self, frames: int):
+        """Set number of frames required before a track appears in gallery.
+
+        Args:
+            frames: Number of frames (minimum 1)
+        """
+        self.confirmation_threshold = max(1, frames)
+
+    def update_track(self, track_id: int, detection, frame: np.ndarray,
+                     frame_index: int, timestamp: float):
+        """Create or update a Track object, capturing static thumbnail on first appearance.
+
+        Args:
+            track_id: The detection's track ID
+            detection: Detection object with bbox, centroid, etc.
+            frame: The current video frame
+            frame_index: Current frame index
+            timestamp: Current timestamp in seconds
+        """
+        if track_id not in self.tracks:
+            # New track - capture static thumbnail
+            x, y, w, h = detection.bbox
+
+            # Ensure bounds are within frame
+            frame_h, frame_w = frame.shape[:2]
+            x = max(0, min(x, frame_w - 1))
+            y = max(0, min(y, frame_h - 1))
+            x2 = min(x + w, frame_w)
+            y2 = min(y + h, frame_h)
+
+            # CRITICAL: Use .copy() to prevent memory leak from holding entire frame
+            thumbnail = frame[y:y2, x:x2].copy()
+
+            # Create new Track
+            self.tracks[track_id] = Track(
+                track_id=track_id,
+                bbox=detection.bbox,
+                centroid=detection.centroid,
+                thumbnail=thumbnail,
+                first_frame_index=frame_index,
+                first_timestamp=timestamp,
+                detection_type=getattr(detection, 'detection_type', 'detection'),
+                confidence=getattr(detection, 'confidence', 0.0)
+            )
+        else:
+            # Existing track - update position and increment frames seen
+            track = self.tracks[track_id]
+            track.bbox = detection.bbox
+            track.centroid = detection.centroid
+            track.frames_seen += 1
+
+            # Check confirmation threshold
+            if not track.is_confirmed and track.frames_seen >= self.confirmation_threshold:
+                track.is_confirmed = True
+                self.track_confirmed.emit(track)
+
+        # Prune old tracks if over limit
+        self._prune_tracks()
+
+    def _prune_tracks(self):
+        """Remove oldest tracks when exceeding memory limit."""
+        if len(self.tracks) > self.max_tracks:
+            # Sort by track_id (older tracks have lower IDs)
+            sorted_ids = sorted(self.tracks.keys())
+            # Remove oldest tracks, keeping confirmed ones longer
+            to_remove = len(self.tracks) - self.max_tracks
+            removed = 0
+            for old_id in sorted_ids:
+                if removed >= to_remove:
+                    break
+                track = self.tracks[old_id]
+                # Skip confirmed tracks that haven't been saved to gallery yet
+                if track.is_confirmed and not track.saved_to_gallery:
+                    continue
+                del self.tracks[old_id]
+                removed += 1
 
 
 class DetectionThumbnailWidget(QWidget):
@@ -377,7 +497,8 @@ class DetectionThumbnailWidget(QWidget):
         self.tracker.max_slots = max_thumbnails
 
     def update_thumbnails(self, frame: np.ndarray, detections: List, zoom: float = 3.0,
-                          processing_resolution: tuple = None, original_resolution: tuple = None):
+                          processing_resolution: tuple = None, original_resolution: tuple = None,
+                          frame_index: int = 0, timestamp: float = 0.0):
         """Update thumbnails with tracked detections in stable slots.
 
         Args:
@@ -386,9 +507,17 @@ class DetectionThumbnailWidget(QWidget):
             zoom: Zoom level (higher = tighter crop around detection)
             processing_resolution: (width, height) of processing resolution (unused, kept for compatibility)
             original_resolution: (width, height) of frame (unused, kept for compatibility)
+            frame_index: Current frame index for track storage
+            timestamp: Current timestamp in seconds for track storage
         """
         # Use tracker to get stable slot assignments
         slot_assignments = self.tracker.update(detections)
+
+        # Update track objects with frame context (for gallery)
+        for detection in detections:
+            track_id = detection.metadata.get('track_id')
+            if track_id is not None:
+                self.tracker.update_track(track_id, detection, frame, frame_index, timestamp)
 
         # Calculate scale factor if we need to convert coordinates
         scale_x = 1.0

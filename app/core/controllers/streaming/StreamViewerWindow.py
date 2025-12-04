@@ -14,7 +14,7 @@ It provides:
 
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QLabel, QComboBox, QHBoxLayout,
                                QVBoxLayout, QPushButton, QLineEdit, QGroupBox, QWidget,
-                               QFileDialog, QApplication, QDialog)
+                               QFileDialog, QApplication, QDialog, QTabWidget, QSpinBox)
 from PySide6.QtCore import Qt, QTimer, Slot, QSettings, QUrl, QThread, QObject
 from PySide6.QtGui import QAction, QDesktopServices
 from typing import Optional, Dict, Any, List, Callable
@@ -34,6 +34,7 @@ from core.controllers.streaming.components import StreamCoordinator, DetectionRe
 from core.controllers.streaming.components.FrameProcessingWorker import FrameProcessingWorker
 from core.controllers.streaming.shared_widgets import VideoDisplayWidget, DetectionThumbnailWidget, StreamControlWidget
 from core.views.streaming.components import PlaybackControlBar
+from core.views.streaming.components.TrackGalleryWidget import TrackGalleryWidget
 from core.controllers.streaming.base import StreamAlgorithmController
 from core.services.streaming.RTMPStreamService import StreamType
 
@@ -104,6 +105,9 @@ class StreamViewerWindow(QMainWindow):
         self.algorithm_widget: Optional[StreamAlgorithmController] = None
         self.current_algorithm_name: Optional[str] = None
 
+        # Store current frame timestamp for worker thread callback (video timestamp for seeking)
+        self._current_frame_timestamp: float = 0.0
+
         # Store algorithm configs for session persistence (forgotten on close)
         self._algorithm_configs: Dict[str, Dict[str, Any]] = {}
 
@@ -132,23 +136,53 @@ class StreamViewerWindow(QMainWindow):
 
     def setup_custom_widgets(self):
         """Replace placeholder widgets with actual custom widgets."""
+        # Create tab widget for Live View and Gallery
+        self.tab_widget = QTabWidget()
+
+        # === Live View Tab ===
+        live_view_widget = QWidget()
+        live_layout = QVBoxLayout(live_view_widget)
+        live_layout.setContentsMargins(0, 0, 0, 0)
+        live_layout.setSpacing(0)
+
         # Video display
         self.video_display = VideoDisplayWidget()
-        self.ui.splitter.widget(0).layout().replaceWidget(self.ui.videoLabel, self.video_display)
-        self.ui.videoLabel.deleteLater()
+        live_layout.addWidget(self.video_display)
 
         # Playback controls
         self.playback_controls = PlaybackControlBar()
-        self.ui.splitter.widget(0).layout().replaceWidget(
-            self.ui.playbackControlWidget, self.playback_controls
-        )
-        self.ui.playbackControlWidget.deleteLater()
+        live_layout.addWidget(self.playback_controls)
 
         # Thumbnail widget
         self.thumbnail_widget = DetectionThumbnailWidget()
-        self.ui.splitter.widget(0).layout().replaceWidget(
-            self.ui.thumbnailWidget, self.thumbnail_widget
-        )
+        live_layout.addWidget(self.thumbnail_widget)
+
+        # Add Live View tab
+        self.tab_widget.addTab(live_view_widget, "Live View")
+
+        # === Gallery Tab ===
+        self.gallery_widget = TrackGalleryWidget()
+        self.gallery_widget.track_clicked.connect(self._on_gallery_track_clicked)
+        self.tab_widget.addTab(self.gallery_widget, "Gallery")
+
+        # Connect track_confirmed signal from tracker to gallery
+        self.thumbnail_widget.tracker.track_confirmed.connect(self.gallery_widget.add_track)
+
+        # Replace the placeholder widgets with the tab widget
+        # Get the left panel layout and replace videoLabel with tab widget
+        left_panel = self.ui.splitter.widget(0)
+        left_layout = left_panel.layout()
+
+        # Remove the old placeholder widgets
+        left_layout.replaceWidget(self.ui.videoLabel, self.tab_widget)
+        self.ui.videoLabel.deleteLater()
+
+        # Remove playback controls placeholder (now in tab)
+        left_layout.removeWidget(self.ui.playbackControlWidget)
+        self.ui.playbackControlWidget.deleteLater()
+
+        # Remove thumbnail widget placeholder (now in tab)
+        left_layout.removeWidget(self.ui.thumbnailWidget)
         self.ui.thumbnailWidget.deleteLater()
 
         # Stream controls (without recording)
@@ -339,6 +373,31 @@ class StreamViewerWindow(QMainWindow):
 
         # Insert at the top of algorithm control layout (before placeholder)
         self.ui.algorithmControlLayout.insertLayout(0, algorithm_layout)
+
+        # === Gallery Settings ===
+        gallery_layout = QHBoxLayout()
+        gallery_layout.setContentsMargins(0, 0, 0, 10)
+
+        confirm_label = QLabel("Gallery Threshold:")
+        confirm_label.setToolTip("Number of frames a detection must be seen before appearing in the Gallery tab")
+
+        self.confirmation_spinbox = QSpinBox()
+        self.confirmation_spinbox.setRange(1, 30)
+        self.confirmation_spinbox.setValue(5)
+        self.confirmation_spinbox.setSuffix(" frames")
+        self.confirmation_spinbox.setToolTip(
+            "Detections must be seen for this many consecutive frames\n"
+            "before appearing in the Gallery. Higher values reduce\n"
+            "false positives but delay detection appearance."
+        )
+        self.confirmation_spinbox.valueChanged.connect(self._on_confirmation_threshold_changed)
+
+        gallery_layout.addWidget(confirm_label)
+        gallery_layout.addWidget(self.confirmation_spinbox)
+        gallery_layout.addStretch()
+
+        # Insert after algorithm layout
+        self.ui.algorithmControlLayout.insertLayout(1, gallery_layout)
 
     def connect_signals(self):
         """Connect signals between components."""
@@ -986,11 +1045,17 @@ class StreamViewerWindow(QMainWindow):
                 if processing_resolution and original_resolution:
                     break
 
+            # Get frame index and timestamp for track storage
+            frame_index = self.stream_statistics.frame_count
+            timestamp = self._current_frame_timestamp
+
             self.thumbnail_widget.update_thumbnails(
                 frame,
                 detection_objects,
                 processing_resolution=processing_resolution,
-                original_resolution=original_resolution
+                original_resolution=original_resolution,
+                frame_index=frame_index,
+                timestamp=timestamp
             )
 
         # Record frame if recording
@@ -1069,6 +1134,16 @@ class StreamViewerWindow(QMainWindow):
             algorithm_key = self.algorithm_combo.itemData(index)
             if algorithm_key:
                 self.on_algorithm_selected(algorithm_key)
+
+    def _on_confirmation_threshold_changed(self, value: int):
+        """Handle gallery confirmation threshold change.
+
+        Args:
+            value: Number of frames required before detection appears in gallery
+        """
+        if hasattr(self, 'thumbnail_widget'):
+            self.thumbnail_widget.tracker.set_confirmation_threshold(value)
+            self.logger.info(f"Gallery confirmation threshold set to {value} frames")
 
     @Slot(str)
     def on_algorithm_selected(self, algorithm_name: str):
@@ -1166,12 +1241,21 @@ class StreamViewerWindow(QMainWindow):
             # Reset statistics
             self.stream_statistics.reset()
 
+            # Clear gallery and tracks on disconnect
+            if hasattr(self, 'gallery_widget'):
+                self.gallery_widget.clear()
+            if hasattr(self, 'thumbnail_widget'):
+                self.thumbnail_widget.tracker.tracks.clear()
+
             # Clear pending resolution (will be reapplied on next connection if wizard runs again)
             self._pending_processing_resolution = None
 
     @Slot(np.ndarray, float)
     def on_frame_received(self, frame: np.ndarray, timestamp: float):
         """Handle frame received from stream."""
+        # Store timestamp for worker thread callback (used for gallery track storage)
+        self._current_frame_timestamp = timestamp
+
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
 
@@ -1288,11 +1372,16 @@ class StreamViewerWindow(QMainWindow):
                             if processing_resolution and original_resolution:
                                 break
 
+                        # Get frame index for track storage
+                        frame_index = self.stream_statistics.frame_count
+
                         self.thumbnail_widget.update_thumbnails(
                             frame,
                             detection_objects,
                             processing_resolution=processing_resolution,
-                            original_resolution=original_resolution
+                            original_resolution=original_resolution,
+                            frame_index=frame_index,
+                            timestamp=timestamp
                         )
 
                     # Record frame if recording (when rendering is handled here)
@@ -1438,6 +1527,28 @@ class StreamViewerWindow(QMainWindow):
         # Request seek from stream manager
         if self.stream_coordinator.stream_manager and hasattr(self.stream_coordinator.stream_manager, 'seek_to_time'):
             self.stream_coordinator.stream_manager.seek_to_time(time_seconds)
+
+    def _on_gallery_track_clicked(self, track):
+        """Handle click on gallery item - seek to detection frame.
+
+        Args:
+            track: Track object containing first_timestamp for seeking
+        """
+        # Check if we're playing a file (seekable) or live stream (not seekable)
+        if self.stream_coordinator.current_stream_type == StreamType.FILE:
+            # Seek to the track's first appearance timestamp
+            self.on_seek_requested(track.first_timestamp)
+            # Switch to Live View tab to show the video
+            self.tab_widget.setCurrentIndex(0)
+            self.logger.info(f"Seeking to track {track.track_id} at {track.first_timestamp:.2f}s")
+        else:
+            # Live stream - cannot seek, show info dialog
+            QMessageBox.information(
+                self,
+                "Live Stream",
+                f"Cannot seek in live stream.\n\n"
+                f"Detection was first seen at frame {track.first_frame_index}."
+            )
 
     @Slot(dict)
     def on_stream_info_updated(self, stream_info: dict):
