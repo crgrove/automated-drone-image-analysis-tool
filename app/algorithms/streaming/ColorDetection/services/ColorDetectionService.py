@@ -1764,8 +1764,10 @@ class ColorDetectionService(QObject):
                 cv2.circle(annotated, (centroid_x, centroid_y), 3, color, -1)
 
             elif self._config.render_shape == 1:
-                # Circle exceeding contour by 50%
-                radius = int(max(w, h) * 0.75)
+                # Circle that encompasses the entire bounding box
+                # Calculate diagonal distance from centroid to corner, then add 10% margin
+                diagonal = np.sqrt(w * w + h * h) / 2.0
+                radius = int(diagonal * 1.1)  # 10% margin to ensure full coverage
                 cv2.circle(annotated, (centroid_x, centroid_y), radius, color, 2)
 
             elif self._config.render_shape == 2:

@@ -573,8 +573,9 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                         (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
                         radius = max(5, int(contour_radius * 1.5))
                     else:
-                        base_radius = np.sqrt(detection.area) * render_inverse_scale / 2
-                        radius = max(5, int(base_radius * 1.5))
+                        # Calculate diagonal distance from centroid to corner of bounding box, then add 10% margin
+                        diagonal = np.sqrt(w_scaled * w_scaled + h_scaled * h_scaled) / 2.0
+                        radius = max(5, int(diagonal * 1.1))  # 10% margin to ensure full coverage
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), radius, color, 2)
                 elif config.render_shape == 2:  # Dot
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 5, color, -1)

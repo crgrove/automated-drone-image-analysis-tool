@@ -168,6 +168,14 @@ class ColorDetectionController(StreamAlgorithmController):
             show_detections=ui_config.get('render_shape', 1) != 3  # Map render_shape != Off to show_detections
         )
 
+        # Set rendering parameters from UI config
+        config.render_shape = ui_config.get('render_shape', 1)  # 0=box, 1=circle, 2=dot, 3=off
+        config.render_text = ui_config.get('render_text', False)  # Show text labels
+        config.render_contours = ui_config.get('render_contours', False)  # Show contours
+        config.render_at_processing_res = ui_config.get('render_at_processing_res', False)  # Render at processing resolution
+        config.use_detection_color_for_rendering = ui_config.get('use_detection_color_for_rendering', False)
+        config.max_detections_to_render = ui_config.get('max_detections_to_render', 0)  # 0 = unlimited
+
         # Set optional parameters if provided
         if color_ranges and len(color_ranges) > 0:
             first_range = color_ranges[0]
