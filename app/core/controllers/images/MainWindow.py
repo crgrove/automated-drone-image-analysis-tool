@@ -914,7 +914,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens the Community Help Discord URL in the default browser.
         """
         try:
-            url = QUrl("https://discord.gg/UWxu9Dk8")
+            url = QUrl("https://discord.com/invite/aY9tY7JSPu")
             QDesktopServices.openUrl(url)
             self.logger.info("Community Help Discord opened")
         except Exception as e:

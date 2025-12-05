@@ -559,7 +559,7 @@ class StreamViewerWindow(QMainWindow):
     def _open_community_forum(self):
         """Open the community forum link in the default browser."""
         try:
-            url = QUrl("https://discord.gg/UWxu9Dk8")
+            url = QUrl("https://discord.com/invite/aY9tY7JSPu")
             QDesktopServices.openUrl(url)
             self.logger.info("Community forum opened")
         except Exception as e:
