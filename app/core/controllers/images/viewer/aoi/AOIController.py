@@ -59,6 +59,10 @@ class AOIController:
         self.filter_temperature_min = None  # Minimum temperature (Celsius) for filtering
         self.filter_temperature_max = None  # Maximum temperature (Celsius) for filtering
 
+        # Index mapping from original AOI index to visible container index
+        # This is rebuilt when thumbnails are loaded (after sorting and filtering)
+        self.aoi_index_to_visible_index = {}
+
         # Cache for AOIService to avoid recreating for same image
         self._cached_aoi_service = None
         self._cached_image_index = None
@@ -259,12 +263,18 @@ class AOIController:
     def find_aoi_at_position(self, x, y):
         """Find the AOI at the given cursor position.
 
+        This method checks ALL AOIs geometrically (regardless of current filtering/sorting)
+        and then looks up the visible index from the mapping built when thumbnails were loaded.
+
         Args:
             x (int): X coordinate in image space
             y (int): Y coordinate in image space
 
         Returns:
-            tuple: (aoi_index, visible_index) if found, (-1, -1) otherwise
+            tuple: (aoi_index, visible_index) where:
+                   - Both >= 0: AOI found and visible in thumbnail bar
+                   - aoi_index >= 0, visible_index == -1: AOI found but filtered out
+                   - Both == -1: No AOI at cursor position
         """
         # Return if cursor is outside the image
         if x < 0 or y < 0:
@@ -280,19 +290,9 @@ class AOIController:
 
         areas_of_interest = image['areas_of_interest']
 
-        # Get flagged AOIs for filtering
-        img_idx = self.parent.current_image
-        flagged_set = self.flagged_aois.get(img_idx, set())
-
-        # Track visible index (accounting for filtering)
-        visible_index = 0
-
-        # Check each AOI to see if cursor is within it
+        # Check each AOI geometrically to see if cursor is within it
+        # We check ALL AOIs regardless of filtering to detect if cursor is over a filtered-out AOI
         for aoi_index, aoi in enumerate(areas_of_interest):
-            # Skip if we're filtering and this AOI is not flagged
-            if self.filter_flagged_only and aoi_index not in flagged_set:
-                continue
-
             # Get AOI center and radius
             center = aoi['center']
             radius = aoi.get('radius', 0)
@@ -301,9 +301,10 @@ class AOIController:
             cx, cy = center
             distance_squared = (x - cx) ** 2 + (y - cy) ** 2
             if distance_squared <= radius ** 2:
+                # Found an AOI at cursor position
+                # Look up visible index from mapping (built when thumbnails were loaded)
+                visible_index = self.aoi_index_to_visible_index.get(aoi_index, -1)
                 return (aoi_index, visible_index)
-
-            visible_index += 1
 
         return (-1, -1)
 

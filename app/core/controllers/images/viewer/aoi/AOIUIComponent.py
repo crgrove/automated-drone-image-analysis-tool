@@ -91,6 +91,13 @@ class AOIUIComponent:
         aois_with_indices = self.aoi_controller.sort_aois_with_indices(areas_of_interest)
         aois_with_indices = self.aoi_controller.filter_aois_with_indices(aois_with_indices, img_idx)
 
+        # Build the index mapping from original AOI index to visible container index
+        # This is used by find_aoi_at_position to correctly look up the visible index
+        # when sorting and/or filtering is applied
+        self.aoi_controller.aoi_index_to_visible_index.clear()
+        for visible_idx, (original_idx, _) in enumerate(aois_with_indices):
+            self.aoi_controller.aoi_index_to_visible_index[original_idx] = visible_idx
+
         # Keep track of total count before and after filtering
         total_count = len(areas_of_interest)
         filtered_count = len(aois_with_indices)
