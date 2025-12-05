@@ -844,9 +844,8 @@ class GalleryController:
 
         current_index = self.ui_component.gallery_view.currentIndex()
         self.logger.debug(
-            f"toggle_aoi_flag: current_index.isValid() = {
-                current_index.isValid()}, row = {
-                current_index.row() if current_index.isValid() else 'N/A'}")
+            f"toggle_aoi_flag: current_index.isValid() = {current_index.isValid()}, "
+            f"row = {current_index.row() if current_index.isValid() else 'N/A'}")
 
         if not current_index.isValid():
             self.logger.warning("toggle_aoi_flag: No valid current index in gallery")
