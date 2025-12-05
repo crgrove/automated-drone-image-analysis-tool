@@ -71,6 +71,7 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
         options['threshold'] = threshold
         options['segments'] = segments
         options['window'] = window
+        options['colorspace'] = 'LAB'  # Default to LAB to match UI default
 
         # Wizard fields retained for reference
         options['complex_scene'] = complex_scene

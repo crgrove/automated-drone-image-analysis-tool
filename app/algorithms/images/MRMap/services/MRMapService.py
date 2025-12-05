@@ -40,7 +40,7 @@ class MRMapService(AlgorithmService):
         self.segments = options['segments']
         self.threshold = options['threshold']
         self.window_size = options['window']
-        self.colorspace = options.get('colorspace', 'RGB')
+        self.colorspace = options.get('colorspace', 'LAB')  # Default to LAB to match UI default
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """Process a single image using the MR Map algorithm.

@@ -18,6 +18,8 @@ from core.views.streaming.components import InputProcessingTab, RenderingTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
 from algorithms.Shared.views import HSVColorRowWidget, ColorRangeDialog
 from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
+from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
+from core.services.color.RecentColorsService import get_recent_colors_service
 
 
 class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
@@ -33,6 +35,9 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.color_ranges = []
         self.current_range_index = 0
         self.color_range_widgets = []  # Store row widgets
+        
+        # Recent colors service
+        self.recent_colors_service = get_recent_colors_service()
 
         # Setup UI from UI file
         self.setupUi(self)
@@ -68,10 +73,20 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         btn_layout = QHBoxLayout()
         self.add_color_btn = QPushButton("Add Color")
         self.add_color_btn.setToolTip("Add a new color range to detect.\n"
-                                      "Opens a color picker dialog where you can select a color\n"
-                                      "and configure its HSV tolerance ranges.\n"
+                                      "Choose from HSV Color Picker, Image, List, or Recent Colors.\n"
                                       "You can add multiple color ranges to detect different colors simultaneously.")
         btn_layout.addWidget(self.add_color_btn)
+        
+        # Set up color selection menu (same as wizard)
+        self.color_selection_menu = ColorSelectionMenu(
+            self,
+            on_color_selected=self._on_color_selected_from_menu,
+            get_default_qcolor=self._get_default_qcolor,
+            on_hsv_selected=self._on_hsv_selected_from_picker,
+            on_recent_color_selected=self._on_recent_color_selected,
+            mode='HSV'
+        )
+        self.color_selection_menu.attach_to(self.add_color_btn)
 
         btn_layout.addStretch()
 
@@ -167,10 +182,8 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.input_processing_tab.render_at_processing_res.toggled.connect(self._emit_config_changed)
 
         # Color selection
-        if hasattr(self, 'add_color_btn'):
-            self.add_color_btn.clicked.connect(self._on_add_color)
-            if hasattr(self, 'view_range_btn'):
-                self.view_range_btn.clicked.connect(self._on_view_range)
+        if hasattr(self, 'view_range_btn'):
+            self.view_range_btn.clicked.connect(self._on_view_range)
 
         # Detection parameters
         if hasattr(self, 'min_area_spinbox'):
@@ -185,43 +198,133 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.rendering_tab.use_detection_color.toggled.connect(self._emit_config_changed)
         self.rendering_tab.max_detections_to_render.valueChanged.connect(self._emit_config_changed)
 
-    def _on_add_color(self):
-        """Add a new color range using HSV ColorRange dialog."""
-        # Open the HSV ColorRange dialog
-        dialog = ColorRangeDialog(initial_image=None, initial_hsv=(0, 1, 1), initial_ranges=None, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            hsv_data = dialog.get_hsv_ranges()
+    def _get_default_qcolor(self):
+        """Return the most recent color or a sensible default."""
+        if self.color_ranges:
+            last_range = self.color_ranges[-1]
+            color = last_range.get('color', QColor(255, 0, 0))
+            if isinstance(color, QColor):
+                return color
+            elif isinstance(color, tuple):
+                return QColor(color[0], color[1], color[2])
+        return QColor(255, 0, 0)
 
-            # Create color from normalized HSV (0-1)
-            color = QColor.fromHsvF(hsv_data['h'], hsv_data['s'], hsv_data['v'])
+    def _on_color_selected_from_menu(self, color: QColor):
+        """Handle color chosen from the shared color selection menu."""
+        # Add color with default tolerance ranges
+        self._add_color_range_from_color(color)
 
-            # Convert normalized ranges to OpenCV ranges
-            # h_minus/h_plus are fractions of 360°, convert to 0-179 range
-            # h_minus of 0.2 means 20% of 360° = 72°, which is 72 * 179/360 = 35.8 ≈ 36 in 0-179 range
-            hue_minus = int(hsv_data['h_minus'] * 179)
-            hue_plus = int(hsv_data['h_plus'] * 179)
-            # s_minus/s_plus are fractions of 100%, convert to 0-255 range
-            # s_minus of 0.2 means 20%, which is 20 * 255/100 = 51 in 0-255 range
-            sat_minus = int(hsv_data['s_minus'] * 255)
-            sat_plus = int(hsv_data['s_plus'] * 255)
-            # v_minus/v_plus are fractions of 100%, convert to 0-255 range
-            # v_minus of 0.2 means 20%, which is 20 * 255/100 = 51 in 0-255 range
-            val_minus = int(hsv_data['v_minus'] * 255)
-            val_plus = int(hsv_data['v_plus'] * 255)
+    def _on_hsv_selected_from_picker(self, hsv_data: dict):
+        """Handle HSV color range selected from HSV picker dialog."""
+        import cv2
+        import numpy as np
+        
+        # Extract the center HSV color from the data
+        if 'center_hsv' in hsv_data:
+            h, s, v = hsv_data['center_hsv']
+        elif 'h' in hsv_data and 's' in hsv_data and 'v' in hsv_data:
+            # Convert from 0-1 range to OpenCV range (0-179, 0-255, 0-255)
+            h = int(hsv_data['h'] * 179)
+            s = int(hsv_data['s'] * 255)
+            v = int(hsv_data['v'] * 255)
+        else:
+            return  # Invalid data
 
-            new_range = {
-                'name': f"Color_{len(self.color_ranges) + 1}",
-                'color': color,
-                'hue_minus': hue_minus,
-                'hue_plus': hue_plus,
-                'sat_minus': sat_minus,
-                'sat_plus': sat_plus,
-                'val_minus': val_minus,
-                'val_plus': val_plus
-            }
-            self.color_ranges.append(new_range)
+        # Convert HSV to RGB (OpenCV format: H=0-179, S=0-255, V=0-255)
+        if 'h' in hsv_data and isinstance(hsv_data['h'], float) and 0 <= hsv_data['h'] <= 1:
+            # Already in 0-1 range, convert to OpenCV for RGB conversion
+            h_cv = int(hsv_data['h'] * 179)
+            s_cv = int(hsv_data['s'] * 255)
+            v_cv = int(hsv_data['v'] * 255)
+        else:
+            # Already in OpenCV range
+            h_cv, s_cv, v_cv = h, s, v
+
+        hsv_array = np.uint8([[[h_cv, s_cv, v_cv]]])
+        bgr = cv2.cvtColor(hsv_array, cv2.COLOR_HSV2BGR)[0][0]
+        b, g, r = int(bgr[0]), int(bgr[1]), int(bgr[2])
+        color = QColor(r, g, b)
+        
+        # Convert HSV ranges from fractional (0-1) to OpenCV format
+        h_minus_frac = hsv_data.get('h_minus', 0.1)
+        h_plus_frac = hsv_data.get('h_plus', 0.1)
+        s_minus_frac = hsv_data.get('s_minus', 0.2)
+        s_plus_frac = hsv_data.get('s_plus', 0.2)
+        v_minus_frac = hsv_data.get('v_minus', 0.2)
+        v_plus_frac = hsv_data.get('v_plus', 0.2)
+        
+        new_range = {
+            'name': f"Color_{len(self.color_ranges) + 1}",
+            'color': color,
+            'hue_minus': int(h_minus_frac * 179),
+            'hue_plus': int(h_plus_frac * 179),
+            'sat_minus': int(s_minus_frac * 255),
+            'sat_plus': int(s_plus_frac * 255),
+            'val_minus': int(v_minus_frac * 255),
+            'val_plus': int(v_plus_frac * 255)
+        }
+        self.color_ranges.append(new_range)
+        self._update_color_ranges_display()
+        self._emit_config_changed()
+
+    def _on_recent_color_selected(self, color_data: dict):
+        """Handle selection from recent colors list."""
+        try:
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            r, g, b = selected_color
+            color = QColor(r, g, b)
+
+            # Try to get HSV ranges from data if available
+            hsv_ranges = color_data.get('hsv_ranges')
+            if hsv_ranges:
+                # Recent color has HSV ranges, use them
+                h_minus_frac = hsv_ranges.get('h_minus', 0.1)
+                h_plus_frac = hsv_ranges.get('h_plus', 0.1)
+                s_minus_frac = hsv_ranges.get('s_minus', 0.2)
+                s_plus_frac = hsv_ranges.get('s_plus', 0.2)
+                v_minus_frac = hsv_ranges.get('v_minus', 0.2)
+                v_plus_frac = hsv_ranges.get('v_plus', 0.2)
+                
+                new_range = {
+                    'name': f"Color_{len(self.color_ranges) + 1}",
+                    'color': color,
+                    'hue_minus': int(h_minus_frac * 179),
+                    'hue_plus': int(h_plus_frac * 179),
+                    'sat_minus': int(s_minus_frac * 255),
+                    'sat_plus': int(s_plus_frac * 255),
+                    'val_minus': int(v_minus_frac * 255),
+                    'val_plus': int(v_plus_frac * 255)
+                }
+                self.color_ranges.append(new_range)
+            else:
+                # Fallback: use default ranges
+                self._add_color_range_from_color(color)
             self._update_color_ranges_display()
             self._emit_config_changed()
+        except Exception as e:
+            # Fallback to basic color selection
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            if isinstance(selected_color, (list, tuple)) and len(selected_color) == 3:
+                r, g, b = selected_color
+                color = QColor(r, g, b)
+                self._add_color_range_from_color(color)
+
+    def _add_color_range_from_color(self, color: QColor):
+        """Add a color range from a QColor with default tolerance ranges."""
+        # Use default tolerance values (Moderate preset: 15, 75, 75)
+        new_range = {
+            'name': f"Color_{len(self.color_ranges) + 1}",
+            'color': color,
+            'hue_minus': 15,  # Default tolerance
+            'hue_plus': 15,
+            'sat_minus': 75,
+            'sat_plus': 75,
+            'val_minus': 75,
+            'val_plus': 75
+        }
+        self.color_ranges.append(new_range)
+        self._update_color_ranges_display()
+        self._emit_config_changed()
 
     def _on_view_range(self):
         """View range - show all color ranges in a single combined viewer dialog."""

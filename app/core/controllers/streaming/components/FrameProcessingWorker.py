@@ -33,7 +33,7 @@ class FrameProcessingWorker(QObject):
     # Signal to request stop (emitted from main thread, received in worker thread)
     stopRequested = Signal()
 
-    def __init__(self, processing_function: Callable):
+    def __init__(self, processing_function: Callable, pause_check: Optional[Callable[[], bool]] = None):
         """
         Initialize the frame processing worker.
 
@@ -42,10 +42,13 @@ class FrameProcessingWorker(QObject):
                 Signature: (frame: np.ndarray, timestamp: float) -> List[Dict]
                 This function should use algorithm service objects that are moved to
                 the worker thread.
+            pause_check: Optional function to check if processing should be paused.
+                Returns True if paused, False if playing. Called from worker thread.
         """
         super().__init__()
         self.processing_function = processing_function
         self._should_stop = False
+        self._pause_check = pause_check
 
         # Connect the request signal to the processing slot
         self.processFrameRequested.connect(self._process_frame_internal, Qt.QueuedConnection)
@@ -65,6 +68,10 @@ class FrameProcessingWorker(QObject):
             timestamp: Frame timestamp
         """
         if self._should_stop or not self.processing_function:
+            return
+        
+        # Check if paused (skip processing if paused)
+        if self._pause_check and self._pause_check():
             return
 
         try:

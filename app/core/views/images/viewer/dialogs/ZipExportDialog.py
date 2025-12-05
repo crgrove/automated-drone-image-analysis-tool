@@ -1,6 +1,6 @@
 """ZipExportDialog - Dialog to choose between Native or Augmented export."""
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton, QButtonGroup
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton, QButtonGroup, QCheckBox
 from PySide6.QtCore import Qt
 
 
@@ -39,6 +39,18 @@ class ZipExportDialog(QDialog):
         layout.addWidget(self.native_radio)
         layout.addWidget(self.augmented_radio)
 
+        # Add spacing before checkbox
+        layout.addSpacing(10)
+
+        # Checkbox for including images without flagged AOIs
+        self.include_no_flagged_checkbox = QCheckBox("Include images without flagged AOIs")
+        self.include_no_flagged_checkbox.setChecked(False)  # Default: only export images with flagged AOIs
+        self.include_no_flagged_checkbox.setToolTip(
+            "When unchecked, only images with at least one flagged AOI will be exported.\n"
+            "When checked, all images will be exported regardless of flagged AOI status."
+        )
+        layout.addWidget(self.include_no_flagged_checkbox)
+
         buttons = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("Cancel")
@@ -54,3 +66,7 @@ class ZipExportDialog(QDialog):
 
     def get_export_mode(self):
         return 'augmented' if self.augmented_radio.isChecked() else 'native'
+
+    def should_include_images_without_flagged_aois(self):
+        """Return whether to include images without flagged AOIs."""
+        return self.include_no_flagged_checkbox.isChecked()

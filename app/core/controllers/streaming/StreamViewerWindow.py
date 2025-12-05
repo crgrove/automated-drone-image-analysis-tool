@@ -110,6 +110,7 @@ class StreamViewerWindow(QMainWindow):
         # Frame processing worker thread (moves algorithm processing off main thread)
         self._processing_thread: Optional[QThread] = None
         self._processing_worker: Optional[FrameProcessingWorker] = None
+        self._is_stopping_worker = False  # Flag to prevent new frames from being queued during cleanup
 
         # Setup custom widgets
         self.setup_custom_widgets()
@@ -826,9 +827,17 @@ class StreamViewerWindow(QMainWindow):
             return
 
         try:
+            # Create pause check function for worker (checks if stream is paused)
+            def pause_check():
+                """Check if stream is paused (called from worker thread)."""
+                if (self.stream_coordinator.stream_manager and 
+                    hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
+                    return not self.stream_coordinator.stream_manager.is_playing()
+                return False
+            
             # Create worker thread
             self._processing_thread = QThread()
-            self._processing_worker = FrameProcessingWorker(processing_function)
+            self._processing_worker = FrameProcessingWorker(processing_function, pause_check)
 
             # Move service and worker to thread
             service.moveToThread(self._processing_thread)
@@ -843,6 +852,9 @@ class StreamViewerWindow(QMainWindow):
 
             # Start thread
             self._processing_thread.start()
+            
+            # Reset stopping flag when starting new worker
+            self._is_stopping_worker = False
 
             self.logger.info("Frame processing worker thread started")
 
@@ -852,6 +864,19 @@ class StreamViewerWindow(QMainWindow):
 
     def _cleanup_processing_worker(self):
         """Clean up the frame processing worker thread."""
+        # Set flag early to prevent new frames from being queued
+        self._is_stopping_worker = True
+
+        # Disconnect processFrameRequested signal immediately to prevent new frames from queuing
+        # This effectively clears the queue for new signals (existing queued signals will still process)
+        if self._processing_worker:
+            try:
+                # Disconnect processFrameRequested to prevent new frames from being queued
+                self._processing_worker.processFrameRequested.disconnect()
+            except (RuntimeError, TypeError):
+                # Signal may already be disconnected, ignore
+                pass
+
         # Stop the worker first (thread-safe via signal)
         if self._processing_worker:
             try:
@@ -871,12 +896,11 @@ class StreamViewerWindow(QMainWindow):
             # Thread will delete itself via deleteLater() connected to finished signal
             self._processing_thread = None
 
-        # Disconnect signals after thread is stopped to prevent queued signals from accessing deleted objects
+        # Disconnect remaining signals after thread is stopped to prevent queued signals from accessing deleted objects
         if self._processing_worker:
             try:
                 self._processing_worker.frameProcessed.disconnect()
                 self._processing_worker.errorOccurred.disconnect()
-                self._processing_worker.processFrameRequested.disconnect()
                 self._processing_worker.stopRequested.disconnect()
             except (RuntimeError, TypeError):
                 # Signals may already be disconnected, ignore
@@ -893,6 +917,7 @@ class StreamViewerWindow(QMainWindow):
 
         # Clear worker reference (worker will be deleted when thread is deleted)
         self._processing_worker = None
+        self._is_stopping_worker = False  # Reset flag after cleanup
 
     @Slot(np.ndarray, list, float)
     def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float):
@@ -1150,11 +1175,19 @@ class StreamViewerWindow(QMainWindow):
             # Clear pending resolution (only apply once)
             self._pending_processing_resolution = None
 
-        # Process frame with algorithm if loaded
-        if self.algorithm_widget:
+        # Check if stream is paused (for file playback) - skip processing if paused
+        is_paused = False
+        if (self.stream_coordinator.stream_manager and 
+            hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
+            is_paused = not self.stream_coordinator.stream_manager.is_playing()
+        
+        # Process frame with algorithm if loaded and not paused
+        if self.algorithm_widget and not is_paused:
             # Use worker thread if available, otherwise fall back to main thread
             use_worker = False
-            if self._processing_worker and self._processing_thread and self._processing_thread.isRunning():
+            # Check if worker is available, running, and not in the process of stopping
+            if (self._processing_worker and self._processing_thread and 
+                self._processing_thread.isRunning() and not self._is_stopping_worker):
                 # Process frame in worker thread (non-blocking)
                 # Emit signal to request processing in worker thread
                 try:

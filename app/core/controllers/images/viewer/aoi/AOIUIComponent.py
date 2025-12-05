@@ -425,6 +425,11 @@ class AOIUIComponent:
             filtered_count: Number of AOIs after filtering
             total_count: Total number of AOIs before filtering
         """
+        # Don't update the header if we're in gallery mode - the gallery controller handles it
+        if (hasattr(self.aoi_controller.parent, 'gallery_mode') and 
+                self.aoi_controller.parent.gallery_mode):
+            return
+        
         area_count_label = self.aoi_controller.parent.areaCountLabel
         if area_count_label:
             if filtered_count < total_count:

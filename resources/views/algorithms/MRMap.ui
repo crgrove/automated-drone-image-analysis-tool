@@ -145,6 +145,20 @@ Recommended: 4-9 segments for typical drone imagery.</string>
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Select the color space for MR Map analysis.
+The MR Map algorithm analyzes features in different color representations:
+• LAB: Perceptually uniform color space (default, better for color difference analysis)
+• RGB: Standard red-green-blue color space (good for general use)
+• HSV: Hue-Saturation-Value color space (better for color-based feature detection)
+Different color spaces can improve detection depending on the image content.
+Recommended: LAB for most cases, HSV for color-rich imagery.</string>
+         </property>
+         <item>
+          <property name="text">
+           <string>LAB</string>
+          </property>
+         </item>
          <item>
           <property name="text">
            <string>RGB</string>
@@ -153,11 +167,6 @@ Recommended: 4-9 segments for typical drone imagery.</string>
          <item>
           <property name="text">
            <string>HSV</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>LAB</string>
           </property>
          </item>
         </widget>

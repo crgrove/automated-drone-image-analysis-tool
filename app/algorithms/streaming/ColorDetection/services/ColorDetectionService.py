@@ -1811,23 +1811,7 @@ class ColorDetectionService(QObject):
                 cv2.putText(annotated, label, (x + 2, y - 4),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-        # Add detection count and config info
-        info_text = f"Detections: {len(detections)}"
-        if len(detections) != len(render_detections):
-            info_text += f" (showing {len(render_detections)})"
-
-        if self._config.hsv_ranges:
-            h_minus = int(self._config.hsv_ranges['h_minus'] * 179)
-            h_plus = int(self._config.hsv_ranges['h_plus'] * 179)
-            info_text += f" | H-{h_minus}/+{h_plus}"
-        else:
-            info_text += f" | H±{self._config.hue_threshold}"
-
-        if self._config.processing_resolution:
-            info_text += f" | {self._config.processing_resolution[0]}x{self._config.processing_resolution[1]}"
-
-        cv2.putText(annotated, info_text, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+        # Overlay removed - no detection count or config info displayed
 
         # Upscale back to original resolution if we rendered at processing resolution
         if needs_upscale and self._original_frame is not None:

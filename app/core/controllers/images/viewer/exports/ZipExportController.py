@@ -124,6 +124,7 @@ class ZipExportController:
                 return False
 
             export_mode = options_dialog.get_export_mode()  # 'native' or 'augmented'
+            include_no_flagged = options_dialog.should_include_images_without_flagged_aois()
 
             # Open file dialog for ZIP export
             file_name, _ = QFileDialog.getSaveFileName(
@@ -136,7 +137,30 @@ class ZipExportController:
             if not file_name:  # User cancelled
                 return False
 
-            visible_images = [img for img in images if not img.get('hidden', False)]
+            # Filter visible images and track original indices
+            visible_images = []
+            visible_indices = []
+            for idx, img in enumerate(images):
+                if not img.get('hidden', False):
+                    visible_images.append(img)
+                    visible_indices.append(idx)
+
+            # Filter by flagged AOIs if checkbox is unchecked
+            if not include_no_flagged:
+                # Get flagged AOIs from AOI controller
+                flagged_aois = {}
+                if hasattr(self.parent, 'aoi_controller') and hasattr(self.parent.aoi_controller, 'flagged_aois'):
+                    flagged_aois = self.parent.aoi_controller.flagged_aois
+
+                # Only include images that have at least one flagged AOI
+                filtered_images = []
+                for img, orig_idx in zip(visible_images, visible_indices):
+                    # Check if this image index (from original images list) has any flagged AOIs
+                    if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
+                        filtered_images.append(img)
+                
+                visible_images = filtered_images
+
             if not visible_images:
                 self._show_toast("No images to export", 3000, color="#F44336")
                 return False

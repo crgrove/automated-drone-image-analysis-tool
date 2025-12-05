@@ -15,8 +15,9 @@ from ast import literal_eval
 from algorithms.streaming.ColorDetection.views.ColorDetectionWizard_ui import Ui_ColorDetectionWizard
 from algorithms.Shared.views.HSVColorRowWizardWidget import HSVColorRowWizardWidget
 from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
-from algorithms.Shared.views.ColorSelectionMenu import ColorSelectionMenu
+from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
+from core.services.color.RecentColorsService import get_recent_colors_service
 
 
 class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
@@ -61,12 +62,16 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
         # Insert before the spacer
         self.horizontalLayout_add.insertWidget(1, self.viewRangeButton)
 
-        # Common color selection menu (HSV mode with HSV picker)
+        # Recent colors service
+        self.recent_colors_service = get_recent_colors_service()
+        
+        # Common color selection menu (HSV mode with HSV picker and recent colors)
         self.color_selection_menu = ColorSelectionMenu(
             self,
             on_color_selected=self._on_color_selected_from_menu,
             get_default_qcolor=self._get_default_qcolor,
             on_hsv_selected=self._on_hsv_selected_from_picker,
+            on_recent_color_selected=self._on_recent_color_selected,
             mode='HSV'
         )
         self.color_selection_menu.attach_to(self.addColorButton)
@@ -91,6 +96,29 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
     def _on_color_selected_from_menu(self, color: QColor):
         """Handle color chosen from the shared color selection menu."""
         self.add_color_row(color)
+
+    def _on_recent_color_selected(self, color_data: dict):
+        """Handle selection from recent colors list."""
+        try:
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            r, g, b = selected_color
+            color = QColor(r, g, b)
+
+            # Try to get HSV ranges from data if available
+            hsv_ranges = color_data.get('hsv_ranges')
+            if hsv_ranges:
+                # Recent color has HSV ranges, use them
+                self.add_color_row(color, from_hsv_picker=True, hsv_ranges=hsv_ranges)
+            else:
+                # Fallback: use default ranges
+                self.add_color_row(color)
+        except Exception as e:
+            # Fallback to basic color selection
+            selected_color = color_data.get('selected_color', (255, 0, 0))
+            if isinstance(selected_color, (list, tuple)) and len(selected_color) == 3:
+                r, g, b = selected_color
+                color = QColor(r, g, b)
+                self.add_color_row(color)
 
     def _on_hsv_selected_from_picker(self, hsv_data: dict):
         """Handle HSV color range selected from HSV picker dialog."""
@@ -224,34 +252,63 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
 
             # Get HSV ranges
             if hasattr(row, 'hsv_ranges') and row.hsv_ranges:
+                # HSV ranges from picker are in fractional format (0-1), convert to OpenCV format
                 hsv_data = row.hsv_ranges
+                # Convert fractional ranges to OpenCV format (h: 0-179, s/v: 0-255)
+                h_minus_frac = hsv_data.get('h_minus', 0.1)  # Default 0.1 = ~18 in OpenCV
+                h_plus_frac = hsv_data.get('h_plus', 0.1)
+                s_minus_frac = hsv_data.get('s_minus', 0.2)  # Default 0.2 = ~51 in OpenCV
+                s_plus_frac = hsv_data.get('s_plus', 0.2)
+                v_minus_frac = hsv_data.get('v_minus', 0.2)  # Default 0.2 = ~51 in OpenCV
+                v_plus_frac = hsv_data.get('v_plus', 0.2)
+                
                 color_range = {
                     'name': f"Color_{len(options['color_ranges']) + 1}",
                     'color': color,
                     'rgb': rgb,
-                    'hue_minus': hsv_data.get('h_minus', 20),
-                    'hue_plus': hsv_data.get('h_plus', 20),
-                    'sat_minus': hsv_data.get('s_minus', 50),
-                    'sat_plus': hsv_data.get('s_plus', 50),
-                    'val_minus': hsv_data.get('v_minus', 50),
-                    'val_plus': hsv_data.get('v_plus', 50)
+                    'hue_minus': int(h_minus_frac * 179),  # Convert fractional to OpenCV (0-179)
+                    'hue_plus': int(h_plus_frac * 179),
+                    'sat_minus': int(s_minus_frac * 255),  # Convert fractional to OpenCV (0-255)
+                    'sat_plus': int(s_plus_frac * 255),
+                    'val_minus': int(v_minus_frac * 255),  # Convert fractional to OpenCV (0-255)
+                    'val_plus': int(v_plus_frac * 255)
                 }
             else:
                 # Use tolerance-based ranges
-                tolerance_value = row.get_tolerance_value()
+                h_range, s_range, v_range = row.get_tolerance_values()
                 color_range = {
                     'name': f"Color_{len(options['color_ranges']) + 1}",
                     'color': color,
                     'rgb': rgb,
-                    'hue_minus': tolerance_value,
-                    'hue_plus': tolerance_value,
-                    'sat_minus': tolerance_value,
-                    'sat_plus': tolerance_value,
-                    'val_minus': tolerance_value,
-                    'val_plus': tolerance_value
+                    'hue_minus': h_range,
+                    'hue_plus': h_range,
+                    'sat_minus': s_range,
+                    'sat_plus': s_range,
+                    'val_minus': v_range,
+                    'val_plus': v_range
                 }
 
             options['color_ranges'].append(color_range)
+            
+            # Track this color in recent colors (it's being used for processing)
+            try:
+                # For HSV colors, track with HSV ranges if available
+                if hasattr(row, 'hsv_ranges') and row.hsv_ranges:
+                    hsv_config = {
+                        'selected_color': rgb,
+                        'hsv_ranges': row.hsv_ranges  # Already in fractional format
+                    }
+                    self.recent_colors_service.add_hsv_color(hsv_config)
+                else:
+                    # For tolerance-based colors, track as RGB
+                    color_config = {
+                        'selected_color': rgb,
+                        'color_range': None  # No specific range for tolerance-based
+                    }
+                    self.recent_colors_service.add_rgb_color(color_config)
+            except Exception as e:
+                # Silently fail if tracking fails
+                pass
 
         return options
 
@@ -285,15 +342,22 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                         continue
 
                     # Create HSV ranges dict if available
+                    # Note: Values in color_config are in OpenCV format (h: 0-179, s/v: 0-255)
+                    # But hsv_ranges expects fractional format (0-1) for HSV picker mode
                     hsv_ranges = None
                     if 'hue_minus' in color_config:
+                        # Convert from OpenCV format to fractional format for hsv_ranges
                         hsv_ranges = {
-                            'h_minus': color_config.get('hue_minus', 20),
-                            'h_plus': color_config.get('hue_plus', 20),
-                            's_minus': color_config.get('sat_minus', 50),
-                            's_plus': color_config.get('sat_plus', 50),
-                            'v_minus': color_config.get('val_minus', 50),
-                            'v_plus': color_config.get('val_plus', 50)
+                            'h_minus': color_config.get('hue_minus', 20) / 179.0,  # Convert to fractional
+                            'h_plus': color_config.get('hue_plus', 20) / 179.0,
+                            's_minus': color_config.get('sat_minus', 50) / 255.0,  # Convert to fractional
+                            's_plus': color_config.get('sat_plus', 50) / 255.0,
+                            'v_minus': color_config.get('val_minus', 50) / 255.0,  # Convert to fractional
+                            'v_plus': color_config.get('val_plus', 50) / 255.0,
+                            # Also include center HSV values
+                            'h': color.getHsvF()[0],
+                            's': color.getHsvF()[1],
+                            'v': color.getHsvF()[2]
                         }
 
                     self.add_color_row(color, from_hsv_picker=(hsv_ranges is not None), hsv_ranges=hsv_ranges)
