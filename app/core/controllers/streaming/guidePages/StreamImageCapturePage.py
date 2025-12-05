@@ -6,6 +6,7 @@ import pandas as pd
 from .BasePage import BasePage
 from helpers.PickleHelper import PickleHelper
 from core.services.GSDService import GSDService
+from core.services.LoggerService import LoggerService
 
 
 class StreamImageCapturePage(BasePage):
@@ -14,6 +15,7 @@ class StreamImageCapturePage(BasePage):
     def __init__(self, wizard_data, settings_service, dialog):
         """Initialize the page."""
         super().__init__(wizard_data, settings_service, dialog)
+        self.logger = LoggerService()
         # Store camera groups: key = (manufacturer, model), value = list of sensor rows
         self.camera_groups = {}
 
@@ -142,7 +144,7 @@ class StreamImageCapturePage(BasePage):
             self.dialog.droneComboBox.setCurrentIndex(0)
 
         except Exception as e:
-            print(f"Error loading drone data: {e}")
+            self.logger.error(f"Error loading drone data: {e}")
             self.dialog.droneComboBox.addItem("Error loading drone data", None)
 
     def _load_preferences(self):
@@ -216,7 +218,7 @@ class StreamImageCapturePage(BasePage):
                 if isinstance(drone_data, dict):
                     drone_data = pd.Series(drone_data)
                 else:
-                    print(f"Warning: drone_data is unexpected type: {type(drone_data)}")
+                    self.logger.warning(f"Warning: drone_data is unexpected type: {type(drone_data)}")
                     self.dialog.gsdTextEdit.setPlainText("-- (Invalid camera data)")
                     return
 
@@ -385,7 +387,7 @@ class StreamImageCapturePage(BasePage):
                     # Default to 8.8mm which is common for DJI wide cameras
                     # This is a reasonable approximation for drone video streams
                     focal_length_mm = 8.8
-                    print(f"Using default focal length {focal_length_mm}mm for streaming video (focus at infinity)")
+                    # self.logger.info(f"Using default focal length {focal_length_mm}mm for streaming video (focus at infinity)")
 
                 # Skip if missing sensor dimensions
                 if not sensor_width_mm or not sensor_height_mm:
@@ -413,7 +415,7 @@ class StreamImageCapturePage(BasePage):
                                 'sensor_data': drone_data
                             })
                     except Exception as e:
-                        print(f"Error calculating GSD for sensor {sensor_idx}: {e}")
+                        self.logger.error(f"Error calculating GSD for sensor {sensor_idx}: {e}")
                         continue
                 else:
                     # Missing sensor dimensions (focal length should always be available now with default)
@@ -431,7 +433,7 @@ class StreamImageCapturePage(BasePage):
                 self.wizard_data['gsd'] = None
 
         except Exception as e:
-            print(f"Error calculating GSD: {e}")
+            self.logger.error(f"Error calculating GSD: {e}")
             self.dialog.gsdTextEdit.setPlainText("-- (Error)")
 
     def _get_sensor_name(self, drone_data, sensor_idx):

@@ -12,6 +12,7 @@ import tifffile
 from PIL import Image
 
 from core.services.GSDService import GSDService
+from core.services.LoggerService import LoggerService
 
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.PickleHelper import PickleHelper
@@ -33,6 +34,7 @@ class ImageService:
             calculated_bearing (float, optional): Calculated bearing in degrees [0, 360).
                                                  Used as fallback if EXIF bearing is missing.
         """
+        self.logger = LoggerService()
         self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
         self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
@@ -372,7 +374,7 @@ class ImageService:
             return thermal_data
 
         except Exception as e:
-            print(f"Warning: Failed to read thermal data from {self.mask_path}: {e}")
+            self.logger.warning(f"Warning: Failed to read thermal data from {self.mask_path}: {e}")
             return None
 
     def _is_autel(self):

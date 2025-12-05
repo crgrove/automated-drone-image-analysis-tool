@@ -4,6 +4,7 @@ from helpers.MetaDataHelper import MetaDataHelper
 from core.services.thermal.thermalParserServices.DjiThermalParserService import DjiThermalParserService
 from core.services.thermal.thermalParserServices.FlirThermalParserService import FlirThermalParserService
 from core.services.thermal.thermalParserServices.AutelThermalParserService import AutelThermalImageParser
+from core.services.LoggerService import LoggerService
 
 
 class ThermalParserService:
@@ -48,6 +49,8 @@ class ThermalParserService:
         Args:
             dtype (type, optional): Data type for temperature arrays. Defaults to np.float32.
         """
+        self.logger = LoggerService()
+        self.logger = LoggerService()
         self.dtype = dtype
 
     def _get_model_and_platform(self, meta_fields):
@@ -95,7 +98,7 @@ class ThermalParserService:
         """
         data = MetaDataHelper.get_meta_data_exiftool(full_path)
         meta_fields = {k.split(':')[1].strip(): v for k, v in data.items() if ':' in k}
-        print(meta_fields)
+        # self.logger.debug(f"Meta fields: {meta_fields}")
         camera_model, platform = self._get_model_and_platform(meta_fields)
         assert camera_model != "Not Supported", "Camera Model is not supported"
 

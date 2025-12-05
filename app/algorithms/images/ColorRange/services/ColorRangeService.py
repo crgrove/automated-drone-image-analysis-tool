@@ -99,6 +99,6 @@ class ColorRangeService(AlgorithmService):
 
         except Exception as e:
             # Log and return an error if processing fails
-            print(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))

@@ -74,7 +74,7 @@ class RecentColorsService:
         # Keep only last 10
         recent = recent[:self.MAX_RECENT_COLORS]
 
-        self.logger.info(f"Saving {len(recent)} RGB color(s) to recent colors")
+        # self.logger.info(f"Saving {len(recent)} RGB color(s) to recent colors")
         self.settings_service.set_setting('RecentRGBColors', recent)
 
     def add_matched_filter_color(self, color_data: Dict[str, Any]) -> None:
@@ -117,10 +117,10 @@ class RecentColorsService:
         recent = self.settings_service.get_setting(setting_key)
 
         if not isinstance(recent, list):
-            self.logger.info(f"No recent colors found for {setting_key}")
+            # self.logger.info(f"No recent colors found for {setting_key}")
             return []
 
-        self.logger.info(f"Loaded {len(recent)} recent color(s) from {setting_key}")
+        # self.logger.info(f"Loaded {len(recent)} recent color(s) from {setting_key}")
         return recent
 
 

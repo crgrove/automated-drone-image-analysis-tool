@@ -167,23 +167,23 @@ class AlgorithmParametersPage(BasePage):
 
             # Debug logging
             logger = LoggerService()
-            logger.info(
-                f"Algorithm: {self.active_algorithm.get('name')}, "
-                f"Wizard Controller: {wizard_controller_name}, "
-                f"Regular Controller: {controller_class_name}"
-            )
+            # logger.info(
+            #     f"Algorithm: {self.active_algorithm.get('name')}, "
+            #     f"Wizard Controller: {wizard_controller_name}, "
+            #     f"Regular Controller: {controller_class_name}"
+            # )
 
             # Prefer wizard controller if available
             cls = None
             if wizard_controller_name and wizard_controller_name in globals():
                 cls = globals()[wizard_controller_name]
-                logger.info(f"Using wizard controller: {cls}")
+                # logger.info(f"Using wizard controller: {cls}")
 
             # Fall back to regular controller if wizard controller not available
             if cls is None:
                 if controller_class_name in globals():
                     cls = globals()[controller_class_name]
-                    logger.info(f"Using regular controller: {cls}")
+                    # logger.info(f"Using regular controller: {cls}")
                 else:
                     raise ValueError(f"Controller class '{controller_class_name}' not found in globals()")
 
@@ -191,7 +191,7 @@ class AlgorithmParametersPage(BasePage):
             if not callable(cls):
                 raise ValueError(f"Class '{cls}' is not callable")
 
-            logger.info(f"Instantiating controller: {cls} with config: {self.active_algorithm}, theme: {theme}")
+            # logger.info(f"Instantiating controller: {cls} with config: {self.active_algorithm}, theme: {theme}")
             # Create the algorithm widget
             self.algorithm_widget = cls(self.active_algorithm, theme)
 

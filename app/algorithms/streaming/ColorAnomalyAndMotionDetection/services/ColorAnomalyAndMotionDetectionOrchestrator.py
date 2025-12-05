@@ -71,7 +71,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Temporal voting state
         self._temporal_detection_history: deque = deque(maxlen=self.config.temporal_window_frames)
 
-        self.logger.info("Color anomaly and motion detection orchestrator initialized")
+        # self.logger.info("Color anomaly and motion detection orchestrator initialized")
 
     def update_config(self, config: ColorAnomalyAndMotionDetectionConfig):
         """Update detection configuration thread-safely."""
@@ -90,7 +90,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             self.motion_service.update_config(config)
             self.color_service.update_config(config)
 
-        self.logger.info("Orchestrator configuration updated")
+        # self.logger.info("Orchestrator configuration updated")
 
     def _fuse_detections(self, motion_detections: List[Detection], color_detections: List[Detection]) -> List[Detection]:
         """Fuse motion and color detections using configured mode."""
@@ -666,4 +666,4 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self._fps_counter = 0
         self._fps_start_time = time.time()
         self.motion_service.reset()
-        self.logger.info("Performance metrics reset")
+        # self.logger.info("Performance metrics reset")

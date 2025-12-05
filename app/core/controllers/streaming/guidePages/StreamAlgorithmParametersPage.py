@@ -138,13 +138,13 @@ class StreamAlgorithmParametersPage(BasePage):
             class_name = module_parts[-1]  # Class name is the last part
 
             logger = LoggerService()
-            logger.info(f"Importing module: {module_name}, looking for class: {class_name}")
+            # logger.info(f"Importing module: {module_name}, looking for class: {class_name}")
 
             # Import the module (the .py file)
             try:
                 module = importlib.import_module(module_name)
-                logger.info(f"Successfully imported module: {module}, type: {type(module)}")
-                logger.info(f"Module attributes: {[attr for attr in dir(module) if not attr.startswith('_')]}")
+                # logger.info(f"Successfully imported module: {module}, type: {type(module)}")
+                # logger.info(f"Module attributes: {[attr for attr in dir(module) if not attr.startswith('_')]}")
             except Exception as e:
                 logger.error(f"Failed to import module {module_name}: {e}")
                 raise
@@ -158,7 +158,7 @@ class StreamAlgorithmParametersPage(BasePage):
                     f"Class '{class_name}' not found in module '{module_name}'. Available classes: {available_classes}, All attributes: {all_attrs[:20]}")
 
             controller_class = getattr(module, class_name)
-            logger.info(f"Got controller_class: {controller_class}, type: {type(controller_class)}, callable: {callable(controller_class)}")
+            # logger.info(f"Got controller_class: {controller_class}, type: {type(controller_class)}, callable: {callable(controller_class)}")
 
             # Check if it's a module (common mistake)
             if isinstance(controller_class, type(module)):
@@ -188,7 +188,7 @@ class StreamAlgorithmParametersPage(BasePage):
                 pass
 
             # Logger already created above
-            logger.info(f"Loading streaming algorithm wizard controller: {controller_class} for {current_algorithm_name}")
+            # logger.info(f"Loading streaming algorithm wizard controller: {controller_class} for {current_algorithm_name}")
 
             # Create algorithm config dict
             algorithm_config = {

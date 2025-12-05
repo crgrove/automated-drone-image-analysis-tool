@@ -700,8 +700,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             wizard_data (dict): Dictionary containing wizard configuration data.
         """
-        self.logger.info(f"populate_from_wizard_data called with keys: {wizard_data.keys()}")
-        self.logger.info(f"auto_start in wizard_data: {wizard_data.get('auto_start', 'NOT SET')}")
+        # self.logger.info(f"populate_from_wizard_data called with keys: {wizard_data.keys()}")
+        # self.logger.info(f"auto_start in wizard_data: {wizard_data.get('auto_start', 'NOT SET')}")
 
         # Set input and output directories
         if wizard_data.get('input_directory'):
@@ -787,7 +787,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Mark for auto-start if requested (will execute in showEvent after window is visible)
         self._auto_start_requested = wizard_data.get('auto_start', False)
         if self._auto_start_requested:
-            self.logger.info("Auto-start requested from wizard - will execute after window is shown")
+            # self.logger.info("Auto-start requested from wizard - will execute after window is shown")
+            pass
 
     def _open_image_analysis_guide(self):
         """
@@ -800,7 +801,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         def _on_wizard_completed(wizard_data):
             # Mark for auto-start when opened from menu (same behavior as startup wizard)
             wizard_data['auto_start'] = True
-            self.logger.info("Wizard completed from menu - setting auto_start=True")
+            # self.logger.info("Wizard completed from menu - setting auto_start=True")
 
             # Populate this MainWindow with wizard data
             self.populate_from_wizard_data(wizard_data)
@@ -808,7 +809,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Since the window is already visible (opened from menu), showEvent won't fire again
             # So we need to manually trigger the auto-start if requested
             if self._auto_start_requested and self.isVisible():
-                self.logger.info("Window already visible - executing auto-start immediately")
+                # self.logger.info("Window already visible - executing auto-start immediately")
                 self._auto_start_requested = False  # Prevent re-execution
                 self._startButton_clicked()
 
@@ -816,7 +817,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         def _on_review_requested(file_path):
             """Handle review request - load XML file and open viewer."""
             try:
-                self.logger.info(f"Review requested for file: {file_path}")
+                # self.logger.info(f"Review requested for file: {file_path}")
                 # Load the XML file
                 self._process_xml_file(file_path)
                 # Automatically open the Viewer
@@ -869,7 +870,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 app._stream_viewer = streaming_viewer
 
             streaming_viewer.show()
-            self.logger.info("Streaming Detector opened")
+            # self.logger.info("Streaming Detector opened")
 
             # Hide the main window instead of closing to prevent closeEvent from firing
             # This prevents closeEvent from closing all windows including the StreamViewerWindow
@@ -888,7 +889,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.settings_service.get_setting('Theme')
                 )
                 self.coordinator_window.show()
-                self.logger.info("Coordinator window opened")
+                # self.logger.info("Coordinator window opened")
             else:
                 # Bring existing window to front
                 self.coordinator_window.raise_()
@@ -904,7 +905,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             url = QUrl("https://www.texsar.org/automated-drone-image-analysis-tool/")
             QDesktopServices.openUrl(url)
-            self.logger.info("Help documentation opened")
+            # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
@@ -916,7 +917,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             url = QUrl("https://discord.com/invite/aY9tY7JSPu")
             QDesktopServices.openUrl(url)
-            self.logger.info("Community Help Discord opened")
+            # self.logger.info("Community Help Discord opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Help URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
@@ -927,21 +928,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         super().showEvent(event)
 
-        self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
+        # self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
 
         # Only execute auto-start on first show event (window is now visible and ready)
         if self._auto_start_requested:
-            self.logger.info("Executing auto-start processing after window shown")
+            # self.logger.info("Executing auto-start processing after window shown")
             self._auto_start_requested = False  # Prevent re-execution
 
             # Log current state for debugging
-            self.logger.info(f"Input folder: {self.inputFolderLine.text()}")
-            self.logger.info(f"Output folder: {self.outputFolderLine.text()}")
-            self.logger.info(f"Algorithm widget exists: {self.algorithmWidget is not None}")
+            # self.logger.info(f"Input folder: {self.inputFolderLine.text()}")
+            # self.logger.info(f"Output folder: {self.outputFolderLine.text()}")
+            # self.logger.info(f"Algorithm widget exists: {self.algorithmWidget is not None}")
 
             self._startButton_clicked()
         else:
-            self.logger.info("Auto-start not requested or already executed")
+            # self.logger.info("Auto-start not requested or already executed")
+            pass
 
     def closeEvent(self, event):
         """

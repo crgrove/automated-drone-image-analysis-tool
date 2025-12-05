@@ -1,5 +1,6 @@
 import zipfile
 import os
+from core.services.LoggerService import LoggerService
 
 
 class ZipBundleService:
@@ -15,7 +16,7 @@ class ZipBundleService:
 
         Sets up the service for creating ZIP archive files.
         """
-        pass
+        self.logger = LoggerService()
 
     def generate_zip_file(self, file_paths, output_path):
         """Generate a ZIP file from a list of file paths.
@@ -33,7 +34,7 @@ class ZipBundleService:
                 if os.path.exists(img_path):
                     zipf.write(img_path, os.path.basename(img_path))
                 else:
-                    print(f"File not found: {img_path}")
+                    self.logger.warning(f"File not found: {img_path}")
 
     def generate_zip_from_directory(self, directory_path, output_path):
         """Create a ZIP archive from a directory, preserving subdirectory structure.

@@ -87,7 +87,7 @@ class StreamCoordinator(QObject):
                 }
                 stream_type = stream_type_map.get(stream_type.lower(), StreamType.FILE)
 
-            self.logger.info(f"Connecting to {stream_type.value} stream: {url}")
+            # self.logger.info(f"Connecting to {stream_type.value} stream: {url}")
 
             # Create new stream manager
             self.stream_manager = StreamManager()
@@ -105,7 +105,7 @@ class StreamCoordinator(QObject):
             if self.stream_manager.connect_to_stream(url, stream_type):
                 self.current_stream_url = url
                 self.current_stream_type = stream_type
-                self.logger.info("Stream connection initiated")
+                # self.logger.info("Stream connection initiated")
                 return True
             else:
                 self.logger.error("Failed to start stream")
@@ -121,7 +121,7 @@ class StreamCoordinator(QObject):
     def disconnect_stream(self):
         """Disconnect from current stream."""
         if self.stream_manager:
-            self.logger.info("Disconnecting stream")
+            # self.logger.info("Disconnecting stream")
 
             # Stop recording if active
             if self.is_recording:
@@ -174,7 +174,7 @@ class StreamCoordinator(QObject):
             return False
 
         try:
-            self.logger.info(f"Starting recording to: {output_directory}")
+            # self.logger.info(f"Starting recording to: {output_directory}")
 
             # Determine recording resolution from stream info
             resolution = self.stream_info.get('resolution', (0, 0))
@@ -190,7 +190,7 @@ class StreamCoordinator(QObject):
             success = self.recording_manager.start_recording(resolution)
             if success:
                 self.is_recording = True
-                self.logger.info(f"Recording started in: {output_directory}")
+                # self.logger.info(f"Recording started in: {output_directory}")
                 return True
             else:
                 self.is_recording = False
@@ -214,7 +214,7 @@ class StreamCoordinator(QObject):
             return None
 
         try:
-            self.logger.info("Stopping recording")
+            # self.logger.info("Stopping recording")
 
             # Save the path before stopping
             recording_path = self.current_recording_path
@@ -261,11 +261,6 @@ class StreamCoordinator(QObject):
         self.is_connected = connected
         self.connectionChanged.emit(connected, message)
 
-        if connected:
-            self.logger.info(f"Stream connected: {message}")
-        else:
-            self.logger.info(f"Stream disconnected: {message}")
-
     def _on_stream_error(self, error: str):
         """Handle stream error."""
         self.logger.error(f"Stream error: {error}")
@@ -288,11 +283,11 @@ class StreamCoordinator(QObject):
         if recording:
             # Recording started - path_or_message is the actual file path
             self.current_recording_path = path_or_message
-            self.logger.info(f"Recording started: {path_or_message}")
+            # self.logger.info(f"Recording started: {path_or_message}")
         else:
             # Recording stopped - path_or_message is completion/error message
             self.is_recording = False
-            self.logger.info(f"Recording stopped: {path_or_message}")
+            # self.logger.info(f"Recording stopped: {path_or_message}")
 
         # Forward to UI
         self.recordingStateChanged.emit(recording, path_or_message)
@@ -320,7 +315,7 @@ class StreamCoordinator(QObject):
 
     def cleanup(self):
         """Clean up resources."""
-        self.logger.info("StreamCoordinator cleanup")
+        # self.logger.info("StreamCoordinator cleanup")
 
         # Stop recording
         if self.is_recording:

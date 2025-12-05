@@ -111,7 +111,7 @@ class VideoRecorder(QThread):
             self.start()  # Start thread
 
             self.recordingStarted.emit(self._current_output_path)
-            self.logger.info(f"Recording started: {self._current_output_path}")
+            # self.logger.info(f"Recording started: {self._current_output_path}")
             return True
 
         except Exception as e:
@@ -124,7 +124,7 @@ class VideoRecorder(QThread):
         if not self._is_recording:
             return
 
-        self.logger.info("Stopping video recording")
+        # self.logger.info("Stopping video recording")
         self._should_stop = True
 
         # Wait for thread to finish
@@ -155,7 +155,7 @@ class VideoRecorder(QThread):
 
     def run(self):
         """Main recording thread loop."""
-        self.logger.info("Recording thread started")
+        # self.logger.info("Recording thread started")
 
         while not self._should_stop:
             try:
@@ -189,7 +189,7 @@ class VideoRecorder(QThread):
 
         # Cleanup
         self._cleanup_recording()
-        self.logger.info("Recording thread stopped")
+        # self.logger.info("Recording thread stopped")
 
     def _init_video_writer(self) -> bool:
         """Initialize video writer with optimal settings."""
@@ -198,7 +198,7 @@ class VideoRecorder(QThread):
 
             # Try hardware encoding first if enabled
             if self.config.use_hardware_encoding:
-                self.logger.info("Attempting hardware encoding...")
+                # self.logger.info("Attempting hardware encoding...")
                 for codec_info in self._get_hardware_codecs():
                     try:
                         fourcc = cv2.VideoWriter_fourcc(*codec_info['fourcc'])
@@ -211,18 +211,19 @@ class VideoRecorder(QThread):
 
                         if writer.isOpened():
                             self._current_writer = writer
-                            self.logger.info(f"✅ Hardware encoding enabled: {codec_info['name']} ({codec_info['fourcc']})")
+                            # self.logger.info(f"✅ Hardware encoding enabled: {codec_info['name']} ({codec_info['fourcc']})")
                             return True
                         else:
                             writer.release()
-                            self.logger.debug(f"❌ Hardware codec failed: {codec_info['name']}")
-                    except Exception as e:
-                        self.logger.debug(f"❌ Hardware codec error {codec_info['name']}: {e}")
+                            # self.logger.debug(f"❌ Hardware codec failed: {codec_info['name']}")
+                    except Exception:
+                        # self.logger.debug(f"❌ Hardware codec error {codec_info['name']}: {e}")
+                        pass
 
                 self.logger.warning("🔄 Hardware encoding failed, falling back to software encoding")
 
             # Fallback to software encoding
-            self.logger.info("Using software encoding...")
+            # self.logger.info("Using software encoding...")
             fourcc = cv2.VideoWriter_fourcc(*self.config.codec)
             self._current_writer = cv2.VideoWriter(
                 self._current_output_path,
@@ -232,7 +233,7 @@ class VideoRecorder(QThread):
             )
 
             if self._current_writer.isOpened():
-                self.logger.info(f"Using software codec: {self.config.codec}")
+                # self.logger.info(f"Using software codec: {self.config.codec}")
                 return True
             else:
                 self.logger.error("Failed to initialize video writer")
@@ -294,7 +295,7 @@ class VideoRecorder(QThread):
                 self._frame_count = 0
 
                 self.segmentCompleted.emit(old_path, self._current_output_path)
-                self.logger.info(f"Rotated to new segment: {self._current_output_path}")
+                # self.logger.info(f"Rotated to new segment: {self._current_output_path}")
 
                 # Cleanup old segments if needed
                 self._cleanup_old_segments()
@@ -320,7 +321,7 @@ class VideoRecorder(QThread):
                 old_file = recording_files.pop(0)
                 try:
                     old_file.unlink()
-                    self.logger.info(f"Removed old recording: {old_file}")
+                    # self.logger.info(f"Removed old recording: {old_file}")
                 except Exception as e:
                     self.logger.error(f"Error removing old recording {old_file}: {e}")
 
@@ -443,7 +444,8 @@ class RecordingManager(QObject):
             # Start recording
             success = self._recorder.start_recording(resolution)
             if success:
-                self.logger.info(f"Recording started with resolution {resolution}")
+                # self.logger.info(f"Recording started with resolution {resolution}")
+                pass
 
             return success
 
@@ -500,7 +502,7 @@ class RecordingManager(QObject):
         for key, value in kwargs.items():
             if hasattr(self._config, key):
                 setattr(self._config, key, value)
-                self.logger.info(f"Recording config updated: {key} = {value}")
+                # self.logger.info(f"Recording config updated: {key} = {value}")
 
     def _on_recording_started(self, output_path: str):
         """Handle recording started."""
@@ -509,11 +511,11 @@ class RecordingManager(QObject):
     def _on_recording_stopped(self, output_path: str, duration: float):
         """Handle recording stopped."""
         self.recordingStateChanged.emit(False, f"Completed: {duration:.1f}s")
-        self.logger.info(f"Recording completed: {output_path} ({duration:.1f}s)")
+        # self.logger.info(f"Recording completed: {output_path} ({duration:.1f}s)")
 
     def _on_segment_completed(self, old_path: str, new_path: str):
         """Handle segment rotation."""
-        self.logger.info(f"Recording segment rotated: {new_path}")
+        # self.logger.info(f"Recording segment rotated: {new_path}")
 
     def _on_recording_error(self, error_message: str):
         """Handle recording error."""

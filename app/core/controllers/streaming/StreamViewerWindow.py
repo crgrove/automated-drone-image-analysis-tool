@@ -128,7 +128,7 @@ class StreamViewerWindow(QMainWindow):
         if self._initial_algorithm_name and self._initial_algorithm_name.strip():
             self.load_algorithm(self._initial_algorithm_name)
 
-        self.logger.info("StreamViewerWindow initialized")
+        # self.logger.info("StreamViewerWindow initialized")
 
     def setup_custom_widgets(self):
         """Replace placeholder widgets with actual custom widgets."""
@@ -493,11 +493,11 @@ class StreamViewerWindow(QMainWindow):
             # Try set_config first (used by algorithm controllers)
             if hasattr(self.algorithm_widget, 'set_config'):
                 self.algorithm_widget.set_config(options)
-                self.logger.info(f"Applied algorithm options via set_config: {list(options.keys())}")
+                # self.logger.info(f"Applied algorithm options via set_config: {list(options.keys())}")
             # Fallback to load_options (used by wizard controllers)
             elif hasattr(self.algorithm_widget, 'load_options'):
                 self.algorithm_widget.load_options(options)
-                self.logger.info(f"Applied algorithm options via load_options: {list(options.keys())}")
+                # self.logger.info(f"Applied algorithm options via load_options: {list(options.keys())}")
             else:
                 self.logger.warning(f"Algorithm widget {type(self.algorithm_widget)} has no set_config or load_options method")
         except Exception as e:
@@ -552,7 +552,7 @@ class StreamViewerWindow(QMainWindow):
         try:
             url = QUrl("https://www.texsar.org/automated-drone-image-analysis-tool/")
             QDesktopServices.openUrl(url)
-            self.logger.info("Help documentation opened")
+            # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
@@ -562,7 +562,7 @@ class StreamViewerWindow(QMainWindow):
         try:
             url = QUrl("https://discord.com/invite/aY9tY7JSPu")
             QDesktopServices.openUrl(url)
-            self.logger.info("Community forum opened")
+            # self.logger.info("Community forum opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Forum URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Community Forum:\n{str(e)}")
@@ -575,7 +575,7 @@ class StreamViewerWindow(QMainWindow):
             algorithm_name: Name of algorithm to load
         """
         try:
-            self.logger.info(f"Loading algorithm: {algorithm_name}")
+            # self.logger.info(f"Loading algorithm: {algorithm_name}")
 
             # Save current algorithm config before removing it
             if self.algorithm_widget and self.current_algorithm_name:
@@ -583,7 +583,7 @@ class StreamViewerWindow(QMainWindow):
                     if hasattr(self.algorithm_widget, 'get_config'):
                         saved_config = self.algorithm_widget.get_config()
                         self._algorithm_configs[self.current_algorithm_name] = saved_config
-                        self.logger.info(f"Saved config for algorithm: {self.current_algorithm_name}")
+                        # self.logger.info(f"Saved config for algorithm: {self.current_algorithm_name}")
                 except Exception as e:
                     self.logger.warning(f"Failed to save config for {self.current_algorithm_name}: {e}")
 
@@ -664,7 +664,7 @@ class StreamViewerWindow(QMainWindow):
             # Setup frame processing worker thread (moves heavy computation off main thread)
             self._setup_processing_worker()
 
-            self.logger.info(f"Algorithm loaded: {algorithm_name}")
+            # self.logger.info(f"Algorithm loaded: {algorithm_name}")
             self.ui.statusbar.showMessage(f"Loaded: {algorithm_name}")
 
             # Restore saved config for this algorithm if available (session persistence)
@@ -676,7 +676,7 @@ class StreamViewerWindow(QMainWindow):
             elif algorithm_name in self._algorithm_configs:
                 # Restore previously saved config for this algorithm
                 saved_config = self._algorithm_configs[algorithm_name]
-                self.logger.info(f"Restoring saved config for algorithm: {algorithm_name}")
+                # self.logger.info(f"Restoring saved config for algorithm: {algorithm_name}")
                 self._apply_algorithm_options(saved_config)
 
         except Exception as e:
@@ -830,11 +830,11 @@ class StreamViewerWindow(QMainWindow):
             # Create pause check function for worker (checks if stream is paused)
             def pause_check():
                 """Check if stream is paused (called from worker thread)."""
-                if (self.stream_coordinator.stream_manager and 
-                    hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
+                if (self.stream_coordinator.stream_manager and
+                        hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
                     return not self.stream_coordinator.stream_manager.is_playing()
                 return False
-            
+
             # Create worker thread
             self._processing_thread = QThread()
             self._processing_worker = FrameProcessingWorker(processing_function, pause_check)
@@ -852,11 +852,11 @@ class StreamViewerWindow(QMainWindow):
 
             # Start thread
             self._processing_thread.start()
-            
+
             # Reset stopping flag when starting new worker
             self._is_stopping_worker = False
 
-            self.logger.info("Frame processing worker thread started")
+            # self.logger.info("Frame processing worker thread started")
 
         except Exception as e:
             self.logger.error(f"Failed to setup processing worker: {e}")
@@ -1065,7 +1065,7 @@ class StreamViewerWindow(QMainWindow):
                 self._pending_algorithm_options = None
             return
 
-        self.logger.info(f"Switching algorithm to: {algorithm_name}")
+        # self.logger.info(f"Switching algorithm to: {algorithm_name}")
         self.load_algorithm(algorithm_name)
         if not self.algorithm_widget:
             return
@@ -1158,10 +1158,11 @@ class StreamViewerWindow(QMainWindow):
 
             # Only update if capping actually changed the resolution
             if capped_width < desired_width or capped_height < desired_height:
-                self.logger.info(
-                    f"Capping processing resolution from {desired_width}x{desired_height} "
-                    f"to {capped_width}x{capped_height} (native: {native_width}x{native_height})"
-                )
+                # self.logger.info(
+                #     f"Capping processing resolution from {desired_width}x{desired_height} "
+                #     f"to {capped_width}x{capped_height} (native: {native_width}x{native_height})"
+                # )
+                pass
 
                 # Update algorithm with capped resolution
                 if self.algorithm_widget:
@@ -1177,17 +1178,17 @@ class StreamViewerWindow(QMainWindow):
 
         # Check if stream is paused (for file playback) - skip processing if paused
         is_paused = False
-        if (self.stream_coordinator.stream_manager and 
-            hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
+        if (self.stream_coordinator.stream_manager and
+                hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
             is_paused = not self.stream_coordinator.stream_manager.is_playing()
-        
+
         # Process frame with algorithm if loaded and not paused
         if self.algorithm_widget and not is_paused:
             # Use worker thread if available, otherwise fall back to main thread
             use_worker = False
             # Check if worker is available, running, and not in the process of stopping
-            if (self._processing_worker and self._processing_thread and 
-                self._processing_thread.isRunning() and not self._is_stopping_worker):
+            if (self._processing_worker and self._processing_thread and
+                    self._processing_thread.isRunning() and not self._is_stopping_worker):
                 # Process frame in worker thread (non-blocking)
                 # Emit signal to request processing in worker thread
                 try:
@@ -1461,7 +1462,7 @@ class StreamViewerWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event."""
-        self.logger.info("Closing StreamViewerWindow")
+        # self.logger.info("Closing StreamViewerWindow")
 
         # Save current algorithm config before closing (though we'll clear it anyway)
         if self.algorithm_widget and self.current_algorithm_name:

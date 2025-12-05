@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QIcon
 from datetime import datetime
 from core.views.images.viewer.dialogs.CalTopoCredentialDialog import CalTopoCredentialDialog
+from core.services.LoggerService import LoggerService
 
 
 class CalTopoAPIMapDialog(QDialog):
@@ -45,6 +46,7 @@ class CalTopoAPIMapDialog(QDialog):
         self.selected_map = None
         self.credential_helper = credential_helper
         self.api_service = api_service
+        self.logger = LoggerService()
 
         self.setup_ui()
         self.populate_tree()
@@ -181,8 +183,8 @@ class CalTopoAPIMapDialog(QDialog):
                     if isinstance(state_info, dict):
                         debug_info += f"\nState keys: {list(state_info.keys())}"
                 self.info_label.setText(f"No maps found. {debug_info}")
-                print(f"DEBUG: {debug_info}")
-                print(f"DEBUG: Account data structure (first 1000 chars): {json.dumps(self.account_data, indent=2, default=str)[:1000]}")
+                # self.logger.debug(f"DEBUG: {debug_info}")
+                # self.logger.debug(f"DEBUG: Account data structure (first 1000 chars): {json.dumps(self.account_data, indent=2, default=str)[:1000]}")
             except Exception as e:
                 self.info_label.setText(f"No maps found. Error: {str(e)}")
             return
@@ -309,12 +311,12 @@ class CalTopoAPIMapDialog(QDialog):
             if not modified:
                 # Only log once per dialog load
                 if not hasattr(self, '_debug_logged'):
-                    print("DEBUG: Modified timestamp not found in API response.")
-                    print("DEBUG: Sample feature structure (first map):")
-                    print(f"  Feature keys: {list(feature.keys())}")
-                    print(f"  Properties keys: {list(props.keys())}")
-                    print("DEBUG: Sample feature (first 800 chars):")
-                    print(json.dumps(feature, indent=2, default=str)[:800])
+                    # self.logger.debug("DEBUG: Modified timestamp not found in API response.")
+                    # self.logger.debug("DEBUG: Sample feature structure (first map):")
+                    # self.logger.debug(f"  Feature keys: {list(feature.keys())}")
+                    # self.logger.debug(f"  Properties keys: {list(props.keys())}")
+                    # self.logger.debug("DEBUG: Sample feature (first 800 chars):")
+                    # self.logger.debug(json.dumps(feature, indent=2, default=str)[:800])
                     self._debug_logged = True
 
             # Format modified date

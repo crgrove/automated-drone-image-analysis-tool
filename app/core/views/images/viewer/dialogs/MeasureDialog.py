@@ -64,16 +64,6 @@ class MeasureDialog(QDialog):
         # Use WindowStaysOnTopHint to keep it visible when clicking on parent window
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
-    def showEvent(self, event):
-        """Override showEvent to ensure dialog receives focus on macOS."""
-        super().showEvent(event)
-        # On macOS, non-modal dialogs with WindowStaysOnTopHint need explicit focus
-        self.activateWindow()
-        self.raise_()
-        # Set focus to the GSD input field so users can type immediately
-        if hasattr(self, 'gsd_input'):
-            self.gsd_input.setFocus()
-
         self.setMinimumWidth(300)
 
         # Main layout
@@ -133,6 +123,16 @@ class MeasureDialog(QDialog):
         layout.addStretch()
 
         self.setLayout(layout)
+
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, non-modal dialogs with WindowStaysOnTopHint need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the GSD input field so users can type immediately
+        if hasattr(self, 'gsd_input'):
+            self.gsd_input.setFocus()
 
     def connectSignals(self):
         """Connect signals and slots."""

@@ -52,7 +52,7 @@ class MotionDetectionController(StreamAlgorithmController):
         self.motion_detector.performanceUpdate.connect(self._on_performance_update)
         self.motion_detector.modeChanged.connect(self._on_mode_auto_changed)
 
-        self.logger.info("MotionDetectionController initialized")
+        # self.logger.info("MotionDetectionController initialized")
 
     def setup_ui(self):
         """Setup the algorithm-specific UI."""
@@ -278,7 +278,7 @@ class MotionDetectionController(StreamAlgorithmController):
     @Slot(str)
     def _on_mode_auto_changed(self, new_mode: str):
         """Handle automatic mode change."""
-        self.logger.info(f"Motion detector auto-switched to {new_mode} mode")
+        # self.logger.info(f"Motion detector auto-switched to {new_mode} mode")
         self.mode_status_label.setText(f"Auto Mode: {new_mode.title()}")
 
     # Parameter change handlers
@@ -422,4 +422,4 @@ class MotionDetectionController(StreamAlgorithmController):
         # If cleanup is needed in the future, it can be added to the service
         if hasattr(self.motion_detector, 'cleanup'):
             self.motion_detector.cleanup()
-        self.logger.info("MotionDetectionController cleaned up")
+        # self.logger.info("MotionDetectionController cleaned up")

@@ -12,6 +12,7 @@ from .BasePage import BasePage
 from core.views.components.LabeledSlider import LabeledSlider, TextLabeledSlider
 from core.services.CPUService import CPUService
 from core.services.image.ImageService import ImageService
+from core.services.LoggerService import LoggerService
 
 
 class GeneralSettingsPage(BasePage):
@@ -19,6 +20,7 @@ class GeneralSettingsPage(BasePage):
 
     def setup_ui(self):
         """Initialize UI components."""
+        self.logger = LoggerService()
         # Prevent buttons from getting focus by default
         self.dialog.colorPickerButton.setFocusPolicy(Qt.NoFocus)
         self.dialog.benchmarkButton.setFocusPolicy(Qt.NoFocus)
@@ -183,7 +185,7 @@ class GeneralSettingsPage(BasePage):
             self._save_skip_preference()
         except Exception as e:
             # Non-fatal; preference will still be saved on close/complete
-            print(f"Warning: failed saving SkipImageAnalysisGuide immediately: {e}")
+            self.logger.warning(f"Warning: failed saving SkipImageAnalysisGuide immediately: {e}")
 
     def _save_skip_preference(self) -> None:
         """Persist the 'SkipImageAnalysisGuide' setting based on the checkbox state."""
@@ -192,7 +194,7 @@ class GeneralSettingsPage(BasePage):
         # Optional: verify
         verify = self.settings_service.get_setting('SkipImageAnalysisGuide', 'No')
         if str(verify).strip() != skip_value:
-            print(
+            self.logger.warning(
                 f"Warning: SkipImageAnalysisGuide setting may not have saved correctly. "
                 f"Expected '{skip_value}', got '{verify}'"
             )
@@ -271,7 +273,7 @@ class GeneralSettingsPage(BasePage):
             return closest_index
 
         except Exception as e:
-            print(f"Error calculating recommended resolution: {e}")
+            self.logger.error(f"Error calculating recommended resolution: {e}")
             return default_index
 
     def _on_processing_resolution_changed(self, index):

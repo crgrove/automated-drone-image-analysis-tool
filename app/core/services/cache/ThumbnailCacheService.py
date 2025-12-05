@@ -54,7 +54,7 @@ class ThumbnailCacheService:
         self.cache_dir = Path(cache_dir) if cache_dir else None
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"Thumbnail cache initialized at {self.cache_dir}")
+            # self.logger.info(f"Thumbnail cache initialized at {self.cache_dir}")
 
         # Set up per-dataset cache directory (optional)
         self.dataset_cache_dir = Path(dataset_cache_dir) if dataset_cache_dir else None
@@ -458,7 +458,7 @@ class ThumbnailCacheService:
             if self.dataset_cache_dir:
                 shutil.rmtree(self.dataset_cache_dir)
                 self.dataset_cache_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info("Disk cache cleared")
+            # self.logger.info("Disk cache cleared")
         except Exception as e:
             self.logger.error(f"Error clearing disk cache: {e}")
 

@@ -111,9 +111,10 @@ class AOIGalleryModel(QAbstractListModel):
             # Update thumbnail loader with dataset cache directory
             if thumbnail_cache_dir.exists():
                 self.thumbnail_loader.set_dataset_cache_dir(str(thumbnail_cache_dir))
-                self.logger.info(f"Using per-dataset thumbnail cache from {thumbnail_cache_dir}")
+                # self.logger.info(f"Using per-dataset thumbnail cache from {thumbnail_cache_dir}")
             else:
-                self.logger.debug(f"No thumbnail cache found at {thumbnail_cache_dir}, will use global cache")
+                # self.logger.debug(f"No thumbnail cache found at {thumbnail_cache_dir}, will use global cache")
+                pass
 
         except Exception as e:
             self.logger.error(f"Error setting dataset directory: {e}")
@@ -141,7 +142,7 @@ class AOIGalleryModel(QAbstractListModel):
     @Slot(int)
     def _on_batch_complete(self, count: int):
         """Handle batch complete signal."""
-        self.logger.debug(f"Loaded {count} thumbnails")
+        # self.logger.debug(f"Loaded {count} thumbnails")
 
     def set_aoi_items(self, items, skip_color_calc=False, preserve_color_cache=False):
         """
@@ -649,7 +650,7 @@ class AOIGalleryModel(QAbstractListModel):
             return
 
         total_aois = len(self.aoi_items)
-        self.logger.info(f"Loading color info for {total_aois} AOIs...")
+        # self.logger.info(f"Loading color info for {total_aois} AOIs...")
         self.color_calc_message.emit(f"Loading color information for {total_aois} AOIs...")
 
         try:
@@ -660,7 +661,7 @@ class AOIGalleryModel(QAbstractListModel):
             for idx, (img_idx, aoi_idx, aoi_data) in enumerate(self.aoi_items):
                 # Check for cancellation
                 if self._cancel_color_calc:
-                    self.logger.info("Color calculation cancelled")
+                    # self.logger.info("Color calculation cancelled")
                     self.color_calc_message.emit("Calculation cancelled")
                     return
 
@@ -714,11 +715,11 @@ class AOIGalleryModel(QAbstractListModel):
 
             if cached_count > 0:
                 completion_msg = f"Loaded {cached_count} colors from cache, calculated {calculated_count}"
-                self.logger.info(completion_msg)
+                # self.logger.info(completion_msg)
                 self.color_calc_message.emit(completion_msg)
             else:
                 completion_msg = f"Calculated {calculated_count} colors (no cache available)"
-                self.logger.info(completion_msg)
+                # self.logger.info(completion_msg)
                 self.color_calc_message.emit(completion_msg)
 
             # Force a refresh of all items to show the color swatches
@@ -751,10 +752,10 @@ class AOIGalleryModel(QAbstractListModel):
         if not self.viewer or not self.aoi_items:
             return
 
-        total_aois = len(self.aoi_items)
+        # total_aois = len(self.aoi_items)
         loaded_count = 0
 
-        self.logger.info(f"Loading temperature info for {total_aois} AOIs...")
+        # self.logger.info(f"Loading temperature info for {total_aois} AOIs...")
 
         try:
             for img_idx, aoi_idx, aoi_data in self.aoi_items:
@@ -768,7 +769,8 @@ class AOIGalleryModel(QAbstractListModel):
                     self._temperature_info_cache[cache_key] = None
 
             if loaded_count > 0:
-                self.logger.info(f"Loaded {loaded_count} temperatures from cache")
+                # self.logger.info(f"Loaded {loaded_count} temperatures from cache")
+                pass
 
         except Exception as e:
             self.logger.error(f"Error loading temperature info: {e}")

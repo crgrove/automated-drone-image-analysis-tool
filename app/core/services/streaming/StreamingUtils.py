@@ -226,7 +226,7 @@ class ThreadedCaptureWorker:
             self._running = True
             self._thread = Thread(target=self._capture_loop, daemon=True, name="CaptureThread")
             self._thread.start()
-            self.logger.info("Threaded capture started")
+            # self.logger.info("Threaded capture started")
 
     def stop(self):
         """Stop the capture thread."""
@@ -239,7 +239,7 @@ class ThreadedCaptureWorker:
         # Wait for thread to finish
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)
-            self.logger.info(f"Threaded capture stopped (captured {self._frames_captured} frames, {self._capture_errors} errors)")
+            # self.logger.info(f"Threaded capture stopped (captured {self._frames_captured} frames, {self._capture_errors} errors)")
 
     def is_running(self) -> bool:
         """Check if capture thread is running."""
@@ -255,7 +255,7 @@ class ThreadedCaptureWorker:
 
     def _capture_loop(self):
         """Main capture loop that runs in background thread."""
-        self.logger.info(f"Capture loop starting (FPS limit: {self.target_fps if self.target_fps else 'None'})...")
+        # self.logger.info(f"Capture loop starting (FPS limit: {self.target_fps if self.target_fps else 'None'})...")
 
         last_capture_time = time.time()
 
@@ -302,7 +302,7 @@ class ThreadedCaptureWorker:
                 self.logger.error(f"Capture loop error: {e}")
                 time.sleep(0.01)  # Brief pause on exception
 
-        self.logger.info("Capture loop exiting")
+        # self.logger.info("Capture loop exiting")
 
 
 # ============================================================================

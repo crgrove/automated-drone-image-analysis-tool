@@ -118,10 +118,11 @@ class ThermalAnomalyService(AlgorithmService):
                             temps_extracted += 1
                             # Debug: Log first few temperatures
                             if temps_extracted <= 3:
-                                self.logger.debug(
-                                    f"AOI at {aoi['center']}: avg temperature="
-                                    f"{temp_value:.2f}°C (from {len(temps)} pixels)"
-                                )
+                                # self.logger.debug(
+                                #     f"AOI at {aoi['center']}: avg temperature="
+                                #     f"{temp_value:.2f}°C (from {len(temps)} pixels)"
+                                # )
+                                pass
                         else:
                             aoi['temperature'] = None
                             self.logger.warning(f"AOI at {aoi['center']}: all detected pixels out of bounds")
@@ -130,7 +131,7 @@ class ThermalAnomalyService(AlgorithmService):
                         aoi['temperature'] = None
                         self.logger.warning(f"AOI at {aoi['center']}: no detected pixels available")
 
-                self.logger.info(f"Extracted temperature for {temps_extracted}/{len(areas_of_interest)} AOIs from {full_path}")
+                # self.logger.info(f"Extracted temperature for {temps_extracted}/{len(areas_of_interest)} AOIs from {full_path}")
 
             # Calculate scale factors if thermal resolution != visual resolution
             thermal_h, thermal_w = temperature_c.shape[:2]
@@ -141,7 +142,7 @@ class ThermalAnomalyService(AlgorithmService):
             # Scale AOI coordinates from thermal resolution to visual resolution
             # This ensures viewer can display AOIs at correct positions
             if areas_of_interest and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"Info: Scaling AOI coordinates from thermal {thermal_w}x{thermal_h} to visual {visual_w}x{visual_h}")
+                # self.logger.info(f"Info: Scaling AOI coordinates from thermal {thermal_w}x{thermal_h} to visual {visual_w}x{visual_h}")
                 for aoi in areas_of_interest:
                     # Scale center coordinates
                     if 'center' in aoi:
@@ -166,6 +167,6 @@ class ThermalAnomalyService(AlgorithmService):
 
         except Exception as e:
             # Log and return an error if processing fails.
-            print(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))

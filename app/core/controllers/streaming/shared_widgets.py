@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridL
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, Signal
 from core.services.streaming.RTMPStreamService import StreamType
+from core.services.LoggerService import LoggerService
 
 
 class DetectionTracker:
@@ -467,6 +468,7 @@ class VideoDisplayWidget(QLabel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.logger = LoggerService()
         self.setMinimumSize(640, 480)
         # Remove any maximum size constraints to allow full expansion
         self.setMaximumSize(16777215, 16777215)  # Qt's maximum widget size
@@ -496,7 +498,7 @@ class VideoDisplayWidget(QLabel):
             self.setPixmap(scaled_pixmap)
 
         except Exception as e:
-            print(f"Error updating frame: {e}")
+            self.logger.error(f"Error updating frame: {e}")
 
 
 class StreamControlWidget(QWidget):

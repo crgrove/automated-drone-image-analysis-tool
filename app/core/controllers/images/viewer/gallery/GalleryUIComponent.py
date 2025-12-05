@@ -439,8 +439,9 @@ class GalleryUIComponent(QObject):
                     if not hasattr(self, '_view_ready_emitted'):
                         self.view_ready.emit()
                         self._view_ready_emitted = True
-        except Exception as e:
-            self.logger.debug(f"Error in _on_model_ready: {e}")
+        except Exception:
+            # self.logger.debug(f"Error in _on_model_ready: {e}")
+            pass
 
     def eventFilter(self, obj, event):
         """Watch for the first time the view/viewport has a valid size, handle flag button clicks, and keyboard events."""

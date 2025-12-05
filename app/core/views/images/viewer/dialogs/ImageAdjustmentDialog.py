@@ -88,17 +88,7 @@ class ImageAdjustmentDialog(QDialog):
         self.resize(400, 400)
 
         # Main layout
-        main_layout = QVBoxLayout(self)
-
-    def showEvent(self, event):
-        """Override showEvent to ensure dialog receives focus on macOS."""
-        super().showEvent(event)
-        # On macOS, non-modal dialogs with WindowStaysOnTopHint need explicit focus
-        self.activateWindow()
-        self.raise_()
-        # Set focus to the first input field so users can type immediately
-        if hasattr(self, 'exposureValueInput'):
-            self.exposureValueInput.setFocus()
+        self.main_layout = QVBoxLayout(self)
 
         # Create adjustment controls group
         adjustments_group = QGroupBox("Adjustments")
@@ -145,7 +135,7 @@ class ImageAdjustmentDialog(QDialog):
         )
 
         adjustments_group.setLayout(grid_layout)
-        main_layout.addWidget(adjustments_group)
+        self.main_layout.addWidget(adjustments_group)
 
         # Button layout
         button_layout = QHBoxLayout()
@@ -159,7 +149,17 @@ class ImageAdjustmentDialog(QDialog):
         button_layout.addWidget(self.applyButton)
         button_layout.addWidget(self.closeButton)
 
-        main_layout.addLayout(button_layout)
+        self.main_layout.addLayout(button_layout)
+
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, non-modal dialogs with WindowStaysOnTopHint need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the first input field so users can type immediately
+        if hasattr(self, 'exposureValueInput'):
+            self.exposureValueInput.setFocus()
 
     def _connect_signals(self):
         """Connect slider and button signals."""

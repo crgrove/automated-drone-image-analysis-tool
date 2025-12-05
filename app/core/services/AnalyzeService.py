@@ -193,7 +193,7 @@ class AnalyzeService(QObject):
             self.sig_msg.emit(f"Total Images Processed: {self.ttl_images}")
 
         except Exception as e:
-            print(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
             self.logger.error(f"An error occurred during processing: {e}")
 
     @staticmethod

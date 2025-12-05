@@ -46,7 +46,7 @@ class BearingRecoveryController:
 
         if any_has_xml_bearing:
             # Some images have bearings already, skip recovery
-            self.logger.info("Bearing data found in XML, skipping recovery")
+            # self.logger.info("Bearing data found in XML, skipping recovery")
             return 0
 
         # No XML bearings found - check if first image has bearing in EXIF data
@@ -63,17 +63,18 @@ class BearingRecoveryController:
                 camera_yaw = image_service.get_camera_yaw()
 
                 if camera_yaw is not None:
-                    self.logger.info(f"First image has gimbal orientation in EXIF ({camera_yaw}°), skipping recovery")
+                    # self.logger.info(f"First image has gimbal orientation in EXIF ({camera_yaw}°), skipping recovery")
                     return 0
                 else:
-                    self.logger.info("First image does not have gimbal orientation in EXIF, showing recovery dialog")
+                    # self.logger.info("First image does not have gimbal orientation in EXIF, showing recovery dialog")
+                    pass
             except Exception as e:
                 self.logger.warning(f"Could not check first image EXIF for bearing: {e}")
                 # Continue to show recovery dialog if EXIF check fails
 
         # No XML bearings found - prepare lightweight image list for dialog
         # The actual GPS/timestamp extraction happens in the calculation service
-        self.logger.info(f"No bearing data in XML, preparing recovery for {len(images)} images")
+        # self.logger.info(f"No bearing data in XML, preparing recovery for {len(images)} images")
 
         for image in images:
             # Just add the image path - GPS/timestamp will be extracted during calculation
@@ -86,7 +87,7 @@ class BearingRecoveryController:
 
         # Show recovery dialog immediately (no slow EXIF check needed)
         if len(images_missing_bearings) > 0:
-            self.logger.info(f"Found {len(images_missing_bearings)}/{len(images)} images missing bearings")
+            # self.logger.info(f"Found {len(images_missing_bearings)}/{len(images)} images missing bearings")
 
             # Show bearing recovery dialog
             dialog = BearingRecoveryDialog(self.parent, images_missing_bearings)
@@ -103,9 +104,10 @@ class BearingRecoveryController:
                     # Save XML file
                     xml_service.save_xml_file(xml_path)
 
-                    self.logger.info(f"Saved {updated_count} calculated bearings to XML")
+                    # self.logger.info(f"Saved {updated_count} calculated bearings to XML")
                     return updated_count
         else:
-            self.logger.info("All images have bearing information")
+            # self.logger.info("All images have bearing information")
+            pass
 
         return 0

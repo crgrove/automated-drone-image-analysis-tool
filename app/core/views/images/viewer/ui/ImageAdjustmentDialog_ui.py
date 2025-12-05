@@ -9,7 +9,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 class Ui_ImageAdjustmentDialog(object):
     def setupUi(self, ImageAdjustmentDialog):
-        print("TESTING")
         ImageAdjustmentDialog.setObjectName("ImageAdjustmentDialog")
         ImageAdjustmentDialog.resize(350, 400)
         ImageAdjustmentDialog.setWindowTitle("Image Adjustments")

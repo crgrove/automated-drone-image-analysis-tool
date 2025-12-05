@@ -123,7 +123,7 @@ class ColorCacheService:
         """
         try:
             self.memory_cache.update(colors)
-            self.logger.info(f"Added {len(colors)} colors to cache")
+            # self.logger.info(f"Added {len(colors)} colors to cache")
             return True
 
         except Exception as e:
@@ -133,7 +133,7 @@ class ColorCacheService:
     def clear_cache(self):
         """Clear the in-memory cache."""
         self.memory_cache.clear()
-        self.logger.info("Color cache cleared from memory")
+        # self.logger.info("Color cache cleared from memory")
 
     def get_all_cache_data(self) -> Dict[str, Dict[str, Any]]:
         """

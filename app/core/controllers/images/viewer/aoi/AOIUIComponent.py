@@ -426,10 +426,10 @@ class AOIUIComponent:
             total_count: Total number of AOIs before filtering
         """
         # Don't update the header if we're in gallery mode - the gallery controller handles it
-        if (hasattr(self.aoi_controller.parent, 'gallery_mode') and 
+        if (hasattr(self.aoi_controller.parent, 'gallery_mode') and
                 self.aoi_controller.parent.gallery_mode):
             return
-        
+
         area_count_label = self.aoi_controller.parent.areaCountLabel
         if area_count_label:
             if filtered_count < total_count:
@@ -524,7 +524,7 @@ class AOIUIComponent:
         # Start batch timer (10ms intervals for responsive UI)
         self.batch_timer.start(10)
 
-        self.logger.info(f"Starting batch loading of {len(aois_with_indices)} AOIs...")
+        # self.logger.info(f"Starting batch loading of {len(aois_with_indices)} AOIs...")
 
     def _process_next_batch(self):
         """Process the next batch of AOI containers."""
@@ -563,7 +563,7 @@ class AOIUIComponent:
         self.batch_timer.stop()
         self._remove_progress_widget()
         self.batch_loading_state = None
-        self.logger.info("Batch loading complete")
+        # self.logger.info("Batch loading complete")
 
     def _show_progress_widget(self):
         """Show a progress indicator at the top of the AOI list."""

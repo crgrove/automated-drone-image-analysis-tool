@@ -72,7 +72,7 @@ class BackfillCacheService(QObject):
             # Create thumbnail cache directory (color data goes to XML)
             thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
 
-            self.logger.info(f"Creating caches in {dataset_dir}")
+            # self.logger.info(f"Creating caches in {dataset_dir}")
             self.progress_message.emit(f"Creating caches for {len(images)} images...")
 
             # Initialize cache services
@@ -153,7 +153,7 @@ class BackfillCacheService(QObject):
             )
             self.complete.emit(processed_images, total_aois)
 
-            self.logger.info(f"Cache regeneration complete: {processed_images} images, {total_aois} AOIs")
+            # self.logger.info(f"Cache regeneration complete: {processed_images} images, {total_aois} AOIs")
             return True
 
         except Exception as e:
@@ -311,7 +311,7 @@ class BackfillCacheService(QObject):
 
             # Save updated XML
             xml_service.save_xml_file(xml_service.xml_path)
-            self.logger.info(f"Updated XML with color cache data for {len(color_updates)} images")
+            # self.logger.info(f"Updated XML with color cache data for {len(color_updates)} images")
 
         except Exception as e:
             self.logger.error(f"Error updating XML with colors: {e}")
@@ -319,4 +319,4 @@ class BackfillCacheService(QObject):
     def cancel(self):
         """Cancel the current cache regeneration."""
         self.cancelled = True
-        self.logger.info("Cache regeneration cancelled")
+        # self.logger.info("Cache regeneration cancelled")

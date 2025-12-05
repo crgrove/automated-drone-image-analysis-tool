@@ -166,7 +166,7 @@ class AltitudeController:
             self.custom_agl_altitude_ft = altitude_ft
 
             unit_label = self._get_unit_label()
-            self.logger.info(f"Custom AGL altitude set to {altitude_display} {unit_label} ({altitude_ft:.2f} ft)")
+            # self.logger.info(f"Custom AGL altitude set to {altitude_display} {unit_label} ({altitude_ft:.2f} ft)")
 
             # Show confirmation toast with user's preferred unit
             if hasattr(self.parent, 'status_controller'):
@@ -185,10 +185,11 @@ class AltitudeController:
                 # User canceled automatic prompt - don't show dialog again for this session
                 # Set a flag value to indicate user chose to skip
                 self.custom_agl_altitude_ft = -1
-                self.logger.info("User declined to set custom AGL altitude")
+                # self.logger.info("User declined to set custom AGL altitude")
             else:
                 # User canceled manual override - just log it
-                self.logger.info("User canceled altitude override")
+                # self.logger.info("User canceled altitude override")
+                pass
 
     def get_effective_altitude(self):
         """
@@ -209,11 +210,11 @@ class AltitudeController:
             altitude_ft (float): Altitude in feet
         """
         self.custom_agl_altitude_ft = altitude_ft
-        unit_label = self._get_unit_label()
-        altitude_display = self._convert_feet_to_preferred_unit(altitude_ft)
-        self.logger.info(f"Custom AGL altitude set to {altitude_display:.2f} {unit_label} ({altitude_ft:.2f} ft)")
+        # unit_label = self._get_unit_label()
+        # altitude_display = self._convert_feet_to_preferred_unit(altitude_ft)
+        # self.logger.info(f"Custom AGL altitude set to {altitude_display:.2f} {unit_label} ({altitude_ft:.2f} ft)")
 
     def clear_custom_altitude(self):
         """Clear the custom altitude setting."""
         self.custom_agl_altitude_ft = None
-        self.logger.info("Custom AGL altitude cleared")
+        # self.logger.info("Custom AGL altitude cleared")

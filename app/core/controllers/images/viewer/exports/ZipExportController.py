@@ -158,7 +158,7 @@ class ZipExportController:
                     # Check if this image index (from original images list) has any flagged AOIs
                     if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
                         filtered_images.append(img)
-                
+
                 visible_images = filtered_images
 
             if not visible_images:

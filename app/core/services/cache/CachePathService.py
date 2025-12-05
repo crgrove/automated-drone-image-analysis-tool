@@ -55,7 +55,7 @@ class CachePathService:
                 # User selected a cache folder
                 selected_path = dialog.get_selected_path()
                 if selected_path:
-                    self.logger.info(f"Using cache from: {selected_path}")
+                    # self.logger.info(f"Using cache from: {selected_path}")
                     return str(selected_path), True
 
             # User declined - proceed without cache
@@ -85,7 +85,7 @@ class CachePathService:
                 thumbnail_cache_path = cache_dir / '.thumbnails'
                 if thumbnail_cache_path.exists() and hasattr(model, 'thumbnail_loader'):
                     model.thumbnail_loader.set_dataset_cache_dir(str(thumbnail_cache_path))
-                    self.logger.info(f"Using AOI thumbnail cache from: {thumbnail_cache_path}")
+                    # self.logger.info(f"Using AOI thumbnail cache from: {thumbnail_cache_path}")
 
             # Update thumbnail controller for main image thumbnails (now unified in .thumbnails)
             if hasattr(viewer, 'thumbnail_controller') and viewer.thumbnail_controller:
@@ -96,7 +96,7 @@ class CachePathService:
                     # If loader is already created, update it
                     if hasattr(viewer.thumbnail_controller, 'loader') and viewer.thumbnail_controller.loader:
                         viewer.thumbnail_controller.loader.results_dir = str(cache_dir)
-                    self.logger.info(f"Using thumbnail cache from: {thumbnail_path}")
+                    # self.logger.info(f"Using thumbnail cache from: {thumbnail_path}")
 
         except Exception as e:
             self.logger.error(f"Error updating cache paths: {e}")

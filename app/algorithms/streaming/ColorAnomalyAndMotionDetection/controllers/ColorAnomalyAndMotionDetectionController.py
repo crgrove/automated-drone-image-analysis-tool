@@ -63,7 +63,7 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             initial_config = self.integrated_controls.get_config()
             self._on_config_changed(initial_config)
 
-        self.logger.info("ColorAnomalyAndMotionDetectionController initialized")
+        # self.logger.info("ColorAnomalyAndMotionDetectionController initialized")
 
     def setup_ui(self):
         """Setup the algorithm-specific UI."""
@@ -338,4 +338,4 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
     def cleanup(self):
         """Clean up algorithm resources."""
         # Resources are managed automatically by the orchestrator and sub-services
-        self.logger.info("ColorAnomalyAndMotionDetectionController cleaned up")
+        # self.logger.info("ColorAnomalyAndMotionDetectionController cleaned up")

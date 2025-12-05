@@ -348,7 +348,7 @@ class BearingRecoveryDialog(QDialog):
         if gaps > 0:
             summary += f", {gaps} time gaps"
 
-        self._logger.info(summary)
+        # self._logger.info(summary)
 
         # Show completion message
         QMessageBox.information(
@@ -392,7 +392,7 @@ class BearingRecoveryDialog(QDialog):
 
         Resets the UI to allow the user to try again or skip.
         """
-        self._logger.info("Bearing calculation cancelled by user")
+        # self._logger.info("Bearing calculation cancelled by user")
 
         # Reset UI
         self.track_button.setEnabled(True)
@@ -421,7 +421,7 @@ class BearingRecoveryDialog(QDialog):
         Shows an informational message explaining that bearing recovery
         requires multiple images, then closes the dialog.
         """
-        self._logger.info("Skipping bearing recovery: only one image in result set")
+        # self._logger.info("Skipping bearing recovery: only one image in result set")
 
         QMessageBox.information(
             self,

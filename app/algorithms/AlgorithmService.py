@@ -16,6 +16,7 @@ from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
 from core.services.cache.ColorCacheService import ColorCacheService
 from core.services.cache.TemperatureCacheService import TemperatureCacheService
 from core.services.image.AOIService import AOIService
+from core.services.LoggerService import LoggerService
 
 
 class AlgorithmService:
@@ -35,6 +36,7 @@ class AlgorithmService:
             options (dict): Additional algorithm-specific options.
             is_thermal (bool, optional): Indicates if this is a thermal image algorithm. Defaults to False.
         """
+        self.logger = LoggerService()
         self.name = name
         self.identifier_color = identifier_color
         self.min_area = min_area
@@ -415,7 +417,7 @@ class AlgorithmService:
 
                 except Exception as e:
                     # Log error but continue processing other AOIs
-                    print(f"Error caching AOI at {center}: {e}")
+                    self.logger.error(f"Error caching AOI at {center}: {e}")
                     continue
 
             # Note: Color and temperature cache data is now stored in AOI dicts and will be written to XML
@@ -423,7 +425,7 @@ class AlgorithmService:
 
         except Exception as e:
             # Don't fail the entire detection if cache generation fails
-            print(f"Error generating AOI cache: {e}")
+            self.logger.error(f"Error generating AOI cache: {e}")
 
     def _construct_output_path(self, full_path, input_dir, output_dir):
         """
@@ -479,8 +481,8 @@ class AlgorithmService:
         # If target_shape provided, upscale mask and thermal data to match visual image resolution
         # This handles DJI upscaled images where visual (1280x1024) != thermal (640x512)
         if target_shape is not None and target_shape[:2] != mask.shape[:2]:
-            print(f"Info: Upscaling mask from {mask.shape[:2]} to visual image resolution {target_shape[:2]}")
-            print("      (DJI upscaled image: ensuring viewer can query all pixels)")
+            # self.logger.info(f"Info: Upscaling mask from {mask.shape[:2]} to visual image resolution {target_shape[:2]}")
+            # self.logger.info("      (DJI upscaled image: ensuring viewer can query all pixels)")
             mask = cv2.resize(
                 mask,
                 (target_shape[1], target_shape[0]),
@@ -499,8 +501,8 @@ class AlgorithmService:
 
             # Upscale temperature data to match mask resolution (which matches visual image)
             if temperature_data.shape[:2] != mask.shape[:2]:
-                print(f"Info: Upscaling thermal data from {temperature_data.shape[:2]} to {mask.shape[:2]}")
-                print("      Using bilinear interpolation to preserve temperature values")
+                # self.logger.info(f"Info: Upscaling thermal data from {temperature_data.shape[:2]} to {mask.shape[:2]}")
+                # self.logger.info("      Using bilinear interpolation to preserve temperature values")
                 temperature_data = cv2.resize(
                     temperature_data.astype(np.float32),
                     (mask.shape[1], mask.shape[0]),

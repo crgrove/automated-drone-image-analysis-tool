@@ -69,7 +69,7 @@ class FrameProcessingWorker(QObject):
         """
         if self._should_stop or not self.processing_function:
             return
-        
+
         # Check if paused (skip processing if paused)
         if self._pause_check and self._pause_check():
             return

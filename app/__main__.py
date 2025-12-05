@@ -18,7 +18,7 @@ import sys
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
-version = '2.0.0 Beta'
+version = '2.0.0'
 
 
 def update_app_version(app_version):
@@ -41,7 +41,7 @@ def update_app_version(app_version):
         # Update version if not set (first run)
         if current_version is None:
             settings_service.set_setting('app_version', app_version)
-            logger.info(f"Set app version to {app_version} (first run)")
+            # logger.info(f"Set app version to {app_version} (first run)")
             return
 
         # Parse versions to check for Beta -> Full upgrade
@@ -60,9 +60,11 @@ def update_app_version(app_version):
             if new_version_int > current_version_int or (is_app_full and is_current_beta):
                 settings_service.set_setting('app_version', app_version)
                 if is_app_full and is_current_beta:
-                    logger.info(f"Updated app version from Beta to full release: {current_version} -> {app_version}")
+                    # logger.info(f"Updated app version from Beta to full release: {current_version} -> {app_version}")
+                    pass
                 else:
-                    logger.info(f"Updated app version: {current_version} -> {app_version}")
+                    # logger.info(f"Updated app version: {current_version} -> {app_version}")
+                    pass
         except (ValueError, AttributeError) as e:
             # If version parsing fails, update to current version
             logger.warning(f"Failed to parse version strings, updating to {app_version}: {e}")
@@ -104,11 +106,11 @@ def initialize_default_settings():
 
         # DistanceUnit
         distance_unit = settings_service.get_setting('DistanceUnit')
-        logger.info(f"initialize_default_settings: DistanceUnit = {repr(distance_unit)}")
+        # logger.info(f"initialize_default_settings: DistanceUnit = {repr(distance_unit)}")
         # Set default if not set, is None, empty, or not a valid value
         if distance_unit is None or (isinstance(distance_unit, str) and distance_unit == ''):
             # Setting doesn't exist or is empty - set default to 'Feet'
-            logger.info("initialize_default_settings: Setting DistanceUnit to 'Feet' (was None or empty)")
+            # logger.info("initialize_default_settings: Setting DistanceUnit to 'Feet' (was None or empty)")
             settings_service.set_setting('DistanceUnit', 'Feet')
         elif isinstance(distance_unit, str):
             # Check if it's a legacy value that needs migration
@@ -152,18 +154,18 @@ def check_and_update_pickle_files(app_version):
         # 3. New app version is greater than stored version
         if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
             PickleHelper.copy_pickle('drones.pkl')
-            logger.info("Copied drones.pkl to AppData (first run or missing file)")
+            # logger.info("Copied drones.pkl to AppData (first run or missing file)")
         else:
             current_version_int = PickleHelper.version_to_int(current_version)
             new_version_int = PickleHelper.version_to_int(app_version)
             if new_version_int > current_version_int:
                 PickleHelper.copy_pickle('drones.pkl')
-                logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
+                # logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
 
         # Ensure xmp.pkl exists
         if PickleHelper.get_xmp_mapping() is None:
             PickleHelper.copy_pickle('xmp.pkl')
-            logger.info("Copied xmp.pkl to AppData")
+            # logger.info("Copied xmp.pkl to AppData")
 
     except Exception as e:
         logger.error(f"Error checking/updating pickle files: {e}")

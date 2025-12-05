@@ -373,8 +373,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                     total_width = sum(self.image_gallery_splitter.sizes())
                     image_width = total_width - default_width
                     self.image_gallery_splitter.setSizes([image_width, default_width])
-        except Exception as e:
-            self.logger.debug(f"Error resetting aoiFrame width: {e}")
+        except Exception:
+            # self.logger.debug(f"Error resetting aoiFrame width: {e}")
+            pass
 
     def _on_splitter_moved(self, pos, index):
         """Handle splitter movement with snapping to column widths."""
@@ -481,7 +482,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             )
             self.cache_thread.start()
 
-            self.logger.info("Started cache generation")
+            # self.logger.info("Started cache generation")
 
         except Exception as e:
             self.logger.error(f"Error starting cache generation: {e}")
@@ -517,7 +518,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.gallery_controller.model.set_dataset_directory(self.xml_path)
                 self.gallery_controller.load_all_aois()
 
-            self.logger.info(f"Cache generation complete: {total_images} images, {total_aois} AOIs")
+            # self.logger.info(f"Cache generation complete: {total_images} images, {total_aois} AOIs")
 
         except Exception as e:
             self.logger.error(f"Error handling cache completion: {e}")
@@ -573,7 +574,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         # but don't actually create it until the user needs it
         if self._gallery_setup_pending and hasattr(self, 'gallery_controller'):
             # Just mark that we're ready to create the gallery when needed
-            self.logger.debug("Viewer is now visible, gallery can be created when needed")
+            # self.logger.debug("Viewer is now visible, gallery can be created when needed")
+            pass
 
     def _resize_main_image_and_reposition_overlay(self):
         """Resize the main image to fit new dimensions and reposition the overlay."""
@@ -715,7 +717,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             if hasattr(self, 'gallery_mode') and self.gallery_mode:
                 # Use gallery controller for flagging
                 if hasattr(self, 'gallery_controller') and self.gallery_controller:
-                    self.logger.debug("F key pressed in gallery mode, calling gallery_controller.toggle_aoi_flag()")
+                    # self.logger.debug("F key pressed in gallery mode, calling gallery_controller.toggle_aoi_flag()")
                     self.gallery_controller.toggle_aoi_flag()
                 else:
                     self.logger.warning("F key pressed in gallery mode but gallery_controller not available")
@@ -1152,8 +1154,8 @@ class Viewer(QMainWindow, Ui_Viewer):
                 "Please install it using: pip install qimage2ndarray"
             )
         except Exception as e:
-            print(f"Error opening upscale dialog: {e}")
-            print(traceback.format_exc())
+            self.logger.error(f"Error opening upscale dialog: {e}")
+            self.logger.error(traceback.format_exc())
             QMessageBox.warning(
                 self,
                 "Upscale Error",
@@ -1416,7 +1418,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Update the reviewer name display in the UI."""
         # This will be displayed in the title bar or a label
         # For now, just log it
-        self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
+        # self.logger.info(f"Reviewer: {self.current_reviewer} (ID: {self.current_review_id})")
 
     def _create_gallery_loading_overlay(self):
         """Create a loading overlay widget for the gallery."""

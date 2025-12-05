@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
                                QGraphicsPixmapItem, QDialogButtonBox, QApplication,
                                QCheckBox, QGraphicsEllipseItem, QGraphicsItem,
                                QGraphicsTextItem, QMessageBox)
+from core.services.LoggerService import LoggerService
 
 
 @dataclass
@@ -51,6 +52,7 @@ class FastImageViewer(QGraphicsView):
             parent: Parent widget. Defaults to None.
         """
         super().__init__(parent)
+        self.logger = LoggerService()
 
         # Scene setup
         self.scene = QGraphicsScene(self)
@@ -200,7 +202,7 @@ class FastImageViewer(QGraphicsView):
             return True
 
         except Exception as e:
-            print(f"Error loading image: {e}")
+            self.logger.error(f"Error loading image: {e}")
             return False
 
     def keyPressEvent(self, event: QKeyEvent):

@@ -924,7 +924,7 @@ class AOIController:
         is_thermal = hasattr(self.parent, 'is_thermal') and self.parent.is_thermal
 
         # Debug logging
-        self.logger.debug(f"Sort combo initialization: is_thermal={is_thermal}")
+        # self.logger.debug(f"Sort combo initialization: is_thermal={is_thermal}")
 
         # Also check if any AOI actually has temperature data
         has_temperature_data = False
@@ -940,18 +940,19 @@ class AOIController:
                         temp_count += 1
                         # Debug first few
                         if temp_count <= 3:
-                            self.logger.debug(f"  Found temperature in AOI: {aoi.get('temperature')}°C at {aoi.get('center')}")
+                            # self.logger.debug(f"  Found temperature in AOI: {aoi.get('temperature')}°C at {aoi.get('center')}")
+                            pass
                         # Found temperature, can break early after checking a few
                         if temp_count >= 5:
                             break
                 if temp_count >= 5:
                     break
 
-        self.logger.debug(
-            f"Sort combo: has_temperature_data={has_temperature_data}, "
-            f"found {temp_count} AOIs with temperature "
-            f"(checked {total_aois_checked} total AOIs)"
-        )
+        # self.logger.debug(
+        #     f"Sort combo: has_temperature_data={has_temperature_data}, "
+        #     f"found {temp_count} AOIs with temperature "
+        #     f"(checked {total_aois_checked} total AOIs)"
+        # )
 
         # Add items dynamically
         for idx, (text, data, icon) in enumerate(sort_options):
@@ -1089,11 +1090,11 @@ class AOIController:
                 if h == -1:
                     h = 0
 
-                self.logger.info(f"User selected color for sorting: Hue {h}°")
+                # self.logger.info(f"User selected color for sorting: Hue {h}°")
                 return h
             else:
                 # User cancelled
-                self.logger.info("User cancelled color selection for sorting")
+                # self.logger.info("User cancelled color selection for sorting")
                 return None
 
         except Exception as e:

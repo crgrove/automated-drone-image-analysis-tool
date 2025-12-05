@@ -15,6 +15,7 @@ from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
 import os
 import re
 import json
+from core.services.LoggerService import LoggerService
 
 
 class CalTopoWebEnginePage(QWebEnginePage):
@@ -30,6 +31,7 @@ class CalTopoWebEnginePage(QWebEnginePage):
             log_callback: Optional callback function for displaying log messages
         """
         super().__init__(profile, parent)
+        self.logger = LoggerService()
         self.log_callback = log_callback
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
@@ -49,17 +51,14 @@ class CalTopoWebEnginePage(QWebEnginePage):
         }
         level_str = level_names.get(level, "LOG")
 
-        # Print ALL console messages - no filtering
-        # Force immediate output with flush to ensure it appears in terminal
+        # Log ALL console messages - no filtering
         output = f"[JS {level_str}] {message}"
-        print(output, flush=True)
-        sys.stdout.flush()
-        sys.stderr.flush()  # Also flush stderr
+        # self.logger.debug(output)
 
         if sourceID and lineNumber:
-            source_info = f"  Source: {sourceID}:{lineNumber}"
-            print(source_info, flush=True)
-            sys.stdout.flush()
+            # source_info = f"  Source: {sourceID}:{lineNumber}"
+            # self.logger.debug(source_info)
+            pass
 
         # Also call callback if provided (for UI display)
         if self.log_callback:
@@ -92,6 +91,7 @@ class CalTopoAuthDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
+        self.logger = LoggerService()
         self.setWindowTitle("CalTopo Login & Map Selection")
         self.setMinimumSize(800, 600)
 
@@ -255,8 +255,8 @@ class CalTopoAuthDialog(QDialog):
             QTimer.singleShot(1000, lambda: self.manual_done_button.setEnabled(True))
 
         except Exception as e:
-            print(f"ERROR: Failed to initialize web view: {e}")
-            traceback.print_exc()
+            self.logger.error(f"ERROR: Failed to initialize web view: {e}")
+            self.logger.error(traceback.format_exc())
             QMessageBox.critical(
                 self,
                 "Initialization Error",

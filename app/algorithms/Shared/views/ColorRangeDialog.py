@@ -21,6 +21,7 @@ from algorithms.images.HSVColorRange.views.HSVRangePickerWidget import HSVRangeP
 from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColorRangeAssistant
 from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
 from core.services.color.CustomColorsService import get_custom_colors_service
+from core.services.LoggerService import LoggerService
 
 
 class ColorRangeDialog(QDialog):
@@ -32,6 +33,7 @@ class ColorRangeDialog(QDialog):
     def __init__(self, initial_image=None, initial_hsv=(0, 1, 1),
                  initial_ranges=None, parent=None):
         super().__init__(parent)
+        self.logger = LoggerService()
 
         self.setWindowTitle("HSV Color Range Selection")
         self.setModal(True)
@@ -99,7 +101,7 @@ class ColorRangeDialog(QDialog):
                 self.setMaximumSize(max_width, max_height)
                 return
         except Exception as e:
-            print(f"Warning: Could not determine screen size: {e}")
+            self.logger.warning(f"Warning: Could not determine screen size: {e}")
 
         # Fallback to a reasonable default
         self.resize(1000, 900)
@@ -159,7 +161,7 @@ class ColorRangeDialog(QDialog):
                 if screen_height < 800:
                     return 0.9
         except Exception as e:
-            print(f"Warning: Could not determine screen size: {e}")
+            self.logger.warning(f"Warning: Could not determine screen size: {e}")
 
         return 1.0  # No scaling by default
 
@@ -481,7 +483,7 @@ class ColorRangeDialog(QDialog):
             self.processed_image = result
 
         except Exception as e:
-            print(f"Error updating preview: {e}")
+            self.logger.error(f"Error updating preview: {e}")
 
     def set_image_to_label(self, label, cv_image):
         """Convert OpenCV image to QPixmap and set to label."""
@@ -501,7 +503,7 @@ class ColorRangeDialog(QDialog):
             label.setPixmap(pixmap)
 
         except Exception as e:
-            print(f"Error setting image to label: {e}")
+            self.logger.error(f"Error setting image to label: {e}")
 
     def get_hsv_ranges(self):
         """Get the selected HSV ranges."""
@@ -534,7 +536,7 @@ class ColorRangeDialog(QDialog):
         try:
             dlg = ColorPickerDialog(self)
         except Exception as e:
-            print(f"Failed to import ColorPickerDialog: {e}")
+            self.logger.error(f"Failed to import ColorPickerDialog: {e}")
             return
 
         if dlg.exec():
@@ -655,10 +657,13 @@ if __name__ == "__main__":
     test_image[:, 200:300] = [255, 0, 0]  # Blue
     test_image[:, 300:] = [255, 255, 255]  # White
 
+    logger = LoggerService()
     result = show_color_picker_dialog(test_image)
     if result:
-        print("Selected HSV ranges:", result)
+        # logger.debug(f"Selected HSV ranges: {result}")
+        pass
     else:
-        print("Dialog cancelled")
+        # logger.debug("Dialog cancelled")
+        pass
 
     sys.exit(app.exec())

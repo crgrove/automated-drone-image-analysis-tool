@@ -41,27 +41,14 @@ class TestColorDetectionControlWidget:
         widget = ColorDetectionControlWidget()
         initial_count = len(widget.color_ranges)
 
-        # Mock the ColorRangeDialog to return a result
-        # Patch where it's used in the widget module
-        with patch('algorithms.streaming.ColorDetection.views.ColorDetectionControlWidget.ColorRangeDialog') as mock_dialog:
-            mock_instance = mock_dialog.return_value
-            mock_instance.exec.return_value = QDialog.DialogCode.Accepted
-            mock_instance.get_hsv_ranges.return_value = {
-                'h': 0.0,  # Red in normalized 0-1
-                's': 1.0,
-                'v': 1.0,
-                'h_minus': 20 / 360.0,  # Fixed: should be normalized 0-1, not 0-179
-                'h_plus': 20 / 360.0,
-                's_minus': 0.2,  # Fixed: should be normalized 0-1, not 0-255
-                's_plus': 0.2,
-                'v_minus': 0.2,
-                'v_plus': 0.2
-            }
+        # Test adding a color using the actual implementation method
+        # This simulates selecting a color from the color selection menu
+        test_color = QColor(255, 0, 0)  # Red
+        widget._on_color_selected_from_menu(test_color)
 
-            widget._on_add_color()
-
-            # Should have added a new color range
-            assert len(widget.color_ranges) == initial_count + 1
+        # Should have added a new color range
+        assert len(widget.color_ranges) == initial_count + 1
+        assert widget.color_ranges[0]['color'] == test_color
 
     def test_remove_color_range(self, qapp):
         """Test removing a color range."""

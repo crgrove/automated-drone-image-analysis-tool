@@ -204,7 +204,7 @@ class ColorDetectionService(QObject):
         self._original_frame = None  # Original high resolution frame
         self._current_scale_factor = 1.0  # Scale factor between processing and original
 
-        self.logger.info(f"Color detector initialized (GPU: {self._gpu_available})")
+        # self.logger.info(f"Color detector initialized (GPU: {self._gpu_available})")
 
     def _check_gpu_availability(self) -> bool:
         """Check if GPU acceleration is available."""
@@ -232,7 +232,7 @@ class ColorDetectionService(QObject):
             self._update_hsv_values()
 
         self.configurationChanged.emit(self._get_config_dict())
-        self.logger.info("Detection configuration updated")
+        # self.logger.info("Detection configuration updated")
 
     def _update_hsv_values(self):
         """Update HSV conversion values based on current config."""
@@ -282,7 +282,7 @@ class ColorDetectionService(QObject):
                         )
 
                 self._hsv_ranges = all_ranges
-                self.logger.info(f"Loaded {len(self._config.hsv_ranges_list)} color ranges ({len(all_ranges)} HSV ranges after hue wrapping)")
+                # self.logger.info(f"Loaded {len(self._config.hsv_ranges_list)} color ranges ({len(all_ranges)} HSV ranges after hue wrapping)")
 
             # Check if we have a single precise HSV range from the new picker (backward compatibility)
             elif self._config.hsv_ranges:
@@ -1013,7 +1013,7 @@ class ColorDetectionService(QObject):
 
             # Early exit if too many contours (performance optimization)
             if config.max_motion_detections > 0 and len(contours) > config.max_motion_detections * 3:
-                self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
+                # self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
                 contours = contours[:config.max_motion_detections * 3]
 
             # Process contours into detections
@@ -1100,7 +1100,7 @@ class ColorDetectionService(QObject):
 
             # Early exit if too many contours (performance optimization)
             if config.max_motion_detections > 0 and len(contours) > config.max_motion_detections * 3:
-                self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
+                # self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
                 contours = contours[:config.max_motion_detections * 3]
 
             # Process contours
@@ -1180,7 +1180,7 @@ class ColorDetectionService(QObject):
 
             # Early exit if too many contours (performance optimization)
             if config.max_motion_detections > 0 and len(contours) > config.max_motion_detections * 3:
-                self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
+                # self.logger.debug(f"Too many contours ({len(contours)}) - limiting to first {config.max_motion_detections * 3} for performance")
                 contours = contours[:config.max_motion_detections * 3]
 
             # Process contours
@@ -1249,7 +1249,7 @@ class ColorDetectionService(QObject):
 
             # Check if frame size has changed (e.g., resolution change)
             if self._prev_frame.shape != blurred.shape:
-                self.logger.debug(f"Frame size changed from {self._prev_frame.shape} to {blurred.shape}, resetting camera movement detection")
+                # self.logger.debug(f"Frame size changed from {self._prev_frame.shape} to {blurred.shape}, resetting camera movement detection")
                 self._prev_frame = blurred
                 return False
 
@@ -1282,11 +1282,12 @@ class ColorDetectionService(QObject):
 
             # Log camera movement detection for debugging
             if is_moving:
-                self.logger.debug(
-                    f"Camera movement detected: "
-                    f"MAD={mad_normalized * 100:.1f}% (threshold: {mad_threshold * 100:.1f}%), "
-                    f"Pixel change={change_ratio * 100:.1f}% (threshold: {config.camera_movement_threshold * 100:.1f}%)"
-                )
+                # self.logger.debug(
+                #     f"Camera movement detected: "
+                #     f"MAD={mad_normalized * 100:.1f}% (threshold: {mad_threshold * 100:.1f}%), "
+                #     f"Pixel change={change_ratio * 100:.1f}% (threshold: {config.camera_movement_threshold * 100:.1f}%)"
+                # )
+                pass
 
             return is_moving
 
@@ -1506,7 +1507,8 @@ class ColorDetectionService(QObject):
                     filtered.append(detection)
 
             if len(detections) != len(filtered):
-                self.logger.debug(f"Aspect ratio filter: {len(detections)} -> {len(filtered)} detections")
+                # self.logger.debug(f"Aspect ratio filter: {len(detections)} -> {len(filtered)} detections")
+                pass
 
             return filtered
 

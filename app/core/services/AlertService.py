@@ -228,7 +228,7 @@ class AlertManager(QObject):
         self._detection_buffer = []
         self._buffer_lock = threading.Lock()
 
-        self.logger.info("Alert manager initialized")
+        # self.logger.info("Alert manager initialized")
 
     def _init_audio_system(self) -> Optional[Any]:
         """Initialize audio system for alerts.
@@ -318,7 +318,7 @@ class AlertManager(QObject):
             self._audio_system = self._init_audio_system()
 
         self.alertConfigChanged.emit(self._get_config_dict())
-        self.logger.info("Alert configuration updated")
+        # self.logger.info("Alert configuration updated")
 
     def process_detections(self, detections: List[Detection], timestamp: float):
         """Process detections and trigger alerts if conditions are met.
@@ -501,7 +501,7 @@ class AlertManager(QObject):
             stats.update(alert_info)
             self.statsChanged.emit(stats)
 
-            self.logger.info(f"Alert triggered: {len(detections)} detections, confidence: {alert_info['avg_confidence']:.2f}")
+            # self.logger.info(f"Alert triggered: {len(detections)} detections, confidence: {alert_info['avg_confidence']:.2f}")
 
         except Exception as e:
             self.logger.error(f"Error triggering alert: {e}")
@@ -529,7 +529,9 @@ class AlertManager(QObject):
             elif self.config.use_system_sound:
                 # Fallback for non-Windows systems
                 try:
-                    print('\a')  # Terminal bell
+                    # Terminal bell - note: logger won't produce sound, but log for debugging
+                    # self.logger.debug("Alert: Terminal bell (system sound fallback)")
+                    pass
                 except Exception:
                     pass  # Even this can sometimes fail
         except Exception as e:
@@ -666,7 +668,7 @@ class AlertManager(QObject):
         self.history = AlertHistory()
         self._consecutive_detections = 0
         self._last_detection_time = 0
-        self.logger.info("Alert statistics reset")
+        # self.logger.info("Alert statistics reset")
 
     def test_alert(self):
         """Test alert system with dummy detection.
@@ -686,7 +688,7 @@ class AlertManager(QObject):
 
             # Use safe trigger to prevent hanging
             self._trigger_alert_safe([dummy_detection], time.time())
-            self.logger.info("Alert test initiated")
+            # self.logger.info("Alert test initiated")
 
         except Exception as e:
             self.logger.error(f"Error testing alert: {e}")
@@ -706,7 +708,7 @@ class AlertManager(QObject):
         Re-enables alert processing after it has been disabled.
         """
         self._alert_processing_enabled = True
-        self.logger.info("Alert processing has been re-enabled")
+        # self.logger.info("Alert processing has been re-enabled")
 
 
 # Convenience functions for common alert configurations

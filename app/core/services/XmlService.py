@@ -291,7 +291,8 @@ class XmlService:
 
         # Debug logging for temperature save
         if temp_count > 0:
-            self.logger.debug(f"Saved {temp_count} AOIs with temperature data for image {img.get('path', 'unknown')}")
+            # self.logger.debug(f"Saved {temp_count} AOIs with temperature data for image {img.get('path', 'unknown')}")
+            pass
 
     def save_xml_file(self, path):
         """
@@ -490,7 +491,7 @@ class XmlService:
                 if success:
                     updated_count += 1
 
-            self.logger.info(f"Updated bearing metadata for {updated_count}/{len(bearing_results)} images")
+            # self.logger.info(f"Updated bearing metadata for {updated_count}/{len(bearing_results)} images")
             return updated_count
 
         except Exception as e:

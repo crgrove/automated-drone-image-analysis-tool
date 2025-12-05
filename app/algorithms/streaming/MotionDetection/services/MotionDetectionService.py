@@ -137,8 +137,8 @@ class MotionDetectionService(QObject):
         self._frame_count = 0
         self._last_fps_time = time.time()
 
-        gpu_status = "GPU-accelerated" if self._use_gpu else "CPU-only"
-        self.logger.info(f"Motion detector initialized with dual-mode support ({gpu_status})")
+        # gpu_status = "GPU-accelerated" if self._use_gpu else "CPU-only"
+        # self.logger.info(f"Motion detector initialized with dual-mode support ({gpu_status})")
 
     def _check_gpu_support(self) -> bool:
         """Check if GPU acceleration is available for OpenCV."""
@@ -149,12 +149,13 @@ class MotionDetectionService(QObject):
                     # Test if we can actually use GPU
                     test_mat = cv2.cuda_GpuMat()
                     test_mat.upload(np.zeros((100, 100), dtype=np.uint8))
-                    self.logger.info(f"GPU acceleration available: {device_count} CUDA device(s) detected")
+                    # self.logger.info(f"GPU acceleration available: {device_count} CUDA device(s) detected")
                     return True
-        except Exception as e:
-            self.logger.debug(f"GPU check failed: {e}")
+        except Exception:
+            # self.logger.debug(f"GPU check failed: {e}")
+            pass
 
-        self.logger.info("GPU acceleration not available, using CPU")
+        # self.logger.info("GPU acceleration not available, using CPU")
         return False
 
     def _init_background_subtractors(self):
@@ -173,7 +174,7 @@ class MotionDetectionService(QObject):
                     dist2Threshold=400,
                     history=100
                 )
-                self.logger.info("Using GPU-accelerated MOG2 background subtractor")
+                # self.logger.info("Using GPU-accelerated MOG2 background subtractor")
                 return
             except Exception as e:
                 self.logger.warning(f"Failed to create GPU background subtractors: {e}")
@@ -538,8 +539,8 @@ class MotionDetectionService(QObject):
                 gpu_thresh = cv2.cuda.threshold(gpu_fg_mask, 200, 255, cv2.THRESH_BINARY)[1]
                 fg_mask = gpu_thresh.download()
 
-            except Exception as e:
-                self.logger.debug(f"GPU MOG2 failed, falling back to CPU: {e}")
+            except Exception:
+                # self.logger.debug(f"GPU MOG2 failed, falling back to CPU: {e}")
                 # Fallback to CPU
                 fg_mask = self._bg_subtractor_mog2.apply(frame)
                 _, fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
@@ -789,7 +790,7 @@ class MotionDetectionService(QObject):
                     self._camera_motion_history.clear()
                     # Reinitialize background subtractors for new resolution
                     self._init_background_subtractors()
-                    self.logger.info("Cleared frame buffers due to resolution change")
+                    # self.logger.info("Cleared frame buffers due to resolution change")
 
                 # Update dependent settings
                 if 'history_frames' in kwargs:
@@ -832,7 +833,7 @@ class MotionDetectionService(QObject):
         self._frame_history.clear()
         self._camera_motion_history.clear()
         self._init_background_subtractors()
-        self.logger.info("Motion detector reset")
+        # self.logger.info("Motion detector reset")
 
 
 # Alias for backward compatibility with existing code

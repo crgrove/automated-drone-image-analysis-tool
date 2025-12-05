@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor
 from core.services.LoggerService import LoggerService
 from core.views.streaming.components import InputProcessingTab, RenderingTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
-from algorithms.Shared.views import HSVColorRowWidget, ColorRangeDialog
+from algorithms.Shared.views import HSVColorRowWidget
 from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.RecentColorsService import get_recent_colors_service
@@ -35,7 +35,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.color_ranges = []
         self.current_range_index = 0
         self.color_range_widgets = []  # Store row widgets
-        
+
         # Recent colors service
         self.recent_colors_service = get_recent_colors_service()
 
@@ -76,7 +76,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                                       "Choose from HSV Color Picker, Image, List, or Recent Colors.\n"
                                       "You can add multiple color ranges to detect different colors simultaneously.")
         btn_layout.addWidget(self.add_color_btn)
-        
+
         # Set up color selection menu (same as wizard)
         self.color_selection_menu = ColorSelectionMenu(
             self,
@@ -218,7 +218,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         """Handle HSV color range selected from HSV picker dialog."""
         import cv2
         import numpy as np
-        
+
         # Extract the center HSV color from the data
         if 'center_hsv' in hsv_data:
             h, s, v = hsv_data['center_hsv']
@@ -244,7 +244,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         bgr = cv2.cvtColor(hsv_array, cv2.COLOR_HSV2BGR)[0][0]
         b, g, r = int(bgr[0]), int(bgr[1]), int(bgr[2])
         color = QColor(r, g, b)
-        
+
         # Convert HSV ranges from fractional (0-1) to OpenCV format
         h_minus_frac = hsv_data.get('h_minus', 0.1)
         h_plus_frac = hsv_data.get('h_plus', 0.1)
@@ -252,7 +252,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         s_plus_frac = hsv_data.get('s_plus', 0.2)
         v_minus_frac = hsv_data.get('v_minus', 0.2)
         v_plus_frac = hsv_data.get('v_plus', 0.2)
-        
+
         new_range = {
             'name': f"Color_{len(self.color_ranges) + 1}",
             'color': color,
@@ -284,7 +284,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 s_plus_frac = hsv_ranges.get('s_plus', 0.2)
                 v_minus_frac = hsv_ranges.get('v_minus', 0.2)
                 v_plus_frac = hsv_ranges.get('v_plus', 0.2)
-                
+
                 new_range = {
                     'name': f"Color_{len(self.color_ranges) + 1}",
                     'color': color,
@@ -301,7 +301,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 self._add_color_range_from_color(color)
             self._update_color_ranges_display()
             self._emit_config_changed()
-        except Exception as e:
+        except Exception:
             # Fallback to basic color selection
             selected_color = color_data.get('selected_color', (255, 0, 0))
             if isinstance(selected_color, (list, tuple)) and len(selected_color) == 3:

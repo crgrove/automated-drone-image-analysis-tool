@@ -195,7 +195,7 @@ class ThumbnailLoader(QObject):
         """
         # Recreate cache service with new dataset cache directory
         self.cache_service = ThumbnailCacheService(dataset_cache_dir=dataset_cache_dir)
-        self.logger.info(f"Updated thumbnail cache to use dataset directory: {dataset_cache_dir}")
+        # self.logger.info(f"Updated thumbnail cache to use dataset directory: {dataset_cache_dir}")
 
     def clear_queue(self):
         """Clear all pending loads."""

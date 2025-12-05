@@ -64,7 +64,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
 
         # Recent colors service
         self.recent_colors_service = get_recent_colors_service()
-        
+
         # Common color selection menu (HSV mode with HSV picker and recent colors)
         self.color_selection_menu = ColorSelectionMenu(
             self,
@@ -112,7 +112,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
             else:
                 # Fallback: use default ranges
                 self.add_color_row(color)
-        except Exception as e:
+        except Exception:
             # Fallback to basic color selection
             selected_color = color_data.get('selected_color', (255, 0, 0))
             if isinstance(selected_color, (list, tuple)) and len(selected_color) == 3:
@@ -261,7 +261,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                 s_plus_frac = hsv_data.get('s_plus', 0.2)
                 v_minus_frac = hsv_data.get('v_minus', 0.2)  # Default 0.2 = ~51 in OpenCV
                 v_plus_frac = hsv_data.get('v_plus', 0.2)
-                
+
                 color_range = {
                     'name': f"Color_{len(options['color_ranges']) + 1}",
                     'color': color,
@@ -289,7 +289,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                 }
 
             options['color_ranges'].append(color_range)
-            
+
             # Track this color in recent colors (it's being used for processing)
             try:
                 # For HSV colors, track with HSV ranges if available
@@ -306,7 +306,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
                         'color_range': None  # No specific range for tolerance-based
                     }
                     self.recent_colors_service.add_rgb_color(color_config)
-            except Exception as e:
+            except Exception:
                 # Silently fail if tracking fails
                 pass
 

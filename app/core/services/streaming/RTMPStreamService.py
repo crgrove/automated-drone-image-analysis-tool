@@ -109,7 +109,7 @@ class RTMPStreamService(QThread):
 
     def run(self):
         """Main thread loop for stream processing."""
-        self.logger.info(f"Starting RTMP stream service: {self.config.url}")
+        # self.logger.info(f"Starting RTMP stream service: {self.config.url}")
 
         reconnect_attempts = 0
 
@@ -145,23 +145,23 @@ class RTMPStreamService(QThread):
     def _connect_to_stream(self) -> bool:
         """Establish connection to the video stream."""
         try:
-            self.logger.info(f"Connecting to stream: {self.config.url}")
+            # self.logger.info(f"Connecting to stream: {self.config.url}")
 
             # Configure OpenCV for different stream types
             if self.config.stream_type == StreamType.HDMI_CAPTURE:
                 # Handle HDMI capture device
                 try:
                     device_index = int(self.config.url)
-                    self.logger.info(f"Connecting to HDMI capture device {device_index}")
+                    # self.logger.info(f"Connecting to HDMI capture device {device_index}")
                     # Try DirectShow backend instead of MSMF for better performance
                     self._cap = cv2.VideoCapture(device_index, cv2.CAP_DSHOW)
-                    print(f"HDMI: Using DirectShow backend for device {device_index}")
+                    # self.logger.info(f"HDMI: Using DirectShow backend for device {device_index}")
                 except ValueError:
                     self.logger.error(f"Invalid device index: {self.config.url}")
                     return False
             elif self.config.stream_type == StreamType.RTMP:
                 # Handle RTMP streams with FFMPEG backend for better compatibility
-                self.logger.info(f"Connecting to RTMP stream: {self.config.url}")
+                # self.logger.info(f"Connecting to RTMP stream: {self.config.url}")
                 self._cap = cv2.VideoCapture(self.config.url, cv2.CAP_FFMPEG)
                 # Set buffer size for low latency
                 self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
@@ -186,7 +186,7 @@ class RTMPStreamService(QThread):
                 self._cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
                 self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 self._cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
-                self.logger.info("HDMI capture optimized for 720p @ 25fps performance")
+                # self.logger.info("HDMI capture optimized for 720p @ 25fps performance")
 
             # Test frame read
             ret, frame = self._cap.read()
@@ -204,9 +204,10 @@ class RTMPStreamService(QThread):
                 self._total_frames = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 self._video_fps = fps if fps > 0 else 30
                 self._total_duration = self._total_frames / self._video_fps if self._video_fps > 0 else 0
-                self.logger.info(f"Video file connected: {width}x{height} @ {fps}fps, "f"{self._total_frames} frames, {self._total_duration:.1f}s duration")
+                # self.logger.info(f"Video file connected: {width}x{height} @ {fps}fps, "f"{self._total_frames} frames, {self._total_duration:.1f}s duration")
             else:
-                self.logger.info(f"Stream connected: {width}x{height} @ {fps}fps")
+                # self.logger.info(f"Stream connected: {width}x{height} @ {fps}fps")
+                pass
 
             # Emit initial stats
             stats = {
@@ -257,7 +258,7 @@ class RTMPStreamService(QThread):
                                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, self._seek_target_frame)
                                 self._current_frame_pos = self._seek_target_frame
                                 self._seek_requested = False
-                                self.logger.info(f"Seek completed to frame {self._seek_target_frame}")
+                                # self.logger.info(f"Seek completed to frame {self._seek_target_frame}")
                             except Exception as e:
                                 self.logger.error(f"Seek execution error: {e}")
                                 self._seek_requested = False
@@ -283,9 +284,9 @@ class RTMPStreamService(QThread):
                         continue
 
                 # Read frame with timeout handling - TIME THIS (critical for high-res video profiling)
-                read_start = time.perf_counter()
+                # read_start = time.perf_counter()
                 ret, frame = self._cap.read()
-                read_time_ms = (time.perf_counter() - read_start) * 1000
+                # read_time_ms = (time.perf_counter() - read_start) * 1000
 
                 if not ret or frame is None:
                     consecutive_errors += 1
@@ -306,7 +307,7 @@ class RTMPStreamService(QThread):
                     continue
 
                 # Performance optimization: resize if needed
-                resize_start = time.perf_counter()
+                # resize_start = time.perf_counter()
                 try:
                     height, width = frame.shape[:2]
                     if width > self.config.resolution_limit[0] or height > self.config.resolution_limit[1]:
@@ -320,7 +321,7 @@ class RTMPStreamService(QThread):
                 except Exception as e:
                     self.logger.error(f"Error resizing frame: {e}")
                     continue
-                resize_time_ms = (time.perf_counter() - resize_start) * 1000
+                # resize_time_ms = (time.perf_counter() - resize_start) * 1000
 
                 # Update performance metrics
                 self._update_fps_counter()
@@ -332,10 +333,10 @@ class RTMPStreamService(QThread):
                     self.videoPositionChanged.emit(current_time_in_video, self._total_duration)
 
                 # Make a copy of the frame to prevent memory issues
-                copy_start = time.perf_counter()
+                # copy_start = time.perf_counter()
                 try:
                     frame_copy = frame.copy()
-                    copy_time_ms = (time.perf_counter() - copy_start) * 1000
+                    # copy_time_ms = (time.perf_counter() - copy_start) * 1000
 
                     # Use perf_counter for consistent timing (not time.time())
                     emit_timestamp = time.perf_counter()
@@ -345,12 +346,6 @@ class RTMPStreamService(QThread):
                     self._frame_number += 1
                     last_process_time = current_time
 
-                    # Log detailed capture timing every 30 frames for profiling
-                    if self._frame_number % 30 == 0:
-                        total_capture = read_time_ms + resize_time_ms + copy_time_ms
-                        self.logger.debug(f"Capture profiling: read={read_time_ms:.1f}ms, "
-                                          f"resize={resize_time_ms:.1f}ms, copy={copy_time_ms:.1f}ms, "
-                                          f"total_capture={total_capture:.1f}ms")
                 except Exception as e:
                     self.logger.error(f"Error emitting frame: {e}")
                     continue
@@ -388,7 +383,7 @@ class RTMPStreamService(QThread):
 
     def stop(self):
         """Stop the stream processing."""
-        self.logger.info("Stopping RTMP stream service")
+        # self.logger.info("Stopping RTMP stream service")
         self._should_stop = True
         self._connected = False  # Immediately mark as disconnected to break loops
 
@@ -399,7 +394,7 @@ class RTMPStreamService(QThread):
 
         with self._playback_lock:
             self._is_playing = not self._is_playing
-            self.logger.info(f"Video {'playing' if self._is_playing else 'paused'}")
+            # self.logger.info(f"Video {'playing' if self._is_playing else 'paused'}")
             # Emit immediate update so UI can reflect new play state
             self.streamStatsChanged.emit({'is_playing': self._is_playing})
             return self._is_playing
@@ -423,7 +418,7 @@ class RTMPStreamService(QThread):
                 actual_time = target_frame / self._video_fps if self._video_fps > 0 else 0
                 self.videoPositionChanged.emit(actual_time, self._total_duration)
 
-                self.logger.info(f"Seek requested to {actual_time:.1f}s (frame {target_frame})")
+                # self.logger.info(f"Seek requested to {actual_time:.1f}s (frame {target_frame})")
                 return True
 
         except Exception as e:
@@ -569,7 +564,7 @@ class StreamManager(QObject):
             # Start service
             self._service.start()
 
-            self.logger.info(f"Stream connection initiated: {url}")
+            # self.logger.info(f"Stream connection initiated: {url}")
             return True
 
         except Exception as e:
@@ -615,8 +610,9 @@ class StreamManager(QObject):
                     self._service.errorOccurred.disconnect()
                 except TypeError:
                     pass
-            except Exception as e:
-                self.logger.debug(f"Error disconnecting signals: {e}")
+            except Exception:
+                # self.logger.debug(f"Error disconnecting signals: {e}")
+                pass
 
             # Delete the service to ensure proper cleanup
             self._service.deleteLater()

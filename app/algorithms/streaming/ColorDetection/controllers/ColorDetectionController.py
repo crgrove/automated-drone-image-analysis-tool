@@ -60,7 +60,7 @@ class ColorDetectionController(StreamAlgorithmController):
             initial_config = self.control_widget.get_config()
             self._on_config_changed(initial_config)
 
-        self.logger.info(f"ColorDetectionController initialized (provides_custom_rendering={self.provides_custom_rendering})")
+        # self.logger.info(f"ColorDetectionController initialized (provides_custom_rendering={self.provides_custom_rendering})")
 
     def setup_ui(self):
         """Setup the algorithm-specific UI."""
@@ -113,7 +113,7 @@ class ColorDetectionController(StreamAlgorithmController):
 
             # Create and emit annotated frame
             annotated_frame = self.color_detector.create_annotated_frame(frame, detections)
-            self.logger.debug(f"Emitting frameProcessed signal (frame shape: {annotated_frame.shape})")
+            # self.logger.debug(f"Emitting frameProcessed signal (frame shape: {annotated_frame.shape})")
             self.frameProcessed.emit(annotated_frame)
 
             return detection_dicts
@@ -282,4 +282,4 @@ class ColorDetectionController(StreamAlgorithmController):
         # If cleanup is needed in the future, it can be added to the service
         if hasattr(self.color_detector, 'cleanup'):
             self.color_detector.cleanup()
-        self.logger.info("ColorDetectionController cleaned up")
+        # self.logger.info("ColorDetectionController cleaned up")

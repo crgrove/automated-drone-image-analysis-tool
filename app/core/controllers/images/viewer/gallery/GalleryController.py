@@ -97,7 +97,7 @@ class GalleryController:
         with loading overlay.
         """
         try:
-            self.logger.debug("===== load_all_aois() called =====")
+            # self.logger.debug("===== load_all_aois() called =====")
 
             if not self.parent or not hasattr(self.parent, 'images'):
                 self.logger.warning("No images available to load AOIs")
@@ -105,7 +105,7 @@ class GalleryController:
 
             # Additional safety check
             if not self.parent.images:
-                self.logger.debug("Images list is empty, skipping gallery load")
+                # self.logger.debug("Images list is empty, skipping gallery load")
                 return
 
             # Show loading overlay immediately
@@ -114,11 +114,11 @@ class GalleryController:
 
             # Collect all AOIs from all images
             all_aois = self._collect_all_aois()
-            self.logger.debug(f"Collected {len(all_aois)} AOIs")
+            # self.logger.debug(f"Collected {len(all_aois)} AOIs")
 
             # Set items without triggering color calculation
             self.model.set_aoi_items(all_aois, skip_color_calc=True)
-            self.logger.debug("Set AOI items in model")
+            # self.logger.debug("Set AOI items in model")
 
             # Start color calculation in background with loading overlay
             self._start_color_calculation_with_progress(all_aois)
@@ -139,14 +139,14 @@ class GalleryController:
             all_aois: List of all AOI tuples to process
         """
         try:
-            self.logger.debug("===== _start_color_calculation_with_progress() called =====")
+            # self.logger.debug("===== _start_color_calculation_with_progress() called =====")
 
             # Disconnect any existing signal connections first
             self._disconnect_color_calc_signals()
 
             # Close any existing progress dialog
             if self.color_calc_progress_dialog:
-                self.logger.debug("Closing existing progress dialog")
+                # self.logger.debug("Closing existing progress dialog")
                 self.color_calc_progress_dialog.close()
                 self.color_calc_progress_dialog = None
 
@@ -203,13 +203,14 @@ class GalleryController:
                     self.color_calc_progress_dialog.canceled.disconnect(self._on_color_calc_cancelled)
                 except Exception:
                     pass
-        except Exception as e:
-            self.logger.debug(f"Error disconnecting signals: {e}")
+        except Exception:
+            # self.logger.debug(f"Error disconnecting signals: {e}")
+            pass
 
     def _on_color_calc_complete(self):
         """Handle color calculation completion."""
         try:
-            self.logger.debug("===== _on_color_calc_complete() called =====")
+            # self.logger.debug("===== _on_color_calc_complete() called =====")
 
             # Disconnect signals first
             self._disconnect_color_calc_signals()
@@ -220,7 +221,7 @@ class GalleryController:
 
             # Close progress dialog if it exists (for backwards compatibility)
             if self.color_calc_progress_dialog:
-                self.logger.debug("Closing progress dialog (complete)")
+                # self.logger.debug("Closing progress dialog (complete)")
                 self.color_calc_progress_dialog.setValue(100)
                 self.color_calc_progress_dialog.close()
                 self.color_calc_progress_dialog = None
@@ -233,7 +234,7 @@ class GalleryController:
 
     def _on_color_calc_cancelled(self):
         """Handle color calculation cancellation."""
-        self.logger.info("===== Color calculation cancelled by user =====")
+        # self.logger.info("===== Color calculation cancelled by user =====")
         self.model.cancel_color_calculation()
 
         # Disconnect signals
@@ -245,14 +246,14 @@ class GalleryController:
 
         # Close progress dialog if it exists (for backwards compatibility)
         if self.color_calc_progress_dialog:
-            self.logger.debug("Closing progress dialog (cancelled)")
+            # self.logger.debug("Closing progress dialog (cancelled)")
             self.color_calc_progress_dialog.close()
             self.color_calc_progress_dialog = None
 
     def _finalize_gallery_load(self):
         """Finalize gallery load by applying sorting and filtering."""
         try:
-            self.logger.debug("===== _finalize_gallery_load() called =====")
+            # self.logger.debug("===== _finalize_gallery_load() called =====")
 
             # Get current items
             all_aois = list(self.model.aoi_items)
@@ -278,7 +279,7 @@ class GalleryController:
                         len(filtered_aois) > 0):
                     self.ui_component._load_visible_thumbnails()
 
-            self.logger.info(f"Loaded {len(filtered_aois)} AOIs in gallery (from {len(all_aois)} total)")
+            # self.logger.info(f"Loaded {len(filtered_aois)} AOIs in gallery (from {len(all_aois)} total)")
 
         except Exception as e:
             self.logger.error(f"Error finalizing gallery load: {e}")
@@ -580,7 +581,7 @@ class GalleryController:
         self.sort_method = aoi_ctrl.sort_method
         self.sort_color_hue = aoi_ctrl.sort_color_hue
 
-        self.logger.debug("Synced filters from AOI controller")
+        # self.logger.debug("Synced filters from AOI controller")
 
     def on_aoi_clicked(self, image_idx, aoi_idx, aoi_data):
         """
@@ -592,7 +593,7 @@ class GalleryController:
             aoi_data: AOI data dictionary
         """
         try:
-            self.logger.info(f"Gallery AOI clicked: Image {image_idx}, AOI {aoi_idx}")
+            # self.logger.info(f"Gallery AOI clicked: Image {image_idx}, AOI {aoi_idx}")
 
             # Stay in gallery mode - just load the image with the clicked AOI
             # 1. Load the parent image if it's not already loaded
@@ -658,8 +659,9 @@ class GalleryController:
                     try:
                         self.parent.main_image.viewChanged.connect(zoom_when_ready)
                         zoom_handler = zoom_when_ready
-                    except Exception as e:
-                        self.logger.debug(f"Could not connect to viewChanged: {e}")
+                    except Exception:
+                        # self.logger.debug(f"Could not connect to viewChanged: {e}")
+                        pass
 
                 # Now load the image - this will emit viewChanged signals which our handler will catch
                 if hasattr(self.parent, '_load_image'):
@@ -723,7 +725,7 @@ class GalleryController:
             # Get AOI center
             center = aoi_data.get('center')
 
-            self.logger.info(f"Attempting to zoom to AOI: center={center}")
+            # self.logger.info(f"Attempting to zoom to AOI: center={center}")
 
             if not center:
                 self.logger.warning("AOI has no center coordinate, cannot zoom")
@@ -738,7 +740,7 @@ class GalleryController:
             # First, make sure AOI overlays are visible
             if hasattr(self.parent, 'showOverlayToggle'):
                 if not self.parent.showOverlayToggle.isChecked():
-                    self.logger.info("Enabling AOI overlay visibility")
+                    # self.logger.info("Enabling AOI overlay visibility")
                     self.parent.showOverlayToggle.setChecked(True)
                     # Trigger the overlay update
                     if hasattr(self.parent, '_show_overlay_change'):
@@ -747,9 +749,9 @@ class GalleryController:
             # Use the same zoom method as single-image view
             # zoomToArea(center_xy, scale) where scale 6 = 6x zoom
             if hasattr(viewer, 'zoomToArea'):
-                self.logger.info(f"Calling zoomToArea with center={center}, scale=6")
+                # self.logger.info(f"Calling zoomToArea with center={center}, scale=6")
                 viewer.zoomToArea(center, 6)
-                self.logger.info(f"Successfully zoomed to AOI at {center}")
+                # self.logger.info(f"Successfully zoomed to AOI at {center}")
             else:
                 self.logger.warning("Viewer does not have zoomToArea method")
 
@@ -832,7 +834,7 @@ class GalleryController:
 
     def toggle_aoi_flag(self):
         """Toggle the flag status of the currently selected AOI in the gallery."""
-        self.logger.debug("===== toggle_aoi_flag() called =====")
+        # self.logger.debug("===== toggle_aoi_flag() called =====")
 
         if not self.ui_component:
             self.logger.warning("toggle_aoi_flag: ui_component is None")
@@ -843,20 +845,21 @@ class GalleryController:
             return
 
         current_index = self.ui_component.gallery_view.currentIndex()
-        self.logger.debug(
-            f"toggle_aoi_flag: current_index.isValid() = {current_index.isValid()}, "
-            f"row = {current_index.row() if current_index.isValid() else 'N/A'}")
+        # self.logger.debug(
+        #     f"toggle_aoi_flag: current_index.isValid() = {current_index.isValid()}, "
+        #     f"row = {current_index.row() if current_index.isValid() else 'N/A'}"
+        # )
 
         if not current_index.isValid():
             self.logger.warning("toggle_aoi_flag: No valid current index in gallery")
             return
 
         aoi_info = self.model.get_aoi_info(current_index)
-        self.logger.debug(f"toggle_aoi_flag: aoi_info = {aoi_info}")
+        # self.logger.debug(f"toggle_aoi_flag: aoi_info = {aoi_info}")
 
         if aoi_info:
             image_idx, aoi_idx, _ = aoi_info
-            self.logger.info(f"Toggling flag for gallery item at row {current_index.row()}: image {image_idx}, AOI {aoi_idx}")
+            # self.logger.info(f"Toggling flag for gallery item at row {current_index.row()}: image {image_idx}, AOI {aoi_idx}")
             self.toggle_aoi_flag_by_index(image_idx, aoi_idx)
         else:
             self.logger.error(f"Could not get AOI info for index at row {current_index.row()}")
@@ -951,13 +954,13 @@ class GalleryController:
 
             # Save the current selection to restore it after update
             current_index = self.ui_component.gallery_view.currentIndex()
-            current_row = current_index.row() if current_index.isValid() else -1
+            _ = current_index.row() if current_index.isValid() else -1
 
             # Update the AOI data in the model's items list
             cache_key = (image_idx, aoi_idx)
             if cache_key in self.model.aoi_to_row:
                 row = self.model.aoi_to_row[cache_key]
-                self.logger.debug(f"Refreshing flag display for image {image_idx}, AOI {aoi_idx} at row {row} (current selection: row {current_row})")
+                # self.logger.debug(f"Refreshing flag display for image {image_idx}, AOI {aoi_idx} at row {row} (current selection: row {current_row})")
 
                 # Update the aoi_data in the model's items list
                 if 0 <= row < len(self.model.aoi_items):
@@ -977,7 +980,7 @@ class GalleryController:
                 # Restore the selection
                 if current_index.isValid():
                     self.ui_component.gallery_view.setCurrentIndex(current_index)
-                    self.logger.debug(f"Restored selection to row {current_index.row()}")
+                    # self.logger.debug(f"Restored selection to row {current_index.row()}")
                 # Re-enable signals
                 self.ui_component.gallery_view.blockSignals(False)
                 # Also update the viewport
@@ -1003,7 +1006,7 @@ class GalleryController:
 
             # Check if the parent widget is visible - if not, defer creation
             if not self.parent.isVisible():
-                self.logger.debug("Parent widget not visible yet, deferring gallery widget creation")
+                # self.logger.debug("Parent widget not visible yet, deferring gallery widget creation")
                 return None
 
             # Create gallery widget with aoiFrame as parent (safer than layout manipulation)
@@ -1016,7 +1019,7 @@ class GalleryController:
             # Raise aoiListWidget to front initially (single-image mode)
             self.parent.aoiListWidget.raise_()
 
-            self.logger.info("Gallery mode UI setup complete")
+            # self.logger.info("Gallery mode UI setup complete")
             return gallery_widget
 
         except Exception as e:
@@ -1054,8 +1057,9 @@ class GalleryController:
                 if hasattr(self.parent, '_update_gallery_overlay_position'):
                     self.parent._update_gallery_overlay_position()
 
-        except Exception as e:
-            self.logger.debug(f"Error updating gallery geometry: {e}")
+        except Exception:
+            # self.logger.debug(f"Error updating gallery geometry: {e}")
+            pass
 
     def set_splitter_to_single_column(self, splitter):
         """Set the splitter to show exactly 1 column in the gallery."""
@@ -1066,9 +1070,10 @@ class GalleryController:
             image_width = total_width - single_column_width
 
             splitter.setSizes([image_width, single_column_width])
-            self.logger.debug(f"Set splitter to single column: [{image_width}, {single_column_width}]")
-        except Exception as e:
-            self.logger.debug(f"Error setting splitter to single column: {e}")
+            # self.logger.debug(f"Set splitter to single column: [{image_width}, {single_column_width}]")
+        except Exception:
+            # self.logger.debug(f"Error setting splitter to single column: {e}")
+            pass
 
     def _set_splitter_cursor(self, splitter, cursor):
         """Set the cursor on the splitter and its handle to prevent drag cursor when disabled."""
@@ -1084,8 +1089,9 @@ class GalleryController:
             except Exception:
                 # Handle might not exist if width is 0, that's okay
                 pass
-        except Exception as e:
-            self.logger.debug(f"Error setting splitter cursor: {e}")
+        except Exception:
+            # self.logger.debug(f"Error setting splitter cursor: {e}")
+            pass
 
     def save_splitter_position(self, splitter):
         """Save current splitter position to settings based on current view mode."""
@@ -1104,8 +1110,9 @@ class GalleryController:
             else:
                 # Save single-image mode position
                 self.parent.settings_service.set_setting('viewer/splitter_position_single', position_str)
-        except Exception as e:
-            self.logger.debug(f"Could not save splitter position: {e}")
+        except Exception:
+            # self.logger.debug(f"Could not save splitter position: {e}")
+            pass
 
     def on_splitter_moved(self, pos, index, splitter, gallery_widget):
         """Handle splitter movement with snapping to column widths."""
@@ -1195,9 +1202,10 @@ class GalleryController:
                         positions = [int(p) for p in str(saved_position).split(',')]
                         if len(positions) == 2:
                             splitter.setSizes(positions)
-                            self.logger.debug(f"Restored single-image splitter position: {positions}")
-                    except Exception as e:
-                        self.logger.debug(f"Could not restore splitter position: {e}")
+                            # self.logger.debug(f"Restored single-image splitter position: {positions}")
+                    except Exception:
+                        # self.logger.debug(f"Could not restore splitter position: {e}")
+                        pass
                 else:
                     # Default to 1-column width for single-image mode
                     self.set_splitter_to_single_column(splitter)
@@ -1228,8 +1236,9 @@ class GalleryController:
 
                     # Update the header using the AOI UI component's method
                     self.parent.aoi_controller.ui_component._update_count_label(filtered_count, total_count)
-        except Exception as e:
-            self.logger.debug(f"Error restoring single-image header: {e}")
+        except Exception:
+            # self.logger.debug(f"Error restoring single-image header: {e}")
+            pass
 
     def toggle_gallery_mode(self):
         """Toggle between single-image and gallery view modes."""
@@ -1294,15 +1303,16 @@ class GalleryController:
                                 splitter.blockSignals(True)
                                 splitter.setSizes(positions)
                                 splitter.blockSignals(False)
-                                self.logger.debug(f"Restored gallery splitter position: {positions}")
+                                # self.logger.debug(f"Restored gallery splitter position: {positions}")
                                 # Force update of gallery geometry after restoring position
                                 QApplication.processEvents()  # Ensure sizes are applied
                                 self.update_gallery_geometry(self.parent.gallery_widget)
                                 # Resize main image and reposition overlay
                                 if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                                     self.parent._resize_main_image_and_reposition_overlay()
-                        except Exception as e:
-                            self.logger.debug(f"Could not restore gallery splitter position: {e}")
+                        except Exception:
+                            # self.logger.debug(f"Could not restore gallery splitter position: {e}")
+                            pass
                     else:
                         # Default to 4 columns
                         total_width = sum(self.parent.image_gallery_splitter.sizes())
@@ -1312,7 +1322,7 @@ class GalleryController:
                         splitter.blockSignals(True)
                         splitter.setSizes([image_width, four_column_width])
                         splitter.blockSignals(False)
-                        self.logger.debug(f"Set gallery to default 4 columns: [{image_width}, {four_column_width}]")
+                        # self.logger.debug(f"Set gallery to default 4 columns: [{image_width}, {four_column_width}]")
                         # Force update of gallery geometry
                         QApplication.processEvents()  # Ensure sizes are applied
                         self.update_gallery_geometry(self.parent.gallery_widget)
@@ -1384,7 +1394,7 @@ class GalleryController:
                         self.parent.gallery_mode):
                     self.ui_component._update_count_label(self.model.rowCount())
 
-                self.logger.info("Switched to gallery view mode")
+                # self.logger.info("Switched to gallery view mode")
 
             else:
                 # Switch to single-image view
@@ -1416,7 +1426,7 @@ class GalleryController:
                 if hasattr(self.parent, 'aoi_controller') and self.parent.aoi_controller.ui_component:
                     self.parent.aoi_controller.ui_component.refresh_aoi_display()
 
-                self.logger.info("Switched to single-image view mode")
+                # self.logger.info("Switched to single-image view mode")
 
         except Exception as e:
             self.logger.error(f"Error toggling gallery mode: {e}")

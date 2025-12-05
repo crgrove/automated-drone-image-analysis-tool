@@ -82,7 +82,7 @@ class BearingCalculationService(QObject):
     def cancel(self):
         """Request cancellation of current calculation."""
         self._cancel_requested = True
-        self._logger.info("Bearing calculation cancellation requested")
+        # self._logger.info("Bearing calculation cancellation requested")
 
     def calculate_from_track(
         self,
@@ -103,7 +103,7 @@ class BearingCalculationService(QObject):
         try:
             # Parse track file
             file_ext = Path(track_file_path).suffix.lower()
-            self._logger.info(f"Parsing track file: {track_file_path} ({file_ext})")
+            # self._logger.info(f"Parsing track file: {track_file_path} ({file_ext})")
 
             if file_ext == '.kml':
                 track_points = self._parse_kml(track_file_path)
@@ -122,7 +122,7 @@ class BearingCalculationService(QObject):
 
             # Validate and sort trackpoints by timestamp
             track_points = self._validate_track(track_points)
-            self._logger.info(f"Loaded {len(track_points)} trackpoints from {file_ext}")
+            # self._logger.info(f"Loaded {len(track_points)} trackpoints from {file_ext}")
 
             # Calculate bearings
             results = self._bearing_from_track(images, track_points, source_type)
@@ -149,7 +149,7 @@ class BearingCalculationService(QObject):
         self._cancel_requested = False
 
         try:
-            self._logger.info(f"Auto-calculating bearings for {len(images)} images")
+            # self._logger.info(f"Auto-calculating bearings for {len(images)} images")
 
             # Calculate bearings
             results = self._bearing_auto(images)
@@ -483,20 +483,11 @@ class BearingCalculationService(QObject):
 
         Mode 2 implementation from spec.
         """
-        self._logger.info(f"Starting auto-bearing calculation for {len(images)} images")
+        # self._logger.info(f"Starting auto-bearing calculation for {len(images)} images")
 
         # Extract GPS and timestamps if not already provided
         imgs_with_gps = []
         total = len(images)
-
-        # Debug: Check first image structure
-        if len(images) > 0:
-            first_img = images[0]
-            self._logger.info(
-                f"First image data: path={first_img.get('path')}, "
-                f"lat={first_img.get('lat')}, lon={first_img.get('lon')}, "
-                f"timestamp={first_img.get('timestamp')}"
-            )
 
         for idx, img in enumerate(images):
             # Emit progress during extraction
@@ -512,7 +503,7 @@ class BearingCalculationService(QObject):
                     # Get GPS
                     gps_data = LocationInfo.get_gps(exif_data=exif_data)
                     if not gps_data:
-                        self._logger.debug(f"Image {img['path']} has no GPS in EXIF")
+                        # self._logger.debug(f"Image {img['path']} has no GPS in EXIF")
                         continue
 
                     img['lat'] = gps_data.get('latitude')
@@ -549,7 +540,7 @@ class BearingCalculationService(QObject):
             if img.get('lat') is not None and img.get('lon') is not None:
                 imgs_with_gps.append(img)
 
-        self._logger.info(f"Extracted GPS from {len(imgs_with_gps)}/{total} images")
+        # self._logger.info(f"Extracted GPS from {len(imgs_with_gps)}/{total} images")
 
         if len(imgs_with_gps) < 2:
             raise ValueError("Need at least 2 images with GPS for auto-calculation")
@@ -562,8 +553,8 @@ class BearingCalculationService(QObject):
         last_valid_bearing = None
 
         # Calculate auto turn threshold from data
-        turn_threshold = self._calculate_turn_threshold(imgs_with_gps)
-        self._logger.info(f"Auto-calculated turn threshold: {turn_threshold:.1f}m")
+        # turn_threshold = self._calculate_turn_threshold(imgs_with_gps)
+        # self._logger.info(f"Auto-calculated turn threshold: {turn_threshold:.1f}m")
 
         for i in range(N):
             if self._cancel_requested:
@@ -641,12 +632,13 @@ class BearingCalculationService(QObject):
 
                         # Debug logging
                         if i <= 10:  # Log first 10 points
-                            self._logger.info(
-                                f"Point {i}: Aligned with PREV leg. "
-                                f"leg_bearing={leg_bearing:.2f}°, "
-                                f"point_bearing={current_from_prev_bearing:.2f}°, "
-                                f"diff={angle_diff:.2f}°"
-                            )
+                            # self._logger.info(
+                            #     f"Point {i}: Aligned with PREV leg. "
+                            #     f"leg_bearing={leg_bearing:.2f}°, "
+                            #     f"point_bearing={current_from_prev_bearing:.2f}°, "
+                            #     f"diff={angle_diff:.2f}°"
+                            # )
+                            pass
 
                 # If NOT aligned with previous leg, check NEXT leg using best-fit bearing
                 if not aligned_with_prev_leg and i <= N - 3:
@@ -680,22 +672,19 @@ class BearingCalculationService(QObject):
 
                         # Debug logging
                         if i <= 10:
-                            self._logger.info(
-                                f"Point {i}: Aligned with NEXT leg. "
-                                f"leg_bearing={next_leg_bearing:.2f}°, "
-                                f"point_bearing={current_to_next_bearing:.2f}°, "
-                                f"diff={angle_diff:.2f}°"
-                            )
+                            # self._logger.info(
+                            #     f"Point {i}: Aligned with NEXT leg. "
+                            #     f"leg_bearing={next_leg_bearing:.2f}°, "
+                            #     f"point_bearing={current_to_next_bearing:.2f}°, "
+                            #     f"diff={angle_diff:.2f}°"
+                            # )
+                            pass
                     else:
                         # Not aligned with either leg - we're in transition between legs
                         # Use bearing from current to next point as best estimate
                         bearing = current_to_next_bearing
                         source = 'auto_prev_next'
                         quality = 'turn_inferred'
-
-                        # Debug logging
-                        if i <= 10:
-                            self._logger.info(f"Point {i}: NOT aligned with either leg. Using current→next bearing={current_to_next_bearing:.2f}°")
 
                 # Fallback if we only have 3 points total (can't check 2 points ahead)
                 elif not aligned_with_prev_leg:

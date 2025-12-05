@@ -1482,15 +1482,16 @@ class CalTopoExportController:
                 return False
 
             # Debug: Log account data structure
-            self.logger.info(f"Account data keys: {list(account_data.keys()) if account_data else 'None'}")
+            # self.logger.info(f"Account data keys: {list(account_data.keys()) if account_data else 'None'}")
             if account_data:
                 state = account_data.get('state', {})
                 features = state.get('features', []) if isinstance(state, dict) else []
-                self.logger.info(f"Found {len(features)} features in account data")
+                # self.logger.info(f"Found {len(features)} features in account data")
                 if not features:
                     # Try alternative structure
-                    features_alt = account_data.get('features', [])
-                    self.logger.info(f"Alternative structure has {len(features_alt)} features")
+                    # features_alt = account_data.get('features', [])
+                    # self.logger.info(f"Alternative structure has {len(features_alt)} features")
+                    pass
 
             # Show map selection dialog (pass credential helper and API service for update functionality)
             map_dialog = CalTopoAPIMapDialog(

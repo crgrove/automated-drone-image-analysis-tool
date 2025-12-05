@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
+from core.services.LoggerService import LoggerService
 
 qimage2ndarray = None
 try:
@@ -50,6 +51,7 @@ class UpscaleWorker(QThread):
 
     def __init__(self, image_array, factor, method, sr_model=None):
         super().__init__()
+        self.logger = LoggerService()
         self.image_array = image_array
         self.factor = factor
         self.method = method
@@ -167,6 +169,7 @@ class UpscaleDialog(QDialog):
             auto_upscale (bool): If True, automatically upscale on open (default False for backwards compatibility)
         """
         super().__init__(parent)
+        self.logger = LoggerService()
 
         self.upscale_factor = upscale_factor
         self.current_level = current_level
@@ -332,7 +335,7 @@ class UpscaleDialog(QDialog):
             return visible_portion
 
         except Exception as e:
-            print(f"Error extracting visible portion: {e}")
+            self.logger.error(f"Error extracting visible portion: {e}")
             return None
 
     def _perform_initial_upscale(self):
@@ -577,7 +580,7 @@ class UpscaleDialog(QDialog):
             else:  # 'fast' or fallback
                 return self._upscale_lanczos(image_array, factor)
         except Exception as e:
-            print(f"Upscaling error with method '{method}': {e}")
+            self.logger.error(f"Upscaling error with method '{method}': {e}")
             # Fallback to Lanczos
             return self._upscale_lanczos(image_array, factor)
 
@@ -620,13 +623,13 @@ class UpscaleDialog(QDialog):
 
         # Limit to supported scales
         if factor not in [2, 3, 4]:
-            print(f"EDSR doesn't support {factor}x, falling back to Lanczos")
+            # self.logger.info(f"EDSR doesn't support {factor}x, falling back to Lanczos")
             return self._upscale_lanczos(image_array, factor)
 
         # Load model
         sr = self._load_sr_model(factor)
         if sr is None:
-            print("Failed to load SR model, falling back to Lanczos")
+            self.logger.warning("Failed to load SR model, falling back to Lanczos")
             return self._upscale_lanczos(image_array, factor)
 
         # Convert RGB to BGR for OpenCV
@@ -639,7 +642,7 @@ class UpscaleDialog(QDialog):
             upscaled_rgb = cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB)
             return upscaled_rgb
         except Exception as e:
-            print(f"EDSR upscaling failed: {e}, falling back to Lanczos")
+            self.logger.error(f"EDSR upscaling failed: {e}, falling back to Lanczos")
             return self._upscale_lanczos(image_array, factor)
 
     def _check_gpu_available(self):
@@ -661,7 +664,7 @@ class UpscaleDialog(QDialog):
         """Handle method selection change."""
         method = self.method_combo.currentData()
         self.upscale_method = method
-        print(f"Upscale method changed to: {method}")
+        # self.logger.info(f"Upscale method changed to: {method}")
 
     def _auto_select_method(self, image_array):
         """
@@ -720,7 +723,7 @@ class UpscaleDialog(QDialog):
 
         # Download model
         try:
-            print(f"Downloading {model_name} model...")
+            # self.logger.info(f"Downloading {model_name} model...")
 
             # Show progress dialog
             progress = QProgressDialog(
@@ -748,11 +751,11 @@ class UpscaleDialog(QDialog):
             )
 
             progress.setValue(100)
-            print(f"Model downloaded to: {model_path}")
+            # self.logger.info(f"Model downloaded to: {model_path}")
             return model_path
 
         except Exception as e:
-            print(f"Failed to download model {model_name}: {e}")
+            self.logger.error(f"Failed to download model {model_name}: {e}")
             if model_path.exists():
                 model_path.unlink()  # Remove partial download
             return None
@@ -792,11 +795,11 @@ class UpscaleDialog(QDialog):
             # Cache the model
             self._sr_models[model_name] = sr
 
-            print(f"Loaded SR model: {model_name}")
+            # self.logger.info(f"Loaded SR model: {model_name}")
             return sr
 
         except Exception as e:
-            print(f"Failed to load SR model {model_name}: {e}")
+            self.logger.error(f"Failed to load SR model {model_name}: {e}")
             return None
 
     def keyPressEvent(self, event):

@@ -114,7 +114,7 @@ class TemperatureCacheService:
         """
         try:
             self.memory_cache.update(temperatures)
-            self.logger.info(f"Added {len(temperatures)} temperatures to cache")
+            # self.logger.info(f"Added {len(temperatures)} temperatures to cache")
             return True
 
         except Exception as e:
@@ -124,7 +124,7 @@ class TemperatureCacheService:
     def clear_cache(self):
         """Clear the in-memory cache."""
         self.memory_cache.clear()
-        self.logger.info("Temperature cache cleared from memory")
+        # self.logger.info("Temperature cache cleared from memory")
 
     def get_all_cache_data(self) -> Dict[str, float]:
         """

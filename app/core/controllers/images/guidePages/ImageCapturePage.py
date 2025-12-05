@@ -11,6 +11,7 @@ from .BasePage import BasePage
 from helpers.PickleHelper import PickleHelper
 from core.services.GSDService import GSDService
 from core.services.image.ImageService import ImageService
+from core.services.LoggerService import LoggerService
 
 
 class ImageCapturePage(BasePage):
@@ -19,6 +20,7 @@ class ImageCapturePage(BasePage):
     def __init__(self, wizard_data, settings_service, dialog):
         """Initialize the page."""
         super().__init__(wizard_data, settings_service, dialog)
+        self.logger = LoggerService()
         # Store camera groups: key = (manufacturer, model), value = list of sensor rows
         self.camera_groups = {}
 
@@ -156,7 +158,7 @@ class ImageCapturePage(BasePage):
             self.dialog.droneComboBox.setCurrentIndex(0)
 
         except Exception as e:
-            print(f"Error loading drone data: {e}")
+            self.logger.error(f"Error loading drone data: {e}")
             self.dialog.droneComboBox.addItem("Error loading drone data", None)
 
     def _load_preferences(self):
@@ -234,7 +236,7 @@ class ImageCapturePage(BasePage):
                 if isinstance(drone_data, dict):
                     drone_data = pd.Series(drone_data)
                 else:
-                    print(f"Warning: drone_data is unexpected type: {type(drone_data)}")
+                    self.logger.warning(f"Warning: drone_data is unexpected type: {type(drone_data)}")
                     self.dialog.gsdTextEdit.setPlainText("-- (Invalid camera data)")
                     return
 
@@ -353,7 +355,7 @@ class ImageCapturePage(BasePage):
                 try:
                     image_service = ImageService(self.wizard_data['first_image_path'])
                 except Exception as e:
-                    print(f"Error creating ImageService: {e}")
+                    self.logger.error(f"Error creating ImageService: {e}")
 
             # Calculate GSD for each sensor configuration
             for sensor_idx, drone_data in enumerate(self.wizard_data['drone_sensors']):
@@ -419,7 +421,7 @@ class ImageCapturePage(BasePage):
                         if intrinsics:
                             focal_length_mm = intrinsics['focal_length_mm']
                     except Exception as e:
-                        print(f"Error getting focal length from image: {e}")
+                        self.logger.error(f"Error getting focal length from image: {e}")
 
                 # Check for focal length in database (unlikely, but check anyway)
                 if not focal_length_mm:
@@ -462,7 +464,7 @@ class ImageCapturePage(BasePage):
                                 'sensor_data': drone_data
                             })
                     except Exception as e:
-                        print(f"Error calculating GSD for sensor {sensor_idx}: {e}")
+                        self.logger.error(f"Error calculating GSD for sensor {sensor_idx}: {e}")
                         continue
                 else:
                     # Missing focal length
@@ -485,7 +487,7 @@ class ImageCapturePage(BasePage):
                 self.wizard_data['gsd'] = None
 
         except Exception as e:
-            print(f"Error calculating GSD: {e}")
+            self.logger.error(f"Error calculating GSD: {e}")
             self.dialog.gsdTextEdit.setPlainText("-- (Error)")
 
     def _get_sensor_name(self, drone_data, sensor_idx):
@@ -545,7 +547,7 @@ class ImageCapturePage(BasePage):
                 if first_image_path:
                     break
         except Exception as e:
-            print(f"Error scanning input directory: {e}")
+            self.logger.error(f"Error scanning input directory: {e}")
             return
 
         if not first_image_path or not os.path.exists(first_image_path):
@@ -642,11 +644,11 @@ class ImageCapturePage(BasePage):
                                     drone_manufacturer.lower() == camera_manufacturer.lower() and
                                     drone_model_exif.lower() == camera_model_exif.lower()):
                                 self.dialog.droneComboBox.setCurrentIndex(i)
-                                print(
-                                    f"Matched camera using camera_info: "
-                                    f"{camera_manufacturer} {camera_model_exif} -> "
-                                    f"Selected index {i}"
-                                )
+                                # self.logger.info(
+                                #     f"Matched camera using camera_info: "
+                                #     f"{camera_manufacturer} {camera_model_exif} -> "
+                                #     f"Selected index {i}"
+                                # )
                                 # Recalculate GSD with focal length from image
                                 self._calculate_gsd()
                                 return  # Found exact match, we're done
@@ -710,12 +712,13 @@ class ImageCapturePage(BasePage):
                 # Select the best match if we found one
                 if best_match_index is not None and best_match_score >= 5:
                     self.dialog.droneComboBox.setCurrentIndex(best_match_index)
-                    print(f"Matched camera: {make} {model} -> Selected index {best_match_index}")
+                    # self.logger.info(f"Matched camera: {make} {model} -> Selected index {best_match_index}")
                 else:
-                    print(f"Could not match camera: {make} {model} (best score: {best_match_score})")
+                    # self.logger.info(f"Could not match camera: {make} {model} (best score: {best_match_score})")
+                    pass
 
             # Recalculate GSD with focal length from image
             self._calculate_gsd()
 
         except Exception as e:
-            print(f"Error extracting metadata from first image: {e}")
+            self.logger.error(f"Error extracting metadata from first image: {e}")

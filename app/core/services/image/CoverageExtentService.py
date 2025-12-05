@@ -61,7 +61,7 @@ class CoverageExtentService:
         for idx, image in enumerate(images):
             # Check for cancellation
             if cancel_check and cancel_check():
-                self.logger.info("Coverage extent calculation cancelled by user")
+                # self.logger.info("Coverage extent calculation cancelled by user")
                 return {
                     'polygons': [],
                     'image_count': processed_count,
@@ -106,7 +106,7 @@ class CoverageExtentService:
 
         # Check for cancellation before union
         if cancel_check and cancel_check():
-            self.logger.info("Coverage extent calculation cancelled before union")
+            # self.logger.info("Coverage extent calculation cancelled before union")
             return {
                 'polygons': [],
                 'image_count': processed_count,
