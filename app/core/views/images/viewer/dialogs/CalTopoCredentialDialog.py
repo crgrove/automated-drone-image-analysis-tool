@@ -163,6 +163,16 @@ class CalTopoCredentialDialog(QDialog):
         if self.ask_to_change and self.existing_credentials:
             self.on_change_checkbox_changed()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the first input field so users can type immediately
+        if hasattr(self, 'team_id_input'):
+            self.team_id_input.setFocus()
+
     def on_change_checkbox_changed(self):
         """
         Handle change credentials checkbox state change.

@@ -93,6 +93,16 @@ class CalTopoMapDialog(QDialog):
 
         self.setLayout(layout)
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the search box so users can type immediately
+        if hasattr(self, 'search_box'):
+            self.search_box.setFocus()
+
     def populate_maps(self):
         """Populate the maps list widget."""
         self.maps_list_widget.clear()

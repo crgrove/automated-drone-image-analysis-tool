@@ -66,6 +66,16 @@ class AOICommentDialog(QDialog):
         # Set focus to text edit
         self.comment_edit.setFocus()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the text edit so users can type immediately
+        if hasattr(self, 'comment_edit'):
+            self.comment_edit.setFocus()
+
     def on_text_changed(self):
         """Handle text changes to enforce character limit and update counter."""
         text = self.comment_edit.toPlainText()

@@ -80,6 +80,16 @@ class PDFExportDialog(QDialog):
         # Set focus to organization input
         self.organization_input.setFocus()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the first input field so users can type immediately
+        if hasattr(self, 'organization_input'):
+            self.organization_input.setFocus()
+
     def on_ok_clicked(self):
         """Handle OK button click."""
         # Save settings before accepting

@@ -628,6 +628,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         Args:
             e (QKeyEvent): Key event containing the key pressed.
         """
+        # On macOS, check if a dialog with text inputs is open and has focus
+        # If so, don't consume keyboard events - let the dialog handle them
+        active_window = QApplication.activeWindow()
+        if active_window and active_window != self:
+            # Check if the active window is a dialog (likely has text inputs)
+            if isinstance(active_window, QDialog) and active_window.isVisible():
+                # Don't consume keyboard events when a dialog is active
+                # This allows text input in dialogs to work properly on macOS
+                super().keyPressEvent(e)
+                return
+
         if e.key() == Qt.Key_Right:
             self._nextImageButton_clicked()
         if e.key() == Qt.Key_Left:

@@ -312,6 +312,16 @@ class AOIFilterDialog(QDialog):
         self.on_temperature_filter_toggled(self.temperature_filter_enabled.isChecked())
         self.update_color_preview()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the comment pattern input if enabled, otherwise first enabled control
+        if hasattr(self, 'comment_pattern_input') and self.comment_filter_enabled.isChecked():
+            self.comment_pattern_input.setFocus()
+
     def select_color(self):
         """Open color picker dialog."""
         # Create initial color from current hue if available

@@ -87,6 +87,13 @@ class ExportProgressDialog(QDialog):
         # This helps avoid access violations in test environments
         self.cancel_button.clicked.connect(self.on_cancel_clicked)
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog appears and receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit activation to appear
+        self.activateWindow()
+        self.raise_()
+
     def on_cancel_clicked(self):
         """Handle cancel button click."""
         self.cancelled = True

@@ -90,6 +90,16 @@ class ImageAdjustmentDialog(QDialog):
         # Main layout
         main_layout = QVBoxLayout(self)
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, non-modal dialogs with WindowStaysOnTopHint need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the first input field so users can type immediately
+        if hasattr(self, 'exposureValueInput'):
+            self.exposureValueInput.setFocus()
+
         # Create adjustment controls group
         adjustments_group = QGroupBox("Adjustments")
         grid_layout = QGridLayout()

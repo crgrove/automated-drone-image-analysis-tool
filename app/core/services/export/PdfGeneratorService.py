@@ -37,17 +37,22 @@ import traceback
 class PDFDocTemplate(BaseDocTemplate):
     """Custom document template with TOC support."""
 
-    def __init__(self, filename, organization="[ORGANIZATION]", **kwargs):
+    def __init__(self, filename, organization="[ORGANIZATION]", progress_callback=None, **kwargs):
         """
         Initialize a custom document template.
 
         Args:
             filename (str): The file path for the generated PDF document.
             organization (str): Organization name for the footer
+            progress_callback: Optional callback function(current, total, message) for progress updates
             **kwargs: Additional arguments for the BaseDocTemplate class.
         """
         self.allowSplitting = 0
         self.organization = organization
+        self.progress_callback = progress_callback
+        self.total_flowables = 0
+        self.current_flowable = 0
+        self.build_pass = 0  # Track which pass we're on (0 = TOC collection, 1 = actual build)
         BaseDocTemplate.__init__(self, filename, **kwargs)
 
         # Letter dimensions in cm
@@ -85,12 +90,38 @@ class PDFDocTemplate(BaseDocTemplate):
 
     def afterFlowable(self, flowable):
         """
-        Register entries for the Table of Contents.
+        Register entries for the Table of Contents and track progress.
         Optimized to avoid unnecessary string operations for non-Paragraph flowables.
 
         Args:
             flowable (Flowable): A flowable object, such as a Paragraph.
         """
+        # Track progress during build
+        # Note: multiBuild processes the document twice (TOC collection + actual build)
+        # This is why there's a delay at 100% - it's actually building the PDF
+        if self.progress_callback and hasattr(self, 'total_flowables') and self.total_flowables > 0:
+            self.current_flowable += 1
+            # Update progress: first pass (TOC collection) is ~50%, second pass (build) is 50-100%
+            # Throttle updates to every 2% to reduce callback overhead
+            update_interval = max(1, self.total_flowables // 50)
+            if self.current_flowable % update_interval == 0:
+                if self.build_pass == 0:
+                    # First pass: 0-50%
+                    progress = min(50, int((self.current_flowable / self.total_flowables) * 50))
+                    self.progress_callback(
+                        progress,
+                        100,
+                        f"Collecting table of contents... ({self.current_flowable}/{self.total_flowables})"
+                    )
+                else:
+                    # Second pass: 50-100%
+                    progress = 50 + min(50, int((self.current_flowable / self.total_flowables) * 50))
+                    self.progress_callback(
+                        progress,
+                        100,
+                        f"Building PDF pages... ({self.current_flowable}/{self.total_flowables})"
+                    )
+        
         # Early exit for non-Paragraph flowables (most common case)
         if flowable.__class__.__name__ != 'Paragraph':
             return
@@ -120,6 +151,27 @@ class PDFDocTemplate(BaseDocTemplate):
             self.canv.bookmarkPage(key)
             self.notify('TOCEntry', (1, label, self.page, key))
 
+    
+    def build(self, flowables, filename=None, **buildKwds):
+        """
+        Override build to track which pass we're on and reset counters.
+        """
+        if self.build_pass == 0:
+            # First pass: count total flowables for progress tracking
+            self.total_flowables = len(flowables)
+            self.current_flowable = 0
+        else:
+            # Second pass: reset counter
+            self.current_flowable = 0
+        
+        # Call parent build with all keyword arguments properly forwarded
+        result = BaseDocTemplate.build(self, flowables, filename=filename, **buildKwds)
+        
+        # Increment pass counter after build completes
+        self.build_pass += 1
+        
+        return result
+
 
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
@@ -147,8 +199,10 @@ class PdfGeneratorService:
         self._initialize_styles()
 
         # Performance optimization: Cache rotated images per image path
+        # Note: Cache is cleared after each image to prevent memory buildup on large image sets
         self._rotated_image_cache = {}  # key: (image_path, bearing) -> rotated_img_array
         self._image_service_cache = {}  # key: image_path -> ImageService instance
+        self._temp_files = []  # Track temporary files for cleanup
 
     def generate_report(self, output_path, progress_callback=None, cancel_check=None):
         """
@@ -171,7 +225,12 @@ class PdfGeneratorService:
                 if not os.path.exists(img['path']):
                     raise FileNotFoundError(f"Image not found: {img['path']}")
 
-            self.doc = PDFDocTemplate(output_path, organization=self.organization, pagesize=letter)
+            self.doc = PDFDocTemplate(
+                output_path, 
+                organization=self.organization, 
+                pagesize=letter,
+                progress_callback=progress_callback
+            )
 
             # Add title with date/time and placeholder logo
             current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -196,9 +255,9 @@ class PdfGeneratorService:
             self.story.append(Spacer(1, 20))
 
             # Add overview map
-            map_bytes = self._generate_overview_map()
-            if map_bytes:
-                map_img = Image(map_bytes, width=7 * inch, height=5.25 * inch)
+            map_path = self._generate_overview_map()
+            if map_path:
+                map_img = Image(map_path, width=7 * inch, height=5.25 * inch)
                 map_img.hAlign = 'CENTER'
                 self.story.append(map_img)
                 self.story.append(Spacer(1, 20))
@@ -216,6 +275,11 @@ class PdfGeneratorService:
 
             # Add image details
             self._add_image_details(progress_callback=progress_callback, cancel_check=cancel_check)
+            
+            # Check for cancellation after image details are added
+            if cancel_check and cancel_check():
+                self.logger.info("PDF generation cancelled by user")
+                return  # Exit early - finally block will clean up temp files
 
             # Update progress to show finalization
             if progress_callback:
@@ -244,19 +308,32 @@ class PdfGeneratorService:
                 self.logger.error("No PageBreak found after title page content. Inserting TOC at beginning.")
                 self.story[0:0] = [toc, PageBreak()]
 
+            # Set total flowables for progress tracking
+            self.doc.total_flowables = len(self.story)
+            
             # Update progress before the potentially slow multiBuild operation
             if progress_callback:
-                progress_callback(total_flagged_aois, total_flagged_aois, "Building PDF document...")
+                progress_callback(0, 100, "Starting PDF build...")
 
             # Build the PDF
             # Note: multiBuild is necessary for TOC as it processes the document twice
             # (once to collect TOC entries, once to build with page numbers)
+            # Progress is tracked in PDFDocTemplate.handle_flowable()
             self.doc.multiBuild(self.story)
+            
+            # Final progress update
+            if progress_callback:
+                progress_callback(100, 100, "PDF generation complete!")
 
         except Exception as e:
             # print(traceback.format_exc())
             self.logger.error(f"PDF generation failed: {str(e)}")
             raise
+        finally:
+            # Clean up temporary files
+            self._cleanup_temp_files()
+            # Clear caches to free memory
+            self._clear_caches()
 
     def _create_toc(self):
         """
@@ -447,17 +524,21 @@ class PdfGeneratorService:
                         aoi['radius']
                     )
 
-                    # Add composite image
-                    # Reduced quality to 70 for significantly smaller file size while maintaining acceptable visual quality
-                    # This should reduce file size by ~40-50% compared to 85% quality
-                    _, buffer = cv2.imencode('.jpg', composite_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
-                    composite_bytes = BytesIO(buffer)
-
+                    # Use temporary file instead of BytesIO to reduce memory usage
+                    # This is critical for large image sets on Mac
+                    temp_file = self._save_image_to_temp_file(composite_img, quality=70)
+                    
                     # Use full page width
-                    composite_img_obj = Image(composite_bytes, width=7.5 * inch, height=6 * inch)
+                    composite_img_obj = Image(temp_file, width=7.5 * inch, height=6 * inch)
                     composite_img_obj.hAlign = 'CENTER'
                     self.story.append(composite_img_obj)
                     self.story.append(Spacer(1, 10))
+                    
+                    # Explicitly delete large numpy arrays to free memory immediately
+                    del composite_img
+                    del full_img
+                    del medium_img
+                    del closeup_img
 
                 # Add additional metadata
                 metadata_lines = []
@@ -498,6 +579,25 @@ class PdfGeneratorService:
 
                 # Page break between AOIs
                 self.story.append(PageBreak())
+            
+            # Clear rotated image cache after processing all AOIs for this image
+            # This prevents memory buildup when processing large image sets
+            # Only clear entries for this specific image to preserve cache for other images
+            keys_to_remove = [key for key in self._rotated_image_cache.keys() if key[0] == original_path]
+            for key in keys_to_remove:
+                del self._rotated_image_cache[key]
+            
+            # Clear image arrays from memory after processing all AOIs for this image
+            # This is critical for large image sets to prevent memory exhaustion
+            del img_array
+            del display_img_array
+            
+            # Clear image array from ImageService cache to free memory
+            # Metadata (GPS, bearing, etc.) is already extracted, so we don't need the full image array anymore
+            if cache_key in self._image_service_cache:
+                image_service = self._image_service_cache[cache_key]
+                if hasattr(image_service, 'img_array') and image_service.img_array is not None:
+                    image_service.img_array = None
 
     def _initialize_styles(self):
         """Initialize paragraph styles for the document."""
@@ -538,7 +638,7 @@ class PdfGeneratorService:
         Generate an overview map showing all images and flagged AOIs with map tile background.
 
         Returns:
-            BytesIO: Image bytes of the overview map, or None if no GPS data
+            str: Path to temporary file containing the overview map image, or None if no GPS data
         """
         try:
             # Collect GPS data for ALL images (not just flagged)
@@ -678,9 +778,11 @@ class PdfGeneratorService:
             cv2.putText(map_img, 'Flagged AOI locations', (legend_x + 44, legend_y + 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 1)
 
-            # Encode to bytes (reduced quality to 75 for smaller file size - maps don't need high detail)
-            _, buffer = cv2.imencode('.jpg', map_img, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            return BytesIO(buffer)
+            # Save to temporary file instead of BytesIO to reduce memory usage
+            temp_file = self._save_image_to_temp_file(map_img, quality=75)
+            # Explicitly delete large numpy array to free memory
+            del map_img
+            return temp_file
 
         except Exception as e:
             self.logger.error(f"Error generating overview map: {e}")
@@ -1271,3 +1373,54 @@ class PdfGeneratorService:
         except Exception as e:
             self.logger.error(f"Error creating full rotated image: {e}")
             return None, None
+
+    def _save_image_to_temp_file(self, img_array, quality=70):
+        """
+        Save image array to a temporary file instead of keeping it in memory.
+        
+        This reduces memory usage for large image sets by writing images to disk
+        and letting ReportLab read them when needed, rather than keeping all
+        images in BytesIO buffers in memory.
+        
+        Args:
+            img_array: Image as numpy array (BGR format)
+            quality: JPEG quality (0-100)
+            
+        Returns:
+            str: Path to temporary file
+        """
+        try:
+            # Create temporary file
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.jpg', prefix='adiat_pdf_')
+            os.close(temp_fd)  # Close file descriptor, we'll use the path
+            
+            # Encode and save to file
+            _, buffer = cv2.imencode('.jpg', img_array, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            with open(temp_path, 'wb') as f:
+                f.write(buffer.tobytes())
+            
+            # Track for cleanup
+            self._temp_files.append(temp_path)
+            
+            return temp_path
+        except Exception as e:
+            self.logger.error(f"Error saving image to temp file: {e}")
+            # Fallback to BytesIO if temp file fails
+            _, buffer = cv2.imencode('.jpg', img_array, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            return BytesIO(buffer)
+
+    def _cleanup_temp_files(self):
+        """Clean up temporary files created during PDF generation."""
+        for temp_path in self._temp_files:
+            try:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            except Exception as e:
+                self.logger.warning(f"Failed to delete temp file {temp_path}: {e}")
+        self._temp_files.clear()
+
+    def _clear_caches(self):
+        """Clear all caches to free memory."""
+        self._rotated_image_cache.clear()
+        # Don't clear ImageService cache here as it might be reused
+        # Individual entries are cleared after each image is processed

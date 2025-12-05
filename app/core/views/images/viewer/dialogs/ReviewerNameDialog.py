@@ -100,6 +100,17 @@ class ReviewerNameDialog(QDialog):
         self.name_input.setFocus()
         self.name_input.selectAll()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the name input so users can type immediately
+        if hasattr(self, 'name_input'):
+            self.name_input.setFocus()
+            self.name_input.selectAll()
+
     def _on_ok_clicked(self):
         """Handle OK button click."""
         name = self.name_input.text().strip()

@@ -73,6 +73,16 @@ class ColorListDialog(QDialog):
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self._populate_table()
 
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit focus
+        self.activateWindow()
+        self.raise_()
+        # Set focus to the search input so users can type immediately
+        if hasattr(self, 'search_input'):
+            self.search_input.setFocus()
+
     def _apply_filter(self, text: str) -> None:
         query = (text or "").strip().lower()
         if not query:

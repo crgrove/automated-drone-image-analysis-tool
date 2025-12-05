@@ -113,18 +113,7 @@ class PDFExportController:
             search_name = settings_dialog.get_search_name()
             include_images_without_flagged_aois = settings_dialog.get_include_images_without_flagged_aois()
 
-            # Open file dialog for PDF export
-            file_name, _ = QFileDialog.getSaveFileName(
-                self.parent,
-                "Save PDF File",
-                "",
-                "PDF files (*.pdf)"
-            )
-
-            if not file_name:  # User cancelled
-                return False
-
-            # Filter images based on user preference
+            # Filter images based on user preference to check if there are any images to export
             original_images = images
             filtered_images = []
 
@@ -152,11 +141,34 @@ class PDFExportController:
                             # Include image with ALL its AOIs
                             filtered_images.append(img_copy)
 
+            # Check if there are any images to export BEFORE showing file dialog
             if not filtered_images:
                 if include_images_without_flagged_aois:
-                    self._show_toast("No images to include in PDF", 3000, color="#F44336")
+                    QMessageBox.warning(
+                        self.parent,
+                        "No Images to Export",
+                        "There are no images available to include in the PDF report.\n\n"
+                        "All images may be hidden or there are no images in the dataset."
+                    )
                 else:
-                    self._show_toast("No flagged AOIs to include in PDF", 3000, color="#F44336")
+                    QMessageBox.warning(
+                        self.parent,
+                        "No Images to Export",
+                        "There are no images with flagged AOIs to include in the PDF report.\n\n"
+                        "Please flag at least one AOI, or check 'Include images without flagged AOIs' "
+                        "to include all images in the report."
+                    )
+                return False
+
+            # Open file dialog for PDF export
+            file_name, _ = QFileDialog.getSaveFileName(
+                self.parent,
+                "Save PDF File",
+                "",
+                "PDF files (*.pdf)"
+            )
+
+            if not file_name:  # User cancelled
                 return False
 
             # Create PDF generator with filtered images

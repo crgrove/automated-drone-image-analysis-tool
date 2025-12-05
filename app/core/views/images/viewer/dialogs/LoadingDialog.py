@@ -38,3 +38,10 @@ class LoadingDialog(QDialog):
         layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
 
         self.setLayout(layout)
+
+    def showEvent(self, event):
+        """Override showEvent to ensure dialog appears and receives focus on macOS."""
+        super().showEvent(event)
+        # On macOS, modal dialogs sometimes need explicit activation to appear
+        self.activateWindow()
+        self.raise_()
