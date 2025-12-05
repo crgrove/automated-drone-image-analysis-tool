@@ -136,11 +136,11 @@ class TestStreamingGuide:
 
         # Test all aggressiveness levels
         test_cases = [
-            (0, 80.0, "Very Conservative"),
-            (1, 50.0, "Conservative"),
+            (0, 5.0, "Very Conservative"),
+            (1, 15.0, "Conservative"),
             (2, 30.0, "Moderate"),
-            (3, 15.0, "Aggressive"),
-            (4, 5.0, "Very Aggressive"),
+            (3, 50.0, "Aggressive"),
+            (4, 80.0, "Very Aggressive"),
         ]
 
         for index, expected_percentile, label in test_cases:
@@ -258,11 +258,11 @@ class TestStreamingGuide:
 
         # Test percentile to index mapping
         test_cases = [
-            (80.0, 0),  # Very Conservative
-            (50.0, 1),  # Conservative
+            (5.0, 0),   # Very Conservative
+            (15.0, 1),  # Conservative
             (30.0, 2),  # Moderate
-            (15.0, 3),  # Aggressive
-            (5.0, 4),   # Very Aggressive
+            (50.0, 3),  # Aggressive
+            (80.0, 4),  # Very Aggressive
         ]
 
         for percentile, expected_index in test_cases:

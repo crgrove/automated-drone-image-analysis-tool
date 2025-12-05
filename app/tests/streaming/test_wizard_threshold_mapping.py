@@ -61,11 +61,11 @@ class TestWizardThresholdMapping:
     def test_all_aggressiveness_levels_map_correctly(self, mock_stats, mock_renderer, mock_coord, qapp):
         """Test all aggressiveness levels map to correct threshold values."""
         test_cases = [
-            (80.0, "Very Conservative"),
-            (50.0, "Conservative"),
+            (5.0, "Very Conservative"),
+            (15.0, "Conservative"),
             (30.0, "Moderate"),
-            (15.0, "Aggressive"),
-            (5.0, "Very Aggressive"),
+            (50.0, "Aggressive"),
+            (80.0, "Very Aggressive"),
         ]
 
         for percentile, label in test_cases:

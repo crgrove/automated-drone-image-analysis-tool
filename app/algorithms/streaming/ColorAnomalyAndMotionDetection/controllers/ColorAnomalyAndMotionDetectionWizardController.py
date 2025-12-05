@@ -71,18 +71,18 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
         }
 
         # Map aggressiveness index to color_rarity_percentile
-        # Higher percentile = more conservative (only very rare colors)
-        # Lower percentile = more aggressive (less rare colors)
+        # Lower percentile = more conservative (only very rare colors, fewer detections)
+        # Higher percentile = more aggressive (includes more common colors, more detections)
         aggr_index = self.aggressivenessSlider.value()
         aggr_label, _ = self.aggressivenessSlider.getCurrentPreset()
 
         # Map aggressiveness index (0-4) to percentile values
-        # Very Conservative (0) -> 80 (only very rare colors)
-        # Conservative (1) -> 50
+        # Very Conservative (0) -> 5 (only very rare colors, fewer detections)
+        # Conservative (1) -> 15
         # Moderate (2) -> 30 (default)
-        # Aggressive (3) -> 15
-        # Very Aggressive (4) -> 5 (even common colors)
-        percentile_map = {0: 80.0, 1: 50.0, 2: 30.0, 3: 15.0, 4: 5.0}
+        # Aggressive (3) -> 50
+        # Very Aggressive (4) -> 80 (includes more common colors, more detections)
+        percentile_map = {0: 5.0, 1: 15.0, 2: 30.0, 3: 50.0, 4: 80.0}
         color_rarity_percentile = percentile_map.get(aggr_index, 30.0)
 
         options['color_rarity_percentile'] = color_rarity_percentile
@@ -125,14 +125,15 @@ class ColorAnomalyAndMotionDetectionWizardController(QWidget, Ui_ColorAnomalyAnd
                 self.aggressivenessSlider.setValue(max(0, min(4, aggr_index)))
         elif 'color_rarity_percentile' in options:
             # Reverse map percentile to aggressiveness index for backward compatibility
+            # Lower percentile = conservative, higher percentile = aggressive
             percentile = float(options['color_rarity_percentile'])
-            if percentile >= 70:
+            if percentile <= 10:
                 index = 0  # Very Conservative
-            elif percentile >= 40:
+            elif percentile <= 20:
                 index = 1  # Conservative
-            elif percentile >= 20:
+            elif percentile <= 40:
                 index = 2  # Moderate
-            elif percentile >= 10:
+            elif percentile <= 60:
                 index = 3  # Aggressive
             else:
                 index = 4  # Very Aggressive
