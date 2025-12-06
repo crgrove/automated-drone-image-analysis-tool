@@ -176,6 +176,20 @@ class ColorDetectionController(StreamAlgorithmController):
         config.use_detection_color_for_rendering = ui_config.get('use_detection_color_for_rendering', False)
         config.max_detections_to_render = ui_config.get('max_detections_to_render', 0)  # 0 = unlimited
 
+        # Set temporal voting parameters from UI config
+        config.enable_temporal_voting = ui_config.get('enable_temporal_voting', False)
+        config.temporal_window_frames = ui_config.get('temporal_window_frames', 5)
+        config.temporal_threshold_frames = ui_config.get('temporal_threshold_frames', 3)
+
+        # Set detection clustering parameters from UI config
+        config.enable_detection_clustering = ui_config.get('enable_detection_clustering', False)
+        config.clustering_distance = ui_config.get('clustering_distance', 50.0)
+
+        # Set aspect ratio filter parameters from UI config
+        config.enable_aspect_ratio_filter = ui_config.get('enable_aspect_ratio_filter', False)
+        config.min_aspect_ratio = ui_config.get('min_aspect_ratio', 0.2)
+        config.max_aspect_ratio = ui_config.get('max_aspect_ratio', 5.0)
+
         # Set optional parameters if provided
         if color_ranges and len(color_ranges) > 0:
             first_range = color_ranges[0]
