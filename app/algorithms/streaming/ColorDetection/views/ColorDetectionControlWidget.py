@@ -10,7 +10,7 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
                                QComboBox, QGroupBox, QPushButton, QListWidget, QListWidgetItem,
-                               QScrollArea, QDialog)
+                               QScrollArea, QDialog, QSlider)
 from PySide6.QtGui import QColor
 
 from core.services.LoggerService import LoggerService
@@ -152,19 +152,22 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         grid.addWidget(self.max_area_spinbox, 1, 1)
 
         grid.addWidget(QLabel("Confidence Threshold:"), 2, 0)
-        self.confidence_spinbox = QDoubleSpinBox()
-        self.confidence_spinbox.setRange(0.0, 1.0)
-        self.confidence_spinbox.setSingleStep(0.05)
-        self.confidence_spinbox.setValue(0.5)
-        self.confidence_spinbox.setToolTip("Minimum confidence score to accept a detection (0.0-1.0).\n"
-                                           "Confidence is calculated from:\n"
-                                           "• Size score: area relative to max area\n"
-                                           "• Shape score: solidity (how compact/regular the shape is)\n"
-                                           "• Final: average of both scores\n\n"
-                                           "Lower values (0.0-0.3) = accept more detections, including weak/fragmented ones.\n"
-                                           "Higher values (0.7-1.0) = only high-quality detections, well-formed shapes.\n"
-                                           "Recommended: 0.5 for balanced filtering, 0.3 for more detections, 0.7 for strict quality.")
-        grid.addWidget(self.confidence_spinbox, 2, 1)
+        confidence_layout = QHBoxLayout()
+        self.confidence_slider = QSlider(Qt.Horizontal)
+        self.confidence_slider.setRange(0, 100)
+        self.confidence_slider.setValue(50)  # Default 0.5 (50%)
+        self.confidence_slider.setToolTip("Minimum confidence score to accept a detection (0-100%).\n"
+                                          "Confidence is calculated from:\n"
+                                          "• Size score: area relative to max area\n"
+                                          "• Shape score: solidity (how compact/regular the shape is)\n"
+                                          "• Final: average of both scores\n\n"
+                                          "Lower values (0-30%) = accept more detections, including weak/fragmented ones.\n"
+                                          "Higher values (70-100%) = only high-quality detections, well-formed shapes.\n"
+                                          "Recommended: 50% for balanced filtering, 30% for more detections, 70% for strict quality.")
+        confidence_layout.addWidget(self.confidence_slider)
+        self.confidence_label = QLabel("50%")
+        confidence_layout.addWidget(self.confidence_label)
+        grid.addLayout(confidence_layout, 2, 1)
 
         layout.addLayout(grid)
         layout.addStretch()
@@ -189,7 +192,8 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         if hasattr(self, 'min_area_spinbox'):
             self.min_area_spinbox.valueChanged.connect(self._emit_config_changed)
             self.max_area_spinbox.valueChanged.connect(self._emit_config_changed)
-            self.confidence_spinbox.valueChanged.connect(self._emit_config_changed)
+            self.confidence_slider.valueChanged.connect(self._update_confidence_label)
+            self.confidence_slider.valueChanged.connect(self._emit_config_changed)
 
         # Rendering (from shared RenderingTab)
         self.rendering_tab.render_shape.currentTextChanged.connect(self._emit_config_changed)
@@ -371,9 +375,30 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
     def _on_remove_color_range(self, widget):
         """Remove a color range by widget reference."""
         if widget in self.color_range_widgets:
+            # Find the index before removing
             index = self.color_range_widgets.index(widget)
+            
+            # First, sync data from all widgets to color_ranges to preserve any edits
+            # This must happen before removing to keep indices aligned
+            if self.color_range_widgets:
+                for i, w in enumerate(self.color_range_widgets):
+                    if i < len(self.color_ranges):
+                        hsv_ranges = w.get_hsv_ranges()
+                        color = w.get_color()
+                        self.color_ranges[i]['color'] = color
+                        self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
+                        self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                        self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
+                        self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
+                        self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
+                        self.color_ranges[i]['val_plus'] = int(hsv_ranges['v_plus'] * 255)
+            
+            # Now remove from color_ranges using the correct index
             if index < len(self.color_ranges):
                 self.color_ranges.pop(index)
+                # Remove widget from list to prevent sync issues in _update_color_ranges_display
+                self.color_range_widgets.remove(widget)
+                widget.setParent(None)
                 self._update_color_ranges_display()
                 self._emit_config_changed()
 
@@ -447,6 +472,11 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         """Emit configuration changed signal."""
         self.configChanged.emit(self.get_config())
 
+    def _update_confidence_label(self):
+        """Update confidence threshold label."""
+        value = self.confidence_slider.value()
+        self.confidence_label.setText(f"{value}%")
+
     def get_config(self) -> dict:
         """Get current configuration matching ColorAnomalyAndMotionDetection format."""
         # Get processing resolution from shared InputProcessingTab
@@ -504,7 +534,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             # Detection
             'min_area': self.min_area_spinbox.value() if hasattr(self, 'min_area_spinbox') else 100,
             'max_area': self.max_area_spinbox.value() if hasattr(self, 'max_area_spinbox') else 100000,
-            'confidence_threshold': self.confidence_spinbox.value() if hasattr(self, 'confidence_spinbox') else 0.5,
+            'confidence_threshold': self.confidence_slider.value() / 100.0 if hasattr(self, 'confidence_slider') else 0.5,
 
             # Rendering (from shared RenderingTab)
             **rendering_config,

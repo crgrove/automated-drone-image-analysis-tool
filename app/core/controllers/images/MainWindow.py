@@ -117,6 +117,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.actionHelp.triggered.connect(self._open_help)
         if hasattr(self, 'actionCommunityHelp'):
             self.actionCommunityHelp.triggered.connect(self._open_community_help)
+        if hasattr(self, 'actionYouTube_Channel'):
+            self.actionYouTube_Channel.triggered.connect(self._open_youtube_channel)
 
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
@@ -128,18 +130,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         initial_max_value = self.maxAreaSpinBox.value()
         self._last_non_zero_max_area = initial_max_value if initial_max_value > 0 else 1000
 
-        # Ensure spinbox state matches checkbox state on initialization
-        # Checkbox is checked by default in UI, so spinbox should be disabled and set to 0
-        if self.maxAreaNoLimitCheckbox.isChecked():
-            self.maxAreaSpinBox.setValue(0)
-            self.maxAreaSpinBox.setEnabled(False)
-        else:
-            # If checkbox somehow not checked, ensure spinbox is enabled
-            self.maxAreaSpinBox.setEnabled(True)
+        # Ensure spinbox and checkbox reflect persisted max-area value rather than UI defaults
+        self._sync_max_area_no_limit_ui(initial_max_value)
 
         # NOW connect signals after initial state is set
         self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_valueChanged)
-        self.maxAreaNoLimitCheckbox.stateChanged.connect(self._maxAreaNoLimitCheckbox_changed)
+        # Use toggled to capture user intent once per click
+        self.maxAreaNoLimitCheckbox.toggled.connect(self._maxAreaNoLimitCheckbox_changed)
 
         # Store original values to detect actual changes
         self._minAreaOriginal = self.minAreaSpinBox.value()
@@ -431,7 +428,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         When checked: sets spinbox to 0 (None) and disables it.
         When unchecked: restores previous value and enables the spinbox.
         """
-        checked = state == Qt.Checked
+        checked = state if isinstance(state, bool) else state == Qt.Checked
         if checked:
             # Store current value if it's greater than 0 before setting to None
             if self.maxAreaSpinBox.value() > 0:
@@ -452,13 +449,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.maxAreaSpinBox.setEnabled(True)
             self.maxAreaSpinBox.blockSignals(False)
             self.maxAreaSpinBox.setFocus()
+        self._sync_max_area_no_limit_ui(self.maxAreaSpinBox.value())
 
     def _sync_max_area_no_limit_ui(self, max_value, from_value_change=False):
         """
         Updates the max-area controls to reflect whether there is an active ceiling.
         """
         no_limit = max_value == 0
-        if not no_limit and from_value_change:
+        if max_value > 0:
             self._last_non_zero_max_area = max_value
         self.maxAreaSpinBox.setEnabled(not no_limit)
         block = self.maxAreaNoLimitCheckbox.blockSignals(True)
@@ -681,6 +679,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if 'max_area' in settings:
             self.maxAreaSpinBox.setValue(int(settings['max_area']))
             self._maxAreaOriginal = int(settings['max_area'])
+            self._sync_max_area_no_limit_ui(self.maxAreaSpinBox.value())
         if 'hist_ref_path' in settings:
             if settings['hist_ref_path'] != "":
                 self.histogramCheckbox.setChecked(True)
@@ -746,6 +745,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._minAreaOriginal = min_area
                 self.maxAreaSpinBox.setValue(max_area)
                 self._maxAreaOriginal = max_area
+                self._sync_max_area_no_limit_ui(max_area)
 
         # Set normalize histogram based on lighting conditions
         if wizard_data.get('normalize_histogram'):
@@ -921,6 +921,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.logger.error(f"Error opening Community Help URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
+
+    def _open_youtube_channel(self):
+        """
+        Opens the YouTube Channel URL in the default browser.
+        """
+        try:
+            url = QUrl("https://www.youtube.com/@adiat-u4f")
+            QDesktopServices.openUrl(url)
+            # self.logger.info("YouTube Channel opened")
+        except Exception as e:
+            self.logger.error(f"Error opening YouTube Channel URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
 
     def showEvent(self, event):
         """

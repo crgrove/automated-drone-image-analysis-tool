@@ -25,6 +25,7 @@ import traceback
 from PySide6.QtCore import QObject, QThread, Signal
 from helpers.ColorUtils import ColorUtils
 from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
 from core.services.streaming.StreamingUtils import (
     FrameQueue, PerformanceMetrics, StageTimings
 )
@@ -167,6 +168,7 @@ class ColorDetectionService(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = LoggerService()
+        self.settings_service = SettingsService()
 
         # Detection configuration
         self._config = HSVConfig(target_color_rgb=(255, 0, 0))  # Default red
@@ -1762,14 +1764,27 @@ class ColorDetectionService(QObject):
             # Render shape based on render_shape setting
             if self._config.render_shape == 0:
                 # Box with centroid marker
-                cv2.rectangle(annotated, (x, y), (x + w, y + h), color, 2)
+                # Add AOI radius buffer from preferences to expand the box
+                aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                x_expanded = max(0, x - int(aoi_radius))
+                y_expanded = max(0, y - int(aoi_radius))
+                w_expanded = w + int(aoi_radius) * 2
+                h_expanded = h + int(aoi_radius) * 2
+                # Ensure expanded box doesn't exceed image bounds
+                w_expanded = min(w_expanded, annotated.shape[1] - x_expanded)
+                h_expanded = min(h_expanded, annotated.shape[0] - y_expanded)
+                cv2.rectangle(annotated, (x_expanded, y_expanded), 
+                             (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
                 cv2.circle(annotated, (centroid_x, centroid_y), 3, color, -1)
 
             elif self._config.render_shape == 1:
                 # Circle that encompasses the entire bounding box
                 # Calculate diagonal distance from centroid to corner, then add 10% margin
                 diagonal = np.sqrt(w * w + h * h) / 2.0
-                radius = int(diagonal * 1.1)  # 10% margin to ensure full coverage
+                base_radius = int(diagonal * 1.1)  # 10% margin to ensure full coverage
+                # Add AOI radius buffer from preferences
+                aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                radius = base_radius + int(aoi_radius)
                 cv2.circle(annotated, (centroid_x, centroid_y), radius, color, 2)
 
             elif self._config.render_shape == 2:

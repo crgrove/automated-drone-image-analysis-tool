@@ -6,6 +6,7 @@ color anomaly and motion detection with fusion, temporal smoothing, and filterin
 """
 
 from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
 from core.services.streaming.StreamingUtils import (
     FrameQueue, PerformanceMetrics, StageTimings
 )
@@ -46,6 +47,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
     def __init__(self):
         super().__init__()
         self.logger = LoggerService()
+        self.settings_service = SettingsService()
 
         # Configuration
         self.config = ColorAnomalyAndMotionDetectionConfig()
@@ -564,18 +566,30 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                     cv2.drawContours(annotated_frame, [scaled_contour], -1, color, 2)
 
                 if config.render_shape == 0:  # Box
-                    cv2.rectangle(annotated_frame, (x_scaled, y_scaled),
-                                  (x_scaled + w_scaled, y_scaled + h_scaled), color, 2)
+                    # Add AOI radius buffer from preferences to expand the box
+                    aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                    x_expanded = max(0, x_scaled - int(aoi_radius))
+                    y_expanded = max(0, y_scaled - int(aoi_radius))
+                    w_expanded = w_scaled + int(aoi_radius) * 2
+                    h_expanded = h_scaled + int(aoi_radius) * 2
+                    # Ensure expanded box doesn't exceed image bounds
+                    w_expanded = min(w_expanded, annotated_frame.shape[1] - x_expanded)
+                    h_expanded = min(h_expanded, annotated_frame.shape[0] - y_expanded)
+                    cv2.rectangle(annotated_frame, (x_expanded, y_expanded),
+                                  (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
                 elif config.render_shape == 1:  # Circle
                     if detection.contour is not None:
                         scaled_contour = (detection.contour * render_inverse_scale).astype(np.int32)
                         (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
-                        radius = max(5, int(contour_radius * 1.5))
+                        base_radius = max(5, int(contour_radius * 1.5))
                     else:
                         # Calculate diagonal distance from centroid to corner of bounding box, then add 10% margin
                         diagonal = np.sqrt(w_scaled * w_scaled + h_scaled * h_scaled) / 2.0
-                        radius = max(5, int(diagonal * 1.1))  # 10% margin to ensure full coverage
+                        base_radius = max(5, int(diagonal * 1.1))  # 10% margin to ensure full coverage
+                    # Add AOI radius buffer from preferences
+                    aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                    radius = base_radius + int(aoi_radius)
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), radius, color, 2)
                 elif config.render_shape == 2:  # Dot
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 5, color, -1)
