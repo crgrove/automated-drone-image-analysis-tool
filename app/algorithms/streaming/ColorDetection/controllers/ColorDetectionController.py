@@ -176,6 +176,16 @@ class ColorDetectionController(StreamAlgorithmController):
         config.use_detection_color_for_rendering = ui_config.get('use_detection_color_for_rendering', False)
         config.max_detections_to_render = ui_config.get('max_detections_to_render', 0)  # 0 = unlimited
 
+        # Set cleanup parameters from UI config (from shared CleanupTab)
+        config.enable_temporal_voting = ui_config.get('enable_temporal_voting', True)
+        config.temporal_window_frames = ui_config.get('temporal_window_frames', 5)
+        config.temporal_threshold_frames = ui_config.get('temporal_threshold_frames', 3)
+        config.enable_aspect_ratio_filter = ui_config.get('enable_aspect_ratio_filter', False)
+        config.min_aspect_ratio = ui_config.get('min_aspect_ratio', 0.2)
+        config.max_aspect_ratio = ui_config.get('max_aspect_ratio', 5.0)
+        config.enable_detection_clustering = ui_config.get('enable_detection_clustering', False)
+        config.clustering_distance = ui_config.get('clustering_distance', 50.0)
+
         # Set optional parameters if provided
         if color_ranges and len(color_ranges) > 0:
             first_range = color_ranges[0]
@@ -221,6 +231,14 @@ class ColorDetectionController(StreamAlgorithmController):
 
             config.hsv_ranges_list = hsv_ranges_list
 
+        # Set processing mask parameters from UI config (from shared FrameTab)
+        config.mask_enabled = ui_config.get('mask_enabled', False)
+        config.frame_mask_enabled = ui_config.get('frame_mask_enabled', False)
+        config.image_mask_enabled = ui_config.get('image_mask_enabled', False)
+        config.frame_buffer_pixels = ui_config.get('frame_buffer_pixels', 50)
+        config.mask_image_path = ui_config.get('mask_image_path', None)
+        config.show_mask_overlay = ui_config.get('show_mask_overlay', True)
+
         return config
 
     # Required interface methods
@@ -247,6 +265,27 @@ class ColorDetectionController(StreamAlgorithmController):
                     rendering_config[key] = config[key]
             if rendering_config:
                 self.control_widget.rendering_tab.set_config(rendering_config)
+
+        # Update cleanup config in CleanupTab
+        if hasattr(self.control_widget, 'cleanup_tab'):
+            cleanup_config = {}
+            for key in ['enable_temporal_voting', 'temporal_window_frames', 'temporal_threshold_frames',
+                        'enable_aspect_ratio_filter', 'min_aspect_ratio', 'max_aspect_ratio',
+                        'enable_detection_clustering', 'clustering_distance']:
+                if key in config:
+                    cleanup_config[key] = config[key]
+            if cleanup_config:
+                self.control_widget.cleanup_tab.set_config(cleanup_config)
+
+        # Update frame/mask config in FrameTab
+        if hasattr(self.control_widget, 'frame_tab'):
+            frame_config = {}
+            for key in ['mask_enabled', 'frame_mask_enabled', 'image_mask_enabled',
+                        'frame_buffer_pixels', 'mask_image_path', 'show_mask_overlay']:
+                if key in config:
+                    frame_config[key] = config[key]
+            if frame_config:
+                self.control_widget.frame_tab.set_config(frame_config)
 
         # Update control widget with config
         if 'color_ranges' in config:

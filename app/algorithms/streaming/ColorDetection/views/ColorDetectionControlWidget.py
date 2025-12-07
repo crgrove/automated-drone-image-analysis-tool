@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from PySide6.QtGui import QColor
 
 from core.services.LoggerService import LoggerService
-from core.views.streaming.components import InputProcessingTab, RenderingTab
+from core.views.streaming.components import InputProcessingTab, RenderingTab, CleanupTab, FrameTab
 from algorithms.streaming.ColorDetection.views.HSVControlWidget_ui import Ui_HSVControlWidget
 from algorithms.Shared.views import HSVColorRowWidget
 from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
@@ -56,12 +56,16 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         # Clear placeholder tabs
         self.tabs.clear()
 
-        # Use shared tabs for Input & Processing and Rendering
+        # Use shared tabs for Input & Processing, Cleanup, Frame, and Rendering
         self.input_processing_tab = InputProcessingTab()
+        self.cleanup_tab = CleanupTab()
+        self.frame_tab = FrameTab()
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
         self.tabs.addTab(self._create_color_selection_tab(), "Color Selection")
         self.tabs.addTab(self._create_detection_tab(), "Detection")
         self.tabs.addTab(self.input_processing_tab, "Input & Processing")
+        self.tabs.addTab(self.cleanup_tab, "Cleanup")
+        self.tabs.addTab(self.frame_tab, "Frame")
         self.tabs.addTab(self.rendering_tab, "Rendering")
 
     def _create_color_selection_tab(self) -> QWidget:
@@ -190,6 +194,19 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             self.min_area_spinbox.valueChanged.connect(self._emit_config_changed)
             self.max_area_spinbox.valueChanged.connect(self._emit_config_changed)
             self.confidence_spinbox.valueChanged.connect(self._emit_config_changed)
+
+        # Cleanup (from shared CleanupTab)
+        self.cleanup_tab.enable_temporal_voting.toggled.connect(self._emit_config_changed)
+        self.cleanup_tab.temporal_window_frames.valueChanged.connect(self._emit_config_changed)
+        self.cleanup_tab.temporal_threshold_frames.valueChanged.connect(self._emit_config_changed)
+        self.cleanup_tab.enable_aspect_ratio_filter.toggled.connect(self._emit_config_changed)
+        self.cleanup_tab.min_aspect_ratio.valueChanged.connect(self._emit_config_changed)
+        self.cleanup_tab.max_aspect_ratio.valueChanged.connect(self._emit_config_changed)
+        self.cleanup_tab.enable_detection_clustering.toggled.connect(self._emit_config_changed)
+        self.cleanup_tab.clustering_distance.valueChanged.connect(self._emit_config_changed)
+
+        # Frame/Mask (from shared FrameTab)
+        self.frame_tab.configChanged.connect(self._emit_config_changed)
 
         # Rendering (from shared RenderingTab)
         self.rendering_tab.render_shape.currentTextChanged.connect(self._emit_config_changed)
@@ -456,6 +473,12 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         else:
             processing_resolution = (processing_width, processing_height)
 
+        # Get cleanup config from shared CleanupTab
+        cleanup_config = self.cleanup_tab.get_config()
+
+        # Get frame/mask config from shared FrameTab
+        frame_config = self.frame_tab.get_config()
+
         # Get rendering config from shared RenderingTab
         rendering_config = self.rendering_tab.get_config()
 
@@ -505,6 +528,12 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             'min_area': self.min_area_spinbox.value() if hasattr(self, 'min_area_spinbox') else 100,
             'max_area': self.max_area_spinbox.value() if hasattr(self, 'max_area_spinbox') else 100000,
             'confidence_threshold': self.confidence_spinbox.value() if hasattr(self, 'confidence_spinbox') else 0.5,
+
+            # Cleanup (from shared CleanupTab)
+            **cleanup_config,
+
+            # Frame/Mask (from shared FrameTab)
+            **frame_config,
 
             # Rendering (from shared RenderingTab)
             **rendering_config,

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QComboBox, QGroupBox, QSlider, QTabWidget)
 
 from core.services.LoggerService import LoggerService
-from core.views.streaming.components import InputProcessingTab, RenderingTab, ColorWheelWidget
+from core.views.streaming.components import InputProcessingTab, RenderingTab, ColorWheelWidget, FrameTab
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services.shared_types import (
     MotionAlgorithm, FusionMode
 )
@@ -50,10 +50,12 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.tabs.addTab(self._create_color_tab(), "Color Anomaly")
         self.tabs.addTab(self._create_motion_tab(), "Motion Detection")
         self.tabs.addTab(self._create_fusion_tab(), "Fusion && Cleanup")
-        # Use shared tabs for Input & Processing and Rendering
+        # Use shared tabs for Input & Processing, Frame, and Rendering
         self.input_processing_tab = InputProcessingTab()
+        self.frame_tab = FrameTab()
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
         self.tabs.addTab(self.input_processing_tab, "Input && Processing")
+        self.tabs.addTab(self.frame_tab, "Frame")
         self.tabs.addTab(self.rendering_tab, "Rendering")
 
     def _create_motion_tab(self) -> QWidget:
@@ -611,6 +613,9 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         # Color wheel selection changes
         self.color_wheel.selectionChanged.connect(self.emit_config)
 
+        # Frame/Mask (from shared FrameTab)
+        self.frame_tab.configChanged.connect(self.emit_config)
+
         # Rendering (from shared RenderingTab)
         self.rendering_tab.render_shape.currentTextChanged.connect(self.emit_config)
         self.rendering_tab.render_text.toggled.connect(self.emit_config)
@@ -732,6 +737,9 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             'clustering_distance': self.clustering_distance.value(),
             'enable_color_exclusion': self.enable_color_exclusion.isChecked(),
             'excluded_hue_ranges': excluded_hue_ranges,
+
+            # Frame/Mask (from shared FrameTab)
+            **self.frame_tab.get_config(),
 
             # Rendering (from shared RenderingTab)
             **self.rendering_tab.get_config(),

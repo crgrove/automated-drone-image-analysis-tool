@@ -88,13 +88,13 @@ class RenderingTab(QWidget):
         limit_layout.addWidget(QLabel("Max Detections:"), 0, 0)
         self.max_detections_to_render = QSpinBox()
         self.max_detections_to_render.setRange(0, 1000)
-        self.max_detections_to_render.setValue(100)
+        self.max_detections_to_render.setValue(10)
         self.max_detections_to_render.setSpecialValueText("Unlimited")
         self.max_detections_to_render.setToolTip("Maximum number of detections to render on screen (0-1000).\n"
                                                  "Prevents rendering slowdown when hundreds of detections occur.\n"
                                                  "Shows highest confidence detections first.\n"
                                                  "0 = Unlimited (may cause lag with many detections).\n"
-                                                 "Recommended: 100 for general use, 50 for complex rendering (text+contours).")
+                                                 "Recommended: 10 for general use, 50 for complex rendering (text+contours).")
         limit_layout.addWidget(self.max_detections_to_render, 0, 1)
 
         layout.addWidget(limit_group)
