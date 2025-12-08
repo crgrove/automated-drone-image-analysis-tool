@@ -118,3 +118,11 @@ class ColorAnomalyAndMotionDetectionConfig:
     # Color exclusion (background learning)
     enable_color_exclusion: bool = False
     excluded_hue_ranges: List[Tuple[float, float]] = field(default_factory=list)
+
+    # Processing Mask Options
+    mask_enabled: bool = False  # Enable processing region mask
+    frame_mask_enabled: bool = False  # Enable frame buffer mask
+    image_mask_enabled: bool = False  # Enable image mask
+    frame_buffer_pixels: int = 50  # Pixels to exclude from all edges (frame mode)
+    mask_image_path: Optional[str] = None  # Path to mask image file (image mode)
+    show_mask_overlay: bool = True  # Show mask visualization on rendered video

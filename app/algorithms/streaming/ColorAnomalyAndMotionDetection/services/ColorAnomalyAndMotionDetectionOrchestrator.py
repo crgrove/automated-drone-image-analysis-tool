@@ -73,6 +73,15 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Temporal voting state
         self._temporal_detection_history: deque = deque(maxlen=self.config.temporal_window_frames)
 
+        # Processing mask manager
+        from core.services.streaming.MaskManager import MaskManager
+        self._mask_manager = MaskManager()
+
+        # Rendering state (for render_at_processing_res)
+        self._processing_frame = None
+        self._original_frame = None
+        self._current_scale_factor = 1.0
+
         # self.logger.info("Color anomaly and motion detection orchestrator initialized")
 
     def update_config(self, config: ColorAnomalyAndMotionDetectionConfig):
@@ -392,6 +401,136 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         return filtered
 
+    def _apply_mask_filter(self, detections: List[Detection], processing_shape: Tuple[int, int]) -> List[Detection]:
+        """
+        Filter detections to exclude those whose centroids fall outside the processing mask.
+
+        Args:
+            detections: List of detections to filter
+            processing_shape: (height, width) of the processing frame
+
+        Returns:
+            Filtered list of detections
+        """
+        config = self.config
+        if not config.mask_enabled:
+            return detections
+
+        if not hasattr(self, '_mask_manager'):
+            return detections
+
+        # Get original resolution
+        original_h, original_w = self._original_frame.shape[:2] if self._original_frame is not None else processing_shape
+        proc_h, proc_w = processing_shape
+
+        # Get mask at processing resolution (where detections were made)
+        processing_mask = self._mask_manager.get_mask(
+            {
+                'mask_enabled': config.mask_enabled,
+                'frame_mask_enabled': config.frame_mask_enabled,
+                'image_mask_enabled': config.image_mask_enabled,
+                'frame_buffer_pixels': config.frame_buffer_pixels,
+                'mask_image_path': config.mask_image_path,
+            },
+            (original_w, original_h),
+            (proc_w, proc_h) if (proc_w, proc_h) != (original_w, original_h) else None
+        )
+
+        if processing_mask is None:
+            return detections
+
+        # Filter detections whose centroids fall in excluded regions (black in mask)
+        filtered = []
+        for detection in detections:
+            cx, cy = detection.centroid
+            # Ensure coordinates are within bounds
+            cx = max(0, min(cx, proc_w - 1))
+            cy = max(0, min(cy, proc_h - 1))
+
+            # Check if centroid is in the processing region (white=255 in mask)
+            if processing_mask[cy, cx] > 127:  # Inside mask (process area)
+                filtered.append(detection)
+
+        return filtered
+
+    def _draw_mask_overlay(self, frame: np.ndarray, config, render_inverse_scale: float) -> np.ndarray:
+        """
+        Draw mask overlay on frame for visualization.
+
+        Args:
+            frame: Frame to draw on
+            config: Configuration object
+            render_inverse_scale: Scale factor for coordinates (1/scale_factor)
+
+        Returns:
+            Frame with mask overlay drawn
+        """
+        if not hasattr(self, '_mask_manager'):
+            return frame
+
+        h, w = frame.shape[:2]
+        result = frame
+
+        # Draw frame buffer rectangle if enabled
+        if config.frame_mask_enabled and config.frame_buffer_pixels > 0:
+            buffer_px = config.frame_buffer_pixels
+
+            # Scale buffer if rendering at different resolution
+            # render_inverse_scale is 1/scale_factor, so multiply to get original-space buffer
+            # then if we're at original res, buffer is already correct
+            # if we're at processing res (scale_factor < 1), buffer needs to be scaled down
+            if render_inverse_scale != 1.0:
+                # Rendering at original resolution
+                scaled_buffer = buffer_px
+            else:
+                # Rendering at processing resolution
+                scaled_buffer = int(buffer_px * self._current_scale_factor)
+
+            color = (255, 255, 0)  # Cyan (BGR)
+            thickness = 2
+
+            # Calculate bounds
+            x1 = min(scaled_buffer, w // 2)
+            y1 = min(scaled_buffer, h // 2)
+            x2 = max(w - scaled_buffer, w // 2)
+            y2 = max(h - scaled_buffer, h // 2)
+
+            cv2.rectangle(result, (x1, y1), (x2, y2), color, thickness)
+
+        # Draw image mask overlay if enabled
+        if config.image_mask_enabled and config.mask_image_path:
+            original_w, original_h = w, h
+            if self._original_frame is not None:
+                original_h, original_w = self._original_frame.shape[:2]
+
+            render_mask = self._mask_manager.get_mask_for_rendering(
+                {
+                    'mask_enabled': config.mask_enabled,
+                    'frame_mask_enabled': False,  # Only get image mask for overlay
+                    'image_mask_enabled': True,
+                    'mask_image_path': config.mask_image_path,
+                    'show_mask_overlay': True,
+                },
+                (w, h),
+                (original_w, original_h)
+            )
+
+            if render_mask is not None:
+                # Create semi-transparent overlay for excluded regions
+                # Excluded regions (black in mask) will be tinted red
+                excluded = render_mask == 0
+
+                # Create overlay with excluded regions tinted
+                overlay = result.copy()
+                # Tint excluded regions with red at 30% opacity
+                overlay[excluded] = (
+                    overlay[excluded] * 0.7 + np.array([0, 0, 128], dtype=np.float32) * 0.3
+                ).astype(np.uint8)
+
+                result = overlay
+
+        return result
+
     def process_frame(self, frame: np.ndarray, timestamp: float) -> Tuple[np.ndarray, List[Detection], StageTimings]:
         """
         Process a frame through the color anomaly and motion detection pipeline.
@@ -432,6 +571,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         else:
             processing_frame = working_frame
             scale_factor = 1.0
+
+        # Store frames for mask operations
+        self._original_frame = working_frame
+        self._processing_frame = processing_frame
+        self._current_scale_factor = scale_factor
 
         # Convert to grayscale
         processing_gray = cv2.cvtColor(processing_frame, cv2.COLOR_BGR2GRAY)
@@ -484,6 +628,9 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Apply false positive reduction filters
         detections = self._apply_aspect_ratio_filter(detections)
         detections = self._apply_color_exclusion_filter(detections, processing_frame)
+
+        # Apply processing region mask filter
+        detections = self._apply_mask_filter(detections, processing_frame.shape[:2])
 
         timings.fusion_ms = (time.perf_counter() - fusion_start) * 1000
 
@@ -621,6 +768,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             cv2.putText(annotated_frame, "Motion detection paused (color still active)",
                         (w // 2 - 210, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Draw mask overlay if enabled
+        if config.mask_enabled and config.show_mask_overlay:
+            annotated_frame = self._draw_mask_overlay(annotated_frame, config, render_inverse_scale)
 
         # Upscale if rendered at processing res
         if config.render_at_processing_res and scale_factor < 1.0:

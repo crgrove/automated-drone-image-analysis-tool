@@ -228,7 +228,14 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             render_text=ui_config.get('render_text', base_config.render_text),
             render_contours=ui_config.get('render_contours', base_config.render_contours),
             render_at_processing_res=ui_config.get('render_at_processing_res', base_config.render_at_processing_res),
-            use_detection_color_for_rendering=ui_config.get('use_detection_color_for_rendering', base_config.use_detection_color_for_rendering)
+            use_detection_color_for_rendering=ui_config.get('use_detection_color_for_rendering', base_config.use_detection_color_for_rendering),
+            # Processing mask parameters (from shared FrameTab)
+            mask_enabled=ui_config.get('mask_enabled', base_config.mask_enabled),
+            frame_mask_enabled=ui_config.get('frame_mask_enabled', base_config.frame_mask_enabled),
+            image_mask_enabled=ui_config.get('image_mask_enabled', base_config.image_mask_enabled),
+            frame_buffer_pixels=ui_config.get('frame_buffer_pixels', base_config.frame_buffer_pixels),
+            mask_image_path=ui_config.get('mask_image_path', base_config.mask_image_path),
+            show_mask_overlay=ui_config.get('show_mask_overlay', base_config.show_mask_overlay)
         )
 
     # Required interface methods
@@ -259,6 +266,16 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
                     rendering_config[key] = config[key]
             if rendering_config:
                 self.integrated_controls.rendering_tab.set_config(rendering_config)
+
+        # Update frame/mask config in FrameTab
+        if hasattr(self.integrated_controls, 'frame_tab'):
+            frame_config = {}
+            for key in ['mask_enabled', 'frame_mask_enabled', 'image_mask_enabled',
+                        'frame_buffer_pixels', 'mask_image_path', 'show_mask_overlay']:
+                if key in config:
+                    frame_config[key] = config[key]
+            if frame_config:
+                self.integrated_controls.frame_tab.set_config(frame_config)
 
         # Update motion detection checkbox
         if 'enable_motion' in config and hasattr(self.integrated_controls, 'enable_motion'):

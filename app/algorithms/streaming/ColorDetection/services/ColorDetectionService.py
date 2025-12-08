@@ -147,6 +147,14 @@ class HSVConfig:
     # Overlay Options
     show_detections: bool = True  # Toggle detection rendering
 
+    # Processing Mask Options
+    mask_enabled: bool = False  # Enable processing region mask
+    frame_mask_enabled: bool = False  # Enable frame buffer mask
+    image_mask_enabled: bool = False  # Enable image mask
+    frame_buffer_pixels: int = 50  # Pixels to exclude from all edges (frame mode)
+    mask_image_path: Optional[str] = None  # Path to mask image file (image mode)
+    show_mask_overlay: bool = True  # Show mask visualization on rendered video
+
 
 class ColorDetectionService(QObject):
     """
@@ -205,6 +213,10 @@ class ColorDetectionService(QObject):
         self._processing_frame = None  # Lower resolution frame used for detection
         self._original_frame = None  # Original high resolution frame
         self._current_scale_factor = 1.0  # Scale factor between processing and original
+
+        # Processing mask manager
+        from core.services.streaming.MaskManager import MaskManager
+        self._mask_manager = MaskManager()
 
         # self.logger.info(f"Color detector initialized (GPU: {self._gpu_available})")
 
@@ -799,6 +811,28 @@ class ColorDetectionService(QObject):
                     self.logger.error(f"Error in morphological operations: {e}")
                     # Continue without morphology
 
+            # Apply processing region mask if enabled
+            if config.mask_enabled and hasattr(self, '_mask_manager'):
+                frame_h, frame_w = frame.shape[:2]
+                # Get original resolution for mask creation
+                original_w, original_h = frame_w, frame_h
+                if self._original_frame is not None:
+                    original_h, original_w = self._original_frame.shape[:2]
+
+                processing_mask = self._mask_manager.get_mask(
+                    {
+                        'mask_enabled': config.mask_enabled,
+                        'frame_mask_enabled': config.frame_mask_enabled,
+                        'image_mask_enabled': config.image_mask_enabled,
+                        'frame_buffer_pixels': config.frame_buffer_pixels,
+                        'mask_image_path': config.mask_image_path,
+                    },
+                    (original_w, original_h),
+                    (frame_w, frame_h) if (frame_w, frame_h) != (original_w, original_h) else None
+                )
+                if processing_mask is not None:
+                    mask = cv2.bitwise_and(mask, processing_mask)
+
             # Find contours
             try:
                 contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -839,6 +873,27 @@ class ColorDetectionService(QObject):
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
                 mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
                 mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+            # Apply processing region mask if enabled
+            if config.mask_enabled and hasattr(self, '_mask_manager'):
+                frame_h, frame_w = frame.shape[:2]
+                original_w, original_h = frame_w, frame_h
+                if self._original_frame is not None:
+                    original_h, original_w = self._original_frame.shape[:2]
+
+                processing_mask = self._mask_manager.get_mask(
+                    {
+                        'mask_enabled': config.mask_enabled,
+                        'frame_mask_enabled': config.frame_mask_enabled,
+                        'image_mask_enabled': config.image_mask_enabled,
+                        'frame_buffer_pixels': config.frame_buffer_pixels,
+                        'mask_image_path': config.mask_image_path,
+                    },
+                    (original_w, original_h),
+                    (frame_w, frame_h) if (frame_w, frame_h) != (original_w, original_h) else None
+                )
+                if processing_mask is not None:
+                    mask = cv2.bitwise_and(mask, processing_mask)
 
             # Find contours (CPU)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -1690,6 +1745,78 @@ class ColorDetectionService(QObject):
             self.logger.error(f"Error merging detections: {e}")
             return det1
 
+    def _draw_mask_overlay(self, frame: np.ndarray, render_scale: float = 1.0) -> np.ndarray:
+        """
+        Draw mask overlay on frame for visualization.
+
+        Args:
+            frame: Frame to draw on
+            render_scale: Scale factor for coordinates (processing_res / original_res)
+
+        Returns:
+            Frame with mask overlay drawn
+        """
+        if not hasattr(self, '_mask_manager'):
+            return frame
+
+        h, w = frame.shape[:2]
+        result = frame
+
+        # Draw frame buffer rectangle if enabled
+        if self._config.frame_mask_enabled and self._config.frame_buffer_pixels > 0:
+            buffer_px = self._config.frame_buffer_pixels
+
+            # Scale buffer if rendering at different resolution
+            if render_scale != 1.0:
+                scaled_buffer = int(buffer_px * render_scale)
+            else:
+                scaled_buffer = buffer_px
+
+            color = (255, 255, 0)  # Cyan (BGR)
+            thickness = 2
+
+            # Calculate bounds
+            x1 = min(scaled_buffer, w // 2)
+            y1 = min(scaled_buffer, h // 2)
+            x2 = max(w - scaled_buffer, w // 2)
+            y2 = max(h - scaled_buffer, h // 2)
+
+            cv2.rectangle(result, (x1, y1), (x2, y2), color, thickness)
+
+        # Draw image mask overlay if enabled
+        if self._config.image_mask_enabled and self._config.mask_image_path:
+            original_w, original_h = w, h
+            if self._original_frame is not None:
+                original_h, original_w = self._original_frame.shape[:2]
+
+            render_mask = self._mask_manager.get_mask_for_rendering(
+                {
+                    'mask_enabled': self._config.mask_enabled,
+                    'frame_mask_enabled': False,  # Only get image mask for overlay
+                    'image_mask_enabled': True,
+                    'mask_image_path': self._config.mask_image_path,
+                    'show_mask_overlay': True,
+                },
+                (w, h),
+                (original_w, original_h)
+            )
+
+            if render_mask is not None:
+                # Create semi-transparent overlay for excluded regions
+                # Excluded regions (black in mask) will be tinted red
+                excluded = render_mask == 0
+
+                # Create overlay with excluded regions tinted
+                overlay = result.copy()
+                # Tint excluded regions with red at 30% opacity
+                overlay[excluded] = (
+                    overlay[excluded] * 0.7 + np.array([0, 0, 128], dtype=np.float32) * 0.3
+                ).astype(np.uint8)
+
+                result = overlay
+
+        return result
+
     def create_annotated_frame(self, frame: np.ndarray, detections: List[Detection]) -> np.ndarray:
         """
         Create annotated frame with detection overlays using enhanced rendering options.
@@ -1831,6 +1958,10 @@ class ColorDetectionService(QObject):
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
         # Overlay removed - no detection count or config info displayed
+
+        # Draw mask overlay if enabled
+        if self._config.mask_enabled and self._config.show_mask_overlay and hasattr(self, '_mask_manager'):
+            annotated = self._draw_mask_overlay(annotated, render_scale)
 
         # Upscale back to original resolution if we rendered at processing resolution
         if needs_upscale and self._original_frame is not None:
