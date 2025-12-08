@@ -298,8 +298,13 @@ class ColorDetectionController(StreamAlgorithmController):
             self.control_widget.min_area_spinbox.setValue(config['min_area'])
         if 'max_area' in config and hasattr(self.control_widget, 'max_area_spinbox'):
             self.control_widget.max_area_spinbox.setValue(config['max_area'])
-        if 'confidence_threshold' in config and hasattr(self.control_widget, 'confidence_spinbox'):
-            self.control_widget.confidence_spinbox.setValue(config['confidence_threshold'])
+        if 'confidence_threshold' in config and hasattr(self.control_widget, 'confidence_slider'):
+            # Convert from 0.0-1.0 to 0-100 for slider
+            slider_value = int(config['confidence_threshold'] * 100)
+            self.control_widget.confidence_slider.setValue(slider_value)
+            # Update label
+            if hasattr(self.control_widget, '_update_confidence_label'):
+                self.control_widget._update_confidence_label()
 
         # Apply other config as needed
         self._on_config_changed(config)

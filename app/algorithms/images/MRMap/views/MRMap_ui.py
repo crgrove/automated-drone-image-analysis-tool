@@ -174,10 +174,19 @@ class Ui_MRMap(object):
 "Recommended: 4-9 segments for typical drone imagery.", None))
 #endif // QT_CONFIG(tooltip)
         self.colorspaceLabel.setText(QCoreApplication.translate("MRMap", u"Color Space:", None))
-        self.colorspaceComboBox.setItemText(0, QCoreApplication.translate("MRMap", u"RGB", None))
-        self.colorspaceComboBox.setItemText(1, QCoreApplication.translate("MRMap", u"HSV", None))
-        self.colorspaceComboBox.setItemText(2, QCoreApplication.translate("MRMap", u"LAB", None))
+        self.colorspaceComboBox.setItemText(0, QCoreApplication.translate("MRMap", u"LAB", None))
+        self.colorspaceComboBox.setItemText(1, QCoreApplication.translate("MRMap", u"RGB", None))
+        self.colorspaceComboBox.setItemText(2, QCoreApplication.translate("MRMap", u"HSV", None))
 
+#if QT_CONFIG(tooltip)
+        self.colorspaceComboBox.setToolTip(QCoreApplication.translate("MRMap", u"Select the color space for MR Map analysis.\n"
+"The MR Map algorithm analyzes features in different color representations:\n"
+"\u2022 LAB: Perceptually uniform color space (default, better for color difference analysis)\n"
+"\u2022 RGB: Standard red-green-blue color space (good for general use)\n"
+"\u2022 HSV: Hue-Saturation-Value color space (better for color-based feature detection)\n"
+"Different color spaces can improve detection depending on the image content.\n"
+"Recommended: LAB for most cases, HSV for color-rich imagery.", None))
+#endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.windowLabel.setToolTip(QCoreApplication.translate("MRMap", u"Window size for multi-resolution analysis.\n"
 "Determines the spatial scale of features to detect.", None))

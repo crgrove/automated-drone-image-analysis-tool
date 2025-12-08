@@ -10,7 +10,7 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
                                QComboBox, QGroupBox, QPushButton, QListWidget, QListWidgetItem,
-                               QScrollArea, QDialog)
+                               QScrollArea, QDialog, QSlider)
 from PySide6.QtGui import QColor
 
 from core.services.LoggerService import LoggerService
@@ -63,10 +63,9 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
         self.tabs.addTab(self._create_color_selection_tab(), "Color Selection")
         self.tabs.addTab(self._create_detection_tab(), "Detection")
-        self.tabs.addTab(self.input_processing_tab, "Input & Processing")
-        self.tabs.addTab(self.cleanup_tab, "Cleanup")
+        self.tabs.addTab(self.input_processing_tab, "Input && Processing")
         self.tabs.addTab(self.frame_tab, "Frame")
-        self.tabs.addTab(self.rendering_tab, "Rendering")
+        self.tabs.addTab(self.rendering_tab, "Rendering && Cleanup")
 
     def _create_color_selection_tab(self) -> QWidget:
         """Create color selection tab matching screenshot - inline editing with HSV ranges."""
@@ -156,19 +155,22 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         grid.addWidget(self.max_area_spinbox, 1, 1)
 
         grid.addWidget(QLabel("Confidence Threshold:"), 2, 0)
-        self.confidence_spinbox = QDoubleSpinBox()
-        self.confidence_spinbox.setRange(0.0, 1.0)
-        self.confidence_spinbox.setSingleStep(0.05)
-        self.confidence_spinbox.setValue(0.5)
-        self.confidence_spinbox.setToolTip("Minimum confidence score to accept a detection (0.0-1.0).\n"
-                                           "Confidence is calculated from:\n"
-                                           "• Size score: area relative to max area\n"
-                                           "• Shape score: solidity (how compact/regular the shape is)\n"
-                                           "• Final: average of both scores\n\n"
-                                           "Lower values (0.0-0.3) = accept more detections, including weak/fragmented ones.\n"
-                                           "Higher values (0.7-1.0) = only high-quality detections, well-formed shapes.\n"
-                                           "Recommended: 0.5 for balanced filtering, 0.3 for more detections, 0.7 for strict quality.")
-        grid.addWidget(self.confidence_spinbox, 2, 1)
+        confidence_layout = QHBoxLayout()
+        self.confidence_slider = QSlider(Qt.Horizontal)
+        self.confidence_slider.setRange(0, 100)
+        self.confidence_slider.setValue(50)  # Default 0.5 (50%)
+        self.confidence_slider.setToolTip("Minimum confidence score to accept a detection (0-100%).\n"
+                                          "Confidence is calculated from:\n"
+                                          "• Size score: area relative to max area\n"
+                                          "• Shape score: solidity (how compact/regular the shape is)\n"
+                                          "• Final: average of both scores\n\n"
+                                          "Lower values (0-30%) = accept more detections, including weak/fragmented ones.\n"
+                                          "Higher values (70-100%) = only high-quality detections, well-formed shapes.\n"
+                                          "Recommended: 50% for balanced filtering, 30% for more detections, 70% for strict quality.")
+        confidence_layout.addWidget(self.confidence_slider)
+        self.confidence_label = QLabel("50%")
+        confidence_layout.addWidget(self.confidence_label)
+        grid.addLayout(confidence_layout, 2, 1)
 
         layout.addLayout(grid)
         layout.addStretch()
@@ -193,7 +195,8 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         if hasattr(self, 'min_area_spinbox'):
             self.min_area_spinbox.valueChanged.connect(self._emit_config_changed)
             self.max_area_spinbox.valueChanged.connect(self._emit_config_changed)
-            self.confidence_spinbox.valueChanged.connect(self._emit_config_changed)
+            self.confidence_slider.valueChanged.connect(self._update_confidence_label)
+            self.confidence_slider.valueChanged.connect(self._emit_config_changed)
 
         # Cleanup (from shared CleanupTab)
         self.cleanup_tab.enable_temporal_voting.toggled.connect(self._emit_config_changed)
@@ -214,6 +217,15 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.rendering_tab.render_contours.toggled.connect(self._emit_config_changed)
         self.rendering_tab.use_detection_color.toggled.connect(self._emit_config_changed)
         self.rendering_tab.max_detections_to_render.valueChanged.connect(self._emit_config_changed)
+        # Temporal Voting and Cleanup
+        self.rendering_tab.enable_temporal_voting.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.temporal_window_frames.valueChanged.connect(self._emit_config_changed)
+        self.rendering_tab.temporal_threshold_frames.valueChanged.connect(self._emit_config_changed)
+        self.rendering_tab.enable_aspect_ratio_filter.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.min_aspect_ratio.valueChanged.connect(self._emit_config_changed)
+        self.rendering_tab.max_aspect_ratio.valueChanged.connect(self._emit_config_changed)
+        self.rendering_tab.enable_detection_clustering.toggled.connect(self._emit_config_changed)
+        self.rendering_tab.clustering_distance.valueChanged.connect(self._emit_config_changed)
 
     def _get_default_qcolor(self):
         """Return the most recent color or a sensible default."""
@@ -230,6 +242,16 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         """Handle color chosen from the shared color selection menu."""
         # Add color with default tolerance ranges
         self._add_color_range_from_color(color)
+        # Save to recent colors
+        try:
+            rgb = (color.red(), color.green(), color.blue())
+            color_config = {
+                'selected_color': rgb,
+                'color_range': None  # No specific range for tolerance-based
+            }
+            self.recent_colors_service.add_rgb_color(color_config)
+        except Exception:
+            pass  # Silently fail if tracking fails
 
     def _on_hsv_selected_from_picker(self, hsv_data: dict):
         """Handle HSV color range selected from HSV picker dialog."""
@@ -283,6 +305,27 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.color_ranges.append(new_range)
         self._update_color_ranges_display()
         self._emit_config_changed()
+        
+        # Save to recent colors with HSV ranges
+        try:
+            rgb = (color.red(), color.green(), color.blue())
+            hsv_config = {
+                'selected_color': rgb,
+                'hsv_ranges': {
+                    'h': hsv_data.get('h', 0.0),
+                    's': hsv_data.get('s', 1.0),
+                    'v': hsv_data.get('v', 1.0),
+                    'h_minus': h_minus_frac,
+                    'h_plus': h_plus_frac,
+                    's_minus': s_minus_frac,
+                    's_plus': s_plus_frac,
+                    'v_minus': v_minus_frac,
+                    'v_plus': v_plus_frac
+                }
+            }
+            self.recent_colors_service.add_hsv_color(hsv_config)
+        except Exception:
+            pass  # Silently fail if tracking fails
 
     def _on_recent_color_selected(self, color_data: dict):
         """Handle selection from recent colors list."""
@@ -342,6 +385,19 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.color_ranges.append(new_range)
         self._update_color_ranges_display()
         self._emit_config_changed()
+        
+        # Save to recent colors (when called from _on_color_selected_from_menu, it's already saved there)
+        # But if called from elsewhere (like _on_recent_color_selected fallback), save it
+        # Actually, we'll save it here too to ensure it's always tracked
+        try:
+            rgb = (color.red(), color.green(), color.blue())
+            color_config = {
+                'selected_color': rgb,
+                'color_range': None  # No specific range for tolerance-based
+            }
+            self.recent_colors_service.add_rgb_color(color_config)
+        except Exception:
+            pass  # Silently fail if tracking fails
 
     def _on_view_range(self):
         """View range - show all color ranges in a single combined viewer dialog."""
@@ -388,9 +444,30 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
     def _on_remove_color_range(self, widget):
         """Remove a color range by widget reference."""
         if widget in self.color_range_widgets:
+            # Find the index before removing
             index = self.color_range_widgets.index(widget)
+            
+            # First, sync data from all widgets to color_ranges to preserve any edits
+            # This must happen before removing to keep indices aligned
+            if self.color_range_widgets:
+                for i, w in enumerate(self.color_range_widgets):
+                    if i < len(self.color_ranges):
+                        hsv_ranges = w.get_hsv_ranges()
+                        color = w.get_color()
+                        self.color_ranges[i]['color'] = color
+                        self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
+                        self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                        self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
+                        self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
+                        self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
+                        self.color_ranges[i]['val_plus'] = int(hsv_ranges['v_plus'] * 255)
+            
+            # Now remove from color_ranges using the correct index
             if index < len(self.color_ranges):
                 self.color_ranges.pop(index)
+                # Remove widget from list to prevent sync issues in _update_color_ranges_display
+                self.color_range_widgets.remove(widget)
+                widget.setParent(None)
                 self._update_color_ranges_display()
                 self._emit_config_changed()
 
@@ -464,6 +541,11 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         """Emit configuration changed signal."""
         self.configChanged.emit(self.get_config())
 
+    def _update_confidence_label(self):
+        """Update confidence threshold label."""
+        value = self.confidence_slider.value()
+        self.confidence_label.setText(f"{value}%")
+
     def get_config(self) -> dict:
         """Get current configuration matching ColorAnomalyAndMotionDetection format."""
         # Get processing resolution from shared InputProcessingTab
@@ -486,6 +568,30 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         # Collect color ranges from widgets
         updated_color_ranges = []
         for widget in self.color_range_widgets:
+            # Save colors to recent colors when config is retrieved (when actually used)
+            try:
+                color = widget.get_color()
+                hsv_ranges = widget.get_hsv_ranges()
+                rgb = (color.red(), color.green(), color.blue())
+                
+                # HSVColorRowWidget always returns hsv_ranges with h, s, v, h_minus, h_plus, etc.
+                # All values are in normalized 0-1 format
+                if hsv_ranges and isinstance(hsv_ranges, dict):
+                    hsv_config = {
+                        'selected_color': rgb,
+                        'hsv_ranges': hsv_ranges  # Already in correct format (0-1 normalized)
+                    }
+                    self.recent_colors_service.add_hsv_color(hsv_config)
+                else:
+                    # Fallback: RGB color without HSV ranges
+                    color_config = {
+                        'selected_color': rgb,
+                        'color_range': None
+                    }
+                    self.recent_colors_service.add_rgb_color(color_config)
+            except Exception as e:
+                # Log error for debugging instead of silently failing
+                self.logger.debug(f"Error saving color to recent colors: {e}")
             # Convert from HSVColorRowWidget format to our format
             hsv_ranges = widget.get_hsv_ranges()
             color = widget.get_color()
@@ -527,7 +633,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             # Detection
             'min_area': self.min_area_spinbox.value() if hasattr(self, 'min_area_spinbox') else 100,
             'max_area': self.max_area_spinbox.value() if hasattr(self, 'max_area_spinbox') else 100000,
-            'confidence_threshold': self.confidence_spinbox.value() if hasattr(self, 'confidence_spinbox') else 0.5,
+            'confidence_threshold': self.confidence_slider.value() / 100.0 if hasattr(self, 'confidence_slider') else 0.5,
 
             # Cleanup (from shared CleanupTab)
             **cleanup_config,

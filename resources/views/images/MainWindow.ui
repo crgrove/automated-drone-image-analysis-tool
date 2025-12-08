@@ -1097,6 +1097,7 @@ Use to review, verify, and export analysis results.</string>
     </property>
     <addaction name="actionHelp"/>
     <addaction name="actionCommunityHelp"/>
+    <addaction name="actionYouTube_Channel"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHelp"/>
@@ -1268,6 +1269,11 @@ Ask questions, report issues, and suggest new features.</string>
     <font>
      <pointsize>10</pointsize>
     </font>
+   </property>
+  </action>
+  <action name="actionYouTube_Channel">
+   <property name="text">
+    <string>YouTube Channel</string>
    </property>
   </action>
  </widget>
