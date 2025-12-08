@@ -13,7 +13,7 @@ import numpy as np
 import cv2
 
 # Import shared types
-from .shared_types import Detection, ColorAnomalyAndMotionDetectionConfig
+from .shared_types import Detection, ColorAnomalyAndMotionDetectionConfig, ContourMethod
 
 
 class ColorAnomalyService(QObject):
@@ -43,6 +43,105 @@ class ColorAnomalyService(QObject):
                 cv2.MORPH_ELLIPSE, (size, size)
             )
         return self._morph_kernel_cache[size]
+
+    def _extract_blobs_connected_components(self, binary_mask: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                                             timestamp: float, frame_bgr: np.ndarray,
+                                             color_indices: np.ndarray, histogram: np.ndarray,
+                                             total_pixels: int, max_detections: int = 0) -> List[Detection]:
+        """
+        Extract blobs using cv2.connectedComponentsWithStats.
+
+        This is an alternative to findContours that provides direct access to blob statistics
+        in a single pass.
+
+        Args:
+            binary_mask: Binary mask of rare color pixels
+            config: Detection configuration
+            timestamp: Frame timestamp
+            frame_bgr: Original BGR frame for color extraction
+            color_indices: Quantized color indices for confidence calculation
+            histogram: Color histogram for rarity calculation
+            total_pixels: Total pixels in frame
+            max_detections: Maximum detections to return (0 = unlimited)
+
+        Returns:
+            List of Detection objects
+        """
+        detections = []
+        h, w = binary_mask.shape[:2]
+
+        # Apply connected components with statistics
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            binary_mask, connectivity=8, ltype=cv2.CV_32S
+        )
+
+        # Label 0 is background, skip it
+        for label_idx in range(1, num_labels):
+            if max_detections > 0 and len(detections) >= max_detections:
+                break
+
+            # Get statistics for this component
+            x = stats[label_idx, cv2.CC_STAT_LEFT]
+            y = stats[label_idx, cv2.CC_STAT_TOP]
+            w_box = stats[label_idx, cv2.CC_STAT_WIDTH]
+            h_box = stats[label_idx, cv2.CC_STAT_HEIGHT]
+            area = stats[label_idx, cv2.CC_STAT_AREA]
+
+            # Filter by area
+            if area < config.color_min_detection_area or area > config.max_detection_area:
+                continue
+
+            # Get centroid
+            cx, cy = int(centroids[label_idx][0]), int(centroids[label_idx][1])
+
+            # Create component mask for this blob (reused for color and contour)
+            component_mask = (labels == label_idx).astype(np.uint8) * 255
+
+            # Get dominant color from ONLY the detected pixels (not entire bbox)
+            # This ensures color exclusion and rendering use the actual detected color
+            region = frame_bgr[y:y + h_box, x:x + w_box]
+            region_mask = component_mask[y:y + h_box, x:x + w_box]
+            if region.size > 0 and np.any(region_mask):
+                # cv2.mean returns (B, G, R, 0) when using mask
+                mean_color = cv2.mean(region, mask=region_mask)[:3]
+                dominant_color = tuple(int(c) for c in mean_color)
+            else:
+                dominant_color = (0, 0, 0)
+
+            # Calculate confidence based on rarity
+            if 0 <= cy < h and 0 <= cx < w:
+                bin_idx = color_indices[cy, cx]
+                bin_count = histogram[bin_idx]
+                rarity = 1.0 - (bin_count / total_pixels)
+                confidence = min(1.0, rarity * 2.0)
+            else:
+                confidence = 0.5
+                bin_count = 0
+                rarity = 0.5
+
+            # Create contour from component mask for compatibility with rendering
+            contours, _ = cv2.findContours(component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contour = contours[0] if contours else None
+
+            detection = Detection(
+                bbox=(x, y, w_box, h_box),
+                centroid=(cx, cy),
+                area=area,
+                confidence=confidence,
+                detection_type='color_anomaly',
+                timestamp=timestamp,
+                contour=contour,
+                metadata={
+                    'algorithm': 'quantization',
+                    'contour_method': 'connected_components',
+                    'dominant_color': dominant_color,
+                    'bin_count': int(bin_count),
+                    'rarity': float(rarity)
+                }
+            )
+            detections.append(detection)
+
+        return detections
 
     def detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                max_detections: int = 0) -> List[Detection]:
@@ -115,63 +214,77 @@ class ColorAnomalyService(QObject):
         rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_OPEN, morph_kernel)
         rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_CLOSE, morph_kernel)
 
-        # Step 5: Extract contours
-        contours, _ = cv2.findContours(rare_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Process contours
-        for contour in contours:
-            if max_detections > 0 and len(detections) >= max_detections:
-                break
-
-            area = cv2.contourArea(contour)
-            if area < config.color_min_detection_area or area > config.max_detection_area:
-                continue
-
-            x, y, w_box, h_box = cv2.boundingRect(contour)
-
-            # Calculate centroid
-            M = cv2.moments(contour)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-            else:
-                cx, cy = x + w_box // 2, y + h_box // 2
-
-            # Get dominant color in this region
-            region = frame_bgr[y:y + h_box, x:x + w_box]
-            if region.size > 0:
-                mean_color = region.mean(axis=(0, 1)).astype(int)
-                dominant_color = tuple(mean_color.tolist())
-            else:
-                dominant_color = (0, 0, 0)
-
-            # Confidence based on rarity (use full resolution coordinates)
-            if 0 <= cy < h and 0 <= cx < w:
-                bin_idx = color_indices[cy, cx]
-                bin_count = histogram[bin_idx]
-                rarity = 1.0 - (bin_count / total_pixels)
-                confidence = min(1.0, rarity * 2.0)
-            else:
-                confidence = 0.5
-                bin_count = 0
-                rarity = 0.5
-
-            detection = Detection(
-                bbox=(x, y, w_box, h_box),
-                centroid=(cx, cy),
-                area=area,
-                confidence=confidence,
-                detection_type='color_anomaly',
-                timestamp=timestamp,
-                contour=contour,
-                metadata={
-                    'algorithm': 'quantization',
-                    'dominant_color': dominant_color,
-                    'bin_count': int(bin_count),
-                    'rarity': float(rarity)
-                }
+        # Step 5: Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            # Use connected components - returns detections directly
+            detections = self._extract_blobs_connected_components(
+                rare_mask, config, timestamp, frame_bgr,
+                color_indices, histogram, total_pixels, max_detections
             )
-            detections.append(detection)
+        else:
+            # Default: use findContours
+            contours, _ = cv2.findContours(rare_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Process contours
+            for contour in contours:
+                if max_detections > 0 and len(detections) >= max_detections:
+                    break
+
+                area = cv2.contourArea(contour)
+                if area < config.color_min_detection_area or area > config.max_detection_area:
+                    continue
+
+                x, y, w_box, h_box = cv2.boundingRect(contour)
+
+                # Calculate centroid
+                M = cv2.moments(contour)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    cx, cy = x + w_box // 2, y + h_box // 2
+
+                # Get dominant color from ONLY the detected pixels (not entire bbox)
+                # Create mask from contour and use it to extract only detected pixel colors
+                region = frame_bgr[y:y + h_box, x:x + w_box]
+                if region.size > 0:
+                    # Create local mask by drawing contour shifted to bbox origin
+                    contour_mask = np.zeros((h_box, w_box), dtype=np.uint8)
+                    shifted_contour = contour - np.array([x, y])
+                    cv2.drawContours(contour_mask, [shifted_contour], -1, 255, -1)
+                    # cv2.mean returns (B, G, R, 0) when using mask
+                    mean_color = cv2.mean(region, mask=contour_mask)[:3]
+                    dominant_color = tuple(int(c) for c in mean_color)
+                else:
+                    dominant_color = (0, 0, 0)
+
+                # Confidence based on rarity (use full resolution coordinates)
+                if 0 <= cy < h and 0 <= cx < w:
+                    bin_idx = color_indices[cy, cx]
+                    bin_count = histogram[bin_idx]
+                    rarity = 1.0 - (bin_count / total_pixels)
+                    confidence = min(1.0, rarity * 2.0)
+                else:
+                    confidence = 0.5
+                    bin_count = 0
+                    rarity = 0.5
+
+                detection = Detection(
+                    bbox=(x, y, w_box, h_box),
+                    centroid=(cx, cy),
+                    area=area,
+                    confidence=confidence,
+                    detection_type='color_anomaly',
+                    timestamp=timestamp,
+                    contour=contour,
+                    metadata={
+                        'algorithm': 'quantization',
+                        'dominant_color': dominant_color,
+                        'bin_count': int(bin_count),
+                        'rarity': float(rarity)
+                    }
+                )
+                detections.append(detection)
 
         # Hue expansion: Expand detections to include neighboring similar-hue pixels
         if config.enable_hue_expansion and len(detections) > 0 and config.hue_expansion_range > 0:

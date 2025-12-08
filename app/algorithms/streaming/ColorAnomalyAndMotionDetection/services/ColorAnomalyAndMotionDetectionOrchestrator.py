@@ -103,6 +103,62 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         # self.logger.info("Orchestrator configuration updated")
 
+    def _scale_detections_to_original(self, detections: List[Detection], scale_factor: float) -> List[Detection]:
+        """
+        Scale detections from processing resolution back to original resolution.
+
+        Args:
+            detections: List of detections at processing resolution
+            scale_factor: The scale factor used for downsampling (e.g., 0.5 for 1920->960)
+
+        Returns:
+            List of detections scaled to original resolution
+        """
+        if scale_factor >= 1.0:
+            return detections  # No scaling needed
+
+        inv_scale = 1.0 / scale_factor
+        scaled_detections = []
+
+        for detection in detections:
+            # Scale bounding box
+            x, y, w, h = detection.bbox
+            scaled_bbox = (
+                int(x * inv_scale),
+                int(y * inv_scale),
+                int(w * inv_scale),
+                int(h * inv_scale)
+            )
+
+            # Scale centroid
+            cx, cy = detection.centroid
+            scaled_centroid = (
+                int(cx * inv_scale),
+                int(cy * inv_scale)
+            )
+
+            # Scale area (proportional to inv_scale squared)
+            scaled_area = detection.area * inv_scale * inv_scale
+
+            # Scale contour points if present
+            scaled_contour = None
+            if detection.contour is not None:
+                scaled_contour = (detection.contour * inv_scale).astype(np.int32)
+
+            scaled_detection = Detection(
+                bbox=scaled_bbox,
+                centroid=scaled_centroid,
+                area=scaled_area,
+                confidence=detection.confidence,
+                detection_type=detection.detection_type,
+                timestamp=detection.timestamp,
+                contour=scaled_contour,
+                metadata={**detection.metadata, 'scale_factor_applied': inv_scale}
+            )
+            scaled_detections.append(scaled_detection)
+
+        return scaled_detections
+
     def _fuse_detections(self, motion_detections: List[Detection], color_detections: List[Detection]) -> List[Detection]:
         """Fuse motion and color detections using configured mode."""
         config = self.config
@@ -401,13 +457,14 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         return filtered
 
-    def _apply_mask_filter(self, detections: List[Detection], processing_shape: Tuple[int, int]) -> List[Detection]:
+    def _apply_mask_filter(self, detections: List[Detection]) -> List[Detection]:
         """
         Filter detections to exclude those whose centroids fall outside the processing mask.
 
+        Note: Detections are now at original resolution after immediate scaling.
+
         Args:
-            detections: List of detections to filter
-            processing_shape: (height, width) of the processing frame
+            detections: List of detections to filter (at original resolution)
 
         Returns:
             Filtered list of detections
@@ -419,12 +476,14 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         if not hasattr(self, '_mask_manager'):
             return detections
 
-        # Get original resolution
-        original_h, original_w = self._original_frame.shape[:2] if self._original_frame is not None else processing_shape
-        proc_h, proc_w = processing_shape
+        if self._original_frame is None:
+            return detections
 
-        # Get mask at processing resolution (where detections were made)
-        processing_mask = self._mask_manager.get_mask(
+        # Get original resolution (where detections now are)
+        original_h, original_w = self._original_frame.shape[:2]
+
+        # Get mask at original resolution (detections are now at original res)
+        original_mask = self._mask_manager.get_mask(
             {
                 'mask_enabled': config.mask_enabled,
                 'frame_mask_enabled': config.frame_mask_enabled,
@@ -433,10 +492,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                 'mask_image_path': config.mask_image_path,
             },
             (original_w, original_h),
-            (proc_w, proc_h) if (proc_w, proc_h) != (original_w, original_h) else None
+            None  # No processing resolution - use original directly
         )
 
-        if processing_mask is None:
+        if original_mask is None:
             return detections
 
         # Filter detections whose centroids fall in excluded regions (black in mask)
@@ -444,23 +503,23 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         for detection in detections:
             cx, cy = detection.centroid
             # Ensure coordinates are within bounds
-            cx = max(0, min(cx, proc_w - 1))
-            cy = max(0, min(cy, proc_h - 1))
+            cx = max(0, min(cx, original_w - 1))
+            cy = max(0, min(cy, original_h - 1))
 
             # Check if centroid is in the processing region (white=255 in mask)
-            if processing_mask[cy, cx] > 127:  # Inside mask (process area)
+            if original_mask[cy, cx] > 127:  # Inside mask (process area)
                 filtered.append(detection)
 
         return filtered
 
-    def _draw_mask_overlay(self, frame: np.ndarray, config, render_inverse_scale: float) -> np.ndarray:
+    def _draw_mask_overlay(self, frame: np.ndarray, config, render_scale: float) -> np.ndarray:
         """
         Draw mask overlay on frame for visualization.
 
         Args:
             frame: Frame to draw on
             config: Configuration object
-            render_inverse_scale: Scale factor for coordinates (1/scale_factor)
+            render_scale: Scale factor for coordinates (scale_factor when rendering at proc res, 1.0 otherwise)
 
         Returns:
             Frame with mask overlay drawn
@@ -475,16 +534,14 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         if config.frame_mask_enabled and config.frame_buffer_pixels > 0:
             buffer_px = config.frame_buffer_pixels
 
-            # Scale buffer if rendering at different resolution
-            # render_inverse_scale is 1/scale_factor, so multiply to get original-space buffer
-            # then if we're at original res, buffer is already correct
-            # if we're at processing res (scale_factor < 1), buffer needs to be scaled down
-            if render_inverse_scale != 1.0:
-                # Rendering at original resolution
-                scaled_buffer = buffer_px
+            # Scale buffer if rendering at processing resolution
+            # render_scale is scale_factor when at proc res, 1.0 when at original
+            if render_scale < 1.0:
+                # Rendering at processing resolution - scale buffer down
+                scaled_buffer = int(buffer_px * render_scale)
             else:
-                # Rendering at processing resolution
-                scaled_buffer = int(buffer_px * self._current_scale_factor)
+                # Rendering at original resolution - use buffer as-is
+                scaled_buffer = buffer_px
 
             color = (255, 255, 0)  # Cyan (BGR)
             thickness = 2
@@ -602,6 +659,9 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         motion_start = time.perf_counter()
         if config.enable_motion and not is_camera_moving:
             motion_detections = self.motion_service.detect(processing_gray, config, max_to_detect)
+            # Scale motion detections to original resolution immediately
+            if scale_factor < 1.0:
+                motion_detections = self._scale_detections_to_original(motion_detections, scale_factor)
         timings.motion_detection_ms = (time.perf_counter() - motion_start) * 1000
 
         # Color detection
@@ -609,6 +669,9 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         color_start = time.perf_counter()
         if config.enable_color_quantization:
             color_detections = self.color_service.detect(processing_frame, config, max_to_detect)
+            # Scale color detections to original resolution immediately
+            if scale_factor < 1.0:
+                color_detections = self._scale_detections_to_original(color_detections, scale_factor)
         timings.color_detection_ms = (time.perf_counter() - color_start) * 1000
 
         timings.detection_ms = (time.perf_counter() - detection_start) * 1000
@@ -627,10 +690,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         # Apply false positive reduction filters
         detections = self._apply_aspect_ratio_filter(detections)
-        detections = self._apply_color_exclusion_filter(detections, processing_frame)
+        # Use working_frame (original resolution) since detections are now at original resolution
+        detections = self._apply_color_exclusion_filter(detections, working_frame)
 
-        # Apply processing region mask filter
-        detections = self._apply_mask_filter(detections, processing_frame.shape[:2])
+        # Apply processing region mask filter (detections are now at original resolution)
+        detections = self._apply_mask_filter(detections)
 
         timings.fusion_ms = (time.perf_counter() - fusion_start) * 1000
 
@@ -638,12 +702,15 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         render_start = time.perf_counter()
 
         # Choose rendering resolution
+        # Note: Detections are now at ORIGINAL resolution after immediate scaling
         if config.render_at_processing_res:
             render_frame = processing_frame.copy()
-            render_inverse_scale = 1.0
+            # Detections are at original res, scale DOWN for processing res rendering
+            render_scale = scale_factor if scale_factor < 1.0 else 1.0
         else:
             render_frame = working_frame.copy()
-            render_inverse_scale = 1.0 / scale_factor if scale_factor > 0.0 else 1.0
+            # No scaling needed - detections already at original resolution
+            render_scale = 1.0
 
         annotated_frame = render_frame
 
@@ -665,13 +732,13 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             # Draw detections
             for i, detection in enumerate(detections_to_render):
                 x, y, w, h = detection.bbox
-                x_scaled = int(x * render_inverse_scale)
-                y_scaled = int(y * render_inverse_scale)
-                w_scaled = int(w * render_inverse_scale)
-                h_scaled = int(h * render_inverse_scale)
+                x_scaled = int(x * render_scale)
+                y_scaled = int(y * render_scale)
+                w_scaled = int(w * render_scale)
+                h_scaled = int(h * render_scale)
 
-                cx_scaled = int(detection.centroid[0] * render_inverse_scale)
-                cy_scaled = int(detection.centroid[1] * render_inverse_scale)
+                cx_scaled = int(detection.centroid[0] * render_scale)
+                cy_scaled = int(detection.centroid[1] * render_scale)
 
                 # Color based on detection type
                 if config.use_detection_color_for_rendering and 'dominant_color' in detection.metadata:
@@ -709,7 +776,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
                 # Render based on toggles
                 if config.render_contours and detection.contour is not None:
-                    scaled_contour = (detection.contour * render_inverse_scale).astype(np.int32)
+                    scaled_contour = (detection.contour * render_scale).astype(np.int32)
                     cv2.drawContours(annotated_frame, [scaled_contour], -1, color, 2)
 
                 if config.render_shape == 0:  # Box
@@ -727,7 +794,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
                     cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
                 elif config.render_shape == 1:  # Circle
                     if detection.contour is not None:
-                        scaled_contour = (detection.contour * render_inverse_scale).astype(np.int32)
+                        scaled_contour = (detection.contour * render_scale).astype(np.int32)
                         (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
                         base_radius = max(5, int(contour_radius * 1.5))
                     else:
@@ -771,7 +838,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         # Draw mask overlay if enabled
         if config.mask_enabled and config.show_mask_overlay:
-            annotated_frame = self._draw_mask_overlay(annotated_frame, config, render_inverse_scale)
+            annotated_frame = self._draw_mask_overlay(annotated_frame, config, render_scale)
 
         # Upscale if rendered at processing res
         if config.render_at_processing_res and scale_factor < 1.0:
@@ -791,12 +858,14 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             self.metrics.dropped_frames += dropped
 
         # Add resolution metadata
-        processing_resolution = (processing_frame.shape[1], processing_frame.shape[0])
+        # Note: Detections are now at original resolution (scaled immediately after detection)
+        # Set both resolutions to original so no additional scaling is applied by consumers
         original_resolution = (working_frame.shape[1], working_frame.shape[0])
         for detection in detections:
             if detection.metadata is None:
                 detection.metadata = {}
-            detection.metadata.setdefault('processing_resolution', processing_resolution)
+            # Both set to original since detections are already at original resolution
+            detection.metadata.setdefault('processing_resolution', original_resolution)
             detection.metadata.setdefault('original_resolution', original_resolution)
 
         # Emit signals

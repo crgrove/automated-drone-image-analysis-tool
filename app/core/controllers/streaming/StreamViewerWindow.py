@@ -878,7 +878,11 @@ class StreamViewerWindow(QMainWindow):
 
     def _cleanup_processing_worker(self):
         """Clean up the frame processing worker thread."""
-        # Set flag early to prevent new frames from being queued
+        # Guard against re-entrant calls (can happen during shutdown)
+        if self._is_stopping_worker:
+            return
+
+        # Set flag early to prevent new frames from being queued and re-entry
         self._is_stopping_worker = True
 
         # Disconnect processFrameRequested signal immediately to prevent new frames from queuing
@@ -900,6 +904,7 @@ class StreamViewerWindow(QMainWindow):
                 pass
 
         # Stop and cleanup thread
+        thread_terminated_forcefully = False
         if self._processing_thread:
             if self._processing_thread.isRunning():
                 self._processing_thread.quit()
@@ -907,6 +912,7 @@ class StreamViewerWindow(QMainWindow):
                     self.logger.warning("Processing thread didn't stop gracefully, terminating")
                     self._processing_thread.terminate()
                     self._processing_thread.wait(1000)
+                    thread_terminated_forcefully = True
             # Thread will delete itself via deleteLater() connected to finished signal
             self._processing_thread = None
 
@@ -921,13 +927,19 @@ class StreamViewerWindow(QMainWindow):
                 pass
 
         # Move service back to main thread after thread is stopped
-        service = self._get_algorithm_service()
-        if service:
-            try:
-                service.moveToThread(None)  # Move back to main thread
-            except RuntimeError:
-                # Service may already be deleted or moved, ignore
-                pass
+        # IMPORTANT: Don't try to move service if thread was forcefully terminated -
+        # the service object may be in an inconsistent state
+        if not thread_terminated_forcefully:
+            service = self._get_algorithm_service()
+            if service:
+                try:
+                    # Move service back to main thread (must use actual thread, not None)
+                    # Note: moveToThread(None) dissociates object from thread which causes crashes
+                    main_thread = QThread.currentThread()  # This runs on main thread
+                    service.moveToThread(main_thread)
+                except RuntimeError:
+                    # Service may already be deleted or moved, ignore
+                    pass
 
         # Clear worker reference (worker will be deleted when thread is deleted)
         self._processing_worker = None
@@ -1108,7 +1120,11 @@ class StreamViewerWindow(QMainWindow):
     @Slot()
     def on_disconnect_requested(self):
         """Handle stream disconnection request."""
+        # Disconnect the stream first - this stops frame delivery
+        # and signals the stream reader to stop
         self.stream_coordinator.disconnect_stream()
+        # Then cleanup the processing worker (should be quick since no frames coming)
+        self._cleanup_processing_worker()
 
     @Slot(bool, str)
     def on_connection_changed(self, connected: bool, message: str):
@@ -1501,12 +1517,14 @@ class StreamViewerWindow(QMainWindow):
         # Cleanup
         self.update_timer.stop()
 
-        # Cleanup processing worker thread
+        # Disconnect stream first - this stops frame delivery and signals stream to stop
+        self.stream_coordinator.cleanup()
+
+        # Then cleanup processing worker (should be quick since no frames coming)
         self._cleanup_processing_worker()
 
+        # Finally cleanup algorithm widget
         if self.algorithm_widget:
             self.algorithm_widget.cleanup()
-
-        self.stream_coordinator.cleanup()
 
         event.accept()
