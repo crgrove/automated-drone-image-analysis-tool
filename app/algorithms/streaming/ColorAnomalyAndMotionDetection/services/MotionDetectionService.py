@@ -14,7 +14,7 @@ import numpy as np
 import cv2
 
 # Import shared types
-from .shared_types import Detection, MotionAlgorithm, ColorAnomalyAndMotionDetectionConfig
+from .shared_types import Detection, MotionAlgorithm, ColorAnomalyAndMotionDetectionConfig, ContourMethod
 
 
 class MotionDetectionService(QObject):
@@ -89,6 +89,75 @@ class MotionDetectionService(QObject):
             )
         return self._morph_kernel_cache[size]
 
+    def _extract_motion_blobs_connected_components(self, binary_mask: np.ndarray,
+                                                    config: ColorAnomalyAndMotionDetectionConfig,
+                                                    detection_type: str, algorithm_name: str,
+                                                    max_detections: int = 0) -> List[Detection]:
+        """
+        Extract motion blobs using cv2.connectedComponentsWithStats.
+
+        Args:
+            binary_mask: Binary mask of motion pixels
+            config: Detection configuration
+            detection_type: Type string for the detection (e.g., 'mog2_motion')
+            algorithm_name: Name of the algorithm for metadata
+            max_detections: Maximum detections to return (0 = unlimited)
+
+        Returns:
+            List of Detection objects
+        """
+        detections = []
+        timestamp = time.time()
+
+        # Apply connected components with statistics
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            binary_mask, connectivity=8, ltype=cv2.CV_32S
+        )
+
+        # Label 0 is background, skip it
+        for label_idx in range(1, num_labels):
+            if max_detections > 0 and len(detections) >= max_detections:
+                break
+
+            # Get statistics for this component
+            x = stats[label_idx, cv2.CC_STAT_LEFT]
+            y = stats[label_idx, cv2.CC_STAT_TOP]
+            w = stats[label_idx, cv2.CC_STAT_WIDTH]
+            h = stats[label_idx, cv2.CC_STAT_HEIGHT]
+            area = stats[label_idx, cv2.CC_STAT_AREA]
+
+            # Filter by area
+            if area < config.min_detection_area or area > config.max_detection_area:
+                continue
+
+            # Get centroid
+            cx, cy = int(centroids[label_idx][0]), int(centroids[label_idx][1])
+
+            # Calculate confidence
+            confidence = min(1.0, area / config.max_detection_area)
+
+            # Create contour from component mask for compatibility with rendering
+            component_mask = (labels == label_idx).astype(np.uint8) * 255
+            contours, _ = cv2.findContours(component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contour = contours[0] if contours else None
+
+            detection = Detection(
+                bbox=(x, y, w, h),
+                centroid=(cx, cy),
+                area=area,
+                confidence=confidence,
+                detection_type=detection_type,
+                timestamp=timestamp,
+                contour=contour,
+                metadata={
+                    'algorithm': algorithm_name,
+                    'contour_method': 'connected_components'
+                }
+            )
+            detections.append(detection)
+
+        return detections
+
     def detect(self, frame_gray: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                max_detections: int = 0) -> List[Detection]:
         """
@@ -134,40 +203,46 @@ class MotionDetectionService(QObject):
             binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, morph_kernel)
             binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, morph_kernel)
 
-        # Find contours
-        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Process contours
-        timestamp = time.time()
-        for contour in contours:
-            if max_detections > 0 and len(detections) >= max_detections:
-                break
-
-            area = cv2.contourArea(contour)
-            if area < config.min_detection_area or area > config.max_detection_area:
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            M = cv2.moments(contour)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-            else:
-                cx, cy = x + w // 2, y + h // 2
-
-            confidence = min(1.0, area / config.max_detection_area)
-
-            detection = Detection(
-                bbox=(x, y, w, h),
-                centroid=(cx, cy),
-                area=area,
-                confidence=confidence,
-                detection_type='baseline_motion',
-                timestamp=timestamp,
-                contour=contour,
-                metadata={'threshold': config.motion_threshold}
+        # Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            detections = self._extract_motion_blobs_connected_components(
+                binary_mask, config, 'baseline_motion', 'FRAME_DIFF', max_detections
             )
-            detections.append(detection)
+        else:
+            # Default: use findContours
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Process contours
+            timestamp = time.time()
+            for contour in contours:
+                if max_detections > 0 and len(detections) >= max_detections:
+                    break
+
+                area = cv2.contourArea(contour)
+                if area < config.min_detection_area or area > config.max_detection_area:
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                M = cv2.moments(contour)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    cx, cy = x + w // 2, y + h // 2
+
+                confidence = min(1.0, area / config.max_detection_area)
+
+                detection = Detection(
+                    bbox=(x, y, w, h),
+                    centroid=(cx, cy),
+                    area=area,
+                    confidence=confidence,
+                    detection_type='baseline_motion',
+                    timestamp=timestamp,
+                    contour=contour,
+                    metadata={'threshold': config.motion_threshold}
+                )
+                detections.append(detection)
 
         # Update previous frame
         self._prev_gray = frame_gray.copy()
@@ -191,40 +266,46 @@ class MotionDetectionService(QObject):
             fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
             fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
 
-        # Find contours
-        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Process contours
-        timestamp = time.time()
-        for contour in contours:
-            if max_detections > 0 and len(detections) >= max_detections:
-                break
-
-            area = cv2.contourArea(contour)
-            if area < config.min_detection_area or area > config.max_detection_area:
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            M = cv2.moments(contour)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-            else:
-                cx, cy = x + w // 2, y + h // 2
-
-            confidence = min(1.0, area / config.max_detection_area)
-
-            detection = Detection(
-                bbox=(x, y, w, h),
-                centroid=(cx, cy),
-                area=area,
-                confidence=confidence,
-                detection_type='mog2_motion',
-                timestamp=timestamp,
-                contour=contour,
-                metadata={'algorithm': 'MOG2'}
+        # Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            detections = self._extract_motion_blobs_connected_components(
+                fg_mask, config, 'mog2_motion', 'MOG2', max_detections
             )
-            detections.append(detection)
+        else:
+            # Default: use findContours
+            contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Process contours
+            timestamp = time.time()
+            for contour in contours:
+                if max_detections > 0 and len(detections) >= max_detections:
+                    break
+
+                area = cv2.contourArea(contour)
+                if area < config.min_detection_area or area > config.max_detection_area:
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                M = cv2.moments(contour)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    cx, cy = x + w // 2, y + h // 2
+
+                confidence = min(1.0, area / config.max_detection_area)
+
+                detection = Detection(
+                    bbox=(x, y, w, h),
+                    centroid=(cx, cy),
+                    area=area,
+                    confidence=confidence,
+                    detection_type='mog2_motion',
+                    timestamp=timestamp,
+                    contour=contour,
+                    metadata={'algorithm': 'MOG2'}
+                )
+                detections.append(detection)
 
         return detections
 
@@ -246,40 +327,46 @@ class MotionDetectionService(QObject):
             fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, morph_kernel)
             fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, morph_kernel)
 
-        # Find contours
-        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Process contours
-        timestamp = time.time()
-        for contour in contours:
-            if max_detections > 0 and len(detections) >= max_detections:
-                break
-
-            area = cv2.contourArea(contour)
-            if area < config.min_detection_area or area > config.max_detection_area:
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            M = cv2.moments(contour)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-            else:
-                cx, cy = x + w // 2, y + h // 2
-
-            confidence = min(1.0, area / config.max_detection_area)
-
-            detection = Detection(
-                bbox=(x, y, w, h),
-                centroid=(cx, cy),
-                area=area,
-                confidence=confidence,
-                detection_type='knn_motion',
-                timestamp=timestamp,
-                contour=contour,
-                metadata={'algorithm': 'KNN'}
+        # Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            detections = self._extract_motion_blobs_connected_components(
+                fg_mask, config, 'knn_motion', 'KNN', max_detections
             )
-            detections.append(detection)
+        else:
+            # Default: use findContours
+            contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Process contours
+            timestamp = time.time()
+            for contour in contours:
+                if max_detections > 0 and len(detections) >= max_detections:
+                    break
+
+                area = cv2.contourArea(contour)
+                if area < config.min_detection_area or area > config.max_detection_area:
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                M = cv2.moments(contour)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                else:
+                    cx, cy = x + w // 2, y + h // 2
+
+                confidence = min(1.0, area / config.max_detection_area)
+
+                detection = Detection(
+                    bbox=(x, y, w, h),
+                    centroid=(cx, cy),
+                    area=area,
+                    confidence=confidence,
+                    detection_type='knn_motion',
+                    timestamp=timestamp,
+                    contour=contour,
+                    metadata={'algorithm': 'KNN'}
+                )
+                detections.append(detection)
 
         return detections
 

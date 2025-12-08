@@ -38,6 +38,12 @@ class FusionMode(Enum):
     MOTION_PRIORITY = "motion_priority"  # Use motion, add color if motion misses it
 
 
+class ContourMethod(Enum):
+    """Contour/blob detection methods."""
+    FIND_CONTOURS = "find_contours"              # Traditional cv2.findContours (default)
+    CONNECTED_COMPONENTS = "connected_components"  # cv2.connectedComponentsWithStats
+
+
 @dataclass
 class ColorAnomalyAndMotionDetectionConfig:
     """Configuration for color anomaly and motion detection."""
@@ -94,6 +100,9 @@ class ColorAnomalyAndMotionDetectionConfig:
     color_min_detection_area: int = 15
     color_max_detection_area: int = 50000
     use_tile_analysis: bool = False
+
+    # Contour/blob detection method
+    contour_method: ContourMethod = ContourMethod.FIND_CONTOURS
 
     # Hue expansion for color detections
     enable_hue_expansion: bool = False

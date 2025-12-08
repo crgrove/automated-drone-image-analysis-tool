@@ -101,9 +101,12 @@ class FrameProcessingWorker(QObject):
 
     def stop(self):
         """Stop processing frames (thread-safe, can be called from any thread)."""
-        # Use signal to ensure thread-safe stop
+        # Set flag immediately (this is atomic in Python, so thread-safe)
+        # This ensures current/next processing check will see the stop flag
+        self._should_stop = True
+        # Also emit signal to handle any queued work cleanly
         try:
             self.stopRequested.emit()
         except RuntimeError:
-            # Object may already be deleted, just set flag directly
-            self._should_stop = True
+            # Object may already be deleted, flag already set above
+            pass

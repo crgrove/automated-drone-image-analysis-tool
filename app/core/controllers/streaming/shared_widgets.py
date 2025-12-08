@@ -889,7 +889,7 @@ class StreamControlWidget(QWidget):
             self,
             "Select Video File",
             "",
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm);;All Files (*)"
+            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm *.mpg *.mpeg *.ts *.mts *.m2ts);;All Files (*)"
         )
         if file_path:
             self.url_input.setText(file_path)

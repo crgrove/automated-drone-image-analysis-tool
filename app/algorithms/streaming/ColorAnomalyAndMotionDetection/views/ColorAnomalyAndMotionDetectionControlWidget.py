@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from core.services.LoggerService import LoggerService
 from core.views.streaming.components import InputProcessingTab, RenderingTab, ColorWheelWidget, FrameTab
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services.shared_types import (
-    MotionAlgorithm, FusionMode
+    MotionAlgorithm, FusionMode, ContourMethod
 )
 
 
@@ -356,6 +356,17 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
                                                  "Recommended: 50000 for general use, 10000 for small-object-only searches.")
         quant_layout.addWidget(self.color_max_detection_area, 3, 1)
 
+        quant_layout.addWidget(QLabel("Blob Detection Method:"), 4, 0)
+        self.contour_method = QComboBox()
+        self.contour_method.addItems(["Find Contours", "Connected Components"])
+        self.contour_method.setCurrentText("Find Contours")
+        self.contour_method.setToolTip("Method for extracting blob regions from the detection mask:\n\n"
+                                       "Find Contours: Traditional OpenCV contour detection (default).\n"
+                                       "  Better for irregular shapes, provides detailed contour outlines.\n\n"
+                                       "Connected Components: Uses cv2.connectedComponentsWithStats.\n"
+                                       "  Provides direct blob statistics in a single pass.")
+        quant_layout.addWidget(self.contour_method, 4, 1)
+
         layout.addWidget(quant_group)
 
         # Hue Expansion
@@ -592,6 +603,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.color_rarity_percentile.valueChanged.connect(self.update_color_percentile_label)
         self.color_min_detection_area.valueChanged.connect(self.emit_config)
         self.color_max_detection_area.valueChanged.connect(self.emit_config)
+        self.contour_method.currentTextChanged.connect(self.emit_config)
         self.enable_hue_expansion.toggled.connect(self.emit_config)
         self.hue_expansion_range.valueChanged.connect(self.update_hue_range_label)
 
@@ -673,6 +685,12 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             "MOTION_PRIORITY": FusionMode.MOTION_PRIORITY
         }
 
+        # Map string contour methods to enum
+        contour_map = {
+            "Find Contours": ContourMethod.FIND_CONTOURS,
+            "Connected Components": ContourMethod.CONNECTED_COMPONENTS
+        }
+
         # Map shape names to indices
 
         # Build excluded hue ranges from color wheel selection
@@ -721,6 +739,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             'color_rarity_percentile': float(self.color_rarity_percentile.value()),
             'color_min_detection_area': self.color_min_detection_area.value(),
             'color_max_detection_area': self.color_max_detection_area.value(),
+            'contour_method': contour_map[self.contour_method.currentText()],
             'enable_hue_expansion': self.enable_hue_expansion.isChecked(),
             'hue_expansion_range': self.hue_expansion_range.value(),
 

@@ -37,15 +37,20 @@ class LoggerService:
 
         log_path = app_path + 'adiat_logs.txt'
         self.logger = logging.getLogger(__name__)
-        stdoutHandler = logging.StreamHandler(stream=sys.stdout)
-        fileHandler = logging.FileHandler(log_path)
-        stdoutFmt = logging.Formatter(
-            "%(name)s: %(asctime)s | %(levelname)s | %(process)d >>> %(message)s"
-        )
-        stdoutHandler.setFormatter(stdoutFmt)
-        fileHandler.setFormatter(stdoutFmt)
-        self.logger.addHandler(stdoutHandler)
-        self.logger.addHandler(fileHandler)
+
+        # Only add handlers if they haven't been added yet (prevents duplicate logs
+        # when multiple LoggerService instances are created)
+        if not self.logger.handlers:
+            stdoutHandler = logging.StreamHandler(stream=sys.stdout)
+            fileHandler = logging.FileHandler(log_path)
+            stdoutFmt = logging.Formatter(
+                "%(name)s: %(asctime)s | %(levelname)s | %(process)d >>> %(message)s"
+            )
+            stdoutHandler.setFormatter(stdoutFmt)
+            fileHandler.setFormatter(stdoutFmt)
+            self.logger.addHandler(stdoutHandler)
+            self.logger.addHandler(fileHandler)
+            self.logger.setLevel(logging.DEBUG)
 
     def info(self, message):
         """
