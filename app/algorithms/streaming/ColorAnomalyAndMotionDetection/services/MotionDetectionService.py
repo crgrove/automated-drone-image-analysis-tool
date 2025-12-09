@@ -410,6 +410,25 @@ class MotionDetectionService(QObject):
         return change_ratio > config.camera_movement_threshold
 
     def reset(self):
-        """Reset motion detection state."""
+        """Reset motion detection state (does not reset background models)."""
         self._prev_gray = None
         self._detection_masks = []
+
+    def reset_background_models(self):
+        """Reset background subtractor models for new video session.
+
+        This should be called when switching videos to prevent the old video's
+        learned background from affecting motion detection in the new video.
+        """
+        # Reset all state
+        self._prev_gray = None
+        self._detection_masks = []
+
+        # Reset background subtractors to None - they will be recreated
+        # with fresh state when next used via _init_background_subtractors
+        self._bg_subtractor_mog2 = None
+        self._bg_subtractor_knn = None
+
+        # Reinitialize with default config to ensure they're ready for use
+        default_config = ColorAnomalyAndMotionDetectionConfig()
+        self._init_background_subtractors(default_config)

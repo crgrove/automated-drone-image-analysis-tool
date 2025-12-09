@@ -24,7 +24,7 @@ class FrameProcessingWorker(QObject):
     """
 
     # Signals emitted from worker thread
-    frameProcessed = Signal(np.ndarray, list, float)  # frame, detections, processing_time_ms
+    frameProcessed = Signal(np.ndarray, list, float, bool)  # frame, detections, processing_time_ms, was_skipped
     errorOccurred = Signal(str)  # error_message
 
     # Signal to request frame processing (emitted from main thread, received in worker thread)
@@ -39,7 +39,9 @@ class FrameProcessingWorker(QObject):
 
         Args:
             processing_function: Function that processes a frame and returns detections
-                Signature: (frame: np.ndarray, timestamp: float) -> List[Dict]
+                Signature: (frame: np.ndarray, timestamp: float) -> Tuple[List[Dict], bool]
+                Returns (detections, was_skipped) where was_skipped indicates if frame
+                was skipped due to frame rate limiting.
                 This function should use algorithm service objects that are moved to
                 the worker thread.
             pause_check: Optional function to check if processing should be paused.
@@ -81,14 +83,21 @@ class FrameProcessingWorker(QObject):
             frame_copy = frame.copy()
 
             # Process frame with algorithm (calls service methods in worker thread)
-            detections = self.processing_function(frame_copy, timestamp)
+            # Returns (detections, was_skipped) tuple
+            result = self.processing_function(frame_copy, timestamp)
+            if isinstance(result, tuple) and len(result) == 2:
+                detections, was_skipped = result
+            else:
+                # Backwards compatibility: old processing functions return just detections
+                detections = result
+                was_skipped = False
 
             # Calculate processing time
             processing_time_ms = (time.time() - start_time) * 1000
 
             # Emit results back to main thread
             # Note: Rendering happens on main thread since Qt operations must be on main thread
-            self.frameProcessed.emit(frame_copy, detections, processing_time_ms)
+            self.frameProcessed.emit(frame_copy, detections, processing_time_ms, was_skipped)
 
         except Exception as e:
             error_msg = f"Error processing frame: {str(e)}"

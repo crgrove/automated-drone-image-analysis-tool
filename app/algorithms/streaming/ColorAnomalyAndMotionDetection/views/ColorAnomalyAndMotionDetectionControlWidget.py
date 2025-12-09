@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from core.services.LoggerService import LoggerService
 from core.views.streaming.components import InputProcessingTab, RenderingTab, ColorWheelWidget, FrameTab
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services.shared_types import (
-    MotionAlgorithm, FusionMode, ContourMethod
+    MotionAlgorithm, FusionMode, ContourMethod, ColorSpace
 )
 
 
@@ -369,6 +369,63 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         layout.addWidget(quant_group)
 
+        # Color Space Selection
+        colorspace_group = QGroupBox("Color Space (Lighting Invariance)")
+        colorspace_layout = QGridLayout(colorspace_group)
+        colorspace_layout.setColumnMinimumWidth(0, 160)
+        colorspace_layout.setColumnStretch(1, 1)
+
+        colorspace_layout.addWidget(QLabel("Color Space:"), 0, 0)
+        self.color_space = QComboBox()
+        self.color_space.addItems(["BGR", "HSV", "LAB"])
+        self.color_space.setCurrentText("BGR")
+        self.color_space.setToolTip("Color space for histogram-based anomaly detection:\n\n"
+                                    "BGR (default): Uses all 3 color channels. Fast, but sensitive to lighting.\n"
+                                    "  A red shirt in shadow may not match a red shirt in sunlight.\n\n"
+                                    "HSV (Hue-based): Uses only Hue channel - lighting invariant.\n"
+                                    "  Red stays red regardless of brightness. Good for colored objects.\n"
+                                    "  Filters out grays/whites where hue is undefined.\n\n"
+                                    "LAB (a,b chromaticity): Uses a,b channels - lighting invariant, perceptually uniform.\n"
+                                    "  No discontinuity at red (unlike HSV). Best for search & rescue.\n"
+                                    "  Filters out neutral grays where a,b are near zero.")
+        colorspace_layout.addWidget(self.color_space, 0, 1)
+
+        # HSV Min Saturation (only relevant for HSV mode)
+        colorspace_layout.addWidget(QLabel("HSV Min Saturation:"), 1, 0)
+        hsv_sat_layout = QHBoxLayout()
+        self.hsv_min_saturation = QSlider(Qt.Horizontal)
+        self.hsv_min_saturation.setRange(0, 255)
+        self.hsv_min_saturation.setValue(30)
+        self.hsv_min_saturation.setToolTip("Minimum saturation for HSV mode (0-255).\n"
+                                           "Pixels below this saturation are ignored (grays, whites, blacks).\n"
+                                           "These have undefined/noisy hue values.\n"
+                                           "Lower = include more desaturated colors (may add noise).\n"
+                                           "Higher = only vivid colors (may miss faded/shadowed objects).\n"
+                                           "Recommended: 30-50 for general use.")
+        hsv_sat_layout.addWidget(self.hsv_min_saturation)
+        self.hsv_sat_label = QLabel("30")
+        hsv_sat_layout.addWidget(self.hsv_sat_label)
+        colorspace_layout.addLayout(hsv_sat_layout, 1, 1)
+
+        # LAB Min Chroma (only relevant for LAB mode)
+        colorspace_layout.addWidget(QLabel("LAB Min Chroma:"), 2, 0)
+        lab_chroma_layout = QHBoxLayout()
+        self.lab_min_chroma = QSlider(Qt.Horizontal)
+        self.lab_min_chroma.setRange(0, 128)
+        self.lab_min_chroma.setValue(10)
+        self.lab_min_chroma.setToolTip("Minimum chroma (color intensity) for LAB mode (0-128).\n"
+                                       "Chroma = distance from neutral gray in a,b plane.\n"
+                                       "Pixels below this are ignored (near-neutral grays).\n"
+                                       "Lower = include more muted colors.\n"
+                                       "Higher = only vivid, saturated colors.\n"
+                                       "Recommended: 10-20 for general use.")
+        lab_chroma_layout.addWidget(self.lab_min_chroma)
+        self.lab_chroma_label = QLabel("10")
+        lab_chroma_layout.addWidget(self.lab_chroma_label)
+        colorspace_layout.addLayout(lab_chroma_layout, 2, 1)
+
+        layout.addWidget(colorspace_group)
+
         # Hue Expansion
         hue_group = QGroupBox("Color Match Expansion")
         hue_layout = QVBoxLayout(hue_group)
@@ -473,6 +530,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.input_processing_tab.processing_width.valueChanged.connect(self.emit_config)
         self.input_processing_tab.processing_height.valueChanged.connect(self.emit_config)
         self.input_processing_tab.render_at_processing_res.toggled.connect(self.emit_config)
+        self.input_processing_tab.frame_rate_preset.currentTextChanged.connect(self.emit_config)
 
         # Motion
         self.enable_motion.toggled.connect(self.emit_config)
@@ -500,6 +558,11 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.contour_method.currentTextChanged.connect(self.emit_config)
         self.enable_hue_expansion.toggled.connect(self.emit_config)
         self.hue_expansion_range.valueChanged.connect(self.update_hue_range_label)
+
+        # Color space
+        self.color_space.currentTextChanged.connect(self.emit_config)
+        self.hsv_min_saturation.valueChanged.connect(self.update_hsv_sat_label)
+        self.lab_min_chroma.valueChanged.connect(self.update_lab_chroma_label)
 
         # Fusion
         self.enable_fusion.toggled.connect(self.emit_config)
@@ -553,6 +616,18 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.hue_range_label.setText(f"±{value} (~{value * 2}°)")
         self.emit_config()
 
+    def update_hsv_sat_label(self):
+        """Update HSV min saturation label."""
+        value = self.hsv_min_saturation.value()
+        self.hsv_sat_label.setText(str(value))
+        self.emit_config()
+
+    def update_lab_chroma_label(self):
+        """Update LAB min chroma label."""
+        value = self.lab_min_chroma.value()
+        self.lab_chroma_label.setText(str(value))
+        self.emit_config()
+
     def on_show_advanced_motion_toggled(self, checked: bool):
         """Show or hide advanced motion controls."""
         self.advanced_motion_container.setVisible(checked)
@@ -585,6 +660,13 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             "Connected Components": ContourMethod.CONNECTED_COMPONENTS
         }
 
+        # Map string color spaces to enum
+        colorspace_map = {
+            "BGR": ColorSpace.BGR,
+            "HSV": ColorSpace.HSV,
+            "LAB": ColorSpace.LAB
+        }
+
         # Map shape names to indices
 
         # Build excluded hue ranges from color wheel selection
@@ -605,12 +687,14 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             hue_max = min(179, hue_cv + tolerance_cv)
             excluded_hue_ranges.append((hue_min, hue_max))
 
-        # Get processing resolution from shared InputProcessingTab
+        # Get processing resolution and frame rate from shared InputProcessingTab
         processing_width, processing_height = self.input_processing_tab.get_processing_resolution()
+        target_fps = self.input_processing_tab.get_target_fps()
 
         config = {
             'processing_width': processing_width,
             'processing_height': processing_height,
+            'target_fps': target_fps,
             'render_at_processing_res': self.input_processing_tab.render_at_processing_res.isChecked(),
 
             'enable_motion': self.enable_motion.isChecked(),
@@ -634,6 +718,9 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
             'color_min_detection_area': self.color_min_detection_area.value(),
             'color_max_detection_area': self.color_max_detection_area.value(),
             'contour_method': contour_map[self.contour_method.currentText()],
+            'color_space': colorspace_map[self.color_space.currentText()],
+            'hsv_min_saturation': self.hsv_min_saturation.value(),
+            'lab_min_chroma': self.lab_min_chroma.value(),
             'enable_hue_expansion': self.enable_hue_expansion.isChecked(),
             'hue_expansion_range': self.hue_expansion_range.value(),
 

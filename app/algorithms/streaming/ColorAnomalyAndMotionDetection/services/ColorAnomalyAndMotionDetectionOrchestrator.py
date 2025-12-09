@@ -82,6 +82,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self._original_frame = None
         self._current_scale_factor = 1.0
 
+        # Frame rate limiting state
+        self._last_processed_time = 0.0
+        self._last_detections: List[Detection] = []  # Persist detections when skipping frames
+
         # self.logger.info("Color anomaly and motion detection orchestrator initialized")
 
     def update_config(self, config: ColorAnomalyAndMotionDetectionConfig):
@@ -588,6 +592,87 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         return result
 
+    def _render_detections_fast(self, frame: np.ndarray, detections: List[Detection]) -> np.ndarray:
+        """
+        Fast rendering of detections onto a frame (used when skipping frames for FPS limiting).
+
+        This is a simplified version of the full rendering that just draws bounding boxes
+        to maintain visual continuity when frames are skipped.
+
+        Args:
+            frame: Input BGR frame
+            detections: List of detections to render
+
+        Returns:
+            Annotated frame with detections drawn
+        """
+        if not detections:
+            return frame
+
+        with self.config_lock:
+            config = self.config
+
+        if not config.show_detections:
+            return frame
+
+        annotated_frame = frame.copy()
+
+        # Limit detections for performance
+        detections_to_render = detections
+        if config.max_detections_to_render > 0 and len(detections) > config.max_detections_to_render:
+            detections_to_render = sorted(
+                detections,
+                key=lambda d: d.confidence * d.area,
+                reverse=True
+            )[:config.max_detections_to_render]
+
+        for i, detection in enumerate(detections_to_render):
+            x, y, w, h = detection.bbox
+            cx, cy = detection.centroid
+
+            # Color based on detection type
+            if config.use_detection_color_for_rendering and 'dominant_color' in detection.metadata:
+                try:
+                    bgr_color = detection.metadata['dominant_color']
+                    bgr_pixel = np.uint8([[[bgr_color[0], bgr_color[1], bgr_color[2]]]])
+                    hsv_pixel = cv2.cvtColor(bgr_pixel, cv2.COLOR_BGR2HSV)
+                    hue = hsv_pixel[0][0][0]
+                    hsv_vibrant = np.uint8([[[hue, 255, 255]]])
+                    bgr_vibrant = cv2.cvtColor(hsv_vibrant, cv2.COLOR_HSV2BGR)
+                    color = tuple(int(c) for c in bgr_vibrant[0][0])
+                except Exception:
+                    color = (255, 0, 255)
+            elif detection.detection_type == 'fused':
+                color = (255, 255, 0) if detection.confidence > 0.7 else (255, 128, 0)
+            elif detection.detection_type == 'color_anomaly':
+                color = (255, 0, 255) if detection.confidence > 0.7 else (255, 0, 128)
+            else:
+                color = (0, 255, 0) if detection.confidence > 0.7 else (0, 255, 255)
+
+            # Render shape
+            if config.render_shape == 0:  # Box
+                cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), color, 2)
+                cv2.circle(annotated_frame, (cx, cy), 3, color, -1)
+            elif config.render_shape == 1:  # Circle
+                diagonal = np.sqrt(w * w + h * h) / 2.0
+                radius = max(5, int(diagonal * 1.1))
+                cv2.circle(annotated_frame, (cx, cy), radius, color, 2)
+            elif config.render_shape == 2:  # Dot
+                cv2.circle(annotated_frame, (cx, cy), 5, color, -1)
+
+            # Render text label
+            if config.render_text:
+                if detection.detection_type == 'fused':
+                    label = f"#{i + 1} FUSED"
+                elif detection.detection_type == 'color_anomaly':
+                    label = f"#{i + 1} COLOR"
+                else:
+                    label = f"#{i + 1} MOTION"
+                cv2.putText(annotated_frame, label, (x, max(15, y - 5)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
+
+        return annotated_frame
+
     def process_frame(self, frame: np.ndarray, timestamp: float) -> Tuple[np.ndarray, List[Detection], StageTimings]:
         """
         Process a frame through the color anomaly and motion detection pipeline.
@@ -601,6 +686,29 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         """
         timings = StageTimings()
         overall_start = time.perf_counter()
+
+        # Frame rate limiting - skip frame if we're above target FPS
+        with self.config_lock:
+            target_fps = self.config.target_fps
+
+        if target_fps > 0:
+            target_interval = 1.0 / target_fps
+            current_time = time.perf_counter()
+            elapsed = current_time - self._last_processed_time
+
+            if elapsed < target_interval:
+                # Skip this frame - return previous detections for visual continuity
+                timings.total_ms = (time.perf_counter() - overall_start) * 1000
+                timings.was_skipped = True
+
+                # Render previous detections onto current frame if we have any
+                if self._last_detections:
+                    annotated_frame = self._render_detections_fast(frame, self._last_detections)
+                    return annotated_frame, self._last_detections, timings
+                return frame, [], timings
+
+            # Update last processed time
+            self._last_processed_time = current_time
 
         # Frame queue management
         capture_start = time.perf_counter()
@@ -877,6 +985,9 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
             self.performanceUpdate.emit(self.metrics.to_dict())
             self._last_fps_update = current_time
 
+        # Store detections for frame skipping (visual continuity)
+        self._last_detections = detections
+
         return annotated_frame, detections, timings
 
     def _update_fps(self):
@@ -901,3 +1012,25 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self._fps_start_time = time.time()
         self.motion_service.reset()
         # self.logger.info("Performance metrics reset")
+
+    def reset_for_new_video(self):
+        """Reset all state for a new video session.
+
+        This should be called when switching videos to ensure clean state:
+        - Clears temporal detection history (prevents old detections affecting new video)
+        - Resets background subtractor models (prevents old background affecting motion detection)
+        - Resets performance metrics
+        """
+        # Clear temporal detection history
+        self._temporal_detection_history.clear()
+
+        # Clear last detections (for frame skipping persistence)
+        self._last_detections = []
+
+        # Reset motion service including background models
+        self.motion_service.reset_background_models()
+
+        # Reset performance metrics
+        self.metrics = PerformanceMetrics()
+        self._fps_counter = 0
+        self._fps_start_time = time.time()

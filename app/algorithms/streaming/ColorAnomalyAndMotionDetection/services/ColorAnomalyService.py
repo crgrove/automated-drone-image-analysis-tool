@@ -13,7 +13,7 @@ import numpy as np
 import cv2
 
 # Import shared types
-from .shared_types import Detection, ColorAnomalyAndMotionDetectionConfig, ContourMethod
+from .shared_types import Detection, ColorAnomalyAndMotionDetectionConfig, ContourMethod, ColorSpace
 
 
 class ColorAnomalyService(QObject):
@@ -47,7 +47,8 @@ class ColorAnomalyService(QObject):
     def _extract_blobs_connected_components(self, binary_mask: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                                              timestamp: float, frame_bgr: np.ndarray,
                                              color_indices: np.ndarray, histogram: np.ndarray,
-                                             total_pixels: int, max_detections: int = 0) -> List[Detection]:
+                                             total_pixels: int, max_detections: int = 0,
+                                             color_space: str = 'bgr') -> List[Detection]:
         """
         Extract blobs using cv2.connectedComponentsWithStats.
 
@@ -76,10 +77,8 @@ class ColorAnomalyService(QObject):
         )
 
         # Label 0 is background, skip it
+        # Process ALL components (no early stopping - we sort by rarity first)
         for label_idx in range(1, num_labels):
-            if max_detections > 0 and len(detections) >= max_detections:
-                break
-
             # Get statistics for this component
             x = stats[label_idx, cv2.CC_STAT_LEFT]
             y = stats[label_idx, cv2.CC_STAT_TOP]
@@ -133,6 +132,7 @@ class ColorAnomalyService(QObject):
                 contour=contour,
                 metadata={
                     'algorithm': 'quantization',
+                    'color_space': color_space,
                     'contour_method': 'connected_components',
                     'dominant_color': dominant_color,
                     'bin_count': int(bin_count),
@@ -140,6 +140,12 @@ class ColorAnomalyService(QObject):
                 }
             )
             detections.append(detection)
+
+        # Sort by rarity (lowest bin_count = rarest) and apply max_detections limit
+        if len(detections) > 0:
+            detections.sort(key=lambda d: d.metadata.get('bin_count', float('inf')))
+            if max_detections > 0 and len(detections) > max_detections:
+                detections = detections[:max_detections]
 
         return detections
 
@@ -164,7 +170,18 @@ class ColorAnomalyService(QObject):
 
     def _color_quantization_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
                                    max_detections: int = 0) -> List[Detection]:
-        """Color quantization anomaly detection."""
+        """Color quantization anomaly detection - routes to appropriate color space method."""
+        # Route to appropriate color space implementation
+        if config.color_space == ColorSpace.HSV:
+            return self._hsv_hue_detect(frame_bgr, config, max_detections)
+        elif config.color_space == ColorSpace.LAB:
+            return self._lab_ab_detect(frame_bgr, config, max_detections)
+        else:
+            return self._bgr_detect(frame_bgr, config, max_detections)
+
+    def _bgr_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                    max_detections: int = 0) -> List[Detection]:
+        """BGR color space anomaly detection (original 3D histogram method)."""
         detections = []
         timestamp = time.time()
 
@@ -219,17 +236,15 @@ class ColorAnomalyService(QObject):
             # Use connected components - returns detections directly
             detections = self._extract_blobs_connected_components(
                 rare_mask, config, timestamp, frame_bgr,
-                color_indices, histogram, total_pixels, max_detections
+                color_indices, histogram, total_pixels, max_detections,
+                color_space='bgr'
             )
         else:
             # Default: use findContours
             contours, _ = cv2.findContours(rare_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            # Process contours
+            # Process ALL contours (no early stopping - we sort by rarity first)
             for contour in contours:
-                if max_detections > 0 and len(detections) >= max_detections:
-                    break
-
                 area = cv2.contourArea(contour)
                 if area < config.color_min_detection_area or area > config.max_detection_area:
                     continue
@@ -279,12 +294,19 @@ class ColorAnomalyService(QObject):
                     contour=contour,
                     metadata={
                         'algorithm': 'quantization',
+                        'color_space': 'bgr',
                         'dominant_color': dominant_color,
                         'bin_count': int(bin_count),
                         'rarity': float(rarity)
                     }
                 )
                 detections.append(detection)
+
+            # Sort by rarity (lowest bin_count = rarest) and apply max_detections limit
+            if len(detections) > 0:
+                detections.sort(key=lambda d: d.metadata.get('bin_count', float('inf')))
+                if max_detections > 0 and len(detections) > max_detections:
+                    detections = detections[:max_detections]
 
         # Hue expansion: Expand detections to include neighboring similar-hue pixels
         if config.enable_hue_expansion and len(detections) > 0 and config.hue_expansion_range > 0:
@@ -378,3 +400,250 @@ class ColorAnomalyService(QObject):
             return expanded_detection
 
         return detection
+
+    def _hsv_hue_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                        max_detections: int = 0) -> List[Detection]:
+        """
+        HSV Hue-based anomaly detection (1D histogram on Hue channel).
+
+        Lighting-invariant detection that groups colors by hue regardless of brightness.
+        Filters out low-saturation pixels (grays/whites/blacks) where hue is meaningless.
+        """
+        detections = []
+        timestamp = time.time()
+
+        h, w = frame_bgr.shape[:2]
+        total_pixels = h * w
+
+        # Convert to HSV
+        frame_hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+
+        # Extract channels
+        hue = frame_hsv[:, :, 0]  # 0-179 in OpenCV
+        saturation = frame_hsv[:, :, 1]  # 0-255
+
+        # Create mask for pixels with sufficient saturation (filter out grays)
+        saturation_mask = saturation >= config.hsv_min_saturation
+
+        # Quantize hue values
+        # OpenCV Hue is 0-179, so max bins is 180
+        bits = min(config.color_quantization_bits, 8)
+        if bits >= 8:
+            # Full resolution - use raw hue values (0-179)
+            hue_indices = hue.astype(np.int32)
+            max_bins = 180
+        else:
+            # Quantize hue
+            bins_count = 2 ** bits
+            # Scale 0-179 to 0-(bins_count-1)
+            hue_indices = (hue.astype(np.int32) * bins_count // 180).clip(0, bins_count - 1)
+            max_bins = bins_count
+
+        # Build histogram only from saturated pixels
+        valid_hues = hue_indices[saturation_mask]
+        if len(valid_hues) == 0:
+            return detections
+
+        histogram = np.bincount(valid_hues.ravel(), minlength=max_bins)
+
+        # Find rare hue bins
+        nonzero_counts = histogram[histogram > 0]
+        if len(nonzero_counts) == 0:
+            return detections
+
+        valid_pixel_count = len(valid_hues)
+        percentile_threshold = np.percentile(nonzero_counts, config.color_rarity_percentile)
+        absolute_max = valid_pixel_count * 0.05
+        threshold = min(percentile_threshold, absolute_max)
+
+        # Create mask of rare bins
+        rare_bins = (histogram > 0) & (histogram < threshold)
+
+        # Create binary mask: pixel is rare if it has sufficient saturation AND rare hue
+        rare_hue_mask = rare_bins[hue_indices]
+        rare_mask = (rare_hue_mask & saturation_mask).astype(np.uint8) * 255
+
+        # Morphology to clean up noise
+        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_OPEN, morph_kernel)
+        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_CLOSE, morph_kernel)
+
+        # Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            detections = self._extract_blobs_connected_components(
+                rare_mask, config, timestamp, frame_bgr,
+                hue_indices, histogram, valid_pixel_count, max_detections,
+                color_space='hsv'
+            )
+        else:
+            detections = self._extract_blobs_find_contours(
+                rare_mask, config, timestamp, frame_bgr,
+                hue_indices, histogram, valid_pixel_count, max_detections,
+                color_space='hsv'
+            )
+
+        return detections
+
+    def _lab_ab_detect(self, frame_bgr: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                       max_detections: int = 0) -> List[Detection]:
+        """
+        LAB a,b-based anomaly detection (2D histogram on a,b channels).
+
+        Lighting-invariant detection using perceptually uniform color space.
+        Filters out low-chroma pixels (near-neutral grays) where a,b are close to 128.
+        """
+        detections = []
+        timestamp = time.time()
+
+        h, w = frame_bgr.shape[:2]
+        total_pixels = h * w
+
+        # Convert to LAB
+        frame_lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
+
+        # Extract a and b channels (both 0-255 in OpenCV, centered at 128)
+        a_channel = frame_lab[:, :, 1].astype(np.int32)
+        b_channel = frame_lab[:, :, 2].astype(np.int32)
+
+        # Calculate chroma (distance from neutral gray at 128,128)
+        chroma = np.sqrt((a_channel - 128.0) ** 2 + (b_channel - 128.0) ** 2)
+
+        # Create mask for pixels with sufficient chroma (filter out grays)
+        chroma_mask = chroma >= config.lab_min_chroma
+
+        # Quantize a and b values
+        bits = config.color_quantization_bits
+        scale = 2 ** (8 - bits)
+        bins_per_channel = 2 ** bits
+
+        # Quantize a and b
+        a_quantized = (a_channel // scale).clip(0, bins_per_channel - 1)
+        b_quantized = (b_channel // scale).clip(0, bins_per_channel - 1)
+
+        # Create 2D histogram index (a + b * bins_per_channel)
+        color_indices = a_quantized + b_quantized * bins_per_channel
+        max_bins = bins_per_channel ** 2
+
+        # Build histogram only from chromatic pixels
+        valid_indices = color_indices[chroma_mask]
+        if len(valid_indices) == 0:
+            return detections
+
+        histogram = np.bincount(valid_indices.ravel(), minlength=max_bins)
+
+        # Find rare color bins
+        nonzero_counts = histogram[histogram > 0]
+        if len(nonzero_counts) == 0:
+            return detections
+
+        valid_pixel_count = len(valid_indices)
+        percentile_threshold = np.percentile(nonzero_counts, config.color_rarity_percentile)
+        absolute_max = valid_pixel_count * 0.05
+        threshold = min(percentile_threshold, absolute_max)
+
+        # Create mask of rare bins
+        rare_bins = (histogram > 0) & (histogram < threshold)
+
+        # Create binary mask: pixel is rare if it has sufficient chroma AND rare a,b
+        rare_ab_mask = rare_bins[color_indices]
+        rare_mask = (rare_ab_mask & chroma_mask).astype(np.uint8) * 255
+
+        # Morphology to clean up noise
+        morph_kernel = self._get_morph_kernel(config.morphology_kernel_size)
+        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_OPEN, morph_kernel)
+        rare_mask = cv2.morphologyEx(rare_mask, cv2.MORPH_CLOSE, morph_kernel)
+
+        # Extract blobs using configured method
+        if config.contour_method == ContourMethod.CONNECTED_COMPONENTS:
+            detections = self._extract_blobs_connected_components(
+                rare_mask, config, timestamp, frame_bgr,
+                color_indices, histogram, valid_pixel_count, max_detections,
+                color_space='lab'
+            )
+        else:
+            detections = self._extract_blobs_find_contours(
+                rare_mask, config, timestamp, frame_bgr,
+                color_indices, histogram, valid_pixel_count, max_detections,
+                color_space='lab'
+            )
+
+        return detections
+
+    def _extract_blobs_find_contours(self, binary_mask: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
+                                      timestamp: float, frame_bgr: np.ndarray,
+                                      color_indices: np.ndarray, histogram: np.ndarray,
+                                      total_pixels: int, max_detections: int = 0,
+                                      color_space: str = 'bgr') -> List[Detection]:
+        """
+        Extract blobs using cv2.findContours.
+
+        Shared implementation for all color spaces.
+        """
+        detections = []
+        h, w = binary_mask.shape[:2]
+
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Process ALL contours (no early stopping - we sort by rarity first)
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < config.color_min_detection_area or area > config.max_detection_area:
+                continue
+
+            x, y, w_box, h_box = cv2.boundingRect(contour)
+
+            # Calculate centroid
+            M = cv2.moments(contour)
+            if M["m00"] > 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+            else:
+                cx, cy = x + w_box // 2, y + h_box // 2
+
+            # Get dominant color from detected pixels
+            region = frame_bgr[y:y + h_box, x:x + w_box]
+            if region.size > 0:
+                contour_mask = np.zeros((h_box, w_box), dtype=np.uint8)
+                shifted_contour = contour - np.array([x, y])
+                cv2.drawContours(contour_mask, [shifted_contour], -1, 255, -1)
+                mean_color = cv2.mean(region, mask=contour_mask)[:3]
+                dominant_color = tuple(int(c) for c in mean_color)
+            else:
+                dominant_color = (0, 0, 0)
+
+            # Confidence based on rarity
+            if 0 <= cy < h and 0 <= cx < w:
+                bin_idx = color_indices[cy, cx]
+                bin_count = histogram[bin_idx] if bin_idx < len(histogram) else 0
+                rarity = 1.0 - (bin_count / total_pixels) if total_pixels > 0 else 0.5
+                confidence = min(1.0, rarity * 2.0)
+            else:
+                confidence = 0.5
+                bin_count = 0
+                rarity = 0.5
+
+            detection = Detection(
+                bbox=(x, y, w_box, h_box),
+                centroid=(cx, cy),
+                area=area,
+                confidence=confidence,
+                detection_type='color_anomaly',
+                timestamp=timestamp,
+                contour=contour,
+                metadata={
+                    'algorithm': 'quantization',
+                    'color_space': color_space,
+                    'dominant_color': dominant_color,
+                    'bin_count': int(bin_count),
+                    'rarity': float(rarity)
+                }
+            )
+            detections.append(detection)
+
+        # Sort by rarity (lowest bin_count = rarest) and apply max_detections limit
+        if len(detections) > 0:
+            detections.sort(key=lambda d: d.metadata.get('bin_count', float('inf')))
+            if max_detections > 0 and len(detections) > max_detections:
+                detections = detections[:max_detections]
+
+        return detections

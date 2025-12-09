@@ -770,7 +770,8 @@ class StreamViewerWindow(QMainWindow):
         # ColorAnomalyAndMotionDetectionOrchestrator
         if hasattr(service, 'process_frame'):
             # Check if it returns (annotated_frame, detections, timings)
-            def process_integrated(frame: np.ndarray, timestamp: float) -> List[Dict]:
+            from typing import Tuple
+            def process_integrated(frame: np.ndarray, timestamp: float) -> Tuple[List[Dict], bool]:
                 annotated_frame, detections, timings = service.process_frame(frame, timestamp)
 
                 # Ensure the annotated frame is what gets displayed when the algorithm
@@ -794,7 +795,9 @@ class StreamViewerWindow(QMainWindow):
                         'timestamp': detection.timestamp,
                         'metadata': detection.metadata
                     })
-                return detection_dicts
+                # Return detections and whether frame was skipped due to frame rate limiting
+                was_skipped = timings.was_skipped if hasattr(timings, 'was_skipped') else False
+                return (detection_dicts, was_skipped)
             return process_integrated
 
         # MotionDetectionService
@@ -917,7 +920,8 @@ class StreamViewerWindow(QMainWindow):
             self._processing_thread = None
 
         # Disconnect remaining signals after thread is stopped to prevent queued signals from accessing deleted objects
-        if self._processing_worker:
+        # IMPORTANT: Skip this if thread was forcefully terminated - worker may be in invalid state
+        if not thread_terminated_forcefully and self._processing_worker:
             try:
                 self._processing_worker.frameProcessed.disconnect()
                 self._processing_worker.errorOccurred.disconnect()
@@ -945,11 +949,11 @@ class StreamViewerWindow(QMainWindow):
         self._processing_worker = None
         self._is_stopping_worker = False  # Reset flag after cleanup
 
-    @Slot(np.ndarray, list, float)
-    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float):
+    @Slot(np.ndarray, list, float, bool)
+    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float, was_skipped: bool = False):
         """Handle frame processed by worker thread."""
         # This runs on main thread (via QueuedConnection)
-        self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
+        self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=was_skipped)
         self._latest_detections_for_rendering = detections
 
         rendered_frame = None
@@ -1125,6 +1129,10 @@ class StreamViewerWindow(QMainWindow):
         self.stream_coordinator.disconnect_stream()
         # Then cleanup the processing worker (should be quick since no frames coming)
         self._cleanup_processing_worker()
+        # Reset algorithm state for next video session (clears background models,
+        # temporal history, etc. to prevent carryover between videos)
+        if self.algorithm_widget:
+            self.algorithm_widget.cleanup()
 
     @Slot(bool, str)
     def on_connection_changed(self, connected: bool, message: str):
@@ -1150,6 +1158,11 @@ class StreamViewerWindow(QMainWindow):
                 # Get stream resolution from stream_info if available, otherwise use placeholder
                 resolution = self.stream_coordinator.stream_info.get('resolution') or (1920, 1080)
                 self.algorithm_widget.on_stream_connected(resolution)
+
+            # Recreate processing worker if it was cleaned up during disconnect
+            # This ensures second video also uses worker thread for processing
+            if self.algorithm_widget and not self._processing_worker:
+                self._setup_processing_worker()
 
             if self._pending_auto_record:
                 default_recording_dir = os.path.expanduser("~")
@@ -1244,7 +1257,8 @@ class StreamViewerWindow(QMainWindow):
 
                     # Record processing completion
                     processing_time_ms = (time.time() - start_time) * 1000
-                    self.stream_statistics.on_frame_processed(processing_time_ms, len(detections))
+                    # Fallback path doesn't have access to was_skipped flag from timings
+                    self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=False)
 
                     self._latest_detections_for_rendering = detections
 
@@ -1462,15 +1476,37 @@ class StreamViewerWindow(QMainWindow):
         """Update statistics display."""
         # Update performance section in stream controls
         stats_obj = self.stream_statistics.get_stats()
+
+        # Get video info from stream coordinator
+        stream_info = self.stream_coordinator.stream_info if self.stream_coordinator else {}
+        video_resolution = stream_info.get('resolution')
+        video_fps = stream_info.get('fps', 0)
+
+        # Get processing resolution from algorithm config
+        processing_resolution = None
+        if self.algorithm_widget:
+            config = self.algorithm_widget.get_config()
+            proc_width = config.get('processing_width', 0)
+            proc_height = config.get('processing_height', 0)
+            # Check for "Original" setting (marker value 99999)
+            if proc_width < 99999 and proc_height < 99999 and proc_width > 0 and proc_height > 0:
+                processing_resolution = (proc_width, proc_height)
+            elif video_resolution:
+                processing_resolution = video_resolution  # Using original resolution
+
         perf_payload = {
             "fps": stats_obj.fps,
             "avg_fps": stats_obj.processing_fps,
+            "processing_fps": stats_obj.processing_fps,  # Actual frames processed per second
             "current_processing_time_ms": stats_obj.avg_processing_time_ms,
             "avg_processing_time_ms": stats_obj.avg_processing_time_ms,
             "latency_ms": stats_obj.latency_ms,
             "total_frames": stats_obj.total_frames,
             "detection_count": stats_obj.detection_count,
             "dropped_frames": stats_obj.dropped_frames,
+            "video_resolution": video_resolution,
+            "processing_resolution": processing_resolution,
+            "video_fps": video_fps,
         }
         self.stream_controls.update_performance(perf_payload)
 

@@ -33,6 +33,7 @@ class StageTimings:
     fusion_ms: float = 0.0
     render_ms: float = 0.0
     total_ms: float = 0.0
+    was_skipped: bool = False  # True if frame was skipped due to frame rate limiting
 
     def to_dict(self) -> Dict[str, float]:
         """Convert to dictionary."""
@@ -44,7 +45,8 @@ class StageTimings:
             'color_detection_ms': self.color_detection_ms,
             'fusion_ms': self.fusion_ms,
             'render_ms': self.render_ms,
-            'total_ms': self.total_ms
+            'total_ms': self.total_ms,
+            'was_skipped': self.was_skipped
         }
 
 

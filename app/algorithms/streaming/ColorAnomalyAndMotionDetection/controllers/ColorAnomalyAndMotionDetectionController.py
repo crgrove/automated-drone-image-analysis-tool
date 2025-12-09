@@ -188,6 +188,7 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         return ColorAnomalyAndMotionDetectionConfig(
             processing_width=processing_width,
             processing_height=processing_height,
+            target_fps=ui_config.get('target_fps', base_config.target_fps),
             enable_motion=ui_config.get('enable_motion', base_config.enable_motion),
             enable_color_quantization=ui_config.get('enable_color_quantization', base_config.enable_color_quantization),
             motion_algorithm=motion_algorithm,
@@ -353,6 +354,13 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         self.detection_count = 0
 
     def cleanup(self):
-        """Clean up algorithm resources."""
-        # Resources are managed automatically by the orchestrator and sub-services
-        # self.logger.info("ColorAnomalyAndMotionDetectionController cleaned up")
+        """Clean up algorithm resources for new video session.
+
+        Resets all internal state including:
+        - Background subtractor models (MOG2/KNN)
+        - Temporal detection history
+        - Performance metrics
+        """
+        if hasattr(self, 'integrated_detector') and self.integrated_detector:
+            self.integrated_detector.reset_for_new_video()
+        self.detection_count = 0
