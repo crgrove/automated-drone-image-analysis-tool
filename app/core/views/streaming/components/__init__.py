@@ -11,6 +11,7 @@ from .RenderingTab import RenderingTab
 from .CleanupTab import CleanupTab
 from .ColorWheelWidget import ColorWheelWidget
 from .FrameTab import FrameTab
+from .TrackGalleryWidget import TrackGalleryWidget
 
 __all__ = [
     'VideoTimelineWidget',
@@ -20,4 +21,5 @@ __all__ = [
     'CleanupTab',
     'ColorWheelWidget',
     'FrameTab',
+    'TrackGalleryWidget',
 ]
