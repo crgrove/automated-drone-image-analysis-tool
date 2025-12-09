@@ -12,7 +12,7 @@ import numpy as np
 import qtawesome as qta
 import traceback
 import xml.etree.ElementTree as ET
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QColorDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QColorDialog, QMessageBox
 from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
@@ -1169,7 +1169,8 @@ class AOIController:
                 'radius': radius,
                 'area': aoi_area,
                 'flagged': False,
-                'user_comment': ''
+                'user_comment': '',
+                'user_created': True  # Mark as manually created
             }
 
             # Add to current image's areas of interest
@@ -1188,6 +1189,7 @@ class AOIController:
                 aoi_xml.set('radius', str(radius))
                 aoi_xml.set('area', str(aoi_area))
                 aoi_xml.set('flagged', 'False')
+                aoi_xml.set('user_created', 'True')
 
                 # Store reference to XML element
                 new_aoi['xml'] = aoi_xml
@@ -1246,3 +1248,104 @@ class AOIController:
         # Restore normal cursor
         if hasattr(self.parent, 'main_image') and self.parent.main_image is not None:
             self.parent.main_image.viewport().setCursor(Qt.ArrowCursor)
+
+    def delete_aoi(self, aoi_index):
+        """Delete an AOI from the current image. Only allows deletion of user-created AOIs.
+
+        Args:
+            aoi_index (int): Index of the AOI to delete
+        """
+        try:
+            if aoi_index is None or aoi_index < 0:
+                return
+
+            # Get current image
+            if not hasattr(self.parent, 'images') or not hasattr(self.parent, 'current_image'):
+                return
+
+            image = self.parent.images[self.parent.current_image]
+
+            # Check if AOI exists
+            if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
+                return
+
+            aoi = image['areas_of_interest'][aoi_index]
+
+            # Only allow deletion of user-created AOIs
+            # Check if it's user-created (has user_created flag) or doesn't have detected_pixels
+            is_user_created = aoi.get('user_created', False) or 'detected_pixels' not in aoi
+
+            if not is_user_created:
+                QMessageBox.warning(
+                    self.parent,
+                    "Cannot Delete AOI",
+                    "Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted."
+                )
+                return
+
+            # Show confirmation dialog
+            reply = QMessageBox.question(
+                self.parent,
+                "Delete AOI",
+                "Are you sure you want to delete this AOI? This action cannot be undone.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # Remove from XML if it exists
+            aoi = image['areas_of_interest'][aoi_index]
+            if 'xml' in aoi and aoi['xml'] is not None:
+                xml_element = aoi['xml']
+                image_xml = image.get('xml')
+                if image_xml is not None:
+                    image_xml.remove(xml_element)
+
+            # Remove from flagged_aois if it's flagged
+            img_idx = self.parent.current_image
+            if img_idx in self.flagged_aois:
+                flagged_set = self.flagged_aois[img_idx]
+                if aoi_index in flagged_set:
+                    flagged_set.remove(aoi_index)
+                    # Decrement indices of all flagged AOIs after the deleted one
+                    new_flagged_set = set()
+                    for idx in flagged_set:
+                        if idx > aoi_index:
+                            new_flagged_set.add(idx - 1)
+                        else:
+                            new_flagged_set.add(idx)
+                    self.flagged_aois[img_idx] = new_flagged_set
+
+            # Remove the AOI from the list
+            image['areas_of_interest'].pop(aoi_index)
+
+            # Clear selection if the deleted AOI was selected
+            if self.selected_aoi_index == aoi_index:
+                self.selected_aoi_index = -1
+            elif self.selected_aoi_index > aoi_index:
+                # Decrement selection index if it was after the deleted AOI
+                self.selected_aoi_index -= 1
+
+            # Save XML file
+            if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+                try:
+                    self.parent.xml_service.save_xml_file(self.parent.xml_path)
+                except Exception as e:
+                    self.logger.error(f"Failed to save XML after AOI deletion: {e}")
+
+            # Show success message
+            if hasattr(self.parent, 'status_controller'):
+                self.parent.status_controller.show_toast(
+                    "AOI deleted",
+                    2000,
+                    color="#FFA726"
+                )
+
+            # Reload the image to update the display
+            self.parent._load_image()
+
+        except Exception as e:
+            self.logger.error(f"Error deleting AOI: {e}")
+            self.logger.error(traceback.format_exc())

@@ -377,10 +377,10 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         colorspace_layout.addWidget(QLabel("Color Space:"), 0, 0)
         self.color_space = QComboBox()
-        self.color_space.addItems(["BGR", "HSV", "LAB"])
-        self.color_space.setCurrentText("BGR")
+        self.color_space.addItems(["RGB", "HSV", "LAB"])
+        self.color_space.setCurrentText("RGB")
         self.color_space.setToolTip("Color space for histogram-based anomaly detection:\n\n"
-                                    "BGR (default): Uses all 3 color channels. Fast, but sensitive to lighting.\n"
+                                    "RGB: Uses all 3 color channels. Fast, but sensitive to lighting.\n"
                                     "  A red shirt in shadow may not match a red shirt in sunlight.\n\n"
                                     "HSV (Hue-based): Uses only Hue channel - lighting invariant.\n"
                                     "  Red stays red regardless of brightness. Good for colored objects.\n"
@@ -391,7 +391,8 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         colorspace_layout.addWidget(self.color_space, 0, 1)
 
         # HSV Min Saturation (only relevant for HSV mode)
-        colorspace_layout.addWidget(QLabel("HSV Min Saturation:"), 1, 0)
+        self.hsv_sat_label_widget = QLabel("HSV Min Saturation:")
+        colorspace_layout.addWidget(self.hsv_sat_label_widget, 1, 0)
         hsv_sat_layout = QHBoxLayout()
         self.hsv_min_saturation = QSlider(Qt.Horizontal)
         self.hsv_min_saturation.setRange(0, 255)
@@ -408,7 +409,8 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         colorspace_layout.addLayout(hsv_sat_layout, 1, 1)
 
         # LAB Min Chroma (only relevant for LAB mode)
-        colorspace_layout.addWidget(QLabel("LAB Min Chroma:"), 2, 0)
+        self.lab_chroma_label_widget = QLabel("LAB Min Chroma:")
+        colorspace_layout.addWidget(self.lab_chroma_label_widget, 2, 0)
         lab_chroma_layout = QHBoxLayout()
         self.lab_min_chroma = QSlider(Qt.Horizontal)
         self.lab_min_chroma.setRange(0, 128)
@@ -423,6 +425,9 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.lab_chroma_label = QLabel("10")
         lab_chroma_layout.addWidget(self.lab_chroma_label)
         colorspace_layout.addLayout(lab_chroma_layout, 2, 1)
+        
+        # Initialize visibility based on default selection (LAB)
+        self._update_color_space_controls_visibility()
 
         layout.addWidget(colorspace_group)
 
@@ -560,6 +565,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.hue_expansion_range.valueChanged.connect(self.update_hue_range_label)
 
         # Color space
+        self.color_space.currentTextChanged.connect(self._update_color_space_controls_visibility)
         self.color_space.currentTextChanged.connect(self.emit_config)
         self.hsv_min_saturation.valueChanged.connect(self.update_hsv_sat_label)
         self.lab_min_chroma.valueChanged.connect(self.update_lab_chroma_label)
@@ -628,6 +634,22 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.lab_chroma_label.setText(str(value))
         self.emit_config()
 
+    def _update_color_space_controls_visibility(self):
+        """Show/hide HSV and LAB sliders based on selected color space."""
+        selected_space = self.color_space.currentText()
+        
+        # Show HSV controls only when HSV is selected
+        show_hsv = (selected_space == "HSV")
+        self.hsv_sat_label_widget.setVisible(show_hsv)
+        self.hsv_min_saturation.setVisible(show_hsv)
+        self.hsv_sat_label.setVisible(show_hsv)
+        
+        # Show LAB controls only when LAB is selected
+        show_lab = (selected_space == "LAB")
+        self.lab_chroma_label_widget.setVisible(show_lab)
+        self.lab_min_chroma.setVisible(show_lab)
+        self.lab_chroma_label.setVisible(show_lab)
+
     def on_show_advanced_motion_toggled(self, checked: bool):
         """Show or hide advanced motion controls."""
         self.advanced_motion_container.setVisible(checked)
@@ -661,8 +683,9 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         }
 
         # Map string color spaces to enum
+        # Note: "RGB" in UI maps to BGR enum since OpenCV uses BGR internally
         colorspace_map = {
-            "BGR": ColorSpace.BGR,
+            "RGB": ColorSpace.BGR,
             "HSV": ColorSpace.HSV,
             "LAB": ColorSpace.LAB
         }

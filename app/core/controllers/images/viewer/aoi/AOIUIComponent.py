@@ -392,7 +392,7 @@ class AOIUIComponent:
         comment_icon.mousePressEvent = make_comment_click_handler(original_index)
         info_layout.addWidget(comment_icon)
 
-        # Location icon (always visible) - at the end
+        # Location icon (always visible)
         location_icon = qta.icon('fa6s.location-dot', color='#4CAF50')
         location_label = QLabel()
         location_label.setCursor(Qt.PointingHandCursor)
@@ -404,6 +404,23 @@ class AOIUIComponent:
 
         location_label.mousePressEvent = make_location_click_handler(original_index)
         info_layout.addWidget(location_label)
+
+        # Delete/Trash icon (only for user-created AOIs) - at the end
+        # Check if this is a user-created AOI (has user_created flag or no detected_pixels)
+        is_user_created = area_of_interest.get('user_created', False) or 'detected_pixels' not in area_of_interest
+        
+        if is_user_created:
+            delete_icon = qta.icon('fa6s.trash', color='#FF5252')
+            delete_label = QLabel()
+            delete_label.setCursor(Qt.PointingHandCursor)
+            delete_label.setToolTip("Delete this AOI")
+            delete_label.setPixmap(delete_icon.pixmap(16, 16))
+
+            def make_delete_click_handler(aoi_idx):
+                return lambda event: self.aoi_controller.delete_aoi(aoi_idx)
+
+            delete_label.mousePressEvent = make_delete_click_handler(original_index)
+            info_layout.addWidget(delete_label)
 
         # Enable context menu for the info widget
         info_widget.setContextMenuPolicy(Qt.CustomContextMenu)

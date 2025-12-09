@@ -80,7 +80,7 @@ class CalTopoDataPreparationThread(QThread):
     canceled = Signal()
 
     def __init__(self, controller, images, flagged_aois, include_flagged_aois,
-                 include_locations, include_coverage_area, include_images):
+                 include_locations, include_images_without_flagged_aois, include_coverage_area, include_images):
         """
         Initialize the data preparation thread.
 
@@ -90,6 +90,7 @@ class CalTopoDataPreparationThread(QThread):
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois: Whether to include flagged AOIs
             include_locations: Whether to include locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
         """
@@ -99,6 +100,7 @@ class CalTopoDataPreparationThread(QThread):
         self.flagged_aois = flagged_aois
         self.include_flagged_aois = include_flagged_aois
         self.include_locations = include_locations
+        self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
         self._cancelled = False
@@ -142,13 +144,40 @@ class CalTopoDataPreparationThread(QThread):
 
             if self.include_locations and not self.is_cancelled():
                 self.progressUpdated.emit(33, 100, "Preparing location markers...")
+                # Filter images for locations based on flag
+                images_for_locations = []
+                for img_idx, img in enumerate(self.images):
+                    if img.get('hidden', False):
+                        continue
+                    has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                    if has_flagged_aois or self.include_images_without_flagged_aois:
+                        images_for_locations.append(img)
                 markers.extend(self.controller._prepare_location_markers(
-                    self.images, include_images=self.include_images
+                    images_for_locations, include_images=self.include_images
                 ))
 
             if self.include_coverage_area and not self.is_cancelled():
                 self.progressUpdated.emit(66, 100, "Calculating coverage polygons...")
-                polygons.extend(self.controller._prepare_coverage_polygons(self.images))
+                # Determine which images should be included for coverage
+                # Coverage should only include images that are actually being exported
+                exported_image_indices = set()
+                
+                # Add images with flagged AOIs if flagged AOIs are included
+                if self.include_flagged_aois:
+                    exported_image_indices.update(self.flagged_aois.keys())
+                
+                # Add images for locations if locations are included
+                if self.include_locations:
+                    for img_idx, img in enumerate(self.images):
+                        if img.get('hidden', False):
+                            continue
+                        has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                        if has_flagged_aois or self.include_images_without_flagged_aois:
+                            exported_image_indices.add(img_idx)
+                
+                # Filter images to only those being exported
+                images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
+                polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
 
             if self.is_cancelled():
                 self.canceled.emit()
@@ -171,7 +200,7 @@ class CalTopoAPIExportThread(QThread):
 
     def __init__(self, api_service, controller, map_id, team_id, credential_id, credential_secret,
                  images, flagged_aois, include_flagged_aois, include_locations,
-                 include_coverage_area, include_images):
+                 include_images_without_flagged_aois, include_coverage_area, include_images):
         """
         Initialize the CalTopo API export thread.
 
@@ -186,6 +215,7 @@ class CalTopoAPIExportThread(QThread):
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois: Whether to include flagged AOIs
             include_locations: Whether to include locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
         """
@@ -200,6 +230,7 @@ class CalTopoAPIExportThread(QThread):
         self.flagged_aois = flagged_aois
         self.include_flagged_aois = include_flagged_aois
         self.include_locations = include_locations
+        self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
         self._cancelled = False
@@ -239,13 +270,40 @@ class CalTopoAPIExportThread(QThread):
 
             if self.include_locations and not self.is_cancelled():
                 self.progressUpdated.emit(20, 100, "Preparing location markers...")
+                # Filter images for locations based on flag
+                images_for_locations = []
+                for img_idx, img in enumerate(self.images):
+                    if img.get('hidden', False):
+                        continue
+                    has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                    if has_flagged_aois or self.include_images_without_flagged_aois:
+                        images_for_locations.append(img)
                 markers.extend(self.controller._prepare_location_markers(
-                    self.images, include_images=self.include_images
+                    images_for_locations, include_images=self.include_images
                 ))
 
             if self.include_coverage_area and not self.is_cancelled():
                 self.progressUpdated.emit(40, 100, "Calculating coverage polygons...")
-                polygons.extend(self.controller._prepare_coverage_polygons(self.images))
+                # Determine which images should be included for coverage
+                # Coverage should only include images that are actually being exported
+                exported_image_indices = set()
+                
+                # Add images with flagged AOIs if flagged AOIs are included
+                if self.include_flagged_aois:
+                    exported_image_indices.update(self.flagged_aois.keys())
+                
+                # Add images for locations if locations are included
+                if self.include_locations:
+                    for img_idx, img in enumerate(self.images):
+                        if img.get('hidden', False):
+                            continue
+                        has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                        if has_flagged_aois or self.include_images_without_flagged_aois:
+                            exported_image_indices.add(img_idx)
+                
+                # Filter images to only those being exported
+                images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
+                polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
 
             if self.is_cancelled():
                 self.canceled.emit()
@@ -351,7 +409,7 @@ class CalTopoExportController:
         self.caltopo_api_service = CalTopoAPIService()  # API-based service
         self.credential_helper = CalTopoCredentialHelper()
 
-    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False, include_coverage_area=False, include_images=True):
+    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False, include_images_without_flagged_aois=True, include_coverage_area=False, include_images=True):
         """
         Export data to CalTopo.
 
@@ -360,6 +418,7 @@ class CalTopoExportController:
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois (bool): Include flagged AOIs as markers
             include_locations (bool): Include drone/image locations as markers
+            include_images_without_flagged_aois (bool): Include images without flagged AOIs in location export
             include_coverage_area (bool): Include coverage area as polygons
             include_images (bool): Upload photos to CalTopo markers
 
@@ -419,7 +478,7 @@ class CalTopoExportController:
 
             prep_thread = CalTopoDataPreparationThread(
                 self, images, flagged_aois, include_flagged_aois,
-                include_locations, include_coverage_area, include_images
+                include_locations, include_images_without_flagged_aois, include_coverage_area, include_images
             )
             prep_thread.progressUpdated.connect(on_prep_progress)
             prep_thread.finished.connect(on_prep_finished)
@@ -1369,7 +1428,7 @@ class CalTopoExportController:
         )
 
     def export_to_caltopo_via_api(self, images, flagged_aois, include_flagged_aois=True,
-                                  include_locations=False, include_coverage_area=False, include_images=True):
+                                  include_locations=False, include_images_without_flagged_aois=True, include_coverage_area=False, include_images=True):
         """
         Export data to CalTopo using the official Team API.
 
@@ -1381,6 +1440,7 @@ class CalTopoExportController:
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois (bool): Include flagged AOIs as markers
             include_locations (bool): Include drone/image locations as markers
+            include_images_without_flagged_aois (bool): Include images without flagged AOIs in location export
             include_coverage_area (bool): Include coverage area as polygons
             include_images (bool): Upload photos to CalTopo markers
 
@@ -1515,7 +1575,7 @@ class CalTopoExportController:
             return self._export_via_api_threaded(
                 map_id, map_team_id, credential_id, credential_secret,
                 images, flagged_aois, include_flagged_aois, include_locations,
-                include_coverage_area, include_images
+                include_images_without_flagged_aois, include_coverage_area, include_images
             )
 
         except Exception as e:
@@ -1568,6 +1628,7 @@ class CalTopoExportController:
             flagged_aois,
             include_flagged_aois,
             include_locations,
+            include_images_without_flagged_aois,
             include_coverage_area,
             include_images
         )

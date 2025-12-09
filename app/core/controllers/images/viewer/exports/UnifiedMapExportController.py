@@ -30,7 +30,7 @@ class UnifiedMapExportThread(QThread):
     canceled = Signal()
 
     def __init__(self, kml_service, coverage_service, images, flagged_aois,
-                 include_locations, include_flagged_aois, include_coverage,
+                 include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage,
                  output_path, custom_altitude_ft=None):
         """
         Initialize the export thread.
@@ -41,6 +41,7 @@ class UnifiedMapExportThread(QThread):
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to flagged AOI indices
             include_locations: Whether to include image locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent
             output_path: Path to save the KML file
@@ -52,6 +53,7 @@ class UnifiedMapExportThread(QThread):
         self.images = images
         self.flagged_aois = flagged_aois
         self.include_locations = include_locations
+        self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.include_flagged_aois = include_flagged_aois
         self.include_coverage = include_coverage
         self.output_path = output_path
@@ -69,13 +71,48 @@ class UnifiedMapExportThread(QThread):
     def run(self):
         """Execute the export operation."""
         try:
+            # Determine which images should be included for locations
+            images_for_locations = []
+            if self.include_locations:
+                for img_idx, img in enumerate(self.images):
+                    if img.get('hidden', False):
+                        continue
+                    # Check if image has flagged AOIs
+                    has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                    # Include if: has flagged AOIs OR include_images_without_flagged_aois is True
+                    if has_flagged_aois or self.include_images_without_flagged_aois:
+                        images_for_locations.append(img)
+
+            # Determine which images should be included for coverage
+            # Coverage should only include images that are actually being exported
+            images_for_coverage = []
+            if self.include_coverage:
+                # Collect all image indices that are being exported
+                exported_image_indices = set()
+                
+                # Add images with flagged AOIs if flagged AOIs are included
+                if self.include_flagged_aois:
+                    exported_image_indices.update(self.flagged_aois.keys())
+                
+                # Add images for locations if locations are included
+                if self.include_locations:
+                    for img_idx, img in enumerate(self.images):
+                        if img.get('hidden', False):
+                            continue
+                        has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                        if has_flagged_aois or self.include_images_without_flagged_aois:
+                            exported_image_indices.add(img_idx)
+                
+                # Filter images to only those being exported
+                images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
+
             total_steps = 0
             if self.include_locations:
-                total_steps += sum(1 for img in self.images if not img.get('hidden', False))
+                total_steps += len(images_for_locations)
             if self.include_flagged_aois:
                 total_steps += sum(len(aois) for aois in self.flagged_aois.values())
             if self.include_coverage:
-                total_steps += len(self.images)
+                total_steps += len(images_for_coverage)
 
             current_step = 0
 
@@ -89,7 +126,7 @@ class UnifiedMapExportThread(QThread):
                     self.progressUpdated.emit(current_step + current, total_steps, message)
 
                 self.kml_service.generate_image_locations_kml(
-                    self.images,
+                    images_for_locations,
                     progress_callback=location_progress,
                     cancel_check=self.is_cancelled
                 )
@@ -98,7 +135,7 @@ class UnifiedMapExportThread(QThread):
                     self.canceled.emit()
                     return
 
-                current_step += sum(1 for img in self.images if not img.get('hidden', False))
+                current_step += len(images_for_locations)
 
             # Export flagged AOIs
             if self.include_flagged_aois:
@@ -245,7 +282,7 @@ class UnifiedMapExportThread(QThread):
                     self.progressUpdated.emit(current_step + current, total_steps, message)
 
                 coverage_data = self.coverage_service.calculate_coverage_extents(
-                    self.images,
+                    images_for_coverage,
                     progress_callback=coverage_progress,
                     cancel_check=self.is_cancelled
                 )
@@ -330,6 +367,7 @@ class UnifiedMapExportController:
             # Get user selections
             export_type = dialog.get_export_type()
             include_locations = dialog.should_include_locations()
+            include_images_without_flagged_aois = dialog.should_include_images_without_flagged_aois()
             include_flagged_aois = dialog.should_include_flagged_aois()
             include_coverage = dialog.should_include_coverage()
             include_images = dialog.should_include_images() if export_type == 'caltopo' else False
@@ -345,7 +383,7 @@ class UnifiedMapExportController:
 
             # Handle export based on type
             if export_type == 'kml':
-                self._export_to_kml(include_locations, include_flagged_aois, include_coverage)
+                self._export_to_kml(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage)
             else:  # caltopo
                 # Show method selection dialog
                 method_dialog = CalTopoMethodDialog(self.parent)
@@ -355,9 +393,9 @@ class UnifiedMapExportController:
 
                 method = method_dialog.get_selected_method()
                 if method == 'api':
-                    self._export_to_caltopo_via_api(include_locations, include_flagged_aois, include_coverage, include_images)
+                    self._export_to_caltopo_via_api(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images)
                 else:  # browser
-                    self._export_to_caltopo(include_locations, include_flagged_aois, include_coverage, include_images)
+                    self._export_to_caltopo(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images)
 
         except Exception as e:
             self.logger.error(f"Error in unified map export: {str(e)}")
@@ -367,12 +405,13 @@ class UnifiedMapExportController:
                 f"An error occurred during export:\n{str(e)}"
             )
 
-    def _export_to_kml(self, include_locations, include_flagged_aois, include_coverage):
+    def _export_to_kml(self, include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage):
         """
         Export to KML file.
 
         Args:
             include_locations: Whether to include image locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent
         """
@@ -397,13 +436,20 @@ class UnifiedMapExportController:
             kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
             coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
 
-            # Calculate total items for progress
+            # Calculate total items for progress (will be recalculated in thread, but estimate here)
             total_items = 0
             if include_locations:
-                total_items += sum(1 for img in self.parent.images if not img.get('hidden', False))
+                # Count images that will be included
+                for img_idx, img in enumerate(self.parent.images):
+                    if img.get('hidden', False):
+                        continue
+                    has_flagged_aois = img_idx in self.parent.aoi_controller.flagged_aois and len(self.parent.aoi_controller.flagged_aois[img_idx]) > 0
+                    if has_flagged_aois or include_images_without_flagged_aois:
+                        total_items += 1
             if include_flagged_aois:
                 total_items += sum(len(aois) for aois in self.parent.aoi_controller.flagged_aois.values())
             if include_coverage:
+                # Coverage will use filtered images, estimate with all for now
                 total_items += len(self.parent.images)
 
             # Create progress dialog
@@ -421,6 +467,7 @@ class UnifiedMapExportController:
                 self.parent.images,
                 self.parent.aoi_controller.flagged_aois,
                 include_locations,
+                include_images_without_flagged_aois,
                 include_flagged_aois,
                 include_coverage,
                 file_name,
@@ -455,12 +502,13 @@ class UnifiedMapExportController:
                 f"Failed to export to KML:\n{str(e)}"
             )
 
-    def _export_to_caltopo(self, include_locations, include_flagged_aois, include_coverage, include_images=True):
+    def _export_to_caltopo(self, include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images=True):
         """
         Export to CalTopo using browser-based authentication.
 
         Args:
             include_locations: Whether to include image locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent polygons
             include_images: Whether to upload photos to CalTopo markers
@@ -475,6 +523,7 @@ class UnifiedMapExportController:
                 self.parent.aoi_controller.flagged_aois,
                 include_flagged_aois=include_flagged_aois,
                 include_locations=include_locations,
+                include_images_without_flagged_aois=include_images_without_flagged_aois,
                 include_coverage_area=include_coverage,
                 include_images=include_images
             )
@@ -487,12 +536,13 @@ class UnifiedMapExportController:
                 f"Failed to export to CalTopo:\n{str(e)}"
             )
 
-    def _export_to_caltopo_via_api(self, include_locations, include_flagged_aois, include_coverage, include_images=True):
+    def _export_to_caltopo_via_api(self, include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images=True):
         """
         Export to CalTopo using API-based authentication.
 
         Args:
             include_locations: Whether to include image locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent polygons
             include_images: Whether to upload photos to CalTopo markers
@@ -507,6 +557,7 @@ class UnifiedMapExportController:
                 self.parent.aoi_controller.flagged_aois,
                 include_flagged_aois=include_flagged_aois,
                 include_locations=include_locations,
+                include_images_without_flagged_aois=include_images_without_flagged_aois,
                 include_coverage_area=include_coverage,
                 include_images=include_images
             )

@@ -149,6 +149,8 @@ class XmlService:
                     area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
                     # Load user comment (default to empty string if not present)
                     area_of_interest['user_comment'] = area_of_interest_xml.get('user_comment', '')
+                    # Load user_created flag (default to False if not present)
+                    area_of_interest['user_created'] = area_of_interest_xml.get('user_created') == 'True'
                     # Load confidence scoring data if present
                     if area_of_interest_xml.get('confidence'):
                         area_of_interest['confidence'] = float(area_of_interest_xml.get('confidence'))

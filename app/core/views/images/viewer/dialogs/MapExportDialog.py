@@ -83,9 +83,15 @@ class MapExportDialog(QDialog):
         self.include_coverage.setChecked(True)  # Default: on
         self.include_coverage.setToolTip("Include polygon(s) showing the geographic coverage extent")
 
+        self.include_images_without_flagged_aois = QCheckBox("Include images without flagged AOIs")
+        self.include_images_without_flagged_aois.setChecked(True)  # Default: on
+        self.include_images_without_flagged_aois.setToolTip("If unchecked, only export locations for images that have flagged AOIs")
+        self.include_images_without_flagged_aois.setEnabled(True)  # Enabled when locations are checked
+
         data_layout.addWidget(self.include_locations)
         data_layout.addWidget(self.include_flagged_aois)
         data_layout.addWidget(self.include_coverage)
+        data_layout.addWidget(self.include_images_without_flagged_aois)
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
 
@@ -106,6 +112,10 @@ class MapExportDialog(QDialog):
         self.kml_radio.toggled.connect(self._on_export_type_changed)
         self.caltopo_radio.toggled.connect(self._on_export_type_changed)
         self._on_export_type_changed()  # Set initial state
+
+        # Connect locations checkbox to enable/disable "Include Images without flagged AOIs"
+        self.include_locations.toggled.connect(self._on_locations_changed)
+        self._on_locations_changed()  # Set initial state
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -167,8 +177,22 @@ class MapExportDialog(QDialog):
         """
         return self.include_images.isChecked()
 
+    def should_include_images_without_flagged_aois(self):
+        """
+        Check if images without flagged AOIs should be included in location exports.
+
+        Returns:
+            bool: True if images without flagged AOIs should be included
+        """
+        return self.include_images_without_flagged_aois.isChecked()
+
     def _on_export_type_changed(self):
         """Handle export type radio button changes."""
         is_caltopo = self.caltopo_radio.isChecked()
         self.include_images.setEnabled(is_caltopo)
         self.caltopo_options_group.setEnabled(is_caltopo)
+
+    def _on_locations_changed(self):
+        """Handle locations checkbox changes to enable/disable related option."""
+        is_locations_checked = self.include_locations.isChecked()
+        self.include_images_without_flagged_aois.setEnabled(is_locations_checked)
