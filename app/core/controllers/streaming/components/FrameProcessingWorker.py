@@ -24,11 +24,11 @@ class FrameProcessingWorker(QObject):
     """
 
     # Signals emitted from worker thread
-    frameProcessed = Signal(np.ndarray, list, float, bool)  # frame, detections, processing_time_ms, was_skipped
+    frameProcessed = Signal(np.ndarray, list, float, bool, int)  # frame, detections, processing_time_ms, was_skipped, video_frame_pos
     errorOccurred = Signal(str)  # error_message
 
     # Signal to request frame processing (emitted from main thread, received in worker thread)
-    processFrameRequested = Signal(np.ndarray, float)  # frame, timestamp
+    processFrameRequested = Signal(np.ndarray, float, int)  # frame, timestamp, video_frame_pos
 
     # Signal to request stop (emitted from main thread, received in worker thread)
     stopRequested = Signal()
@@ -57,8 +57,8 @@ class FrameProcessingWorker(QObject):
         # Connect stop signal to slot
         self.stopRequested.connect(self._handle_stop_request, Qt.QueuedConnection)
 
-    @Slot(np.ndarray, float)
-    def _process_frame_internal(self, frame: np.ndarray, timestamp: float):
+    @Slot(np.ndarray, float, int)
+    def _process_frame_internal(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
         """
         Internal slot that processes a frame in the background thread.
 
@@ -68,6 +68,7 @@ class FrameProcessingWorker(QObject):
         Args:
             frame: Input frame (BGR format) - will be copied for thread safety
             timestamp: Frame timestamp
+            video_frame_pos: Video frame position (for file playback seek tracking)
         """
         if self._should_stop or not self.processing_function:
             return
@@ -97,7 +98,7 @@ class FrameProcessingWorker(QObject):
 
             # Emit results back to main thread
             # Note: Rendering happens on main thread since Qt operations must be on main thread
-            self.frameProcessed.emit(frame_copy, detections, processing_time_ms, was_skipped)
+            self.frameProcessed.emit(frame_copy, detections, processing_time_ms, was_skipped, video_frame_pos)
 
         except Exception as e:
             error_msg = f"Error processing frame: {str(e)}"

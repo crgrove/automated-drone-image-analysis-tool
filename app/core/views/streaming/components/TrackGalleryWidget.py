@@ -114,14 +114,8 @@ class TrackGalleryWidget(QWidget):
         )
         icon = QIcon(scaled_pixmap)
 
-        # Format timestamp as MM:SS
-        total_seconds = int(track.first_timestamp)
-        mins = total_seconds // 60
-        secs = total_seconds % 60
-        time_str = f"{mins:02d}:{secs:02d}"
-
-        # Create item with icon and label
-        item = QListWidgetItem(icon, f"Time: {time_str}")
+        # Create item with icon and frame number label
+        item = QListWidgetItem(icon, f"Frame {track.first_frame_index}")
 
         # Store track object in item data for retrieval on click
         item.setData(Qt.UserRole, track)

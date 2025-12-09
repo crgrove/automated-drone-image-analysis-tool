@@ -251,6 +251,7 @@ class RTMPStreamService(QThread):
 
                 # Handle pause state and seek requests for video files
                 if self._is_file:
+                    seek_just_completed = False
                     with self._playback_lock:
                         # Handle seek requests first (thread-safe)
                         if self._seek_requested and self._cap:
@@ -258,13 +259,14 @@ class RTMPStreamService(QThread):
                                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, self._seek_target_frame)
                                 self._current_frame_pos = self._seek_target_frame
                                 self._seek_requested = False
+                                seek_just_completed = True  # Flag to read one frame even if paused
                                 # self.logger.info(f"Seek completed to frame {self._seek_target_frame}")
                             except Exception as e:
                                 self.logger.error(f"Seek execution error: {e}")
                                 self._seek_requested = False
 
-                        # Handle pause state
-                        if not self._is_playing:
+                        # Handle pause state - but allow one frame after seek
+                        if not self._is_playing and not seek_just_completed:
                             time.sleep(0.1)  # Sleep while paused
                             continue
 
@@ -342,7 +344,9 @@ class RTMPStreamService(QThread):
                     emit_timestamp = time.perf_counter()
 
                     # Emit frame for processing with timing metadata attached
-                    self.frameReady.emit(frame_copy, emit_timestamp, self._frame_number)
+                    # For video files, emit actual video position; for live streams, emit cumulative count
+                    video_frame_pos = self._current_frame_pos if self._is_file else self._frame_number
+                    self.frameReady.emit(frame_copy, emit_timestamp, video_frame_pos)
                     self._frame_number += 1
                     last_process_time = current_time
 
@@ -511,7 +515,7 @@ class StreamManager(QObject):
     Provides simplified interface for ADIAT integration.
     """
 
-    frameReceived = Signal(np.ndarray, float)  # frame, timestamp
+    frameReceived = Signal(np.ndarray, float, int)  # frame, timestamp, video_frame_pos
     connectionChanged = Signal(bool, str)  # connected, message
     statsUpdated = Signal(dict)  # stream statistics
     videoPositionChanged = Signal(float, float)  # current_time, total_time
@@ -631,9 +635,9 @@ class StreamManager(QObject):
             return self._service.get_stream_info()
         return {}
 
-    def _on_frame_ready(self, frame: np.ndarray, timestamp: float, frame_number: int):
+    def _on_frame_ready(self, frame: np.ndarray, timestamp: float, video_frame_pos: int):
         """Handle incoming frame from service."""
-        self.frameReceived.emit(frame, timestamp)
+        self.frameReceived.emit(frame, timestamp, video_frame_pos)
 
     def _on_error(self, error_message: str):
         """Handle service errors."""

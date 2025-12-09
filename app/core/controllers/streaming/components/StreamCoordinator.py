@@ -30,7 +30,7 @@ class StreamCoordinator(QObject):
 
     # Signals
     connectionChanged = Signal(bool, str)  # (connected, message)
-    frameReceived = Signal(np.ndarray, float)  # (frame, timestamp)
+    frameReceived = Signal(np.ndarray, float, int)  # (frame, timestamp, video_frame_pos)
     recordingStateChanged = Signal(bool, str)  # (recording, path)
     streamInfoUpdated = Signal(dict)  # Stream info (fps, resolution, etc.)
     errorOccurred = Signal(str)  # Error message
@@ -244,8 +244,11 @@ class StreamCoordinator(QObject):
         if self.is_recording and self.recording_manager:
             self.recording_manager.add_frame(frame)
 
-    def _on_frame_ready(self, frame: np.ndarray, timestamp: float):
+    def _on_frame_ready(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
         """Handle frame received from stream."""
+        # Store video frame position for access by StreamViewerWindow
+        self._current_video_frame_pos = video_frame_pos
+
         # Update stream info
         self._update_stream_info()
 
@@ -253,8 +256,8 @@ class StreamCoordinator(QObject):
         if self.is_recording:
             self.record_frame(frame)
 
-        # Emit frame for processing
-        self.frameReceived.emit(frame, timestamp)
+        # Emit frame for processing with video position
+        self.frameReceived.emit(frame, timestamp, video_frame_pos)
 
     def _on_connection_status_changed(self, connected: bool, message: str):
         """Handle connection status change."""

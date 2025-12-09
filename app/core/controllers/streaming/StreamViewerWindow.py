@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, QTimer, Slot, QSettings, QUrl, QThread, QObject
 from PySide6.QtGui import QAction, QDesktopServices
 from typing import Optional, Dict, Any, List, Callable
 import numpy as np
+import cv2
 from types import SimpleNamespace
 import time
 import os
@@ -107,6 +108,12 @@ class StreamViewerWindow(QMainWindow):
 
         # Store current frame timestamp for worker thread callback (video timestamp for seeking)
         self._current_frame_timestamp: float = 0.0
+
+        # Store current video frame position (passed through signal chain, not read from stream manager)
+        self._current_video_frame_pos: int = 0
+
+        # Store track to highlight when seeking from gallery (cleared on play/next action)
+        self._highlight_track = None
 
         # Store algorithm configs for session persistence (forgotten on close)
         self._algorithm_configs: Dict[str, Dict[str, Any]] = {}
@@ -994,22 +1001,30 @@ class StreamViewerWindow(QMainWindow):
         self._processing_worker = None
         self._is_stopping_worker = False  # Reset flag after cleanup
 
-    @Slot(np.ndarray, list, float, bool)
-    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float, was_skipped: bool = False):
+    @Slot(np.ndarray, list, float, bool, int)
+    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float, was_skipped: bool = False, video_frame_pos: int = 0):
         """Handle frame processed by worker thread."""
         # This runs on main thread (via QueuedConnection)
         self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=was_skipped)
         self._latest_detections_for_rendering = detections
 
+        # Use video_frame_pos that was passed through the worker (not stale instance variable)
+        current_video_frame_pos = video_frame_pos
+
         rendered_frame = None
         if not self.algorithm_renders_frame:
             # Render detections using the shared renderer (on main thread)
             rendered_frame = self.detection_renderer.render(frame, detections)
-            # Update display with rendered frame
-            self.video_display.update_frame(rendered_frame)
         else:
             # Algorithm already rendered onto the frame (e.g., ColorDetection)
-            self.video_display.update_frame(frame)
+            rendered_frame = frame
+
+        # Draw highlight box if a gallery track is selected
+        if self._highlight_track is not None:
+            rendered_frame = self._draw_gallery_highlight(rendered_frame)
+
+        # Update display with rendered frame
+        self.video_display.update_frame(rendered_frame)
 
         # Update thumbnails
         if detections:
@@ -1045,8 +1060,9 @@ class StreamViewerWindow(QMainWindow):
                 if processing_resolution and original_resolution:
                     break
 
-            # Get frame index and timestamp for track storage
-            frame_index = self.stream_statistics.frame_count
+            # Use video frame position that was passed through the worker thread
+            # (This is the correct position for THIS specific frame, not affected by race conditions)
+            frame_index = current_video_frame_pos
             timestamp = self._current_frame_timestamp
 
             self.thumbnail_widget.update_thumbnails(
@@ -1250,11 +1266,12 @@ class StreamViewerWindow(QMainWindow):
             # Clear pending resolution (will be reapplied on next connection if wizard runs again)
             self._pending_processing_resolution = None
 
-    @Slot(np.ndarray, float)
-    def on_frame_received(self, frame: np.ndarray, timestamp: float):
+    @Slot(np.ndarray, float, int)
+    def on_frame_received(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
         """Handle frame received from stream."""
-        # Store timestamp for worker thread callback (used for gallery track storage)
+        # Store timestamp and video frame position for track storage
         self._current_frame_timestamp = timestamp
+        self._current_video_frame_pos = video_frame_pos
 
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
@@ -1305,7 +1322,7 @@ class StreamViewerWindow(QMainWindow):
                 # Process frame in worker thread (non-blocking)
                 # Emit signal to request processing in worker thread
                 try:
-                    self._processing_worker.processFrameRequested.emit(frame, timestamp)
+                    self._processing_worker.processFrameRequested.emit(frame, timestamp, self._current_video_frame_pos)
                     use_worker = True
                 except RuntimeError:
                     # Worker may have been deleted, fall back to main thread processing
@@ -1330,9 +1347,15 @@ class StreamViewerWindow(QMainWindow):
                     if not self.algorithm_renders_frame:
                         # Render detections using the shared renderer
                         rendered_frame = self.detection_renderer.render(frame, detections)
+                    else:
+                        rendered_frame = frame
 
-                        # Update display with rendered frame
-                        self.video_display.update_frame(rendered_frame)
+                    # Draw highlight box if a gallery track is selected
+                    if self._highlight_track is not None:
+                        rendered_frame = self._draw_gallery_highlight(rendered_frame)
+
+                    # Update display with rendered frame
+                    self.video_display.update_frame(rendered_frame)
 
                     # Update thumbnails
                     if detections:
@@ -1372,8 +1395,9 @@ class StreamViewerWindow(QMainWindow):
                             if processing_resolution and original_resolution:
                                 break
 
-                        # Get frame index for track storage
-                        frame_index = self.stream_statistics.frame_count
+                        # Use video frame position that was passed through the signal chain
+                        # (This is the correct position for THIS frame, not affected by race conditions)
+                        frame_index = self._current_video_frame_pos
 
                         self.thumbnail_widget.update_thumbnails(
                             frame,
@@ -1517,6 +1541,9 @@ class StreamViewerWindow(QMainWindow):
     @Slot()
     def on_play_pause_toggled(self):
         """Handle play/pause toggle (for file playback)."""
+        # Clear gallery highlight when playing (user action)
+        self._clear_gallery_highlight()
+
         # Toggle play/pause on stream manager
         if self.stream_coordinator.stream_manager and hasattr(self.stream_coordinator.stream_manager, 'play_pause'):
             self.stream_coordinator.stream_manager.play_pause()
@@ -1524,23 +1551,44 @@ class StreamViewerWindow(QMainWindow):
     @Slot(float)
     def on_seek_requested(self, time_seconds: float):
         """Handle seek request (for file playback)."""
+        # Clear gallery highlight on manual seek (gallery clicks will re-set it after)
+        self._clear_gallery_highlight()
+
         # Request seek from stream manager
         if self.stream_coordinator.stream_manager and hasattr(self.stream_coordinator.stream_manager, 'seek_to_time'):
             self.stream_coordinator.stream_manager.seek_to_time(time_seconds)
 
     def _on_gallery_track_clicked(self, track):
-        """Handle click on gallery item - seek to detection frame.
+        """Handle click on gallery item - seek to detection frame and highlight.
 
         Args:
-            track: Track object containing first_timestamp for seeking
+            track: Track object containing frame index and bbox for seeking/highlighting
         """
         # Check if we're playing a file (seekable) or live stream (not seekable)
         if self.stream_coordinator.current_stream_type == StreamType.FILE:
-            # Seek to the track's first appearance timestamp
-            self.on_seek_requested(track.first_timestamp)
-            # Switch to Live View tab to show the video
+            stream_mgr = self.stream_coordinator.stream_manager
+            if not stream_mgr:
+                return
+
+            # StreamManager wraps RTMPStreamService as _service
+            service = getattr(stream_mgr, '_service', None)
+            if not service:
+                return
+
+            # Pause video so user can see the highlighted detection
+            is_playing = getattr(service, '_is_playing', True)
+            if is_playing:
+                stream_mgr.play_pause()
+
+            # Store track for highlighting
+            self._highlight_track = track
+
+            # Switch to Live View tab
             self.tab_widget.setCurrentIndex(0)
-            self.logger.info(f"Seeking to track {track.track_id} at {track.first_timestamp:.2f}s")
+
+            # Directly seek, read, and display the frame with highlight
+            # Use a short delay to ensure pause has taken effect
+            QTimer.singleShot(50, lambda: self._display_highlighted_frame(track, service))
         else:
             # Live stream - cannot seek, show info dialog
             QMessageBox.information(
@@ -1549,6 +1597,129 @@ class StreamViewerWindow(QMainWindow):
                 f"Cannot seek in live stream.\n\n"
                 f"Detection was first seen at frame {track.first_frame_index}."
             )
+
+    def _display_highlighted_frame(self, track, service):
+        """Read frame at track position from video and display with highlight."""
+        try:
+            cap = getattr(service, '_cap', None)
+            if not cap or not cap.isOpened():
+                return
+
+            # Seek to the exact frame where detection was first seen
+            target_frame = track.first_frame_index
+            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+
+            # Read the frame
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                return
+
+            # Draw the highlight circle
+            frame_with_highlight = self._draw_gallery_highlight_on_frame(frame, track)
+
+            # Display it
+            self.video_display.update_frame(frame_with_highlight)
+        except Exception as e:
+            self.logger.error(f"Error displaying highlighted frame: {e}")
+
+    def _draw_gallery_highlight_on_frame(self, frame: np.ndarray, track) -> np.ndarray:
+        """Draw highlight circle on a specific frame for a track."""
+        if track is None:
+            return frame
+
+        x, y, w, h = track.bbox
+        cx, cy = track.centroid
+
+        # Scale coordinates if frame resolution differs from when detection was captured
+        current_h, current_w = frame.shape[:2]
+        stored_w, stored_h = track.frame_resolution
+
+        if stored_w > 0 and stored_h > 0 and (stored_w != current_w or stored_h != current_h):
+            scale_x = current_w / stored_w
+            scale_y = current_h / stored_h
+            x = int(x * scale_x)
+            y = int(y * scale_y)
+            w = int(w * scale_x)
+            h = int(h * scale_y)
+            cx = int(cx * scale_x)
+            cy = int(cy * scale_y)
+
+        # Use detection color if available, otherwise bright yellow
+        if track.detection_color is not None:
+            highlight_color = track.detection_color
+        else:
+            highlight_color = (0, 255, 255)  # Yellow in BGR as fallback
+
+        # Calculate circle radius to encompass the detection
+        radius = int(max(w, h) * 0.75)
+        radius = max(radius, 30)  # Minimum radius for visibility
+        thickness = 4
+
+        # Draw single circle around the detection
+        cv2.circle(frame, (cx, cy), radius, highlight_color, thickness)
+
+        return frame
+
+    def _draw_gallery_highlight(self, frame: np.ndarray) -> np.ndarray:
+        """Draw a highlight circle around the selected gallery track's detection.
+
+        Args:
+            frame: The frame to draw on
+
+        Returns:
+            Frame with highlight drawn (modifies in place for efficiency)
+        """
+        if self._highlight_track is None:
+            return frame
+
+        track = self._highlight_track
+        x, y, w, h = track.bbox
+        cx, cy = track.centroid
+
+        # Scale coordinates if frame resolution differs from when detection was captured
+        current_h, current_w = frame.shape[:2]
+        stored_w, stored_h = track.frame_resolution
+
+        if stored_w > 0 and stored_h > 0 and (stored_w != current_w or stored_h != current_h):
+            # Calculate scale factors
+            scale_x = current_w / stored_w
+            scale_y = current_h / stored_h
+
+            # Scale bbox and centroid
+            x = int(x * scale_x)
+            y = int(y * scale_y)
+            w = int(w * scale_x)
+            h = int(h * scale_y)
+            cx = int(cx * scale_x)
+            cy = int(cy * scale_y)
+
+        # Use detection color if available, otherwise bright cyan
+        if track.detection_color is not None:
+            highlight_color = track.detection_color
+        else:
+            highlight_color = (255, 255, 0)  # Cyan in BGR as fallback
+
+        # Calculate circle center and radius to encompass the detection
+        # Radius should be large enough to circle the detection bbox
+        radius = int(max(w, h) * 0.75)
+        thickness = 4
+
+        # Draw circle around the detection
+        cv2.circle(frame, (cx, cy), radius, highlight_color, thickness)
+
+        # Draw a second outer circle for better visibility
+        cv2.circle(frame, (cx, cy), radius + 8, highlight_color, 2)
+
+        # Draw crosshair at centroid for precise location
+        crosshair_size = 20
+        cv2.line(frame, (cx - crosshair_size, cy), (cx + crosshair_size, cy), highlight_color, 3)
+        cv2.line(frame, (cx, cy - crosshair_size), (cx, cy + crosshair_size), highlight_color, 3)
+
+        return frame
+
+    def _clear_gallery_highlight(self):
+        """Clear the gallery highlight (called on play, new seek, etc.)."""
+        self._highlight_track = None
 
     @Slot(dict)
     def on_stream_info_updated(self, stream_info: dict):

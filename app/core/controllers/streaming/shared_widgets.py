@@ -40,12 +40,20 @@ class Track:
     first_frame_index: int
     first_timestamp: float  # seconds
 
+    # Frame resolution when detection was captured (for coordinate scaling)
+    frame_resolution: Tuple[int, int] = (0, 0)  # (width, height)
+
     # Tracking state
     frames_seen: int = 1
     is_confirmed: bool = False
     saved_to_gallery: bool = False
     detection_type: str = "detection"
     confidence: float = 0.0
+
+    # Additional metadata for gallery sorting
+    detection_color: Optional[Tuple[int, int, int]] = None  # BGR color
+    pixel_area: float = 0.0  # Pixel area of detection
+    rarity: float = 0.0  # Rarity score (from confidence)
 
 
 class DetectionTracker(QObject):
@@ -362,20 +370,53 @@ class DetectionTracker(QObject):
             timestamp: Current timestamp in seconds
         """
         if track_id not in self.tracks:
-            # New track - capture static thumbnail
+            # New track - capture static thumbnail with context (like thumbnail bar)
             x, y, w, h = detection.bbox
-
-            # Ensure bounds are within frame
             frame_h, frame_w = frame.shape[:2]
-            x = max(0, min(x, frame_w - 1))
-            y = max(0, min(y, frame_h - 1))
-            x2 = min(x + w, frame_w)
-            y2 = min(y + h, frame_h)
+
+            # Add context padding similar to DetectionThumbnailWidget's zoom calculation
+            # zoom=3.0 gives context_multiplier = 4.5/3.0 = 1.5
+            context_multiplier = 1.5
+            zoom_w = int(w * context_multiplier)
+            zoom_h = int(h * context_multiplier)
+
+            # Minimum size to match gallery display (120x120)
+            zoom_w = max(120, zoom_w)
+            zoom_h = max(120, zoom_h)
+
+            # Center on detection
+            cx = x + w // 2
+            cy = y + h // 2
+            x1 = max(0, cx - zoom_w // 2)
+            y1 = max(0, cy - zoom_h // 2)
+            x2 = min(frame_w, cx + zoom_w // 2)
+            y2 = min(frame_h, cy + zoom_h // 2)
 
             # CRITICAL: Use .copy() to prevent memory leak from holding entire frame
-            thumbnail = frame[y:y2, x:x2].copy()
+            thumbnail = frame[y1:y2, x1:x2].copy()
 
-            # Create new Track
+            # Create new Track with metadata for gallery sorting
+            det_confidence = getattr(detection, 'confidence', 0.0)
+
+            # Get detection color - check multiple sources
+            det_color = None
+            # First try mean_color (from ColorDetection)
+            if hasattr(detection, 'mean_color') and detection.mean_color is not None:
+                mc = detection.mean_color
+                if isinstance(mc, (list, tuple)) and len(mc) >= 3:
+                    det_color = (int(mc[0]), int(mc[1]), int(mc[2]))
+            # Then try metadata.display_color (from ColorAnomalyAndMotionDetection)
+            if det_color is None:
+                metadata = getattr(detection, 'metadata', None) or {}
+                if 'display_color' in metadata:
+                    dc = metadata['display_color']
+                    if isinstance(dc, (list, tuple)) and len(dc) >= 3:
+                        det_color = (int(dc[0]), int(dc[1]), int(dc[2]))
+                elif 'color' in metadata:
+                    dc = metadata['color']
+                    if isinstance(dc, (list, tuple)) and len(dc) >= 3:
+                        det_color = (int(dc[0]), int(dc[1]), int(dc[2]))
+
             self.tracks[track_id] = Track(
                 track_id=track_id,
                 bbox=detection.bbox,
@@ -383,14 +424,18 @@ class DetectionTracker(QObject):
                 thumbnail=thumbnail,
                 first_frame_index=frame_index,
                 first_timestamp=timestamp,
+                frame_resolution=(frame_w, frame_h),  # Store resolution for coordinate scaling
                 detection_type=getattr(detection, 'detection_type', 'detection'),
-                confidence=getattr(detection, 'confidence', 0.0)
+                confidence=det_confidence,
+                detection_color=det_color,
+                pixel_area=getattr(detection, 'area', 0.0),
+                rarity=det_confidence,  # Use confidence as rarity proxy
             )
         else:
-            # Existing track - update position and increment frames seen
+            # Existing track - just increment frames seen
+            # Keep bbox/centroid STATIC from first detection (like thumbnail)
+            # so they match first_frame_index when seeking
             track = self.tracks[track_id]
-            track.bbox = detection.bbox
-            track.centroid = detection.centroid
             track.frames_seen += 1
 
             # Check confirmation threshold
