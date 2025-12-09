@@ -95,6 +95,40 @@ class InputProcessingTab(QWidget):
         perf_group = QGroupBox("Performance Options")
         perf_layout = QVBoxLayout(perf_group)
 
+        # Frame Rate selection
+        fps_layout = QHBoxLayout()
+        fps_layout.addWidget(QLabel("Frame Rate:"))
+        self.frame_rate_preset = QComboBox()
+
+        # Frame rate options: Original uses video's native FPS, others limit processing
+        self.frame_rate_presets = {
+            "Original": 0,   # 0 = use video's native FPS (no limiting)
+            "30 FPS": 30,
+            "25 FPS": 25,
+            "20 FPS": 20,
+            "15 FPS": 15,
+            "10 FPS": 10,
+            "5 FPS": 5,
+        }
+
+        for preset in self.frame_rate_presets.keys():
+            self.frame_rate_preset.addItem(preset)
+
+        self.frame_rate_preset.setCurrentText("Original")
+        self.frame_rate_preset.setToolTip("Limit the frame rate for processing.\n\n"
+                                          "• Original - Process at video's native frame rate\n"
+                                          "• 30 FPS - Good balance of smoothness and performance\n"
+                                          "• 25 FPS - Standard for PAL video\n"
+                                          "• 20 FPS - Reduced CPU usage\n"
+                                          "• 15 FPS - Lower CPU usage\n"
+                                          "• 10 FPS - Significant CPU savings\n"
+                                          "• 5 FPS - Maximum CPU savings, may miss fast objects\n\n"
+                                          "Lower frame rates reduce CPU usage but may miss fast-moving objects.\n"
+                                          "Detections persist between skipped frames for visual continuity.")
+        fps_layout.addWidget(self.frame_rate_preset)
+        fps_layout.addStretch()
+        perf_layout.addLayout(fps_layout)
+
         self.render_at_processing_res = QCheckBox("Render at Processing Resolution (faster for high-res)")
         self.render_at_processing_res.setChecked(True)  # Default ON
         self.render_at_processing_res.setToolTip("Renders detection overlays at processing resolution instead of original video resolution.\n"
@@ -182,3 +216,23 @@ class InputProcessingTab(QWidget):
             self.processing_height.setVisible(True)
             self.processing_height.setEnabled(True)
             self.processing_height.setValue(height)
+
+    def get_target_fps(self) -> int:
+        """Get the target frame rate for processing.
+
+        Returns:
+            Target FPS value, or 0 for 'Original' (no limiting)
+        """
+        preset_name = self.frame_rate_preset.currentText()
+        return self.frame_rate_presets.get(preset_name, 0)
+
+    def set_target_fps(self, fps: int):
+        """Set the target frame rate.
+
+        Args:
+            fps: Target FPS value (0 = Original/no limiting)
+        """
+        # Create reverse mapping from FPS to preset name
+        fps_map = {v: k for k, v in self.frame_rate_presets.items()}
+        preset_name = fps_map.get(fps, "Original")
+        self.frame_rate_preset.setCurrentText(preset_name)

@@ -397,7 +397,7 @@ class DetectionThumbnailWidget(QWidget):
             scale_x = original_resolution[0] / processing_resolution[0]
             scale_y = original_resolution[1] / processing_resolution[1]
 
-        # Update each thumbnail label based on slot assignment (only visible ones)
+        # Update each thumbnail label based on slot assignment (stable positions)
         for slot_idx, label in enumerate(self.thumbnail_labels):
             if not label.isVisible():
                 continue
@@ -602,22 +602,39 @@ class StreamControlWidget(QWidget):
         performance_group.setToolTip("Real-time performance metrics")
         performance_layout = QGridLayout(performance_group)
 
-        self.fps_label = QLabel("FPS: --")
-        self.fps_label.setToolTip("Frames per second being processed")
-        self.processing_label = QLabel("Processing: -- ms")
+        # Resolution labels
+        self.video_resolution_label = QLabel("Video: --")
+        self.video_resolution_label.setToolTip("Original video resolution")
+        self.processing_resolution_label = QLabel("Processing: --")
+        self.processing_resolution_label.setToolTip("Resolution used for detection processing")
+
+        # FPS labels
+        self.video_fps_label = QLabel("Video FPS: --")
+        self.video_fps_label.setToolTip("Native frame rate of the video source")
+        self.processing_fps_label = QLabel("Proc FPS: --")
+        self.processing_fps_label.setToolTip("Actual frames per second being processed")
+
+        # Timing labels
+        self.processing_label = QLabel("Time: -- ms")
         self.processing_label.setToolTip("Time in milliseconds to process each frame")
         self.latency_label = QLabel("Latency: -- ms")
         self.latency_label.setToolTip("End-to-end latency from frame capture to display")
-        self.total_frames_label = QLabel("Total Frames: --")
+
+        # Stats labels
+        self.total_frames_label = QLabel("Frames: --")
         self.total_frames_label.setToolTip("Total number of frames processed")
         self.detections_label = QLabel("Detections: --")
         self.detections_label.setToolTip("Number of detections in current frame")
 
-        performance_layout.addWidget(self.fps_label, 0, 0)
-        performance_layout.addWidget(self.processing_label, 0, 1)
-        performance_layout.addWidget(self.latency_label, 1, 0)
-        performance_layout.addWidget(self.total_frames_label, 1, 1)
-        performance_layout.addWidget(self.detections_label, 2, 0)
+        # Layout: 4 rows x 2 columns
+        performance_layout.addWidget(self.video_resolution_label, 0, 0)
+        performance_layout.addWidget(self.processing_resolution_label, 0, 1)
+        performance_layout.addWidget(self.video_fps_label, 1, 0)
+        performance_layout.addWidget(self.processing_fps_label, 1, 1)
+        performance_layout.addWidget(self.processing_label, 2, 0)
+        performance_layout.addWidget(self.latency_label, 2, 1)
+        performance_layout.addWidget(self.total_frames_label, 3, 0)
+        performance_layout.addWidget(self.detections_label, 3, 1)
 
         # Recording group (optional)
         if self.include_recording:
@@ -871,16 +888,37 @@ class StreamControlWidget(QWidget):
 
     def update_performance(self, stats: Dict[str, Any]):
         """Update performance display."""
-        fps = stats.get('fps', stats.get('avg_fps', 0))
+        # Resolution info
+        video_resolution = stats.get('video_resolution')
+        processing_resolution = stats.get('processing_resolution')
+
+        if video_resolution:
+            self.video_resolution_label.setText(f"Video: {video_resolution[0]}x{video_resolution[1]}")
+        if processing_resolution:
+            self.processing_resolution_label.setText(f"Processing: {processing_resolution[0]}x{processing_resolution[1]}")
+
+        # FPS info
+        video_fps = stats.get('video_fps', 0)
+        # Use processing_fps (actual processed frames/sec, accounts for frame rate limiting)
+        # Fall back to avg_fps or fps for backwards compatibility
+        processing_fps = stats.get('processing_fps', stats.get('avg_fps', stats.get('fps', 0)))
+
+        if video_fps > 0:
+            self.video_fps_label.setText(f"Video FPS: {video_fps:.1f}")
+        self.processing_fps_label.setText(f"Proc FPS: {processing_fps:.1f}")
+
+        # Timing info
         processing_time = stats.get('current_processing_time_ms', stats.get('avg_processing_time_ms', stats.get('total_ms', 0)))
         latency = stats.get('latency_ms', 0)
+
+        self.processing_label.setText(f"Time: {processing_time:.1f} ms")
+        self.latency_label.setText(f"Latency: {latency:.1f} ms")
+
+        # Stats
         total_frames = stats.get('total_frames', 0)
         detection_count = stats.get('detection_count', stats.get('detections', 0))
 
-        self.fps_label.setText(f"FPS: {fps:.1f}")
-        self.processing_label.setText(f"Processing: {processing_time:.1f} ms")
-        self.latency_label.setText(f"Latency: {latency:.1f} ms")
-        self.total_frames_label.setText(f"Total Frames: {total_frames}")
+        self.total_frames_label.setText(f"Frames: {total_frames}")
         self.detections_label.setText(f"Detections: {detection_count}")
 
     def browse_for_file(self):

@@ -55,6 +55,11 @@ class StreamStatistics:
         self.dropped_frame_count = 0
         self.detection_count = 0
 
+        # Actual processed frame tracking (for frame rate limiting)
+        self._processed_frame_count = 0
+        self._processed_fps_start_time = time.time()
+        self._actual_processing_fps = 0.0
+
         # Current stats
         self._stats = PerformanceStats()
 
@@ -82,16 +87,27 @@ class StreamStatistics:
         # Update FPS
         self._calculate_fps()
 
-    def on_frame_processed(self, processing_time_ms: float, detection_count: int = 0):
+    def on_frame_processed(self, processing_time_ms: float, detection_count: int = 0, was_skipped: bool = False):
         """
         Record frame processing completion.
 
         Args:
             processing_time_ms: Time taken to process frame (milliseconds)
             detection_count: Number of detections in this frame
+            was_skipped: True if this frame was skipped due to frame rate limiting
         """
-        self.processing_times.append(processing_time_ms)
-        self.detection_count += detection_count
+        if not was_skipped:
+            self.processing_times.append(processing_time_ms)
+            self.detection_count += detection_count
+            self._processed_frame_count += 1
+
+        # Calculate actual processing FPS every second
+        current_time = time.time()
+        elapsed = current_time - self._processed_fps_start_time
+        if elapsed >= 1.0:
+            self._actual_processing_fps = self._processed_frame_count / elapsed
+            self._processed_frame_count = 0
+            self._processed_fps_start_time = current_time
 
         # Update processing stats
         self._calculate_processing_stats()
@@ -144,6 +160,9 @@ class StreamStatistics:
         self.frame_count = 0
         self.dropped_frame_count = 0
         self.detection_count = 0
+        self._processed_frame_count = 0
+        self._processed_fps_start_time = time.time()
+        self._actual_processing_fps = 0.0
         self._stats = PerformanceStats()
 
     def _calculate_fps(self):
@@ -162,15 +181,11 @@ class StreamStatistics:
         if len(self.processing_times) > 0:
             # Average processing time
             self._stats.avg_processing_time_ms = sum(self.processing_times) / len(self.processing_times)
-
-            # Processing FPS (theoretical max based on processing time)
-            if self._stats.avg_processing_time_ms > 0:
-                self._stats.processing_fps = 1000.0 / self._stats.avg_processing_time_ms
-            else:
-                self._stats.processing_fps = 0.0
         else:
             self._stats.avg_processing_time_ms = 0.0
-            self._stats.processing_fps = 0.0
+
+        # Use actual measured processing FPS (accounts for frame rate limiting/skipping)
+        self._stats.processing_fps = self._actual_processing_fps
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:

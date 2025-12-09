@@ -44,6 +44,13 @@ class ContourMethod(Enum):
     CONNECTED_COMPONENTS = "connected_components"  # cv2.connectedComponentsWithStats
 
 
+class ColorSpace(Enum):
+    """Color space for histogram-based anomaly detection."""
+    BGR = "bgr"  # 3D histogram on B,G,R channels (default, lighting-sensitive)
+    HSV = "hsv"  # 1D histogram on Hue only (lighting-invariant, good for colored objects)
+    LAB = "lab"  # 2D histogram on a,b channels (lighting-invariant, perceptually uniform)
+
+
 @dataclass
 class ColorAnomalyAndMotionDetectionConfig:
     """Configuration for color anomaly and motion detection."""
@@ -57,7 +64,7 @@ class ColorAnomalyAndMotionDetectionConfig:
     enable_rx_anomaly: bool = False
 
     # Performance settings
-    max_fps: Optional[int] = None
+    target_fps: int = 0  # Target FPS for processing (0 = use video's native FPS, no limiting)
 
     # Motion algorithm selection
     motion_algorithm: MotionAlgorithm = MotionAlgorithm.MOG2
@@ -100,6 +107,11 @@ class ColorAnomalyAndMotionDetectionConfig:
     color_min_detection_area: int = 15
     color_max_detection_area: int = 50000
     use_tile_analysis: bool = False
+
+    # Color space selection for anomaly detection
+    color_space: ColorSpace = ColorSpace.BGR
+    hsv_min_saturation: int = 30  # Min saturation (0-255) for HSV mode - filters out grays/whites
+    lab_min_chroma: int = 10  # Min distance from neutral for LAB mode - filters out grays
 
     # Contour/blob detection method
     contour_method: ContourMethod = ContourMethod.FIND_CONTOURS
