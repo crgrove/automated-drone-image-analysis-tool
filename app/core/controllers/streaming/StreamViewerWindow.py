@@ -101,6 +101,7 @@ class StreamViewerWindow(QMainWindow):
         self.algorithm_renders_frame = False
         self._latest_detections_for_rendering: List[Dict] = []
         self._last_algorithm_frame: Optional[np.ndarray] = None
+        self._original_frame_for_thumbnails: Optional[np.ndarray] = None  # Store original frame before detection rendering
 
         # Current algorithm
         self.algorithm_widget: Optional[StreamAlgorithmController] = None
@@ -224,8 +225,10 @@ class StreamViewerWindow(QMainWindow):
         help_menu = menu_bar.addMenu("Help")
         self.action_manual = QAction("Manual", self)
         self.action_community = QAction("Community Forum", self)
+        self.action_youtube = QAction("YouTube Channel", self)
         help_menu.addAction(self.action_manual)
         help_menu.addAction(self.action_community)
+        help_menu.addAction(self.action_youtube)
 
         # Wire actions
         self.action_streaming_guide.triggered.connect(self._open_streaming_guide)
@@ -233,6 +236,7 @@ class StreamViewerWindow(QMainWindow):
         self.action_preferences.triggered.connect(self._open_preferences)
         self.action_manual.triggered.connect(self._open_manual)
         self.action_community.triggered.connect(self._open_community_forum)
+        self.action_youtube.triggered.connect(self._open_youtube_channel)
 
     def _setup_recording_widget(self):
         """Setup recording widget in its own section between Algorithm Controls and the bottom of the panel."""
@@ -632,6 +636,16 @@ class StreamViewerWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error opening Community Forum URL: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open Community Forum:\n{str(e)}")
+
+    def _open_youtube_channel(self):
+        """Open the YouTube Channel URL in the default browser."""
+        try:
+            url = QUrl("https://www.youtube.com/@adiat-u4f")
+            QDesktopServices.openUrl(url)
+            # self.logger.info("YouTube Channel opened")
+        except Exception as e:
+            self.logger.error(f"Error opening YouTube Channel URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
 
     def load_algorithm(self, algorithm_name: str):
         """
@@ -1065,8 +1079,10 @@ class StreamViewerWindow(QMainWindow):
             frame_index = current_video_frame_pos
             timestamp = self._current_frame_timestamp
 
+            # Use original frame (without detections) for crisp thumbnails
+            thumbnail_frame = self._original_frame_for_thumbnails if self._original_frame_for_thumbnails is not None else frame
             self.thumbnail_widget.update_thumbnails(
-                frame,
+                thumbnail_frame,
                 detection_objects,
                 processing_resolution=processing_resolution,
                 original_resolution=original_resolution,
@@ -1275,6 +1291,10 @@ class StreamViewerWindow(QMainWindow):
 
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
+        
+        # Store original frame for thumbnails (before detection rendering)
+        # This ensures thumbnails are crisp without detection overlays
+        self._original_frame_for_thumbnails = frame.copy()
 
         # Apply resolution capping on first frame (to prevent upscaling)
         if self._pending_processing_resolution is not None:
@@ -1399,8 +1419,10 @@ class StreamViewerWindow(QMainWindow):
                         # (This is the correct position for THIS frame, not affected by race conditions)
                         frame_index = self._current_video_frame_pos
 
+                        # Use original frame (without detections) for crisp thumbnails
+                        thumbnail_frame = self._original_frame_for_thumbnails if self._original_frame_for_thumbnails is not None else frame
                         self.thumbnail_widget.update_thumbnails(
-                            frame,
+                            thumbnail_frame,
                             detection_objects,
                             processing_resolution=processing_resolution,
                             original_resolution=original_resolution,

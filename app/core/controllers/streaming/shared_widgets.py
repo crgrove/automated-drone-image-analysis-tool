@@ -667,8 +667,8 @@ class VideoDisplayWidget(QLabel):
             pixmap = QPixmap.fromImage(q_image)
 
             # Scale to fit widget while maintaining aspect ratio
-            # Use FastTransformation for better real-time performance
-            scaled_pixmap = pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+            # Use SmoothTransformation for crisper detection rendering (slight performance cost but better quality)
+            scaled_pixmap = pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.setPixmap(scaled_pixmap)
 
         except Exception as e:

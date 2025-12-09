@@ -62,6 +62,8 @@ class Ui_MainWindow(object):
         self.actionCommunityHelp = QAction(MainWindow)
         self.actionCommunityHelp.setObjectName(u"actionCommunityHelp")
         self.actionCommunityHelp.setFont(font)
+        self.actionYouTube_Channel = QAction(MainWindow)
+        self.actionYouTube_Channel.setObjectName(u"actionYouTube_Channel")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
@@ -445,6 +447,7 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionVideoParser)
         self.menuHelp.addAction(self.actionHelp)
         self.menuHelp.addAction(self.actionCommunityHelp)
+        self.menuHelp.addAction(self.actionYouTube_Channel)
 
         self.retranslateUi(MainWindow)
 
@@ -545,6 +548,7 @@ class Ui_MainWindow(object):
 "Connect with other users, share experiences, and get help.\n"
 "Ask questions, report issues, and suggest new features.", None))
 #endif // QT_CONFIG(tooltip)
+        self.actionYouTube_Channel.setText(QCoreApplication.translate("MainWindow", u"YouTube Channel", None))
 #if QT_CONFIG(tooltip)
         self.outputFolderButton.setToolTip(QCoreApplication.translate("MainWindow", u"Browse for the output folder to save analysis results.\n"
 "Opens a folder selection dialog.\n"
