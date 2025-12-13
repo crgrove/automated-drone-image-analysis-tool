@@ -161,11 +161,11 @@ class CalTopoDataPreparationThread(QThread):
                 # Determine which images should be included for coverage
                 # Coverage should only include images that are actually being exported
                 exported_image_indices = set()
-                
+
                 # Add images with flagged AOIs if flagged AOIs are included
                 if self.include_flagged_aois:
                     exported_image_indices.update(self.flagged_aois.keys())
-                
+
                 # Add images for locations if locations are included
                 if self.include_locations:
                     for img_idx, img in enumerate(self.images):
@@ -174,7 +174,7 @@ class CalTopoDataPreparationThread(QThread):
                         has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
                         if has_flagged_aois or self.include_images_without_flagged_aois:
                             exported_image_indices.add(img_idx)
-                
+
                 # Filter images to only those being exported
                 images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
                 polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
@@ -287,11 +287,11 @@ class CalTopoAPIExportThread(QThread):
                 # Determine which images should be included for coverage
                 # Coverage should only include images that are actually being exported
                 exported_image_indices = set()
-                
+
                 # Add images with flagged AOIs if flagged AOIs are included
                 if self.include_flagged_aois:
                     exported_image_indices.update(self.flagged_aois.keys())
-                
+
                 # Add images for locations if locations are included
                 if self.include_locations:
                     for img_idx, img in enumerate(self.images):
@@ -300,7 +300,7 @@ class CalTopoAPIExportThread(QThread):
                         has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
                         if has_flagged_aois or self.include_images_without_flagged_aois:
                             exported_image_indices.add(img_idx)
-                
+
                 # Filter images to only those being exported
                 images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
                 polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
@@ -409,7 +409,15 @@ class CalTopoExportController:
         self.caltopo_api_service = CalTopoAPIService()  # API-based service
         self.credential_helper = CalTopoCredentialHelper()
 
-    def export_to_caltopo(self, images, flagged_aois, include_flagged_aois=True, include_locations=False, include_images_without_flagged_aois=True, include_coverage_area=False, include_images=True):
+    def export_to_caltopo(
+            self,
+            images,
+            flagged_aois,
+            include_flagged_aois=True,
+            include_locations=False,
+            include_images_without_flagged_aois=True,
+            include_coverage_area=False,
+            include_images=True):
         """
         Export data to CalTopo.
 
@@ -1589,7 +1597,7 @@ class CalTopoExportController:
 
     def _export_via_api_threaded(self, map_id, team_id, credential_id, credential_secret,
                                  images, flagged_aois, include_flagged_aois, include_locations,
-                                 include_coverage_area, include_images):
+                                 include_images_without_flagged_aois, include_coverage_area, include_images):
         """Export markers and polygons via API in a separate thread.
 
         Args:
@@ -1601,6 +1609,7 @@ class CalTopoExportController:
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois: Whether to include flagged AOIs
             include_locations: Whether to include locations
+            include_images_without_flagged_aois: Whether to include images without flagged AOIs
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
 

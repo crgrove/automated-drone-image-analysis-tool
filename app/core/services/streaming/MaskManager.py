@@ -66,7 +66,7 @@ class MaskManager:
 
             if (self._cache['config_hash'] == config_hash and
                 self._cache['processing_resolution'] == target_resolution and
-                self._cache['mask_processing'] is not None):
+                    self._cache['mask_processing'] is not None):
                 return self._cache['mask_processing']
 
             # Need to regenerate mask
@@ -255,7 +255,11 @@ class MaskManager:
     def _compute_config_hash(self, config: Dict[str, Any],
                              resolution: Tuple[int, int]) -> str:
         """Compute hash of config for cache invalidation."""
-        return f"{config.get('frame_mask_enabled')}_{config.get('image_mask_enabled')}_{config.get('frame_buffer_pixels')}_{config.get('mask_image_path')}_{resolution}"
+        return f"{
+            config.get('frame_mask_enabled')}_{
+            config.get('image_mask_enabled')}_{
+            config.get('frame_buffer_pixels')}_{
+                config.get('mask_image_path')}_{resolution}"
 
     def invalidate_cache(self):
         """Force cache invalidation."""
@@ -270,8 +274,8 @@ class MaskManager:
 
     @staticmethod
     def validate_mask_image(file_path: str,
-                           video_aspect_ratio: Optional[float] = None,
-                           tolerance: float = 0.05) -> Tuple[bool, Optional[str], Optional[Tuple[int, int]]]:
+                            video_aspect_ratio: Optional[float] = None,
+                            tolerance: float = 0.05) -> Tuple[bool, Optional[str], Optional[Tuple[int, int]]]:
         """
         Validate a mask image file.
 

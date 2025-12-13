@@ -89,11 +89,11 @@ class UnifiedMapExportThread(QThread):
             if self.include_coverage:
                 # Collect all image indices that are being exported
                 exported_image_indices = set()
-                
+
                 # Add images with flagged AOIs if flagged AOIs are included
                 if self.include_flagged_aois:
                     exported_image_indices.update(self.flagged_aois.keys())
-                
+
                 # Add images for locations if locations are included
                 if self.include_locations:
                     for img_idx, img in enumerate(self.images):
@@ -102,7 +102,7 @@ class UnifiedMapExportThread(QThread):
                         has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
                         if has_flagged_aois or self.include_images_without_flagged_aois:
                             exported_image_indices.add(img_idx)
-                
+
                 # Filter images to only those being exported
                 images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
 
@@ -393,7 +393,8 @@ class UnifiedMapExportController:
 
                 method = method_dialog.get_selected_method()
                 if method == 'api':
-                    self._export_to_caltopo_via_api(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images)
+                    self._export_to_caltopo_via_api(include_locations, include_images_without_flagged_aois,
+                                                    include_flagged_aois, include_coverage, include_images)
                 else:  # browser
                     self._export_to_caltopo(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images)
 

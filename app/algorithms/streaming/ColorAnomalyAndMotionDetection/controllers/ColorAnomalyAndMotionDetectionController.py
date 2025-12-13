@@ -13,6 +13,7 @@ from algorithms.streaming.ColorAnomalyAndMotionDetection.services import (
     ColorAnomalyAndMotionDetectionConfig,
     MotionAlgorithm,
     FusionMode,
+    ColorSpace,
     Detection
 )
 from core.services.LoggerService import LoggerService
@@ -185,6 +186,11 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
         if not isinstance(fusion_mode, FusionMode):
             fusion_mode = base_config.fusion_mode
 
+        # Map color space (widget returns enum)
+        color_space = ui_config.get('color_space', base_config.color_space)
+        if not isinstance(color_space, ColorSpace):
+            color_space = base_config.color_space
+
         return ColorAnomalyAndMotionDetectionConfig(
             processing_width=processing_width,
             processing_height=processing_height,
@@ -209,6 +215,9 @@ class ColorAnomalyAndMotionDetectionController(StreamAlgorithmController):
             color_rarity_percentile=ui_config.get('color_rarity_percentile', base_config.color_rarity_percentile),
             color_min_detection_area=ui_config.get('color_min_detection_area', base_config.color_min_detection_area),
             color_max_detection_area=ui_config.get('color_max_detection_area', base_config.color_max_detection_area),
+            color_space=color_space,
+            hsv_min_saturation=ui_config.get('hsv_min_saturation', base_config.hsv_min_saturation),
+            lab_min_chroma=ui_config.get('lab_min_chroma', base_config.lab_min_chroma),
             enable_hue_expansion=ui_config.get('enable_hue_expansion', base_config.enable_hue_expansion),
             hue_expansion_range=ui_config.get('hue_expansion_range', base_config.hue_expansion_range),
             enable_fusion=ui_config.get('enable_fusion', base_config.enable_fusion),

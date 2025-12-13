@@ -90,9 +90,9 @@ class MotionDetectionService(QObject):
         return self._morph_kernel_cache[size]
 
     def _extract_motion_blobs_connected_components(self, binary_mask: np.ndarray,
-                                                    config: ColorAnomalyAndMotionDetectionConfig,
-                                                    detection_type: str, algorithm_name: str,
-                                                    max_detections: int = 0) -> List[Detection]:
+                                                   config: ColorAnomalyAndMotionDetectionConfig,
+                                                   detection_type: str, algorithm_name: str,
+                                                   max_detections: int = 0) -> List[Detection]:
         """
         Extract motion blobs using cv2.connectedComponentsWithStats.
 

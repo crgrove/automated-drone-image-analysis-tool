@@ -1900,8 +1900,8 @@ class ColorDetectionService(QObject):
                 # Ensure expanded box doesn't exceed image bounds
                 w_expanded = min(w_expanded, annotated.shape[1] - x_expanded)
                 h_expanded = min(h_expanded, annotated.shape[0] - y_expanded)
-                cv2.rectangle(annotated, (x_expanded, y_expanded), 
-                             (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
+                cv2.rectangle(annotated, (x_expanded, y_expanded),
+                              (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
                 cv2.circle(annotated, (centroid_x, centroid_y), 3, color, -1)
 
             elif self._config.render_shape == 1:

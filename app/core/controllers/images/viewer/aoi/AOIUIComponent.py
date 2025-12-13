@@ -408,7 +408,7 @@ class AOIUIComponent:
         # Delete/Trash icon (only for user-created AOIs) - at the end
         # Check if this is a user-created AOI (has user_created flag or no detected_pixels)
         is_user_created = area_of_interest.get('user_created', False) or 'detected_pixels' not in area_of_interest
-        
+
         if is_user_created:
             delete_icon = qta.icon('fa6s.trash', color='#FF5252')
             delete_label = QLabel()

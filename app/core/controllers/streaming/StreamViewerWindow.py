@@ -837,6 +837,7 @@ class StreamViewerWindow(QMainWindow):
         if hasattr(service, 'process_frame'):
             # Check if it returns (annotated_frame, detections, timings)
             from typing import Tuple
+
             def process_integrated(frame: np.ndarray, timestamp: float) -> Tuple[List[Dict], bool]:
                 annotated_frame, detections, timings = service.process_frame(frame, timestamp)
 
@@ -1016,7 +1017,13 @@ class StreamViewerWindow(QMainWindow):
         self._is_stopping_worker = False  # Reset flag after cleanup
 
     @Slot(np.ndarray, list, float, bool, int)
-    def _on_worker_frame_processed(self, frame: np.ndarray, detections: List[Dict], processing_time_ms: float, was_skipped: bool = False, video_frame_pos: int = 0):
+    def _on_worker_frame_processed(
+            self,
+            frame: np.ndarray,
+            detections: List[Dict],
+            processing_time_ms: float,
+            was_skipped: bool = False,
+            video_frame_pos: int = 0):
         """Handle frame processed by worker thread."""
         # This runs on main thread (via QueuedConnection)
         self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=was_skipped)
@@ -1291,7 +1298,7 @@ class StreamViewerWindow(QMainWindow):
 
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
-        
+
         # Store original frame for thumbnails (before detection rendering)
         # This ensures thumbnails are crisp without detection overlays
         self._original_frame_for_thumbnails = frame.copy()

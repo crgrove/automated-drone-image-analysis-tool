@@ -163,7 +163,7 @@ class TestStreamViewerWindow:
             window.algorithm_widget = mock_algorithm
 
             # Simulate frame received
-            window.stream_coordinator.frameReceived.emit(sample_frame, 0.0)
+            window.stream_coordinator.frameReceived.emit(sample_frame, 0.0, 0)
 
             # In a real scenario, this would trigger processing
             # For now, we just verify the signal exists

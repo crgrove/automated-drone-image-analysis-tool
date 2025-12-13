@@ -134,6 +134,6 @@ class TestStreamCoordinator:
         assert coordinator.frameReceived is not None
 
         # Simulate frame emission (would normally come from stream manager)
-        coordinator.frameReceived.emit(sample_frame, 0.0)
+        coordinator.frameReceived.emit(sample_frame, 0.0, 0)
 
         # Signal should be emitted (async, so we just verify it exists)

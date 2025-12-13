@@ -45,10 +45,10 @@ class ColorAnomalyService(QObject):
         return self._morph_kernel_cache[size]
 
     def _extract_blobs_connected_components(self, binary_mask: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
-                                             timestamp: float, frame_bgr: np.ndarray,
-                                             color_indices: np.ndarray, histogram: np.ndarray,
-                                             total_pixels: int, max_detections: int = 0,
-                                             color_space: str = 'bgr') -> List[Detection]:
+                                            timestamp: float, frame_bgr: np.ndarray,
+                                            color_indices: np.ndarray, histogram: np.ndarray,
+                                            total_pixels: int, max_detections: int = 0,
+                                            color_space: str = 'bgr') -> List[Detection]:
         """
         Extract blobs using cv2.connectedComponentsWithStats.
 
@@ -413,7 +413,6 @@ class ColorAnomalyService(QObject):
         timestamp = time.time()
 
         h, w = frame_bgr.shape[:2]
-        total_pixels = h * w
 
         # Convert to HSV
         frame_hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
@@ -496,7 +495,6 @@ class ColorAnomalyService(QObject):
         timestamp = time.time()
 
         h, w = frame_bgr.shape[:2]
-        total_pixels = h * w
 
         # Convert to LAB
         frame_lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
@@ -570,10 +568,10 @@ class ColorAnomalyService(QObject):
         return detections
 
     def _extract_blobs_find_contours(self, binary_mask: np.ndarray, config: ColorAnomalyAndMotionDetectionConfig,
-                                      timestamp: float, frame_bgr: np.ndarray,
-                                      color_indices: np.ndarray, histogram: np.ndarray,
-                                      total_pixels: int, max_detections: int = 0,
-                                      color_space: str = 'bgr') -> List[Detection]:
+                                     timestamp: float, frame_bgr: np.ndarray,
+                                     color_indices: np.ndarray, histogram: np.ndarray,
+                                     total_pixels: int, max_detections: int = 0,
+                                     color_space: str = 'bgr') -> List[Detection]:
         """
         Extract blobs using cv2.findContours.
 

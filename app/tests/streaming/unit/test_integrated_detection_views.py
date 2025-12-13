@@ -20,7 +20,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
 
         assert widget is not None
         assert widget.tabs is not None
-        assert widget.tabs.count() == 5  # Should have 5 tabs
+        assert widget.tabs.count() == 6  # Should have 6 tabs
 
     def test_tabs_exist(self, qapp):
         """Test that all expected tabs exist."""
@@ -30,8 +30,9 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert "Input && Processing" in tab_names  # Note: UI uses && for & in tab names
         assert "Motion Detection" in tab_names
         assert "Color Anomaly" in tab_names
-        assert "Fusion && Cleanup" in tab_names  # Updated name
-        assert "Rendering" in tab_names
+        assert "Fusion" in tab_names
+        assert "Frame" in tab_names
+        assert "Rendering && Cleanup" in tab_names
 
     def test_input_tab_controls(self, qapp):
         """Test Input & Processing tab controls."""
@@ -122,29 +123,29 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert hasattr(widget, 'fusion_mode')
         assert widget.fusion_mode.currentText() == "UNION"
 
-        # Check temporal voting
-        assert hasattr(widget, 'enable_temporal_voting')
-        assert widget.enable_temporal_voting.isChecked() is True  # Default ON
-        assert hasattr(widget, 'temporal_window_frames')
-        assert widget.temporal_window_frames.value() == 5  # Default 5
-        assert hasattr(widget, 'temporal_threshold_frames')
-        assert widget.temporal_threshold_frames.value() == 3  # Default 3
+        # Check temporal voting (now in rendering_tab)
+        assert hasattr(widget.rendering_tab, 'enable_temporal_voting')
+        assert widget.rendering_tab.enable_temporal_voting.isChecked() is True  # Default ON
+        assert hasattr(widget.rendering_tab, 'temporal_window_frames')
+        assert widget.rendering_tab.temporal_window_frames.value() == 5  # Default 5
+        assert hasattr(widget.rendering_tab, 'temporal_threshold_frames')
+        assert widget.rendering_tab.temporal_threshold_frames.value() == 3  # Default 3
 
     def test_fpr_tab_controls(self, qapp):
         """Test False Pos. Reduction tab controls."""
         widget = ColorAnomalyAndMotionDetectionControlWidget()
 
-        # Check aspect ratio filter
-        assert hasattr(widget, 'enable_aspect_ratio_filter')
-        assert widget.enable_aspect_ratio_filter.isChecked() is False  # Default OFF
-        assert hasattr(widget, 'min_aspect_ratio')
-        assert hasattr(widget, 'max_aspect_ratio')
+        # Check aspect ratio filter (now in rendering_tab)
+        assert hasattr(widget.rendering_tab, 'enable_aspect_ratio_filter')
+        assert widget.rendering_tab.enable_aspect_ratio_filter.isChecked() is False  # Default OFF
+        assert hasattr(widget.rendering_tab, 'min_aspect_ratio')
+        assert hasattr(widget.rendering_tab, 'max_aspect_ratio')
 
-        # Check detection clustering
-        assert hasattr(widget, 'enable_detection_clustering')
-        assert widget.enable_detection_clustering.isChecked() is False  # Default OFF
-        assert hasattr(widget, 'clustering_distance')
-        assert widget.clustering_distance.value() == 50  # Default 50
+        # Check detection clustering (now in rendering_tab)
+        assert hasattr(widget.rendering_tab, 'enable_detection_clustering')
+        assert widget.rendering_tab.enable_detection_clustering.isChecked() is False  # Default OFF
+        assert hasattr(widget.rendering_tab, 'clustering_distance')
+        assert widget.rendering_tab.clustering_distance.value() == 50  # Default 50
 
         # Check color exclusion
         assert hasattr(widget, 'enable_color_exclusion')
@@ -201,11 +202,12 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         # Fusion tab defaults
         assert config['enable_fusion'] is False
         assert config['fusion_mode'] == FusionMode.UNION
+        # Temporal voting and cleanup are now in rendering_tab
         assert config['enable_temporal_voting'] is True
         assert config['temporal_window_frames'] == 5
         assert config['temporal_threshold_frames'] == 3
 
-        # FPR tab defaults
+        # FPR tab defaults (now in rendering_tab)
         assert config['enable_aspect_ratio_filter'] is False
         assert config['enable_detection_clustering'] is False
         assert config['clustering_distance'] == 50

@@ -12,7 +12,10 @@ import numpy as np
 import qtawesome as qta
 import traceback
 import xml.etree.ElementTree as ET
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton, QMenu, QApplication, QAbstractItemView, QColorDialog, QMessageBox
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidgetItem, QPushButton,
+    QMenu, QApplication, QAbstractItemView, QColorDialog, QMessageBox
+)
 from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor

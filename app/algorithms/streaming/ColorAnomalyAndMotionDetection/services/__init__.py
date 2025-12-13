@@ -5,6 +5,8 @@ from .shared_types import (
     Detection,
     MotionAlgorithm,
     FusionMode,
+    ColorSpace,
+    ContourMethod,
     ColorAnomalyAndMotionDetectionConfig
 )
 
@@ -30,6 +32,8 @@ __all__ = [
     # Shared types and enums
     'MotionAlgorithm',
     'FusionMode',
+    'ColorSpace',
+    'ContourMethod',
     'StageTimings',
     'PerformanceMetrics',
     'Detection',

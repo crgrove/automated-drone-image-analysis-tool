@@ -305,7 +305,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.color_ranges.append(new_range)
         self._update_color_ranges_display()
         self._emit_config_changed()
-        
+
         # Save to recent colors with HSV ranges
         try:
             rgb = (color.red(), color.green(), color.blue())
@@ -371,21 +371,29 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
     def _add_color_range_from_color(self, color: QColor):
         """Add a color range from a QColor with default tolerance ranges."""
-        # Use default tolerance values (Moderate preset: 15, 75, 75)
+        # Use reasonable default tolerance values (Moderate preset)
+        # These are stored in OpenCV format (H: 0-179, S/V: 0-255)
+        # Hue: ±15° is reasonable for most colors
+        # Saturation/Value: Use 20% of full range (51) instead of 75 (29%) for tighter matching
+        # The old value of 75 was too wide - it would match almost all colors except extremes
+        hue_tolerance = 15  # ±15° in OpenCV (0-179 range) - reasonable hue variation
+        sat_tolerance = 51  # 20% of full saturation range (0.2 * 255) - tighter than old 75
+        val_tolerance = 51  # 20% of full value range (0.2 * 255) - tighter than old 75
+
         new_range = {
             'name': f"Color_{len(self.color_ranges) + 1}",
             'color': color,
-            'hue_minus': 15,  # Default tolerance
-            'hue_plus': 15,
-            'sat_minus': 75,
-            'sat_plus': 75,
-            'val_minus': 75,
-            'val_plus': 75
+            'hue_minus': hue_tolerance,
+            'hue_plus': hue_tolerance,
+            'sat_minus': sat_tolerance,
+            'sat_plus': sat_tolerance,
+            'val_minus': val_tolerance,
+            'val_plus': val_tolerance
         }
         self.color_ranges.append(new_range)
         self._update_color_ranges_display()
         self._emit_config_changed()
-        
+
         # Save to recent colors (when called from _on_color_selected_from_menu, it's already saved there)
         # But if called from elsewhere (like _on_recent_color_selected fallback), save it
         # Actually, we'll save it here too to ensure it's always tracked
@@ -401,6 +409,23 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
     def _on_view_range(self):
         """View range - show all color ranges in a single combined viewer dialog."""
+        # IMPORTANT: Sync current widget values to self.color_ranges before building the list
+        # This ensures the dialog shows the latest modifications made in the widgets
+        if self.color_range_widgets:
+            for i, widget in enumerate(self.color_range_widgets):
+                if i < len(self.color_ranges):
+                    hsv_ranges = widget.get_hsv_ranges()
+                    color = widget.get_color()
+
+                    # Update self.color_ranges with current widget values
+                    self.color_ranges[i]['color'] = color
+                    self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
+                    self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                    self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
+                    self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
+                    self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
+                    self.color_ranges[i]['val_plus'] = int(hsv_ranges['v_plus'] * 255)
+
         if not self.color_ranges:
             return
 
@@ -446,7 +471,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         if widget in self.color_range_widgets:
             # Find the index before removing
             index = self.color_range_widgets.index(widget)
-            
+
             # First, sync data from all widgets to color_ranges to preserve any edits
             # This must happen before removing to keep indices aligned
             if self.color_range_widgets:
@@ -461,7 +486,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                         self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
                         self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
                         self.color_ranges[i]['val_plus'] = int(hsv_ranges['v_plus'] * 255)
-            
+
             # Now remove from color_ranges using the correct index
             if index < len(self.color_ranges):
                 self.color_ranges.pop(index)
@@ -573,7 +598,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 color = widget.get_color()
                 hsv_ranges = widget.get_hsv_ranges()
                 rgb = (color.red(), color.green(), color.blue())
-                
+
                 # HSVColorRowWidget always returns hsv_ranges with h, s, v, h_minus, h_plus, etc.
                 # All values are in normalized 0-1 format
                 if hsv_ranges and isinstance(hsv_ranges, dict):

@@ -425,7 +425,7 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
         self.lab_chroma_label = QLabel("10")
         lab_chroma_layout.addWidget(self.lab_chroma_label)
         colorspace_layout.addLayout(lab_chroma_layout, 2, 1)
-        
+
         # Initialize visibility based on default selection (LAB)
         self._update_color_space_controls_visibility()
 
@@ -637,13 +637,13 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
     def _update_color_space_controls_visibility(self):
         """Show/hide HSV and LAB sliders based on selected color space."""
         selected_space = self.color_space.currentText()
-        
+
         # Show HSV controls only when HSV is selected
         show_hsv = (selected_space == "HSV")
         self.hsv_sat_label_widget.setVisible(show_hsv)
         self.hsv_min_saturation.setVisible(show_hsv)
         self.hsv_sat_label.setVisible(show_hsv)
-        
+
         # Show LAB controls only when LAB is selected
         show_lab = (selected_space == "LAB")
         self.lab_chroma_label_widget.setVisible(show_lab)
