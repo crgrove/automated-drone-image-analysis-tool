@@ -23,6 +23,16 @@
          <pointsize>10</pointsize>
         </font>
        </property>
+       <property name="toolTip">
+        <string>Select a target color from an image to detect.
+Opens a color picker that allows you to:
+• Load an image from the input folder
+• Click on pixels to sample colors
+• Automatically calculates HSV values
+• Sets Hue, Saturation, and Value ranges
+The selected color becomes the center of your HSV detection range.
+Adjust the +/- range values to capture color variations.</string>
+       </property>
        <property name="text">
         <string> Pick Color</string>
        </property>
@@ -42,6 +52,11 @@
          <width>50</width>
          <height>20</height>
         </size>
+       </property>
+       <property name="toolTip">
+        <string>Visual preview of the currently selected target color.
+Shows the center color of your HSV detection range.
+The actual detection will match colors within the specified +/- ranges around this color.</string>
        </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
@@ -73,17 +88,80 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Hue range tolerance for color detection.
+Hue represents the actual color (red, green, blue, etc.) on a 0-179 scale.
+Adjust the -/+ values to allow variation in the color hue.</string>
+         </property>
          <property name="text">
-          <string>Hue Range +/-</string>
+          <string>Hue Range</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="hueSpinBox">
+        <widget class="QLabel" name="hueMinusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="hueMinusSpinBox">
          <property name="font">
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Lower hue range tolerance.
+• Range: 0 to 179
+• Default: 20
+Subtracts from the target hue value to define the lower bound.
+Lower values = stricter color matching, higher values = more color variation accepted.
+Example: Target hue 100, minus 20 = detects hues from 80-100.</string>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>179</number>
+         </property>
+         <property name="value">
+          <number>20</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="huePlusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>+</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="huePlusSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Upper hue range tolerance.
+• Range: 0 to 179
+• Default: 20
+Adds to the target hue value to define the upper bound.
+Lower values = stricter color matching, higher values = more color variation accepted.
+Example: Target hue 100, plus 20 = detects hues from 100-120.</string>
          </property>
          <property name="minimum">
           <number>0</number>
@@ -116,17 +194,77 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Saturation range tolerance for color detection.
+Saturation represents color intensity (0=gray, 255=fully saturated) on a 0-255 scale.
+Adjust the -/+ values to allow variation in color intensity.</string>
+         </property>
          <property name="text">
-          <string>Saturation Range +/-</string>
+          <string>Saturation Range</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="saturationSpinBox">
+        <widget class="QLabel" name="saturationMinusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="saturationMinusSpinBox">
          <property name="font">
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Lower saturation range tolerance.
+• Range: 0 to 255
+• Default: 50
+Subtracts from the target saturation value to define the lower bound.
+Lower values = requires vivid colors, higher values = accepts faded/washed out colors.
+Example: Target saturation 150, minus 50 = detects saturations from 100-150.</string>
+         </property>
+         <property name="maximum">
+          <number>255</number>
+         </property>
+         <property name="value">
+          <number>50</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="saturationPlusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>+</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="saturationPlusSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Upper saturation range tolerance.
+• Range: 0 to 255
+• Default: 50
+Adds to the target saturation value to define the upper bound.
+Lower values = requires exact saturation, higher values = accepts more saturated colors.
+Example: Target saturation 150, plus 50 = detects saturations from 150-200.</string>
          </property>
          <property name="maximum">
           <number>255</number>
@@ -156,17 +294,77 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Value (brightness) range tolerance for color detection.
+Value represents brightness (0=black, 255=bright) on a 0-255 scale.
+Adjust the -/+ values to allow variation in brightness.</string>
+         </property>
          <property name="text">
-          <string>Value Range +/-</string>
+          <string>Value Range</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QSpinBox" name="valueSpinBox">
+        <widget class="QLabel" name="valueMinusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="valueMinusSpinBox">
          <property name="font">
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Lower value (brightness) range tolerance.
+• Range: 0 to 255
+• Default: 50
+Subtracts from the target brightness value to define the lower bound.
+Lower values = requires bright pixels, higher values = accepts darker pixels.
+Example: Target value 200, minus 50 = detects brightness from 150-200.</string>
+         </property>
+         <property name="maximum">
+          <number>255</number>
+         </property>
+         <property name="value">
+          <number>50</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="valuePlusLabel">
+         <property name="font">
+          <font>
+           <pointsize>8</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>+</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="valuePlusSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Upper value (brightness) range tolerance.
+• Range: 0 to 255
+• Default: 50
+Adds to the target brightness value to define the upper bound.
+Lower values = requires exact brightness, higher values = accepts brighter pixels.
+Example: Target value 200, plus 50 = detects brightness from 200-250.</string>
          </property>
          <property name="maximum">
           <number>255</number>
@@ -207,6 +405,11 @@
         <font>
          <pointsize>10</pointsize>
         </font>
+       </property>
+       <property name="toolTip">
+        <string>Opens the Range Viewer window to:
+- See the range of colors that will be searched for in the image analysis.
+Use this to see what colors are going to be detected and optimize the color ranges before processing.</string>
        </property>
        <property name="text">
         <string>View Range</string>

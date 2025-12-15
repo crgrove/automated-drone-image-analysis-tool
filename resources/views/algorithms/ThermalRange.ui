@@ -25,6 +25,15 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Minimum temperature threshold for detection in thermal images.
+• Range: -30°C to 50°C
+• Default: 35°C
+Defines the lower bound of the temperature detection range:
+• Lower values: INCREASE detections - accepts cooler objects
+• Higher values: DECREASE detections - only warmer objects detected
+Combined with Maximum Temp to create a detection range (e.g., 35-40°C for human body temperature).</string>
+         </property>
          <property name="text">
           <string>Minimum Temp (°C)</string>
          </property>
@@ -36,6 +45,16 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Set the minimum temperature for detection in Celsius.
+• Range: -30°C to 50°C
+• Default: 35°C
+Pixels with temperatures at or above this threshold will be detected.
+• Lower values: Detect cooler objects (more detections)
+• Higher values: Only detect warmer objects (fewer detections)
+Note: Temperature displayed in Celsius, converted based on Preferences setting.
+Use for finding objects within a specific temperature range (e.g., people 35-40°C).</string>
          </property>
          <property name="minimum">
           <number>-30</number>
@@ -71,6 +90,15 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Maximum temperature threshold for detection in thermal images.
+• Range: -30°C to 93°C
+• Default: 40°C
+Defines the upper bound of the temperature detection range:
+• Lower values: DECREASE detections - only cooler objects detected
+• Higher values: INCREASE detections - accepts warmer objects
+Combined with Minimum Temp to create a detection range (e.g., 35-40°C for human body temperature).</string>
+         </property>
          <property name="text">
           <string>Maximum Temp (°C)</string>
          </property>
@@ -82,6 +110,16 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Set the maximum temperature for detection in Celsius.
+• Range: -30°C to 93°C
+• Default: 40°C
+Pixels with temperatures at or below this threshold will be detected.
+• Lower values: Only detect cooler objects (fewer detections)
+• Higher values: Detect warmer objects (more detections)
+Note: Temperature displayed in Celsius, converted based on Preferences setting.
+Detection occurs for pixels between minimum and maximum temperatures (inclusive).</string>
          </property>
          <property name="minimum">
           <number>-30</number>
@@ -109,52 +147,6 @@
           </size>
          </property>
         </spacer>
-       </item>
-       <item>
-        <widget class="QLabel" name="colorMapLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Color Map: </string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="colorMapComboBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <item>
-          <property name="text">
-           <string>White Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Black Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Inferno (Iron Red)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Hot (Fulgurite)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Jet (Rainbow2)</string>
-          </property>
-         </item>
-        </widget>
        </item>
       </layout>
      </item>

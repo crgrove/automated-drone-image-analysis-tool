@@ -25,6 +25,10 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Type of thermal anomaly to detect in thermal imagery.
+Determines whether to find hot spots, cold spots, or both.</string>
+         </property>
          <property name="text">
           <string>Anomaly Type:</string>
          </property>
@@ -36,6 +40,14 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Select the type of thermal anomaly to detect:
+• Above or Below Mean: Detects both hot and cold anomalies (default)
+• Above Mean: Only detects hot spots (temperatures above average)
+• Below Mean: Only detects cold spots (temperatures below average)
+The algorithm compares each pixel's temperature to the mean temperature of its segment.
+Use &quot;Above Mean&quot; for finding heat sources, &quot;Below Mean&quot; for cold objects.</string>
          </property>
          <item>
           <property name="text">
@@ -61,6 +73,10 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Temperature threshold for detecting thermal anomalies.
+Measured in standard deviations from the mean temperature.</string>
+         </property>
          <property name="text">
           <string>Anomaly Threshold:</string>
          </property>
@@ -68,12 +84,114 @@
        </item>
        <item>
         <widget class="QSpinBox" name="anomalySpinBox">
+         <property name="toolTip">
+          <string>Set the anomaly detection threshold in standard deviations.
+• Range: 0 to 7 standard deviations
+• Default: 4
+Defines how different a temperature must be from the mean to be detected:
+• Lower values (1-2): Very sensitive, detects subtle temperature differences (more detections)
+• Medium values (3-5): Balanced detection (recommended for most cases)
+• Higher values (6-7): Only detects extreme temperature differences (fewer detections)
+Example: Value of 4 detects pixels 4 standard deviations above/below mean temperature.</string>
+         </property>
          <property name="maximum">
           <number>7</number>
          </property>
          <property name="value">
           <number>4</number>
          </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="segmentsLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Number of segments to divide each thermal image into for analysis.
+Each segment is analyzed independently for local thermal anomalies.
+Performance impact:
+• Higher number of segments: INCREASES processing time (more segments to analyze)
+• Lower number of segments: DECREASES processing time (fewer segments to analyze)
+• 1 segment: Fastest processing (analyzes whole image once)
+Higher segment counts improve detection in scenes with temperature gradients.</string>
+         </property>
+         <property name="text">
+          <string>Image Segments:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="segmentsComboBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>30</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Select the number of segments to divide each thermal image into.
+• Options: 1, 2, 4, 6, 9, 16, 25, 36 segments
+• Default: 1 (analyze entire image as one segment)
+The algorithm calculates mean temperature for each segment independently:
+• 1 segment: Global temperature analysis (best for uniform scenes)
+• More segments: Local temperature analysis (better for varying backgrounds)
+Higher segment counts improve detection in scenes with temperature gradients.
+Recommended: 4-9 segments for typical thermal drone imagery.</string>
+         </property>
+         <item>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>2</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>4</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>6</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>9</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>16</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>25</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>36</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item>
@@ -89,143 +207,7 @@
          </property>
         </spacer>
        </item>
-       <item>
-        <widget class="QLabel" name="colorMapLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <property name="text">
-          <string>Color Map: </string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="colorMapComboBox">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-          </font>
-         </property>
-         <item>
-          <property name="text">
-           <string>White Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Black Hot</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Inferno (Iron Red)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Hot (Fulgurite)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Jet (Rainbow2)</string>
-          </property>
-         </item>
-        </widget>
-       </item>
       </layout>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout">
-     <item>
-      <widget class="QLabel" name="segmentsLabel">
-       <property name="font">
-        <font>
-         <pointsize>10</pointsize>
-        </font>
-       </property>
-       <property name="text">
-        <string>Image Segments:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="segmentsComboBox">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>30</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <pointsize>10</pointsize>
-        </font>
-       </property>
-       <item>
-        <property name="text">
-         <string>1</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>2</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>4</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>6</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>9</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>16</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>25</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>36</string>
-        </property>
-       </item>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
      </item>
     </layout>
    </item>

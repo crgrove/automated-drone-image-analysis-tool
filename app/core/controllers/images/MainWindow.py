@@ -1,0 +1,1074 @@
+# Set environment variable to avoid numpy._core issues - MUST be first
+from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
+from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
+from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
+from algorithms.images.MRMap.controllers.MRMapController import MRMapController
+from algorithms.images.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
+from algorithms.images.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
+from algorithms.images.ColorRange.controllers.ColorRangeController import ColorRangeController
+from core.services.ConfigService import ConfigService
+from core.services.XmlService import XmlService
+from core.services.SettingsService import SettingsService
+from core.services.AnalyzeService import AnalyzeService
+from core.services.LoggerService import LoggerService
+from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
+# StreamViewerWindow imported lazily in _open_streaming_detector() to avoid circular dependency
+from core.controllers.images.VideoParser import VideoParser
+from core.controllers.Perferences import Preferences
+from core.controllers.images.viewer.Viewer import Viewer
+from helpers.PickleHelper import PickleHelper
+from core.views.images.MainWindow_ui import Ui_MainWindow
+from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
+                               QMessageBox, QSizePolicy, QAbstractButton)
+from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
+from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
+import qtawesome as qta
+import sys
+import platform
+import pathlib
+from core.views.components.GroupedComboBox import GroupedComboBox
+from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
+from helpers.IconHelper import IconHelper
+import os
+os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
+
+"""****Import Algorithm Controllers****"""
+"""****End Algorithm Import****"""
+
+
+class MainWindow(QMainWindow, Ui_MainWindow):
+    """Controller for the Main Window (QMainWindow)."""
+
+    def __init__(self, theme):
+        """
+        Initializes the ADIAT Main Window.
+
+        Args:
+            theme (qdarktheme): Instance of qdarktheme to toggle light/dark mode.
+        """
+        self.logger = LoggerService()
+        QMainWindow.__init__(self)
+        self.theme = theme
+
+        self.setupUi(self)
+
+        self.setStylesheets()
+        self.settings_service = SettingsService()
+        self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
+        self.__threads = []
+        self.images = None
+        self.algorithmWidget = None
+        self.identifierColor = (0, 255, 0)
+        self._auto_start_requested = False
+        self.HistogramImgWidget.setVisible(False)
+        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self._load_algorithms()
+
+        self.results_path = ''
+        self.settings_service = SettingsService()
+
+        # Initialize processing resolution presets (percentage-based for aspect ratio preservation)
+        self.resolution_presets = {
+            "100%": 1.0,
+            "75%": 0.75,
+            "50%": 0.50,
+            "33%": 0.33,
+            "25%": 0.25,
+            "10%": 0.10
+        }
+
+        # Populate processing resolution combo box (widget now created from .ui file)
+        for preset_name in self.resolution_presets.keys():
+            self.processingResolutionCombo.addItem(preset_name)
+
+        self.processingResolutionCombo.setMinimumWidth(80)
+        self._set_defaults()
+
+        # Global Options layout remains as defined in the .ui
+
+        # Setting up GUI element connections
+        self.identifierColorButton.clicked.connect(self._identifierButton_clicked)
+        self.inputFolderButton.clicked.connect(self._inputFolderButton_clicked)
+        self.outputFolderButton.clicked.connect(self._outputFolderButton_clicked)
+        self.startButton.clicked.connect(self._startButton_clicked)
+        self.cancelButton.clicked.connect(self._cancelButton_clicked)
+        self.viewResultsButton.clicked.connect(self._viewResultsButton_clicked)
+        self.actionLoadFile.triggered.connect(self._open_load_file)
+        self.actionPreferences.triggered.connect(self._open_preferences)
+        self.actionVideoParser.triggered.connect(self._open_video_parser)
+
+        # Connect Image Analysis Guide menu item
+        if hasattr(self, 'actionImageAnalysisGuide'):
+            self.actionImageAnalysisGuide.triggered.connect(self._open_image_analysis_guide)
+
+        # Connect Streaming Detector menu item
+        if hasattr(self, 'actionStreaming'):
+            self.actionStreaming.triggered.connect(self._open_streaming_detector)
+
+        # Add Coordinator functionality
+        self.coordinator_window = None
+        if hasattr(self, 'actionCoordinator'):
+            self.actionCoordinator.triggered.connect(self._open_coordinator)
+
+        # Add Help menu items
+        if hasattr(self, 'actionHelp'):
+            self.actionHelp.triggered.connect(self._open_help)
+        if hasattr(self, 'actionCommunityHelp'):
+            self.actionCommunityHelp.triggered.connect(self._open_community_help)
+        if hasattr(self, 'actionYouTube_Channel'):
+            self.actionYouTube_Channel.triggered.connect(self._open_youtube_channel)
+
+        self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
+        self._algorithmComboBox_changed()
+        # Connect to editingFinished instead of valueChanged for deferred validation
+        self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
+        self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
+
+        # Initialize last non-zero max area value for restoration
+        initial_max_value = self.maxAreaSpinBox.value()
+        self._last_non_zero_max_area = initial_max_value if initial_max_value > 0 else 1000
+
+        # Ensure spinbox and checkbox reflect persisted max-area value rather than UI defaults
+        self._sync_max_area_no_limit_ui(initial_max_value)
+
+        # NOW connect signals after initial state is set
+        self.maxAreaSpinBox.valueChanged.connect(self._maxAreaSpinBox_valueChanged)
+        # Use toggled to capture user intent once per click
+        self.maxAreaNoLimitCheckbox.toggled.connect(self._maxAreaNoLimitCheckbox_changed)
+
+        # Store original values to detect actual changes
+        self._minAreaOriginal = self.minAreaSpinBox.value()
+        self._maxAreaOriginal = self.maxAreaSpinBox.value()
+
+        # Connect signal for processing resolution changes
+        self.processingResolutionCombo.currentTextChanged.connect(self._processingResolutionCombo_changed)
+
+        self.histogramCheckbox.stateChanged.connect(self._histogramCheckbox_change)
+        self.histogramButton.clicked.connect(self._histogramButton_clicked)
+
+        # Store previous valid values
+        self._previous_min_area = self.minAreaSpinBox.value()
+        self._previous_max_area = self.maxAreaSpinBox.value()
+
+    def setStylesheets(self):
+        """
+        Sets the stylesheets for the main window.
+        """
+        self.cancelButton.setStyleSheet("""
+            QPushButton { background-color: rgb(136,0,0); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.startButton.setStyleSheet("""
+            QPushButton { background-color: rgb(0,136,0); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.viewResultsButton.setStyleSheet("""
+            QPushButton { background-color: rgb(0,0,136); color: rgb(228,231,235); }
+            QPushButton:disabled { background-color: transparent; color: palette(button-text); }
+        """)
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
+    def _load_algorithms(self):
+        """
+        Loads and categorizes algorithms for selection in the algorithm combobox.
+        """
+        system = platform.system()
+        # Get program root directory (app/)
+        if getattr(sys, 'frozen', False):
+            # Running from a PyInstaller bundle
+            app_root = sys._MEIPASS
+        else:
+            # Running from source code - go up 3 levels from app/core/controllers/images/MainWindow.py to app/
+            app_root = str(pathlib.Path(__file__).resolve().parents[3])
+        config_path = os.path.join(app_root, 'algorithms.conf')
+        configService = ConfigService(config_path)
+        self.algorithms = configService.get_algorithms()
+        algorithm_list = {}
+        for algorithm in self.algorithms:
+            if system in algorithm['platforms']:
+                if algorithm['type'] not in algorithm_list:
+                    algorithm_list[algorithm['type']] = []
+                algorithm_list[algorithm['type']].append(algorithm['label'])
+
+        self._replace_algorithmComboBox()
+        for key, algos in algorithm_list.items():
+            self.algorithmComboBox.add_group(key, algos)
+        self.algorithmComboBox.setCurrentIndex(1)
+
+    def _replace_algorithmComboBox(self):
+        """
+        Replaces the standard combobox with a grouped version to allow algorithm grouping.
+        """
+        self.tempAlgorithmComboBox.deleteLater()
+        self.algorithmComboBox = GroupedComboBox(self.setupWidget)
+        sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
+        self.algorithmComboBox.setSizePolicy(sizePolicy)
+        self.algorithmComboBox.setMinimumSize(QSize(300, 0))
+        font = QFont()
+        font.setPointSize(10)
+        self.algorithmComboBox.setFont(font)
+
+        # Set comprehensive tooltip for algorithm selection
+        self.algorithmComboBox.setToolTip(
+            "Select the detection algorithm for your image analysis task:\n"
+            "\n"
+            "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
+            "  • Best for: Colored objects in varying lighting conditions\n"
+            "  • Limitation: Requires color tuning, not for camouflaged objects\n"
+            "\n"
+            "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
+            "  • Best for: Basic color detection in controlled lighting\n"
+            "  • Limitation: Sensitive to lighting changes\n"
+            "\n"
+            "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
+            "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
+            "  • Limitation: May detect natural anomalies, slower with more segments\n"
+            "\n"
+            "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
+            "  • Best for: Night searches, detecting people/animals by body heat\n"
+            "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
+            "\n"
+            "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
+            "  • Best for: Human detection with thermal camera (known body temp)\n"
+            "  • Limitation: Requires thermal camera, must know target temperature\n"
+            "\n"
+            "MATCHED FILTER: Matches targets using color signature from sample\n"
+            "  • Best for: Specific known objects when you have a target sample\n"
+            "  • Limitation: Requires reference image, not for unknown targets\n"
+            "\n"
+            "MR MAP: Multi-resolution detection for objects of varying sizes\n"
+            "  • Best for: Complex scenes with unknown target sizes\n"
+            "  • Limitation: Slower processing, more false positives\n"
+            "\n"
+            "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
+            "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
+            "  • Limitation: Only detects people, slower processing"
+        )
+
+        self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
+
+    def _normalize_color(self, color):
+        """
+        Normalize color to a tuple of integers (R, G, B).
+
+        Args:
+            color: Can be QColor, tuple, list, or string representation
+
+        Returns:
+            tuple: (R, G, B) tuple of integers in range 0-255
+        """
+        if isinstance(color, QColor):
+            return (color.red(), color.green(), color.blue())
+        elif isinstance(color, (tuple, list)):
+            # Ensure all values are integers
+            return (int(color[0]), int(color[1]), int(color[2]))
+        elif isinstance(color, str):
+            # Try to parse string like "255,0,0" or "(255, 0, 0)"
+            try:
+                # Remove parentheses if present
+                color_str = color.strip('()')
+                parts = [int(x.strip()) for x in color_str.split(',')]
+                if len(parts) == 3:
+                    return tuple(parts)
+            except (ValueError, AttributeError):
+                pass
+        # Default fallback
+        return (0, 255, 0)  # Default green
+
+    def _identifierButton_clicked(self):
+        """
+        Opens a color selector dialog for setting the object identifier color.
+        """
+        # Get current color to show in picker
+        current_color = QColor(*self.identifierColor) if isinstance(self.identifierColor, (tuple, list)) else QColor(0, 255, 0)
+        color = QColorDialog.getColor(current_color, self, "Select AOI Highlight Color")
+        if color.isValid():
+            self.identifierColor = (color.red(), color.green(), color.blue())
+            self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
+
+    def _inputFolderButton_clicked(self):
+        """
+        Opens a directory dialog to select an input folder for analysis.
+        """
+        dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
+        dir = dir if isinstance(dir, str) else ""
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        if directory:
+            self.inputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.inputFolderLine.setText(directory.replace('/', '\\'))
+            self.settings_service.set_setting('InputFolder', pathlib.Path(directory).parent.__str__())
+
+    def _outputFolderButton_clicked(self):
+        """
+        Opens a directory dialog to select an output folder for analysis results.
+        """
+        dir = self.outputFolderLine.text() or self.settings_service.get_setting('OutputFolder')
+        dir = dir if isinstance(dir, str) else ""
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        if directory:
+            self.outputFolderLine.setText(directory)
+            if os.name == 'nt':
+                self.outputFolderLine.setText(directory.replace('/', '\\'))
+            self.settings_service.set_setting('OutputFolder', pathlib.Path(directory).parent.__str__())
+
+    def _histogramButton_clicked(self):
+        """
+        Opens a file dialog to select a reference image for histogram-based analysis.
+        """
+        dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
+        filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
+        if filename:
+            self.histogramLine.setText(filename)
+            if os.name == 'nt':
+                self.histogramLine.setText(filename.replace('/', '\\'))
+
+    def _algorithmComboBox_changed(self):
+        """
+        Loads the selected algorithm's widget and sets UI elements based on the algorithm's requirements.
+        """
+        if self.algorithmWidget:
+            self.verticalLayout_2.removeWidget(self.algorithmWidget)
+            self.algorithmWidget.deleteLater()
+
+        self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
+        cls = globals()[self.activeAlgorithm['controller']]
+        self.algorithmWidget = cls(self.activeAlgorithm, self.settings_service.get_setting('Theme'))
+        self.verticalLayout_2.addWidget(self.algorithmWidget)
+        self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
+
+    def _histogramCheckbox_change(self):
+        """
+        Shows or hides the histogram reference image selector based on checkbox state.
+        """
+        self.HistogramImgWidget.setVisible(self.histogramCheckbox.isChecked())
+
+    def _minAreaSpinBox_editingFinished(self):
+        """
+        Validates min area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the max area needs to be adjusted.
+        """
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
+
+        # Only validate if value actually changed
+        if min_val == self._minAreaOriginal:
+            return
+
+        # Check if min is greater than or equal to max
+        if min_val >= max_val and max_val > 0:
+            new_max = min_val + 1
+            self.maxAreaSpinBox.setValue(new_max)
+            self._maxAreaOriginal = new_max  # Update the stored max value
+
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Maximum area has been adjusted to {new_max} pixels to maintain valid range.\n"
+                f"(Minimum area must be less than maximum area)",
+                QMessageBox.Ok
+            )
+
+        # Update stored original value
+        self._minAreaOriginal = min_val
+
+    def _maxAreaSpinBox_editingFinished(self):
+        """
+        Validates max area when user finishes editing (loses focus or presses Enter).
+        Shows a notification if the min area needs to be adjusted.
+        """
+        min_val = self.minAreaSpinBox.value()
+        max_val = self.maxAreaSpinBox.value()
+
+        # Only validate if value actually changed
+        if max_val == self._maxAreaOriginal:
+            return
+
+        # Check if max is less than or equal to min
+        if max_val <= min_val and max_val > 0:
+            new_min = max(0, max_val - 1)  # Ensure min doesn't go below 0
+            self.minAreaSpinBox.setValue(new_min)
+            self._minAreaOriginal = new_min  # Update the stored min value
+
+            # Notify user of the change
+            QMessageBox.information(
+                self,
+                "Value Adjusted",
+                f"Minimum area has been adjusted to {new_min} pixels to maintain valid range.\n"
+                f"(Maximum area must be greater than minimum area)",
+                QMessageBox.Ok
+            )
+
+        # Update stored original value
+        self._maxAreaOriginal = max_val
+        # Ensure the checkbox matches any manual changes to the spinbox
+        self._sync_max_area_no_limit_ui(max_val)
+
+    def _maxAreaSpinBox_valueChanged(self, value):
+        """
+        Keeps the \"No max limit\" checkbox synchronized with the spinbox value.
+        """
+        self._sync_max_area_no_limit_ui(value, from_value_change=True)
+
+    def _maxAreaNoLimitCheckbox_changed(self, state):
+        """
+        Enables or disables the max area spinbox when the \"No max limit\" checkbox is toggled.
+        When checked: sets spinbox to 0 (None) and disables it.
+        When unchecked: restores previous value and enables the spinbox.
+        """
+        checked = state if isinstance(state, bool) else state == Qt.Checked
+        if checked:
+            # Store current value if it's greater than 0 before setting to None
+            if self.maxAreaSpinBox.value() > 0:
+                self._last_non_zero_max_area = self.maxAreaSpinBox.value()
+            # Block signals to prevent recursive calls during update
+            self.maxAreaSpinBox.blockSignals(True)
+            self.maxAreaSpinBox.setValue(0)
+            self.maxAreaSpinBox.setEnabled(False)
+            self.maxAreaSpinBox.blockSignals(False)
+        else:
+            # Restore previous non-zero value
+            restore_value = self._last_non_zero_max_area
+            if not isinstance(restore_value, int) or restore_value <= 0:
+                restore_value = max(self.minAreaSpinBox.value() + 1, 1000)
+            # Block signals to prevent recursive calls during update
+            self.maxAreaSpinBox.blockSignals(True)
+            self.maxAreaSpinBox.setValue(restore_value)
+            self.maxAreaSpinBox.setEnabled(True)
+            self.maxAreaSpinBox.blockSignals(False)
+            self.maxAreaSpinBox.setFocus()
+        self._sync_max_area_no_limit_ui(self.maxAreaSpinBox.value())
+
+    def _sync_max_area_no_limit_ui(self, max_value, from_value_change=False):
+        """
+        Updates the max-area controls to reflect whether there is an active ceiling.
+        """
+        no_limit = max_value == 0
+        if max_value > 0:
+            self._last_non_zero_max_area = max_value
+        self.maxAreaSpinBox.setEnabled(not no_limit)
+        block = self.maxAreaNoLimitCheckbox.blockSignals(True)
+        self.maxAreaNoLimitCheckbox.setChecked(no_limit)
+        self.maxAreaNoLimitCheckbox.blockSignals(block)
+
+    def _processingResolutionCombo_changed(self):
+        """
+        Handles processing resolution combo box changes.
+        Saves the new setting.
+        """
+        resolution_text = self.processingResolutionCombo.currentText()
+        self.settings_service.set_setting('ProcessingResolution', resolution_text)
+
+    def _startButton_clicked(self):
+        """
+        Starts the image analysis process.
+        """
+        try:
+            alg_validation = self.algorithmWidget.validate()
+            if alg_validation:
+                self._show_error(alg_validation)
+                return
+
+            if not (self.inputFolderLine.text() and self.outputFolderLine.text()):
+                self._show_error("Please set the input and output directories.")
+                return
+
+            self._set_StartButton(False)
+            self._set_ViewResultsButton(False)
+            self._add_log_entry("--- Starting image processing ---")
+
+            options = self.algorithmWidget.get_options()
+            hist_ref_path = self.histogramLine.text() if self.histogramCheckbox.isChecked() else None
+            kmeans_clusters = None  # K-Means clustering UI removed; feature disabled in MainWindow
+
+            self.settings_service.set_setting('MinObjectArea', self.minAreaSpinBox.value())
+            self.settings_service.set_setting('MaxObjectArea', self.maxAreaSpinBox.value())
+            self.settings_service.set_setting('IdentifierColor', self.identifierColor)
+            self.settings_service.set_setting('MaxProcesses', self.maxProcessesSpinBox.value())
+            self.settings_service.set_setting('ProcessingResolution', self.processingResolutionCombo.currentText())
+
+            max_aois = self.settings_service.get_setting('MaxAOIs')
+            aoi_radius = self.settings_service.get_setting('AOIRadius')
+
+            # Get processing resolution percentage from combo box
+            resolution_text = self.processingResolutionCombo.currentText()
+            processing_resolution = self.resolution_presets.get(resolution_text, 1.0)
+
+            # Normalize identifier color to ensure it's a tuple of integers (R, G, B)
+            identifier_color = self._normalize_color(self.identifierColor)
+
+            self.analyzeService = AnalyzeService(
+                1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
+                identifier_color, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
+                max_aois, aoi_radius, hist_ref_path, kmeans_clusters, options,
+                self.maxAreaSpinBox.value(), processing_resolution
+            )
+
+            thread = QThread()
+            self.__threads.append((thread, self.analyzeService))
+            self.analyzeService.moveToThread(thread)
+
+            self.analyzeService.sig_msg.connect(self._on_worker_msg)
+            self.analyzeService.sig_aois.connect(self._show_aois_limit_warning)
+            self.analyzeService.sig_done.connect(self._on_worker_done)
+
+            thread.started.connect(self.analyzeService.process_files)
+            thread.start()
+
+            self._set_CancelButton(True)
+        except Exception as e:
+            self.logger.error(e)
+
+    def _cancelButton_clicked(self):
+        """
+        Cancels the in-progress analysis.
+        """
+        self.analyzeService.process_cancel()
+        self._set_CancelButton(False)
+
+    def _viewResultsButton_clicked(self):
+        """
+        Launches the image viewer to display analysis results.
+        """
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        file = pathlib.Path(self.results_path)
+        if file.is_file():
+            position_format = self.settings_service.get_setting('PositionFormat')
+            temperature_unit = self.settings_service.get_setting('TemperatureUnit')
+            distance_unit = self.settings_service.get_setting('DistanceUnit')
+            self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False,
+                                 self.settings_service.get_setting('Theme'))
+            self.viewer.show()
+        else:
+            self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
+        QApplication.restoreOverrideCursor()
+
+    def _add_log_entry(self, text):
+        """
+        Adds a log entry to the output window.
+
+        Args:
+            text (str): The text to add to the output window.
+        """
+        self.outputWindow.appendPlainText(text)
+
+    @Slot()
+    def _show_aois_limit_warning(self):
+        """
+        Displays a warning that the maximum number of areas of interest has been exceeded.
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Question)
+        msg.setText(f"Area of Interest Limit ({self.settings_service.get_setting('MaxAOIs')}) exceeded. Continue?")
+        msg.setWindowTitle("Area of Interest Limit Exceeded")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        if msg.exec() == QMessageBox.No:
+            self._cancelButton_clicked()
+
+    @Slot(str)
+    def _on_worker_msg(self, text):
+        """
+        Logs a message from the worker thread.
+
+        Args:
+            text (str): The message text.
+        """
+        self._add_log_entry(text)
+
+    @Slot(int, int, str)
+    def _on_worker_done(self, id, images_with_aois, xml_path):
+        """
+        Finalizes the UI upon completion of the analysis process.
+
+        Args:
+            id (int): ID of the calling object.
+            images_with_aois (int): Count of images with areas of interest.
+        """
+        self._add_log_entry("--- Image Processing Completed ---")
+        if images_with_aois > 0:
+            self._add_log_entry(f"{images_with_aois} images with areas of interest identified")
+            self._set_ViewResultsButton(True)
+        else:
+            self._add_log_entry("No areas of interest identified")
+            self._set_ViewResultsButton(False)
+
+        self.results_path = xml_path
+        self._set_StartButton(True)
+        self._set_CancelButton(False)
+        for thread, analyze in self.__threads:
+            thread.quit()
+
+    def _show_error(self, text):
+        """
+        Displays an error message.
+
+        Args:
+            text (str): The error message text.
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText(text)
+        msg.setWindowTitle("Error")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+
+    def _open_load_file(self):
+        """
+        Opens a file dialog to select a file to load.
+        """
+        try:
+            file, _ = QFileDialog.getOpenFileName(self, "Select File")
+            if file:
+                self._process_xml_file(file)
+        except Exception as e:
+            self.logger.error(e)
+
+    def _process_xml_file(self, full_path):
+        """
+        Processes an XML file selected in the Load File dialog.
+
+        Args:
+            full_path (str): Path to the XML file.
+        """
+        try:
+            image_count = self._get_settings_from_xml(full_path)
+            if image_count > 0:
+                self._set_ViewResultsButton(True)
+            self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
+        except Exception as e:
+            self.logger.error(e)
+
+    def _get_settings_from_xml(self, full_path):
+        """
+        Populates the UI with data from a previously executed analysis.
+
+        Args:
+            full_path (str): Path to the XML file.
+
+        Returns:
+            int: Number of images with areas of interest.
+        """
+        xmlLoader = XmlService(full_path)
+        settings, image_count = xmlLoader.get_settings()
+        if 'output_dir' in settings:
+            self.outputFolderLine.setText(settings['output_dir'])
+            self.results_path = full_path
+        if 'input_dir' in settings:
+            self.inputFolderLine.setText(settings['input_dir'])
+        if 'identifier_color' in settings:
+            self.identifierColor = settings['identifier_color']
+            color = QColor(*self.identifierColor)
+            self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
+        if 'num_processes' in settings:
+            self.maxProcessesSpinBox.setValue(settings['num_processes'])
+        if 'min_area' in settings:
+            self.minAreaSpinBox.setValue(int(settings['min_area']))
+            self._minAreaOriginal = int(settings['min_area'])
+        if 'max_area' in settings:
+            self.maxAreaSpinBox.setValue(int(settings['max_area']))
+            self._maxAreaOriginal = int(settings['max_area'])
+            self._sync_max_area_no_limit_ui(self.maxAreaSpinBox.value())
+        if 'hist_ref_path' in settings:
+            if settings['hist_ref_path'] != "":
+                self.histogramCheckbox.setChecked(True)
+                self.histogramLine.setText(settings['hist_ref_path'])
+        if 'algorithm' in settings:
+            self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
+            self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
+            self.algorithmWidget.load_options(settings['options'])
+        if 'thermal' in settings:
+            self.algorithmWidget.is_thermal = (settings['thermal'] == 'True')
+        return image_count
+
+    def populate_from_wizard_data(self, wizard_data):
+        """
+        Populates the MainWindow UI with data from the wizard.
+
+        Args:
+            wizard_data (dict): Dictionary containing wizard configuration data.
+        """
+        # self.logger.info(f"populate_from_wizard_data called with keys: {wizard_data.keys()}")
+        # self.logger.info(f"auto_start in wizard_data: {wizard_data.get('auto_start', 'NOT SET')}")
+
+        # Set input and output directories
+        if wizard_data.get('input_directory'):
+            self.inputFolderLine.setText(wizard_data['input_directory'])
+        if wizard_data.get('output_directory'):
+            self.outputFolderLine.setText(wizard_data['output_directory'])
+
+        # Set identifier color - normalize to ensure consistent format
+        if wizard_data.get('identifier_color'):
+            self.identifierColor = self._normalize_color(wizard_data['identifier_color'])
+            qcolor = QColor(*self.identifierColor)
+            self.identifierColorButton.setStyleSheet("background-color: " + qcolor.name() + ";")
+
+        # Set max processes
+        if wizard_data.get('max_processes'):
+            self.maxProcessesSpinBox.setValue(wizard_data['max_processes'])
+
+        # Calculate and set min/max area from object size and GSD
+        # GSD is stored in gsd_list as a list of sensor GSD values
+        gsd_list = wizard_data.get('gsd_list', [])
+        if wizard_data.get('object_size_min') and wizard_data.get('object_size_max') and gsd_list:
+            # Use the first GSD value from the list (or average if multiple sensors)
+            # Each item in gsd_list is a dict with 'gsd' key in cm/pixel
+            gsd_values = [item.get('gsd') for item in gsd_list if item.get('gsd')]
+            if gsd_values:
+                # Use the first GSD value (or could average them)
+                gsd_cm_per_pixel = gsd_values[0]
+
+                object_size_min_ft = wizard_data['object_size_min']
+                object_size_max_ft = wizard_data['object_size_max']
+
+                # Convert object size from feet to cm, then to pixels
+                # object_size_cm = object_size_ft * 30.48
+                # pixels = object_size_cm / gsd_cm_per_pixel
+                # area_pixels = pixels^2
+                min_pixels = (object_size_min_ft * 30.48) / gsd_cm_per_pixel
+                max_pixels = (object_size_max_ft * 30.48) / gsd_cm_per_pixel
+                min_area = max(10, int(min_pixels * min_pixels) / 250)
+                max_area = max(100, int(max_pixels * max_pixels))
+
+                self.minAreaSpinBox.setValue(min_area)
+                self._minAreaOriginal = min_area
+                self.maxAreaSpinBox.setValue(max_area)
+                self._maxAreaOriginal = max_area
+                self._sync_max_area_no_limit_ui(max_area)
+
+        # Set normalize histogram based on lighting conditions
+        if wizard_data.get('normalize_histogram'):
+            self.histogramCheckbox.setChecked(True)
+            # If normalize is enabled and we have a first image, use it as reference
+            if wizard_data.get('first_image_path'):
+                ref_path = wizard_data['first_image_path']
+                self.histogramLine.setText(ref_path)
+        else:
+            self.histogramCheckbox.setChecked(False)
+
+        # Set processing resolution
+        if wizard_data.get('processing_resolution'):
+            resolution_text = wizard_data['processing_resolution']
+            if resolution_text in self.resolution_presets:
+                self.processingResolutionCombo.setCurrentText(resolution_text)
+                self.settings_service.set_setting('ProcessingResolution', resolution_text)
+
+        # Set algorithm
+        if wizard_data.get('algorithm'):
+            algorithm_label = wizard_data['algorithm']
+            # Find the algorithm config
+            for algo in self.algorithms:
+                if algo['label'] == algorithm_label:
+                    self.activeAlgorithm = algo
+                    self.algorithmComboBox.setCurrentText(algorithm_label)
+                    # Load algorithm widget (this will trigger _algorithmComboBox_changed)
+                    self._algorithmComboBox_changed()
+
+                    # Load algorithm options if available
+                    # Wait a moment for the widget to be fully initialized
+                    if wizard_data.get('algorithm_options'):
+                        # Use QApplication.processEvents() to ensure widget is fully created
+                        QApplication.processEvents()
+                        if self.algorithmWidget:
+                            self.algorithmWidget.load_options(wizard_data['algorithm_options'])
+                    break
+
+        # Mark for auto-start if requested (will execute in showEvent after window is visible)
+        self._auto_start_requested = wizard_data.get('auto_start', False)
+        if self._auto_start_requested:
+            # self.logger.info("Auto-start requested from wizard - will execute after window is shown")
+            pass
+
+    def _open_image_analysis_guide(self):
+        """
+        Opens the Image Analysis Guide wizard and populates this MainWindow on completion.
+        """
+        # Launch the wizard
+        wizard = ImageAnalysisGuide()
+
+        # Connect to wizard completion to populate this MainWindow
+        def _on_wizard_completed(wizard_data):
+            # Mark for auto-start when opened from menu (same behavior as startup wizard)
+            wizard_data['auto_start'] = True
+            # self.logger.info("Wizard completed from menu - setting auto_start=True")
+
+            # Populate this MainWindow with wizard data
+            self.populate_from_wizard_data(wizard_data)
+
+            # Since the window is already visible (opened from menu), showEvent won't fire again
+            # So we need to manually trigger the auto-start if requested
+            if self._auto_start_requested and self.isVisible():
+                # self.logger.info("Window already visible - executing auto-start immediately")
+                self._auto_start_requested = False  # Prevent re-execution
+                self._startButton_clicked()
+
+        # Connect to review requested signal to load existing results
+        def _on_review_requested(file_path):
+            """Handle review request - load XML file and open viewer."""
+            try:
+                # self.logger.info(f"Review requested for file: {file_path}")
+                # Load the XML file
+                self._process_xml_file(file_path)
+                # Automatically open the Viewer
+                self._viewResultsButton_clicked()
+            except Exception as e:
+                self.logger.error(f"Error loading results file: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error Loading Results",
+                    f"Failed to load results file:\n{str(e)}"
+                )
+
+        wizard.wizardCompleted.connect(_on_wizard_completed)
+        wizard.reviewRequested.connect(_on_review_requested)
+        wizard.exec()
+
+        # Wizard closed - MainWindow remains open
+
+    def _open_preferences(self):
+        """
+        Opens the Preferences dialog.
+        """
+        pref = Preferences(self)
+        pref.exec()
+
+    def _open_video_parser(self):
+        """
+        Opens the Video Parser dialog.
+        """
+        parser = VideoParser(self.settings_service.get_setting('Theme'))
+        parser.exec()
+
+    def _open_streaming_detector(self):
+        """
+        Closes the Main Window and opens the Streaming Detector window.
+        """
+        try:
+            # Lazy import to avoid circular dependency with StreamViewerWindow
+            from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+
+            # Get theme from settings
+            theme = self.settings_service.get_setting('Theme', 'Dark').lower()
+
+            # Open the streaming viewer window
+            streaming_viewer = StreamViewerWindow(algorithm_name='ColorAnomalyAndMotionDetection', theme=theme)
+
+            # Store on QApplication instance (like __main__.py does)
+            app = QApplication.instance()
+            if app:
+                app._stream_viewer = streaming_viewer
+
+            streaming_viewer.show()
+            # self.logger.info("Streaming Detector opened")
+
+            # Hide the main window instead of closing to prevent closeEvent from firing
+            # This prevents closeEvent from closing all windows including the StreamViewerWindow
+            self.hide()
+        except Exception as e:
+            self.logger.error(f"Error opening Streaming Detector: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Streaming Detector:\n{str(e)}")
+
+    def _open_coordinator(self):
+        """
+        Opens the Search Coordinator window for managing multi-batch review projects.
+        """
+        try:
+            if self.coordinator_window is None or not self.coordinator_window.isVisible():
+                self.coordinator_window = CoordinatorWindow(
+                    self.settings_service.get_setting('Theme')
+                )
+                self.coordinator_window.show()
+                # self.logger.info("Coordinator window opened")
+            else:
+                # Bring existing window to front
+                self.coordinator_window.raise_()
+                self.coordinator_window.activateWindow()
+        except Exception as e:
+            self.logger.error(f"Error opening Coordinator: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Search Coordinator:\n{str(e)}")
+
+    def _open_help(self):
+        """
+        Opens the Help documentation URL in the default browser.
+        """
+        try:
+            url = QUrl("https://www.texsar.org/automated-drone-image-analysis-tool/")
+            QDesktopServices.openUrl(url)
+            # self.logger.info("Help documentation opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Help URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+
+    def _open_community_help(self):
+        """
+        Opens the Community Help Discord URL in the default browser.
+        """
+        try:
+            url = QUrl("https://discord.com/invite/aY9tY7JSPu")
+            QDesktopServices.openUrl(url)
+            # self.logger.info("Community Help Discord opened")
+        except Exception as e:
+            self.logger.error(f"Error opening Community Help URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
+
+    def _open_youtube_channel(self):
+        """
+        Opens the YouTube Channel URL in the default browser.
+        """
+        try:
+            url = QUrl("https://www.youtube.com/@adiat-u4f")
+            QDesktopServices.openUrl(url)
+            # self.logger.info("YouTube Channel opened")
+        except Exception as e:
+            self.logger.error(f"Error opening YouTube Channel URL: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
+
+    def showEvent(self, event):
+        """
+        Handle window show event. Auto-start processing if requested from wizard.
+        """
+        super().showEvent(event)
+
+        # self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
+
+        # Only execute auto-start on first show event (window is now visible and ready)
+        if self._auto_start_requested:
+            # self.logger.info("Executing auto-start processing after window shown")
+            self._auto_start_requested = False  # Prevent re-execution
+
+            # Log current state for debugging
+            # self.logger.info(f"Input folder: {self.inputFolderLine.text()}")
+            # self.logger.info(f"Output folder: {self.outputFolderLine.text()}")
+            # self.logger.info(f"Algorithm widget exists: {self.algorithmWidget is not None}")
+
+            self._startButton_clicked()
+        else:
+            # self.logger.info("Auto-start not requested or already executed")
+            pass
+
+    def closeEvent(self, event):
+        """
+        Closes all top-level windows when the main window is closed.
+        """
+        for window in QApplication.topLevelWidgets():
+            window.close()
+
+    def _set_StartButton(self, enabled):
+        """
+        Enables or disables the start button.
+
+        Args:
+            enabled (bool): True to enable, False to disable.
+        """
+        self.startButton.setEnabled(enabled)
+
+    def _set_CancelButton(self, enabled):
+        """
+        Enables or disables the cancel button.
+
+        Args:
+            enabled (bool): True to enable, False to disable.
+        """
+        self.cancelButton.setEnabled(enabled)
+
+    def _set_ViewResultsButton(self, enabled):
+        """
+        Enables or disables the view results button.
+
+        Args:
+            enabled (bool): True to enable, False to disable.
+        """
+        self.viewResultsButton.setEnabled(enabled)
+
+    def _set_defaults(self):
+        """
+        Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
+        """
+        min_area = self.settings_service.get_setting('MinObjectArea')
+        if isinstance(min_area, int):
+            self.minAreaSpinBox.setValue(min_area)
+            self._minAreaOriginal = min_area
+
+        max_area = self.settings_service.get_setting('MaxObjectArea')
+        if isinstance(max_area, int):
+            self.maxAreaSpinBox.setValue(max_area)
+            self._maxAreaOriginal = max_area
+
+        processing_resolution = self.settings_service.get_setting('ProcessingResolution')
+        if isinstance(processing_resolution, str) and processing_resolution in self.resolution_presets:
+            self.processingResolutionCombo.setCurrentText(processing_resolution)
+        else:
+            # Set default to 50% (balanced quality and speed)
+            self.processingResolutionCombo.setCurrentText("50%")
+            self.settings_service.set_setting('ProcessingResolution', "50%")
+
+        max_processes = self.settings_service.get_setting('MaxProcesses')
+        if isinstance(max_processes, int):
+            self.maxProcessesSpinBox.setValue(max_processes)
+
+        id_color = self.settings_service.get_setting('IdentifierColor')
+        if id_color:
+            # Normalize color from settings (could be tuple, string, etc.)
+            self.identifierColor = self._normalize_color(id_color)
+            color = QColor(*self.identifierColor)
+            self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
+
+        # Note: Default settings (MaxAOIs, AOIRadius, PositionFormat, TemperatureUnit,
+        # DistanceUnit, Theme) are now initialized in __main__.py before MainWindow is created.
+        # Only UI-specific initialization remains here.
+
+        theme = self.settings_service.get_setting('Theme', 'Dark')
+        self.update_theme(theme)
+
+    def update_theme(self, theme):
+        """
+        Updates the application theme.
+
+        Args:
+            theme (str): 'Light' or 'Dark'
+        """
+        if theme == 'Light':
+            self.theme.setup_theme("light")
+            self._apply_icons("Light")
+        else:
+            self.theme.setup_theme()
+            self._apply_icons("Dark")
+
+    def _show_area_validation_error(self, message):
+        """
+        Displays an error message for area validation.
+
+        Args:
+            message (str): The error message to display.
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(message)
+        msg.setWindowTitle("Invalid Value")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+
+    def _apply_icons(self, theme):
+        """
+        Loads icon assets based on the currently selected theme.
+
+        Args:
+            theme (str): Name of the active theme used to resolve icon paths.
+        """
+        self.inputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
+        self.outputFolderButton.setIcon(IconHelper.create_icon('fa6.folder-open', theme))
+        self.startButton.setIcon(IconHelper.create_icon('fa6s.play', theme))
+        self.cancelButton.setIcon(IconHelper.create_icon('mdi.close-circle', theme))
+        self.viewResultsButton.setIcon(IconHelper.create_icon('fa6.images', theme))
+        self.histogramButton.setIcon(IconHelper.create_icon('fa6.image', theme))

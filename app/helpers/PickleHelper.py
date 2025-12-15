@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import sys
 import shutil
+import pickle
+import re
 
 
 class PickleHelper:
@@ -89,7 +91,25 @@ class PickleHelper:
         if not os.path.isfile(file_path):
             PickleHelper.copy_pickle('drones.pkl')
         if os.path.isfile(file_path):
-            return pd.read_pickle(file_path)
+            try:
+                return pd.read_pickle(file_path)
+            except (ModuleNotFoundError, ImportError) as e:
+                # Handle numpy version mismatch by trying alternative load method
+                if 'numpy.core.multiarray' in str(e):
+                    try:
+                        # Try loading with pickle directly and reconstructing DataFrame
+                        with open(file_path, 'rb') as f:
+                            data = pickle.load(f, encoding='latin1')
+                        if isinstance(data, pd.DataFrame):
+                            return data
+                        else:
+                            # If it's not a DataFrame, try to convert it
+                            return pd.DataFrame(data)
+                    except (ValueError, TypeError):
+                        # Return empty DataFrame if all else fails
+                        return pd.DataFrame()
+                else:
+                    raise
         else:
             return None  # or pd.DataFrame() if you prefer an empty table
 
@@ -105,7 +125,34 @@ class PickleHelper:
         if not os.path.isfile(file_path):
             PickleHelper.copy_pickle('xmp.pkl')
         if os.path.isfile(file_path):
-            return pd.read_pickle(file_path)
+            try:
+                return pd.read_pickle(file_path)
+            except (ModuleNotFoundError, ImportError) as e:
+                # Handle numpy version mismatch by trying alternative load method
+                if 'numpy.core.multiarray' in str(e):
+                    try:
+                        # Try loading with pickle directly and reconstructing DataFrame
+                        with open(file_path, 'rb') as f:
+                            data = pickle.load(f, encoding='latin1')
+                        if isinstance(data, pd.DataFrame):
+                            return data
+                        else:
+                            # If it's not a DataFrame, try to convert it
+                            return pd.DataFrame(data)
+                    except (ValueError, TypeError, KeyError):
+                        # If all else fails, return a minimal default DataFrame
+                        # This allows the app to continue running
+                        return pd.DataFrame({
+                            'Attribute': ['Flight Yaw', 'Flight Pitch', 'Flight Roll',
+                                          'Gimbal Yaw', 'Gimbal Pitch', 'Gimbal Roll',
+                                          'Relative Altitude'],
+                            'DJI': ['drone-dji:FlightYawDegree', 'drone-dji:FlightPitchDegree',
+                                    'drone-dji:FlightRollDegree', 'drone-dji:GimbalYawDegree',
+                                    'drone-dji:GimbalPitchDegree', 'drone-dji:GimbalRollDegree',
+                                    'drone-dji:RelativeAltitude']
+                        })
+                else:
+                    raise
         else:
             return None  # or pd.DataFrame() if you prefer an empty table
 
@@ -138,7 +185,6 @@ class PickleHelper:
         Raises:
             ValueError: If the version string does not match the expected format.
         """
-        import re
         # Extract version numbers and optional label
         m = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:\s*(\w+))?', version_str.strip())
         if not m:
@@ -182,6 +228,11 @@ class PickleHelper:
 
     @classmethod
     def force_reload(cls):
-        """Forces reloading of the drone metadata pickle on next access."""
+        """
+        Force reloading of the drone metadata pickle on next access.
+
+        Clears the cached dataframes so they will be reloaded from disk
+        on the next call to get_drone_sensor_info() or get_xmp_mapping().
+        """
         cls._drones_df = None
         cls._xmp_df = None

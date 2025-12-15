@@ -5,23 +5,29 @@ import json
 
 
 class ConfigService:
-    """Service for parsing an ADIAT Algorithm configuration file."""
+    """Service for parsing an ADIAT Algorithm configuration file.
+
+    Provides functionality to load and parse algorithm configuration files
+    in JSON format. Used to retrieve available algorithms and their settings.
+
+    Attributes:
+        config: Dictionary containing the parsed configuration data.
+    """
 
     def __init__(self, path):
-        """
-        Initialize the ConfigService with a configuration file path.
+        """Initialize the ConfigService with a configuration file path.
 
         Args:
-            path (str): Path to the configuration file in JSON format.
+            path: Path to the configuration file in JSON format.
         """
         with open(path) as f:
             self.config = json.load(f)
 
     def get_algorithms(self):
-        """
-        Retrieve the list of algorithms from the configuration.
+        """Retrieve the list of algorithms from the configuration.
 
         Returns:
-            list: A list of algorithms specified in the configuration file.
+            A list of algorithm dictionaries specified in the configuration file.
+            Each dictionary contains algorithm metadata and configuration.
         """
         return self.config['algorithms']

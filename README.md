@@ -33,7 +33,7 @@ Activate Environment (Mac/Linux)::
 From the activated environment, install all dependencies::
 
     pip install -r requirements.txt
-    pip install -r requirement-dev.txt
+    pip install -r requirements-dev.txt
 
 Once done, you can run the application like this::
 

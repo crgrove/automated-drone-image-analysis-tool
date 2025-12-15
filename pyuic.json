@@ -6,64 +6,128 @@
     ],
     [
       "resources/*.qrc",
-      "app/algorithms/ColorRange/views"
+      "app/core/views/images/"
     ],
     [
       "resources/*.qrc",
-      "app/algorithms/MatchedFilter/views"
+      "app/core/views/images/viewer/ui"
     ],
     [
       "resources/*.qrc",
-      "app/algorithms/HSVColorRange/views"
+      "app/algorithms/images/ColorRange/views"
+    ],
+    [
+      "resources/*.qrc",
+      "app/algorithms/images/MatchedFilter/views"
+    ],
+    [
+      "resources/*.qrc",
+      "app/algorithms/images/HSVColorRange/views"
     ],
     [
       "resources/views/*.ui",
       "app/core/views/"
     ],
     [
+      "resources/views/images/*.ui",
+      "app/core/views/images"
+    ],
+    [
+      "resources/views/images/viewer/*.ui",
+      "app/core/views/images/viewer/ui"
+    ],
+    [
+      "resources/views/streaming/*.ui",
+      "app/core/views/streaming"
+    ],
+    [
       "resources/views/algorithms/RXAnomaly.ui",
-      "app/algorithms/RXAnomaly/views"
+      "app/algorithms/images/RXAnomaly/views"
     ],
     [
       "resources/views/algorithms/MRMap.ui",
-      "app/algorithms/MRMap/views"
+      "app/algorithms/images/MRMap/views"
     ],
     [
       "resources/views/algorithms/ColorRange.ui",
-      "app/algorithms/ColorRange/views"
+      "app/algorithms/images/ColorRange/views"
     ],
     [
       "resources/views/algorithms/HSVColorRange.ui",
-      "app/algorithms/HSVColorRange/views"
+      "app/algorithms/images/HSVColorRange/views"
     ],
     [
       "resources/views/algorithms/RangeViewer.ui",
-      "app/algorithms/Shared/views"
+      "app/algorithms/images/Shared/views"
     ],
     [
       "resources/views/algorithms/MatchedFilter.ui",
-      "app/algorithms/MatchedFilter/views"
+      "app/algorithms/images/MatchedFilter/views"
     ],
     [
       "resources/views/algorithms/AIPersonDetector.ui",
-      "app/algorithms/AIPersonDetector/views"
+      "app/algorithms/images/AIPersonDetector/views"
     ],
     [
       "resources/views/algorithms/ThermalRange.ui",
-      "app/algorithms/ThermalRange/views"
+      "app/algorithms/images/ThermalRange/views"
     ],
     [
       "resources/views/algorithms/ThermalAnomaly.ui",
-      "app/algorithms/ThermalAnomaly/views"
+      "app/algorithms/images/ThermalAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/ThermalAnomalyWizard.ui",
+      "app/algorithms/images/ThermalAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/RXAnomalyWizard.ui",
+      "app/algorithms/images/RXAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/MRMapWizard.ui",
+      "app/algorithms/images/MRMap/views"
+    ],
+    [
+      "resources/views/algorithms/ColorRangeWizard.ui",
+      "app/algorithms/images/ColorRange/views"
+    ],
+    [
+      "resources/views/algorithms/HSVColorRangeWizard.ui",
+      "app/algorithms/images/HSVColorRange/views"
+    ],
+    [
+      "resources/views/algorithms/MatchedFilterWizard.ui",
+      "app/algorithms/images/MatchedFilter/views"
+    ],
+    [
+      "resources/views/algorithms/AIPersonDetectorWizard.ui",
+      "app/algorithms/images/AIPersonDetector/views"
+    ],
+    [
+      "resources/views/algorithms/ThermalRangeWizard.ui",
+      "app/algorithms/images/ThermalRange/views"
     ],
     [
       "resources/views/components/*.ui",
       "app/core/views/components/"
+    ],
+    [
+      "resources/views/algorithms/MotionDetectionWizard.ui",
+      "app/algorithms/streaming/MotionDetection/views"
+    ],
+    [
+      "resources/views/algorithms/ColorDetectionWizard.ui",
+      "app/algorithms/streaming/ColorDetection/views"
+    ],
+    [
+      "resources/views/algorithms/ColorAnomalyAndMotionDetectionWizard.ui",
+      "app/algorithms/streaming/ColorAnomalyAndMotionDetection/views"
     ]
   ],
     "hooks": [],
-    "pyrcc": "pyrcc5",
+    "pyrcc": "pyside6-rcc",
     "pyrcc_options": "",
-    "pyuic": "pyuic5",
+    "pyuic": "pyside6-uic",
     "pyuic_options": "--from-import"
 }

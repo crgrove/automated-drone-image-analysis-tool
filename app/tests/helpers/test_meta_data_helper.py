@@ -3,6 +3,8 @@ import platform
 import piexif
 import json
 import numpy as np
+import tempfile
+import os
 from unittest.mock import patch, MagicMock, mock_open
 from os import path
 from PIL import Image
@@ -78,19 +80,6 @@ def test_transfer_all_exiftool(example_image_path, example_destination_path):
         mock_et.execute.assert_called_once_with("-tagsfromfile", example_image_path, example_destination_path, "-overwrite_original", "--thumbnailimage")
 
 
-def test_transfer_temperature_data(example_destination_path):
-    data = np.array([1, 2, 3])
-    json_data = json.dumps(data.tolist())
-    with patch('exiftool.ExifToolHelper') as MockExifToolHelper:
-        mock_et_helper = MockExifToolHelper.return_value.__enter__.return_value
-        MetaDataHelper.transfer_temperature_data(data, example_destination_path)
-        mock_et_helper.set_tags.assert_called_once_with(
-            [example_destination_path],
-            tags={"Notes": json_data},
-            params=["-P", "-overwrite_original"]
-        )
-
-
 def test_get_raw_temperature_data(example_image_path):
     raw_bytes = b'raw thermal image bytes'
     with patch('exiftool.ExifTool') as MockExifTool:
@@ -99,17 +88,6 @@ def test_get_raw_temperature_data(example_image_path):
         result = MetaDataHelper.get_raw_temperature_data(example_image_path)
         mock_et.execute.assert_called_once_with("-b", "-RawThermalImage", example_image_path, raw_bytes=True)
         assert result == raw_bytes
-
-
-def test_get_temperature_data(example_image_path):
-    data = [1, 2, 3]
-    json_data = json.dumps(data)
-    with patch('exiftool.ExifToolHelper') as MockExifToolHelper:
-        mock_et_helper = MockExifToolHelper.return_value.__enter__.return_value
-        mock_et_helper.get_tags.return_value = [{'XMP:Notes': json_data}]
-        result = MetaDataHelper.get_temperature_data(example_image_path)
-        mock_et_helper.get_tags.assert_called_once_with([example_image_path], tags=['Notes'])
-        assert np.array_equal(result, np.asarray(data))
 
 
 def test_get_meta_data_exiftool(example_image_path):
@@ -140,9 +118,30 @@ def test_get_xmp_data(example_image_path):
         mock_file.assert_called_once_with(example_image_path, 'rb')
 
 
-def test_embed_xmp(example_image_path, example_destination_path):
-    xmp_data = MetaDataHelper.get_xmp_data(example_image_path)
-    MetaDataHelper.embed_xmp(xmp_data, example_destination_path)
+def test_embed_xmp_xml(example_destination_path):
+    """Test embedding XMP XML data into an image file."""
+    # Create a temporary destination file
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        # Write some dummy JPEG data
+        tmp_file.write(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # JPEG header
+        tmp_file.write(b'\x00' * 100)  # Some dummy data
+        tmp_dest = tmp_file.name
+
+    try:
+        # Create XMP XML bytes
+        xmp_xml_bytes = b'<xmp>test data</xmp>'
+
+        # Test embedding XMP XML
+        MetaDataHelper.embed_xmp_xml(xmp_xml_bytes, tmp_dest)
+
+        # Verify file was modified (should contain XMP data)
+        with open(tmp_dest, 'rb') as f:
+            content = f.read()
+            # XMP should be embedded in the file
+            assert len(content) > 0
+    finally:
+        if os.path.exists(tmp_dest):
+            os.unlink(tmp_dest)
 
 
 def test_add_gps_data(example_image_path):

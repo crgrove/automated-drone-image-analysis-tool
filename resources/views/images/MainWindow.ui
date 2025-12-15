@@ -1,0 +1,1284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>888</width>
+    <height>861</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>10</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>Automated Drone Image Analysis Tool  v1.2 - Sponsored by TEXSAR</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../../resources.qrc">
+    <normaloff>:/ADIAT.ico</normaloff>:/ADIAT.ico</iconset>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_3">
+    <item>
+     <widget class="QWidget" name="setupWidget" native="true">
+      <layout class="QVBoxLayout" name="verticalLayout_4">
+       <item>
+        <layout class="QGridLayout" name="directoriesLayout">
+         <property name="spacing">
+          <number>6</number>
+         </property>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="outputFolderButton">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Browse for the output folder to save analysis results.
+Opens a folder selection dialog.
+Choose an empty folder or create a new one to avoid overwriting existing files.</string>
+           </property>
+           <property name="text">
+            <string> Select</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../../resources.qrc">
+             <normaloff>:/icons/folder.png</normaloff>:/icons/folder.png</iconset>
+           </property>
+           <property name="iconName" stdset="0">
+            <string>folder.png</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="outputFolderLine">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Path to the output folder for saving analysis results.
+Click the Select button to browse for a destination folder.
+Results include:
+• Processed images with detected objects marked
+• CSV file with detection coordinates and metadata
+• KML file for viewing results in mapping applications
+• Additional algorithm-specific output files</string>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="inputFolderLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the folder containing images to analyze.
+Supported formats: JPG, PNG, TIFF, and other common image formats.</string>
+           </property>
+           <property name="text">
+            <string>Input Folder:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="outputFolderLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the destination folder for analysis results.
+Output includes processed images with marked detections and CSV data files.</string>
+           </property>
+           <property name="text">
+            <string>Output Folder:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QPushButton" name="inputFolderButton">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Browse for the input folder containing images to analyze.
+Opens a folder selection dialog.</string>
+           </property>
+           <property name="text">
+            <string> Select</string>
+           </property>
+           <property name="icon">
+            <iconset resource="../../resources.qrc">
+             <normaloff>:/icons/folder.png</normaloff>:/icons/folder.png</iconset>
+           </property>
+           <property name="iconName" stdset="0">
+            <string>folder.png</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="inputFolderLine">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Path to the input folder containing images for analysis.
+Click the Select button to browse for a folder.
+All supported image files in this folder will be processed.</string>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QFrame" name="GlobalOptionsFrame">
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Raised</enum>
+         </property>
+         <property name="lineWidth">
+          <number>0</number>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <property name="spacing">
+             <number>9</number>
+            </property>
+            <property name="topMargin">
+             <number>5</number>
+            </property>
+            <property name="bottomMargin">
+             <number>9</number>
+            </property>
+            <item>
+             <widget class="QWidget" name="widget" native="true">
+              <layout class="QHBoxLayout" name="horizontalLayout_2">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="minAreaLabel">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Minimum object size in pixels for detection filtering.
+Objects smaller than this will be ignored.</string>
+                 </property>
+                 <property name="text">
+                  <string>Min Object Area (px):</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="minAreaSpinBox">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Set the minimum object area in pixels for detection filtering.
+• Range: 1 to 999 pixels
+• Default: 10 pixels
+Objects smaller than this threshold will be filtered out and not detected.
+• Lower values: Detect smaller objects (may increase false positives)
+• Higher values: Only detect larger objects (reduces noise)
+Use to filter out small artifacts and noise in detection results.</string>
+                 </property>
+                 <property name="minimum">
+                  <number>1</number>
+                 </property>
+                 <property name="maximum">
+                  <number>999</number>
+                 </property>
+                 <property name="value">
+                  <number>10</number>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_2">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeType">
+                  <enum>QSizePolicy::Fixed</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QLabel" name="maxAreaLabel">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                   <bold>false</bold>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Maximum object size in pixels for detection filtering.
+Objects larger than this will be ignored.</string>
+                 </property>
+                 <property name="text">
+                  <string>Max Object Area (px):</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="maxAreaSpinBox">
+                 <property name="enabled">
+                  <bool>false</bool>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Set the maximum object area in pixels for detection filtering.
+• Range: 0 to 99999 pixels
+• Default: 0 (None - no maximum filter applied)
+• Special value: 0 displays as &quot;None&quot;
+Objects larger than this threshold will be filtered out and not detected.
+• Lower values: Only detect smaller objects
+• Higher values: Allow detection of larger objects
+• Set to 0 (None): No maximum size filtering
+Use to exclude very large false positive detections like shadows or terrain features.</string>
+                 </property>
+                 <property name="specialValueText">
+                  <string>None</string>
+                 </property>
+                 <property name="minimum">
+                  <number>0</number>
+                 </property>
+                 <property name="maximum">
+                  <number>99999</number>
+                 </property>
+                 <property name="singleStep">
+                  <number>1</number>
+                 </property>
+                 <property name="value">
+                  <number>0</number>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="maxAreaNoLimitCheckbox">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Disable the maximum size filter and allow detections of any size.</string>
+                 </property>
+                 <property name="text">
+                  <string>No max limit</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="widget_2" native="true">
+              <layout class="QHBoxLayout" name="horizontalLayout_4">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="identifierColor">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Color used to mark and identify detected objects in output images.
+Click the color button to select a different color.</string>
+                 </property>
+                 <property name="text">
+                  <string>Object Identifer Color:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="identifierColorButton">
+                 <property name="toolTip">
+                  <string>Select the color used to mark detected objects in output images.
+• Default: Green (RGB: 0, 255, 0)
+Click to open a color picker dialog and choose a different marker color.
+The selected color will be used for:
+• Drawing circles/rectangles around detected objects
+• Highlighting AOI locations on output images
+• Creating visual markers in the results viewer
+Choose a color that contrasts well with your image content for best visibility.</string>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(0, 255, 0);</string>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="maxProcessesLabel">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Maximum number of parallel processes to use for image analysis.
+More processes = faster processing but higher CPU/memory usage.</string>
+                 </property>
+                 <property name="text">
+                  <string>Max Processes: </string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="maxProcessesSpinBox">
+                 <property name="minimumSize">
+                  <size>
+                   <width>40</width>
+                   <height>0</height>
+                  </size>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Set the maximum number of parallel processes for image analysis.
+• Range: 1 to 20 processes
+• Default: 10 processes
+The application uses multiprocessing to analyze multiple images simultaneously:
+• Higher values: Faster processing (uses more CPU cores and memory)
+• Lower values: Slower processing (uses fewer system resources)
+• Recommended: Set to number of CPU cores or slightly higher
+• For systems with limited RAM, reduce this value to prevent memory issues
+Each process analyzes one image at a time, so more processes = more parallel image processing.</string>
+                 </property>
+                 <property name="minimum">
+                  <number>1</number>
+                 </property>
+                 <property name="maximum">
+                  <number>20</number>
+                 </property>
+                 <property name="value">
+                  <number>10</number>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="processingResolutionLabel">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Resolution at which images are processed.
+Lower resolutions = faster processing but may miss small objects.</string>
+                 </property>
+                 <property name="text">
+                  <string>Processing Resolution:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="processingResolutionCombo">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Select processing resolution as percentage of original image size:
+• 100%: Original resolution (no scaling, highest quality, slowest)
+• 75%: High quality (~56% of pixels, ~1.8x faster)
+• 50%: Balanced quality (25% of pixels, ~4x faster) - RECOMMENDED
+• 33%: Fast processing (~11% of pixels, ~9x faster)
+• 25%: Very fast (6% of pixels, ~16x faster)
+• 10%: Ultra fast (1% of pixels, ~100x faster)
+
+Percentage scaling preserves original aspect ratio.
+Works with any image size, orientation, or aspect ratio.
+
+Min/Max Area values are always specified in original resolution.
+All results are returned in original resolution coordinates.</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QWidget" name="AdvancedFeaturesWidget" native="true">
+            <layout class="QVBoxLayout" name="verticalLayout">
+             <property name="spacing">
+              <number>4</number>
+             </property>
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <layout class="QHBoxLayout" name="HistogramLayout">
+               <item>
+                <widget class="QCheckBox" name="histogramCheckbox">
+                 <property name="font">
+                  <font>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="toolTip">
+                  <string>Enable histogram normalization preprocessing on images before detection.
+Histogram normalization adjusts image colors to match a reference image:
+• Equalizes lighting and color differences across images
+• Corrects for varying sun angles, shadows, and atmospheric conditions
+• Standardizes color appearance across image set
+• Improves consistency of detection results
+When enabled, select a reference image with ideal lighting/color conditions.
+Useful when processing images taken at different times or under varying conditions.</string>
+                 </property>
+                 <property name="text">
+                  <string>Normalize Histograms</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QWidget" name="HistogramImgWidget" native="true">
+                 <layout class="QHBoxLayout" name="horizontalLayout_3">
+                  <item>
+                   <widget class="QLabel" name="histogramReferenceImageLabel">
+                    <property name="font">
+                     <font>
+                      <pointsize>10</pointsize>
+                     </font>
+                    </property>
+                    <property name="toolTip">
+                     <string>Select the reference image for histogram normalization.
+All images will be adjusted to match this image's color distribution.</string>
+                    </property>
+                    <property name="text">
+                     <string>Reference Image:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLineEdit" name="histogramLine">
+                    <property name="font">
+                     <font>
+                      <pointsize>10</pointsize>
+                     </font>
+                    </property>
+                    <property name="toolTip">
+                     <string>Path to the reference image for histogram normalization.
+Click the Select button to choose an image.
+Choose an image with ideal lighting and color conditions:
+• Clear, well-lit image from your dataset
+• Representative of the desired appearance
+• Typical lighting conditions for your mission
+All other images will be color-adjusted to match this reference.</string>
+                    </property>
+                    <property name="readOnly">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="histogramButton">
+                    <property name="font">
+                     <font>
+                      <pointsize>10</pointsize>
+                     </font>
+                    </property>
+                    <property name="toolTip">
+                     <string>Browse for a reference image for histogram normalization.
+Opens an image file selection dialog.
+Select a representative image with good lighting and typical color conditions.</string>
+                    </property>
+                    <property name="text">
+                     <string> Select</string>
+                    </property>
+                    <property name="icon">
+                     <iconset resource="../../resources.qrc">
+                      <normaloff>:/icons/image.png</normaloff>:/icons/image.png</iconset>
+                    </property>
+                    <property name="iconName" stdset="0">
+                     <string>image.png</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="algorithmSelectorlLayout">
+         <item>
+          <widget class="QLabel" name="algorithmLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the detection algorithm to use for image analysis.
+
+Each algorithm has specific strengths and use cases:
+
+• HSV Color Range: Best for detecting specific colored objects
+• Color Range (RGB): Alternative color detection using RGB color space
+• RX Anomaly: Statistical detection for unusual/anomalous objects
+• Thermal Anomaly: Detects temperature anomalies in thermal imagery
+• Thermal Range: Temperature-based detection in thermal images
+• Matched Filter: Target-based detection using spectral matching
+• MR Map: Multi-resolution feature detection at various scales
+• AI Person Detector: Machine learning for detecting people
+
+Hover over the algorithm dropdown for detailed descriptions of each algorithm.</string>
+           </property>
+           <property name="text">
+            <string>Algorithm:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="tempAlgorithmComboBox">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>300</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Select the detection algorithm for your image analysis task.
+Each algorithm has unique strengths and optimal use cases:
+
+═══════════════════════════════════════════════════
+HSV COLOR RANGE
+═══════════════════════════════════════════════════
+What it does: Detects objects by specific color ranges using HSV color space
+Strengths:
+• Best for detecting brightly colored objects (orange, yellow, red clothing)
+• Robust to lighting variations (HSV separates color from brightness)
+• Highly customizable with per-channel ranges
+• Interactive color selection tools available
+Weaknesses:
+• Requires careful color range tuning for optimal results
+• May struggle with color variations in shadows
+• Not effective for colorless or camouflaged objects
+Best for: Search &amp; Rescue (colored clothing, equipment), colored vehicles, tents, colored tarps
+
+═══════════════════════════════════════════════════
+COLOR RANGE (RGB)
+═══════════════════════════════════════════════════
+What it does: Detects objects by RGB color ranges
+Strengths:
+• Simple and intuitive RGB color specification
+• Fast processing speed
+• Good for basic color-based detection
+Weaknesses:
+• More sensitive to lighting changes than HSV
+• RGB channels mix color and brightness information
+• Less flexible than HSV for complex color variations
+Best for: Controlled lighting situations, quick basic color detection, simple scenarios
+
+═══════════════════════════════════════════════════
+RX ANOMALY
+═══════════════════════════════════════════════════
+What it does: Statistical anomaly detection - finds pixels that are unusual compared to background
+Strengths:
+• Detects objects that don't match the background (no target sample needed)
+• Excellent for finding camouflaged or partially hidden objects
+• Works across all image types (RGB, thermal, multispectral)
+• Automatically adapts to scene characteristics
+• Good for detecting subtle differences
+Weaknesses:
+• May detect natural anomalies (rocks, vegetation changes)
+• Requires tuning sensitivity to balance detection vs false positives
+• Higher segment counts significantly increase processing time
+• Less effective in highly varied/cluttered backgrounds
+Best for: Missing person searches (human among vegetation), camouflaged objects, unknown targets, anything unusual in the scene
+
+═══════════════════════════════════════════════════
+THERMAL ANOMALY
+═══════════════════════════════════════════════════
+What it does: Detects temperature anomalies in thermal imagery (hot/cold spots)
+Strengths:
+• Finds temperature outliers automatically (no specific temp needed)
+• Excellent for detecting heat sources (people, animals, fires)
+• Works day or night with thermal cameras
+• Detects through light vegetation
+• Adjustable for hot, cold, or both types of anomalies
+Weaknesses:
+• Requires thermal (FLIR) imagery
+• May detect sun-heated objects (rocks, vehicles)
+• Temperature gradients can cause false positives
+• Affected by ambient temperature and weather
+Best for: Night searches, detecting people/animals by body heat, finding heat sources, cold spot detection
+
+═══════════════════════════════════════════════════
+THERMAL RANGE
+═══════════════════════════════════════════════════
+What it does: Temperature-based detection within a specific temperature range
+Strengths:
+• Precise temperature-based detection
+• Excellent for finding humans (body temp ~35-40°C / 95-104°F)
+• Filters out non-target temperatures effectively
+• Works day or night with thermal cameras
+• Very reliable when target temperature is known
+Weaknesses:
+• Requires thermal (FLIR) imagery with temperature data
+• Must know target temperature range in advance
+• Ambient conditions affect target temperature
+• May miss targets in extreme weather (hypothermia cases)
+Best for: Human detection (known body temp), specific temperature targets, fire detection (high temp range)
+
+═══════════════════════════════════════════════════
+MATCHED FILTER
+═══════════════════════════════════════════════════
+What it does: Target-based detection using spectral signature matching
+Strengths:
+• Very precise when you have a target sample
+• Uses spectral/color &quot;signature&quot; of target for matching
+• Reduces false positives by matching known target characteristics
+• Good for detecting specific object types
+Weaknesses:
+• Requires a reference image or color sample of the target
+• Less effective if target appearance varies significantly
+• Lighting differences can affect matching accuracy
+• Not suitable for unknown targets
+Best for: Finding specific known objects (specific vehicle color, specific clothing), when you have a target sample to match
+
+═══════════════════════════════════════════════════
+MR MAP (Multi-Resolution Map)
+═══════════════════════════════════════════════════
+What it does: Multi-resolution feature detection at various spatial scales
+Strengths:
+• Detects features at multiple scales simultaneously
+• Good for finding objects of varying sizes
+• Effective for complex scene analysis
+• Can detect both large and small features in one pass
+Weaknesses:
+• More computationally intensive
+• Requires careful parameter tuning
+• Higher segment counts significantly increase processing time
+• May produce more false positives requiring filtering
+Best for: Complex scenes with varying object sizes, when target size is unknown, general feature mapping
+
+═══════════════════════════════════════════════════
+AI PERSON DETECTOR
+═══════════════════════════════════════════════════
+What it does: Deep learning AI model trained specifically to detect people
+Strengths:
+• Extremely accurate for detecting people in various poses
+• Works with partial visibility and varied clothing
+• No color/temperature requirements - works on regular RGB images
+• Trained on millions of images for robust detection
+• Detects people in complex backgrounds
+• Minimal parameter tuning needed
+Weaknesses:
+• Only detects people (not vehicles, equipment, etc.)
+• Computationally intensive - slower processing
+• Requires adequate image resolution
+• May struggle with very distant/small people
+• Less effective with heavy occlusion
+Best for: Search &amp; Rescue operations (missing persons), people counting, situations where only human detection is needed
+
+═══════════════════════════════════════════════════
+ALGORITHM SELECTION GUIDE
+═══════════════════════════════════════════════════
+• For colorful objects (bright clothing, gear): HSV Color Range
+• For thermal cameras searching people: Thermal Range or Thermal Anomaly
+• For camouflaged or hidden subjects: RX Anomaly
+• For detecting people specifically: AI Person Detector
+• When you have a target sample: Matched Filter
+• For unknown targets that stand out: RX Anomaly or Thermal Anomaly
+• For fastest processing: Color Range (RGB) or HSV Color Range
+• For most accurate people detection: AI Person Detector</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="algorithmHorizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Preferred</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>400</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QFrame" name="algorithmFrame">
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Plain</enum>
+         </property>
+         <property name="lineWidth">
+          <number>3</number>
+         </property>
+         <property name="midLineWidth">
+          <number>0</number>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_2"/>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="mainButtons">
+      <item>
+       <widget class="QPushButton" name="startButton">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="toolTip">
+         <string>Start processing images with the selected algorithm.
+Requirements before starting:
+• Input folder must be selected with valid images
+• Output folder must be selected
+• Algorithm must be selected
+• All required algorithm parameters must be configured
+Processing will:
+• Analyze all images in the input folder using the selected algorithm
+• Apply global filters (min/max area, K-Means, histogram normalization)
+• Save results to output folder (marked images, CSV, KML files)
+• Display progress and results in the output window
+Click Cancel during processing to stop the analysis.</string>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="autoFillBackground">
+         <bool>false</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(0, 136, 0);
+color: rgb(228, 231, 235);</string>
+        </property>
+        <property name="text">
+         <string>Start</string>
+        </property>
+        <property name="default">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="cancelButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="toolTip">
+         <string>Cancel the currently running image analysis process.
+Stops processing immediately and safely terminates all worker processes.
+Effects of canceling:
+• All running analysis processes are stopped
+• Partial results are saved up to the cancellation point
+• Images already processed will have output files in the output folder
+• Processing can be restarted after cancellation
+• Returns to the ready state
+Use when you need to stop processing to adjust settings or fix issues.</string>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string> Cancel</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../../resources.qrc">
+          <normaloff>:/icons/cancel.png</normaloff>:/icons/cancel.png</iconset>
+        </property>
+        <property name="iconName" stdset="0">
+         <string>cancel.png</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="viewResultsButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>150</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="toolTip">
+         <string>Open the Results Viewer to review detection results.
+Available after processing completes successfully.
+The Results Viewer provides:
+• Interactive image browsing with detected objects highlighted
+• Side-by-side comparison of original and processed images
+• Navigation through all processed images
+• AOI (Area of Interest) details and metadata
+• GPS coordinates for detected objects
+• Export options for selected detections
+• Zoom and pan capabilities
+• Filtering and sorting of detection results
+Use to review, verify, and export analysis results.</string>
+        </property>
+        <property name="autoFillBackground">
+         <bool>false</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string> View Results</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../../resources.qrc">
+          <normaloff>:/icons/search.png</normaloff>:/icons/search.png</iconset>
+        </property>
+        <property name="default">
+         <bool>false</bool>
+        </property>
+        <property name="iconName" stdset="0">
+         <string>search</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="buttonsSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeType">
+         <enum>QSizePolicy::Fixed</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>400</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QPlainTextEdit" name="outputWindow">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
+      <property name="toolTip">
+       <string/>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+      <property name="centerOnScroll">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QMenuBar" name="mainBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>888</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>Menu</string>
+    </property>
+    <addaction name="actionImageAnalysisGuide"/>
+    <addaction name="actionStreaming"/>
+    <addaction name="separator"/>
+    <addaction name="actionLoadFile"/>
+    <addaction name="actionPreferences"/>
+    <addaction name="actionVideoParser"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionHelp"/>
+    <addaction name="actionCommunityHelp"/>
+    <addaction name="actionYouTube_Channel"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <action name="actionImageAnalysisGuide">
+   <property name="text">
+    <string>Image Analysis Wizard</string>
+   </property>
+   <property name="toolTip">
+    <string>Launch the Image Analysis Guide wizard to configure analysis settings.
+Opens a step-by-step wizard to:
+• Select input and output directories
+• Configure image capture settings (drone, altitude, GSD)
+• Set target object size
+• Choose detection algorithm
+• Configure algorithm-specific parameters
+• Set general processing options
+The wizard will close this window and open with all settings pre-populated.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionLoadFile">
+   <property name="text">
+    <string>Load Results File</string>
+   </property>
+   <property name="toolTip">
+    <string>Load a previously saved results file for viewing.
+Opens a file dialog to select a results file (.pkl format).
+Loads the analysis results and opens the Results Viewer.
+Use this to review results from previous analysis sessions without reprocessing.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionPreferences">
+   <property name="text">
+    <string>Preferences</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Preferences dialog to configure application settings.
+Adjust global settings including:
+• Application theme (Light/Dark)
+• Max AOI warning threshold
+• AOI circle radius for clustering
+• Coordinate system format (Lat/Long, UTM)
+• Temperature unit (Fahrenheit/Celsius)
+• Distance unit (Meters/Feet)
+• Drone sensor configuration file
+All changes are saved automatically.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionVideoParser">
+   <property name="text">
+    <string>Video Parser</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Video Parser utility to extract frames from video files.
+Convert video footage into individual frame images for analysis.
+Features:
+• Extract frames at specified time intervals
+• Optional SRT file support for GPS metadata
+• Supports common video formats (MP4, AVI, MOV, etc.)
+• Embeds location data into extracted frames
+Use to prepare video footage for image-based analysis.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionStreaming">
+   <property name="text">
+    <string>Streaming Detector</string>
+   </property>
+   <property name="toolTip">
+    <string>Switch to the Streaming Detector</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionIntegratedDetection">
+   <property name="text">
+    <string>Real-Time Anomaly Detection</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Real-Time Anomaly Detection window for advanced live analysis.
+Combines multiple detection algorithms for comprehensive real-time anomaly detection.
+Features:
+• Motion detection with background subtraction
+• Color quantization anomaly detection
+• Advanced streaming video processing
+• Detection fusion and temporal filtering
+• Real-time performance optimization
+• Multi-threaded processing for better performance
+• Enhanced detection accuracy through algorithm combination
+Designed for detecting unusual objects, movement, and colors in real-time video streams.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionCoordinator">
+   <property name="text">
+    <string>Search Coordinator</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Search Coordinator window for managing multi-batch review projects.
+Features:
+• Create and manage search projects with multiple batches
+• Track reviewer progress across multiple image sets
+• Consolidate review results from multiple reviewers
+• View dashboard with search status and metrics
+• Export consolidated results
+• Manage batch assignments and reviewer coordination
+Ideal for large-scale searches with multiple reviewers and image batches.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+C</string>
+   </property>
+  </action>
+  <action name="actionHelp">
+   <property name="text">
+    <string>Manual</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the online help documentation in your web browser.
+Access comprehensive documentation, tutorials, and user guides.
+Provides detailed information on all features and algorithms.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionCommunityHelp">
+   <property name="text">
+    <string>Community Forum</string>
+   </property>
+   <property name="toolTip">
+    <string>Join the community Discord server for support and discussions.
+Connect with other users, share experiences, and get help.
+Ask questions, report issues, and suggest new features.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionYouTube_Channel">
+   <property name="text">
+    <string>YouTube Channel</string>
+   </property>
+  </action>
+ </widget>
+ <resources>
+  <include location="../../resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

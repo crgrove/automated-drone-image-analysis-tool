@@ -1,7 +1,7 @@
 import pytest
 import os
 from unittest.mock import patch
-from app.core.services.LoggerService import LoggerService  # Adjust the import according to your project structure
+from core.services.LoggerService import LoggerService  # Adjust the import according to your project structure
 
 
 @pytest.fixture

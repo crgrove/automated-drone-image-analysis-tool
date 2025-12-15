@@ -6,15 +6,23 @@ import traceback
 
 
 class LoggerService:
-    """Service to write errors and warnings to an application log file."""
+    """Service to write errors and warnings to an application log file.
+
+    Provides centralized logging functionality with both file and console
+    handlers. Logs are written to a platform-specific directory.
+
+    Attributes:
+        logger: Python logging.Logger instance for logging messages.
+    """
 
     logger = None
 
     def __init__(self):
-        """
-        Initialize the LoggerService, setting up file and console log handlers.
+        """Initialize the LoggerService, setting up file and console log handlers.
 
-        Creates a log file in a platform-specific directory. If the directory does not exist, it is created.
+        Creates a log file in a platform-specific directory. If the directory
+        does not exist, it is created. Sets up both file and console handlers
+        with formatted output.
         """
         if platform.system() == 'Windows':
             home_path = os.path.expanduser("~")
@@ -29,33 +37,49 @@ class LoggerService:
 
         log_path = app_path + 'adiat_logs.txt'
         self.logger = logging.getLogger(__name__)
-        stdoutHandler = logging.StreamHandler(stream=sys.stdout)
-        fileHandler = logging.FileHandler(log_path)
-        stdoutFmt = logging.Formatter(
-            "%(name)s: %(asctime)s | %(levelname)s | %(process)d >>> %(message)s"
-        )
-        stdoutHandler.setFormatter(stdoutFmt)
-        fileHandler.setFormatter(stdoutFmt)
-        self.logger.addHandler(stdoutHandler)
-        self.logger.addHandler(fileHandler)
+
+        # Only add handlers if they haven't been added yet (prevents duplicate logs
+        # when multiple LoggerService instances are created)
+        if not self.logger.handlers:
+            stdoutHandler = logging.StreamHandler(stream=sys.stdout)
+            fileHandler = logging.FileHandler(log_path)
+            stdoutFmt = logging.Formatter(
+                "%(name)s: %(asctime)s | %(levelname)s | %(process)d >>> %(message)s"
+            )
+            stdoutHandler.setFormatter(stdoutFmt)
+            fileHandler.setFormatter(stdoutFmt)
+            self.logger.addHandler(stdoutHandler)
+            self.logger.addHandler(fileHandler)
+            self.logger.setLevel(logging.DEBUG)
 
     def info(self, message):
         """
-        Log a info message.
+        Log an info message.
 
         Args:
-            message (str): The info message to log.
+            message: The info message to log.
         """
-        # print(message)
+        print(message)
         self.logger.info(message)
+
+    def debug(self, message):
+        """
+        Log a debug message.
+
+        Args:
+            message: The debug message to log.
+        """
+        print(message)
+        self.logger.debug(message)
 
     def warning(self, message):
         """
         Log a warning message.
 
         Args:
-            message (str): The warning message to log.
+            message: The warning message to log.
         """
+        print(message)
         self.logger.warning(message)
 
     def error(self, message):
@@ -63,7 +87,14 @@ class LoggerService:
         Log an error message along with the traceback.
 
         Args:
-            message (str): The error message to log.
+            message: The error message to log.
         """
-        # print(traceback.format_exc())
+        print(message)
         self.logger.error(message)
+
+        # If we're inside an exception handler, also log the full traceback
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        if exc_type is not None and exc_tb is not None:
+            tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            print(tb_str)
+            self.logger.error(tb_str)

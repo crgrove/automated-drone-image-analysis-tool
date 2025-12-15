@@ -26,7 +26,7 @@ def example_gps_data():
 def test_get_gps_jpg(example_image_path, example_gps_data):
     # Simulate a valid JPEG file via PIL
     with patch("PIL.Image.open") as mock_open, \
-         patch("piexif.load", return_value=example_gps_data):
+            patch("piexif.load", return_value=example_gps_data):
 
         mock_img = MagicMock()
         mock_img.format = "JPEG"

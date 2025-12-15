@@ -1,8 +1,8 @@
 import os
 import shutil
 
-from PyQt5.QtWidgets import QDialog, QFileDialog
-from core.views.components.Preferences_ui import Ui_Preferences
+from PySide6.QtWidgets import QDialog, QFileDialog
+from core.views.Preferences_ui import Ui_Preferences
 from core.services.SettingsService import SettingsService
 from helpers.PickleHelper import PickleHelper
 
@@ -23,6 +23,18 @@ class Preferences(QDialog, Ui_Preferences):
         super().__init__()
         self.parent = parent
         self.setupUi(self)
+
+        # Set custom tooltip styling - light blue background with black text
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: lightblue;
+                color: black;
+                border: 1px solid #333333;
+                padding: 4px;
+                font-size: 11px;
+            }
+        """)
+
         self._load_settings()
         self._connect_signals()
 
@@ -33,7 +45,19 @@ class Preferences(QDialog, Ui_Preferences):
         self.AOIRadiusSpinBox.setValue(self.parent.settings_service.get_setting('AOIRadius'))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
-        self.distanceComboBox.setCurrentText(self.parent.settings_service.get_setting('DistanceUnit'))
+        # Load distance unit with default of 'Feet' if not set
+        # Also handle legacy 'ft'/'m' values and convert to 'Feet'/'Meters'
+        distance_unit = self.parent.settings_service.get_setting('DistanceUnit', 'Feet')
+        if distance_unit == 'ft':
+            distance_unit = 'Feet'
+            self.parent.settings_service.set_setting('DistanceUnit', 'Feet')  # Migrate to new format
+        elif distance_unit == 'm':
+            distance_unit = 'Meters'
+            self.parent.settings_service.set_setting('DistanceUnit', 'Meters')  # Migrate to new format
+        self.distanceComboBox.setCurrentText(distance_unit)
+        offline_only = self.parent.settings_service.get_bool_setting('OfflineOnly', False)
+        if hasattr(self, 'offlineOnlyCheckBox'):
+            self.offlineOnlyCheckBox.setChecked(offline_only)
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -45,6 +69,8 @@ class Preferences(QDialog, Ui_Preferences):
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
+        if hasattr(self, 'offlineOnlyCheckBox'):
+            self.offlineOnlyCheckBox.toggled.connect(self._update_offline_only)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
 
     def _update_max_aois(self):
@@ -72,6 +98,10 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_distance_unit(self):
         """Updates the distance unit setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('DistanceUnit', self.distanceComboBox.currentText())
+
+    def _update_offline_only(self, checked: bool):
+        """Update whether the app should run without online map/CalTopo access."""
+        self.parent.settings_service.set_setting('OfflineOnly', bool(checked))
 
     def _droneSensorButton_clicked(self):
         """

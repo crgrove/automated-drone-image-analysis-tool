@@ -25,6 +25,15 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Number of segments to divide each image into for MR Map analysis.
+Each segment is processed independently for multi-resolution feature detection.
+Performance impact:
+• Higher number of segments: INCREASES processing time (more segments to analyze)
+• Lower number of segments: DECREASES processing time (fewer segments to analyze)
+• 1 segment: Fastest processing (analyzes whole image once)
+Higher segment counts improve detection in images with varying features.</string>
+         </property>
          <property name="text">
           <string>Image Segments:</string>
          </property>
@@ -42,6 +51,16 @@
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Select the number of segments to divide each image into.
+• Options: 1, 2, 4, 6, 9, 16, 25, 36 segments
+• Default: 1 (analyze entire image as one segment)
+The MR Map (Multi-Resolution Map) algorithm analyzes features at multiple scales:
+• 1 segment: Process whole image (best for small images or uniform content)
+• More segments: Analyze local regions independently (better for large images)
+Higher segment counts improve detection in images with varying features across the scene.
+Recommended: 4-9 segments for typical drone imagery.</string>
          </property>
          <item>
           <property name="text">
@@ -102,11 +121,82 @@
         </spacer>
        </item>
        <item>
+        <widget class="QLabel" name="colorspaceLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Color Space:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="colorspaceComboBox">
+         <property name="minimumSize">
+          <size>
+           <width>60</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Select the color space for MR Map analysis.
+The MR Map algorithm analyzes features in different color representations:
+• LAB: Perceptually uniform color space (default, better for color difference analysis)
+• RGB: Standard red-green-blue color space (good for general use)
+• HSV: Hue-Saturation-Value color space (better for color-based feature detection)
+Different color spaces can improve detection depending on the image content.
+Recommended: LAB for most cases, HSV for color-rich imagery.</string>
+         </property>
+         <item>
+          <property name="text">
+           <string>LAB</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>RGB</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>HSV</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Maximum</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
         <widget class="QLabel" name="windowLabel">
          <property name="font">
           <font>
            <pointsize>10</pointsize>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Window size for multi-resolution analysis.
+Determines the spatial scale of features to detect.</string>
          </property>
          <property name="text">
           <string>Window Size:</string>
@@ -115,6 +205,17 @@
        </item>
        <item>
         <widget class="QSpinBox" name="windowSpinBox">
+         <property name="toolTip">
+          <string>Set the window size for multi-resolution analysis.
+• Range: 1 to 10
+• Default: 5
+The MR Map algorithm analyzes features at multiple spatial scales using sliding windows:
+• Smaller values (1-3): Detect fine details and small features
+• Medium values (4-6): Balanced detection (recommended for most cases)
+• Larger values (7-10): Detect larger features and patterns
+Window size affects the spatial resolution of feature detection.
+Larger windows provide more context but may miss small objects.</string>
+         </property>
          <property name="minimum">
           <number>1</number>
          </property>
@@ -149,6 +250,10 @@
            <pointsize>10</pointsize>
           </font>
          </property>
+         <property name="toolTip">
+          <string>Detection threshold for MR Map feature detection.
+Controls the sensitivity of feature detection across multiple resolutions.</string>
+         </property>
          <property name="text">
           <string>Threshold:</string>
          </property>
@@ -161,6 +266,18 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="toolTip">
+          <string>Adjust the detection threshold for MR Map algorithm.
+• Range: 1 to 200
+• Default: 100
+• Slider is inverted: LEFT = higher threshold, RIGHT = lower threshold
+The MR Map algorithm detects features at multiple spatial resolutions:
+• Lower values (1-50): Very sensitive, detects many features (may include noise)
+• Medium values (51-150): Balanced detection (recommended for most cases)
+• Higher values (151-200): Less sensitive, only detects prominent features
+Threshold controls how distinct a feature must be to be detected.
+Note: Slider appearance is inverted - move left for stricter, right for more lenient.</string>
          </property>
          <property name="minimum">
           <number>1</number>
@@ -202,9 +319,13 @@
          <property name="font">
           <font>
            <pointsize>10</pointsize>
-           <weight>75</weight>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="toolTip">
+          <string>Current threshold value for MR Map feature detection.
+Displays the value selected on the threshold slider (1-200).
+Lower values = more sensitive detection.</string>
          </property>
          <property name="text">
           <string>100</string>

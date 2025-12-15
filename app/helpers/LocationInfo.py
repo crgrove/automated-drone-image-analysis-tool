@@ -84,7 +84,8 @@ class LocationInfo:
             lng (float): The decimal longitude position.
 
         Returns:
-            dict: Contains the degrees, minutes, and seconds values for latitude and longitude, including reference values.
+            dict: Contains the degrees, minutes, and seconds values for latitude
+                and longitude, including reference values.
         """
         is_positive = lat >= 0
         lat = abs(lat)
@@ -111,6 +112,63 @@ class LocationInfo:
         }
 
         return {'latitude': latitude, 'longitude': longitude}
+
+    @staticmethod
+    def format_coordinates(lat, lon, format_type='Decimal Degrees'):
+        """
+        Format GPS coordinates in various standard formats.
+
+        Args:
+            lat (float): Latitude in decimal degrees
+            lon (float): Longitude in decimal degrees
+            format_type (str): One of:
+                - 'Decimal Degrees' (e.g., "37.123456, -122.123456")
+                - 'Degrees Minutes Seconds' (e.g., "37°7'24.44\"N, 122°7'24.44\"W")
+                - 'Degrees Decimal Minutes' (e.g., "37°7.4073'N, 122°7.4073'W")
+
+        Returns:
+            str: Formatted coordinate string
+        """
+        if format_type == 'Decimal Degrees':
+            return f"{lat:.6f}, {lon:.6f}"
+
+        elif format_type == 'Degrees Minutes Seconds':
+            # Use existing convert_decimal_to_dms() and format the result
+            dms = LocationInfo.convert_decimal_to_dms(lat, lon)
+            lat_data = dms['latitude']
+            lon_data = dms['longitude']
+            lat_str = f"{lat_data['degrees']}°{lat_data['minutes']}'{lat_data['seconds']:.2f}\"{lat_data['reference']}"
+            lon_str = f"{lon_data['degrees']}°{lon_data['minutes']}'{lon_data['seconds']:.2f}\"{lon_data['reference']}"
+            return f"{lat_str}, {lon_str}"
+
+        elif format_type == 'Degrees Decimal Minutes':
+            # Calculate DDM using existing logic pattern
+            lat_ddm = LocationInfo._format_decimal_to_ddm(lat, is_latitude=True)
+            lon_ddm = LocationInfo._format_decimal_to_ddm(lon, is_latitude=False)
+            return f"{lat_ddm}, {lon_ddm}"
+
+        else:
+            # Default to decimal degrees
+            return f"{lat:.6f}, {lon:.6f}"
+
+    @staticmethod
+    def _format_decimal_to_ddm(decimal, is_latitude):
+        """
+        Convert decimal degrees to DDM (Degrees Decimal Minutes) format string.
+
+        Args:
+            decimal (float): Decimal degrees
+            is_latitude (bool): True for latitude, False for longitude
+
+        Returns:
+            str: String in DDM format (e.g., "37°7.4073'N")
+        """
+        direction = 'N' if decimal >= 0 and is_latitude else 'S' if is_latitude else 'E' if decimal >= 0 else 'W'
+        decimal = abs(decimal)
+        degrees = int(decimal)
+        minutes = (decimal - degrees) * 60
+
+        return f"{degrees}°{minutes:.4f}'{direction}"
 
     @staticmethod
     def _convert_to_degrees(value):

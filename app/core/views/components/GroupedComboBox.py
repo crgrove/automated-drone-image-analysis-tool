@@ -1,28 +1,30 @@
-from PyQt5.QtWidgets import QComboBox
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
-from PyQt5.QtCore import Qt
+from PySide6.QtWidgets import QComboBox
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QFont
+from PySide6.QtCore import Qt
 
 
 class GroupedComboBox(QComboBox):
-    """A custom QComboBox with grouped items, where each group has a non-selectable header."""
+    """A custom QComboBox with grouped items, where each group has a non-selectable header.
+
+    Extends QComboBox to support grouping items under non-selectable header items.
+    Useful for organizing related options in a dropdown menu.
+    """
 
     def __init__(self, parent=None):
-        """
-        Initialize the GroupedComboBox.
+        """Initialize the GroupedComboBox.
 
         Args:
-            parent (QWidget, optional): Parent widget for the combo box. Defaults to None.
+            parent: Parent widget for the combo box. Defaults to None.
         """
         super(GroupedComboBox, self).__init__(parent)
         self.setModel(QStandardItemModel(self))
 
     def add_group(self, groupName, items):
-        """
-        Add a group of items under a non-selectable group header.
+        """Add a group of items under a non-selectable group header.
 
         Args:
-            groupName (str): The name of the group.
-            items (list of str): List of items to add under the group header.
+            groupName: The name of the group (displayed as header).
+            items: List of item strings to add under the group header.
         """
         # Add the group name as a non-selectable item
         groupItem = QStandardItem('---' + groupName + '---')
