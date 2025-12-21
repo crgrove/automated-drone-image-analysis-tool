@@ -102,6 +102,7 @@ class StreamViewerWindow(QMainWindow):
         self._latest_detections_for_rendering: List[Dict] = []
         self._last_algorithm_frame: Optional[np.ndarray] = None
         self._original_frame_for_thumbnails: Optional[np.ndarray] = None  # Store original frame before detection rendering
+        self._original_frames_queue: Dict[float, np.ndarray] = {}  # Queue of original frames indexed by timestamp for sync
 
         # Current algorithm
         self.algorithm_widget: Optional[StreamAlgorithmController] = None
@@ -1087,7 +1088,13 @@ class StreamViewerWindow(QMainWindow):
             timestamp = self._current_frame_timestamp
 
             # Use original frame (without detections) for crisp thumbnails
-            thumbnail_frame = self._original_frame_for_thumbnails if self._original_frame_for_thumbnails is not None else frame
+            # Get synchronized original frame from queue if available
+            thumbnail_frame = self._original_frames_queue.get(timestamp, frame)
+            
+            # Clean up used frame from queue
+            if timestamp in self._original_frames_queue:
+                del self._original_frames_queue[timestamp]
+
             self.thumbnail_widget.update_thumbnails(
                 thumbnail_frame,
                 detection_objects,
@@ -1302,6 +1309,13 @@ class StreamViewerWindow(QMainWindow):
         # Store original frame for thumbnails (before detection rendering)
         # This ensures thumbnails are crisp without detection overlays
         self._original_frame_for_thumbnails = frame.copy()
+        
+        # Add to queue for synchronization with worker thread
+        self._original_frames_queue[timestamp] = self._original_frame_for_thumbnails
+        # Prune queue to prevent memory leak (keep last 50 frames)
+        if len(self._original_frames_queue) > 50:
+            oldest_ts = sorted(self._original_frames_queue.keys())[0]
+            del self._original_frames_queue[oldest_ts]
 
         # Apply resolution capping on first frame (to prevent upscaling)
         if self._pending_processing_resolution is not None:

@@ -1,18 +1,18 @@
 """
-Comprehensive tests for CudaCheck.
+Comprehensive tests for OnnxCheck.
 
-Tests CUDA and GPU support detection utilities.
+Tests ONNX Runtime availability and execution provider detection utilities.
 """
 
 import pytest
 from unittest.mock import patch, MagicMock
-from helpers.CudaCheck import CudaCheck
+from helpers.OnnxCheck import OnnxCheck
 
 
 def test_check_onnxruntime_gpu_env_no_cuda():
     """Test when CUDA is not installed."""
     with patch('subprocess.check_output', side_effect=Exception("nvcc not found")):
-        result = CudaCheck.check_onnxruntime_gpu_env()
+        result = OnnxCheck.check_onnxruntime_gpu_env()
 
         assert result['cuda_installed'] is False
         assert result['cuda_version_sufficient'] is False
@@ -27,7 +27,7 @@ def test_check_onnxruntime_gpu_env_cuda_old_version():
             patch('os.path.isdir', return_value=False), \
             patch('os.environ.get', return_value=''), \
             patch('onnxruntime.get_available_providers', return_value=[]):
-        result = CudaCheck.check_onnxruntime_gpu_env()
+        result = OnnxCheck.check_onnxruntime_gpu_env()
 
         assert result['cuda_installed'] is True
         assert result['cuda_version_sufficient'] is False
@@ -66,7 +66,7 @@ def test_check_onnxruntime_gpu_env_cuda_sufficient():
             patch('os.path.join', side_effect=lambda *args: '\\'.join(args)), \
             patch('os.environ.get', side_effect=mock_environ_get), \
             patch('onnxruntime.get_available_providers', return_value=['CUDAExecutionProvider']):
-        result = CudaCheck.check_onnxruntime_gpu_env()
+        result = OnnxCheck.check_onnxruntime_gpu_env()
 
         assert result['cuda_installed'] is True
         assert result['cuda_version_sufficient'] is True
@@ -82,7 +82,7 @@ def test_check_onnxruntime_gpu_env_no_cudnn():
             patch('os.path.isdir', return_value=False), \
             patch('os.environ.get', return_value=''), \
             patch('onnxruntime.get_available_providers', return_value=['CUDAExecutionProvider']):
-        result = CudaCheck.check_onnxruntime_gpu_env()
+        result = OnnxCheck.check_onnxruntime_gpu_env()
 
         assert result['cuda_installed'] is True
         assert result['cuda_version_sufficient'] is True
@@ -100,7 +100,7 @@ def test_check_onnxruntime_gpu_env_no_ort_provider():
             patch('os.path.join', side_effect=lambda *args: '/'.join(args)), \
             patch('os.environ.get', return_value='C:\\Program Files\\NVIDIA\\CUDNN\\v9\\bin\\12'), \
             patch('onnxruntime.get_available_providers', return_value=[]):  # No CUDA provider
-        result = CudaCheck.check_onnxruntime_gpu_env()
+        result = OnnxCheck.check_onnxruntime_gpu_env()
 
         assert result['cuda_installed'] is True
         assert result['cuda_version_sufficient'] is True

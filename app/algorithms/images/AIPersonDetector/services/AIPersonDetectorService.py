@@ -3,12 +3,19 @@ import numpy as np
 import sys
 import os
 from os import path
-import onnxruntime as ort
+
+# Optional import for onnxruntime - handle DLL load failures gracefully
+try:
+    import onnxruntime as ort
+    ONNXRUNTIME_AVAILABLE = True
+except (ImportError, OSError, Exception) as e:
+    ONNXRUNTIME_AVAILABLE = False
+    ort = None
+    _onnxruntime_error = str(e)
 
 from core.services.LoggerService import LoggerService
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
 from helpers.SlidingWindowSlicer import SlidingWindowSlicer
-from helpers.CudaCheck import CudaCheck
 
 OVERLAP = 0.2
 
@@ -38,8 +45,25 @@ class AIPersonDetectorService(AlgorithmService):
             combine_aois: Whether to combine overlapping AOIs.
             options: Algorithm-specific options, must include
                 'person_detector_confidence' and 'cpu_only'.
+        
+        Raises:
+            RuntimeError: If onnxruntime is not available or cannot be loaded.
         """
         self.logger = LoggerService()
+        
+        # Check if onnxruntime is available before proceeding
+        if not ONNXRUNTIME_AVAILABLE or ort is None:
+            error_msg = (
+                "ONNX Runtime is not available. The AI Person Detector requires onnxruntime to function. "
+                "Please ensure onnxruntime-directml is properly installed. "
+                "If you continue to see this error, the DLL may have failed to load. "
+                "Try reinstalling the application or installing the required Visual C++ Redistributables."
+            )
+            if '_onnxruntime_error' in globals():
+                error_msg += f"\nOriginal error: {_onnxruntime_error}"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.confidence = options['person_detector_confidence'] / 100
         self.cpu_only = options['cpu_only']

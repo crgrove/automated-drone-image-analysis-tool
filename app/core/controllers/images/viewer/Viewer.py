@@ -97,6 +97,14 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.main_image = None
         self.logger = LoggerService()
         self.theme = theme  # Store theme before calling _add_Toggles
+        self.messages = {}
+        self.distance_unit = distance_unit
+
+        # Measure dialog state
+        self.measure_dialog = None
+        self.measure_dialog_open = False
+        self.current_gsd = None
+
         self.setupUi(self)
         self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
         self._add_Toggles()
@@ -1358,6 +1366,7 @@ class Viewer(QMainWindow, Ui_Viewer):
     def _on_measure_dialog_closed(self):
         """Handle measure dialog close event."""
         self.measure_dialog_open = False
+        self.measure_dialog = None  # Clear reference for proper lifecycle
         self.ui_style_controller.update_measure_button_style()
 
     def _prompt_for_custom_agl_altitude(self):

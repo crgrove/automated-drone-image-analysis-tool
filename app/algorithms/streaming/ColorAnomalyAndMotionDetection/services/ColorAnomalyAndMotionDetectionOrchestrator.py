@@ -651,11 +651,29 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
             # Render shape
             if config.render_shape == 0:  # Box
-                cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), color, 2)
+                # Add AOI radius buffer from preferences to expand the box
+                aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                x_expanded = max(0, x - int(aoi_radius))
+                y_expanded = max(0, y - int(aoi_radius))
+                w_expanded = w + int(aoi_radius) * 2
+                h_expanded = h + int(aoi_radius) * 2
+                # Ensure expanded box doesn't exceed image bounds
+                w_expanded = min(w_expanded, annotated_frame.shape[1] - x_expanded)
+                h_expanded = min(h_expanded, annotated_frame.shape[0] - y_expanded)
+                cv2.rectangle(annotated_frame, (x_expanded, y_expanded),
+                              (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
                 cv2.circle(annotated_frame, (cx, cy), 3, color, -1)
             elif config.render_shape == 1:  # Circle
-                diagonal = np.sqrt(w * w + h * h) / 2.0
-                radius = max(5, int(diagonal * 1.1))
+                if detection.contour is not None:
+                    (_, _), contour_radius = cv2.minEnclosingCircle(detection.contour)
+                    base_radius = max(5, int(contour_radius * 1.5))
+                else:
+                    diagonal = np.sqrt(w * w + h * h) / 2.0
+                    base_radius = max(5, int(diagonal * 1.1))
+
+                # Add AOI radius buffer from preferences
+                aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                radius = base_radius + int(aoi_radius)
                 cv2.circle(annotated_frame, (cx, cy), radius, color, 2)
             elif config.render_shape == 2:  # Dot
                 cv2.circle(annotated_frame, (cx, cy), 5, color, -1)

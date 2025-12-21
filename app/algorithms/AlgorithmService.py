@@ -233,6 +233,57 @@ class AlgorithmService:
 
         return areas_of_interest, base_contour_count
 
+    def transform_aois_to_original_resolution(self, areas_of_interest):
+        """
+        Transform AOI coordinates from processing resolution back to original resolution.
+        
+        This should be called at the end of process_image() after all processing that
+        requires processing-resolution coordinates is complete (e.g., hue expansion,
+        confidence score calculation).
+        
+        Args:
+            areas_of_interest: List of AOI dictionaries with coordinates at processing resolution.
+            
+        Returns:
+            List of AOI dictionaries with coordinates transformed to original resolution.
+        """
+        if self.scale_factor == 1.0 or not areas_of_interest:
+            return areas_of_interest
+        
+        inverse_scale = 1.0 / self.scale_factor
+        transformed_aois = []
+        
+        for aoi in areas_of_interest:
+            transformed_aoi = aoi.copy()
+            
+            # Transform center coordinates
+            if 'center' in transformed_aoi:
+                x, y = transformed_aoi['center']
+                transformed_aoi['center'] = self.transform_to_original_coords(x, y)
+            
+            # Transform radius (radius scales linearly)
+            if 'radius' in transformed_aoi:
+                transformed_aoi['radius'] = int(transformed_aoi['radius'] * inverse_scale)
+            
+            # Transform contour points
+            if 'contour' in transformed_aoi and transformed_aoi['contour']:
+                # Convert list to numpy array, transform, then convert back
+                contour_array = np.array(transformed_aoi['contour'], dtype=np.float32)
+                transformed_contour = self.transform_contour_to_original(contour_array)
+                transformed_aoi['contour'] = transformed_contour.tolist()
+            
+            # Transform detected pixels
+            if 'detected_pixels' in transformed_aoi and transformed_aoi['detected_pixels']:
+                transformed_pixels = []
+                for pixel in transformed_aoi['detected_pixels']:
+                    x, y = pixel[0], pixel[1]
+                    transformed_pixels.append(self.transform_to_original_coords(x, y))
+                transformed_aoi['detected_pixels'] = transformed_pixels
+            
+            transformed_aois.append(transformed_aoi)
+        
+        return transformed_aois
+
     def apply_hue_expansion(self, img, mask, areas_of_interest, hue_range):
         """
         Expands the pixel detection mask based on hue similarity within AOI circles.

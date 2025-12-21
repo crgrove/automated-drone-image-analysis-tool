@@ -167,18 +167,11 @@ class MatchedFilterService(AlgorithmService):
             detected_pixels = aoi.get('detected_pixels', [])
             if len(detected_pixels) > 0:
                 # Extract filter scores for this AOI's pixels
-                # NOTE: detected_pixels are in ORIGINAL resolution, but filter_scores are in PROCESSING resolution
-                # Need to transform coordinates back to processing resolution for lookup
+                # NOTE: detected_pixels are in PROCESSING resolution (same as filter_scores)
+                # No transformation needed - coordinates are already at processing resolution
                 aoi_scores = []
                 for pixel in detected_pixels:
-                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
-
-                    # Transform back to processing resolution
-                    if self.scale_factor != 1.0:
-                        x = int(x_orig * self.scale_factor)
-                        y = int(y_orig * self.scale_factor)
-                    else:
-                        x, y = x_orig, y_orig
+                    x, y = int(pixel[0]), int(pixel[1])
 
                     if 0 <= y < filter_scores.shape[0] and 0 <= x < filter_scores.shape[1]:
                         aoi_scores.append(filter_scores[y, x])

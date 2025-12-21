@@ -5,7 +5,6 @@ import re
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.AIPersonDetector.views.AIPersonDetector_ui import Ui_AIPersonDetector
 from core.services.LoggerService import LoggerService
-from helpers.CudaCheck import CudaCheck
 
 from PySide6.QtWidgets import QWidget, QMessageBox
 from PySide6.QtCore import Qt
