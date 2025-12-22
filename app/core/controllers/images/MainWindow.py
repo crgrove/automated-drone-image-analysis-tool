@@ -1009,9 +1009,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if isinstance(processing_resolution, str) and processing_resolution in self.resolution_presets:
             self.processingResolutionCombo.setCurrentText(processing_resolution)
         else:
-            # Set default to 50% (balanced quality and speed)
-            self.processingResolutionCombo.setCurrentText("50%")
-            self.settings_service.set_setting('ProcessingResolution', "50%")
+            # Set default to 100% (balanced quality and speed)
+            self.processingResolutionCombo.setCurrentText("100%")
+            self.settings_service.set_setting('ProcessingResolution', "100%")
 
         max_processes = self.settings_service.get_setting('MaxProcesses')
         if isinstance(max_processes, int):

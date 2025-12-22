@@ -15,7 +15,6 @@ from helpers.MetaDataHelper import MetaDataHelper
 from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
 from core.services.cache.ColorCacheService import ColorCacheService
 from core.services.cache.TemperatureCacheService import TemperatureCacheService
-from core.services.image.AOIService import AOIService
 from core.services.LoggerService import LoggerService
 
 
@@ -383,6 +382,8 @@ class AlgorithmService:
             output_dir: Output directory where cache folders will be created.
             thermal: Whether this is a thermal image. Defaults to False.
         """
+        import colorsys
+
         try:
             if not areas_of_interest:
                 return
@@ -397,13 +398,14 @@ class AlgorithmService:
             color_service = ColorCacheService()  # In-memory only - data goes to XML
             temperature_service = TemperatureCacheService() if thermal else None  # In-memory only - data goes to XML
 
-            # Create AOIService for color calculation
-            image_data = {
-                'path': image_path,
-                'is_thermal': self.is_thermal
-            }
+            # Convert BGR to RGB for color calculations
+            # The img from detection is typically in BGR (OpenCV default)
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            else:
+                img_rgb = img
 
-            aoi_service = AOIService(image_data)
+            height, width = img_rgb.shape[:2]
 
             # Process each AOI
             for aoi in areas_of_interest:
@@ -419,7 +421,6 @@ class AlgorithmService:
                     crop_radius = radius + 10  # Add padding
 
                     # Calculate crop bounds
-                    height, width = img.shape[:2]
                     x1 = max(0, int(cx - crop_radius))
                     y1 = max(0, int(cy - crop_radius))
                     x2 = min(width, int(cx + crop_radius))
@@ -449,8 +450,9 @@ class AlgorithmService:
                     # Save thumbnail to dataset cache
                     thumbnail_service.save_thumbnail_from_array(image_path, aoi, thumbnail_rgb, thumbnail_cache_dir)
 
-                    # Calculate and cache color information
-                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    # Calculate representative color directly from in-memory image
+                    # This avoids creating AOIService/ImageService which reads metadata from disk
+                    color_result = self._calculate_aoi_representative_color(img_rgb, aoi)
                     if color_result:
                         color_info = {
                             'rgb': color_result['rgb'],
@@ -477,6 +479,85 @@ class AlgorithmService:
         except Exception as e:
             # Don't fail the entire detection if cache generation fails
             self.logger.error(f"Error generating AOI cache: {e}")
+
+    def _calculate_aoi_representative_color(self, img_rgb: np.ndarray, aoi: dict) -> dict:
+        """
+        Calculate a representative color for an AOI directly from the in-memory image.
+
+        This method avoids creating AOIService/ImageService which would read metadata
+        from disk and potentially cause memory errors on large files.
+
+        Args:
+            img_rgb: RGB image array (not BGR).
+            aoi: AOI dictionary with 'center', 'radius', and optionally 'detected_pixels'.
+
+        Returns:
+            dict or None: {
+                'rgb': (r, g, b),           # Vibrant marker color (0-255)
+                'hex': '#rrggbb',           # Hex color string
+                'hue_degrees': int,         # Hue in degrees (0-360)
+                'avg_rgb': (r, g, b)        # Original average RGB
+            } or None if calculation fails.
+        """
+        import colorsys
+
+        try:
+            height, width = img_rgb.shape[:2]
+
+            center = aoi.get('center', [0, 0])
+            radius = aoi.get('radius', 0)
+            cx, cy = int(center[0]), int(center[1])
+
+            # Collect RGB values within the AOI
+            colors = []
+
+            # If we have detected pixels, use those
+            if 'detected_pixels' in aoi and aoi['detected_pixels']:
+                for pixel in aoi['detected_pixels']:
+                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                        px, py = int(pixel[0]), int(pixel[1])
+                        if 0 <= py < height and 0 <= px < width:
+                            colors.append(img_rgb[py, px])
+            # Otherwise sample within the circle
+            else:
+                y_min = max(0, cy - radius)
+                y_max = min(height, cy + radius + 1)
+                x_min = max(0, cx - radius)
+                x_max = min(width, cx + radius + 1)
+
+                for y in range(y_min, y_max):
+                    for x in range(x_min, x_max):
+                        if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                            colors.append(img_rgb[y, x])
+
+            if not colors:
+                return None
+
+            # Calculate average RGB
+            avg_rgb = np.mean(colors, axis=0).astype(int)
+            r, g, b = int(avg_rgb[0]), int(avg_rgb[1]), int(avg_rgb[2])
+
+            # Convert to HSV
+            h, _, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+            # Create full saturation and full value version for vibrant marker
+            full_sat_rgb = colorsys.hsv_to_rgb(h, 1.0, 1.0)
+            marker_rgb = tuple(int(c * 255) for c in full_sat_rgb)
+
+            # Format color info
+            hex_color = '#{:02x}{:02x}{:02x}'.format(*marker_rgb)
+            hue_degrees = int(h * 360)
+
+            return {
+                'rgb': marker_rgb,
+                'hex': hex_color,
+                'hue_degrees': hue_degrees,
+                'avg_rgb': (r, g, b)
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to calculate AOI color: {e}")
+            return None
 
     def _construct_output_path(self, full_path, input_dir, output_dir):
         """
