@@ -64,6 +64,9 @@ class Ui_MainWindow(object):
         self.actionCommunityHelp.setFont(font)
         self.actionYouTube_Channel = QAction(MainWindow)
         self.actionYouTube_Channel.setObjectName(u"actionYouTube_Channel")
+        self.actionLoadResultsFolder = QAction(MainWindow)
+        self.actionLoadResultsFolder.setObjectName(u"actionLoadResultsFolder")
+        self.actionLoadResultsFolder.setFont(font)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
@@ -443,6 +446,7 @@ class Ui_MainWindow(object):
         self.menuFile.addAction(self.actionStreaming)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionLoadFile)
+        self.menuFile.addAction(self.actionLoadResultsFolder)
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
         self.menuHelp.addAction(self.actionHelp)
@@ -478,6 +482,15 @@ class Ui_MainWindow(object):
 "Opens a file dialog to select a results file (.pkl format).\n"
 "Loads the analysis results and opens the Results Viewer.\n"
 "Use this to review results from previous analysis sessions without reprocessing.", None))
+#endif // QT_CONFIG(tooltip)
+        self.actionLoadResultsFolder.setText(QCoreApplication.translate("MainWindow", u"Load Results Folder", None))
+#if QT_CONFIG(tooltip)
+        self.actionLoadResultsFolder.setToolTip(QCoreApplication.translate("MainWindow", u"Scan a folder for multiple ADIAT result files.\n"
+"Recursively searches for ADIAT_DATA.XML files and displays a summary.\n"
+"Features:\n"
+"\u2022 View algorithm, image count, and AOI count for each result\n"
+"\u2022 Open results directly in the Results Viewer\n"
+"\u2022 View image location in Google Maps", None))
 #endif // QT_CONFIG(tooltip)
         self.actionPreferences.setText(QCoreApplication.translate("MainWindow", u"Preferences", None))
 #if QT_CONFIG(tooltip)
