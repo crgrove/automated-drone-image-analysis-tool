@@ -13,6 +13,7 @@ import cv2
 from pathlib import Path
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
+from helpers.GeodesicHelper import GeodesicHelper
 from core.services.image.ImageService import ImageService
 from core.services.GSDService import GSDService
 from core.services.LoggerService import LoggerService
@@ -205,6 +206,67 @@ class AOINeighborService:
         return (margin <= pixel_x < width - margin and
                 margin <= pixel_y < height - margin)
 
+    def _get_image_center_gps(self, image):
+        """
+        Get the center GPS coordinates for an image (lightweight, no full coverage calc).
+
+        Args:
+            image (dict): Image metadata dict with 'path' key
+
+        Returns:
+            tuple or None: (latitude, longitude) or None if not available
+        """
+        try:
+            exif_data = MetaDataHelper.get_exif_data_piexif(image['path'])
+            gps_coords = LocationInfo.get_gps(exif_data=exif_data)
+            if gps_coords:
+                return (gps_coords['latitude'], gps_coords['longitude'])
+        except Exception:
+            pass
+        return None
+
+    def _estimate_max_coverage_radius(self, images, agl_override_m=None):
+        """
+        Estimate the maximum ground coverage radius for images in the dataset.
+
+        Samples a few images to determine the maximum distance from image center
+        to corner, which represents the maximum radius where an AOI could be visible.
+
+        Args:
+            images (list): List of all images
+            agl_override_m (float, optional): Manual AGL altitude override
+
+        Returns:
+            float: Maximum coverage radius in meters (default 500m if estimation fails)
+        """
+        max_radius = 0
+        sample_count = min(10, len(images))  # Sample first few images
+
+        for i in range(sample_count):
+            try:
+                coverage_info = self.get_image_coverage_info(images[i], agl_override_m)
+                if coverage_info:
+                    # Calculate diagonal coverage distance using GSD
+                    gsd_service = GSDService(
+                        focal_length=coverage_info['focal_mm'],
+                        image_size=(coverage_info['width'], coverage_info['height']),
+                        altitude=coverage_info['altitude'],
+                        tilt_angle=coverage_info['tilt_angle'],
+                        sensor=(coverage_info['sensor_w_mm'], coverage_info['sensor_h_mm'])
+                    )
+                    avg_gsd_m = gsd_service.compute_average_gsd() / 100.0
+
+                    # Diagonal distance from center to corner
+                    half_width = (coverage_info['width'] / 2) * avg_gsd_m
+                    half_height = (coverage_info['height'] / 2) * avg_gsd_m
+                    radius = math.sqrt(half_width**2 + half_height**2)
+                    max_radius = max(max_radius, radius)
+            except Exception:
+                continue
+
+        # Add 20% buffer for safety, default to 500m if estimation fails
+        return max_radius * 1.2 if max_radius > 0 else 500
+
     def extract_thumbnail(self, image_service, pixel_x, pixel_y, radius=100):
         """
         Extract a thumbnail centered at the given pixel coordinates.
@@ -246,9 +308,13 @@ class AOINeighborService:
             return None
 
     def find_aoi_in_neighbors(self, images, current_image_idx, aoi_gps, agl_override_m=None,
-                               thumbnail_radius=100, progress_callback=None):
+                               thumbnail_radius=100, progress_callback=None, max_results=50):
         """
-        Find all neighboring images that contain the AOI GPS coordinate.
+        Find all images that contain the AOI GPS coordinate.
+
+        Uses GPS-based filtering to efficiently search all images, not just
+        sequential neighbors. This handles drone lawn-mower flight patterns
+        where parallel flight paths may also contain the AOI.
 
         Args:
             images (list): List of all images
@@ -257,6 +323,7 @@ class AOINeighborService:
             agl_override_m (float, optional): Manual AGL altitude override
             thumbnail_radius (int): Radius of thumbnails to extract
             progress_callback (callable, optional): Callback for progress updates
+            max_results (int): Maximum number of results to return (default 50)
 
         Returns:
             list: List of dicts with thumbnail info, sorted by image index
@@ -264,40 +331,51 @@ class AOINeighborService:
         results = []
         target_lat, target_lon = aoi_gps
 
-        # Search backwards from current image
-        for i in range(current_image_idx - 1, -1, -1):
+        if progress_callback:
+            progress_callback("Calculating search area...")
+
+        # Estimate maximum coverage radius for GPS-based pre-filtering
+        max_coverage_radius = self._estimate_max_coverage_radius(images, agl_override_m)
+
+        # Build list of candidate images based on GPS proximity
+        candidates = []
+        for i, image in enumerate(images):
+            center_gps = self._get_image_center_gps(image)
+            if center_gps:
+                center_lat, center_lon = center_gps
+                distance = GeodesicHelper.haversine_distance(
+                    target_lat, target_lon, center_lat, center_lon
+                )
+                # Only consider images within maximum coverage radius
+                if distance <= max_coverage_radius:
+                    candidates.append((i, distance))
+
+        # Sort candidates by distance (closest first for better UX)
+        candidates.sort(key=lambda x: x[1])
+
+        if progress_callback:
+            progress_callback(f"Checking {len(candidates)} candidate images...")
+
+        # Check each candidate image
+        for idx, (i, _) in enumerate(candidates):
             if progress_callback:
-                progress_callback(f"Checking image {i + 1} of {len(images)}...")
+                progress_callback(f"Checking image {idx + 1} of {len(candidates)}...")
 
             result = self._check_image_for_aoi(
                 images[i], i, target_lat, target_lon, agl_override_m, thumbnail_radius
             )
             if result:
-                results.insert(0, result)  # Insert at beginning to maintain order
-            else:
-                break  # Stop when AOI is no longer visible
-
-        # Add current image
-        result = self._check_image_for_aoi(
-            images[current_image_idx], current_image_idx,
-            target_lat, target_lon, agl_override_m, thumbnail_radius
-        )
-        if result:
-            result['is_current'] = True
-            results.append(result)
-
-        # Search forwards from current image
-        for i in range(current_image_idx + 1, len(images)):
-            if progress_callback:
-                progress_callback(f"Checking image {i + 1} of {len(images)}...")
-
-            result = self._check_image_for_aoi(
-                images[i], i, target_lat, target_lon, agl_override_m, thumbnail_radius
-            )
-            if result:
+                # Mark if this is the current/originating image
+                if i == current_image_idx:
+                    result['is_current'] = True
                 results.append(result)
-            else:
-                break  # Stop when AOI is no longer visible
+
+                # Stop if we've hit the maximum
+                if len(results) >= max_results:
+                    break
+
+        # Sort results by image index for consistent display order
+        results.sort(key=lambda r: r['image_idx'])
 
         return results
 

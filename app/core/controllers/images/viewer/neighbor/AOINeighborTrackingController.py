@@ -115,7 +115,7 @@ class AOINeighborTrackingController(QObject):
             # Get altitude override if set
             agl_override_m = None
             if hasattr(self.parent, 'altitude_controller'):
-                alt_ft = self.parent.altitude_controller.get_custom_altitude()
+                alt_ft = self.parent.altitude_controller.get_effective_altitude()
                 if alt_ft and alt_ft > 0:
                     agl_override_m = alt_ft * 0.3048
 
@@ -259,6 +259,9 @@ class AOINeighborTrackingController(QObject):
             # Import here to avoid circular imports
             from core.views.images.viewer.dialogs.AOINeighborGalleryDialog import AOINeighborGalleryDialog
 
+            # Store results for later use when zooming
+            self._neighbor_results = results
+
             # Close existing dialog if open
             if self._gallery_dialog:
                 self._gallery_dialog.close()
@@ -280,13 +283,95 @@ class AOINeighborTrackingController(QObject):
         """
         Handle click on an image in the gallery.
 
+        Navigates to the clicked image and zooms to the AOI location.
+
         Args:
             image_idx (int): Index of the clicked image
         """
         try:
-            # Navigate to the clicked image
-            self.parent.current_image = image_idx
-            self.parent._load_image()
+            # Find the result data for this image to get pixel coordinates
+            result = None
+            if hasattr(self, '_neighbor_results') and self._neighbor_results:
+                result = next((r for r in self._neighbor_results if r['image_idx'] == image_idx), None)
+
+            pixel_x = result.get('pixel_x') if result else None
+            pixel_y = result.get('pixel_y') if result else None
+
+            # Check if we need to load a new image
+            needs_load = (self.parent.current_image != image_idx)
+
+            if needs_load and pixel_x is not None and pixel_y is not None:
+                # Set up zoom-after-load using viewChanged signal pattern
+                self.parent.current_image = image_idx
+
+                zoom_handler = None
+                zoom_executed = False
+
+                def zoom_when_ready():
+                    nonlocal zoom_executed
+                    if zoom_executed:
+                        return
+
+                    viewer = self.parent.main_image
+                    if not viewer or not viewer.hasImage():
+                        return
+
+                    # Check recursion guard
+                    if hasattr(viewer, '_recursion_guard') and viewer._recursion_guard:
+                        return
+
+                    # Check zoom stack is cleared (resetZoom has been called)
+                    if hasattr(viewer, 'zoomStack') and len(viewer.zoomStack) != 0:
+                        return
+
+                    zoom_executed = True
+                    # Zoom to the AOI location (scale 6 matches AOI click behavior)
+                    if hasattr(viewer, 'zoomToArea'):
+                        viewer.zoomToArea((pixel_x, pixel_y), 6)
+
+                    # Disconnect handler
+                    if zoom_handler:
+                        try:
+                            viewer.viewChanged.disconnect(zoom_handler)
+                        except Exception:
+                            pass
+
+                # Connect signal before loading
+                if hasattr(self.parent, 'main_image') and self.parent.main_image:
+                    try:
+                        self.parent.main_image.viewChanged.connect(zoom_when_ready)
+                        zoom_handler = zoom_when_ready
+                    except Exception:
+                        pass
+
+                # Load the image
+                self.parent._load_image()
+
+                # Fallback: if image already loaded and zoom not executed
+                if not zoom_executed and hasattr(self.parent, 'main_image'):
+                    viewer = self.parent.main_image
+                    if viewer and viewer.hasImage():
+                        if not getattr(viewer, '_recursion_guard', False):
+                            if not viewer.zoomStack:
+                                zoom_executed = True
+                                if hasattr(viewer, 'zoomToArea'):
+                                    viewer.zoomToArea((pixel_x, pixel_y), 6)
+                                if zoom_handler:
+                                    try:
+                                        viewer.viewChanged.disconnect(zoom_handler)
+                                    except Exception:
+                                        pass
+            else:
+                # Simple navigation without zoom, or same image
+                if needs_load:
+                    self.parent.current_image = image_idx
+                    self.parent._load_image()
+
+                # If same image, still zoom to location
+                if not needs_load and pixel_x is not None and pixel_y is not None:
+                    viewer = self.parent.main_image
+                    if viewer and hasattr(viewer, 'zoomToArea'):
+                        viewer.zoomToArea((pixel_x, pixel_y), 6)
 
             # Scroll thumbnail into view
             if hasattr(self.parent, 'thumbnail_controller') and self.parent.thumbnail_controller:

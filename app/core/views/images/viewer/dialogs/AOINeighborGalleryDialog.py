@@ -76,6 +76,11 @@ class NeighborGalleryView(QGraphicsView):
         # Thumbnail items (for click detection)
         self._thumbnail_rects = []  # List of (QRectF, image_idx)
 
+        # Selection tracking
+        self._selected_index = -1  # Currently selected thumbnail
+        self._border_items = []  # List of (image_idx, border_rect) for updating borders
+        self._results = []  # Store results for reference
+
         # Style settings
         self.thumbnail_spacing = 20
         self.thumbnail_size = 200
@@ -91,6 +96,9 @@ class NeighborGalleryView(QGraphicsView):
         """
         self.scene.clear()
         self._thumbnail_rects = []
+        self._border_items = []
+        self._results = results or []
+        self._selected_index = -1
 
         if not results:
             return
@@ -147,9 +155,12 @@ class NeighborGalleryView(QGraphicsView):
                 border_rect.setBrush(QBrush(Qt.NoBrush))
                 self.scene.addItem(border_rect)
 
+                # Store border item for selection updates
+                image_idx = result.get('image_idx', -1)
+                self._border_items.append((image_idx, border_rect, is_current))
+
                 # Store rect for click detection
                 click_rect = QRectF(x, y, self.thumbnail_size, self.thumbnail_size)
-                image_idx = result.get('image_idx', -1)
                 self._thumbnail_rects.append((click_rect, image_idx))
 
                 # Add label
@@ -189,12 +200,11 @@ class NeighborGalleryView(QGraphicsView):
         # Get zoom factor
         zoom_factor = 1.15
         if event.angleDelta().y() > 0:
-            # Zoom in
-            if self._zoom < self._max_zoom:
-                self._zoom *= zoom_factor
-                self.scale(zoom_factor, zoom_factor)
+            # Zoom in - no upper limit
+            self._zoom *= zoom_factor
+            self.scale(zoom_factor, zoom_factor)
         else:
-            # Zoom out
+            # Zoom out - keep minimum limit
             if self._zoom > self._min_zoom:
                 self._zoom /= zoom_factor
                 self.scale(1 / zoom_factor, 1 / zoom_factor)
@@ -214,6 +224,7 @@ class NeighborGalleryView(QGraphicsView):
             scene_pos = self.mapToScene(event.pos())
             for rect, image_idx in self._thumbnail_rects:
                 if rect.contains(scene_pos):
+                    self.select_thumbnail(image_idx)
                     self.thumbnail_clicked.emit(image_idx)
                     event.accept()
                     return
@@ -253,6 +264,26 @@ class NeighborGalleryView(QGraphicsView):
         self.resetTransform()
         if self.scene.sceneRect().width() > 0:
             self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+
+    def select_thumbnail(self, image_idx):
+        """
+        Update selection highlighting to the specified thumbnail.
+
+        Args:
+            image_idx (int): Index of the image to select
+        """
+        self._selected_index = image_idx
+
+        for idx, border_rect, is_current in self._border_items:
+            if idx == image_idx:
+                # Selected thumbnail gets bright green border
+                border_rect.setPen(QPen(QColor(0, 200, 0), self.current_highlight_width))
+            elif is_current:
+                # Original/current image gets dimmer green when not selected
+                border_rect.setPen(QPen(QColor(0, 150, 0), 3))
+            else:
+                # Other thumbnails get gray border
+                border_rect.setPen(QPen(QColor(100, 100, 100), 2))
 
 
 class AOINeighborGalleryDialog(QDialog):
