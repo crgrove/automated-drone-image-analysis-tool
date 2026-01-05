@@ -166,31 +166,50 @@ class ImageService:
         2. Flight Yaw (drone body direction) - fallback from EXIF
         3. Calculated Bearing (from track/GPS) - fallback from bearing recovery
 
+        Note: Compensates for gimbal roll when roll is ~180°, which indicates
+        the camera orientation is effectively inverted. This commonly occurs
+        in DJI mapping missions where the gimbal maintains a fixed heading
+        regardless of flight direction.
+
         Returns:
             float or None: Camera yaw in degrees (0-360), or None if unavailable.
         """
+        yaw = None
+
         # Prefer gimbal yaw if available (actual camera direction)
         if self.xmp_data is not None and self.drone_make is not None:
             gimbal_yaw = MetaDataHelper.get_drone_xmp_attribute('Gimbal Yaw', self.drone_make, self.xmp_data)
             if gimbal_yaw is not None:
                 try:
                     yaw = float(gimbal_yaw)
-                    if yaw < 0:
-                        yaw += 360
-                    return yaw
                 except (TypeError, ValueError):
                     pass
 
         # Fall back to flight yaw (drone body direction)
-        flight_yaw = self._get_drone_orientation()
-        if flight_yaw is not None:
-            return flight_yaw
+        if yaw is None:
+            yaw = self._get_drone_orientation()
 
         # Final fallback: use calculated bearing if available
-        if self.calculated_bearing is not None:
-            return self.calculated_bearing
+        if yaw is None and self.calculated_bearing is not None:
+            yaw = self.calculated_bearing
 
-        return None
+        if yaw is None:
+            return None
+
+        # Normalize to 0-360 range
+        if yaw < 0:
+            yaw += 360
+
+        # Account for gimbal roll - if roll is ~180°, the camera is effectively
+        # pointing in the opposite direction. This occurs in DJI mapping missions
+        # when the gimbal maintains a fixed heading regardless of flight direction.
+        # The gimbal physically can't roll 180° (limited to ~±52°), but DJI uses
+        # roll=180° in metadata to represent this inverted orientation.
+        gimbal_roll = self.get_gimbal_roll()
+        if gimbal_roll is not None and abs(gimbal_roll) > 90:
+            yaw = (yaw + 180) % 360
+
+        return yaw
 
     def get_camera_intrinsics(self):
         """
