@@ -12,6 +12,7 @@ from core.services.XmlService import XmlService
 from core.services.SettingsService import SettingsService
 from core.services.AnalyzeService import AnalyzeService
 from core.services.LoggerService import LoggerService
+from core.services.ResultsScannerService import ResultsScannerService
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
 # StreamViewerWindow imported lazily in _open_streaming_detector() to avoid circular dependency
 from core.controllers.images.VideoParser import VideoParser
@@ -19,8 +20,9 @@ from core.controllers.Perferences import Preferences
 from core.controllers.images.viewer.Viewer import Viewer
 from helpers.PickleHelper import PickleHelper
 from core.views.images.MainWindow_ui import Ui_MainWindow
+from core.views.images.viewer.dialogs.ResultsFolderDialog import ResultsFolderDialog, ScanWorker, ScanProgressDialog
 from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
-                               QMessageBox, QSizePolicy, QAbstractButton)
+                               QMessageBox, QSizePolicy, QAbstractButton, QProgressDialog)
 from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
 from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
 import qtawesome as qta
@@ -96,6 +98,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.cancelButton.clicked.connect(self._cancelButton_clicked)
         self.viewResultsButton.clicked.connect(self._viewResultsButton_clicked)
         self.actionLoadFile.triggered.connect(self._open_load_file)
+        self.actionLoadResultsFolder.triggered.connect(self._open_load_results_folder)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
 
@@ -634,6 +637,144 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._process_xml_file(file)
         except Exception as e:
             self.logger.error(e)
+
+    def _open_load_results_folder(self):
+        """
+        Opens a folder dialog to select a folder containing results to scan.
+        Recursively scans for ADIAT_DATA.XML files and displays results.
+        """
+        try:
+            # Get last used folder from settings
+            last_folder = self.settings_service.get_setting('LastResultsFolder', '')
+            if not last_folder or not os.path.exists(last_folder):
+                last_folder = ""
+
+            # Open folder selection dialog
+            folder = QFileDialog.getExistingDirectory(
+                self,
+                "Select Results Folder",
+                last_folder,
+                QFileDialog.ShowDirsOnly
+            )
+
+            if not folder:
+                return  # User cancelled
+
+            # Save the selected folder for next time
+            self.settings_service.set_setting('LastResultsFolder', folder)
+
+            # Show progress dialog
+            self._scan_progress = ScanProgressDialog(self)
+            self._scan_progress.show()
+
+            # Perform scan in background thread
+            self._scan_thread = QThread()
+            self._scan_worker = ScanWorker(folder)
+            self._scan_worker.moveToThread(self._scan_thread)
+
+            self._scan_thread.started.connect(self._scan_worker.run)
+            self._scan_worker.finished.connect(self._on_scan_finished)
+            self._scan_worker.error.connect(self._on_scan_error)
+            self._scan_worker.progress.connect(self._on_scan_progress)
+
+            # Handle cancel
+            self._scan_progress.canceled.connect(self._on_scan_cancelled)
+
+            self._scan_thread.start()
+
+        except Exception as e:
+            self.logger.error(f"Error opening results folder dialog: {e}")
+            self._show_error(f"Failed to scan folder: {str(e)}")
+
+    def _on_scan_progress(self, current: int, total: int, current_dir: str):
+        """Handle progress updates from folder scan."""
+        if hasattr(self, '_scan_progress') and self._scan_progress:
+            self._scan_progress.update_progress(current, total, current_dir)
+
+    def _on_scan_finished(self, results):
+        """Handle completion of folder scan."""
+        try:
+            # Clean up thread
+            self._scan_thread.quit()
+            self._scan_thread.wait()
+
+            # Close progress dialog
+            if hasattr(self, '_scan_progress') and self._scan_progress:
+                self._scan_progress.close()
+
+            if not results:
+                QMessageBox.information(
+                    self,
+                    "No Results Found",
+                    "No ADIAT_DATA.XML files were found in the selected folder."
+                )
+                return
+
+            # Show results dialog
+            theme = self.settings_service.get_setting('Theme', 'Dark')
+            dialog = ResultsFolderDialog(
+                self,
+                results,
+                theme,
+                self._open_viewer_from_path
+            )
+            dialog.exec()
+
+        except Exception as e:
+            self.logger.error(f"Error displaying scan results: {e}")
+            self._show_error(f"Failed to display results: {str(e)}")
+
+    def _on_scan_error(self, error_msg):
+        """Handle scan error."""
+        try:
+            self._scan_thread.quit()
+            self._scan_thread.wait()
+            if hasattr(self, '_scan_progress') and self._scan_progress:
+                self._scan_progress.close()
+            self._show_error(f"Scan failed: {error_msg}")
+        except Exception as e:
+            self.logger.error(f"Error handling scan error: {e}")
+
+    def _on_scan_cancelled(self):
+        """Handle scan cancellation."""
+        try:
+            if hasattr(self, '_scan_thread') and self._scan_thread.isRunning():
+                self._scan_thread.quit()
+                self._scan_thread.wait()
+        except Exception as e:
+            self.logger.error(f"Error cancelling scan: {e}")
+
+    def _open_viewer_from_path(self, xml_path):
+        """
+        Open the Results Viewer with the specified XML path.
+        Called from ResultsFolderDialog.
+
+        Args:
+            xml_path: Full path to the ADIAT_DATA.XML file
+        """
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+
+            position_format = self.settings_service.get_setting('PositionFormat')
+            temperature_unit = self.settings_service.get_setting('TemperatureUnit')
+            distance_unit = self.settings_service.get_setting('DistanceUnit')
+            theme = self.settings_service.get_setting('Theme')
+
+            self.viewer = Viewer(
+                xml_path,
+                position_format,
+                temperature_unit,
+                distance_unit,
+                False,  # show_hidden
+                theme
+            )
+            self.viewer.show()
+
+        except Exception as e:
+            self.logger.error(f"Error opening viewer: {e}")
+            self._show_error(f"Failed to open viewer: {str(e)}")
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _process_xml_file(self, full_path):
         """
