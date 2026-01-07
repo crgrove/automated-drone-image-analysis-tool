@@ -225,6 +225,33 @@ class AOIController:
         """
         self.parent.main_image.zoomToArea(img.center, 6)
 
+    def get_selected_aoi(self):
+        """Get the currently selected AOI data and index.
+
+        Returns:
+            tuple: (aoi_data, aoi_index) or None if no AOI is selected
+        """
+        if self.selected_aoi_index < 0:
+            return None
+
+        try:
+            if not hasattr(self.parent, 'images') or not hasattr(self.parent, 'current_image'):
+                return None
+
+            image = self.parent.images[self.parent.current_image]
+            if 'areas_of_interest' not in image:
+                return None
+
+            areas_of_interest = image['areas_of_interest']
+            if self.selected_aoi_index >= len(areas_of_interest):
+                return None
+
+            return (areas_of_interest[self.selected_aoi_index], self.selected_aoi_index)
+
+        except Exception as e:
+            self.logger.error(f"Error getting selected AOI: {e}")
+            return None
+
     def select_aoi(self, aoi_index, visible_index):
         """Select an AOI and update the visual selection.
 

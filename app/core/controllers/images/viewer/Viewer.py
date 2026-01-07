@@ -19,6 +19,7 @@ from core.controllers.images.viewer.path.PathValidationController import PathVal
 from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
 from core.controllers.images.viewer.gallery.GalleryController import GalleryController
 from core.controllers.images.viewer.aoi.AOIController import AOIController
+from core.controllers.images.viewer.neighbor.AOINeighborTrackingController import AOINeighborTrackingController
 from core.controllers.images.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
 from core.controllers.images.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
 from core.controllers.images.viewer.exports.CalTopoExportController import CalTopoExportController
@@ -151,6 +152,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.coordinate_controller = CoordinateController(self)
         self.status_controller = StatusController(self)
         self.gps_map_controller = GPSMapController(self)
+        self.neighbor_tracking_controller = AOINeighborTrackingController(self)
 
         self.ui_style_controller = UIStyleController(self, theme)
         self.thermal_controller = ThermalDataController(self)
@@ -305,6 +307,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Close help dialog if open
         if hasattr(self, 'help_dialog') and self.help_dialog:
             self.help_dialog.close()
+
+        # Clean up neighbor tracking controller
+        if hasattr(self, 'neighbor_tracking_controller'):
+            self.neighbor_tracking_controller.cleanup()
 
         event.accept()
 
@@ -744,6 +750,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_E and e.modifiers() == Qt.NoModifier:
             # Upscale currently visible portion with 'E' key
             self._open_upscale_dialog()
+        if e.key() == Qt.Key_Z and e.modifiers() == Qt.NoModifier:
+            # Track AOI in neighboring images with 'Z' key
+            if hasattr(self, 'neighbor_tracking_controller'):
+                self.neighbor_tracking_controller.track_selected_aoi()
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
