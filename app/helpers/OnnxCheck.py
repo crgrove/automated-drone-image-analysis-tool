@@ -23,7 +23,7 @@ class OnnxCheck:
     @staticmethod
     def is_onnxruntime_available():
         """Check if onnxruntime is available and can be imported.
-        
+
         Returns:
             bool: True if onnxruntime is available, False otherwise.
         """
@@ -144,7 +144,7 @@ class OnnxCheck:
                 pass
 
         results["cudnn_in_path"] = cudnn_dir in search_path if cudnn_dir else False
-        
+
         # Check ONNX Runtime providers (only if onnxruntime is available)
         if ONNXRUNTIME_AVAILABLE and ort is not None:
             try:
@@ -163,6 +163,3 @@ class OnnxCheck:
             and results["ort_cuda_provider_available"]
         )
         return results
-
-
-

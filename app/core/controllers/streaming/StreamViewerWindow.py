@@ -1090,7 +1090,7 @@ class StreamViewerWindow(QMainWindow):
             # Use original frame (without detections) for crisp thumbnails
             # Get synchronized original frame from queue if available
             thumbnail_frame = self._original_frames_queue.get(timestamp, frame)
-            
+
             # Clean up used frame from queue
             if timestamp in self._original_frames_queue:
                 del self._original_frames_queue[timestamp]
@@ -1309,7 +1309,7 @@ class StreamViewerWindow(QMainWindow):
         # Store original frame for thumbnails (before detection rendering)
         # This ensures thumbnails are crisp without detection overlays
         self._original_frame_for_thumbnails = frame.copy()
-        
+
         # Add to queue for synchronization with worker thread
         self._original_frames_queue[timestamp] = self._original_frame_for_thumbnails
         # Prune queue to prevent memory leak (keep last 50 frames)

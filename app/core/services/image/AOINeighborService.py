@@ -149,12 +149,9 @@ class AOINeighborService:
             # From the original:
             # | north |   | -sin_yaw  -cos_yaw | | gx |
             # | east  | = |  cos_yaw  -sin_yaw | | gy |
-            # Inverse:
-            det = (-sin_yaw) * (-sin_yaw) - (-cos_yaw) * cos_yaw
-            det = sin_yaw * sin_yaw + cos_yaw * cos_yaw  # = 1
-
-            # Inverse matrix: 1/det * | -sin_yaw   cos_yaw |
-            #                         | -cos_yaw  -sin_yaw |
+            # Inverse (determinant = sin²(yaw) + cos²(yaw) = 1, so no division needed):
+            # | -sin_yaw   cos_yaw |
+            # | -cos_yaw  -sin_yaw |
             ground_offset_x = -sin_yaw * north + cos_yaw * east
             ground_offset_y = -cos_yaw * north - sin_yaw * east
 
@@ -308,7 +305,7 @@ class AOINeighborService:
             return None
 
     def find_aoi_in_neighbors(self, images, current_image_idx, aoi_gps, agl_override_m=None,
-                               thumbnail_radius=100, progress_callback=None, max_results=50):
+                              thumbnail_radius=100, progress_callback=None, max_results=50):
         """
         Find all images that contain the AOI GPS coordinate.
 
@@ -380,7 +377,7 @@ class AOINeighborService:
         return results
 
     def _check_image_for_aoi(self, image, image_idx, target_lat, target_lon,
-                              agl_override_m=None, thumbnail_radius=100):
+                             agl_override_m=None, thumbnail_radius=100):
         """
         Check if an AOI GPS coordinate is visible in an image and extract thumbnail.
 

@@ -45,12 +45,12 @@ class AIPersonDetectorService(AlgorithmService):
             combine_aois: Whether to combine overlapping AOIs.
             options: Algorithm-specific options, must include
                 'person_detector_confidence' and 'cpu_only'.
-        
+
         Raises:
             RuntimeError: If onnxruntime is not available or cannot be loaded.
         """
         self.logger = LoggerService()
-        
+
         # Check if onnxruntime is available before proceeding
         if not ONNXRUNTIME_AVAILABLE or ort is None:
             error_msg = (
@@ -63,7 +63,7 @@ class AIPersonDetectorService(AlgorithmService):
                 error_msg += f"\nOriginal error: {_onnxruntime_error}"
             self.logger.error(error_msg)
             raise RuntimeError(error_msg)
-        
+
         super().__init__('AIPersonDetector', identifier, min_area, max_area, aoi_radius, combine_aois, options)
         self.confidence = options['person_detector_confidence'] / 100
         self.cpu_only = options['cpu_only']

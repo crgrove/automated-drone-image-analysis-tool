@@ -8,7 +8,7 @@ images in the flight path. Supports zoom, pan, and navigation to specific images
 import numpy as np
 import cv2
 from pathlib import Path
-from PySide6.QtCore import Qt, QSize, Signal, QRectF, QPointF
+from PySide6.QtCore import Qt, QSize, Signal, QRectF, QPointF, QTimer
 from PySide6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QPen, QFont, QBrush,
     QWheelEvent, QMouseEvent, QTransform
@@ -120,22 +120,33 @@ class NeighborGalleryView(QGraphicsView):
                 new_width = int(width * scale)
                 new_height = int(height * scale)
                 thumbnail_resized = cv2.resize(thumbnail, (new_width, new_height),
-                                                interpolation=cv2.INTER_LANCZOS4)
+                                               interpolation=cv2.INTER_LANCZOS4)
 
                 # Convert to QImage and QPixmap
+                # Use bytes conversion to ensure data is fully copied and stable
                 if len(thumbnail_resized.shape) == 2:
                     # Grayscale
-                    qimage = QImage(thumbnail_resized.data, new_width, new_height,
-                                    new_width, QImage.Format_Grayscale8)
+                    thumbnail_contiguous = np.ascontiguousarray(thumbnail_resized, dtype=np.uint8)
+                    image_data = thumbnail_contiguous.tobytes()
+                    qimage = QImage(image_data, new_width, new_height,
+                                    new_width, QImage.Format_Grayscale8).copy()
                 else:
-                    # RGB
+                    # RGB - ensure contiguous memory layout
                     thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_RGB2BGR)
                     thumbnail_rgb = cv2.cvtColor(thumbnail_rgb, cv2.COLOR_BGR2RGB)
+                    thumbnail_contiguous = np.ascontiguousarray(thumbnail_rgb, dtype=np.uint8)
+                    image_data = thumbnail_contiguous.tobytes()
                     bytes_per_line = 3 * new_width
-                    qimage = QImage(thumbnail_rgb.data, new_width, new_height,
-                                    bytes_per_line, QImage.Format_RGB888)
+                    qimage = QImage(image_data, new_width, new_height,
+                                    bytes_per_line, QImage.Format_RGB888).copy()
 
-                pixmap = QPixmap.fromImage(qimage.copy())
+                # Create pixmap from the copied QImage
+                pixmap = QPixmap.fromImage(qimage)
+
+                # Skip if pixmap creation failed
+                if pixmap.isNull():
+                    self.logger.warning("Failed to create pixmap for thumbnail")
+                    continue
 
                 # Create pixmap item
                 pixmap_item = QGraphicsPixmapItem(pixmap)
@@ -149,8 +160,8 @@ class NeighborGalleryView(QGraphicsView):
                 border_width = self.current_highlight_width if is_current else 2
 
                 border_rect = QGraphicsRectItem(x - border_width/2, y - border_width/2,
-                                                 self.thumbnail_size + border_width,
-                                                 self.thumbnail_size + border_width)
+                                                self.thumbnail_size + border_width,
+                                                self.thumbnail_size + border_width)
                 border_rect.setPen(QPen(border_color, border_width))
                 border_rect.setBrush(QBrush(Qt.NoBrush))
                 self.scene.addItem(border_rect)
@@ -192,8 +203,21 @@ class NeighborGalleryView(QGraphicsView):
         total_height = self.thumbnail_size + self.label_height + 2 * self.thumbnail_spacing
         self.scene.setSceneRect(0, 0, total_width, total_height)
 
-        # Fit view to show all thumbnails
-        self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        # Reset transform and set a reasonable initial scale
+        # Don't fit all thumbnails - let user scroll horizontally
+        self.resetTransform()
+        self._zoom = 1.0
+
+        # If content is wider than view, just show from the start
+        # If content fits, center it
+        view_width = self.viewport().width()
+        if total_width <= view_width:
+            # Content fits - center it
+            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        else:
+            # Content is wider - show at 1:1 scale, scrollable
+            self.centerOn(self.thumbnail_spacing + self.thumbnail_size / 2,
+                          self.thumbnail_spacing + self.thumbnail_size / 2)
 
     def wheelEvent(self, event: QWheelEvent):
         """Handle mouse wheel for zooming."""
@@ -307,6 +331,7 @@ class AOINeighborGalleryDialog(QDialog):
         super().__init__(parent)
         self.logger = LoggerService()
         self.results = results or []
+        self._thumbnails_loaded = False
 
         # Setup dialog
         self.setWindowTitle("AOI in Neighboring Images")
@@ -318,12 +343,17 @@ class AOINeighborGalleryDialog(QDialog):
         # Create UI
         self._setup_ui()
 
-        # Load thumbnails
-        if results:
-            self.gallery_view.load_thumbnails(results)
-
-        # Set initial size
+        # Set initial size (thumbnails loaded in showEvent when viewport is ready)
         self.resize(900, 400)
+
+    def showEvent(self, event):
+        """Load thumbnails when dialog is shown (viewport is ready)."""
+        super().showEvent(event)
+        # Only load once, after dialog is visible and viewport has valid size
+        if not self._thumbnails_loaded and self.results:
+            self._thumbnails_loaded = True
+            # Use a small delay to ensure viewport is fully initialized
+            QTimer.singleShot(10, lambda: self.gallery_view.load_thumbnails(self.results))
 
     def _setup_ui(self):
         """Create the dialog UI components."""
