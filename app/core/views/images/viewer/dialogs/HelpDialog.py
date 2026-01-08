@@ -230,6 +230,10 @@ class HelpDialog(QDialog):
                         <td>Upscale currently visible portion of image</td>
                     </tr>
                     <tr>
+                        <td>Z</td>
+                        <td>Track selected AOI across neighboring images (shows where AOI appears in flight path)</td>
+                    </tr>
+                    <tr>
                         <td>Shift + O</td>
                         <td>Override altitude for all images (manually set custom
                             AGL altitude for GSD calculations)</td>
@@ -458,6 +462,8 @@ class HelpDialog(QDialog):
                     <li>Press <b>M</b> to open the GPS map and see the spatial
                         distribution of all images and selected AOI</li>
                     <li>Press <b>R</b> to view images oriented to true north based on drone heading</li>
+                    <li>Press <b>Z</b> to track a selected AOI across neighboring images
+                        - useful for verifying if a detection appears in multiple overlapping shots</li>
                 </ul>
             </div>
 

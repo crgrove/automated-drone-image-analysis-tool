@@ -267,18 +267,11 @@ class MRMapService(AlgorithmService):
             detected_pixels = aoi.get('detected_pixels', [])
             if len(detected_pixels) > 0:
                 # Extract bin counts for this AOI's pixels
-                # NOTE: detected_pixels are in ORIGINAL resolution, but bin_counts are in PROCESSING resolution
-                # Need to transform coordinates back to processing resolution for lookup
+                # NOTE: detected_pixels are in PROCESSING resolution (same as bin_counts)
+                # No transformation needed - coordinates are already at processing resolution
                 aoi_bin_counts = []
                 for pixel in detected_pixels:
-                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
-
-                    # Transform back to processing resolution
-                    if self.scale_factor != 1.0:
-                        x = int(x_orig * self.scale_factor)
-                        y = int(y_orig * self.scale_factor)
-                    else:
-                        x, y = x_orig, y_orig
+                    x, y = int(pixel[0]), int(pixel[1])
 
                     if 0 <= y < bin_counts.shape[0] and 0 <= x < bin_counts.shape[1]:
                         aoi_bin_counts.append(bin_counts[y, x])

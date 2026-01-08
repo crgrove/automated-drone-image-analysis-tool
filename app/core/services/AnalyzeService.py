@@ -274,6 +274,10 @@ class AnalyzeService(QObject):
             instance.set_scale_factor(scale_factor)  # Pass scale factor to algorithm for coordinate transformation
             result = instance.process_image(img, full_path, input_dir, output_dir)
 
+            # Transform AOI coordinates from processing resolution back to original resolution
+            if result and result.areas_of_interest and scale_factor < 1.0:
+                result.areas_of_interest = instance.transform_aois_to_original_resolution(result.areas_of_interest)
+
             if result and result.areas_of_interest:
                 # Generate main image thumbnail (using original resolution image)
                 try:
