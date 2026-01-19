@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Preferences.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.10.1
+## Created by: Qt User Interface Compiler version 6.7.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -191,6 +191,55 @@ class Ui_Preferences(object):
 
         self.verticalLayout_2.addWidget(self.offlineWidget)
 
+        self.terrainWidget = QWidget(self.mainWidget)
+        self.terrainWidget.setObjectName(u"terrainWidget")
+        self.horizontalLayout_terrain = QHBoxLayout(self.terrainWidget)
+        self.horizontalLayout_terrain.setObjectName(u"horizontalLayout_terrain")
+        self.terrainElevationLabel = QLabel(self.terrainWidget)
+        self.terrainElevationLabel.setObjectName(u"terrainElevationLabel")
+        self.terrainElevationLabel.setFont(font)
+
+        self.horizontalLayout_terrain.addWidget(self.terrainElevationLabel)
+
+        self.terrainElevationCheckBox = QCheckBox(self.terrainWidget)
+        self.terrainElevationCheckBox.setObjectName(u"terrainElevationCheckBox")
+        self.terrainElevationCheckBox.setFont(font)
+
+        self.horizontalLayout_terrain.addWidget(self.terrainElevationCheckBox)
+
+
+        self.verticalLayout_2.addWidget(self.terrainWidget)
+
+        self.terrainCacheWidget = QWidget(self.mainWidget)
+        self.terrainCacheWidget.setObjectName(u"terrainCacheWidget")
+        self.horizontalLayout_terrain_cache = QHBoxLayout(self.terrainCacheWidget)
+        self.horizontalLayout_terrain_cache.setObjectName(u"horizontalLayout_terrain_cache")
+        self.terrainCacheLabel = QLabel(self.terrainCacheWidget)
+        self.terrainCacheLabel.setObjectName(u"terrainCacheLabel")
+        self.terrainCacheLabel.setFont(font)
+
+        self.horizontalLayout_terrain_cache.addWidget(self.terrainCacheLabel)
+
+        self.terrainCacheSizeLabel = QLabel(self.terrainCacheWidget)
+        self.terrainCacheSizeLabel.setObjectName(u"terrainCacheSizeLabel")
+        self.terrainCacheSizeLabel.setFont(font)
+
+        self.horizontalLayout_terrain_cache.addWidget(self.terrainCacheSizeLabel)
+
+        self.terrainCacheSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_terrain_cache.addItem(self.terrainCacheSpacer)
+
+        self.clearTerrainCacheButton = QPushButton(self.terrainCacheWidget)
+        self.clearTerrainCacheButton.setObjectName(u"clearTerrainCacheButton")
+        self.clearTerrainCacheButton.setFont(font)
+        self.clearTerrainCacheButton.setAutoDefault(False)
+
+        self.horizontalLayout_terrain_cache.addWidget(self.clearTerrainCacheButton)
+
+
+        self.verticalLayout_2.addWidget(self.terrainCacheWidget)
+
         self.droneSensorLabelsWidget = QHBoxLayout()
         self.droneSensorLabelsWidget.setObjectName(u"droneSensorLabelsWidget")
         self.droneSensorLabelsWidget.setContentsMargins(9, 9, 9, 9)
@@ -349,6 +398,30 @@ class Ui_Preferences(object):
         self.offlineOnlyCheckBox.setToolTip(QCoreApplication.translate("Preferences", u"Disable online functionality (tile downloads, CalTopo integration) and work entirely offline.", None))
 #endif // QT_CONFIG(tooltip)
         self.offlineOnlyCheckBox.setText(QCoreApplication.translate("Preferences", u"Enable", None))
+#if QT_CONFIG(tooltip)
+        self.terrainElevationLabel.setToolTip(QCoreApplication.translate("Preferences", u"Use terrain elevation data (DTM/DSM) for more accurate AOI GPS coordinate calculations.\n"
+"When enabled, uses online elevation data to account for terrain variations.\n"
+"When disabled, assumes flat terrain at takeoff altitude.", None))
+#endif // QT_CONFIG(tooltip)
+        self.terrainElevationLabel.setText(QCoreApplication.translate("Preferences", u"Use Terrain Elevation:", None))
+#if QT_CONFIG(tooltip)
+        self.terrainElevationCheckBox.setToolTip(QCoreApplication.translate("Preferences", u"Enable terrain-corrected AOI positioning using DTM/DSM elevation data.\n"
+"\u2022 When enabled: Downloads and caches elevation tiles for accurate positioning\n"
+"\u2022 When disabled: Uses flat terrain assumption (faster, works offline)\n"
+"Terrain data is cached locally and works offline after first download.", None))
+#endif // QT_CONFIG(tooltip)
+        self.terrainElevationCheckBox.setText(QCoreApplication.translate("Preferences", u"Enable", None))
+#if QT_CONFIG(tooltip)
+        self.terrainCacheLabel.setToolTip(QCoreApplication.translate("Preferences", u"Manage the terrain elevation data cache.\n"
+"Terrain tiles are downloaded and stored locally for offline use.", None))
+#endif // QT_CONFIG(tooltip)
+        self.terrainCacheLabel.setText(QCoreApplication.translate("Preferences", u"Terrain Cache:", None))
+        self.terrainCacheSizeLabel.setText(QCoreApplication.translate("Preferences", u"0 tiles (0 MB)", None))
+#if QT_CONFIG(tooltip)
+        self.clearTerrainCacheButton.setToolTip(QCoreApplication.translate("Preferences", u"Clear all cached terrain elevation tiles.\n"
+"This will require re-downloading tiles when terrain elevation is used.", None))
+#endif // QT_CONFIG(tooltip)
+        self.clearTerrainCacheButton.setText(QCoreApplication.translate("Preferences", u"Clear Cache", None))
 #if QT_CONFIG(tooltip)
         self.droneSensorLabel.setToolTip(QCoreApplication.translate("Preferences", u"Version of the current drone sensor configuration file.\n"
 "Contains camera specifications, sensor dimensions, and focal length data for different drone models.", None))

@@ -60,13 +60,14 @@ class CoordinateController:
         # Show coordinates popup
         self.show_coordinates_popup(coord_text)
 
-    def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None):
+    def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None, tooltip=None):
         """Show a small popup with coordinate sharing options.
 
         Args:
             coord_text: Formatted coordinate string to display
             anchor_widget: Optional widget to anchor the popup to (for single-image mode)
             anchor_point: Optional QPoint in global coordinates to anchor the popup to (for gallery mode)
+            tooltip: Optional tooltip/subtitle text to show (e.g., elevation source info)
         """
         # Close any existing popup
         if self.current_coords_popup:
@@ -103,6 +104,13 @@ class CoordinateController:
                 border-bottom: 1px solid #555555;
                 font-weight: bold;
             }
+            QLabel#subtitle {
+                font-weight: normal;
+                font-size: 11px;
+                color: #aaaaaa;
+                padding: 4px 12px;
+                border-bottom: 1px solid #555555;
+            }
         """)
 
         # Create layout
@@ -114,6 +122,13 @@ class CoordinateController:
         title = QLabel(f"GPS Coordinates: {coord_text}")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
+
+        # Subtitle with elevation source info (if provided)
+        if tooltip:
+            subtitle = QLabel(tooltip)
+            subtitle.setObjectName("subtitle")
+            subtitle.setAlignment(Qt.AlignCenter)
+            layout.addWidget(subtitle)
 
         # Helper function to close popup after action
         def close_popup():

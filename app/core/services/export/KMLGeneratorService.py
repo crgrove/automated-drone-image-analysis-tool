@@ -8,15 +8,17 @@ from core.services.image.AOIService import AOIService
 class KMLGeneratorService:
     """Service to generate a KML file with placemarks for flagged AOIs."""
 
-    def __init__(self, custom_altitude_ft=None):
+    def __init__(self, custom_altitude_ft=None, use_terrain=True):
         """
         Initializes the KMLGeneratorService by creating a new KML document.
 
         Args:
             custom_altitude_ft: Optional custom altitude in feet to use for GSD calculations
+            use_terrain: Whether to use terrain elevation data for AOI positioning
         """
         self.kml = simplekml.Kml()
         self.custom_altitude_ft = custom_altitude_ft
+        self.use_terrain = use_terrain
 
     def add_aoi_placemark(self, name, lat, lon, description, color_rgb=None):
         """
@@ -185,7 +187,7 @@ class KMLGeneratorService:
                     custom_alt_ft = self.custom_altitude_ft
 
                     # Calculate AOI GPS coordinates using the convenience method
-                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft, self.use_terrain)
 
                     if result:
                         aoi_lat, aoi_lon = result

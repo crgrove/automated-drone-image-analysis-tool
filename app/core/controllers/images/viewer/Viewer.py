@@ -175,6 +175,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
         self.show_hidden = show_hidden
+
+        # Terrain elevation preference for AOI positioning
+        self.use_terrain_elevation = self.settings_service.get_bool_setting('UseTerrainElevation', True)
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
 

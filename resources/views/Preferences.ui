@@ -379,6 +379,113 @@ When enabled, the app skips any network calls (map tiles, CalTopo exports) and w
       </widget>
      </item>
      <item>
+      <widget class="QWidget" name="terrainWidget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_terrain">
+        <item>
+         <widget class="QLabel" name="terrainElevationLabel">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Use terrain elevation data (DTM/DSM) for more accurate AOI GPS coordinate calculations.
+When enabled, uses online elevation data to account for terrain variations.
+When disabled, assumes flat terrain at takeoff altitude.</string>
+          </property>
+          <property name="text">
+           <string>Use Terrain Elevation:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="terrainElevationCheckBox">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Enable terrain-corrected AOI positioning using DTM/DSM elevation data.
+• When enabled: Downloads and caches elevation tiles for accurate positioning
+• When disabled: Uses flat terrain assumption (faster, works offline)
+Terrain data is cached locally and works offline after first download.</string>
+          </property>
+          <property name="text">
+           <string>Enable</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QWidget" name="terrainCacheWidget" native="true">
+       <layout class="QHBoxLayout" name="horizontalLayout_terrain_cache">
+        <item>
+         <widget class="QLabel" name="terrainCacheLabel">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Manage the terrain elevation data cache.
+Terrain tiles are downloaded and stored locally for offline use.</string>
+          </property>
+          <property name="text">
+           <string>Terrain Cache:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="terrainCacheSizeLabel">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>0 tiles (0 MB)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="terrainCacheSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="clearTerrainCacheButton">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>Clear all cached terrain elevation tiles.
+This will require re-downloading tiles when terrain elevation is used.</string>
+          </property>
+          <property name="text">
+           <string>Clear Cache</string>
+          </property>
+          <property name="autoDefault">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
        <layout class="QHBoxLayout" name="droneSensorLabelsWidget">
         <property name="leftMargin">
          <number>9</number>

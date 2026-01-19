@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from PySide6.QtWidgets import QDialog, QFileDialog
+from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 from core.views.Preferences_ui import Ui_Preferences
 from core.services.SettingsService import SettingsService
 from helpers.PickleHelper import PickleHelper
@@ -35,8 +35,10 @@ class Preferences(QDialog, Ui_Preferences):
             }
         """)
 
+        self._terrain_service = None
         self._load_settings()
         self._connect_signals()
+        self._update_terrain_cache_display()
 
     def _load_settings(self):
         """Loads the settings from SettingsService and updates the UI accordingly."""
@@ -58,6 +60,12 @@ class Preferences(QDialog, Ui_Preferences):
         offline_only = self.parent.settings_service.get_bool_setting('OfflineOnly', False)
         if hasattr(self, 'offlineOnlyCheckBox'):
             self.offlineOnlyCheckBox.setChecked(offline_only)
+
+        # Load terrain elevation setting (default: enabled)
+        terrain_enabled = self.parent.settings_service.get_bool_setting('UseTerrainElevation', True)
+        if hasattr(self, 'terrainElevationCheckBox'):
+            self.terrainElevationCheckBox.setChecked(terrain_enabled)
+
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
         self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
 
@@ -71,6 +79,10 @@ class Preferences(QDialog, Ui_Preferences):
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
         if hasattr(self, 'offlineOnlyCheckBox'):
             self.offlineOnlyCheckBox.toggled.connect(self._update_offline_only)
+        if hasattr(self, 'terrainElevationCheckBox'):
+            self.terrainElevationCheckBox.toggled.connect(self._update_terrain_elevation)
+        if hasattr(self, 'clearTerrainCacheButton'):
+            self.clearTerrainCacheButton.clicked.connect(self._clear_terrain_cache)
         self.droneSensorButton.clicked.connect(self._droneSensorButton_clicked)
 
     def _update_max_aois(self):
@@ -102,6 +114,70 @@ class Preferences(QDialog, Ui_Preferences):
     def _update_offline_only(self, checked: bool):
         """Update whether the app should run without online map/CalTopo access."""
         self.parent.settings_service.set_setting('OfflineOnly', bool(checked))
+
+    def _update_terrain_elevation(self, checked: bool):
+        """Update whether terrain elevation data should be used for AOI positioning."""
+        self.parent.settings_service.set_setting('UseTerrainElevation', bool(checked))
+
+        # Update terrain service if available
+        if self._terrain_service:
+            self._terrain_service.enabled = checked
+
+    def _get_terrain_service(self):
+        """Lazy-load terrain service."""
+        if self._terrain_service is None:
+            try:
+                from core.services.terrain import TerrainService
+                self._terrain_service = TerrainService()
+            except Exception:
+                pass
+        return self._terrain_service
+
+    def _update_terrain_cache_display(self):
+        """Update the terrain cache size display."""
+        if not hasattr(self, 'terrainCacheSizeLabel'):
+            return
+
+        try:
+            service = self._get_terrain_service()
+            if service:
+                info = service.get_service_info()
+                cache_info = info.get('cache', {})
+                tiles = cache_info.get('total_tiles', 0)
+                size_mb = cache_info.get('total_size_mb', 0)
+                self.terrainCacheSizeLabel.setText(f"{tiles} tiles ({size_mb:.1f} MB)")
+            else:
+                self.terrainCacheSizeLabel.setText("Not available")
+        except Exception:
+            self.terrainCacheSizeLabel.setText("Error")
+
+    def _clear_terrain_cache(self):
+        """Clear the terrain elevation cache."""
+        service = self._get_terrain_service()
+        if not service:
+            QMessageBox.warning(self, "Error", "Terrain service not available.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Clear Terrain Cache",
+            "Are you sure you want to clear all cached terrain elevation data?\n\n"
+            "This will require re-downloading tiles when terrain elevation is used.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                count = service.clear_cache()
+                self._update_terrain_cache_display()
+                QMessageBox.information(
+                    self,
+                    "Cache Cleared",
+                    f"Cleared {count} cached terrain tiles."
+                )
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to clear cache: {e}")
 
     def _droneSensorButton_clicked(self):
         """

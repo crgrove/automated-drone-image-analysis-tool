@@ -17,6 +17,7 @@ reportlab
 onnxruntime-directml
 tifffile
 requests
+pygeodesy>=24.0.0
 qtawesome
 shapely
 fastkml

@@ -25,6 +25,8 @@ if platform.system() == 'Windows':
                     ],
 
                 hiddenimports=[
+                    'shapely',
+                    'shapely.geometry',
                     # Streaming algorithms modules
                     'algorithms.streaming',
                     'algorithms.streaming.MotionDetection',
@@ -57,7 +59,7 @@ if platform.system() == 'Windows':
                 ],
                 hookspath=None,
                 runtime_hooks=None,
-                excludes=None,
+                excludes=['PyQt5', 'PyQt6'],
                 cipher=block_cipher)
 elif platform.system() == 'Darwin':
     a = Analysis(['app/__main__.py'],
@@ -78,6 +80,8 @@ elif platform.system() == 'Darwin':
                         ('app/algorithms/images/AIPersonDetector/services/ai_person_model_V2_1024.onnx', 'ai_models')
                         ],
                     hiddenimports=[
+                        'shapely',
+                        'shapely.geometry',
                         # Streaming algorithms modules
                         'algorithms.streaming',
                         'algorithms.streaming.MotionDetection',
@@ -110,7 +114,7 @@ elif platform.system() == 'Darwin':
                     ],
                     hookspath=None,
                     runtime_hooks=None,
-                    excludes=None,
+                    excludes=['PyQt5', 'PyQt6'],
                     cipher=block_cipher)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
