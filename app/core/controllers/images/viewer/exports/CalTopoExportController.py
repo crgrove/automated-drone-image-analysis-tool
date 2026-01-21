@@ -780,8 +780,11 @@ class CalTopoExportController:
                     if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                         custom_alt_ft = self.parent.custom_agl_altitude_ft
 
+                    # Get terrain preference
+                    use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
                     # Calculate AOI GPS coordinates using the convenience method
-                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft, use_terrain)
 
                     if result:
                         aoi_lat, aoi_lon = result

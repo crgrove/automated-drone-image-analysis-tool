@@ -7,6 +7,7 @@ UI manipulation is handled by AOIUIComponent.
 
 import colorsys
 import fnmatch
+import json
 import math
 import numpy as np
 import qtawesome as qta
@@ -550,8 +551,17 @@ class AOIController:
                 aoi = image['areas_of_interest'][aoi_index]
                 user_comment = aoi.get('user_comment', '')
 
-        # Calculate AOI GPS coordinates
-        aoi_gps_coords = self.calculate_aoi_gps(aoi_index)
+        # Calculate AOI GPS coordinates with metadata
+        gps_result = self.calculate_aoi_gps(aoi_index, return_metadata=True)
+
+        if gps_result:
+            aoi_gps_coords = gps_result['coords_text']
+            elevation_source = gps_result.get('elevation_source', 'flat')
+            terrain_elev = gps_result.get('terrain_elevation_m')
+        else:
+            aoi_gps_coords = "N/A"
+            elevation_source = None
+            terrain_elev = None
 
         # Format the data for clipboard
         clipboard_text = f"Image: {image_name}\n"
@@ -570,7 +580,13 @@ class AOIController:
             clipboard_text += f"Average: {avg_info}\n"
 
         clipboard_text += f"Image GPS Coordinates: {image_gps_coords}\n"
-        clipboard_text += f"AOI GPS Coordinates: {aoi_gps_coords}"
+        clipboard_text += f"AOI GPS Coordinates: {aoi_gps_coords}\n"
+
+        # Add elevation source info
+        if elevation_source == 'terrain' and terrain_elev is not None:
+            clipboard_text += f"Elevation Method: Terrain-corrected ({terrain_elev:.1f}m terrain elevation)"
+        else:
+            clipboard_text += "Elevation Method: Flat terrain assumed"
 
         # Copy to clipboard
         QApplication.clipboard().setText(clipboard_text)
@@ -579,23 +595,25 @@ class AOIController:
         if hasattr(self.parent, 'status_controller'):
             self.parent.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
 
-    def calculate_aoi_gps(self, aoi_index):
+    def calculate_aoi_gps(self, aoi_index, return_metadata=False):
         """Calculate GPS coordinates for a specific AOI.
 
         Args:
             aoi_index: Index of the AOI
+            return_metadata: If True, return dict with coordinates and elevation source info
 
         Returns:
-            String with formatted GPS coordinates or "N/A" if calculation fails
+            If return_metadata=False: String with formatted GPS coordinates or "N/A"
+            If return_metadata=True: Dict with 'coords_text', 'lat', 'lon', 'elevation_source', etc.
         """
         try:
             if aoi_index is None or aoi_index < 0:
-                return "N/A"
+                return "N/A" if not return_metadata else None
 
             # Get current image and AOI
             image = self.parent.images[self.parent.current_image]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
-                return "N/A"
+                return "N/A" if not return_metadata else None
 
             aoi = image['areas_of_interest'][aoi_index]
 
@@ -607,23 +625,38 @@ class AOIController:
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+            # Check if terrain is enabled in preferences
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
+            # Calculate AOI GPS coordinates with full metadata
+            result = aoi_service.calculate_gps_with_metadata(image, aoi, custom_alt_ft, use_terrain)
 
             if result:
-                lat, lon = result
+                lat, lon = result.latitude, result.longitude
 
                 # Get position format preference
                 position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
 
                 # Use LocationInfo for formatting
-                return LocationInfo.format_coordinates(lat, lon, position_format)
+                coords_text = LocationInfo.format_coordinates(lat, lon, position_format)
 
-            return "N/A"
+                if return_metadata:
+                    return {
+                        'coords_text': coords_text,
+                        'lat': lat,
+                        'lon': lon,
+                        'elevation_source': result.elevation_source,
+                        'terrain_elevation_m': result.terrain_elevation_m,
+                        'effective_agl_m': result.effective_agl_m,
+                        'terrain_resolution_m': result.terrain_resolution_m
+                    }
+                return coords_text
+
+            return "N/A" if not return_metadata else None
 
         except Exception as e:
             self.logger.error(f"Error calculating AOI GPS: {e}")
-            return "N/A"
+            return "N/A" if not return_metadata else None
 
     def show_aoi_location(self, aoi_index, image_idx=None, anchor_widget=None, anchor_point=None):
         """Calculate and show GPS location for an AOI.
@@ -658,14 +691,66 @@ class AOIController:
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Calculate AOI GPS coordinates
-            result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+            # Check if terrain is enabled in preferences
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
+            # Calculate AOI GPS coordinates with metadata
+            result = aoi_service.calculate_gps_with_metadata(image, aoi, custom_alt_ft, use_terrain)
 
             if not result:
-                self.parent.status_controller.show_toast("Could not calculate AOI location", 3000, color="#F44336")
+                # Collect diagnostic information for the user to share
+                try:
+                    # Get basic info from image service
+                    img_service = aoi_service.image_service
+                    gps_exif = LocationInfo.get_gps(exif_data=img_service.exif_data)
+                    
+                    diag_info = {
+                        "error": "Could not calculate AOI location",
+                        "image_path": str(image.get('path', 'N/A')),
+                        "aoi_center": aoi.get('center', 'N/A'),
+                        "custom_alt_ft": custom_alt_ft,
+                        "use_terrain_preference": use_terrain,
+                        "drone_make": img_service.drone_make if hasattr(img_service, 'drone_make') else 'N/A',
+                        "reported_agl_m": img_service.get_relative_altitude('m'),
+                        "reported_asl_m": img_service.get_asl_altitude('m'),
+                        "camera_pitch": img_service.get_camera_pitch(),
+                        "camera_yaw": img_service.get_camera_yaw(),
+                        "camera_intrinsics": img_service.get_camera_intrinsics(),
+                        "gps_exif": gps_exif,
+                        "image_shape": img_service.img_array.shape[:2] if hasattr(img_service, 'img_array') and img_service.img_array is not None else 'N/A'
+                    }
+                    
+                    # Deduce possible reasons for failure
+                    reasons = []
+                    if not gps_exif:
+                        reasons.append("Missing GPS coordinates in image EXIF data.")
+                    if not diag_info["camera_intrinsics"]:
+                        reasons.append("Camera model not recognized or missing focal length/sensor data in database.")
+                    
+                    agl = custom_alt_ft * 0.3048 if custom_alt_ft else diag_info["reported_agl_m"]
+                    if agl is None or agl <= 0:
+                        reasons.append(f"Invalid altitude for calculation: {agl}m. Ensure image has AGL metadata or set a custom altitude.")
+                    
+                    if diag_info["camera_pitch"] is not None and diag_info["camera_pitch"] > -5:
+                        reasons.append(f"Camera pitch ({diag_info['camera_pitch']}°) is too close to horizontal; the AOI might be above the horizon.")
+
+                    diag_info["potential_reasons"] = reasons
+                    
+                    # Copy to clipboard
+                    diag_json = json.dumps(diag_info, indent=4)
+                    QApplication.clipboard().setText(diag_json)
+                    
+                    self.parent.status_controller.show_toast(
+                        "Could not calculate AOI location. Diagnostic info copied to clipboard!", 
+                        6000, 
+                        color="#F44336"
+                    )
+                except Exception as diag_err:
+                    self.logger.error(f"Error generating diagnostic info: {diag_err}")
+                    self.parent.status_controller.show_toast("Could not calculate AOI location", 3000, color="#F44336")
                 return
 
-            lat, lon = result
+            lat, lon = result.latitude, result.longitude
 
             # Get position format preference
             position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
@@ -673,14 +758,39 @@ class AOIController:
             # Format coordinates
             coord_text = LocationInfo.format_coordinates(lat, lon, position_format)
 
+            # Add elevation source indicator
+            if result.elevation_source == 'terrain':
+                # Terrain elevation was used
+                source_icon = "🏔️"
+                source_tooltip = f"Terrain elevation: {result.terrain_elevation_m:.1f}m" if result.terrain_elevation_m else "Terrain-corrected"
+                if result.terrain_resolution_m:
+                    source_tooltip += f" (~{result.terrain_resolution_m:.0f}m resolution)"
+            else:
+                # Flat terrain assumed
+                source_icon = "⬜"
+                source_tooltip = "Flat terrain assumed"
+
             # Show popup using coordinate controller's method
             if hasattr(self.parent, 'coordinate_controller'):
                 # Store decimal coordinates for sharing (needed for coordinate controller methods)
                 self.parent.coordinate_controller.current_decimal_coords = (lat, lon)
-                self.parent.coordinate_controller.show_coordinates_popup(coord_text, anchor_widget=anchor_widget, anchor_point=anchor_point)
+
+                # Build display text with elevation source
+                display_text = f"{coord_text} {source_icon}"
+
+                self.parent.coordinate_controller.show_coordinates_popup(
+                    display_text,
+                    anchor_widget=anchor_widget,
+                    anchor_point=anchor_point,
+                    tooltip=source_tooltip
+                )
             else:
-                # Fallback: show simple message
-                self.parent.status_controller.show_toast(f"AOI Location: {coord_text}", 5000, color="#00C853")
+                # Fallback: show simple message with source
+                self.parent.status_controller.show_toast(
+                    f"AOI Location: {coord_text} {source_icon}",
+                    5000,
+                    color="#00C853"
+                )
 
         except Exception as e:
             self.logger.error(f"Error showing AOI location: {e}")

@@ -31,7 +31,7 @@ class UnifiedMapExportThread(QThread):
 
     def __init__(self, kml_service, coverage_service, images, flagged_aois,
                  include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage,
-                 output_path, custom_altitude_ft=None):
+                 output_path, custom_altitude_ft=None, use_terrain=True):
         """
         Initialize the export thread.
 
@@ -46,6 +46,7 @@ class UnifiedMapExportThread(QThread):
             include_coverage: Whether to include coverage extent
             output_path: Path to save the KML file
             custom_altitude_ft: Optional custom altitude in feet
+            use_terrain: Whether to use terrain elevation data
         """
         super().__init__()
         self.kml_service = kml_service
@@ -58,6 +59,7 @@ class UnifiedMapExportThread(QThread):
         self.include_coverage = include_coverage
         self.output_path = output_path
         self.custom_altitude_ft = custom_altitude_ft
+        self.use_terrain = use_terrain
         self._cancelled = False
 
     def cancel(self):
@@ -207,7 +209,7 @@ class UnifiedMapExportThread(QThread):
                             try:
                                 aoi_service = AOIService(image)
                                 result = aoi_service.calculate_gps_with_custom_altitude(
-                                    image, aoi, self.custom_altitude_ft
+                                    image, aoi, self.custom_altitude_ft, self.use_terrain
                                 )
 
                                 if result:
@@ -433,8 +435,11 @@ class UnifiedMapExportController:
             if hasattr(self.parent, 'altitude_controller'):
                 custom_alt = self.parent.altitude_controller.get_effective_altitude()
 
+            # Get terrain preference
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
             # Create services
-            kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt)
+            kml_service = KMLGeneratorService(custom_altitude_ft=custom_alt, use_terrain=use_terrain)
             coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger)
 
             # Calculate total items for progress (will be recalculated in thread, but estimate here)
@@ -472,7 +477,8 @@ class UnifiedMapExportController:
                 include_flagged_aois,
                 include_coverage,
                 file_name,
-                custom_alt
+                custom_alt,
+                use_terrain
             )
 
             # Connect signals

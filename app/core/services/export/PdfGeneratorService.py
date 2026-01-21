@@ -545,8 +545,17 @@ class PdfGeneratorService:
                 # Add AOI GPS coordinates if available
                 aoi_gps = self._calculate_aoi_gps(img, aoi)
                 if aoi_gps:
-                    aoi_gps_str = f"{aoi_gps['latitude']:.6f}, {aoi_gps['longitude']:.6f}"
-                    metadata_lines.append(f"<b>Estimated AOI GPS Location:</b> {aoi_gps_str}")
+                    lat, lon = aoi_gps['latitude'], aoi_gps['longitude']
+                    aoi_gps_str = f"{lat:.6f}, {lon:.6f}"
+                    
+                    # Create Google Maps link
+                    maps_url = f"https://www.google.com/maps?q={lat},{lon}"
+                    maps_link = f'<a href="{maps_url}" color="blue"><u>(Open in Google Maps)</u></a>'
+                    placemark_name = f"{img['name']} - AOI {aoi_idx + 1}"
+                    geo_url = f"geo:{lat},{lon},u=20&({placemark_name})"
+                    geo_link = f'<a href="{geo_url}" color="blue"><u>(Open in GPS)</u></a>'
+                    
+                    metadata_lines.append(f"<b>Estimated AOI GPS Location:</b> {aoi_gps_str} {maps_link} {geo_link}")
 
                 metadata_lines.append(f"<b>AOI Pixel Area:</b> {aoi.get('area', 0):.0f}")
 
@@ -1014,8 +1023,11 @@ class PdfGeneratorService:
             if hasattr(self.viewer, 'custom_agl_altitude_ft') and self.viewer.custom_agl_altitude_ft and self.viewer.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.viewer.custom_agl_altitude_ft
 
+            # Get terrain preference
+            use_terrain = getattr(self.viewer, 'use_terrain_elevation', True)
+
             # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft)
+            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft, use_terrain)
 
             if result:
                 lat, lon = result
