@@ -20,9 +20,10 @@ from algorithms.Shared.views import HSVColorRowWidget
 from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.RecentColorsService import get_recent_colors_service
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
+class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget):
     """Control widget for color detection parameters."""
 
     configChanged = Signal(dict)
@@ -50,6 +51,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         # Connect signals
         self.connect_signals()
+        self._apply_translations()
 
     def _populate_tabs(self):
         """Populate tabs with control panels."""
@@ -61,11 +63,11 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         self.cleanup_tab = CleanupTab()
         self.frame_tab = FrameTab()
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
-        self.tabs.addTab(self._create_color_selection_tab(), "Color Selection")
-        self.tabs.addTab(self._create_detection_tab(), "Detection")
-        self.tabs.addTab(self.input_processing_tab, "Input && Processing")
-        self.tabs.addTab(self.frame_tab, "Frame")
-        self.tabs.addTab(self.rendering_tab, "Rendering && Cleanup")
+        self.tabs.addTab(self._create_color_selection_tab(), self.tr("Color Selection"))
+        self.tabs.addTab(self._create_detection_tab(), self.tr("Detection"))
+        self.tabs.addTab(self.input_processing_tab, self.tr("Input && Processing"))
+        self.tabs.addTab(self.frame_tab, self.tr("Frame"))
+        self.tabs.addTab(self.rendering_tab, self.tr("Rendering && Cleanup"))
 
     def _create_color_selection_tab(self) -> QWidget:
         """Create color selection tab matching screenshot - inline editing with HSV ranges."""
@@ -74,10 +76,14 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         # Top buttons
         btn_layout = QHBoxLayout()
-        self.add_color_btn = QPushButton("Add Color")
-        self.add_color_btn.setToolTip("Add a new color range to detect.\n"
-                                      "Choose from HSV Color Picker, Image, List, or Recent Colors.\n"
-                                      "You can add multiple color ranges to detect different colors simultaneously.")
+        self.add_color_btn = QPushButton(self.tr("Add Color"))
+        self.add_color_btn.setToolTip(
+            self.tr(
+                "Add a new color range to detect.\n"
+                "Choose from HSV Color Picker, Image, List, or Recent Colors.\n"
+                "You can add multiple color ranges to detect different colors simultaneously."
+            )
+        )
         btn_layout.addWidget(self.add_color_btn)
 
         # Set up color selection menu (same as wizard)
@@ -93,11 +99,15 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
 
         btn_layout.addStretch()
 
-        self.view_range_btn = QPushButton("View Range")
-        self.view_range_btn.setToolTip("View HSV color ranges for all configured colors.\n"
-                                       "Opens a viewer dialog for each color range showing\n"
-                                       "the hue, saturation, and value ranges that will be detected.\n"
-                                       "Useful for understanding and fine-tuning multi-color detection.")
+        self.view_range_btn = QPushButton(self.tr("View Range"))
+        self.view_range_btn.setToolTip(
+            self.tr(
+                "View HSV color ranges for all configured colors.\n"
+                "Opens a viewer dialog for each color range showing\n"
+                "the hue, saturation, and value ranges that will be detected.\n"
+                "Useful for understanding and fine-tuning multi-color detection."
+            )
+        )
         btn_layout.addWidget(self.view_range_btn)
         layout.addLayout(btn_layout)
 
@@ -132,43 +142,55 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         grid.setColumnMinimumWidth(0, 160)
         grid.setColumnStretch(1, 1)
 
-        grid.addWidget(QLabel("Min Object Area (px):"), 0, 0)
+        grid.addWidget(QLabel(self.tr("Min Object Area (px):")), 0, 0)
         self.min_area_spinbox = QSpinBox()
         self.min_area_spinbox.setRange(10, 50000)
         self.min_area_spinbox.setValue(10)
-        self.min_area_spinbox.setToolTip("Minimum detection area in pixels (10-50000).\n"
-                                         "Filters out very small detections (noise, small objects, fragments).\n"
-                                         "Lower values = detect smaller objects, more detections, more noise.\n"
-                                         "Higher values = only large objects, fewer detections, less noise.\n"
-                                         "Recommended: 100 for general use, 50 for small objects, 200-500 for large objects.")
+        self.min_area_spinbox.setToolTip(
+            self.tr(
+                "Minimum detection area in pixels (10-50000).\n"
+                "Filters out very small detections (noise, small objects, fragments).\n"
+                "Lower values = detect smaller objects, more detections, more noise.\n"
+                "Higher values = only large objects, fewer detections, less noise.\n"
+                "Recommended: 100 for general use, 50 for small objects, 200-500 for large objects."
+            )
+        )
         grid.addWidget(self.min_area_spinbox, 0, 1)
 
-        grid.addWidget(QLabel("Max Object Area (px):"), 1, 0)
+        grid.addWidget(QLabel(self.tr("Max Object Area (px):")), 1, 0)
         self.max_area_spinbox = QSpinBox()
         self.max_area_spinbox.setRange(100, 500000)
         self.max_area_spinbox.setValue(100000)
-        self.max_area_spinbox.setToolTip("Maximum detection area in pixels (100-500000).\n"
-                                         "Filters out very large detections (shadows, lighting changes, entire scene).\n"
-                                         "Lower values = only small/medium objects.\n"
-                                         "Higher values = allow large objects, may include unwanted large regions.\n"
-                                         "Recommended: 100000 for general use, 50000 for small objects, 200000+ for large objects.")
+        self.max_area_spinbox.setToolTip(
+            self.tr(
+                "Maximum detection area in pixels (100-500000).\n"
+                "Filters out very large detections (shadows, lighting changes, entire scene).\n"
+                "Lower values = only small/medium objects.\n"
+                "Higher values = allow large objects, may include unwanted large regions.\n"
+                "Recommended: 100000 for general use, 50000 for small objects, 200000+ for large objects."
+            )
+        )
         grid.addWidget(self.max_area_spinbox, 1, 1)
 
-        grid.addWidget(QLabel("Confidence Threshold:"), 2, 0)
+        grid.addWidget(QLabel(self.tr("Confidence Threshold:")), 2, 0)
         confidence_layout = QHBoxLayout()
         self.confidence_slider = QSlider(Qt.Horizontal)
         self.confidence_slider.setRange(0, 100)
         self.confidence_slider.setValue(50)  # Default 0.5 (50%)
-        self.confidence_slider.setToolTip("Minimum confidence score to accept a detection (0-100%).\n"
-                                          "Confidence is calculated from:\n"
-                                          "• Size score: area relative to max area\n"
-                                          "• Shape score: solidity (how compact/regular the shape is)\n"
-                                          "• Final: average of both scores\n\n"
-                                          "Lower values (0-30%) = accept more detections, including weak/fragmented ones.\n"
-                                          "Higher values (70-100%) = only high-quality detections, well-formed shapes.\n"
-                                          "Recommended: 50% for balanced filtering, 30% for more detections, 70% for strict quality.")
+        self.confidence_slider.setToolTip(
+            self.tr(
+                "Minimum confidence score to accept a detection (0-100%).\n"
+                "Confidence is calculated from:\n"
+                "• Size score: area relative to max area\n"
+                "• Shape score: solidity (how compact/regular the shape is)\n"
+                "• Final: average of both scores\n\n"
+                "Lower values (0-30%) = accept more detections, including weak/fragmented ones.\n"
+                "Higher values (70-100%) = only high-quality detections, well-formed shapes.\n"
+                "Recommended: 50% for balanced filtering, 30% for more detections, 70% for strict quality."
+            )
+        )
         confidence_layout.addWidget(self.confidence_slider)
-        self.confidence_label = QLabel("50%")
+        self.confidence_label = QLabel(self.tr("50%"))
         confidence_layout.addWidget(self.confidence_label)
         grid.addLayout(confidence_layout, 2, 1)
 
@@ -293,7 +315,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         v_plus_frac = hsv_data.get('v_plus', 0.2)
 
         new_range = {
-            'name': f"Color_{len(self.color_ranges) + 1}",
+            'name': self.tr("Color_{index}").format(index=len(self.color_ranges) + 1),
             'color': color,
             'hue_minus': int(h_minus_frac * 179),
             'hue_plus': int(h_plus_frac * 179),
@@ -346,7 +368,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
                 v_plus_frac = hsv_ranges.get('v_plus', 0.2)
 
                 new_range = {
-                    'name': f"Color_{len(self.color_ranges) + 1}",
+                    'name': self.tr("Color_{index}").format(index=len(self.color_ranges) + 1),
                     'color': color,
                     'hue_minus': int(h_minus_frac * 179),
                     'hue_plus': int(h_plus_frac * 179),
@@ -381,7 +403,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         val_tolerance = 51  # 20% of full value range (0.2 * 255) - tighter than old 75
 
         new_range = {
-            'name': f"Color_{len(self.color_ranges) + 1}",
+            'name': self.tr("Color_{index}").format(index=len(self.color_ranges) + 1),
             'color': color,
             'hue_minus': hue_tolerance,
             'hue_plus': hue_tolerance,
@@ -463,7 +485,9 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
         # Create combined viewer dialog showing all color ranges
         range_dialog = HSVColorRangeRangeViewer(hsv_ranges_list=hsv_ranges_list)
         if hasattr(range_dialog, 'setWindowTitle'):
-            range_dialog.setWindowTitle(f"Color Ranges: {len(hsv_ranges_list)} colors")
+            range_dialog.setWindowTitle(
+                self.tr("Color Ranges: {count} colors").format(count=len(hsv_ranges_list))
+            )
         range_dialog.exec()
 
     def _on_remove_color_range(self, widget):
@@ -633,7 +657,7 @@ class ColorDetectionControlWidget(QWidget, Ui_HSVControlWidget):
             val_plus = int(hsv_ranges['v_plus'] * 255)
 
             updated_color_ranges.append({
-                'name': f"Color_{len(updated_color_ranges) + 1}",
+                'name': self.tr("Color_{index}").format(index=len(updated_color_ranges) + 1),
                 'color': color,
                 'hue_minus': hue_minus,
                 'hue_plus': hue_plus,

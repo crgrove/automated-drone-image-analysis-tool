@@ -118,7 +118,7 @@ class GeneralSettingsPage(BasePage):
         color = QColorDialog.getColor(
             self.wizard_data['identifier_color'],
             self.dialog,
-            "Select AOI Highlight Color"
+            self.tr("Select AOI Highlight Color")
         )
         if color.isValid():
             self.wizard_data['identifier_color'] = color
@@ -156,10 +156,12 @@ class GeneralSettingsPage(BasePage):
         # Show informational message
         QMessageBox.information(
             self.dialog,
-            "Benchmark Complete",
-            f"Detected {cpu_count} CPU core(s).\n\n"
-            f"Recommended number of processes: {recommended_count}\n\n"
-            f"The slider has been set to {recommended_count} processes."
+            self.tr("Benchmark Complete"),
+            self.tr(
+                "Detected {count} CPU core(s).\n\n"
+                "Recommended number of processes: {recommended}\n\n"
+                "The slider has been set to {recommended} processes."
+            ).format(count=cpu_count, recommended=recommended_count)
         )
 
     def _on_normalize_changed(self):

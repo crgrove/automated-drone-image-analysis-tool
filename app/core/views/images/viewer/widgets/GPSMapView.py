@@ -14,9 +14,10 @@ from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QEvent
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMouseEvent, QPainter, QPixmap, QFont, QPalette, QPolygonF
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
 from core.services.image.ImageService import ImageService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class GPSMapView(QGraphicsView):
+class GPSMapView(TranslationMixin, QGraphicsView):
     """
     Custom graphics view for displaying and interacting with GPS points on a map.
 
@@ -1081,7 +1082,7 @@ class GPSMapView(QGraphicsView):
             }
         """)
 
-        copy_action = menu.addAction("Copy Data")
+        copy_action = menu.addAction(self.tr("Copy Data"))
         copy_action.triggered.connect(self.copy_aoi_data)
         menu.exec(global_pos)
 

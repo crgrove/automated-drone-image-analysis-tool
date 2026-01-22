@@ -7,9 +7,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from core.services.LoggerService import LoggerService
 from core.services.coordinator.SearchProjectService import SearchProjectService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class CoordinatorWindow(QMainWindow):
+class CoordinatorWindow(TranslationMixin, QMainWindow):
     """Main window for coordinating multi-batch search reviews."""
 
     def __init__(self, theme="Light"):
@@ -26,7 +27,7 @@ class CoordinatorWindow(QMainWindow):
         self.project_path = None
 
         self._setup_ui()
-        self.setWindowTitle("Search Coordinator")
+        self.setWindowTitle(self.tr("Search Coordinator"))
         self.resize(1200, 800)
 
     def _setup_ui(self):
@@ -45,26 +46,28 @@ class CoordinatorWindow(QMainWindow):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
 
-        self.new_project_btn = QPushButton("Create New Search")
+        self.new_project_btn = QPushButton(self.tr("Create New Search"))
         self.new_project_btn.setMinimumHeight(40)
         self.new_project_btn.clicked.connect(self._create_new_project)
         button_layout.addWidget(self.new_project_btn)
 
-        self.open_project_btn = QPushButton("Open Existing Search")
+        self.open_project_btn = QPushButton(self.tr("Open Existing Search"))
         self.open_project_btn.setMinimumHeight(40)
         self.open_project_btn.clicked.connect(self._open_project)
         button_layout.addWidget(self.open_project_btn)
 
-        self.save_project_btn = QPushButton("Save Search")
+        self.save_project_btn = QPushButton(self.tr("Save Search"))
         self.save_project_btn.setMinimumHeight(40)
         self.save_project_btn.setEnabled(False)
         self.save_project_btn.clicked.connect(self._save_project)
         button_layout.addWidget(self.save_project_btn)
 
-        self.add_batch_btn = QPushButton("Add Batches to Search")
+        self.add_batch_btn = QPushButton(self.tr("Add Batches to Search"))
         self.add_batch_btn.setMinimumHeight(40)
         self.add_batch_btn.setEnabled(False)
-        self.add_batch_btn.setToolTip("Add more batch XML files to the current search project")
+        self.add_batch_btn.setToolTip(
+            self.tr("Add more batch XML files to the current search project")
+        )
         self.add_batch_btn.clicked.connect(self._add_batches)
         button_layout.addWidget(self.add_batch_btn)
 
@@ -81,15 +84,15 @@ class CoordinatorWindow(QMainWindow):
 
         # Dashboard tab
         self.dashboard_widget = self._create_dashboard_tab()
-        self.tab_widget.addTab(self.dashboard_widget, "Dashboard")
+        self.tab_widget.addTab(self.dashboard_widget, self.tr("Dashboard"))
 
         # Batch Status tab
         self.batch_status_widget = self._create_batch_status_tab()
-        self.tab_widget.addTab(self.batch_status_widget, "Batch Status")
+        self.tab_widget.addTab(self.batch_status_widget, self.tr("Batch Status"))
 
         # AOI Analysis tab
         self.aoi_analysis_widget = self._create_aoi_analysis_tab()
-        self.tab_widget.addTab(self.aoi_analysis_widget, "AOI Analysis")
+        self.tab_widget.addTab(self.aoi_analysis_widget, self.tr("AOI Analysis"))
 
         main_layout.addWidget(self.tab_widget)
 
@@ -97,13 +100,13 @@ class CoordinatorWindow(QMainWindow):
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(10)
 
-        self.load_review_btn = QPushButton("Load Review XML")
+        self.load_review_btn = QPushButton(self.tr("Load Review XML"))
         self.load_review_btn.setMinimumHeight(40)
         self.load_review_btn.setEnabled(False)
         self.load_review_btn.clicked.connect(self._load_review)
         bottom_layout.addWidget(self.load_review_btn)
 
-        self.export_results_btn = QPushButton("Export Consolidated Results")
+        self.export_results_btn = QPushButton(self.tr("Export Consolidated Results"))
         self.export_results_btn.setMinimumHeight(40)
         self.export_results_btn.setEnabled(False)
         self.export_results_btn.clicked.connect(self._export_results)
@@ -115,24 +118,24 @@ class CoordinatorWindow(QMainWindow):
 
     def _create_project_info_section(self):
         """Create the project information section."""
-        group = QGroupBox("Project Information")
+        group = QGroupBox(self.tr("Project Information"))
         layout = QHBoxLayout()
         layout.setSpacing(20)
 
         # Project Name
-        self.project_name_label = QLabel("No project loaded")
+        self.project_name_label = QLabel(self.tr("No project loaded"))
         self.project_name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        layout.addWidget(QLabel("Project:"))
+        layout.addWidget(QLabel(self.tr("Project:")))
         layout.addWidget(self.project_name_label)
 
         # Created by
         self.created_by_label = QLabel("-")
-        layout.addWidget(QLabel("Created by:"))
+        layout.addWidget(QLabel(self.tr("Created by:")))
         layout.addWidget(self.created_by_label)
 
         # Created date
         self.created_date_label = QLabel("-")
-        layout.addWidget(QLabel("Date:"))
+        layout.addWidget(QLabel(self.tr("Date:")))
         layout.addWidget(self.created_date_label)
 
         layout.addStretch()
@@ -151,10 +154,10 @@ class CoordinatorWindow(QMainWindow):
         metrics_layout.setSpacing(15)
 
         # Create metric cards
-        self.total_batches_card = self._create_metric_card("Total Batches", "0", "#3498db")
-        self.total_images_card = self._create_metric_card("Total Images", "0", "#9b59b6")
-        self.total_reviews_card = self._create_metric_card("Total Reviews", "0", "#2ecc71")
-        self.unique_reviewers_card = self._create_metric_card("Reviewers", "0", "#e67e22")
+        self.total_batches_card = self._create_metric_card(self.tr("Total Batches"), "0", "#3498db")
+        self.total_images_card = self._create_metric_card(self.tr("Total Images"), "0", "#9b59b6")
+        self.total_reviews_card = self._create_metric_card(self.tr("Total Reviews"), "0", "#2ecc71")
+        self.unique_reviewers_card = self._create_metric_card(self.tr("Reviewers"), "0", "#e67e22")
 
         metrics_layout.addWidget(self.total_batches_card)
         metrics_layout.addWidget(self.total_images_card)
@@ -164,17 +167,17 @@ class CoordinatorWindow(QMainWindow):
         layout.addLayout(metrics_layout)
 
         # Progress section
-        progress_group = QGroupBox("Review Progress")
+        progress_group = QGroupBox(self.tr("Review Progress"))
         progress_layout = QVBoxLayout()
 
         # Overall completion
         completion_layout = QHBoxLayout()
-        completion_layout.addWidget(QLabel("Overall Completion:"))
+        completion_layout.addWidget(QLabel(self.tr("Overall Completion:")))
         self.completion_progress = QProgressBar()
         self.completion_progress.setMinimumHeight(30)
         self.completion_progress.setTextVisible(True)
         completion_layout.addWidget(self.completion_progress)
-        self.completion_percent_label = QLabel("0%")
+        self.completion_percent_label = QLabel(self.tr("0%"))
         self.completion_percent_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         completion_layout.addWidget(self.completion_percent_label)
         progress_layout.addLayout(completion_layout)
@@ -188,7 +191,7 @@ class CoordinatorWindow(QMainWindow):
         self.not_reviewed_count.setStyleSheet("font-size: 24px; font-weight: bold; color: #e74c3c;")
         self.not_reviewed_count.setAlignment(Qt.AlignCenter)
         not_reviewed_layout.addWidget(self.not_reviewed_count)
-        not_reviewed_layout.addWidget(QLabel("Not Reviewed"), alignment=Qt.AlignCenter)
+        not_reviewed_layout.addWidget(QLabel(self.tr("Not Reviewed")), alignment=Qt.AlignCenter)
         status_layout.addLayout(not_reviewed_layout)
 
         # In Progress
@@ -197,7 +200,7 @@ class CoordinatorWindow(QMainWindow):
         self.in_progress_count.setStyleSheet("font-size: 24px; font-weight: bold; color: #f39c12;")
         self.in_progress_count.setAlignment(Qt.AlignCenter)
         in_progress_layout.addWidget(self.in_progress_count)
-        in_progress_layout.addWidget(QLabel("In Progress"), alignment=Qt.AlignCenter)
+        in_progress_layout.addWidget(QLabel(self.tr("In Progress")), alignment=Qt.AlignCenter)
         status_layout.addLayout(in_progress_layout)
 
         # Complete
@@ -206,7 +209,7 @@ class CoordinatorWindow(QMainWindow):
         self.complete_count.setStyleSheet("font-size: 24px; font-weight: bold; color: #27ae60;")
         self.complete_count.setAlignment(Qt.AlignCenter)
         complete_layout.addWidget(self.complete_count)
-        complete_layout.addWidget(QLabel("Complete"), alignment=Qt.AlignCenter)
+        complete_layout.addWidget(QLabel(self.tr("Complete")), alignment=Qt.AlignCenter)
         status_layout.addLayout(complete_layout)
 
         progress_layout.addLayout(status_layout)
@@ -214,7 +217,7 @@ class CoordinatorWindow(QMainWindow):
         layout.addWidget(progress_group)
 
         # AOI Summary section
-        aoi_group = QGroupBox("AOI Summary")
+        aoi_group = QGroupBox(self.tr("AOI Summary"))
         aoi_layout = QHBoxLayout()
 
         total_aois_layout = QVBoxLayout()
@@ -222,7 +225,7 @@ class CoordinatorWindow(QMainWindow):
         self.total_aois_count.setStyleSheet("font-size: 24px; font-weight: bold; color: #3498db;")
         self.total_aois_count.setAlignment(Qt.AlignCenter)
         total_aois_layout.addWidget(self.total_aois_count)
-        total_aois_layout.addWidget(QLabel("Total AOIs"), alignment=Qt.AlignCenter)
+        total_aois_layout.addWidget(QLabel(self.tr("Total AOIs")), alignment=Qt.AlignCenter)
         aoi_layout.addLayout(total_aois_layout)
 
         flagged_aois_layout = QVBoxLayout()
@@ -230,16 +233,16 @@ class CoordinatorWindow(QMainWindow):
         self.flagged_aois_count.setStyleSheet("font-size: 24px; font-weight: bold; color: #e74c3c;")
         self.flagged_aois_count.setAlignment(Qt.AlignCenter)
         flagged_aois_layout.addWidget(self.flagged_aois_count)
-        flagged_aois_layout.addWidget(QLabel("Flagged AOIs"), alignment=Qt.AlignCenter)
+        flagged_aois_layout.addWidget(QLabel(self.tr("Flagged AOIs")), alignment=Qt.AlignCenter)
         aoi_layout.addLayout(flagged_aois_layout)
 
         aoi_group.setLayout(aoi_layout)
         layout.addWidget(aoi_group)
 
         # Reviewer list
-        reviewer_group = QGroupBox("Active Reviewers")
+        reviewer_group = QGroupBox(self.tr("Active Reviewers"))
         reviewer_layout = QVBoxLayout()
-        self.reviewer_list = QLabel("No reviewers yet")
+        self.reviewer_list = QLabel(self.tr("No reviewers yet"))
         self.reviewer_list.setWordWrap(True)
         reviewer_layout.addWidget(self.reviewer_list)
         reviewer_group.setLayout(reviewer_layout)
@@ -285,7 +288,9 @@ class CoordinatorWindow(QMainWindow):
         layout = QVBoxLayout()
 
         # Instructions
-        info_label = QLabel("Batch review status and assignments. Load reviewer XMLs to update progress.")
+        info_label = QLabel(
+            self.tr("Batch review status and assignments. Load reviewer XMLs to update progress.")
+        )
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -293,7 +298,12 @@ class CoordinatorWindow(QMainWindow):
         self.batch_table = QTableWidget()
         self.batch_table.setColumnCount(6)
         self.batch_table.setHorizontalHeaderLabels([
-            "Batch ID", "Algorithm", "Images", "Reviews", "Reviewers", "Status"
+            self.tr("Batch ID"),
+            self.tr("Algorithm"),
+            self.tr("Images"),
+            self.tr("Reviews"),
+            self.tr("Reviewers"),
+            self.tr("Status")
         ])
         self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.batch_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -311,7 +321,9 @@ class CoordinatorWindow(QMainWindow):
         layout = QVBoxLayout()
 
         # Instructions
-        info_label = QLabel("Consolidated AOI data from all reviews. Shows flag counts and reviewer comments.")
+        info_label = QLabel(
+            self.tr("Consolidated AOI data from all reviews. Shows flag counts and reviewer comments.")
+        )
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
@@ -319,7 +331,11 @@ class CoordinatorWindow(QMainWindow):
         self.aoi_table = QTableWidget()
         self.aoi_table.setColumnCount(5)
         self.aoi_table.setHorizontalHeaderLabels([
-            "Image", "Location", "Flag Count", "Reviewers", "Comments"
+            self.tr("Image"),
+            self.tr("Location"),
+            self.tr("Flag Count"),
+            self.tr("Reviewers"),
+            self.tr("Comments")
         ])
         self.aoi_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.aoi_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -336,8 +352,8 @@ class CoordinatorWindow(QMainWindow):
         # Get project name
         project_name, ok = QInputDialog.getText(
             self,
-            "New Search Project",
-            "Enter project name:"
+            self.tr("New Search Project"),
+            self.tr("Enter project name:")
         )
 
         if not ok or not project_name:
@@ -346,8 +362,8 @@ class CoordinatorWindow(QMainWindow):
         # Get coordinator name
         coordinator_name, ok = QInputDialog.getText(
             self,
-            "Coordinator Information",
-            "Enter your name:"
+            self.tr("Coordinator Information"),
+            self.tr("Enter your name:")
         )
 
         if not ok:
@@ -356,14 +372,16 @@ class CoordinatorWindow(QMainWindow):
         # Select batch XML files
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle("Select Batch Files")
-        msg.setText("Select Initial Batch XML Files")
+        msg.setWindowTitle(self.tr("Select Batch Files"))
+        msg.setText(self.tr("Select Initial Batch XML Files"))
         msg.setInformativeText(
-            "You can select multiple ADIAT_Data.xml files from different folders.\n\n"
-            "Tips:\n"
-            "• Hold Ctrl (Windows/Linux) or Cmd (Mac) to select multiple files\n"
-            "• You can add more batches later using 'Add Batches to Search' button\n"
-            "• Each batch should be a processed ADIAT_Data.xml file"
+            self.tr(
+                "You can select multiple ADIAT_Data.xml files from different folders.\n\n"
+                "Tips:\n"
+                "• Hold Ctrl (Windows/Linux) or Cmd (Mac) to select multiple files\n"
+                "• You can add more batches later using 'Add Batches to Search' button\n"
+                "• Each batch should be a processed ADIAT_Data.xml file"
+            )
         )
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
 
@@ -372,9 +390,9 @@ class CoordinatorWindow(QMainWindow):
 
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select Batch ADIAT_Data.xml Files (Hold Ctrl to select multiple)",
+            self.tr("Select Batch ADIAT_Data.xml Files (Hold Ctrl to select multiple)"),
             "",
-            "XML Files (*.xml)"
+            self.tr("XML Files (*.xml)")
         )
 
         if not file_paths:
@@ -387,9 +405,9 @@ class CoordinatorWindow(QMainWindow):
             default_name = f"ADIAT_Search_{project_name.replace(' ', '_')}.xml"
             save_path, _ = QFileDialog.getSaveFileName(
                 self,
-                "Save Search Project",
+                self.tr("Save Search Project"),
                 default_name,
-                "XML Files (*.xml)"
+                self.tr("XML Files (*.xml)")
             )
 
             if save_path:
@@ -399,21 +417,27 @@ class CoordinatorWindow(QMainWindow):
                     self._enable_project_controls(True)
                     QMessageBox.information(
                         self,
-                        "Success",
-                        f"Search project '{project_name}' created successfully!"
+                        self.tr("Success"),
+                        self.tr("Search project '{project}' created successfully!").format(
+                            project=project_name
+                        )
                     )
                 else:
-                    QMessageBox.critical(self, "Error", "Failed to save project file.")
+                    QMessageBox.critical(
+                        self,
+                        self.tr("Error"),
+                        self.tr("Failed to save project file.")
+                    )
         else:
-            QMessageBox.critical(self, "Error", "Failed to create project.")
+            QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to create project."))
 
     def _open_project(self):
         """Open an existing search project."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Open Search Project",
+            self.tr("Open Search Project"),
             "",
-            "Search Project Files (ADIAT_Search_*.xml);;All XML Files (*.xml)"
+            self.tr("Search Project Files (ADIAT_Search_*.xml);;All XML Files (*.xml)")
         )
 
         if not file_path:
@@ -424,36 +448,54 @@ class CoordinatorWindow(QMainWindow):
             self.project_path = file_path
             self._update_all_displays()
             self._enable_project_controls(True)
-            QMessageBox.information(self, "Success", "Project loaded successfully!")
+            QMessageBox.information(
+                self,
+                self.tr("Success"),
+                self.tr("Project loaded successfully!")
+            )
         else:
-            QMessageBox.critical(self, "Error", "Failed to load project file.")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to load project file.")
+            )
 
     def _save_project(self):
         """Save the current project."""
         if self.project_service and self.project_path:
             if self.project_service.save_project(self.project_path):
-                QMessageBox.information(self, "Success", "Project saved successfully!")
+                QMessageBox.information(
+                    self,
+                    self.tr("Success"),
+                    self.tr("Project saved successfully!")
+                )
             else:
-                QMessageBox.critical(self, "Error", "Failed to save project.")
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to save project."))
 
     def _add_batches(self):
         """Add more batches to the current project."""
         if not self.project_service:
-            QMessageBox.warning(self, "No Project", "Please create or open a project first.")
+            QMessageBox.warning(
+                self,
+                self.tr("No Project"),
+                self.tr("Please create or open a project first.")
+            )
             return
 
         # Instruction message
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle("Add Batches")
-        msg.setText("Add More Batch XML Files")
+        msg.setWindowTitle(self.tr("Add Batches"))
+        msg.setText(self.tr("Add More Batch XML Files"))
         msg.setInformativeText(
-            "Select additional ADIAT_Data.xml batch files to add to this search.\n\n"
-            "Tips:\n"
-            "• Hold Ctrl (Windows/Linux) or Cmd (Mac) to select multiple files\n"
-            "• Files can be in different folders\n"
-            "• Each batch should be a processed ADIAT_Data.xml file\n"
-            "• New batches will be numbered sequentially"
+            self.tr(
+                "Select additional ADIAT_Data.xml batch files to add to this search.\n\n"
+                "Tips:\n"
+                "• Hold Ctrl (Windows/Linux) or Cmd (Mac) to select multiple files\n"
+                "• Files can be in different folders\n"
+                "• Each batch should be a processed ADIAT_Data.xml file\n"
+                "• New batches will be numbered sequentially"
+            )
         )
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
 
@@ -463,9 +505,9 @@ class CoordinatorWindow(QMainWindow):
         # Select batch XML files
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select Batch ADIAT_Data.xml Files to Add (Hold Ctrl to select multiple)",
+            self.tr("Select Batch ADIAT_Data.xml Files to Add (Hold Ctrl to select multiple)"),
             "",
-            "XML Files (*.xml)"
+            self.tr("XML Files (*.xml)")
         )
 
         if not file_paths:
@@ -484,15 +526,22 @@ class CoordinatorWindow(QMainWindow):
 
             QMessageBox.information(
                 self,
-                "Success",
-                f"Successfully added {added_count} batch(es) to the project!\n"
-                f"Total batches: {len(self.project_service.project_data['batches'])}"
+                self.tr("Success"),
+                self.tr(
+                    "Successfully added {count} batch(es) to the project!\n"
+                    "Total batches: {total}"
+                ).format(
+                    count=added_count,
+                    total=len(self.project_service.project_data['batches'])
+                )
             )
         else:
             QMessageBox.warning(
                 self,
-                "No Batches Added",
-                "No batches were added. Check that the XML files are valid ADIAT_Data.xml files."
+                self.tr("No Batches Added"),
+                self.tr(
+                    "No batches were added. Check that the XML files are valid ADIAT_Data.xml files."
+                )
             )
 
     def _load_review(self):
@@ -503,9 +552,9 @@ class CoordinatorWindow(QMainWindow):
         # Select reviewer XML file
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Reviewer's ADIAT_Data.xml File",
+            self.tr("Select Reviewer's ADIAT_Data.xml File"),
             "",
-            "XML Files (*.xml)"
+            self.tr("XML Files (*.xml)")
         )
 
         if not file_path:
@@ -514,15 +563,19 @@ class CoordinatorWindow(QMainWindow):
         # Get list of batches for selection
         batch_status = self.project_service.get_batch_status()
         if not batch_status:
-            QMessageBox.warning(self, "No Batches", "No batches found in project.")
+            QMessageBox.warning(
+                self,
+                self.tr("No Batches"),
+                self.tr("No batches found in project.")
+            )
             return
 
         # Let user select which batch this review is for
         batch_ids = [b['batch_id'] for b in batch_status]
         batch_id, ok = QInputDialog.getItem(
             self,
-            "Select Batch",
-            "Which batch does this review belong to?",
+            self.tr("Select Batch"),
+            self.tr("Which batch does this review belong to?"),
             batch_ids,
             0,
             False
@@ -535,9 +588,17 @@ class CoordinatorWindow(QMainWindow):
         if self.project_service.add_review_to_batch(batch_id, file_path):
             self.project_service.save_project(self.project_path)
             self._update_all_displays()
-            QMessageBox.information(self, "Success", "Review data loaded and merged successfully!")
+            QMessageBox.information(
+                self,
+                self.tr("Success"),
+                self.tr("Review data loaded and merged successfully!")
+            )
         else:
-            QMessageBox.critical(self, "Error", "Failed to load review data.")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to load review data.")
+            )
 
     def _export_results(self):
         """Export consolidated results."""
@@ -546,20 +607,20 @@ class CoordinatorWindow(QMainWindow):
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Consolidated Results",
+            self.tr("Export Consolidated Results"),
             "ADIAT_Data_Consolidated.xml",
-            "XML Files (*.xml)"
+            self.tr("XML Files (*.xml)")
         )
 
         if file_path:
             if self.project_service.export_consolidated_results(file_path):
                 QMessageBox.information(
                     self,
-                    "Success",
-                    f"Consolidated results exported to:\n{file_path}"
+                    self.tr("Success"),
+                    self.tr("Consolidated results exported to:\n{path}").format(path=file_path)
                 )
             else:
-                QMessageBox.critical(self, "Error", "Failed to export results.")
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to export results."))
 
     def _update_all_displays(self):
         """Update all display elements with current project data."""
@@ -584,7 +645,9 @@ class CoordinatorWindow(QMainWindow):
         # Update progress
         completion = int(summary['completion_percentage'])
         self.completion_progress.setValue(completion)
-        self.completion_percent_label.setText(f"{completion}%")
+        self.completion_percent_label.setText(
+            self.tr("{value}%").format(value=completion)
+        )
 
         # Update status counts
         self.not_reviewed_count.setText(str(summary['batches_not_reviewed']))
@@ -600,7 +663,7 @@ class CoordinatorWindow(QMainWindow):
             reviewer_text = ", ".join(summary['reviewer_names'])
             self.reviewer_list.setText(reviewer_text)
         else:
-            self.reviewer_list.setText("No reviewers yet")
+            self.reviewer_list.setText(self.tr("No reviewers yet"))
 
         # Update batch table
         self._update_batch_table()

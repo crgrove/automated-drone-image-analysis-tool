@@ -9,9 +9,10 @@ import cv2
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel
 from PySide6.QtGui import QImage, QPixmap, QIcon
 from PySide6.QtCore import Qt, Signal, QSize
+from helpers.TranslationMixin import TranslationMixin
 
 
-class TrackGalleryWidget(QWidget):
+class TrackGalleryWidget(TranslationMixin, QWidget):
     """Displays confirmed detections as clickable thumbnails in a gallery view.
 
     Features:
@@ -27,6 +28,7 @@ class TrackGalleryWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Setup the gallery UI components."""
@@ -139,9 +141,9 @@ class TrackGalleryWidget(QWidget):
         """Update the detection count label."""
         count = self.gallery_list.count()
         if count == 1:
-            self.count_label.setText("1 detection")
+            self.count_label.setText(self.tr("1 detection"))
         else:
-            self.count_label.setText(f"{count} detections")
+            self.count_label.setText(self.tr("{count} detections").format(count=count))
 
     def clear(self):
         """Clear all gallery items."""

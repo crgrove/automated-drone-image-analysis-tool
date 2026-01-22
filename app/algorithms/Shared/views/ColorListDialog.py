@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Any, Tuple
 import colorsys
 
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
@@ -19,14 +20,14 @@ from PySide6.QtWidgets import (
 from core.services.color.ColorListService import get_predefined_colors
 
 
-class ColorListDialog(QDialog):
+class ColorListDialog(TranslationMixin, QDialog):
     """
     Dialog to pick a color from a predefined list.
     """
 
     def __init__(self, parent=None, mode: str = 'RGB'):
         super().__init__(parent)
-        self.setWindowTitle("Select Color from List")
+        self.setWindowTitle(self.tr("Select Color from List"))
         self.setMinimumSize(600, 420)
         self._selected_rgb: Optional[Tuple[int, int, int]] = None
         self.mode = mode.upper()  # Normalize to uppercase
@@ -38,22 +39,27 @@ class ColorListDialog(QDialog):
 
         # Search bar
         search_row = QHBoxLayout()
-        search_label = QLabel("Search:")
+        search_label = QLabel(self.tr("Search:"))
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Filter by name or uses…")
+        self.search_input.setPlaceholderText(self.tr("Filter by name or uses…"))
         self.search_input.textChanged.connect(self._apply_filter)
         search_row.addWidget(search_label)
         search_row.addWidget(self.search_input)
         layout.addLayout(search_row)
+        self._apply_translations()
 
         # Table - adjust columns based on mode
         self.table = QTableWidget()
         if self.mode == 'HSV':
             self.table.setColumnCount(5)
-            self.table.setHorizontalHeaderLabels(["", "Name", "RGB", "HSV", "Uses"])
+            self.table.setHorizontalHeaderLabels([
+                "", self.tr("Name"), self.tr("RGB"), self.tr("HSV"), self.tr("Uses")
+            ])
         else:
             self.table.setColumnCount(4)
-            self.table.setHorizontalHeaderLabels(["", "Name", "RGB", "Uses"])
+            self.table.setHorizontalHeaderLabels([
+                "", self.tr("Name"), self.tr("RGB"), self.tr("Uses")
+            ])
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -64,7 +70,7 @@ class ColorListDialog(QDialog):
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
         self._ok_button = buttons.button(QDialogButtonBox.Ok)
-        self._ok_button.setText("Use Color")
+        self._ok_button.setText(self.tr("Use Color"))
         self._ok_button.setEnabled(False)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)

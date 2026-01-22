@@ -11,6 +11,7 @@ from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.CustomColorsService import get_custom_colors_service
 from core.services.color.RecentColorsService import get_recent_colors_service
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget, QColorDialog, QLabel, QSizePolicy, QScrollArea,
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (QWidget, QColorDialog, QLabel, QSizePolicy, QScro
 from PySide6.QtCore import Qt
 
 
-class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
+class HSVColorRangeController(TranslationMixin, QWidget, Ui_HSVColorRange, AlgorithmController):
     """Controller for the HSV Filter algorithm widget supporting multiple colors."""
 
     def __init__(self, config, theme):
@@ -90,7 +91,10 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         self.color_rows = []
 
         # Empty state label
-        self.emptyLabel = QLabel("No Colors Selected", self.scrollAreaWidgetContents)
+        self.emptyLabel = QLabel(
+            self.tr("No Colors Selected"),
+            self.scrollAreaWidgetContents
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -110,10 +114,14 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
         # Rename colorButton to addColorButton for consistency
         if hasattr(self, 'colorButton'):
             self.addColorButton = self.colorButton
-            self.addColorButton.setText("Add Color")  # Update button text
+            self.addColorButton.setText(
+                self.tr("Add Color")
+            )  # Update button text
         elif not hasattr(self, 'addColorButton'):
             # Create add button if it doesn't exist
-            self.addColorButton = QPushButton("Add Color")
+            self.addColorButton = QPushButton(
+                self.tr("Add Color")
+            )
 
         # Create button layout at top (like ColorRange)
         if not hasattr(self, 'buttonLayout'):
@@ -416,7 +424,7 @@ class HSVColorRangeController(QWidget, Ui_HSVColorRange, AlgorithmController):
             str: An error message if validation fails, otherwise None.
         """
         if not self.color_rows:
-            return "Please add at least one color to detect."
+            return self.tr("Please add at least one color to detect.")
         return None
 
     def load_options(self, options):

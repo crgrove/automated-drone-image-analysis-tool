@@ -9,9 +9,10 @@ from PySide6.QtGui import QIcon
 from core.services.LoggerService import LoggerService
 from core.services.VideoParserService import VideoParserService
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class VideoParser(QDialog, Ui_VideoParser):
+class VideoParser(TranslationMixin, QDialog, Ui_VideoParser):
     """Controller for the VideoParser Dialog.
 
     This class manages the video parsing dialog, handling user interactions,
@@ -51,7 +52,10 @@ class VideoParser(QDialog, Ui_VideoParser):
         Opens a file dialog for the user to select a video file, then
         updates the `videoSelectLine` text field with the selected file path.
         """
-        filename, _ = QFileDialog.getOpenFileName(self, "Select a Video File")
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select a Video File")
+        )
         if filename:
             self.videoSelectLine.setText(filename)
             if os.name == 'nt':
@@ -63,7 +67,11 @@ class VideoParser(QDialog, Ui_VideoParser):
         Opens a file dialog for the user to select an SRT file, then
         updates the `srtSelectLine` text field with the selected file path.
         """
-        filename, _ = QFileDialog.getOpenFileName(self, "Select a SRT file", filter="SRT (*.srt)")
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select a SRT file"),
+            filter=self.tr("SRT (*.srt)")
+        )
         if filename:
             self.srtSelectLine.setText(filename)
             if os.name == 'nt':
@@ -77,7 +85,12 @@ class VideoParser(QDialog, Ui_VideoParser):
         the selected directory path.
         """
         initial_dir = self.outputLine.text() if self.outputLine.text() else ""
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", initial_dir, QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Directory"),
+            initial_dir,
+            QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.outputLine.setText(directory)
             if os.name == 'nt':
@@ -93,11 +106,13 @@ class VideoParser(QDialog, Ui_VideoParser):
         try:
             # Verify that the video file and output directory are set
             if not self.videoSelectLine.text() or not self.outputLine.text():
-                self._show_error("Please set the video file and output directory.")
+                self._show_error(
+                    self.tr("Please set the video file and output directory.")
+                )
                 return
 
             self._set_start_button(False)
-            self._add_log_entry("--- Starting video processing ---")
+            self._add_log_entry(self.tr("--- Starting video processing ---"))
 
             # Initialize the video parser service and move it to a separate thread
             self.parserService = VideoParserService(
@@ -145,7 +160,9 @@ class VideoParser(QDialog, Ui_VideoParser):
         """
         if self.running:
             reply = QMessageBox.question(
-                self, 'Confirmation', 'Are you sure you want to cancel the video processing in progress?',
+                self,
+                self.tr("Confirmation"),
+                self.tr("Are you sure you want to cancel the video processing in progress?"),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
 
@@ -181,8 +198,10 @@ class VideoParser(QDialog, Ui_VideoParser):
             id (int): The identifier for the worker thread.
             image_count (int): The total number of images created.
         """
-        self._add_log_entry("--- Video Processing Completed ---")
-        self._add_log_entry(f"{image_count} images created")
+        self._add_log_entry(self.tr("--- Video Processing Completed ---"))
+        self._add_log_entry(
+            self.tr("{count} images created").format(count=image_count)
+        )
         self.running = False
         self._set_start_button(True)
         self._set_cancel_button(False)
@@ -234,7 +253,7 @@ class VideoParser(QDialog, Ui_VideoParser):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(text)
-        msg.setWindowTitle("Error Starting Processing")
+        msg.setWindowTitle(self.tr("Error Starting Processing"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 

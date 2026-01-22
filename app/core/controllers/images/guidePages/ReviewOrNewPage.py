@@ -67,7 +67,7 @@ class ReviewOrNewPage(BasePage):
         self.wizard_data['review_mode'] = None
         self.wizard_data['review_file_path'] = None
         self.fileSelectorWidget.setVisible(False)
-        self.filePathLabel.setText("No file selected")
+        self.filePathLabel.setText(self.tr("No file selected"))
         self.reviewButton.setEnabled(True)
         self.newAnalysisButton.setEnabled(True)
         # Show buttons and instructions again when re-entering the page
@@ -111,9 +111,9 @@ class ReviewOrNewPage(BasePage):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self.dialog,
-            "Select ADIAT Results File",
+            self.tr("Select ADIAT Results File"),
             last_dir,
-            "XML Files (*.xml);;All Files (*)"
+            self.tr("XML Files (*.xml);;All Files (*)")
         )
 
         if file_path:
@@ -122,9 +122,11 @@ class ReviewOrNewPage(BasePage):
                 # Show warning but allow selection
                 reply = QMessageBox.warning(
                     self.dialog,
-                    "File Name Warning",
-                    "The selected file does not appear to be an ADIAT_Data.xml file.\n\n"
-                    "Do you want to continue with this file?",
+                    self.tr("File Name Warning"),
+                    self.tr(
+                        "The selected file does not appear to be an ADIAT_Data.xml file.\n\n"
+                        "Do you want to continue with this file?"
+                    ),
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
                 )

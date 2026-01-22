@@ -8,6 +8,7 @@ background processing and progress tracking.
 from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox, QApplication, QWidget
 from PySide6.QtCore import QThread, Signal
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
+from helpers.TranslationMixin import TranslationMixin
 from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
 from core.services.export.PdfGeneratorService import PdfGeneratorService
 from core.services.LoggerService import LoggerService
@@ -70,7 +71,7 @@ class PdfGenerationThread(QThread):
         self.canceled.emit()
 
 
-class PDFExportController:
+class PDFExportController(TranslationMixin):
     """
     Controller for managing PDF export functionality.
 
@@ -146,26 +147,30 @@ class PDFExportController:
                 if include_images_without_flagged_aois:
                     QMessageBox.warning(
                         self.parent,
-                        "No Images to Export",
-                        "There are no images available to include in the PDF report.\n\n"
-                        "All images may be hidden or there are no images in the dataset."
+                        self.tr("No Images to Export"),
+                        self.tr(
+                            "There are no images available to include in the PDF report.\n\n"
+                            "All images may be hidden or there are no images in the dataset."
+                        )
                     )
                 else:
                     QMessageBox.warning(
                         self.parent,
-                        "No Images to Export",
-                        "There are no images with flagged AOIs to include in the PDF report.\n\n"
-                        "Please flag at least one AOI, or check 'Include images without flagged AOIs' "
-                        "to include all images in the report."
+                        self.tr("No Images to Export"),
+                        self.tr(
+                            "There are no images with flagged AOIs to include in the PDF report.\n\n"
+                            "Please flag at least one AOI, or check 'Include images without flagged AOIs' "
+                            "to include all images in the report."
+                        )
                     )
                 return False
 
             # Open file dialog for PDF export
             file_name, _ = QFileDialog.getSaveFileName(
                 self.parent,
-                "Save PDF File",
+                self.tr("Save PDF File"),
                 "",
-                "PDF files (*.pdf)"
+                self.tr("PDF files (*.pdf)")
             )
 
             if not file_name:  # User cancelled
@@ -206,10 +211,10 @@ class PDFExportController:
             # Create and show the progress dialog
             self.progress_dialog = ExportProgressDialog(
                 parent_widget,
-                title="Generating PDF Report",
+                title=self.tr("Generating PDF Report"),
                 total_items=total_aois
             )
-            self.progress_dialog.set_title("Generating PDF Report...")
+            self.progress_dialog.set_title(self.tr("Generating PDF Report..."))
 
             # Disconnect old thread signals if it exists
             if self.pdf_thread is not None:
@@ -249,7 +254,9 @@ class PDFExportController:
 
         except Exception as e:
             self.logger.error(f"Error generating PDF file: {str(e)}")
-            self._show_error(f"Failed to generate PDF file: {str(e)}")
+            self._show_error(
+                self.tr("Failed to generate PDF file: {error}").format(error=str(e))
+            )
             return False
 
     def _on_progress_updated(self, current, total, message):
@@ -262,7 +269,11 @@ class PDFExportController:
         """Handles successful completion of PDF generation."""
         if self.progress_dialog:
             self.progress_dialog.accept()
-        QMessageBox.information(self.parent, "Success", "PDF report generated successfully!")
+        QMessageBox.information(
+            self.parent,
+            self.tr("Success"),
+            self.tr("PDF report generated successfully!")
+        )
 
     def _on_pdf_generation_cancelled(self):
         """Handles cancellation of PDF generation."""
@@ -277,7 +288,9 @@ class PDFExportController:
         """Handles errors during PDF generation."""
         if self.progress_dialog and self.progress_dialog.isVisible():
             self.progress_dialog.reject()  # Close the progress dialog
-        self._show_error(f"PDF generation failed: {error_message}")
+        self._show_error(
+            self.tr("PDF generation failed: {error}").format(error=error_message)
+        )
 
     def _show_toast(self, text, msec=3000, color="#00C853"):
         """Show a toast message if the parent has this method."""
@@ -290,4 +303,4 @@ class PDFExportController:
             self.parent._show_error(text)
         else:
             # Fallback to message box
-            QMessageBox.critical(self.parent, "Error", text)
+            QMessageBox.critical(self.parent, self.tr("Error"), text)

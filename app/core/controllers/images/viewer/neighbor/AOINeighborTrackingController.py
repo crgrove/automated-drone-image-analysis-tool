@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from core.services.image.AOINeighborService import AOINeighborService
 from core.services.image.AOIService import AOIService
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class NeighborSearchWorker(QObject):
@@ -61,7 +62,7 @@ class NeighborSearchWorker(QObject):
             self.error.emit(str(e))
 
 
-class AOINeighborTrackingController(QObject):
+class AOINeighborTrackingController(TranslationMixin, QObject):
     """Controller for tracking AOI appearances across neighboring images."""
 
     tracking_started = Signal()
@@ -101,8 +102,8 @@ class AOINeighborTrackingController(QObject):
             if not selected_aoi:
                 QMessageBox.information(
                     self.parent,
-                    "No AOI Selected",
-                    "Please select an AOI first by clicking on it in the thumbnail panel."
+                    self.tr("No AOI Selected"),
+                    self.tr("Please select an AOI first by clicking on it in the thumbnail panel.")
                 )
                 return
 
@@ -126,20 +127,22 @@ class AOINeighborTrackingController(QObject):
             if not aoi_gps:
                 QMessageBox.warning(
                     self.parent,
-                    "Cannot Calculate GPS",
-                    "Unable to calculate GPS coordinates for this AOI.\n\n"
-                    "This may be due to missing image metadata (GPS, altitude, or camera info)."
+                    self.tr("Cannot Calculate GPS"),
+                    self.tr(
+                        "Unable to calculate GPS coordinates for this AOI.\n\n"
+                        "This may be due to missing image metadata (GPS, altitude, or camera info)."
+                    )
                 )
                 return
 
             # Show progress dialog
             self.progress_dialog = QProgressDialog(
-                "Searching for AOI in neighboring images...",
-                "Cancel",
+                self.tr("Searching for AOI in neighboring images..."),
+                self.tr("Cancel"),
                 0, 0,
                 self.parent
             )
-            self.progress_dialog.setWindowTitle("Tracking AOI")
+            self.progress_dialog.setWindowTitle(self.tr("Tracking AOI"))
             self.progress_dialog.setWindowModality(Qt.WindowModal)
             self.progress_dialog.setMinimumDuration(0)
             self.progress_dialog.setValue(0)
@@ -175,8 +178,10 @@ class AOINeighborTrackingController(QObject):
             self.logger.error(f"Error starting AOI neighbor tracking: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Tracking Error",
-                f"An error occurred while tracking the AOI:\n{str(e)}"
+                self.tr("Tracking Error"),
+                self.tr("An error occurred while tracking the AOI:\n{error}").format(
+                    error=str(e)
+                )
             )
 
     def _on_progress(self, message):
@@ -199,8 +204,8 @@ class AOINeighborTrackingController(QObject):
             if not results:
                 QMessageBox.information(
                     self.parent,
-                    "No Neighbors Found",
-                    "The AOI was not found in any neighboring images."
+                    self.tr("No Neighbors Found"),
+                    self.tr("The AOI was not found in any neighboring images.")
                 )
                 return
 
@@ -225,8 +230,10 @@ class AOINeighborTrackingController(QObject):
 
             QMessageBox.critical(
                 self.parent,
-                "Search Error",
-                f"An error occurred during the search:\n{error_msg}"
+                self.tr("Search Error"),
+                self.tr("An error occurred during the search:\n{error}").format(
+                    error=error_msg
+                )
             )
 
             self.tracking_error.emit(error_msg)
@@ -275,8 +282,10 @@ class AOINeighborTrackingController(QObject):
             self.logger.error(f"Error showing gallery dialog: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Display Error",
-                f"An error occurred while displaying results:\n{str(e)}"
+                self.tr("Display Error"),
+                self.tr("An error occurred while displaying results:\n{error}").format(
+                    error=str(e)
+                )
             )
 
     def _on_gallery_image_clicked(self, image_idx):

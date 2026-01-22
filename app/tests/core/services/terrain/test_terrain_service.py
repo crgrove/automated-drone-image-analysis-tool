@@ -310,4 +310,3 @@ class TestTerrainServiceWithGeoid:
             N = service.get_geoid_undulation(40.7128, -74.0060)
             assert N is not None
             assert isinstance(N, float)
-

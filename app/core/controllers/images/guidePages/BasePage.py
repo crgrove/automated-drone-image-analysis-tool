@@ -4,9 +4,10 @@ Base class for wizard pages.
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+from helpers.TranslationMixin import TranslationMixin
 
 
-class BasePage(ABC):
+class BasePage(TranslationMixin, ABC):
     """Abstract base class for wizard pages.
 
     Each page manages its own UI and logic, but shares wizard_data

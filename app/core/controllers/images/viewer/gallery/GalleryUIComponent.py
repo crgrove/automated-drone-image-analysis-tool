@@ -14,6 +14,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, 
 import qtawesome as qta
 
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class AOIGalleryDelegate(QStyledItemDelegate):
@@ -156,7 +157,7 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             return QColor(255, 100, 50)  # Orange/Red
 
 
-class GalleryUIComponent(QObject):
+class GalleryUIComponent(TranslationMixin, QObject):
     """
     UI component for the AOI gallery view.
 
@@ -285,7 +286,7 @@ class GalleryUIComponent(QObject):
         header.setMaximumHeight(0)
 
         # Keep count_label for internal tracking (but don't display it)
-        self.count_label = QLabel("0 AOIs")
+        self.count_label = QLabel(self.tr("0 AOIs"))
         self.count_label.setVisible(False)  # Hidden - we'll update main title instead
 
         return header
@@ -326,7 +327,10 @@ class GalleryUIComponent(QObject):
     def _update_count_label(self, count):
         """Update the count label with the number of AOIs."""
         if self.count_label:
-            self.count_label.setText(f"{count} AOI{'s' if count != 1 else ''}")
+            label = self.tr("AOI") if count == 1 else self.tr("AOIs")
+            self.count_label.setText(
+                self.tr("{count} {label}").format(count=count, label=label)
+            )
 
         # Also update the main AOI header title when in gallery mode
         if (self.gallery_controller and
@@ -342,8 +346,14 @@ class GalleryUIComponent(QObject):
             area_count_label = self.gallery_controller.parent.areaCountLabel
             if area_count_label:
                 # Format: "# Areas of Interest - Gallery Mode" (matching single-image format)
-                area_text = f"{count} {'Area' if count == 1 else 'Areas'} of Interest"
-                area_count_label.setText(area_text)
+                area_label = (
+                    self.tr("Area of Interest")
+                    if count == 1
+                    else self.tr("Areas of Interest")
+                )
+                area_count_label.setText(
+                    self.tr("{count} {label}").format(count=count, label=area_label)
+                )
 
     def _on_item_clicked(self, index):
         """Handle item click in the gallery."""

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class ThumbnailItem:
@@ -310,7 +311,7 @@ class NeighborGalleryView(QGraphicsView):
                 border_rect.setPen(QPen(QColor(100, 100, 100), 2))
 
 
-class AOINeighborGalleryDialog(QDialog):
+class AOINeighborGalleryDialog(TranslationMixin, QDialog):
     """
     Dialog for displaying AOI appearances across neighboring images.
 
@@ -334,7 +335,7 @@ class AOINeighborGalleryDialog(QDialog):
         self._thumbnails_loaded = False
 
         # Setup dialog
-        self.setWindowTitle("AOI in Neighboring Images")
+        self.setWindowTitle(self.tr("AOI in Neighboring Images"))
         self.setModal(False)  # Non-modal so user can interact with main window
 
         # Set window flags
@@ -342,6 +343,7 @@ class AOINeighborGalleryDialog(QDialog):
 
         # Create UI
         self._setup_ui()
+        self._apply_translations()
 
         # Set initial size (thumbnails loaded in showEvent when viewport is ready)
         self.resize(900, 400)
@@ -384,17 +386,17 @@ class AOINeighborGalleryDialog(QDialog):
         button_layout.setSpacing(10)
 
         # Reset View button
-        reset_button = QPushButton("Reset View")
+        reset_button = QPushButton(self.tr("Reset View"))
         reset_button.setMinimumHeight(35)
         reset_button.clicked.connect(self.gallery_view.reset_view)
-        reset_button.setToolTip("Reset zoom and fit all thumbnails in view")
+        reset_button.setToolTip(self.tr("Reset zoom and fit all thumbnails in view"))
         button_layout.addWidget(reset_button)
 
         # Spacer
         button_layout.addStretch()
 
         # Close button
-        close_button = QPushButton("Close")
+        close_button = QPushButton(self.tr("Close"))
         close_button.setMinimumHeight(35)
         close_button.clicked.connect(self.close)
         button_layout.addWidget(close_button)

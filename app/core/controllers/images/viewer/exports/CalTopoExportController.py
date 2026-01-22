@@ -25,6 +25,7 @@ from core.services.image.AOIService import AOIService
 from core.services.image.CoverageExtentService import CoverageExtentService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
 class CalTopoAccountDataThread(QThread):
@@ -387,7 +388,7 @@ class CalTopoAPIExportThread(QThread):
             self.errorOccurred.emit(str(e))
 
 
-class CalTopoExportController:
+class CalTopoExportController(TranslationMixin):
     """
     Controller for managing CalTopo export functionality.
 
@@ -437,30 +438,34 @@ class CalTopoExportController:
             if self._is_offline_only():
                 QMessageBox.information(
                     self.parent,
-                    "Offline Mode Enabled",
-                    "Offline Only is turned on in Preferences:\n\n"
-                    "• Map tiles will not be retrieved.\n"
-                    "• CalTopo integration is disabled.\n\n"
-                    "Turn off Offline Only to export to CalTopo."
+                    self.tr("Offline Mode Enabled"),
+                    self.tr(
+                        "Offline Only is turned on in Preferences:\n\n"
+                        "• Map tiles will not be retrieved.\n"
+                        "• CalTopo integration is disabled.\n\n"
+                        "Turn off Offline Only to export to CalTopo."
+                    )
                 )
                 return False
 
             if not include_flagged_aois and not include_locations and not include_coverage_area:
                 QMessageBox.information(
                     self.parent,
-                    "Nothing Selected",
-                    "Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export."
+                    self.tr("Nothing Selected"),
+                    self.tr(
+                        "Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export."
+                    )
                 )
                 return False
 
             # Step 1: Prepare markers and polygons in a background thread
             prep_dialog = ExportProgressDialog(
                 self.parent,
-                title="Preparing Export Data",
+                title=self.tr("Preparing Export Data"),
                 total_items=100
             )
-            prep_dialog.set_title("Preparing data for export...")
-            prep_dialog.set_status("Processing images and AOIs...")
+            prep_dialog.set_title(self.tr("Preparing data for export..."))
+            prep_dialog.set_status(self.tr("Processing images and AOIs..."))
 
             markers = []
             coverage_polygons = []
@@ -504,8 +509,10 @@ class CalTopoExportController:
             if prep_error:
                 QMessageBox.critical(
                     self.parent,
-                    "Preparation Error",
-                    f"An error occurred while preparing export data:\n\n{prep_error}"
+                    self.tr("Preparation Error"),
+                    self.tr(
+                        "An error occurred while preparing export data:\n\n{error}"
+                    ).format(error=prep_error)
                 )
                 return False
 
@@ -513,33 +520,33 @@ class CalTopoExportController:
                 # Build appropriate error message based on what was selected
                 selected_types = []
                 if include_flagged_aois:
-                    selected_types.append("flagged AOIs")
+                    selected_types.append(self.tr("flagged AOIs"))
                 if include_locations:
-                    selected_types.append("image locations")
+                    selected_types.append(self.tr("image locations"))
                 if include_coverage_area:
-                    selected_types.append("coverage area")
+                    selected_types.append(self.tr("coverage area"))
 
                 if include_flagged_aois and include_locations and include_coverage_area:
-                    message = (
+                    message = self.tr(
                         "No flagged AOIs, geotagged image locations, or coverage areas are available.\n"
                         "Flag some AOIs with the 'F' key or ensure your images have GPS metadata."
                     )
                 elif include_flagged_aois:
                     total_flagged = sum(len(aois) for aois in flagged_aois.values())
-                    message = (
-                        f"Found {total_flagged} flagged AOI(s), but could not extract GPS coordinates.\n\n"
+                    message = self.tr(
+                        "Found {count} flagged AOI(s), but could not extract GPS coordinates.\n\n"
                         "This usually means:\n"
                         "• The images don't have GPS data in their EXIF metadata\n"
                         "• The image files have been moved or renamed\n\n"
                         "Please ensure your images have GPS coordinates embedded."
-                    )
+                    ).format(count=total_flagged)
                 elif include_locations:
-                    message = (
+                    message = self.tr(
                         "No geotagged drone/image locations were found.\n"
                         "Ensure your images contain GPS metadata and try again."
                     )
                 elif include_coverage_area:
-                    message = (
+                    message = self.tr(
                         "No coverage area polygons could be calculated.\n\n"
                         "This usually means:\n"
                         "• The images don't have GPS data in their EXIF metadata\n"
@@ -548,11 +555,13 @@ class CalTopoExportController:
                         "Please ensure your images have GPS coordinates and are nadir shots."
                     )
                 else:
-                    message = f"No {' or '.join(selected_types)} are available to export."
+                    message = self.tr(
+                        "No {types} are available to export."
+                    ).format(types=" or ".join(selected_types))
 
                 QMessageBox.information(
                     self.parent,
-                    "Nothing to Export",
+                    self.tr("Nothing to Export"),
                     message
                 )
                 return False
@@ -573,10 +582,12 @@ class CalTopoExportController:
                 if not selected_map_id:
                     QMessageBox.warning(
                         auth_dialog,
-                        "No Map Selected",
-                        "Please navigate to a CalTopo map before clicking 'I'm Logged In'.\n\n"
-                        "The map URL should look like:\n"
-                        "https://caltopo.com/map.html#...&id=ABC123"
+                        self.tr("No Map Selected"),
+                        self.tr(
+                            "Please navigate to a CalTopo map before clicking 'I'm Logged In'.\n\n"
+                            "The map URL should look like:\n"
+                            "https://caltopo.com/map.html#...&id=ABC123"
+                        )
                     )
                     return
 
@@ -634,33 +645,49 @@ class CalTopoExportController:
                 # Build description of what was exported
                 exported_items = []
                 if markers:
-                    exported_items.append(f"{len(markers)} marker(s)")
+                    exported_items.append(
+                        self.tr("{count} marker(s)").format(count=len(markers))
+                    )
                 if coverage_polygons:
-                    exported_items.append(f"{len(coverage_polygons)} polygon(s)")
+                    exported_items.append(
+                        self.tr("{count} polygon(s)").format(count=len(coverage_polygons))
+                    )
 
-                items_desc = " and ".join(exported_items)
+                items_desc = self.tr(" and ").join(exported_items)
 
                 if success_count == total_count:
                     QMessageBox.information(
                         self.parent,
-                        "Export Successful",
-                        f"Successfully exported all {items_desc} to CalTopo map {selected_map_id}.\n\n"
-                        f"The items should now be visible on your map."
+                        self.tr("Export Successful"),
+                        self.tr(
+                            "Successfully exported all {items} to CalTopo map {map_id}.\n\n"
+                            "The items should now be visible on your map."
+                        ).format(items=items_desc, map_id=selected_map_id)
                     )
                 else:
                     QMessageBox.warning(
                         self.parent,
-                        "Partial Success",
-                        f"Exported {success_count} of {total_count} item(s) ({items_desc}) to CalTopo map {selected_map_id}.\n\n"
-                        f"{total_count - success_count} item(s) failed. Check console for details."
+                        self.tr("Partial Success"),
+                        self.tr(
+                            "Exported {success} of {total} item(s) ({items}) to CalTopo map {map_id}.\n\n"
+                            "{failed} item(s) failed. Check console for details."
+                        ).format(
+                            success=success_count,
+                            total=total_count,
+                            items=items_desc,
+                            map_id=selected_map_id,
+                            failed=total_count - success_count
+                        )
                     )
                 return True
             else:
                 QMessageBox.critical(
                     self.parent,
-                    "Export Failed",
-                    "Failed to export items to CalTopo.\n\n"
-                    "Please check the console output for error details."
+                    self.tr("Export Failed"),
+                    self.tr(
+                        "Failed to export items to CalTopo.\n\n"
+                        "Please check the console output for error details."
+                    )
                 )
                 return False
 
@@ -668,8 +695,10 @@ class CalTopoExportController:
             self.logger.error(f"CalTopo export error: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Export Error",
-                f"An error occurred during CalTopo export:\n\n{str(e)}"
+                self.tr("Export Error"),
+                self.tr(
+                    "An error occurred during CalTopo export:\n\n{error}"
+                ).format(error=str(e))
             )
             return False
 
@@ -968,10 +997,15 @@ class CalTopoExportController:
                     poly_name = f"Coverage Area {idx + 1}"
 
                 # Build description
-                description = (
-                    f"Coverage area: {area_sqkm:.3f} km² ({area_acres:.2f} acres)\n"
-                    f"Area in square meters: {area_sqm:.0f} m²\n"
-                    f"Number of corners: {len(coords)}"
+                description = self.tr(
+                    "Coverage area: {sqkm:.3f} km² ({acres:.2f} acres)\n"
+                    "Area in square meters: {sqm:.0f} m²\n"
+                    "Number of corners: {count}"
+                ).format(
+                    sqkm=area_sqkm,
+                    acres=area_acres,
+                    sqm=area_sqm,
+                    count=len(coords)
                 )
 
                 polygons.append({
@@ -1008,11 +1042,13 @@ class CalTopoExportController:
         # Create progress dialog similar to KML export
         progress_dialog = ExportProgressDialog(
             self.parent,
-            title="Exporting to CalTopo",
+            title=self.tr("Exporting to CalTopo"),
             total_items=total
         )
-        progress_dialog.set_title("Exporting markers to CalTopo...")
-        progress_dialog.set_status(f"Preparing to export {total} marker(s)...")
+        progress_dialog.set_title(self.tr("Exporting markers to CalTopo..."))
+        progress_dialog.set_status(
+            self.tr("Preparing to export {count} marker(s)...").format(count=total)
+        )
 
         # Show progress dialog
         progress_dialog.show()
@@ -1255,7 +1291,9 @@ class CalTopoExportController:
             progress_dialog.update_progress(
                 total,
                 total,
-                f"Export complete: {success_count} of {total} marker(s) exported"
+                self.tr(
+                    "Export complete: {success} of {total} marker(s) exported"
+                ).format(success=success_count, total=total)
             )
             QApplication.processEvents()
             QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
@@ -1288,11 +1326,13 @@ class CalTopoExportController:
         # Create progress dialog
         progress_dialog = ExportProgressDialog(
             self.parent,
-            title="Exporting to CalTopo",
+            title=self.tr("Exporting to CalTopo"),
             total_items=total
         )
-        progress_dialog.set_title("Exporting polygons to CalTopo...")
-        progress_dialog.set_status(f"Preparing to export {total} polygon(s)...")
+        progress_dialog.set_title(self.tr("Exporting polygons to CalTopo..."))
+        progress_dialog.set_status(
+            self.tr("Preparing to export {count} polygon(s)...").format(count=total)
+        )
 
         # Show progress dialog
         progress_dialog.show()
@@ -1417,7 +1457,9 @@ class CalTopoExportController:
             progress_dialog.update_progress(
                 total,
                 total,
-                f"Export complete: {success_count} of {total} polygon(s) exported"
+                self.tr(
+                    "Export complete: {success} of {total} polygon(s) exported"
+                ).format(success=success_count, total=total)
             )
             QApplication.processEvents()
             QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
@@ -1434,8 +1476,8 @@ class CalTopoExportController:
         self.caltopo_service.clear_session()
         QMessageBox.information(
             self.parent,
-            "Logged Out",
-            "Successfully logged out from CalTopo."
+            self.tr("Logged Out"),
+            self.tr("Successfully logged out from CalTopo.")
         )
 
     def export_to_caltopo_via_api(self, images, flagged_aois, include_flagged_aois=True,
@@ -1462,19 +1504,23 @@ class CalTopoExportController:
             if self._is_offline_only():
                 QMessageBox.information(
                     self.parent,
-                    "Offline Mode Enabled",
-                    "Offline Only is turned on in Preferences:\n\n"
-                    "• Map tiles will not be retrieved.\n"
-                    "• CalTopo integration is disabled.\n\n"
-                    "Turn off Offline Only to export to CalTopo."
+                    self.tr("Offline Mode Enabled"),
+                    self.tr(
+                        "Offline Only is turned on in Preferences:\n\n"
+                        "• Map tiles will not be retrieved.\n"
+                        "• CalTopo integration is disabled.\n\n"
+                        "Turn off Offline Only to export to CalTopo."
+                    )
                 )
                 return False
 
             if not include_flagged_aois and not include_locations and not include_coverage_area:
                 QMessageBox.information(
                     self.parent,
-                    "Nothing Selected",
-                    "Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export."
+                    self.tr("Nothing Selected"),
+                    self.tr(
+                        "Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export."
+                    )
                 )
                 return False
 
@@ -1496,11 +1542,11 @@ class CalTopoExportController:
             # Step 2: Get account data and show map selection (in background thread)
             loading_dialog = ExportProgressDialog(
                 self.parent,
-                title="Loading CalTopo Maps",
+                title=self.tr("Loading CalTopo Maps"),
                 total_items=100
             )
-            loading_dialog.set_title("Connecting to CalTopo...")
-            loading_dialog.set_status("Fetching account data and maps...")
+            loading_dialog.set_title(self.tr("Connecting to CalTopo..."))
+            loading_dialog.set_status(self.tr("Fetching account data and maps..."))
 
             account_data = None
             account_success = False
@@ -1538,17 +1584,21 @@ class CalTopoExportController:
             if account_error:
                 QMessageBox.critical(
                     self.parent,
-                    "Connection Error",
-                    f"An error occurred while connecting to CalTopo API:\n\n{account_error}"
+                    self.tr("Connection Error"),
+                    self.tr(
+                        "An error occurred while connecting to CalTopo API:\n\n{error}"
+                    ).format(error=account_error)
                 )
                 return False
 
             if not account_success or not account_data:
                 QMessageBox.critical(
                     self.parent,
-                    "Authentication Failed",
-                    "Failed to authenticate with CalTopo API.\n\n"
-                    "Please check your credentials and try again."
+                    self.tr("Authentication Failed"),
+                    self.tr(
+                        "Failed to authenticate with CalTopo API.\n\n"
+                        "Please check your credentials and try again."
+                    )
                 )
                 return False
 
@@ -1593,8 +1643,10 @@ class CalTopoExportController:
             self.logger.error(f"CalTopo API export error: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Export Error",
-                f"An error occurred during CalTopo API export:\n\n{str(e)}"
+                self.tr("Export Error"),
+                self.tr(
+                    "An error occurred during CalTopo API export:\n\n{error}"
+                ).format(error=str(e))
             )
             return False
 
@@ -1622,11 +1674,11 @@ class CalTopoExportController:
         # Create progress dialog
         progress_dialog = ExportProgressDialog(
             self.parent,
-            title="Exporting to CalTopo",
+            title=self.tr("Exporting to CalTopo"),
             total_items=100
         )
-        progress_dialog.set_title("Exporting to CalTopo...")
-        progress_dialog.set_status("Preparing data and exporting...")
+        progress_dialog.set_title(self.tr("Exporting to CalTopo..."))
+        progress_dialog.set_status(self.tr("Preparing data and exporting..."))
 
         # Create export thread (preparation and export both happen in thread)
         export_thread = CalTopoAPIExportThread(
@@ -1661,23 +1713,33 @@ class CalTopoExportController:
                 if success_count == total_count:
                     QMessageBox.information(
                         self.parent,
-                        "Export Successful",
-                        f"Successfully exported all {total_count} item(s) to CalTopo map.\n\n"
-                        f"The items should now be visible on your map."
+                        self.tr("Export Successful"),
+                        self.tr(
+                            "Successfully exported all {total} item(s) to CalTopo map.\n\n"
+                            "The items should now be visible on your map."
+                        ).format(total=total_count)
                     )
                 else:
                     QMessageBox.warning(
                         self.parent,
-                        "Partial Success",
-                        f"Exported {success_count} of {total_count} item(s) to CalTopo map.\n\n"
-                        f"{total_count - success_count} item(s) failed. Check console for details."
+                        self.tr("Partial Success"),
+                        self.tr(
+                            "Exported {success} of {total} item(s) to CalTopo map.\n\n"
+                            "{failed} item(s) failed. Check console for details."
+                        ).format(
+                            success=success_count,
+                            total=total_count,
+                            failed=total_count - success_count
+                        )
                     )
             else:
                 QMessageBox.critical(
                     self.parent,
-                    "Export Failed",
-                    "Failed to export items to CalTopo.\n\n"
-                    "Please check the console output for error details."
+                    self.tr("Export Failed"),
+                    self.tr(
+                        "Failed to export items to CalTopo.\n\n"
+                        "Please check the console output for error details."
+                    )
                 )
 
         def on_error(error_message):
@@ -1686,8 +1748,10 @@ class CalTopoExportController:
             self.logger.error(f"CalTopo API export error: {error_message}")
             QMessageBox.critical(
                 self.parent,
-                "Export Error",
-                f"An error occurred during CalTopo API export:\n\n{error_message}"
+                self.tr("Export Error"),
+                self.tr(
+                    "An error occurred during CalTopo API export:\n\n{error}"
+                ).format(error=error_message)
             )
 
         def on_cancelled():

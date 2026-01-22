@@ -178,11 +178,13 @@ class StreamAlgorithmParametersPage(BasePage):
                 page_title_widget = getattr(self.dialog, 'labelPageAlgorithmParametersTitle', None)
                 if page_title_widget is not None:
                     algorithm_labels = {
-                        "ColorDetection": "Color Detection",
-                        "ColorAnomalyAndMotionDetection": "Color Anomaly & Motion Detection"
+                        "ColorDetection": self.tr("Color Detection"),
+                        "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection")
                     }
-                    algo_label = algorithm_labels.get(current_algorithm_name, "Algorithm")
-                    page_title_widget.setText(f"{algo_label} Parameters")
+                    algo_label = algorithm_labels.get(current_algorithm_name, self.tr("Algorithm"))
+                    page_title_widget.setText(
+                        self.tr("{algorithm} Parameters").format(algorithm=algo_label)
+                    )
             except Exception:
                 # Best-effort only; ignore if not available
                 pass

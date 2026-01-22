@@ -8,11 +8,12 @@ of a target map for exporting AOIs.
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QListWidget, QListWidgetItem, QLineEdit)
 from PySide6.QtCore import Qt, Signal
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont
 from datetime import datetime
 
 
-class CalTopoMapDialog(QDialog):
+class CalTopoMapDialog(TranslationMixin, QDialog):
     """
     Dialog for selecting a CalTopo map.
 
@@ -31,7 +32,7 @@ class CalTopoMapDialog(QDialog):
             maps_list: List of map dictionaries from CalTopoService
         """
         super().__init__(parent)
-        self.setWindowTitle("Select CalTopo Map")
+        self.setWindowTitle(self.tr("Select CalTopo Map"))
         self.resize(600, 500)
         self.setModal(True)
 
@@ -39,6 +40,7 @@ class CalTopoMapDialog(QDialog):
         self.selected_map = None
 
         self.setup_ui()
+        self._apply_translations()
         self.populate_maps()
 
     def setup_ui(self):
@@ -46,7 +48,7 @@ class CalTopoMapDialog(QDialog):
         layout = QVBoxLayout()
 
         # Title label
-        title_label = QLabel("Select a CalTopo map to export flagged AOIs:")
+        title_label = QLabel(self.tr("Select a CalTopo map to export flagged AOIs:"))
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -55,9 +57,9 @@ class CalTopoMapDialog(QDialog):
 
         # Search box
         search_layout = QHBoxLayout()
-        search_label = QLabel("Search:")
+        search_label = QLabel(self.tr("Search:"))
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Filter maps by name...")
+        self.search_box.setPlaceholderText(self.tr("Filter maps by name..."))
         self.search_box.textChanged.connect(self.filter_maps)
 
         search_layout.addWidget(search_label)
@@ -78,11 +80,11 @@ class CalTopoMapDialog(QDialog):
         # Button row
         button_layout = QHBoxLayout()
 
-        self.select_button = QPushButton("Select Map")
+        self.select_button = QPushButton(self.tr("Select Map"))
         self.select_button.clicked.connect(self.on_select_clicked)
         self.select_button.setEnabled(False)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()

@@ -2,12 +2,13 @@
 
 import math
 from PySide6.QtCore import Qt, QPointF, Signal
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QPen, QColor, QFont
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsTextItem
 
 
-class MeasureDialog(QDialog):
+class MeasureDialog(TranslationMixin, QDialog):
     """Dialog for measuring distances on images using GSD (Ground Sample Distance)."""
 
     gsdChanged = Signal(float)
@@ -54,10 +55,11 @@ class MeasureDialog(QDialog):
 
         self.setupUi()
         self.connectSignals()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("Measure Distance")
+        self.setWindowTitle(self.tr("Measure Distance"))
         self.setModal(False)
 
         # Set window flags to keep dialog on top (especially important on macOS)
@@ -70,16 +72,16 @@ class MeasureDialog(QDialog):
         layout = QVBoxLayout()
 
         # GSD input group
-        gsd_group = QGroupBox("Ground Sample Distance")
+        gsd_group = QGroupBox(self.tr("Ground Sample Distance"))
         gsd_layout = QHBoxLayout()
 
-        gsd_label = QLabel("GSD:")
+        gsd_label = QLabel(self.tr("GSD:"))
         self.gsd_input = QLineEdit()
-        self.gsd_input.setPlaceholderText("Enter GSD value")
+        self.gsd_input.setPlaceholderText(self.tr("Enter GSD value"))
         if self.current_gsd:
             self.gsd_input.setText(str(self.current_gsd))
 
-        gsd_unit_label = QLabel("cm/px")
+        gsd_unit_label = QLabel(self.tr("cm/px"))
 
         gsd_layout.addWidget(gsd_label)
         gsd_layout.addWidget(self.gsd_input)
@@ -87,11 +89,11 @@ class MeasureDialog(QDialog):
         gsd_group.setLayout(gsd_layout)
 
         # Distance display group
-        distance_group = QGroupBox("Measurement")
+        distance_group = QGroupBox(self.tr("Measurement"))
         distance_layout = QHBoxLayout()
 
-        distance_label = QLabel("Distance:")
-        self.distance_display = QLabel("--")
+        distance_label = QLabel(self.tr("Distance:"))
+        self.distance_display = QLabel(self.tr("--"))
         self.distance_display.setStyleSheet("QLabel { font-weight: bold; font-size: 14pt; }")
 
         distance_layout.addWidget(distance_label)
@@ -100,15 +102,19 @@ class MeasureDialog(QDialog):
         distance_group.setLayout(distance_layout)
 
         # Instructions
-        instructions = QLabel("Click on the image to place the first point,\nthen click again to place the second point.")
+        instructions = QLabel(
+            self.tr(
+                "Click on the image to place the first point,\nthen click again to place the second point."
+            )
+        )
         instructions.setWordWrap(True)
         instructions.setStyleSheet("QLabel { color: gray; }")
 
         # Buttons
         button_layout = QHBoxLayout()
-        self.clear_button = QPushButton("Clear")
+        self.clear_button = QPushButton(self.tr("Clear"))
         self.clear_button.clicked.connect(self.clearMeasurement)
-        self.close_button = QPushButton("Close")
+        self.close_button = QPushButton(self.tr("Close"))
         self.close_button.clicked.connect(self.close)
 
         button_layout.addWidget(self.clear_button)
@@ -260,7 +266,7 @@ class MeasureDialog(QDialog):
             return
 
         if not self.current_gsd:
-            self.distance_display.setText("No GSD value")
+            self.distance_display.setText(self.tr("No GSD value"))
             return
 
         # Calculate pixel distance

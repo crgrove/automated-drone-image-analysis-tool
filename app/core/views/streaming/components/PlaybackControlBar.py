@@ -7,9 +7,10 @@ and timeline scrubbing for video file playback.
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QSlider, QLabel
 from PySide6.QtCore import Qt, Signal
+from helpers.TranslationMixin import TranslationMixin
 
 
-class PlaybackControlBar(QWidget):
+class PlaybackControlBar(TranslationMixin, QWidget):
     """
     Advanced playback control bar for video files.
 
@@ -25,6 +26,7 @@ class PlaybackControlBar(QWidget):
         super().__init__(parent)
         self.setup_ui()
         self.connect_signals()
+        self._apply_translations()
 
         # State
         self.is_playing = False

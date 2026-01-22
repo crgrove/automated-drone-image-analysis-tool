@@ -19,6 +19,7 @@ from PySide6.QtGui import QFont
 
 from core.services.BearingCalculationService import BearingCalculationService, BearingResult
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class BearingCalculationWorker(QThread):
@@ -71,7 +72,7 @@ class BearingCalculationWorker(QThread):
             self.service.calculate_auto(self.images)
 
 
-class BearingRecoveryDialog(QDialog):
+class BearingRecoveryDialog(TranslationMixin, QDialog):
     """
     Dialog for recovering missing image bearings.
 
@@ -96,12 +97,13 @@ class BearingRecoveryDialog(QDialog):
         self.worker: Optional[BearingCalculationWorker] = None
         self._logger = LoggerService()
 
-        self.setWindowTitle("Missing Bearings Detected")
+        self.setWindowTitle(self.tr("Missing Bearings Detected"))
         self.setModal(True)
         self.setMinimumWidth(500)
 
         self._setup_ui()
         self._apply_styles()
+        self._apply_translations()
 
         # Check if there's only one image - skip bearing recovery if so
         if len(self.images) <= 1:
@@ -119,18 +121,18 @@ class BearingRecoveryDialog(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
 
         # Title and description
-        title_label = QLabel("Missing Bearings Detected")
+        title_label = QLabel(self.tr("Missing Bearings Detected"))
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
         title_label.setFont(title_font)
         layout.addWidget(title_label)
 
-        desc_label = QLabel(
+        desc_label = QLabel(self.tr(
             "Some images are missing bearing/heading information. "
             "We can estimate bearings from a flight track file (KML/GPX/CSV) "
             "or calculate them automatically from image GPS coordinates."
-        )
+        ))
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 
@@ -145,13 +147,13 @@ class BearingRecoveryDialog(QDialog):
         button_layout.setSpacing(10)
 
         # Track file button
-        self.track_button = QPushButton("📁 Load Track File (KML/GPX/CSV)")
+        self.track_button = QPushButton(self.tr("📁 Load Track File (KML/GPX/CSV)"))
         self.track_button.setMinimumHeight(50)
         self.track_button.clicked.connect(self._on_load_track)
         button_layout.addWidget(self.track_button)
 
         # Auto-calculate button
-        self.auto_button = QPushButton("🧭 Auto-Calculate from Image GPS")
+        self.auto_button = QPushButton(self.tr("🧭 Auto-Calculate from Image GPS"))
         self.auto_button.setMinimumHeight(50)
         self.auto_button.clicked.connect(self._on_auto_calculate)
         button_layout.addWidget(self.auto_button)
@@ -169,7 +171,7 @@ class BearingRecoveryDialog(QDialog):
         progress_layout = QVBoxLayout(self.progress_widget)
         progress_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.progress_label = QLabel("Preparing...")
+        self.progress_label = QLabel(self.tr("Preparing..."))
         progress_layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -185,12 +187,12 @@ class BearingRecoveryDialog(QDialog):
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self._on_cancel)
         self.cancel_button.setVisible(False)
         bottom_layout.addWidget(self.cancel_button)
 
-        self.skip_button = QPushButton("Skip")
+        self.skip_button = QPushButton(self.tr("Skip"))
         self.skip_button.clicked.connect(self.reject)
         bottom_layout.addWidget(self.skip_button)
 
@@ -254,9 +256,9 @@ class BearingRecoveryDialog(QDialog):
         # Open file dialog
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Track File",
+            self.tr("Select Track File"),
             "",
-            "Track Files (*.kml *.gpx *.csv);;KML Files (*.kml);;GPX Files (*.gpx);;CSV Files (*.csv);;All Files (*.*)"
+            self.tr("Track Files (*.kml *.gpx *.csv);;KML Files (*.kml);;GPX Files (*.gpx);;CSV Files (*.csv);;All Files (*.*)")
         )
 
         if file_path:
@@ -340,21 +342,24 @@ class BearingRecoveryDialog(QDialog):
         hover_estimates = qualities.get('hover_estimate', 0)
         gaps = qualities.get('gap', 0)
 
-        summary = f"Bearings set for {len(results)} images ({source_display})"
+        summary = self.tr("Bearings set for {count} images ({source})").format(
+            count=len(results),
+            source=source_display
+        )
         if turns_flagged > 0:
-            summary += f", {turns_flagged} flagged near turns"
+            summary += self.tr(", {count} flagged near turns").format(count=turns_flagged)
         if hover_estimates > 0:
-            summary += f", {hover_estimates} hover estimates"
+            summary += self.tr(", {count} hover estimates").format(count=hover_estimates)
         if gaps > 0:
-            summary += f", {gaps} time gaps"
+            summary += self.tr(", {count} time gaps").format(count=gaps)
 
         # self._logger.info(summary)
 
         # Show completion message
         QMessageBox.information(
             self,
-            "Bearing Calculation Complete",
-            summary + "."
+            self.tr("Bearing Calculation Complete"),
+            self.tr("{summary}.").format(summary=summary)
         )
 
         # Accept dialog
@@ -381,9 +386,11 @@ class BearingRecoveryDialog(QDialog):
         # Show error message
         QMessageBox.critical(
             self,
-            "Bearing Calculation Failed",
-            f"An error occurred during bearing calculation:\n\n{error_msg}\n\n"
-            "Please check your input files and try again."
+            self.tr("Bearing Calculation Failed"),
+            self.tr(
+                "An error occurred during bearing calculation:\n\n{error}\n\n"
+                "Please check your input files and try again."
+            ).format(error=error_msg)
         )
 
     def _on_calculation_cancelled(self):
@@ -401,7 +408,7 @@ class BearingRecoveryDialog(QDialog):
         self.progress_widget.setVisible(False)
         self.cancel_button.setVisible(False)
 
-        self.progress_label.setText("Cancelled")
+        self.progress_label.setText(self.tr("Cancelled"))
 
     def _on_cancel(self):
         """
@@ -412,7 +419,7 @@ class BearingRecoveryDialog(QDialog):
         if self.worker and self.worker.isRunning():
             self.service.cancel()
             self.cancel_button.setEnabled(False)
-            self.progress_label.setText("Cancelling...")
+            self.progress_label.setText(self.tr("Cancelling..."))
 
     def _skip_single_image(self):
         """
@@ -425,9 +432,11 @@ class BearingRecoveryDialog(QDialog):
 
         QMessageBox.information(
             self,
-            "Bearing Recovery Not Needed",
-            "Bearing recovery requires multiple images to calculate direction of travel.\n\n"
-            "With only one image, bearing recovery cannot be performed."
+            self.tr("Bearing Recovery Not Needed"),
+            self.tr(
+                "Bearing recovery requires multiple images to calculate direction of travel.\n\n"
+                "With only one image, bearing recovery cannot be performed."
+            )
         )
 
         # Reject dialog to skip recovery
@@ -440,7 +449,7 @@ class BearingRecoveryDialog(QDialog):
         Displays an informational dialog with details about what bearing
         recovery is, why it's important, and how the different methods work.
         """
-        help_text = """
+        help_text = self.tr("""
 <h3>What is Bearing Recovery?</h3>
 
 <p><b>Bearing</b> (also called heading, yaw, or course) is the direction the drone/camera
@@ -468,10 +477,10 @@ like lawn-mower surveys.</p>
 
 <p><b>Skip</b><br/>
 Proceed without bearing recovery. Some features may not work correctly.</p>
-        """
+        """)
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("About Bearing Recovery")
+        msg.setWindowTitle(self.tr("About Bearing Recovery"))
         msg.setTextFormat(Qt.RichText)
         msg.setText(help_text)
         msg.setIcon(QMessageBox.Information)

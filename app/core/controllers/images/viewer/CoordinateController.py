@@ -20,10 +20,11 @@ from PySide6.QtCore import QThread
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.services.image.ImageService import ImageService
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 import qimage2ndarray
 
 
-class CoordinateController:
+class CoordinateController(TranslationMixin):
     """
     Controller for managing GPS coordinate and mapping functionality.
 
@@ -119,7 +120,9 @@ class CoordinateController:
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
-        title = QLabel(f"GPS Coordinates: {coord_text}")
+        title = QLabel(
+            self.tr("GPS Coordinates: {coords}").format(coords=coord_text)
+        )
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
@@ -144,23 +147,23 @@ class CoordinateController:
                 close_popup()
             return handler
 
-        copy_btn = QPushButton("📋 Copy coordinates")
+        copy_btn = QPushButton(self.tr("📋 Copy coordinates"))
         copy_btn.clicked.connect(make_action_handler(self.copy_coords_to_clipboard, coord_text))
         layout.addWidget(copy_btn)
 
-        maps_btn = QPushButton("🗺️ Open in Google Maps")
+        maps_btn = QPushButton(self.tr("🗺️ Open in Google Maps"))
         maps_btn.clicked.connect(make_action_handler(self.open_in_maps))
         layout.addWidget(maps_btn)
 
-        earth_btn = QPushButton("🌍 View in Google Earth")
+        earth_btn = QPushButton(self.tr("🌍 View in Google Earth"))
         earth_btn.clicked.connect(make_action_handler(self.open_in_earth))
         layout.addWidget(earth_btn)
 
-        whatsapp_btn = QPushButton("📱 Send via WhatsApp")
+        whatsapp_btn = QPushButton(self.tr("📱 Send via WhatsApp"))
         whatsapp_btn.clicked.connect(make_action_handler(self.share_whatsapp))
         layout.addWidget(whatsapp_btn)
 
-        telegram_btn = QPushButton("📨 Send via Telegram")
+        telegram_btn = QPushButton(self.tr("📨 Send via Telegram"))
         telegram_btn.clicked.connect(make_action_handler(self.share_telegram))
         layout.addWidget(telegram_btn)
 
@@ -231,13 +234,21 @@ class CoordinateController:
         if not coord_text:
             return
         QApplication.clipboard().setText(str(coord_text))
-        self.parent.status_controller.show_toast("Coordinates copied", 3000, color="#00C853")
+        self.parent.status_controller.show_toast(
+            self.tr("Coordinates copied"),
+            3000,
+            color="#00C853"
+        )
 
     def open_in_maps(self):
         """Open coordinates in Google Maps."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"),
+                3000,
+                color="#F44336"
+            )
             return
         lat, lon = lat_lon
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
@@ -247,7 +258,11 @@ class CoordinateController:
         """Open coordinates in Google Earth."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"),
+                3000,
+                color="#F44336"
+            )
             return
 
         lat, lon = lat_lon
@@ -277,7 +292,7 @@ class CoordinateController:
             "<?xml version='1.0' encoding='UTF-8'?>\n"
             "<kml xmlns='http://www.opengis.net/kml/2.2'>\n"
             "  <Document>\n"
-            "    <name>ADIAT View</name>\n"
+            f"    <name>{self.tr('ADIAT View')}</name>\n"
             "    <open>1</open>\n"
             "    <LookAt>\n"
             f"      <longitude>{lon}</longitude>\n"
@@ -289,7 +304,7 @@ class CoordinateController:
             f"      <range>{range_val}</range>\n"
             "    </LookAt>\n"
             "    <Placemark>\n"
-            "      <name>Photo Location</name>\n"
+            f"      <name>{self.tr('Photo Location')}</name>\n"
             f"      <Point><coordinates>{lon},{lat},0</coordinates></Point>\n"
             "    </Placemark>\n"
             "  </Document>\n"
@@ -306,11 +321,19 @@ class CoordinateController:
         """Share coordinates via WhatsApp."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"),
+                3000,
+                color="#F44336"
+            )
             return
         lat, lon = lat_lon
         maps = f"https://www.google.com/maps?q={lat},{lon}"
-        text = f"Coordinate: {lat}, {lon} — {maps}"
+        text = self.tr("Coordinate: {lat}, {lon} — {maps}").format(
+            lat=lat,
+            lon=lon,
+            maps=maps
+        )
         wa_url = f"https://wa.me/?text={quote_plus(text)}"
         QDesktopServices.openUrl(QUrl(wa_url))
 
@@ -318,11 +341,16 @@ class CoordinateController:
         """Share coordinates via Telegram."""
         lat_lon = self.get_decimals_or_parse()
         if not lat_lon:
-            self.parent.status_controller.show_toast("Coordinates unavailable", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"),
+                3000,
+                color="#F44336"
+            )
             return
         lat, lon = lat_lon
         maps = f"https://www.google.com/maps?q={lat},{lon}"
-        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(f'Coordinates: {lat}, {lon}')}"
+        tg_text = self.tr("Coordinates: {lat}, {lon}").format(lat=lat, lon=lon)
+        tg_url = f"https://t.me/share/url?url={quote_plus(maps)}&text={quote_plus(tg_text)}"
         QDesktopServices.openUrl(QUrl(tg_url))
 
     def get_decimals_or_parse(self):
@@ -360,7 +388,11 @@ class CoordinateController:
 
             if direction is None:
                 # Show message that no bearing info is available
-                self.parent.status_controller.show_toast("No bearing info available", 3000, color="#F44336")
+                self.parent.status_controller.show_toast(
+                    self.tr("No bearing info available"),
+                    3000,
+                    color="#F44336"
+                )
                 return
 
             # Get the current image array
@@ -397,7 +429,11 @@ class CoordinateController:
 
             # Create popup window
             popup = QDialog(self.parent)
-            popup.setWindowTitle(f"North-Oriented View (Rotated {rotation_angle:.1f}°)")
+            popup.setWindowTitle(
+                self.tr("North-Oriented View (Rotated {angle:.1f}°)").format(
+                    angle=rotation_angle
+                )
+            )
             popup.setModal(False)  # Non-modal so user can still interact with main window
 
             # Store reference for cleanup when viewer closes
@@ -424,12 +460,19 @@ class CoordinateController:
             image_viewer.setImage(qimg)
 
             # Add label showing rotation info
-            info_label = QLabel(f"Original bearing: {direction:.1f}° | Rotation applied: {rotation_angle:.1f}°")
+            info_label = QLabel(
+                self.tr(
+                    "Original bearing: {bearing:.1f}° | Rotation applied: {rotation:.1f}°"
+                ).format(
+                    bearing=direction,
+                    rotation=rotation_angle
+                )
+            )
             info_label.setAlignment(Qt.AlignCenter)
             info_label.setStyleSheet("QLabel { background-color: rgba(0,0,0,150); color: white; padding: 5px; }")
 
             # Add north arrow indicator
-            north_label = QLabel("↑ NORTH")
+            north_label = QLabel(self.tr("↑ NORTH"))
             north_label.setAlignment(Qt.AlignCenter)
             north_label.setStyleSheet("QLabel { color: red; font-size: 16px; font-weight: bold; }")
 
@@ -438,7 +481,7 @@ class CoordinateController:
             layout.addWidget(info_label)
 
             # Add close button
-            close_btn = QPushButton("Close")
+            close_btn = QPushButton(self.tr("Close"))
             close_btn.clicked.connect(popup.close)
             layout.addWidget(close_btn)
 
@@ -448,7 +491,11 @@ class CoordinateController:
 
         except Exception as e:
             self.logger.error(f"Error showing north-oriented image: {e}")
-            self.parent.status_controller.show_toast(f"Error: {str(e)}", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(
+                self.tr("Error: {error}").format(error=str(e)),
+                3000,
+                color="#F44336"
+            )
 
     def update_current_coordinates(self, decimal_coords):
         """Update the current decimal coordinates.

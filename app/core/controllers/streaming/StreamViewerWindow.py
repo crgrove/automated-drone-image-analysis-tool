@@ -38,9 +38,10 @@ from core.views.streaming.components import PlaybackControlBar
 from core.views.streaming.components.TrackGalleryWidget import TrackGalleryWidget
 from core.controllers.streaming.base import StreamAlgorithmController
 from core.services.streaming.RTMPStreamService import StreamType
+from helpers.TranslationMixin import TranslationMixin
 
 
-class StreamViewerWindow(QMainWindow):
+class StreamViewerWindow(TranslationMixin, QMainWindow):
     """
     Main streaming detection window.
 
@@ -80,7 +81,11 @@ class StreamViewerWindow(QMainWindow):
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
         self.ui.setupUi(self)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
 
         # Setup tooltip stylesheet
         self.setStyleSheet("""
@@ -167,12 +172,12 @@ class StreamViewerWindow(QMainWindow):
         live_layout.addWidget(self.thumbnail_widget)
 
         # Add Live View tab
-        self.tab_widget.addTab(live_view_widget, "Live View")
+        self.tab_widget.addTab(live_view_widget, self.tr("Live View"))
 
         # === Gallery Tab ===
         self.gallery_widget = TrackGalleryWidget()
         self.gallery_widget.track_clicked.connect(self._on_gallery_track_clicked)
-        self.tab_widget.addTab(self.gallery_widget, "Gallery")
+        self.tab_widget.addTab(self.gallery_widget, self.tr("Gallery"))
 
         # Connect track_confirmed signal from tracker to gallery
         self.thumbnail_widget.tracker.track_confirmed.connect(self.gallery_widget.add_track)
@@ -213,20 +218,20 @@ class StreamViewerWindow(QMainWindow):
         menu_bar.clear()
 
         # Primary navigation menu
-        primary_menu = menu_bar.addMenu("Menu")
-        self.action_streaming_guide = QAction("Streaming Analysis Wizard", self)
-        self.action_image_analysis = QAction("Image Analysis", self)
-        self.action_preferences = QAction("Preferences", self)
+        primary_menu = menu_bar.addMenu(self.tr("Menu"))
+        self.action_streaming_guide = QAction(self.tr("Streaming Analysis Wizard"), self)
+        self.action_image_analysis = QAction(self.tr("Image Analysis"), self)
+        self.action_preferences = QAction(self.tr("Preferences"), self)
         primary_menu.addAction(self.action_streaming_guide)
         primary_menu.addSeparator()
         primary_menu.addAction(self.action_image_analysis)
         primary_menu.addAction(self.action_preferences)
 
         # Help menu
-        help_menu = menu_bar.addMenu("Help")
-        self.action_manual = QAction("Manual", self)
-        self.action_community = QAction("Community Forum", self)
-        self.action_youtube = QAction("YouTube Channel", self)
+        help_menu = menu_bar.addMenu(self.tr("Help"))
+        self.action_manual = QAction(self.tr("Manual"), self)
+        self.action_community = QAction(self.tr("Community Forum"), self)
+        self.action_youtube = QAction(self.tr("YouTube Channel"), self)
         help_menu.addAction(self.action_manual)
         help_menu.addAction(self.action_community)
         help_menu.addAction(self.action_youtube)
@@ -249,33 +254,45 @@ class StreamViewerWindow(QMainWindow):
 
         # Recording buttons
         button_layout = QHBoxLayout()
-        self.start_recording_btn = QPushButton("Start Recording")
+        self.start_recording_btn = QPushButton(self.tr("Start Recording"))
         self.start_recording_btn.setStyleSheet("QPushButton { background-color: #ff4444; color: white; font-weight: bold; }")
-        self.start_recording_btn.setToolTip("Start recording the video stream with detection overlays.")
-        self.stop_recording_btn = QPushButton("Stop Recording")
+        self.start_recording_btn.setToolTip(
+            self.tr("Start recording the video stream with detection overlays.")
+        )
+        self.stop_recording_btn = QPushButton(self.tr("Stop Recording"))
         self.stop_recording_btn.setEnabled(False)
-        self.stop_recording_btn.setToolTip("Stop the current recording and save to file.")
+        self.stop_recording_btn.setToolTip(
+            self.tr("Stop the current recording and save to file.")
+        )
 
         button_layout.addWidget(self.start_recording_btn)
         button_layout.addWidget(self.stop_recording_btn)
 
         # Recording status
-        self.recording_status = QLabel("Status: Not Recording")
+        self.recording_status = QLabel(self.tr("Status: Not Recording"))
         self.recording_status.setStyleSheet("QLabel { color: gray; }")
-        self.recording_status.setToolTip("Current recording status and output file path")
+        self.recording_status.setToolTip(
+            self.tr("Current recording status and output file path")
+        )
 
         # Recording info
-        self.recording_info = QLabel("Duration: --")
-        self.recording_info.setToolTip("Recording statistics: Duration, FPS, Frames")
+        self.recording_info = QLabel(self.tr("Duration: --"))
+        self.recording_info.setToolTip(
+            self.tr("Recording statistics: Duration, FPS, Frames")
+        )
 
         # Recording directory selector
         dir_layout = QHBoxLayout()
-        dir_label = QLabel("Save to:")
+        dir_label = QLabel(self.tr("Save to:"))
         default_recording_dir = os.path.expanduser("~")
         self.recording_dir_edit = QLineEdit(default_recording_dir)
-        self.recording_dir_edit.setToolTip("Directory where video recordings will be saved.")
-        self.recording_dir_browse = QPushButton("Browse...")
-        self.recording_dir_browse.setToolTip("Choose a folder to store recordings.")
+        self.recording_dir_edit.setToolTip(
+            self.tr("Directory where video recordings will be saved.")
+        )
+        self.recording_dir_browse = QPushButton(self.tr("Browse..."))
+        self.recording_dir_browse.setToolTip(
+            self.tr("Choose a folder to store recordings.")
+        )
 
         dir_layout.addWidget(dir_label)
         dir_layout.addWidget(self.recording_dir_edit, 1)
@@ -324,7 +341,9 @@ class StreamViewerWindow(QMainWindow):
     def _browse_recording_directory(self):
         """Browse for recording directory."""
         directory = QFileDialog.getExistingDirectory(
-            self, "Select Recording Directory", self.recording_dir_edit.text()
+            self,
+            self.tr("Select Recording Directory"),
+            self.recording_dir_edit.text()
         )
         if directory:
             self.recording_dir_edit.setText(directory)
@@ -343,14 +362,18 @@ class StreamViewerWindow(QMainWindow):
         algorithm_layout = QHBoxLayout()
         algorithm_layout.setContentsMargins(0, 0, 0, 10)  # Add bottom margin for spacing
 
-        algorithm_label = QLabel("Algorithm:")
-        algorithm_label.setToolTip("Select which streaming detection algorithm to use")
+        algorithm_label = QLabel(self.tr("Algorithm:"))
+        algorithm_label.setToolTip(
+            self.tr("Select which streaming detection algorithm to use")
+        )
 
         self.algorithm_combo = QComboBox()
         self.algorithm_combo.setToolTip(
-            "Choose which streaming detection algorithm to run.\n"
-            "• Color Anomaly & Motion Detection: fused anomaly detectors\n"
-            "• Color Detection: color-based highlighting"
+            self.tr(
+                "Choose which streaming detection algorithm to run.\n"
+                "• Color Anomaly & Motion Detection: fused anomaly detectors\n"
+                "• Color Detection: color-based highlighting"
+            )
         )
 
         # Populate with available algorithms from registry
@@ -362,11 +385,11 @@ class StreamViewerWindow(QMainWindow):
         ]
         for key in preferred_order:
             if key in registry:
-                label = registry[key].get("label", key)
+                label = self.tr(registry[key].get("label", key))
                 algorithm_options.append((label, key))
         for key, cfg in registry.items():
             if key not in [k for _, k in algorithm_options]:
-                algorithm_options.append((cfg.get("label", key), key))
+                algorithm_options.append((self.tr(cfg.get("label", key)), key))
 
         # Add to combo box
         for label, key in algorithm_options:
@@ -390,17 +413,23 @@ class StreamViewerWindow(QMainWindow):
         gallery_layout = QHBoxLayout()
         gallery_layout.setContentsMargins(0, 0, 0, 10)
 
-        confirm_label = QLabel("Gallery Threshold:")
-        confirm_label.setToolTip("Number of frames a detection must be seen before appearing in the Gallery tab")
+        confirm_label = QLabel(self.tr("Gallery Threshold:"))
+        confirm_label.setToolTip(
+            self.tr(
+                "Number of frames a detection must be seen before appearing in the Gallery tab"
+            )
+        )
 
         self.confirmation_spinbox = QSpinBox()
         self.confirmation_spinbox.setRange(1, 30)
         self.confirmation_spinbox.setValue(5)
-        self.confirmation_spinbox.setSuffix(" frames")
+        self.confirmation_spinbox.setSuffix(self.tr(" frames"))
         self.confirmation_spinbox.setToolTip(
-            "Detections must be seen for this many consecutive frames\n"
-            "before appearing in the Gallery. Higher values reduce\n"
-            "false positives but delay detection appearance."
+            self.tr(
+                "Detections must be seen for this many consecutive frames\n"
+                "before appearing in the Gallery. Higher values reduce\n"
+                "false positives but delay detection appearance."
+            )
         )
         self.confirmation_spinbox.valueChanged.connect(self._on_confirmation_threshold_changed)
 
@@ -592,7 +621,11 @@ class StreamViewerWindow(QMainWindow):
                 self.apply_wizard_data(wizard_data_from_wizard)
         except Exception as e:
             self.logger.error(f"Error opening Streaming Analysis Guide: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Streaming Analysis Guide:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Streaming Analysis Guide:\n{error}").format(error=str(e))
+            )
 
     def _open_image_analysis(self):
         """Open the Image Analysis main window and close this streaming viewer."""
@@ -607,7 +640,11 @@ class StreamViewerWindow(QMainWindow):
             self.close()
         except Exception as e:
             self.logger.error(f"Error opening Image Analysis: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Image Analysis:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Image Analysis:\n{error}").format(error=str(e))
+            )
 
     def _open_preferences(self):
         """Open the Preferences dialog."""
@@ -616,7 +653,11 @@ class StreamViewerWindow(QMainWindow):
             pref.exec()
         except Exception as e:
             self.logger.error(f"Error opening Preferences: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Preferences:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Preferences:\n{error}").format(error=str(e))
+            )
 
     def _open_manual(self):
         """Open the user manual in the default browser."""
@@ -626,7 +667,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Help documentation:\n{error}").format(error=str(e))
+            )
 
     def _open_community_forum(self):
         """Open the community forum link in the default browser."""
@@ -636,7 +681,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("Community forum opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Forum URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Community Forum:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Community Forum:\n{error}").format(error=str(e))
+            )
 
     def _open_youtube_channel(self):
         """Open the YouTube Channel URL in the default browser."""
@@ -646,7 +695,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("YouTube Channel opened")
         except Exception as e:
             self.logger.error(f"Error opening YouTube Channel URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open YouTube Channel:\n{error}").format(error=str(e))
+            )
 
     def load_algorithm(self, algorithm_name: str):
         """
@@ -746,7 +799,9 @@ class StreamViewerWindow(QMainWindow):
             self._setup_processing_worker()
 
             # self.logger.info(f"Algorithm loaded: {algorithm_name}")
-            self.ui.statusbar.showMessage(f"Loaded: {algorithm_name}")
+            self.ui.statusbar.showMessage(
+                self.tr("Loaded: {algorithm}").format(algorithm=algorithm_name)
+            )
 
             # Restore saved config for this algorithm if available (session persistence)
             # Only restore if we don't have pending wizard options (wizard takes priority)
@@ -761,9 +816,13 @@ class StreamViewerWindow(QMainWindow):
                 self._apply_algorithm_options(saved_config)
 
         except Exception as e:
-            error_msg = f"Error loading algorithm: {str(e)}"
+            error_msg = self.tr("Error loading algorithm: {error}").format(error=str(e))
             self.logger.error(error_msg)
-            QMessageBox.critical(self, "Algorithm Load Error", error_msg)
+            QMessageBox.critical(
+                self,
+                self.tr("Algorithm Load Error"),
+                error_msg
+            )
 
     def _get_algorithm_service(self) -> Optional[QObject]:
         """
@@ -1219,7 +1278,9 @@ class StreamViewerWindow(QMainWindow):
                 self.logger.error(f"Error notifying algorithm of active stream: {e}")
         config = self._get_algorithm_config(algorithm_name) or {}
         label = config.get("label", algorithm_name)
-        self.ui.infoPanel.append(f"Algorithm switched to {label}")
+        self.ui.infoPanel.append(
+            self.tr("Algorithm switched to {label}").format(label=label)
+        )
 
     @Slot(str, object)
     def on_connect_requested(self, url: str, stream_type: StreamType):
@@ -1243,14 +1304,19 @@ class StreamViewerWindow(QMainWindow):
     def on_connection_changed(self, connected: bool, message: str):
         """Handle connection status change."""
         # Update bottom status bar with connection state
-        status_text = f"{'Connected' if connected else 'Disconnected'} - {message}"
+        status_text = self.tr("{state} - {message}").format(
+            state=self.tr("Connected") if connected else self.tr("Disconnected"),
+            message=message
+        )
         self.ui.statusbar.showMessage(status_text)
         # Update stream controls status section
         if hasattr(self, "stream_controls"):
             self.stream_controls.update_connection_status(connected, message)
 
         if connected:
-            self.ui.infoPanel.append(f"✓ Connected: {message}")
+            self.ui.infoPanel.append(
+                self.tr("✓ Connected: {message}").format(message=message)
+            )
 
             # Show playback controls for file streams
             if self.stream_coordinator.current_stream_type == StreamType.FILE:
@@ -1275,7 +1341,9 @@ class StreamViewerWindow(QMainWindow):
                 self.on_start_recording_requested(record_dir)
                 self._pending_auto_record = False
         else:
-            self.ui.infoPanel.append(f"✗ Disconnected: {message}")
+            self.ui.infoPanel.append(
+                self.tr("✗ Disconnected: {message}").format(message=message)
+            )
 
             # Hide playback controls
             self.playback_controls.hide_for_stream()
@@ -1481,10 +1549,14 @@ class StreamViewerWindow(QMainWindow):
         # Update detection info panel with a concise summary
         self.ui.infoPanel.clear()
         if not detections:
-            self.ui.infoPanel.setPlainText("No detections found.")
+            self.ui.infoPanel.setPlainText(self.tr("No detections found."))
             return
 
-        self.ui.infoPanel.append(f"Detection Results ({len(detections)} found):")
+        self.ui.infoPanel.append(
+            self.tr("Detection Results ({count} found):").format(
+                count=len(detections)
+            )
+        )
         # Show a brief summary of up to first 5 detections
         for idx, det in enumerate(detections[:5], start=1):
             bbox = det.get("bbox") if isinstance(det, dict) else getattr(det, "bbox", None)
@@ -1492,11 +1564,25 @@ class StreamViewerWindow(QMainWindow):
             conf = det.get("confidence") if isinstance(det, dict) else getattr(det, "confidence", None)
             if bbox is not None:
                 x, y, w, h = bbox
-                summary = f"#{idx}: Type({cls}) Pos({x},{y}) Size({w}x{h})"
+                summary = self.tr(
+                    "#{index}: Type({cls}) Pos({x},{y}) Size({w}x{h})"
+                ).format(
+                    index=idx,
+                    cls=cls,
+                    x=x,
+                    y=y,
+                    w=w,
+                    h=h
+                )
             else:
-                summary = f"#{idx}: Type({cls})"
+                summary = self.tr("#{index}: Type({cls})").format(
+                    index=idx,
+                    cls=cls
+                )
             if conf is not None:
-                summary += f" Conf({conf:.2f})"
+                summary += self.tr(" Conf({confidence:.2f})").format(
+                    confidence=conf
+                )
             self.ui.infoPanel.append(summary)
 
     @Slot(str)
@@ -1538,13 +1624,15 @@ class StreamViewerWindow(QMainWindow):
         self._update_recording_state(recording, path)
 
         if recording:
-            self.ui.statusbar.showMessage(f"Recording started: {path}")
+            self.ui.statusbar.showMessage(
+                self.tr("Recording started: {path}").format(path=path)
+            )
 
             # Notify algorithm
             if self.algorithm_widget:
                 self.algorithm_widget.on_recording_started(path)
         else:
-            self.ui.statusbar.showMessage("Recording stopped")
+            self.ui.statusbar.showMessage(self.tr("Recording stopped"))
 
             # Notify algorithm
             if self.algorithm_widget:
@@ -1557,12 +1645,14 @@ class StreamViewerWindow(QMainWindow):
             self.stop_recording_btn.setEnabled(recording)
 
             if recording:
-                self.recording_status.setText(f"Status: Recording to {path}")
+                self.recording_status.setText(
+                    self.tr("Status: Recording to {path}").format(path=path)
+                )
                 self.recording_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             else:
-                self.recording_status.setText("Status: Not Recording")
+                self.recording_status.setText(self.tr("Status: Not Recording"))
                 self.recording_status.setStyleSheet("QLabel { color: gray; }")
-                self.recording_info.setText("Duration: --")
+                self.recording_info.setText(self.tr("Duration: --"))
 
     @Slot(str)
     def on_status_update(self, message: str):
@@ -1573,8 +1663,10 @@ class StreamViewerWindow(QMainWindow):
     def on_error(self, error: str):
         """Handle error."""
         self.logger.error(error)
-        self.ui.infoPanel.append(f"✗ Error: {error}")
-        QMessageBox.warning(self, "Error", error)
+        self.ui.infoPanel.append(
+            self.tr("✗ Error: {error}").format(error=error)
+        )
+        QMessageBox.warning(self, self.tr("Error"), error)
 
     @Slot(bool)
     def on_recording_request(self, start: bool):
@@ -1636,9 +1728,11 @@ class StreamViewerWindow(QMainWindow):
             # Live stream - cannot seek, show info dialog
             QMessageBox.information(
                 self,
-                "Live Stream",
-                f"Cannot seek in live stream.\n\n"
-                f"Detection was first seen at frame {track.first_frame_index}."
+                self.tr("Live Stream"),
+                self.tr(
+                    "Cannot seek in live stream.\n\n"
+                    "Detection was first seen at frame {frame}."
+                ).format(frame=track.first_frame_index)
             )
 
     def _display_highlighted_frame(self, track, service):

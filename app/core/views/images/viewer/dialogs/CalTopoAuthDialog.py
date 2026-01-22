@@ -16,6 +16,7 @@ import os
 import re
 import json
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class CalTopoWebEnginePage(QWebEnginePage):
@@ -65,7 +66,7 @@ class CalTopoWebEnginePage(QWebEnginePage):
             self.log_callback(output)
 
 
-class CalTopoAuthDialog(QDialog):
+class CalTopoAuthDialog(TranslationMixin, QDialog):
     """
     Dialog for CalTopo authentication.
 
@@ -92,7 +93,7 @@ class CalTopoAuthDialog(QDialog):
         """
         super().__init__(parent)
         self.logger = LoggerService()
-        self.setWindowTitle("CalTopo Login & Map Selection")
+        self.setWindowTitle(self.tr("CalTopo Login & Map Selection"))
         self.setMinimumSize(800, 600)
 
         # Use WindowModal to prevent affecting parent window position
@@ -111,6 +112,7 @@ class CalTopoAuthDialog(QDialog):
         self._cookies_from_store = {}
 
         self.setup_ui()
+        self._apply_translations()
 
         # Show dialog immediately (before web view loads)
         self.show()
@@ -168,11 +170,11 @@ class CalTopoAuthDialog(QDialog):
         map_info_layout = QHBoxLayout()
         map_info_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.current_map_label = QLabel("Current map: Not selected")
+        self.current_map_label = QLabel(self.tr("Current map: Not selected"))
         self.current_map_label.setStyleSheet("padding: 5px; font-size: 11px; color: #666;")
         map_info_layout.addWidget(self.current_map_label)
 
-        info_label = QLabel("(Login → Navigate to your map → Click 'I'm Logged In')")
+        info_label = QLabel(self.tr("(Login → Navigate to your map → Click 'I'm Logged In')"))
         info_label.setStyleSheet("padding: 5px; font-size: 10px; color: #888;")
         map_info_layout.addWidget(info_label)
         map_info_layout.addStretch()
@@ -186,12 +188,12 @@ class CalTopoAuthDialog(QDialog):
         # Button row
         button_layout = QHBoxLayout()
 
-        self.manual_done_button = QPushButton("I'm Logged In - Export Data")
+        self.manual_done_button = QPushButton(self.tr("I'm Logged In - Export Data"))
         self.manual_done_button.clicked.connect(self.on_manual_done_clicked)
-        self.manual_done_button.setToolTip("Click this after logging in and navigating to your map")
+        self.manual_done_button.setToolTip(self.tr("Click this after logging in and navigating to your map"))
         self.manual_done_button.setEnabled(False)  # Disabled until web view loads
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()
@@ -259,8 +261,8 @@ class CalTopoAuthDialog(QDialog):
             self.logger.error(traceback.format_exc())
             QMessageBox.critical(
                 self,
-                "Initialization Error",
-                f"Failed to initialize CalTopo browser:\n{str(e)}"
+                self.tr("Initialization Error"),
+                self.tr("Failed to initialize CalTopo browser:\n{error}").format(error=str(e))
             )
 
     def _on_cookie_added(self, cookie):
@@ -303,8 +305,10 @@ class CalTopoAuthDialog(QDialog):
         if not success:
             QMessageBox.warning(
                 self,
-                "Failed to Load",
-                "Failed to load CalTopo. Please check your internet connection and try again."
+                self.tr("Failed to Load"),
+                self.tr(
+                    "Failed to load CalTopo. Please check your internet connection and try again."
+                )
             )
 
     def on_url_changed(self, url):
@@ -333,7 +337,9 @@ class CalTopoAuthDialog(QDialog):
         if map_id:
             self.map_id = map_id
             self.map_url = url_string
-            self.current_map_label.setText(f"Current map: {map_id}")
+            self.current_map_label.setText(
+                self.tr("Current map: {map_id}").format(map_id=map_id)
+            )
             self.current_map_label.setStyleSheet(
                 "padding: 5px; font-size: 11px; color: #2E7D32; font-weight: bold;"
             )
@@ -349,23 +355,25 @@ class CalTopoAuthDialog(QDialog):
         if not self.map_id:
             QMessageBox.warning(
                 self,
-                "No Map Selected",
-                "Please navigate to a CalTopo map before capturing the session.\n\n"
-                "The map URL should contain a map ID (e.g., /m/ABC123 or #id=ABC123)."
+                self.tr("No Map Selected"),
+                self.tr(
+                    "Please navigate to a CalTopo map before capturing the session.\n\n"
+                    "The map URL should contain a map ID (e.g., /m/ABC123 or #id=ABC123)."
+                )
             )
             return
 
         if not self.web_view:
             QMessageBox.warning(
                 self,
-                "Browser Not Ready",
-                "The CalTopo browser is still loading. Please wait a moment and try again."
+                self.tr("Browser Not Ready"),
+                self.tr("The CalTopo browser is still loading. Please wait a moment and try again.")
             )
             return
 
         # Disable button and show progress
         self.manual_done_button.setEnabled(False)
-        self.manual_done_button.setText("Starting export...")
+        self.manual_done_button.setText(self.tr("Starting export..."))
         QApplication.processEvents()
 
         # Wait a moment to ensure cookies are set, then extract
@@ -383,8 +391,8 @@ class CalTopoAuthDialog(QDialog):
         if not self.profile or not self.web_view:
             QMessageBox.warning(
                 self,
-                "Authentication Failed",
-                "Browser not initialized. Please try again."
+                self.tr("Authentication Failed"),
+                self.tr("Browser not initialized. Please try again.")
             )
             self._reset_button()
             return
@@ -546,13 +554,15 @@ class CalTopoAuthDialog(QDialog):
         if not cookie_list:
             QMessageBox.warning(
                 self,
-                "Authentication Failed",
-                "Could not capture session cookies. Please ensure you are logged in to CalTopo.\n\n"
-                "Try:\n"
-                "1. Make sure you're logged in\n"
-                "2. Navigate to a map\n"
-                "3. Wait a few seconds for cookies to be set\n"
-                "4. Click 'I'm Logged In' again"
+                self.tr("Authentication Failed"),
+                self.tr(
+                    "Could not capture session cookies. Please ensure you are logged in to CalTopo.\n\n"
+                    "Try:\n"
+                    "1. Make sure you're logged in\n"
+                    "2. Navigate to a map\n"
+                    "3. Wait a few seconds for cookies to be set\n"
+                    "4. Click 'I'm Logged In' again"
+                )
             )
             self._reset_button()
             return

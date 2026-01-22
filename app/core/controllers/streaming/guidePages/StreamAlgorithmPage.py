@@ -82,7 +82,9 @@ class StreamAlgorithmPage(BasePage):
         self.selected_algorithm = None
         # Clear algorithm from wizard_data to ensure fresh start
         self.wizard_data["algorithm"] = None
-        self.dialog.labelCurrentQuestion.setText("Are you looking for specific colors?")
+        self.dialog.labelCurrentQuestion.setText(
+            self.tr("Are you looking for specific colors?")
+        )
         self.dialog.labelAlgorithmResult.setVisible(False)
         self.dialog.buttonYes.setVisible(True)
         self.dialog.buttonNo.setVisible(True)
@@ -154,11 +156,13 @@ class StreamAlgorithmPage(BasePage):
         if self.selected_algorithm:
             # Map algorithm key to display name
             algorithm_names = {
-                "ColorDetection": "Color Detection",
-                "ColorAnomalyAndMotionDetection": "Color Anomaly & Motion Detection"
+                "ColorDetection": self.tr("Color Detection"),
+                "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection")
             }
             display_name = algorithm_names.get(self.selected_algorithm, self.selected_algorithm)
-            self.dialog.labelAlgorithmResult.setText(f"Selected Algorithm: {display_name}")
+            self.dialog.labelAlgorithmResult.setText(
+                self.tr("Selected Algorithm: {algorithm}").format(algorithm=display_name)
+            )
             self.dialog.labelAlgorithmResult.setVisible(True)
             self.dialog.buttonYes.setVisible(False)
             self.dialog.buttonNo.setVisible(False)

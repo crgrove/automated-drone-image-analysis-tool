@@ -22,9 +22,10 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QSizePolicy, QColorDialog, QToolButton, QStyle,
                                QApplication)
 from .HSVColorRangeAssistant import HSVColorRangeAssistant
+from helpers.TranslationMixin import TranslationMixin
 
 
-class HSVRangePickerWidget(QWidget):
+class HSVRangePickerWidget(TranslationMixin, QWidget):
     """Advanced HSV color range picker with visual feedback."""
 
     # Signals emitted when values change
@@ -56,6 +57,7 @@ class HSVRangePickerWidget(QWidget):
 
         # Initialize UI
         self.setup_ui()
+        self._apply_translations()
         self.setMinimumSize(800, 750)
 
     def setup_ui(self):

@@ -21,9 +21,10 @@ from PySide6.QtGui import QCursor
 
 from core.services.LoggerService import LoggerService
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AOIUIComponent:
+class AOIUIComponent(TranslationMixin):
     """
     UI component for managing Areas of Interest (AOI) display and interaction.
 
@@ -246,12 +247,14 @@ class AOIUIComponent:
         """)
 
         # Build tooltip with confidence info if available
-        tooltip_text = "AOI Information\nRight-click to copy data to clipboard"
+        tooltip_text = self.tr("AOI Information\nRight-click to copy data to clipboard")
         if 'confidence' in area_of_interest and 'score_type' in area_of_interest:
             score_type = area_of_interest.get('score_type', '')
             raw_score = area_of_interest.get('raw_score', 0)
             score_method = area_of_interest.get('score_method', 'mean')
-            tooltip_text += f"\n\nScore Type: {score_type}\nRaw Score: {raw_score} ({score_method})"
+            tooltip_text += self.tr(
+                "\n\nScore Type: {type}\nRaw Score: {score} ({method})"
+            ).format(type=score_type, score=raw_score, method=score_method)
 
         info_widget.setToolTip(tooltip_text)
         info_layout = QHBoxLayout(info_widget)
@@ -300,7 +303,9 @@ class AOIUIComponent:
                     font-weight: bold;
                 }}
             """)
-            conf_label.setToolTip(f"Confidence Score: {confidence:.1f}%")
+            conf_label.setToolTip(
+                self.tr("Confidence Score: {score:.1f}%").format(score=confidence)
+            )
             info_layout.addWidget(conf_label)
 
         # Enable context menu for the info widget
@@ -324,7 +329,9 @@ class AOIUIComponent:
                 border-radius: 2px;
             }
         """)
-        info_widget.setToolTip("AOI Information\nRight-click to copy data to clipboard")
+        info_widget.setToolTip(
+            self.tr("AOI Information\nRight-click to copy data to clipboard")
+        )
         info_layout = QHBoxLayout(info_widget)
         info_layout.setContentsMargins(4, 2, 4, 2)
         info_layout.setSpacing(4)
@@ -362,7 +369,9 @@ class AOIUIComponent:
         flag_icon = qta.icon('fa6s.flag', color=flag_color)
         flag_label = QLabel()
         flag_label.setCursor(Qt.PointingHandCursor)
-        flag_label.setToolTip("Unflag AOI" if is_flagged else "Flag AOI")
+        flag_label.setToolTip(
+            self.tr("Unflag AOI") if is_flagged else self.tr("Flag AOI")
+        )
         flag_label.setPixmap(flag_icon.pixmap(16, 16))
 
         def make_flag_click_handler(aoi_idx):
@@ -377,13 +386,19 @@ class AOIUIComponent:
         comment_icon.setCursor(Qt.PointingHandCursor)
         if user_comment:
             comment_icon.setStyleSheet("QLabel { color: #FFD700; font-size: 14px; font-weight: bold; }")
-            comment_icon.setToolTip(f"Comment:\n{user_comment}\n\nClick to edit comment")
+            comment_icon.setToolTip(
+                self.tr("Comment:\n{comment}\n\nClick to edit comment").format(
+                    comment=user_comment
+                )
+            )
         else:
             comment_icon.setStyleSheet("QLabel { color: #808080; font-size: 14px; }")
             comment_icon.setToolTip(
-                "No comment yet.\nClick to add a comment for this AOI.\n\n"
-                "Use comments to note important details, observations,\n"
-                "or actions needed for this detection."
+                self.tr(
+                    "No comment yet.\nClick to add a comment for this AOI.\n\n"
+                    "Use comments to note important details, observations,\n"
+                    "or actions needed for this detection."
+                )
             )
 
         def make_comment_click_handler(aoi_idx):
@@ -396,7 +411,9 @@ class AOIUIComponent:
         location_icon = qta.icon('fa6s.location-dot', color='#4CAF50')
         location_label = QLabel()
         location_label.setCursor(Qt.PointingHandCursor)
-        location_label.setToolTip("Calculate and show GPS location for this AOI")
+        location_label.setToolTip(
+            self.tr("Calculate and show GPS location for this AOI")
+        )
         location_label.setPixmap(location_icon.pixmap(16, 16))
 
         def make_location_click_handler(aoi_idx, widget=location_label):
@@ -413,7 +430,7 @@ class AOIUIComponent:
             delete_icon = qta.icon('fa6s.trash', color='#FF5252')
             delete_label = QLabel()
             delete_label.setCursor(Qt.PointingHandCursor)
-            delete_label.setToolTip("Delete this AOI")
+            delete_label.setToolTip(self.tr("Delete this AOI"))
             delete_label.setPixmap(delete_icon.pixmap(16, 16))
 
             def make_delete_click_handler(aoi_idx):
@@ -451,10 +468,27 @@ class AOIUIComponent:
         if area_count_label:
             if filtered_count < total_count:
                 # Show filtered count vs total
-                area_count_label.setText(f"{filtered_count} of {total_count} {'Area' if total_count == 1 else 'Areas'}")
+                area_label = self.tr("Area") if total_count == 1 else self.tr("Areas")
+                area_count_label.setText(
+                    self.tr("{filtered} of {total} {label}").format(
+                        filtered=filtered_count,
+                        total=total_count,
+                        label=area_label
+                    )
+                )
             else:
                 # Show just the count
-                area_count_label.setText(f"{filtered_count} {'Area' if filtered_count == 1 else 'Areas'} of Interest")
+                area_label = (
+                    self.tr("Area of Interest")
+                    if filtered_count == 1
+                    else self.tr("Areas of Interest")
+                )
+                area_count_label.setText(
+                    self.tr("{count} {label}").format(
+                        count=filtered_count,
+                        label=area_label
+                    )
+                )
 
     def update_aoi_selection_style(self, container, selected):
         """Update the visual style of an AOI container based on selection state.
@@ -593,7 +627,7 @@ class AOIUIComponent:
         layout = QVBoxLayout(progress_container)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        label = QLabel("Loading AOIs...")
+        label = QLabel(self.tr("Loading AOIs..."))
         label.setStyleSheet("color: white; font-size: 11pt;")
 
         progress_bar = QProgressBar()
@@ -633,7 +667,12 @@ class AOIUIComponent:
         if not self.batch_progress_widget:
             return
 
-        self.batch_progress_widget['label'].setText(f"Loading AOIs... ({current}/{total})")
+        self.batch_progress_widget['label'].setText(
+            self.tr("Loading AOIs... ({current}/{total})").format(
+                current=current,
+                total=total
+            )
+        )
         self.batch_progress_widget['progress_bar'].setValue(percent)
 
     def _remove_progress_widget(self):

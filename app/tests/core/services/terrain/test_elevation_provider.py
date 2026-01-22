@@ -173,4 +173,3 @@ class TestElevationProviderAbstract:
         """Test that ElevationProvider cannot be instantiated directly."""
         with pytest.raises(TypeError):
             ElevationProvider()
-

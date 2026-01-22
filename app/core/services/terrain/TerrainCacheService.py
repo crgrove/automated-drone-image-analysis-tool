@@ -373,4 +373,3 @@ class TerrainCacheService:
             return data is not None
         except Exception:
             return False
-

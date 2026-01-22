@@ -8,9 +8,10 @@ across all streaming detection algorithms.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QGroupBox)
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 
 
-class RenderingTab(QWidget):
+class RenderingTab(TranslationMixin, QWidget):
     """Shared Rendering tab widget for streaming algorithms."""
 
     def __init__(self, parent=None, show_detection_color_option: bool = True):
@@ -25,6 +26,7 @@ class RenderingTab(QWidget):
         super().__init__(parent)
         self.show_detection_color_option = show_detection_color_option
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""

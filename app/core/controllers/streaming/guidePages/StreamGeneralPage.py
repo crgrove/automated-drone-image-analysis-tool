@@ -50,7 +50,11 @@ class StreamGeneralPage(BasePage):
 
     def _on_browse_clicked(self) -> None:
         current_dir = self.dialog.recordingDirLineEdit.text().strip() or os.getcwd()
-        directory = QFileDialog.getExistingDirectory(self.dialog, "Select Recording Folder", current_dir)
+        directory = QFileDialog.getExistingDirectory(
+            self.dialog,
+            self.tr("Select Recording Folder"),
+            current_dir
+        )
         if directory:
             self.dialog.recordingDirLineEdit.setText(directory)
 

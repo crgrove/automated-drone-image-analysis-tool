@@ -2,9 +2,10 @@
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict
+from helpers.TranslationMixin import TranslationMixin
 
 
-class BasePage(ABC):
+class BasePage(TranslationMixin, ABC):
     """Abstract base class for streaming setup pages."""
 
     def __init__(self, wizard_data: Dict[str, Any], settings_service, dialog):

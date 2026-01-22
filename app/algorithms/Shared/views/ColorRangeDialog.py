@@ -22,9 +22,10 @@ from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColo
 from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
 from core.services.color.CustomColorsService import get_custom_colors_service
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorRangeDialog(QDialog):
+class ColorRangeDialog(TranslationMixin, QDialog):
     """Advanced color range selection dialog with live preview."""
 
     # Signal emitted when color selection is accepted
@@ -35,7 +36,7 @@ class ColorRangeDialog(QDialog):
         super().__init__(parent)
         self.logger = LoggerService()
 
-        self.setWindowTitle("HSV Color Range Selection")
+        self.setWindowTitle(self.tr("HSV Color Range Selection"))
         self.setModal(True)
 
         # Store initial values
@@ -55,6 +56,7 @@ class ColorRangeDialog(QDialog):
 
         # Setup UI
         self.setup_ui()
+        self._apply_translations()
 
         # Set initial values
         h, s, v = initial_hsv
@@ -376,7 +378,7 @@ class ColorRangeDialog(QDialog):
         custom_colors_service = get_custom_colors_service()
 
         # Open dialog
-        color = QColorDialog.getColor(current_color, self, "Select Color")
+        color = QColorDialog.getColor(current_color, self, self.tr("Select Color"))
 
         # Sync custom colors
         custom_colors_service.sync_with_dialog()

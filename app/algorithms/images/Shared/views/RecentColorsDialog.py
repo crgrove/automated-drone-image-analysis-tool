@@ -9,9 +9,10 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from typing import List, Dict, Any, Optional
+from helpers.TranslationMixin import TranslationMixin
 
 
-class RecentColorWidget(QWidget):
+class RecentColorWidget(TranslationMixin, QWidget):
     """Widget representing a single recent color entry."""
 
     clicked = Signal(dict)  # Emits the color_data when clicked
@@ -64,7 +65,7 @@ class RecentColorWidget(QWidget):
         selected_color = self.color_data.get('selected_color', (255, 0, 0))
         r, g, b = selected_color
 
-        text = f"<b>RGB:</b> ({r}, {g}, {b})"
+        text = self.tr("<b>RGB:</b> ({r}, {g}, {b})").format(r=r, g=g, b=b)
 
         if self.mode == 'HSV':
             hsv_ranges = self.color_data.get('hsv_ranges', {})
@@ -93,22 +94,34 @@ class RecentColorWidget(QWidget):
                 v_min_pct = max(0, int((v_center - v_minus) * 100))
                 v_max_pct = min(100, int((v_center + v_plus) * 100))
 
-                text += f"<br><b>H (°):</b> {h_min_deg}-{h_max_deg}"
-                text += f" <b>S (%):</b> {s_min_pct}-{s_max_pct}"
-                text += f" <b>V (%):</b> {v_min_pct}-{v_max_pct}"
+                text += self.tr("<br><b>H (°):</b> {min}-{max}").format(
+                    min=h_min_deg, max=h_max_deg
+                )
+                text += self.tr(" <b>S (%):</b> {min}-{max}").format(
+                    min=s_min_pct, max=s_max_pct
+                )
+                text += self.tr(" <b>V (%):</b> {min}-{max}").format(
+                    min=v_min_pct, max=v_max_pct
+                )
 
         elif self.mode == 'RGB':
             color_range = self.color_data.get('color_range')
             if color_range and len(color_range) == 2:
                 min_rgb, max_rgb = color_range[0], color_range[1]
                 if isinstance(min_rgb, (list, tuple)) and isinstance(max_rgb, (list, tuple)):
-                    text += f"<br><b>R:</b> {min_rgb[0]}-{max_rgb[0]}"
-                    text += f" <b>G:</b> {min_rgb[1]}-{max_rgb[1]}"
-                    text += f" <b>B:</b> {min_rgb[2]}-{max_rgb[2]}"
+                    text += self.tr("<br><b>R:</b> {min}-{max}").format(
+                        min=min_rgb[0], max=max_rgb[0]
+                    )
+                    text += self.tr(" <b>G:</b> {min}-{max}").format(
+                        min=min_rgb[1], max=max_rgb[1]
+                    )
+                    text += self.tr(" <b>B:</b> {min}-{max}").format(
+                        min=min_rgb[2], max=max_rgb[2]
+                    )
 
         elif self.mode == 'MATCHED_FILTER':
             threshold = self.color_data.get('match_filter_threshold', 0.3)
-            text += f"<br><b>Threshold:</b> {threshold:.2f}"
+            text += self.tr("<br><b>Threshold:</b> {value}").format(value=f"{threshold:.2f}")
 
         return text
 
@@ -118,7 +131,7 @@ class RecentColorWidget(QWidget):
         super().mousePressEvent(event)
 
 
-class RecentColorsDialog(QDialog):
+class RecentColorsDialog(TranslationMixin, QDialog):
     """Dialog for selecting from recently used colors."""
 
     def __init__(self, recent_colors: List[Dict[str, Any]], mode: str, parent=None):
@@ -135,17 +148,18 @@ class RecentColorsDialog(QDialog):
         self.mode = mode
         self.selected_color_data: Optional[Dict[str, Any]] = None
 
-        self.setWindowTitle("Recent Colors")
+        self.setWindowTitle(self.tr("Recent Colors"))
         self.setMinimumWidth(400)
         self.setMinimumHeight(300)
 
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
         # Header
-        header = QLabel("Select a recently used color:", self)
+        header = QLabel(self.tr("Select a recently used color:"), self)
         header.setStyleSheet("font-weight: bold; font-size: 12px; padding: 5px;")
         layout.addWidget(header)
 
@@ -161,7 +175,7 @@ class RecentColorsDialog(QDialog):
 
         if not self.recent_colors:
             # Empty state
-            empty_label = QLabel("No recent colors found", container)
+            empty_label = QLabel(self.tr("No recent colors found"), container)
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("color: #888; font-style: italic; padding: 20px;")
             container_layout.addWidget(empty_label)

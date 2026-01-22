@@ -13,9 +13,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel, QComboBox,
                                QPushButton, QSizePolicy, QColorDialog)
 import qtawesome as qta
 from core.services.color.CustomColorsService import get_custom_colors_service
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ClickableColorSwatch(QFrame):
+class ClickableColorSwatch(TranslationMixin, QFrame):
     """A clickable color swatch that opens a color picker when clicked and displays RGB values."""
 
     colorChanged = Signal(QColor)
@@ -59,7 +60,11 @@ class ClickableColorSwatch(QFrame):
             f"background-color: rgb({r}, {g}, {b}); "
             f"border: 1px solid #888;"
         )
-        self.setToolTip(f"RGB: ({r}, {g}, {b})\nClick to change color")
+        self.setToolTip(
+            self.tr("RGB: ({r}, {g}, {b})\nClick to change color").format(
+                r=r, g=g, b=b
+            )
+        )
         self.update()
 
     def paintEvent(self, event):
@@ -106,7 +111,7 @@ class ClickableColorSwatch(QFrame):
         super().mousePressEvent(event)
 
 
-class ColorRowWizardWidget(QWidget):
+class ColorRowWizardWidget(TranslationMixin, QWidget):
     """Simplified widget representing a color range configuration for wizard.
 
     Provides a compact UI for selecting a color and tolerance preset.
@@ -155,6 +160,7 @@ class ColorRowWizardWidget(QWidget):
         self.tolerance_index = max(0, min(tolerance_index, len(self.TOLERANCE_PRESETS) - 1))
 
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Set up the UI layout and widgets.

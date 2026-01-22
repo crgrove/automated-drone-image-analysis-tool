@@ -369,4 +369,3 @@ class GeoidService:
             'cache_path': str(grid_file),
             'cache_size_mb': grid_file.stat().st_size / (1024 * 1024) if grid_file.exists() else 0
         }
-

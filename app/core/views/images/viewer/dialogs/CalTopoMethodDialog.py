@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (
     QRadioButton, QButtonGroup, QGroupBox
 )
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont
 
 
-class CalTopoMethodDialog(QDialog):
+class CalTopoMethodDialog(TranslationMixin, QDialog):
     """
     Dialog for selecting CalTopo export method.
 
@@ -30,11 +31,12 @@ class CalTopoMethodDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.setWindowTitle("CalTopo Export Method")
+        self.setWindowTitle(self.tr("CalTopo Export Method"))
         self.setMinimumWidth(450)
         self.setModal(True)
 
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """
@@ -47,7 +49,7 @@ class CalTopoMethodDialog(QDialog):
         layout.setSpacing(15)
 
         # Title
-        title_label = QLabel("Select CalTopo Export Method")
+        title_label = QLabel(self.tr("Select CalTopo Export Method"))
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -55,30 +57,30 @@ class CalTopoMethodDialog(QDialog):
         layout.addWidget(title_label)
 
         # Description
-        description_label = QLabel(
+        description_label = QLabel(self.tr(
             "Choose how you want to authenticate with CalTopo:"
-        )
+        ))
         description_label.setWordWrap(True)
         description_label.setStyleSheet("color: #666; padding: 5px;")
         layout.addWidget(description_label)
 
         # Method selection
-        method_group = QGroupBox("Export Method")
+        method_group = QGroupBox(self.tr("Export Method"))
         method_layout = QVBoxLayout()
         method_layout.setSpacing(10)
 
-        self.api_radio = QRadioButton("API (Recommended for CalTopo Team Account)")
+        self.api_radio = QRadioButton(self.tr("API (Recommended for CalTopo Team Account)"))
         self.api_radio.setChecked(True)  # Default to API
-        self.api_radio.setToolTip(
+        self.api_radio.setToolTip(self.tr(
             "Use CalTopo Team API with service account credentials.\n"
             "Best for Teams accounts with service accounts configured."
-        )
+        ))
 
-        self.browser_radio = QRadioButton("Browser Login")
-        self.browser_radio.setToolTip(
+        self.browser_radio = QRadioButton(self.tr("Browser Login"))
+        self.browser_radio.setToolTip(self.tr(
             "Use browser-based authentication.\n"
             "Log in through an embedded browser window."
-        )
+        ))
 
         self.method_group = QButtonGroup(self)
         self.method_group.addButton(self.api_radio, 0)
@@ -90,10 +92,10 @@ class CalTopoMethodDialog(QDialog):
         layout.addWidget(method_group)
 
         # Info text
-        info_label = QLabel(
+        info_label = QLabel(self.tr(
             "API method requires Team ID and Credential Secret from your\n"
             "CalTopo Team Admin page. Browser method uses your regular login."
-        )
+        ))
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #888; font-size: 10px; padding: 5px;")
         layout.addWidget(info_label)
@@ -104,11 +106,11 @@ class CalTopoMethodDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.continue_button = QPushButton("Continue")
+        self.continue_button = QPushButton(self.tr("Continue"))
         self.continue_button.setDefault(True)
         self.continue_button.clicked.connect(self.accept)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addWidget(self.continue_button)

@@ -1,14 +1,15 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 from PySide6.QtGui import QMovie
 from PySide6.QtCore import Qt, QSize
+from helpers.TranslationMixin import TranslationMixin
 
 
-class LoadingDialog(QDialog):
+class LoadingDialog(TranslationMixin, QDialog):
     """Custom dialog for showing a loading spinner and message."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Generating Report")
+        self.setWindowTitle(self.tr("Generating Report"))
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setFixedSize(300, 200)
@@ -25,11 +26,11 @@ class LoadingDialog(QDialog):
         self.spinner_movie.start()  # Start the animation
 
         # Add message label
-        self.message_label = QLabel("Report generation in progress...")
+        self.message_label = QLabel(self.tr("Report generation in progress..."))
         self.message_label.setAlignment(Qt.AlignCenter)
 
         # Add cancel button
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         # Add widgets to layout
@@ -38,6 +39,7 @@ class LoadingDialog(QDialog):
         layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
 
         self.setLayout(layout)
+        self._apply_translations()
 
     def showEvent(self, event):
         """Override showEvent to ensure dialog appears and receives focus on macOS."""

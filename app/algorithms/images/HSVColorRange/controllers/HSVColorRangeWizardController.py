@@ -17,9 +17,10 @@ from algorithms.images.HSVColorRange.views.HSVColorRowWizardWidget import HSVCol
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmController):
+class HSVColorRangeWizardController(TranslationMixin, QWidget, Ui_HSVColorRangeWizard, AlgorithmController):
     """Wizard controller for Color Range (HSV) algorithm."""
 
     # Signal emitted when validation state changes (e.g., when rows are added/removed)
@@ -44,14 +45,20 @@ class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmCo
         self.colorsLayout.setContentsMargins(0, 0, 0, 0)
 
         # Empty state label
-        self.emptyLabel = QLabel("No Colors Selected", self.colorsContainer)
+        self.emptyLabel = QLabel(
+            self.tr("No Colors Selected"),
+            self.colorsContainer
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.colorsLayout.addWidget(self.emptyLabel, 1, Qt.AlignCenter)
 
         # View Range button (hidden until colors are added)
-        self.viewRangeButton = QPushButton("View Range", self.widgetAddButton)
+        self.viewRangeButton = QPushButton(
+            self.tr("View Range"),
+            self.widgetAddButton
+        )
         self.viewRangeButton.setFont(self.addColorButton.font())
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', self.theme))
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
@@ -333,7 +340,7 @@ class HSVColorRangeWizardController(QWidget, Ui_HSVColorRangeWizard, AlgorithmCo
     def validate(self):
         """Validate configuration."""
         if not self.color_rows:
-            return "Please add at least one color to detect."
+            return self.tr("Please add at least one color to detect.")
         return None
 
     def load_options(self, options):

@@ -15,9 +15,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
 import qtawesome as qta
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
 from core.services.color.CustomColorsService import get_custom_colors_service
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ClickableColorSwatch(QFrame):
+class ClickableColorSwatch(TranslationMixin, QFrame):
     """A clickable color swatch that opens a color picker when clicked and displays RGB values."""
 
     colorChanged = Signal(QColor)
@@ -50,7 +51,11 @@ class ClickableColorSwatch(QFrame):
             f"border: 1px solid #888;"
         )
         # Set tooltip with RGB values
-        self.setToolTip(f"RGB: ({r}, {g}, {b})\nClick to change color")
+        self.setToolTip(
+            self.tr("RGB: ({r}, {g}, {b})\nClick to change color").format(
+                r=r, g=g, b=b
+            )
+        )
         # Trigger repaint to show RGB text
         self.update()
 
@@ -90,7 +95,7 @@ class ClickableColorSwatch(QFrame):
         super().mousePressEvent(event)
 
 
-class ColorRowWidget(QWidget):
+class ColorRowWidget(TranslationMixin, QWidget):
     """Widget representing a single color range configuration."""
 
     # Signal emitted when this row should be deleted
@@ -152,6 +157,7 @@ class ColorRowWidget(QWidget):
 
         self._setup_ui()
         self._update_display()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Set up the UI layout and widgets."""

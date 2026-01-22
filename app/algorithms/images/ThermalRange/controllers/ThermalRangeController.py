@@ -1,11 +1,12 @@
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.ThermalRange.views.ThermalRange_ui import Ui_ThermalRange
 from core.services.SettingsService import SettingsService
+from helpers.TranslationMixin import TranslationMixin
 
 from PySide6.QtWidgets import QWidget
 
 
-class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
+class ThermalRangeController(TranslationMixin, QWidget, Ui_ThermalRange, AlgorithmController):
     """Controller for the Thermal Range algorithm widget."""
 
     def __init__(self, config, theme):
@@ -102,11 +103,16 @@ class ThermalRangeController(QWidget, Ui_ThermalRange, AlgorithmController):
         Sets the minimum and maximum values for temperature spin boxes
         accordingly and adjusts the displayed unit labels.
         """
-        self.minTempLabel.setText('Minimum Temp (' + u'\N{DEGREE SIGN}' + ' F)')
+        degree_sign = u'\N{DEGREE SIGN}'
+        self.minTempLabel.setText(
+            self.tr("Minimum Temp ({degree} F)").format(degree=degree_sign)
+        )
         self.minTempSpinBox.setMinimum(-20)
         self.minTempSpinBox.setMaximum(120)
         self.minTempSpinBox.setValue(95)
-        self.maxTempLabel.setText('Maximum Temp (' + u'\N{DEGREE SIGN}' + ' F)')
+        self.maxTempLabel.setText(
+            self.tr("Maximum Temp ({degree} F)").format(degree=degree_sign)
+        )
         self.maxTempSpinBox.setMinimum(-20)
         self.maxTempSpinBox.setMaximum(200)
         self.maxTempSpinBox.setValue(105)

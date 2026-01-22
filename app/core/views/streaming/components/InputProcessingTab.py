@@ -8,15 +8,17 @@ that are used across all streaming detection algorithms.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QCheckBox, QComboBox, QGroupBox)
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 
 
-class InputProcessingTab(QWidget):
+class InputProcessingTab(TranslationMixin, QWidget):
     """Shared Input & Processing tab widget for streaming algorithms."""
 
     def __init__(self, parent=None):
         """Initialize the Input & Processing tab."""
         super().__init__(parent)
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""

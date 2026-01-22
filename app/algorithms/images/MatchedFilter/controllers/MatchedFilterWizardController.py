@@ -15,9 +15,10 @@ from algorithms.images.MatchedFilter.views.MatchedFilterRowWizardWidget import M
 from algorithms.images.MatchedFilter.controllers.MatchedFilterRangeViewerController import MatchedFilterRangeViewer
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmController):
+class MatchedFilterWizardController(TranslationMixin, QWidget, Ui_MatchedFilterWizard, AlgorithmController):
     """Wizard controller for Matched Filter algorithm."""
 
     # Signal emitted when validation state changes (e.g., when rows are added/removed)
@@ -42,14 +43,20 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
         self.targetsLayout.setContentsMargins(0, 0, 0, 0)
 
         # Empty state label
-        self.emptyLabel = QLabel("No Targets Selected", self.targetsContainer)
+        self.emptyLabel = QLabel(
+            self.tr("No Targets Selected"),
+            self.targetsContainer
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.targetsLayout.addWidget(self.emptyLabel, 1, Qt.AlignCenter)
 
         # View Range button (hidden until targets are added)
-        self.viewRangeButton = QPushButton("View Range", self.widgetAddButton)
+        self.viewRangeButton = QPushButton(
+            self.tr("View Range"),
+            self.widgetAddButton
+        )
         self.viewRangeButton.setFont(self.addTargetButton.font())
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', self.theme))
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
@@ -208,7 +215,7 @@ class MatchedFilterWizardController(QWidget, Ui_MatchedFilterWizard, AlgorithmCo
     def validate(self):
         """Validate configuration."""
         if not self.target_rows:
-            return "Please add at least one target color to detect."
+            return self.tr("Please add at least one target color to detect.")
         return None
 
     def load_options(self, options):

@@ -20,7 +20,7 @@ def _get_terrain_service():
         try:
             from core.services.terrain import TerrainService
             _terrain_service = TerrainService()
-        except Exception as e:
+        except Exception:
             # Terrain service not available
             pass
     return _terrain_service
@@ -167,7 +167,6 @@ class AOIService:
                     # Use terrain-based AGL if it's reasonable
                     if terrain_based_agl > 5:
                         reported_agl = terrain_based_agl
-                        use_terrain_agl = True
                         if self.logger:
                             self.logger.info(
                                 f"AOIService: Using terrain-based AGL ({terrain_based_agl:.1f}m) "

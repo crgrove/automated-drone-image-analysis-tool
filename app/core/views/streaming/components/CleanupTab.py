@@ -7,9 +7,10 @@ that are used across streaming detection algorithms.
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QGroupBox)
+from helpers.TranslationMixin import TranslationMixin
 
 
-class CleanupTab(QWidget):
+class CleanupTab(TranslationMixin, QWidget):
     """Shared Cleanup tab widget for streaming algorithms."""
 
     def __init__(self, parent=None):
@@ -21,6 +22,7 @@ class CleanupTab(QWidget):
         """
         super().__init__(parent)
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""

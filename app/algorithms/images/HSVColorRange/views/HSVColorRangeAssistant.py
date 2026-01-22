@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
                                QCheckBox, QGraphicsEllipseItem, QGraphicsItem,
                                QGraphicsTextItem, QMessageBox)
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 @dataclass
@@ -635,7 +636,7 @@ class FastImageViewer(QGraphicsView):
         return self.image_hsv[self.selection_mask]
 
 
-class HSVColorRangeAssistant(QDialog):
+class HSVColorRangeAssistant(TranslationMixin, QDialog):
     """Main dialog for HSV Color Range Assistant tool.
 
     Interactive tool for selecting HSV color ranges by clicking on
@@ -657,7 +658,7 @@ class HSVColorRangeAssistant(QDialog):
         """
         super().__init__(parent)
 
-        self.setWindowTitle("HSV Color Range Assistant - Click Selection")
+        self.setWindowTitle(self.tr("HSV Color Range Assistant - Click Selection"))
         self.setModal(True)
         self.resize(1200, 800)
 
@@ -670,6 +671,7 @@ class HSVColorRangeAssistant(QDialog):
         }
 
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """Set up the user interface.
@@ -1471,7 +1473,7 @@ class HSVColorRangeAssistant(QDialog):
         HSV Color Range Assistant tool, including navigation, selection,
         and range adjustment instructions.
         """
-        help_text = """
+        help_text = self.tr("""
 <h2>HSV Color Range Assistant - Help</h2>
 
 <p>This tool helps you pick the HSV color range of a specific color in a photo.
@@ -1496,10 +1498,10 @@ Click on the BROWSE button to open an image.</p>
         <p>On the right side the Mask Preview section will show you what pixels in the image were selected.
         If you see pixels outside of your target object that you are selecting that means you may need to
         adjust the Color Tolerance or be more careful with your selections.</p>
-"""
+""")
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("HSV Color Range Assistant - Help")
+        msg.setWindowTitle(self.tr("HSV Color Range Assistant - Help"))
         msg.setTextFormat(Qt.RichText)
         msg.setText(help_text)
         msg.setIcon(QMessageBox.Information)

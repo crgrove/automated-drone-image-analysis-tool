@@ -8,11 +8,12 @@ for CalTopo Team API access.
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QLineEdit, QMessageBox, QCheckBox, QApplication)
 from PySide6.QtCore import Qt, QUrl
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont, QDesktopServices
 from core.services.export.CalTopoAPIService import CalTopoAPIService
 
 
-class CalTopoCredentialDialog(QDialog):
+class CalTopoCredentialDialog(TranslationMixin, QDialog):
     """
     Dialog for entering CalTopo API credentials.
 
@@ -29,7 +30,7 @@ class CalTopoCredentialDialog(QDialog):
             ask_to_change: If True, show a checkbox asking if user wants to change credentials
         """
         super().__init__(parent)
-        self.setWindowTitle("CalTopo API Credentials")
+        self.setWindowTitle(self.tr("CalTopo API Credentials"))
         self.setModal(True)
         self.resize(500, 300)
 
@@ -38,6 +39,7 @@ class CalTopoCredentialDialog(QDialog):
         self.credentials = None
 
         self.setup_ui()
+        self._apply_translations()
 
         # If credentials exist and we're asking to change, pre-fill but disable
         if existing_credentials and ask_to_change:
@@ -71,7 +73,7 @@ class CalTopoCredentialDialog(QDialog):
         layout.setContentsMargins(15, 15, 15, 15)
 
         # Title
-        title_label = QLabel("CalTopo Team API Credentials")
+        title_label = QLabel(self.tr("CalTopo Team API Credentials"))
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -79,10 +81,10 @@ class CalTopoCredentialDialog(QDialog):
         layout.addWidget(title_label)
 
         # Instructions
-        instructions = QLabel(
+        instructions = QLabel(self.tr(
             "Enter your CalTopo Team API credentials.\n"
             "These can be found in the Team Admin page under Service Accounts."
-        )
+        ))
         instructions.setWordWrap(True)
         instructions.setStyleSheet("color: #666; padding: 5px;")
         layout.addWidget(instructions)
@@ -92,44 +94,44 @@ class CalTopoCredentialDialog(QDialog):
         doc_link_layout.addStretch()
         doc_link_label = QLabel(
             '<a href="https://training.caltopo.com/all_users/team-accounts/teamapi#keysids">'
-            'How to get your API credentials</a>'
+            + self.tr('How to get your API credentials') + '</a>'
         )
         doc_link_label.setOpenExternalLinks(True)
         doc_link_label.setStyleSheet("color: #1E88E5; padding: 5px; text-decoration: underline;")
-        doc_link_label.setToolTip("Opens CalTopo API documentation in your browser")
+        doc_link_label.setToolTip(self.tr("Opens CalTopo API documentation in your browser"))
         doc_link_layout.addWidget(doc_link_label)
         layout.addLayout(doc_link_layout)
 
         # Change credentials checkbox (if asking to change)
         if self.ask_to_change and self.existing_credentials:
-            self.change_checkbox = QCheckBox("Change credentials")
+            self.change_checkbox = QCheckBox(self.tr("Change credentials"))
             self.change_checkbox.setChecked(False)
             self.change_checkbox.stateChanged.connect(self.on_change_checkbox_changed)
             layout.addWidget(self.change_checkbox)
 
         # Team ID
         team_id_layout = QVBoxLayout()
-        team_id_label = QLabel("Team ID:")
+        team_id_label = QLabel(self.tr("Team ID:"))
         self.team_id_input = QLineEdit()
-        self.team_id_input.setPlaceholderText("6-digit alphanumeric Team ID")
+        self.team_id_input.setPlaceholderText(self.tr("6-digit alphanumeric Team ID"))
         team_id_layout.addWidget(team_id_label)
         team_id_layout.addWidget(self.team_id_input)
         layout.addLayout(team_id_layout)
 
         # Credential ID
         credential_id_layout = QVBoxLayout()
-        credential_id_label = QLabel("Credential ID:")
+        credential_id_label = QLabel(self.tr("Credential ID:"))
         self.credential_id_input = QLineEdit()
-        self.credential_id_input.setPlaceholderText("Credential ID")
+        self.credential_id_input.setPlaceholderText(self.tr("Credential ID"))
         credential_id_layout.addWidget(credential_id_label)
         credential_id_layout.addWidget(self.credential_id_input)
         layout.addLayout(credential_id_layout)
 
         # Credential Secret
         credential_secret_layout = QVBoxLayout()
-        credential_secret_label = QLabel("Credential Secret:")
+        credential_secret_label = QLabel(self.tr("Credential Secret:"))
         self.credential_secret_input = QLineEdit()
-        self.credential_secret_input.setPlaceholderText("Credential Secret (will be encrypted)")
+        self.credential_secret_input.setPlaceholderText(self.tr("Credential Secret (will be encrypted)"))
         self.credential_secret_input.setEchoMode(QLineEdit.Password)
         credential_secret_layout.addWidget(credential_secret_label)
         credential_secret_layout.addWidget(self.credential_secret_input)
@@ -141,15 +143,15 @@ class CalTopoCredentialDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.test_button = QPushButton("Test Credentials")
+        self.test_button = QPushButton(self.tr("Test Credentials"))
         self.test_button.clicked.connect(self.on_test_clicked)
-        self.test_button.setToolTip("Test the credentials by calling the CalTopo API")
+        self.test_button.setToolTip(self.tr("Test the credentials by calling the CalTopo API"))
 
-        self.ok_button = QPushButton("OK")
+        self.ok_button = QPushButton(self.tr("OK"))
         self.ok_button.clicked.connect(self.on_ok_clicked)
         self.ok_button.setDefault(True)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addWidget(self.test_button)
@@ -221,15 +223,15 @@ class CalTopoCredentialDialog(QDialog):
         credential_secret = self.credential_secret_input.text().strip()
 
         if not team_id:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Team ID.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Team ID."))
             return
 
         if not credential_id:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Credential ID.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential ID."))
             return
 
         if not credential_secret:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Credential Secret.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential Secret."))
             return
 
         self.credentials = (team_id, credential_id, credential_secret)
@@ -249,20 +251,20 @@ class CalTopoCredentialDialog(QDialog):
 
         # Validate inputs
         if not team_id:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Team ID.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Team ID."))
             return
 
         if not credential_id:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Credential ID.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential ID."))
             return
 
         if not credential_secret:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a Credential Secret.")
+            QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential Secret."))
             return
 
         # Disable test button during test
         self.test_button.setEnabled(False)
-        self.test_button.setText("Testing...")
+        self.test_button.setText(self.tr("Testing..."))
         QApplication.processEvents()
 
         try:
@@ -277,30 +279,34 @@ class CalTopoCredentialDialog(QDialog):
             if success and account_data:
                 QMessageBox.information(
                     self,
-                    "Credentials Valid",
-                    "The credentials are valid and successfully authenticated with CalTopo API."
+                    self.tr("Credentials Valid"),
+                    self.tr("The credentials are valid and successfully authenticated with CalTopo API.")
                 )
             else:
                 QMessageBox.warning(
                     self,
-                    "Credentials Invalid",
-                    "The credentials failed to authenticate with CalTopo API.\n\n"
-                    "Please check:\n"
-                    "• Team ID is correct\n"
-                    "• Credential ID is correct\n"
-                    "• Credential Secret is correct (copy it exactly as shown)\n"
-                    "• Your service account has the required permissions"
+                    self.tr("Credentials Invalid"),
+                    self.tr(
+                        "The credentials failed to authenticate with CalTopo API.\n\n"
+                        "Please check:\n"
+                        "• Team ID is correct\n"
+                        "• Credential ID is correct\n"
+                        "• Credential Secret is correct (copy it exactly as shown)\n"
+                        "• Your service account has the required permissions"
+                    )
                 )
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Test Error",
-                f"An error occurred while testing credentials:\n\n{str(e)}"
+                self.tr("Test Error"),
+                self.tr("An error occurred while testing credentials:\n\n{error}").format(
+                    error=str(e)
+                )
             )
         finally:
             # Re-enable test button
             self.test_button.setEnabled(True)
-            self.test_button.setText("Test Credentials")
+            self.test_button.setText(self.tr("Test Credentials"))
             QApplication.processEvents()
 
     def get_credentials(self):

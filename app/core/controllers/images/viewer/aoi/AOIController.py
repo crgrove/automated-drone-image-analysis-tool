@@ -27,9 +27,10 @@ from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
 from helpers.LocationInfo import LocationInfo
 from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
 from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AOIController:
+class AOIController(TranslationMixin):
     """
     Controller for managing Areas of Interest (AOI) business logic.
 
@@ -430,9 +431,9 @@ class AOIController:
             # Show confirmation toast
             if hasattr(self.parent, 'status_controller'):
                 if new_comment:
-                    self.parent.status_controller.show_toast("Comment saved", 2000, color="#00C853")
+                    self.parent.status_controller.show_toast(self.tr("Comment saved"), 2000, color="#00C853")
                 else:
-                    self.parent.status_controller.show_toast("Comment cleared", 2000, color="#808080")
+                    self.parent.status_controller.show_toast(self.tr("Comment cleared"), 2000, color="#808080")
 
     def toggle_aoi_flag(self):
         """Toggle the flag status of the currently selected AOI."""
@@ -519,7 +520,7 @@ class AOIController:
         """)
 
         # Add copy action
-        copy_action = menu.addAction("Copy Data")
+        copy_action = menu.addAction(self.tr("Copy Data"))
         copy_action.triggered.connect(lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index))
 
         # Get the current cursor position (global coordinates)
@@ -593,7 +594,7 @@ class AOIController:
 
         # Show confirmation toast
         if hasattr(self.parent, 'status_controller'):
-            self.parent.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
+            self.parent.status_controller.show_toast(self.tr("AOI data copied"), 2000, color="#00C853")
 
     def calculate_aoi_gps(self, aoi_index, return_metadata=False):
         """Calculate GPS coordinates for a specific AOI.
@@ -673,12 +674,12 @@ class AOIController:
                 image_idx = self.parent.current_image
 
             if image_idx < 0 or image_idx >= len(self.parent.images):
-                self.parent.status_controller.show_toast("Invalid image index", 3000, color="#F44336")
+                self.parent.status_controller.show_toast(self.tr("Invalid image index"), 3000, color="#F44336")
                 return
 
             image = self.parent.images[image_idx]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
-                self.parent.status_controller.show_toast("Invalid AOI index", 3000, color="#F44336")
+                self.parent.status_controller.show_toast(self.tr("Invalid AOI index"), 3000, color="#F44336")
                 return
 
             aoi = image['areas_of_interest'][aoi_index]
@@ -703,7 +704,7 @@ class AOIController:
                     # Get basic info from image service
                     img_service = aoi_service.image_service
                     gps_exif = LocationInfo.get_gps(exif_data=img_service.exif_data)
-                    
+
                     diag_info = {
                         "error": "Could not calculate AOI location",
                         "image_path": str(image.get('path', 'N/A')),
@@ -719,35 +720,35 @@ class AOIController:
                         "gps_exif": gps_exif,
                         "image_shape": img_service.img_array.shape[:2] if hasattr(img_service, 'img_array') and img_service.img_array is not None else 'N/A'
                     }
-                    
+
                     # Deduce possible reasons for failure
                     reasons = []
                     if not gps_exif:
                         reasons.append("Missing GPS coordinates in image EXIF data.")
                     if not diag_info["camera_intrinsics"]:
                         reasons.append("Camera model not recognized or missing focal length/sensor data in database.")
-                    
+
                     agl = custom_alt_ft * 0.3048 if custom_alt_ft else diag_info["reported_agl_m"]
                     if agl is None or agl <= 0:
                         reasons.append(f"Invalid altitude for calculation: {agl}m. Ensure image has AGL metadata or set a custom altitude.")
-                    
+
                     if diag_info["camera_pitch"] is not None and diag_info["camera_pitch"] > -5:
                         reasons.append(f"Camera pitch ({diag_info['camera_pitch']}°) is too close to horizontal; the AOI might be above the horizon.")
 
                     diag_info["potential_reasons"] = reasons
-                    
+
                     # Copy to clipboard
                     diag_json = json.dumps(diag_info, indent=4)
                     QApplication.clipboard().setText(diag_json)
-                    
+
                     self.parent.status_controller.show_toast(
-                        "Could not calculate AOI location. Diagnostic info copied to clipboard!", 
-                        6000, 
+                        self.tr("Could not calculate AOI location. Diagnostic info copied to clipboard!"),
+                        6000,
                         color="#F44336"
                     )
                 except Exception as diag_err:
                     self.logger.error(f"Error generating diagnostic info: {diag_err}")
-                    self.parent.status_controller.show_toast("Could not calculate AOI location", 3000, color="#F44336")
+                    self.parent.status_controller.show_toast(self.tr("Could not calculate AOI location"), 3000, color="#F44336")
                 return
 
             lat, lon = result.latitude, result.longitude
@@ -1104,7 +1105,9 @@ class AOIController:
                 model = combo.model()
                 item = model.item(idx)
                 item.setEnabled(False)
-                item.setToolTip("Temperature sorting unavailable (no thermal data)")
+                item.setToolTip(
+                    self.tr("Temperature sorting unavailable (no thermal data)")
+                )
 
         # Set current selection based on current sort method
         if self.sort_method is None:
@@ -1418,16 +1421,21 @@ class AOIController:
             if not is_user_created:
                 QMessageBox.warning(
                     self.parent,
-                    "Cannot Delete AOI",
-                    "Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted."
+                    self.tr("Cannot Delete AOI"),
+                    self.tr(
+                        "Only manually created AOIs can be deleted. "
+                        "Algorithm-detected AOIs cannot be deleted."
+                    )
                 )
                 return
 
             # Show confirmation dialog
             reply = QMessageBox.question(
                 self.parent,
-                "Delete AOI",
-                "Are you sure you want to delete this AOI? This action cannot be undone.",
+                self.tr("Delete AOI"),
+                self.tr(
+                    "Are you sure you want to delete this AOI? This action cannot be undone."
+                ),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )

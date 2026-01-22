@@ -160,7 +160,9 @@ class AlgorithmParametersPage(BasePage):
                 page_title_widget = getattr(self.dialog, 'labelPage5Title_AlgorithmParameters', None)
                 if page_title_widget is not None:
                     algo_label = self.active_algorithm.get('label', 'Algorithm')
-                    page_title_widget.setText(f"{algo_label} Algorithm Settings")
+                    page_title_widget.setText(
+                        self.tr("{algorithm} Algorithm Settings").format(algorithm=algo_label)
+                    )
             except Exception:
                 # Best-effort only; ignore if not available
                 pass

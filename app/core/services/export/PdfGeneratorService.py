@@ -547,14 +547,14 @@ class PdfGeneratorService:
                 if aoi_gps:
                     lat, lon = aoi_gps['latitude'], aoi_gps['longitude']
                     aoi_gps_str = f"{lat:.6f}, {lon:.6f}"
-                    
+
                     # Create Google Maps link
                     maps_url = f"https://www.google.com/maps?q={lat},{lon}"
                     maps_link = f'<a href="{maps_url}" color="blue"><u>(Open in Google Maps)</u></a>'
                     placemark_name = f"{img['name']} - AOI {aoi_idx + 1}"
                     geo_url = f"geo:{lat},{lon},u=20&({placemark_name})"
                     geo_link = f'<a href="{geo_url}" color="blue"><u>(Open in GPS)</u></a>'
-                    
+
                     metadata_lines.append(f"<b>Estimated AOI GPS Location:</b> {aoi_gps_str} {maps_link} {geo_link}")
 
                 metadata_lines.append(f"<b>AOI Pixel Area:</b> {aoi.get('area', 0):.0f}")

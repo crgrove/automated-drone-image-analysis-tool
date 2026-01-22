@@ -4,6 +4,7 @@ from PySide6.QtGui import QFont, QColor
 
 from core.views.images.ImageAnalysisGuide_ui import Ui_ImageAnalysisGuide
 from core.services.SettingsService import SettingsService
+from helpers.TranslationMixin import TranslationMixin
 from core.controllers.images.guidePages import (
     ReviewOrNewPage,
     DirectoriesPage,
@@ -15,7 +16,7 @@ from core.controllers.images.guidePages import (
 )
 
 
-class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
+class ImageAnalysisGuide(TranslationMixin, QDialog, Ui_ImageAnalysisGuide):
     """Wizard dialog for initial setup and configuration of ADIAT.
 
     Provides a multi-page wizard interface for configuring image analysis
@@ -98,7 +99,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             page.load_data()
 
         # Set window title
-        self.setWindowTitle("ADIAT Image Analysis Guide")
+        self.setWindowTitle(self.tr("ADIAT Image Analysis Guide"))
 
         # Connect navigation signals
         self.continueButton.clicked.connect(self._on_continue)
@@ -143,7 +144,7 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
         font.setPointSize(16)
         font.setBold(True)
         title_label.setFont(font)
-        title_label.setText("Algorithm Parameters")
+        title_label.setText(self.tr("Algorithm Parameters"))
         vertical_layout.addWidget(title_label)
         line = QFrame(self.pageAlgorithmParameters)
         line.setObjectName("line_algorithmParameters")
@@ -252,23 +253,23 @@ class ImageAnalysisGuide(QDialog, Ui_ImageAnalysisGuide):
             review_mode = self.wizard_data.get('review_mode')
             if review_mode == 'review':
                 # Show "Load Results" button when review file is selected
-                self.continueButton.setText("Load Results")
+                self.continueButton.setText(self.tr("Load Results"))
                 can_continue = self.pages[0].validate()
                 self.continueButton.setEnabled(can_continue)
             elif review_mode == 'new':
                 # New analysis was selected, enable continue button
-                self.continueButton.setText("Continue")
+                self.continueButton.setText(self.tr("Continue"))
                 can_continue = self.pages[0].validate()
                 self.continueButton.setEnabled(can_continue)
             else:
                 # No selection yet
-                self.continueButton.setText("Continue")
+                self.continueButton.setText(self.tr("Continue"))
                 self.continueButton.setEnabled(False)
         elif self.current_page == self.total_pages - 1:
-            self.continueButton.setText("Start Processing")
+            self.continueButton.setText(self.tr("Start Processing"))
             self.continueButton.setEnabled(True)  # Always enable on last page
         else:
-            self.continueButton.setText("Continue")
+            self.continueButton.setText(self.tr("Continue"))
             # Validate current page to determine if continue should be enabled
             if self.current_page < len(self.pages):
                 can_continue = self.pages[self.current_page].validate()

@@ -7,9 +7,10 @@ Can be used for PDF exports, KML exports, and other export operations.
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QProgressBar, QWidget
 from PySide6.QtCore import Qt, Signal
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ExportProgressDialog(QDialog):
+class ExportProgressDialog(TranslationMixin, QDialog):
     """
     Generic progress dialog for export operations.
 
@@ -54,7 +55,7 @@ class ExportProgressDialog(QDialog):
         layout = QVBoxLayout()
 
         # Title label
-        self.title_label = QLabel("Processing...")
+        self.title_label = QLabel(self.tr("Processing..."))
         self.title_label.setAlignment(Qt.AlignCenter)
         font = self.title_label.font()
         font.setBold(True)
@@ -68,11 +69,11 @@ class ExportProgressDialog(QDialog):
         self.progress_bar.setTextVisible(True)
 
         # Status label
-        self.status_label = QLabel("Starting...")
+        self.status_label = QLabel(self.tr("Starting..."))
         self.status_label.setAlignment(Qt.AlignCenter)
 
         # Cancel button
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
 
         # Add widgets to layout
         layout.addWidget(self.title_label)
@@ -82,6 +83,7 @@ class ExportProgressDialog(QDialog):
         layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
 
         self.setLayout(layout)
+        self._apply_translations()
 
         # Connect signal after layout is set to ensure widget hierarchy is established
         # This helps avoid access violations in test environments
@@ -98,8 +100,8 @@ class ExportProgressDialog(QDialog):
         """Handle cancel button click."""
         self.cancelled = True
         self.cancel_button.setEnabled(False)
-        self.cancel_button.setText("Cancelling...")
-        self.status_label.setText("Cancellation requested...")
+        self.cancel_button.setText(self.tr("Cancelling..."))
+        self.status_label.setText(self.tr("Cancellation requested..."))
         self.cancel_requested.emit()
 
     def update_progress(self, current, total, status_message=""):

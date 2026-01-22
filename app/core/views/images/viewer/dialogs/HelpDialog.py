@@ -6,11 +6,12 @@ Shows a comprehensive help dialog with all viewer functionality.
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QScrollArea
 from PySide6.QtCore import Qt, QBuffer, QByteArray, QIODevice
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont, QPixmap
 import base64
 
 
-class HelpDialog(QDialog):
+class HelpDialog(TranslationMixin, QDialog):
     """Dialog displaying viewer help information."""
 
     def __init__(self, parent=None):
@@ -21,7 +22,7 @@ class HelpDialog(QDialog):
             parent: Parent widget (main viewer)
         """
         super().__init__(parent)
-        self.setWindowTitle("Viewer Help")
+        self.setWindowTitle(self.tr("Viewer Help"))
         self.setModal(False)
 
         # Don't use WindowStaysOnTopHint as it blocks modal dialogs
@@ -32,6 +33,7 @@ class HelpDialog(QDialog):
         self.parent_viewer = parent
 
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """
@@ -55,7 +57,7 @@ class HelpDialog(QDialog):
         layout.addWidget(text_edit)
 
         # Add close button
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(self.tr("Close"))
         close_btn.clicked.connect(self.close)
         layout.addWidget(close_btn)
 

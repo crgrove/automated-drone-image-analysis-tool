@@ -18,9 +18,10 @@ from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeV
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
 from core.services.color.RecentColorsService import get_recent_colors_service
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
+class ColorDetectionWizardController(TranslationMixin, QWidget, Ui_ColorDetectionWizard):
     """Wizard controller for Color Detection algorithm."""
 
     # Signal emitted when validation state changes (e.g., when rows are added/removed)
@@ -47,14 +48,20 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
         self.colorsLayout.setContentsMargins(0, 0, 0, 0)
 
         # Empty state label
-        self.emptyLabel = QLabel("No Colors Selected", self.colorsContainer)
+        self.emptyLabel = QLabel(
+            self.tr("No Colors Selected"),
+            self.colorsContainer
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.colorsLayout.addWidget(self.emptyLabel, 1, Qt.AlignCenter)
 
         # View Range button (hidden until colors are added)
-        self.viewRangeButton = QPushButton("View Range", self.widgetAddButton)
+        self.viewRangeButton = QPushButton(
+            self.tr("View Range"),
+            self.widgetAddButton
+        )
         self.viewRangeButton.setFont(self.addColorButton.font())
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', self.theme))
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
@@ -233,7 +240,11 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
 
         range_dialog = HSVColorRangeRangeViewer(hsv_ranges_list=hsv_ranges_list)
         if hasattr(range_dialog, 'setWindowTitle'):
-            range_dialog.setWindowTitle(f"Color Ranges: {len(hsv_ranges_list)} colors")
+            range_dialog.setWindowTitle(
+                self.tr("Color Ranges: {count} colors").format(
+                    count=len(hsv_ranges_list)
+                )
+            )
         range_dialog.exec()
 
     def get_options(self):
@@ -315,7 +326,7 @@ class ColorDetectionWizardController(QWidget, Ui_ColorDetectionWizard):
     def validate(self):
         """Validate configuration."""
         if not self.color_rows:
-            return "Please add at least one color to detect."
+            return self.tr("Please add at least one color to detect.")
         return None
 
     def load_options(self, options):

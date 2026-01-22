@@ -9,9 +9,10 @@ import os
 from pathlib import Path
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class PathValidationController:
+class PathValidationController(TranslationMixin):
     """
     Controller for managing path validation and recovery.
 
@@ -83,16 +84,20 @@ class PathValidationController:
         # Build message with list of missing files
         file_list = '\n'.join([f"  • {item['filename']}" for item in missing_images[:10]])
         if len(missing_images) > 10:
-            file_list += f"\n  ... and {len(missing_images) - 10} more"
+            file_list += self.tr("\n  ... and {count} more").format(
+                count=len(missing_images) - 10
+            )
 
-        message = (f"{len(missing_images)} source image(s) not found at expected locations:\n\n"
-                   f"{file_list}\n\n"
-                   f"Please select the folder containing the source images.")
+        message = self.tr(
+            "{count} source image(s) not found at expected locations:\n\n"
+            "{files}\n\n"
+            "Please select the folder containing the source images."
+        ).format(count=len(missing_images), files=file_list)
 
         # Show informative message
         msg_box = QMessageBox(self.parent)
         msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Source Images Not Found")
+        msg_box.setWindowTitle(self.tr("Source Images Not Found"))
         msg_box.setText(message)
         msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         msg_box.setDefaultButton(QMessageBox.Ok)
@@ -103,7 +108,7 @@ class PathValidationController:
         # Open folder selection dialog
         folder = QFileDialog.getExistingDirectory(
             self.parent,
-            "Select Source Images Folder",
+            self.tr("Select Source Images Folder"),
             "",
             QFileDialog.ShowDirsOnly
         )
@@ -129,13 +134,21 @@ class PathValidationController:
         if still_missing:
             still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
             if len(still_missing) > 10:
-                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
+                still_missing_list += self.tr("\n  ... and {count} more").format(
+                    count=len(still_missing) - 10
+                )
 
             QMessageBox.warning(
                 self.parent,
-                "Some Images Still Missing",
-                f"Found {files_found} of {len(missing_images)} images.\n\n"
-                f"Still missing:\n{still_missing_list}"
+                self.tr("Some Images Still Missing"),
+                self.tr(
+                    "Found {found} of {total} images.\n\n"
+                    "Still missing:\n{missing}"
+                ).format(
+                    found=files_found,
+                    total=len(missing_images),
+                    missing=still_missing_list
+                )
             )
             return False
 
@@ -154,16 +167,20 @@ class PathValidationController:
         # Build message with list of missing files
         file_list = '\n'.join([f"  • {item['filename']}" for item in missing_masks[:10]])
         if len(missing_masks) > 10:
-            file_list += f"\n  ... and {len(missing_masks) - 10} more"
+            file_list += self.tr("\n  ... and {count} more").format(
+                count=len(missing_masks) - 10
+            )
 
-        message = (f"{len(missing_masks)} detection mask(s) not found at expected locations:\n\n"
-                   f"{file_list}\n\n"
-                   f"Please select the folder containing the mask files.")
+        message = self.tr(
+            "{count} detection mask(s) not found at expected locations:\n\n"
+            "{files}\n\n"
+            "Please select the folder containing the mask files."
+        ).format(count=len(missing_masks), files=file_list)
 
         # Show informative message
         msg_box = QMessageBox(self.parent)
         msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Detection Masks Not Found")
+        msg_box.setWindowTitle(self.tr("Detection Masks Not Found"))
         msg_box.setText(message)
         msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         msg_box.setDefaultButton(QMessageBox.Ok)
@@ -174,7 +191,7 @@ class PathValidationController:
         # Open folder selection dialog
         folder = QFileDialog.getExistingDirectory(
             self.parent,
-            "Select Masks Folder",
+            self.tr("Select Masks Folder"),
             "",
             QFileDialog.ShowDirsOnly
         )
@@ -200,13 +217,21 @@ class PathValidationController:
         if still_missing:
             still_missing_list = '\n'.join([f"  • {f}" for f in still_missing[:10]])
             if len(still_missing) > 10:
-                still_missing_list += f"\n  ... and {len(still_missing) - 10} more"
+                still_missing_list += self.tr("\n  ... and {count} more").format(
+                    count=len(still_missing) - 10
+                )
 
             QMessageBox.warning(
                 self.parent,
-                "Some Masks Still Missing",
-                f"Found {files_found} of {len(missing_masks)} masks.\n\n"
-                f"Still missing:\n{still_missing_list}"
+                self.tr("Some Masks Still Missing"),
+                self.tr(
+                    "Found {found} of {total} masks.\n\n"
+                    "Still missing:\n{missing}"
+                ).format(
+                    found=files_found,
+                    total=len(missing_masks),
+                    missing=still_missing_list
+                )
             )
             return False
 

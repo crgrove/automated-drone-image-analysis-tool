@@ -51,7 +51,7 @@ class GPSMapController(QObject):
         self.extract_gps_data()
 
         if not self.gps_data:
-            self.parent.status_controller.show_toast("No GPS data found in images", 3000, color="#F44336")
+            self.parent.status_controller.show_toast(self.tr("No GPS data found in images"), 3000, color="#F44336")
             return
 
         # Create and show the map dialog

@@ -233,4 +233,3 @@ class TestTerrainCacheService:
 
             mock_download.return_value = None
             assert not service.is_online()
-

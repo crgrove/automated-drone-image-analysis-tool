@@ -11,13 +11,14 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTreeWidget, QTreeWidgetItem, QLineEdit,
                                QMessageBox, QHeaderView, QApplication)
 from PySide6.QtCore import Qt, Signal
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont, QIcon
 from datetime import datetime
 from core.views.images.viewer.dialogs.CalTopoCredentialDialog import CalTopoCredentialDialog
 from core.services.LoggerService import LoggerService
 
 
-class CalTopoAPIMapDialog(QDialog):
+class CalTopoAPIMapDialog(TranslationMixin, QDialog):
     """
     Dialog for selecting a CalTopo map from a nested folder structure.
 
@@ -38,7 +39,7 @@ class CalTopoAPIMapDialog(QDialog):
             api_service: CalTopoAPIService instance for refreshing account data
         """
         super().__init__(parent)
-        self.setWindowTitle("Select CalTopo Map")
+        self.setWindowTitle(self.tr("Select CalTopo Map"))
         self.setModal(True)
         self.resize(700, 600)
 
@@ -49,6 +50,7 @@ class CalTopoAPIMapDialog(QDialog):
         self.logger = LoggerService()
 
         self.setup_ui()
+        self._apply_translations()
         self.populate_tree()
 
     def setup_ui(self):
@@ -63,7 +65,7 @@ class CalTopoAPIMapDialog(QDialog):
         layout.setContentsMargins(15, 15, 15, 15)
 
         # Title
-        title_label = QLabel("Select a CalTopo map:")
+        title_label = QLabel(self.tr("Select a CalTopo map:"))
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -72,9 +74,9 @@ class CalTopoAPIMapDialog(QDialog):
 
         # Search box
         search_layout = QHBoxLayout()
-        search_label = QLabel("Search:")
+        search_label = QLabel(self.tr("Search:"))
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Filter maps by name...")
+        self.search_box.setPlaceholderText(self.tr("Filter maps by name..."))
         self.search_box.textChanged.connect(self.filter_tree)
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.search_box)
@@ -106,17 +108,17 @@ class CalTopoAPIMapDialog(QDialog):
 
         # Update Credentials button (only show if credential_helper is provided)
         if self.credential_helper:
-            self.update_credentials_button = QPushButton("Update Credentials")
+            self.update_credentials_button = QPushButton(self.tr("Update Credentials"))
             self.update_credentials_button.clicked.connect(self.on_update_credentials_clicked)
             button_layout.addWidget(self.update_credentials_button)
 
         button_layout.addStretch()
 
-        self.select_button = QPushButton("Select Map")
+        self.select_button = QPushButton(self.tr("Select Map"))
         self.select_button.clicked.connect(self.on_select_clicked)
         self.select_button.setEnabled(False)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addWidget(self.select_button)
@@ -145,7 +147,7 @@ class CalTopoAPIMapDialog(QDialog):
         self.tree_widget.clear()
 
         if not self.account_data:
-            self.info_label.setText("No account data available.")
+            self.info_label.setText(self.tr("No account data available."))
             return
 
         # Get state from account data
@@ -510,29 +512,35 @@ class CalTopoAPIMapDialog(QDialog):
                     self.populate_tree()
                     QMessageBox.information(
                         self,
-                        "Credentials Updated",
-                        "Credentials have been updated and the map list has been refreshed."
+                        self.tr("Credentials Updated"),
+                        self.tr("Credentials have been updated and the map list has been refreshed.")
                     )
                 else:
                     QMessageBox.warning(
                         self,
-                        "Update Failed",
-                        "Failed to refresh account data with new credentials.\n\n"
-                        "Please check your credentials and try again."
+                        self.tr("Update Failed"),
+                        self.tr(
+                            "Failed to refresh account data with new credentials.\n\n"
+                            "Please check your credentials and try again."
+                        )
                     )
             except Exception as e:
                 QMessageBox.critical(
                     self,
-                    "Update Error",
-                    f"An error occurred while updating credentials:\n\n{str(e)}"
+                    self.tr("Update Error"),
+                    self.tr("An error occurred while updating credentials:\n\n{error}").format(
+                        error=str(e)
+                    )
                 )
             finally:
                 QApplication.restoreOverrideCursor()
         else:
             QMessageBox.information(
                 self,
-                "Credentials Updated",
-                "Credentials have been updated. Please close and reopen this dialog to refresh the map list."
+                self.tr("Credentials Updated"),
+                self.tr(
+                    "Credentials have been updated. Please close and reopen this dialog to refresh the map list."
+                )
             )
 
     def on_select_clicked(self):
@@ -548,6 +556,6 @@ class CalTopoAPIMapDialog(QDialog):
         else:
             QMessageBox.warning(
                 self,
-                "No Map Selected",
-                "Please select a map from the list."
+                self.tr("No Map Selected"),
+                self.tr("Please select a map from the list.")
             )

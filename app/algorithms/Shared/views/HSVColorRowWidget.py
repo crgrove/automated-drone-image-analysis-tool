@@ -16,9 +16,10 @@ import qtawesome as qta
 from algorithms.Shared.views.ColorGradientWidget import ColorGradientWidget
 from core.services.color.CustomColorsService import get_custom_colors_service
 from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ClickableColorSwatch(QFrame):
+class ClickableColorSwatch(TranslationMixin, QFrame):
     """A clickable color swatch that opens HSV color picker when clicked and displays HSV values."""
 
     colorChanged = Signal(QColor)
@@ -72,9 +73,17 @@ class ClickableColorSwatch(QFrame):
         )
         if self._hsv_values:
             h, s, v = self._hsv_values
-            self.setToolTip(f"HSV: ({h}°, {s}%, {v}%)\nRGB: ({r}, {g}, {b})\nClick to change color")
+            self.setToolTip(
+                self.tr(
+                    "HSV: ({h}°, {s}%, {v}%)\nRGB: ({r}, {g}, {b})\nClick to change color"
+                ).format(h=h, s=s, v=v, r=r, g=g, b=b)
+            )
         else:
-            self.setToolTip(f"RGB: ({r}, {g}, {b})\nClick to change color")
+            self.setToolTip(
+                self.tr("RGB: ({r}, {g}, {b})\nClick to change color").format(
+                    r=r, g=g, b=b
+                )
+            )
         # Trigger repaint to show HSV text
         self.update()
 
@@ -133,7 +142,7 @@ class ClickableColorSwatch(QFrame):
         super().mousePressEvent(event)
 
 
-class HSVColorRowWidget(QWidget):
+class HSVColorRowWidget(TranslationMixin, QWidget):
     """Widget representing a single HSV color range configuration."""
 
     # Signal emitted when this row should be deleted
@@ -202,6 +211,7 @@ class HSVColorRowWidget(QWidget):
 
         self._setup_ui()
         self._update_inputs()
+        self._apply_translations()
         self._update_display()
 
     def _setup_ui(self):

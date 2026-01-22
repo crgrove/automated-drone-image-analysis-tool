@@ -8,9 +8,10 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Signal
 
 from algorithms.streaming.MotionDetection.views.MotionDetectionWizard_ui import Ui_MotionDetectionWizard
+from helpers.TranslationMixin import TranslationMixin
 
 
-class MotionDetectionWizardController(QWidget, Ui_MotionDetectionWizard):
+class MotionDetectionWizardController(TranslationMixin, QWidget, Ui_MotionDetectionWizard):
     """Wizard controller for Motion Detection algorithm."""
 
     # Signal emitted when validation state changes
@@ -32,8 +33,8 @@ class MotionDetectionWizardController(QWidget, Ui_MotionDetectionWizard):
     def _wire_up_ui(self):
         """Connect signals and set defaults."""
         # Set default values
-        self.modeComboBox.setCurrentText('Auto')
-        self.algorithmComboBox.setCurrentText('MOG2 Background')
+        self.modeComboBox.setCurrentText(self.tr("Auto"))
+        self.algorithmComboBox.setCurrentText(self.tr("MOG2 Background"))
         self.sensitivitySlider.setValue(50)
         self.minAreaSpinBox.setValue(500)
         self.maxAreaSpinBox.setValue(100000)
@@ -43,7 +44,9 @@ class MotionDetectionWizardController(QWidget, Ui_MotionDetectionWizard):
 
     def _on_sensitivity_changed(self, value):
         """Update sensitivity label."""
-        self.labelSensitivity.setText(f"Sensitivity: {value}%")
+        self.labelSensitivity.setText(
+            self.tr("Sensitivity: {value}%").format(value=value)
+        )
 
     def get_options(self):
         """Get algorithm options."""

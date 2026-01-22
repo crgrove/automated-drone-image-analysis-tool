@@ -2,9 +2,10 @@
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AOICommentDialog(QDialog):
+class AOICommentDialog(TranslationMixin, QDialog):
     """Dialog for entering or editing a user comment for an AOI."""
 
     def __init__(self, parent, initial_comment=""):
@@ -19,10 +20,11 @@ class AOICommentDialog(QDialog):
         self.max_length = 256
 
         self.setupUi()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("AOI Comment")
+        self.setWindowTitle(self.tr("AOI Comment"))
         self.setModal(True)
         self.setMinimumWidth(400)
         self.setMinimumHeight(200)
@@ -31,13 +33,15 @@ class AOICommentDialog(QDialog):
         layout = QVBoxLayout()
 
         # Instructions
-        instructions = QLabel("Add a comment for this flagged AOI (max 256 characters):")
+        instructions = QLabel(
+            self.tr("Add a comment for this flagged AOI (max 256 characters):")
+        )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
         # Text edit for comment
         self.comment_edit = QTextEdit()
-        self.comment_edit.setPlaceholderText("Enter your comment here...")
+        self.comment_edit.setPlaceholderText(self.tr("Enter your comment here..."))
         self.comment_edit.setPlainText(self.comment)
         self.comment_edit.textChanged.connect(self.on_text_changed)
         layout.addWidget(self.comment_edit)
@@ -50,9 +54,9 @@ class AOICommentDialog(QDialog):
 
         # Buttons
         button_layout = QHBoxLayout()
-        self.ok_button = QPushButton("OK")
+        self.ok_button = QPushButton(self.tr("OK"))
         self.ok_button.clicked.connect(self.accept)
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()

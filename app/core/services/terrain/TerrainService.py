@@ -371,4 +371,3 @@ class TerrainService:
             resolution_m=None,
             from_cache=False
         )
-

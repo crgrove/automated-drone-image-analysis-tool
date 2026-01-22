@@ -45,6 +45,7 @@ from helpers.IconHelper import IconHelper
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
 from core.views.components.Toggle import Toggle
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtWidgets import (
     QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication, QLabel,
     QHBoxLayout, QWidget, QProgressDialog, QVBoxLayout
@@ -72,7 +73,7 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-class Viewer(QMainWindow, Ui_Viewer):
+class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
     """
     Main application controller for the ADIAT Image Viewer.
 
@@ -107,7 +108,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.current_gsd = None
 
         self.setupUi(self)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
         self._add_Toggles()
         # self._adjust_ui_sizing()
         # ---------------- settings / data ----------------
@@ -124,9 +129,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         if not self.path_validation_controller.validate_and_fix_paths(self.images):
             # User cancelled folder selection - show error and close viewer
             QMessageBox.critical(
-                self, "Load Results Failed",
-                "Cannot load results without valid image and mask locations.\n\n"
-                "The viewer will now close."
+                self,
+                self.tr("Load Results Failed"),
+                self.tr(
+                    "Cannot load results without valid image and mask locations.\n\n"
+                    "The viewer will now close."
+                )
             )
             QTimer.singleShot(0, self.close)  # Close after __init__ completes
             return
@@ -139,7 +147,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
-        self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
+        self.skipHidden.setText(
+            self.tr("Skip Hidden ({count}) ").format(count=self.hidden_image_count)
+        )
         self.settings, _ = self.xml_service.get_settings()
 
         # Store alternative cache directory (set by _check_and_prompt_for_caches)
@@ -199,8 +209,10 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._apply_icons()
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
         self.statusBar.setToolTip(
-            "Image metadata and information.\n"
-            "Click on GPS Coordinates to copy, share, or open in mapping applications."
+            self.tr(
+                "Image metadata and information.\n"
+                "Click on GPS Coordinates to copy, share, or open in mapping applications."
+            )
         )
 
         # toast (non intrusive) over statusBarWidget
@@ -335,7 +347,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.showOverlayToggle = Toggle()
         self.showOverlayToggle.setContentsMargins(4, 0, 4, 0)
         self.showOverlayToggle.setFixedWidth(50)
-        self.showOverlayLabel = QLabel("Show Overlay")
+        self.showOverlayLabel = QLabel(self.tr("Show Overlay"))
         self.showOverlayLabel.setFont(font)
 
         # Create container widget for toggle + label
@@ -441,18 +453,20 @@ class Viewer(QMainWindow, Ui_Viewer):
             if not hasattr(self, 'xml_path') or not self.xml_path:
                 QMessageBox.warning(
                     self,
-                    "No Dataset",
-                    "No dataset is currently loaded."
+                    self.tr("No Dataset"),
+                    self.tr("No dataset is currently loaded.")
                 )
                 return
 
             # Confirm with user
             reply = QMessageBox.question(
                 self,
-                "Generate Cache",
-                "This will regenerate thumbnail and color caches for all AOIs in this dataset.\n\n"
-                "This may take a few minutes depending on the dataset size.\n\n"
-                "Continue?",
+                self.tr("Generate Cache"),
+                self.tr(
+                    "This will regenerate thumbnail and color caches for all AOIs in this dataset.\n\n"
+                    "This may take a few minutes depending on the dataset size.\n\n"
+                    "Continue?"
+                ),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
@@ -462,13 +476,13 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Create progress dialog
             self.cache_progress_dialog = QProgressDialog(
-                "Initializing cache generation...",
-                "Cancel",
+                self.tr("Initializing cache generation..."),
+                self.tr("Cancel"),
                 0,
                 100,
                 self
             )
-            self.cache_progress_dialog.setWindowTitle("Generating Cache")
+            self.cache_progress_dialog.setWindowTitle(self.tr("Generating Cache"))
             self.cache_progress_dialog.setWindowModality(Qt.WindowModal)
             self.cache_progress_dialog.setMinimumDuration(0)
             self.cache_progress_dialog.setValue(0)
@@ -505,8 +519,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.logger.error(f"Error starting cache generation: {e}")
             QMessageBox.critical(
                 self,
-                "Error",
-                f"Failed to start cache generation:\n{e}"
+                self.tr("Error"),
+                self.tr("Failed to start cache generation:\n{error}").format(error=e)
             )
 
     def _on_cache_generation_complete(self, total_images: int, total_aois: int):
@@ -524,10 +538,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show completion message
             QMessageBox.information(
                 self,
-                "Cache Generated",
-                f"Cache generation complete!\n\n"
-                f"Processed {total_images} images with {total_aois} AOIs.\n\n"
-                f"The viewer will now load thumbnails and colors much faster."
+                self.tr("Cache Generated"),
+                self.tr(
+                    "Cache generation complete!\n\n"
+                    "Processed {images} images with {aois} AOIs.\n\n"
+                    "The viewer will now load thumbnails and colors much faster."
+                ).format(images=total_images, aois=total_aois)
             )
 
             # Reload gallery if in gallery mode to show cached results
@@ -555,8 +571,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show error message
             QMessageBox.critical(
                 self,
-                "Cache Generation Error",
-                f"An error occurred during cache generation:\n\n{error_msg}"
+                self.tr("Cache Generation Error"),
+                self.tr(
+                    "An error occurred during cache generation:\n\n{error}"
+                ).format(error=error_msg)
             )
 
             self.logger.error(f"Cache generation error: {error_msg}")
@@ -723,10 +741,12 @@ class Viewer(QMainWindow, Ui_Viewer):
                     # AOI is not visible in either view, show error
                     QMessageBox.information(
                         self,
-                        "AOI Not Visible",
-                        "The AOI at the cursor position cannot be selected because "
-                        "it is currently hidden due to active filters.\n\n"
-                        "To select this AOI, please clear or adjust your filters."
+                        self.tr("AOI Not Visible"),
+                        self.tr(
+                            "The AOI at the cursor position cannot be selected because "
+                            "it is currently hidden due to active filters.\n\n"
+                            "To select this AOI, please clear or adjust your filters."
+                        )
                     )
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
@@ -816,21 +836,28 @@ class Viewer(QMainWindow, Ui_Viewer):
             if hasattr(self, 'galleryModeButton'):
                 self.galleryModeButton.setCheckable(True)
                 self.galleryModeButton.clicked.connect(self._on_gallery_mode_clicked)
-                self.galleryModeButton.setToolTip("Toggle Gallery Mode (G)\nShows all AOIs from all images in a grid view")
+                self.galleryModeButton.setToolTip(
+                    self.tr(
+                        "Toggle Gallery Mode (G)\n"
+                        "Shows all AOIs from all images in a grid view"
+                    )
+                )
                 # Initialize button styling
                 self._update_gallery_mode_button_style()
 
             # Connect the POIs button
             if hasattr(self, 'showPOIsButton'):
                 self.showPOIsButton.clicked.connect(self._on_show_pois_clicked)
-                self.showPOIsButton.setToolTip("Show Pixels of Interest (H or Ctrl+I)")
+                self.showPOIsButton.setToolTip(
+                    self.tr("Show Pixels of Interest (H or Ctrl+I)")
+                )
                 # Initialize button styling
                 self._update_show_pois_button_style()
 
             # Connect the AOIs button
             if hasattr(self, 'showAOIsButton'):
                 self.showAOIsButton.clicked.connect(self._on_show_aois_clicked)
-                self.showAOIsButton.setToolTip("Toggle AOI Circles")
+                self.showAOIsButton.setToolTip(self.tr("Toggle AOI Circles"))
                 # Initialize button styling
                 self._update_show_aois_button_style()
 
@@ -999,7 +1026,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                 if image['hidden']:
                     self.hidden_image_count -= 1
             image['hidden'] = state
-            self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
+            self.skipHidden.setText(
+                self.tr("Skip Hidden ({count}) ").format(count=self.hidden_image_count)
+            )
             if state:
                 self._nextImageButton_clicked()
         else:
@@ -1170,17 +1199,21 @@ class Viewer(QMainWindow, Ui_Viewer):
         except ImportError:
             QMessageBox.warning(
                 self,
-                "Missing Dependency",
-                "The qimage2ndarray module is required for the upscale feature.\n"
-                "Please install it using: pip install qimage2ndarray"
+                self.tr("Missing Dependency"),
+                self.tr(
+                    "The qimage2ndarray module is required for the upscale feature.\n"
+                    "Please install it using: pip install qimage2ndarray"
+                )
             )
         except Exception as e:
             self.logger.error(f"Error opening upscale dialog: {e}")
             self.logger.error(traceback.format_exc())
             QMessageBox.warning(
                 self,
-                "Upscale Error",
-                f"An error occurred while opening the upscale dialog:\n{str(e)}"
+                self.tr("Upscale Error"),
+                self.tr(
+                    "An error occurred while opening the upscale dialog:\n{error}"
+                ).format(error=str(e))
             )
 
     def _skip_hidden_clicked(self, state):
@@ -1417,7 +1450,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                     if dialog.remember_name():
                         self.settings_service.set_setting('ReviewerName', reviewer_name)
                 else:
-                    reviewer_name = "Unknown Reviewer"
+                    reviewer_name = self.tr("Unknown Reviewer")
 
             # Generate unique review ID
             review_id = str(uuid.uuid4())
@@ -1480,7 +1513,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             spinner_label.setFont(QFont("Arial", 24))
 
         # Add message label
-        message_label = QLabel("Loading gallery...", overlay)
+        message_label = QLabel(self.tr("Loading gallery..."), overlay)
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setStyleSheet("""
             QLabel {

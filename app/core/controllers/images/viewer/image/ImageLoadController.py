@@ -14,9 +14,10 @@ from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.ImageHighlightService import ImageHighlightService
 from helpers.LocationInfo import LocationInfo
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ImageLoadController:
+class ImageLoadController(TranslationMixin):
     """
     Controller for loading and displaying images with metadata.
 
@@ -107,7 +108,12 @@ class ImageLoadController:
 
             self.parent.main_image.setFocus()
             self.parent.hideImageToggle.setChecked(image['hidden'])
-            self.parent.indexLabel.setText(f"(Image {self.parent.current_image + 1} of {len(self.parent.images)})")
+            self.parent.indexLabel.setText(
+                self.tr("(Image {current} of {total})").format(
+                    current=self.parent.current_image + 1,
+                    total=len(self.parent.images)
+                )
+            )
 
             # Update metadata displays
             self._update_metadata_displays(image_service)
@@ -343,4 +349,4 @@ class ImageLoadController:
         error_msg += f"{'=' * 60}\n"
         self.logger.error(error_msg)
         # Show error to user
-        QMessageBox.critical(self.parent, "Error Loading Image", error_msg)
+        QMessageBox.critical(self.parent, self.tr("Error Loading Image"), error_msg)

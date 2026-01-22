@@ -20,6 +20,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt, Signal, QObject
 from core.services.streaming.RTMPStreamService import StreamType
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 @dataclass
@@ -637,7 +638,7 @@ class DetectionThumbnailWidget(QWidget):
         self.tracker.clear()
 
 
-class VideoDisplayWidget(QLabel):
+class VideoDisplayWidget(TranslationMixin, QLabel):
     """Optimized video display widget for real-time streaming."""
 
     def __init__(self, parent=None):
@@ -648,7 +649,7 @@ class VideoDisplayWidget(QLabel):
         self.setMaximumSize(16777215, 16777215)  # Qt's maximum widget size
         self.setStyleSheet("QLabel { background-color: black; border: 1px solid gray; }")
         self.setAlignment(Qt.AlignCenter)
-        self.setText("No Stream Connected")
+        self.setText(self.tr("No Stream Connected"))
         self.setScaledContents(False)
         # Set size policy to expanding so it grows to fill available space
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -675,7 +676,7 @@ class VideoDisplayWidget(QLabel):
             self.logger.error(f"Error updating frame: {e}")
 
 
-class StreamControlWidget(QWidget):
+class StreamControlWidget(TranslationMixin, QWidget):
     """Shared stream connection and control widget with optional recording controls."""
 
     connectRequested = Signal(str, object)  # url, stream_type (StreamType enum)
@@ -702,103 +703,131 @@ class StreamControlWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # Connection group
-        connection_group = QGroupBox("Stream Connection")
-        connection_group.setToolTip("Configure and connect to video source (file, HDMI capture, or RTMP stream)")
+        connection_group = QGroupBox(self.tr("Stream Connection"))
+        connection_group.setToolTip(
+            self.tr("Configure and connect to video source (file, HDMI capture, or RTMP stream)")
+        )
         connection_layout = QGridLayout(connection_group)
 
         # Stream type (moved to row 0)
-        connection_layout.addWidget(QLabel("Stream Type:"), 0, 0)
+        connection_layout.addWidget(QLabel(self.tr("Stream Type:")), 0, 0)
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["File", "HDMI Capture", "RTMP Stream"])
-        self.type_combo.setToolTip("Select the type of video source:\n"
-                                   "• File: Pre-recorded video file with timeline controls\n"
-                                   "• HDMI Capture: Live capture from HDMI capture device\n"
-                                   "• RTMP Stream: Real-time streaming from RTMP/HTTP source")
+        self.type_combo.addItem(self.tr("File"), "File")
+        self.type_combo.addItem(self.tr("HDMI Capture"), "HDMI Capture")
+        self.type_combo.addItem(self.tr("RTMP Stream"), "RTMP Stream")
+        self.type_combo.setToolTip(
+            self.tr(
+                "Select the type of video source:\n"
+                "• File: Pre-recorded video file with timeline controls\n"
+                "• HDMI Capture: Live capture from HDMI capture device\n"
+                "• RTMP Stream: Real-time streaming from RTMP/HTTP source"
+            )
+        )
         connection_layout.addWidget(self.type_combo, 0, 1)
 
         # Stream URL/Path (moved to row 1)
-        connection_layout.addWidget(QLabel("Stream URL/Path:"), 1, 0)
+        connection_layout.addWidget(QLabel(self.tr("Stream URL/Path:")), 1, 0)
 
         # Container for URL input - can be QLineEdit or QComboBox
         url_layout = QHBoxLayout()
 
         # QLineEdit for File and RTMP
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("Click to browse for video file...")
+        self.url_input.setPlaceholderText(self.tr("Click to browse for video file..."))
         self.url_input.setText("")  # Default empty for file selection
-        self.url_input.setToolTip("Enter or browse for the video source:\n"
-                                  "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
-                                  "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)")
+        self.url_input.setToolTip(
+            self.tr(
+                "Enter or browse for the video source:\n"
+                "• File: Click to browse for video file (MP4, AVI, MOV, etc.)\n"
+                "• RTMP Stream: Enter RTMP URL (rtmp://server:port/app/stream)"
+            )
+        )
         url_layout.addWidget(self.url_input, 1)
 
         # QComboBox for HDMI Capture (hidden by default)
         self.hdmi_device_combo = QComboBox()
-        self.hdmi_device_combo.setToolTip("Select HDMI capture device")
+        self.hdmi_device_combo.setToolTip(self.tr("Select HDMI capture device"))
         self.hdmi_device_combo.setVisible(False)
-        self.hdmi_device_combo.addItem("Scanning for devices...", None)
+        self.hdmi_device_combo.addItem(self.tr("Scanning for devices..."), None)
         self.hdmi_device_combo.setEnabled(False)
         url_layout.addWidget(self.hdmi_device_combo, 1)
 
-        self.browse_button = QPushButton("Browse...")
+        self.browse_button = QPushButton(self.tr("Browse..."))
         self.browse_button.setVisible(True)  # Visible by default since File is default
-        self.browse_button.setToolTip("Open file browser to select a video file for analysis.\n"
-                                      "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM")
+        self.browse_button.setToolTip(
+            self.tr(
+                "Open file browser to select a video file for analysis.\n"
+                "Supported formats: MP4, AVI, MOV, MKV, FLV, WMV, M4V, 3GP, WebM"
+            )
+        )
         url_layout.addWidget(self.browse_button)
 
         # Scan button for HDMI devices (hidden by default)
-        self.scan_button = QPushButton("Scan...")
+        self.scan_button = QPushButton(self.tr("Scan..."))
         self.scan_button.setVisible(False)
-        self.scan_button.setToolTip("Scan for available HDMI capture devices")
+        self.scan_button.setToolTip(self.tr("Scan for available HDMI capture devices"))
         url_layout.addWidget(self.scan_button)
 
         connection_layout.addLayout(url_layout, 1, 1)
 
         # Connection buttons
         button_layout = QHBoxLayout()
-        self.connect_button = QPushButton("Connect")
+        self.connect_button = QPushButton(self.tr("Connect"))
         self.connect_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
-        self.connect_button.setToolTip("Connect to the specified video source and begin processing.")
-        self.disconnect_button = QPushButton("Disconnect")
+        self.connect_button.setToolTip(
+            self.tr("Connect to the specified video source and begin processing.")
+        )
+        self.disconnect_button = QPushButton(self.tr("Disconnect"))
         self.disconnect_button.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }")
         self.disconnect_button.setEnabled(False)
-        self.disconnect_button.setToolTip("Disconnect from the current video source and stop processing.")
+        self.disconnect_button.setToolTip(
+            self.tr("Disconnect from the current video source and stop processing.")
+        )
 
         button_layout.addWidget(self.connect_button)
         button_layout.addWidget(self.disconnect_button)
 
         # Status display
-        self.status_label = QLabel("Status: Disconnected")
+        self.status_label = QLabel(self.tr("Status: Disconnected"))
         self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
-        self.status_label.setToolTip("Current connection status")
+        self.status_label.setToolTip(self.tr("Current connection status"))
 
         # Performance display
-        performance_group = QGroupBox("Performance")
-        performance_group.setToolTip("Real-time performance metrics")
+        performance_group = QGroupBox(self.tr("Performance"))
+        performance_group.setToolTip(self.tr("Real-time performance metrics"))
         performance_layout = QGridLayout(performance_group)
 
         # Resolution labels
-        self.video_resolution_label = QLabel("Video: --")
-        self.video_resolution_label.setToolTip("Original video resolution")
-        self.processing_resolution_label = QLabel("Processing: --")
-        self.processing_resolution_label.setToolTip("Resolution used for detection processing")
+        self.video_resolution_label = QLabel(self.tr("Video: --"))
+        self.video_resolution_label.setToolTip(self.tr("Original video resolution"))
+        self.processing_resolution_label = QLabel(self.tr("Processing: --"))
+        self.processing_resolution_label.setToolTip(
+            self.tr("Resolution used for detection processing")
+        )
 
         # FPS labels
-        self.video_fps_label = QLabel("Video FPS: --")
-        self.video_fps_label.setToolTip("Native frame rate of the video source")
-        self.processing_fps_label = QLabel("Proc FPS: --")
-        self.processing_fps_label.setToolTip("Actual frames per second being processed")
+        self.video_fps_label = QLabel(self.tr("Video FPS: --"))
+        self.video_fps_label.setToolTip(self.tr("Native frame rate of the video source"))
+        self.processing_fps_label = QLabel(self.tr("Proc FPS: --"))
+        self.processing_fps_label.setToolTip(
+            self.tr("Actual frames per second being processed")
+        )
 
         # Timing labels
-        self.processing_label = QLabel("Time: -- ms")
-        self.processing_label.setToolTip("Time in milliseconds to process each frame")
-        self.latency_label = QLabel("Latency: -- ms")
-        self.latency_label.setToolTip("End-to-end latency from frame capture to display")
+        self.processing_label = QLabel(self.tr("Time: -- ms"))
+        self.processing_label.setToolTip(
+            self.tr("Time in milliseconds to process each frame")
+        )
+        self.latency_label = QLabel(self.tr("Latency: -- ms"))
+        self.latency_label.setToolTip(
+            self.tr("End-to-end latency from frame capture to display")
+        )
 
         # Stats labels
-        self.total_frames_label = QLabel("Frames: --")
-        self.total_frames_label.setToolTip("Total number of frames processed")
-        self.detections_label = QLabel("Detections: --")
-        self.detections_label.setToolTip("Number of detections in current frame")
+        self.total_frames_label = QLabel(self.tr("Frames: --"))
+        self.total_frames_label.setToolTip(self.tr("Total number of frames processed"))
+        self.detections_label = QLabel(self.tr("Detections: --"))
+        self.detections_label.setToolTip(self.tr("Number of detections in current frame"))
 
         # Layout: 4 rows x 2 columns
         performance_layout.addWidget(self.video_resolution_label, 0, 0)
@@ -812,29 +841,37 @@ class StreamControlWidget(QWidget):
 
         # Recording group (optional)
         if self.include_recording:
-            recording_group = QGroupBox("Recording")
+            recording_group = QGroupBox(self.tr("Recording"))
             recording_layout = QVBoxLayout(recording_group)
 
             # Recording buttons
             recording_button_layout = QHBoxLayout()
-            self.start_recording_btn = QPushButton("Start Recording")
+            self.start_recording_btn = QPushButton(self.tr("Start Recording"))
             self.start_recording_btn.setStyleSheet("QPushButton { background-color: #ff4444; color: white; font-weight: bold; }")
-            self.start_recording_btn.setToolTip("Start recording the video stream with detection overlays.")
-            self.stop_recording_btn = QPushButton("Stop Recording")
+            self.start_recording_btn.setToolTip(
+                self.tr("Start recording the video stream with detection overlays.")
+            )
+            self.stop_recording_btn = QPushButton(self.tr("Stop Recording"))
             self.stop_recording_btn.setEnabled(False)
-            self.stop_recording_btn.setToolTip("Stop the current recording and save to file.")
+            self.stop_recording_btn.setToolTip(
+                self.tr("Stop the current recording and save to file.")
+            )
 
             recording_button_layout.addWidget(self.start_recording_btn)
             recording_button_layout.addWidget(self.stop_recording_btn)
 
             # Recording status
-            self.recording_status = QLabel("Status: Not Recording")
+            self.recording_status = QLabel(self.tr("Status: Not Recording"))
             self.recording_status.setStyleSheet("QLabel { color: gray; }")
-            self.recording_status.setToolTip("Current recording status and output file path")
+            self.recording_status.setToolTip(
+                self.tr("Current recording status and output file path")
+            )
 
             # Recording info
-            self.recording_info = QLabel("Duration: --")
-            self.recording_info.setToolTip("Recording statistics: Duration, FPS, Frames")
+            self.recording_info = QLabel(self.tr("Duration: --"))
+            self.recording_info.setToolTip(
+                self.tr("Recording statistics: Duration, FPS, Frames")
+            )
 
             recording_layout.addLayout(recording_button_layout)
             recording_layout.addWidget(self.recording_status)
@@ -842,11 +879,15 @@ class StreamControlWidget(QWidget):
 
             # Recording directory selector
             dir_layout = QHBoxLayout()
-            dir_label = QLabel("Save to:")
+            dir_label = QLabel(self.tr("Save to:"))
             self.recording_dir_edit = QLineEdit("./recordings")
-            self.recording_dir_edit.setToolTip("Directory where video recordings will be saved.")
-            self.recording_dir_browse = QPushButton("Browse...")
-            self.recording_dir_browse.setToolTip("Choose a folder to store recordings.")
+            self.recording_dir_edit.setToolTip(
+                self.tr("Directory where video recordings will be saved.")
+            )
+            self.recording_dir_browse = QPushButton(self.tr("Browse..."))
+            self.recording_dir_browse.setToolTip(
+                self.tr("Choose a folder to store recordings.")
+            )
 
             dir_layout.addWidget(dir_label)
             dir_layout.addWidget(self.recording_dir_edit, 1)
@@ -879,7 +920,8 @@ class StreamControlWidget(QWidget):
 
     def on_stream_type_changed(self, stream_type: str):
         """Handle stream type selection changes."""
-        if stream_type == "HDMI Capture":
+        stream_type_value = self.type_combo.currentData() or stream_type
+        if stream_type_value == "HDMI Capture":
             # Show HDMI device combo, hide URL input
             self.url_input.setVisible(False)
             self.hdmi_device_combo.setVisible(True)
@@ -888,40 +930,48 @@ class StreamControlWidget(QWidget):
             # Ensure devices are scanned
             if self.hdmi_device_combo.count() <= 1:  # Only placeholder item
                 self._scan_hdmi_devices()
-        elif stream_type == "File":
+        elif stream_type_value == "File":
             # Show URL input, hide HDMI combo
             self.url_input.setVisible(True)
             self.hdmi_device_combo.setVisible(False)
-            self.url_input.setPlaceholderText("Click to browse for video file...")
+            self.url_input.setPlaceholderText(self.tr("Click to browse for video file..."))
             self.url_input.setText("")
             self.browse_button.setVisible(True)
             self.scan_button.setVisible(False)
-        elif stream_type == "RTMP Stream":
+        elif stream_type_value == "RTMP Stream":
             # Show URL input, hide HDMI combo
             self.url_input.setVisible(True)
             self.hdmi_device_combo.setVisible(False)
-            self.url_input.setPlaceholderText("rtmp://server:port/app/stream")
+            self.url_input.setPlaceholderText(self.tr("rtmp://server:port/app/stream"))
             self.url_input.setText("")
             self.browse_button.setVisible(False)
             self.scan_button.setVisible(False)
 
     def request_connect(self):
         """Request stream connection."""
-        combo_text = self.type_combo.currentText()
+        combo_text = self.type_combo.currentData() or self.type_combo.currentText()
 
         # Get URL from appropriate widget
         if combo_text == "HDMI Capture":
             # Get device index from HDMI combo box
             device_index = self.hdmi_device_combo.currentData()
             if device_index is None:
-                QMessageBox.warning(self, "Invalid Device", "Please select a valid HDMI capture device.")
+                QMessageBox.warning(
+                    self,
+                    self.tr("Invalid Device"),
+                    self.tr("Please select a valid HDMI capture device.")
+                )
                 return
             url = str(device_index)
         else:
             # Get URL from text input
             url = self.url_input.text().strip()
             if not url:
-                QMessageBox.warning(self, "Invalid URL", "Please enter a valid stream URL.")
+                QMessageBox.warning(
+                    self,
+                    self.tr("Invalid URL"),
+                    self.tr("Please enter a valid stream URL.")
+                )
                 return
 
         # Map combo box text to StreamType enum
@@ -936,12 +986,16 @@ class StreamControlWidget(QWidget):
     def update_connection_status(self, connected: bool, message: str):
         """Update connection status display."""
         if connected:
-            self.status_label.setText(f"Status: {message}")
+            self.status_label.setText(
+                self.tr("Status: {message}").format(message=message)
+            )
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
             self.connect_button.setEnabled(False)
             self.disconnect_button.setEnabled(True)
         else:
-            self.status_label.setText(f"Status: {message}")
+            self.status_label.setText(
+                self.tr("Status: {message}").format(message=message)
+            )
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             self.connect_button.setEnabled(True)
             self.disconnect_button.setEnabled(False)
@@ -968,22 +1022,26 @@ class StreamControlWidget(QWidget):
             self.start_recording_btn.setStyleSheet(start_disabled_style)
             self.stop_recording_btn.setEnabled(True)
             self.stop_recording_btn.setStyleSheet(stop_active_style)
-            self.recording_status.setText("Status: Recording")
+            self.recording_status.setText(self.tr("Status: Recording"))
             self.recording_status.setStyleSheet("QLabel { color: #ff4444; font-weight: bold; }")
             if path_or_message:
-                self.recording_info.setText(f"Output: {path_or_message}")
+                self.recording_info.setText(
+                    self.tr("Output: {value}").format(value=path_or_message)
+                )
         else:
             # Recording stopped
             self.start_recording_btn.setEnabled(True)
             self.start_recording_btn.setStyleSheet(start_active_style)
             self.stop_recording_btn.setEnabled(False)
             self.stop_recording_btn.setStyleSheet(stop_inactive_style)
-            self.recording_status.setText("Status: Not Recording")
+            self.recording_status.setText(self.tr("Status: Not Recording"))
             self.recording_status.setStyleSheet("QLabel { color: gray; }")
             if path_or_message:
-                self.recording_info.setText(f"Duration: {path_or_message}")
+                self.recording_info.setText(
+                    self.tr("Duration: {value}").format(value=path_or_message)
+                )
             else:
-                self.recording_info.setText("Duration: --")
+                self.recording_info.setText(self.tr("Duration: --"))
 
     def set_recording_directory(self, directory: str):
         """Set the recording directory path."""
@@ -1007,7 +1065,11 @@ class StreamControlWidget(QWidget):
     def _browse_recording_directory(self):
         """Open folder selection dialog for recording directory."""
         current_dir = self.get_recording_directory()
-        selected_dir = QFileDialog.getExistingDirectory(self, "Select Recording Directory", current_dir or ".")
+        selected_dir = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Recording Directory"),
+            current_dir or "."
+        )
         if selected_dir:
             self.recording_dir_edit.setText(selected_dir)
             self.recordingDirectoryChanged.emit(selected_dir)
@@ -1016,7 +1078,7 @@ class StreamControlWidget(QWidget):
         """Scan for available HDMI capture devices using OpenCV."""
         self.hdmi_device_combo.clear()
         self.hdmi_device_combo.setEnabled(False)
-        self.hdmi_device_combo.addItem("Scanning for devices...", None)
+        self.hdmi_device_combo.addItem(self.tr("Scanning for devices..."), None)
 
         try:
             found_any = False
@@ -1025,7 +1087,7 @@ class StreamControlWidget(QWidget):
                 cap = cv2.VideoCapture(index)
                 if cap is not None and cap.isOpened():
                     found_any = True
-                    label = f"Device {index}"
+                    label = self.tr("Device {index}").format(index=index)
                     self.hdmi_device_combo.addItem(label, index)
                     cap.release()
                 else:
@@ -1034,7 +1096,7 @@ class StreamControlWidget(QWidget):
 
             if not found_any:
                 self.hdmi_device_combo.clear()
-                self.hdmi_device_combo.addItem("No capture devices found", None)
+                self.hdmi_device_combo.addItem(self.tr("No capture devices found"), None)
                 self.hdmi_device_combo.setEnabled(False)
             else:
                 self.hdmi_device_combo.setEnabled(True)
@@ -1043,7 +1105,10 @@ class StreamControlWidget(QWidget):
                     self.hdmi_device_combo.setCurrentIndex(0)
         except Exception as e:
             self.hdmi_device_combo.clear()
-            self.hdmi_device_combo.addItem(f"Error scanning devices: {str(e)}", None)
+            self.hdmi_device_combo.addItem(
+                self.tr("Error scanning devices: {error}").format(error=str(e)),
+                None
+            )
             self.hdmi_device_combo.setEnabled(False)
 
     def _on_hdmi_device_selected(self, index: int):
@@ -1067,9 +1132,19 @@ class StreamControlWidget(QWidget):
         processing_resolution = stats.get('processing_resolution')
 
         if video_resolution:
-            self.video_resolution_label.setText(f"Video: {video_resolution[0]}x{video_resolution[1]}")
+            self.video_resolution_label.setText(
+                self.tr("Video: {width}x{height}").format(
+                    width=video_resolution[0],
+                    height=video_resolution[1]
+                )
+            )
         if processing_resolution:
-            self.processing_resolution_label.setText(f"Processing: {processing_resolution[0]}x{processing_resolution[1]}")
+            self.processing_resolution_label.setText(
+                self.tr("Processing: {width}x{height}").format(
+                    width=processing_resolution[0],
+                    height=processing_resolution[1]
+                )
+            )
 
         # FPS info
         video_fps = stats.get('video_fps', 0)
@@ -1078,30 +1153,44 @@ class StreamControlWidget(QWidget):
         processing_fps = stats.get('processing_fps', stats.get('avg_fps', stats.get('fps', 0)))
 
         if video_fps > 0:
-            self.video_fps_label.setText(f"Video FPS: {video_fps:.1f}")
-        self.processing_fps_label.setText(f"Proc FPS: {processing_fps:.1f}")
+            self.video_fps_label.setText(
+                self.tr("Video FPS: {fps:.1f}").format(fps=video_fps)
+            )
+        self.processing_fps_label.setText(
+            self.tr("Proc FPS: {fps:.1f}").format(fps=processing_fps)
+        )
 
         # Timing info
         processing_time = stats.get('current_processing_time_ms', stats.get('avg_processing_time_ms', stats.get('total_ms', 0)))
         latency = stats.get('latency_ms', 0)
 
-        self.processing_label.setText(f"Time: {processing_time:.1f} ms")
-        self.latency_label.setText(f"Latency: {latency:.1f} ms")
+        self.processing_label.setText(
+            self.tr("Time: {time:.1f} ms").format(time=processing_time)
+        )
+        self.latency_label.setText(
+            self.tr("Latency: {latency:.1f} ms").format(latency=latency)
+        )
 
         # Stats
         total_frames = stats.get('total_frames', 0)
         detection_count = stats.get('detection_count', stats.get('detections', 0))
 
-        self.total_frames_label.setText(f"Frames: {total_frames}")
-        self.detections_label.setText(f"Detections: {detection_count}")
+        self.total_frames_label.setText(
+            self.tr("Frames: {count}").format(count=total_frames)
+        )
+        self.detections_label.setText(
+            self.tr("Detections: {count}").format(count=detection_count)
+        )
 
     def browse_for_file(self):
         """Open file dialog to select video file."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Video File",
+            self.tr("Select Video File"),
             "",
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm *.mpg *.mpeg *.ts *.mts *.m2ts);;All Files (*)"
+            self.tr(
+                "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm *.mpg *.mpeg *.ts *.mts *.m2ts);;All Files (*)"
+            )
         )
         if file_path:
             self.url_input.setText(file_path)
@@ -1109,7 +1198,7 @@ class StreamControlWidget(QWidget):
     def on_url_input_clicked(self, event):
         """Handle clicks on URL input field."""
         # If file type is selected, open file browser on click
-        if self.type_combo.currentText() == "File":
+        if self.type_combo.currentData() == "File":
             self.browse_for_file()
         else:
             # Call the original mousePressEvent for normal behavior

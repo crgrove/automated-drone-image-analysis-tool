@@ -15,13 +15,14 @@ from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QComb
 
 from core.controllers.streaming.base import StreamAlgorithmController
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 from algorithms.streaming.MotionDetection.services import (
     MotionDetectionService, DetectionMode, MotionAlgorithm,
     MotionDetection, CameraMotion
 )
 
 
-class MotionDetectionController(StreamAlgorithmController):
+class MotionDetectionController(TranslationMixin, StreamAlgorithmController):
     """
     Motion detection algorithm controller.
 
@@ -61,46 +62,52 @@ class MotionDetectionController(StreamAlgorithmController):
         layout.setSpacing(10)
 
         # Detection Mode Group
-        mode_group = QGroupBox("Detection Mode")
+        mode_group = QGroupBox(self.tr("Detection Mode"))
         mode_layout = QVBoxLayout(mode_group)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(['Auto', 'Static Camera', 'Moving Camera'])
-        self.mode_combo.setCurrentText('Auto')
+        self.mode_combo.addItems([
+            self.tr("Auto"),
+            self.tr("Static Camera"),
+            self.tr("Moving Camera")
+        ])
+        self.mode_combo.setCurrentText(self.tr("Auto"))
         self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
-        mode_layout.addWidget(QLabel("Mode:"))
+        mode_layout.addWidget(QLabel(self.tr("Mode:")))
         mode_layout.addWidget(self.mode_combo)
 
-        self.mode_status_label = QLabel("Auto Mode: Detecting...")
+        self.mode_status_label = QLabel(self.tr("Auto Mode: Detecting..."))
         mode_layout.addWidget(self.mode_status_label)
 
         layout.addWidget(mode_group)
 
         # Algorithm Group
-        algorithm_group = QGroupBox("Algorithm")
+        algorithm_group = QGroupBox(self.tr("Algorithm"))
         algorithm_layout = QVBoxLayout(algorithm_group)
 
         self.algorithm_combo = QComboBox()
         self.algorithm_combo.addItems([
-            'Frame Difference',
-            'MOG2 Background',
-            'KNN Background',
-            'Optical Flow',
-            'Feature Matching'
+            self.tr("Frame Difference"),
+            self.tr("MOG2 Background"),
+            self.tr("KNN Background"),
+            self.tr("Optical Flow"),
+            self.tr("Feature Matching")
         ])
-        self.algorithm_combo.setCurrentText('MOG2 Background')
+        self.algorithm_combo.setCurrentText(self.tr("MOG2 Background"))
         self.algorithm_combo.currentTextChanged.connect(self._on_algorithm_changed)
-        algorithm_layout.addWidget(QLabel("Algorithm:"))
+        algorithm_layout.addWidget(QLabel(self.tr("Algorithm:")))
         algorithm_layout.addWidget(self.algorithm_combo)
 
         layout.addWidget(algorithm_group)
 
         # Parameters Group
-        params_group = QGroupBox("Detection Parameters")
+        params_group = QGroupBox(self.tr("Detection Parameters"))
         params_layout = QVBoxLayout(params_group)
 
         # Sensitivity
-        self.sensitivity_label = QLabel("Sensitivity: 50%")
+        self.sensitivity_label = QLabel(
+            self.tr("Sensitivity: {value}%").format(value=50)
+        )
         params_layout.addWidget(self.sensitivity_label)
         self.sensitivity_slider = QSlider(Qt.Horizontal)
         self.sensitivity_slider.setRange(0, 100)
@@ -110,7 +117,7 @@ class MotionDetectionController(StreamAlgorithmController):
 
         # Min Area
         min_area_layout = QHBoxLayout()
-        min_area_layout.addWidget(QLabel("Min Area:"))
+        min_area_layout.addWidget(QLabel(self.tr("Min Area:")))
         self.min_area_spinbox = QSpinBox()
         self.min_area_spinbox.setRange(10, 50000)
         self.min_area_spinbox.setValue(500)
@@ -120,7 +127,7 @@ class MotionDetectionController(StreamAlgorithmController):
 
         # Max Area
         max_area_layout = QHBoxLayout()
-        max_area_layout.addWidget(QLabel("Max Area:"))
+        max_area_layout.addWidget(QLabel(self.tr("Max Area:")))
         self.max_area_spinbox = QSpinBox()
         self.max_area_spinbox.setRange(100, 500000)
         self.max_area_spinbox.setValue(100000)
@@ -130,7 +137,7 @@ class MotionDetectionController(StreamAlgorithmController):
 
         # Threshold
         threshold_layout = QHBoxLayout()
-        threshold_layout.addWidget(QLabel("Threshold:"))
+        threshold_layout.addWidget(QLabel(self.tr("Threshold:")))
         self.threshold_spinbox = QSpinBox()
         self.threshold_spinbox.setRange(1, 100)
         self.threshold_spinbox.setValue(25)
@@ -139,7 +146,9 @@ class MotionDetectionController(StreamAlgorithmController):
         params_layout.addLayout(threshold_layout)
 
         # Compensation Strength
-        self.compensation_label = QLabel("Compensation: 80%")
+        self.compensation_label = QLabel(
+            self.tr("Compensation: {value}%").format(value=80)
+        )
         params_layout.addWidget(self.compensation_label)
         self.compensation_slider = QSlider(Qt.Horizontal)
         self.compensation_slider.setRange(0, 100)
@@ -150,15 +159,15 @@ class MotionDetectionController(StreamAlgorithmController):
         layout.addWidget(params_group)
 
         # Visualization Group
-        viz_group = QGroupBox("Visualization")
+        viz_group = QGroupBox(self.tr("Visualization"))
         viz_layout = QVBoxLayout(viz_group)
 
-        self.show_vectors_checkbox = QCheckBox("Show Motion Vectors")
+        self.show_vectors_checkbox = QCheckBox(self.tr("Show Motion Vectors"))
         self.show_vectors_checkbox.setChecked(True)
         self.show_vectors_checkbox.toggled.connect(self._on_show_vectors_changed)
         viz_layout.addWidget(self.show_vectors_checkbox)
 
-        self.show_camera_checkbox = QCheckBox("Show Camera Motion")
+        self.show_camera_checkbox = QCheckBox(self.tr("Show Camera Motion"))
         self.show_camera_checkbox.setChecked(True)
         self.show_camera_checkbox.toggled.connect(self._on_show_camera_changed)
         viz_layout.addWidget(self.show_camera_checkbox)
@@ -166,19 +175,19 @@ class MotionDetectionController(StreamAlgorithmController):
         layout.addWidget(viz_group)
 
         # Stats Group
-        stats_group = QGroupBox("Detection Statistics")
+        stats_group = QGroupBox(self.tr("Detection Statistics"))
         stats_layout = QVBoxLayout(stats_group)
 
-        self.detection_count_label = QLabel("Detections: 0")
+        self.detection_count_label = QLabel(self.tr("Detections: 0"))
         stats_layout.addWidget(self.detection_count_label)
 
-        self.camera_motion_label = QLabel("Camera Motion: None")
+        self.camera_motion_label = QLabel(self.tr("Camera Motion: None"))
         stats_layout.addWidget(self.camera_motion_label)
 
-        self.fps_label = QLabel("FPS: 0.0")
+        self.fps_label = QLabel(self.tr("FPS: 0.0"))
         stats_layout.addWidget(self.fps_label)
 
-        self.processing_time_label = QLabel("Processing: 0.0ms")
+        self.processing_time_label = QLabel(self.tr("Processing: 0.0ms"))
         stats_layout.addWidget(self.processing_time_label)
 
         layout.addWidget(stats_group)
@@ -224,7 +233,7 @@ class MotionDetectionController(StreamAlgorithmController):
                     'bbox': detection.bbox,
                     'area': detection.area,
                     'confidence': 1.0,  # Motion detection doesn't have confidence
-                    'class_name': 'Motion',
+                    'class_name': self.tr("Motion"),
                     'velocity': getattr(detection, 'velocity', None),
                     'is_compensated': getattr(detection, 'is_compensated', False)
                 })
@@ -244,18 +253,25 @@ class MotionDetectionController(StreamAlgorithmController):
         # Update detection count
         total_area = sum(d.area for d in detections)
         avg_area = total_area / len(detections) if detections else 0
-        self.detection_count_label.setText(
-            f"Detections: {len(detections)} | Total Area: {int(total_area)} | Avg: {int(avg_area)}"
+        detection_text = self.tr("Detections: {count} | Total Area: {total} | Avg: {avg}").format(
+            count=len(detections),
+            total=int(total_area),
+            avg=int(avg_area)
         )
+        self.detection_count_label.setText(detection_text)
 
         # Update camera motion info
         if camera_motion:
-            motion_text = f"Camera Motion: ({camera_motion.global_velocity[0]:.1f}, "
-            motion_text += f"{camera_motion.global_velocity[1]:.1f}) "
-            motion_text += f"Confidence: {camera_motion.confidence:.2f}"
+            motion_text = self.tr(
+                "Camera Motion: ({x}, {y}) Confidence: {confidence}"
+            ).format(
+                x=f"{camera_motion.global_velocity[0]:.1f}",
+                y=f"{camera_motion.global_velocity[1]:.1f}",
+                confidence=f"{camera_motion.confidence:.2f}"
+            )
             self.camera_motion_label.setText(motion_text)
         else:
-            self.camera_motion_label.setText("Camera Motion: None")
+            self.camera_motion_label.setText(self.tr("Camera Motion: None"))
 
     @Slot(dict)
     def _on_performance_update(self, metrics: dict):
@@ -267,19 +283,30 @@ class MotionDetectionController(StreamAlgorithmController):
         gpu_enabled = metrics.get('gpu_enabled', False)
 
         # Update performance labels
-        gpu_text = " (GPU)" if gpu_enabled else " (CPU)"
-        self.fps_label.setText(f"FPS: {fps:.1f}{gpu_text}")
-        self.processing_time_label.setText(f"Processing: {processing_time:.1f}ms")
+        gpu_text = self.tr(" (GPU)") if gpu_enabled else self.tr(" (CPU)")
+        self.fps_label.setText(
+            self.tr("FPS: {fps:.1f}{gpu}").format(fps=fps, gpu=gpu_text)
+        )
+        self.processing_time_label.setText(
+            self.tr("Processing: {time:.1f}ms").format(time=processing_time)
+        )
 
         # Update mode info if in auto mode
-        if self.mode_combo.currentText() == 'Auto':
-            self.mode_status_label.setText(f"Auto Mode: {mode.title()} ({confidence:.0%})")
+        if self.mode_combo.currentText() == self.tr("Auto"):
+            self.mode_status_label.setText(
+                self.tr("Auto Mode: {mode} ({confidence:.0%})").format(
+                    mode=mode.title(),
+                    confidence=confidence
+                )
+            )
 
     @Slot(str)
     def _on_mode_auto_changed(self, new_mode: str):
         """Handle automatic mode change."""
         # self.logger.info(f"Motion detector auto-switched to {new_mode} mode")
-        self.mode_status_label.setText(f"Auto Mode: {new_mode.title()}")
+        self.mode_status_label.setText(
+            self.tr("Auto Mode: {mode}").format(mode=new_mode.title())
+        )
 
     # Parameter change handlers
 
@@ -287,9 +314,9 @@ class MotionDetectionController(StreamAlgorithmController):
     def _on_mode_changed(self, mode_text: str):
         """Handle detection mode change."""
         mode_map = {
-            'Auto': DetectionMode.AUTO,
-            'Static Camera': DetectionMode.STATIC,
-            'Moving Camera': DetectionMode.MOVING
+            self.tr("Auto"): DetectionMode.AUTO,
+            self.tr("Static Camera"): DetectionMode.STATIC,
+            self.tr("Moving Camera"): DetectionMode.MOVING
         }
         mode = mode_map.get(mode_text, DetectionMode.AUTO)
         self.motion_detector.update_config(mode=mode)
@@ -304,11 +331,11 @@ class MotionDetectionController(StreamAlgorithmController):
     def _on_algorithm_changed(self, algorithm_text: str):
         """Handle algorithm change."""
         algorithm_map = {
-            'Frame Difference': MotionAlgorithm.FRAME_DIFF,
-            'MOG2 Background': MotionAlgorithm.MOG2,
-            'KNN Background': MotionAlgorithm.KNN,
-            'Optical Flow': MotionAlgorithm.OPTICAL_FLOW,
-            'Feature Matching': MotionAlgorithm.FEATURE_MATCH
+            self.tr("Frame Difference"): MotionAlgorithm.FRAME_DIFF,
+            self.tr("MOG2 Background"): MotionAlgorithm.MOG2,
+            self.tr("KNN Background"): MotionAlgorithm.KNN,
+            self.tr("Optical Flow"): MotionAlgorithm.OPTICAL_FLOW,
+            self.tr("Feature Matching"): MotionAlgorithm.FEATURE_MATCH
         }
         algorithm = algorithm_map.get(algorithm_text, MotionAlgorithm.MOG2)
         self.motion_detector.update_config(algorithm=algorithm)
@@ -317,7 +344,9 @@ class MotionDetectionController(StreamAlgorithmController):
     @Slot(int)
     def _on_sensitivity_changed(self, value: int):
         """Handle sensitivity change."""
-        self.sensitivity_label.setText(f"Sensitivity: {value}%")
+        self.sensitivity_label.setText(
+            self.tr("Sensitivity: {value}%").format(value=value)
+        )
         sensitivity = value / 100.0
         self.motion_detector.update_config(sensitivity=sensitivity)
         self._emit_config_changed()
@@ -343,7 +372,9 @@ class MotionDetectionController(StreamAlgorithmController):
     @Slot(int)
     def _on_compensation_changed(self, value: int):
         """Handle compensation strength change."""
-        self.compensation_label.setText(f"Compensation: {value}%")
+        self.compensation_label.setText(
+            self.tr("Compensation: {value}%").format(value=value)
+        )
         compensation = value / 100.0
         self.motion_detector.update_config(compensation_strength=compensation)
         self._emit_config_changed()
@@ -398,23 +429,23 @@ class MotionDetectionController(StreamAlgorithmController):
     def get_stats(self) -> Dict[str, str]:
         """Get algorithm-specific statistics."""
         return {
-            'Total Detections': str(self._detection_count),
-            'Last Detection': self._format_last_detection_time()
+            self.tr("Total Detections"): str(self._detection_count),
+            self.tr("Last Detection"): self._format_last_detection_time()
         }
 
     def _format_last_detection_time(self) -> str:
         """Format last detection time."""
         if self._last_detection_time:
             time_since = (datetime.now() - self._last_detection_time).total_seconds()
-            return f"{time_since:.1f}s ago"
-        return "Never"
+            return self.tr("{seconds:.1f}s ago").format(seconds=time_since)
+        return self.tr("Never")
 
     def reset(self):
         """Reset algorithm state."""
         self.motion_detector.reset()
         self._detection_count = 0
         self._last_detection_time = None
-        self.detection_count_label.setText("Detections: 0")
+        self.detection_count_label.setText(self.tr("Detections: 0"))
 
     def cleanup(self):
         """Clean up algorithm resources."""

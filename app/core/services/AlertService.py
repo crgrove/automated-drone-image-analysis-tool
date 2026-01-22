@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, QTimer, Signal, Qt, QMetaObject
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+from helpers.TranslationMixin import TranslationMixin
 import threading
 import time
 import os
@@ -174,7 +175,7 @@ class AlertHistory:
             }
 
 
-class AlertManager(QObject):
+class AlertManager(TranslationMixin, QObject):
     """Manages real-time alerts for color detection system.
 
     Features:
@@ -287,7 +288,9 @@ class AlertManager(QObject):
 
             # Set tooltip
             try:
-                self._system_tray.setToolTip("ADIAT - Color Detection Alerts")
+                self._system_tray.setToolTip(
+                    self.tr("ADIAT - Color Detection Alerts")
+                )
             except Exception as e:
                 self.logger.warning(f"Failed to set system tray tooltip: {e}")
 
@@ -561,7 +564,7 @@ class AlertManager(QObject):
                         def show_notification():
                             try:
                                 self._system_tray.showMessage(
-                                    "ADIAT - Color Detection Alert",
+                                    self.tr("ADIAT - Color Detection Alert"),
                                     message,
                                     QSystemTrayIcon.Information,
                                     3000  # Reduced timeout
@@ -601,15 +604,30 @@ class AlertManager(QObject):
         Returns:
             Formatted alert message string.
         """
-        message = f"Detected {alert_info['detection_count']} object(s)\n"
-        message += f"Average confidence: {alert_info['avg_confidence']:.2f}\n"
-        message += f"Total area: {alert_info['total_area']:.0f} pixels\n"
+        message = self.tr(
+            "Detected {count} object(s)\n"
+            "Average confidence: {avg_confidence:.2f}\n"
+            "Total area: {area:.0f} pixels\n"
+        ).format(
+            count=alert_info['detection_count'],
+            avg_confidence=alert_info['avg_confidence'],
+            area=alert_info['total_area']
+        )
 
         if len(detections) <= 3:  # Show details for small number of detections
-            message += "\nDetails:\n"
+            message += self.tr("\nDetails:\n")
             for i, detection in enumerate(detections, 1):
                 x, y, w, h = detection.bbox
-                message += f"  #{i}: ({x},{y}) {w}x{h} conf:{detection.confidence:.2f}\n"
+                message += self.tr(
+                    "  #{index}: ({x},{y}) {w}x{h} conf:{confidence:.2f}\n"
+                ).format(
+                    index=i,
+                    x=x,
+                    y=y,
+                    w=w,
+                    h=h,
+                    confidence=detection.confidence
+                )
 
         return message.strip()
 
@@ -621,7 +639,7 @@ class AlertManager(QObject):
         """
         try:
             msg_box = QMessageBox()
-            msg_box.setWindowTitle("ADIAT - Detection Alert")
+            msg_box.setWindowTitle(self.tr("ADIAT - Detection Alert"))
             msg_box.setText(message)
             msg_box.setIcon(QMessageBox.Information)
             msg_box.exec()

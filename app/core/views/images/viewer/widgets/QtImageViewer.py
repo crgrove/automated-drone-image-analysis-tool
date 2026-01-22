@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QGraphicsLineItem, QGraphicsPolygonItem, QApplication
 )
 from core.views.images.viewer.dialogs.AOICreationDialog import AOICreationDialog
+from helpers.TranslationMixin import TranslationMixin
 
 # Optional deps
 np = None
@@ -50,7 +51,7 @@ MAX_ZOOM_FACTOR = 100.0  # Maximum zoom factor (100x original)
 # --------------------------------------------------------------------------- #
 #  QtImageViewer                                                              #
 # --------------------------------------------------------------------------- #
-class QtImageViewer(QGraphicsView):
+class QtImageViewer(TranslationMixin, QGraphicsView):
     # -------------------------- public signals --------------------------- #
     leftMouseButtonPressed = Signal(float, float, object)
     leftMouseButtonReleased = Signal(float, float)
@@ -309,7 +310,7 @@ class QtImageViewer(QGraphicsView):
         if self._is_destroyed:
             return
         if path is None:
-            path, _ = QFileDialog.getOpenFileName(self, "Open image")
+            path, _ = QFileDialog.getOpenFileName(self, self.tr("Open image"))
         if path and os.path.isfile(path):
             self.setImage(QImage(path))
 

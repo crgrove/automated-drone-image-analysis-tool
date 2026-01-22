@@ -13,9 +13,10 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from PySide6.QtCore import Qt, Signal
 from typing import Optional, Dict, Any
 import os
+from helpers.TranslationMixin import TranslationMixin
 
 
-class FrameTab(QWidget):
+class FrameTab(TranslationMixin, QWidget):
     """
     Shared Frame tab widget for streaming algorithms.
 
@@ -38,6 +39,7 @@ class FrameTab(QWidget):
         self._video_aspect_ratio: Optional[float] = None
         self.setup_ui()
         self.connect_signals()
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""
@@ -209,18 +211,24 @@ class FrameTab(QWidget):
 
         if not is_valid:
             QMessageBox.warning(
-                self, "Invalid Image",
-                error_msg or "Could not load the selected image. Please choose a valid image file."
+                self, self.tr("Invalid Image"),
+                self.tr("{error}").format(
+                    error=error_msg or self.tr(
+                        "Could not load the selected image. Please choose a valid image file."
+                    )
+                )
             )
             return
 
         # If there's an aspect ratio warning, show it
         if error_msg:  # This is the aspect ratio mismatch warning
             result = QMessageBox.warning(
-                self, "Aspect Ratio Mismatch",
-                f"{error_msg}\n\n"
-                "The mask will be scaled to fit, which may cause distortion.\n\n"
-                "Do you want to continue?",
+                self, self.tr("Aspect Ratio Mismatch"),
+                self.tr(
+                    "{error}\n\n"
+                    "The mask will be scaled to fit, which may cause distortion.\n\n"
+                    "Do you want to continue?"
+                ).format(error=error_msg),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )

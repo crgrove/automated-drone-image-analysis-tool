@@ -11,10 +11,11 @@ from PySide6.QtWidgets import QLabel, QMessageBox
 from PySide6.QtCore import Qt
 
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 from core.services.image.ImageService import ImageService
 
 
-class StatusController:
+class StatusController(TranslationMixin):
     """
     Controller for managing status bar and messaging functionality.
 
@@ -39,18 +40,30 @@ class StatusController:
             return
 
         status_items = []
+        label_map = {
+            "GPS Coordinates": self.tr("GPS Coordinates"),
+            "Relative Altitude": self.tr("Relative Altitude"),
+            "Gimbal Orientation": self.tr("Gimbal Orientation"),
+            "Estimated Average GSD": self.tr("Estimated Average GSD"),
+            "Temperature": self.tr("Temperature"),
+            "Color Values": self.tr("Color Values"),
+            "Drone Orientation": self.tr("Drone Orientation"),
+        }
 
         # GPS Coordinates first (with hyperlink)
         messages = self.parent.messages
         gps_value = messages.get("GPS Coordinates")
         if gps_value:
             # Use the GPS coordinates as the href value so "Copy Link Location" copies the coordinates
-            status_items.append(f'<a href="{gps_value}">GPS Coordinates: {gps_value}</a>')
+            status_items.append(
+                f'<a href="{gps_value}">{label_map["GPS Coordinates"]}: {gps_value}</a>'
+            )
 
         # Add all other messages
         for k, v in messages.items():
             if v is not None and k != "GPS Coordinates":
-                status_items.append(f"{k}: {v}")
+                label = label_map.get(k, k)
+                status_items.append(f"{label}: {v}")
 
         # Update status bar
         if status_items:
@@ -99,14 +112,14 @@ class StatusController:
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(text)
-        msg.setWindowTitle("Error Loading Images")
+        msg.setWindowTitle(self.tr("Error Loading Images"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
     def show_no_images_message(self):
         """Displays an error message when there are no available images."""
-        self.show_error("No active images available.")
+        self.show_error(self.tr("No active images available."))
 
     def show_additional_images_message(self):
         """Displays an error message when there are no additional images."""
-        self.show_error("No other images available.")
+        self.show_error(self.tr("No other images available."))

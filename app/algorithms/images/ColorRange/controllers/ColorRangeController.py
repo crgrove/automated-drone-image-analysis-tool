@@ -16,9 +16,10 @@ from core.services.color.RecentColorsService import get_recent_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
+class ColorRangeController(TranslationMixin, QWidget, Ui_ColorRange, AlgorithmController):
     """Controller for the Color Range algorithm widget supporting multiple colors."""
 
     def __init__(self, config, theme):
@@ -38,7 +39,10 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
         self.color_rows = []
 
         # Empty state label
-        self.emptyLabel = QLabel("No Colors Selected", self.scrollAreaWidgetContents)
+        self.emptyLabel = QLabel(
+            self.tr("No Colors Selected"),
+            self.scrollAreaWidgetContents
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -317,7 +321,7 @@ class ColorRangeController(QWidget, Ui_ColorRange, AlgorithmController):
             str: An error message if validation fails, otherwise None.
         """
         if not self.color_rows:
-            return "Please add at least one color to detect."
+            return self.tr("Please add at least one color to detect.")
         return None
 
     def load_options(self, options):

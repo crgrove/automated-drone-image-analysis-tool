@@ -5,9 +5,10 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 from core.views.Preferences_ui import Ui_Preferences
 from core.services.SettingsService import SettingsService
 from helpers.PickleHelper import PickleHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class Preferences(QDialog, Ui_Preferences):
+class Preferences(TranslationMixin, QDialog, Ui_Preferences):
     """Controller for the Preferences dialog box.
 
     This class manages user preferences for the application, including settings such as
@@ -67,7 +68,12 @@ class Preferences(QDialog, Ui_Preferences):
             self.terrainElevationCheckBox.setChecked(terrain_enabled)
 
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
-        self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
+        self.dronSensorVersionLabel.setText(
+            self.tr("{version}_{date}").format(
+                version=drone_sensor_version['Version'],
+                date=drone_sensor_version['Date']
+            )
+        )
 
     def _connect_signals(self):
         """Connects UI signals to the appropriate update methods."""
@@ -145,24 +151,35 @@ class Preferences(QDialog, Ui_Preferences):
                 cache_info = info.get('cache', {})
                 tiles = cache_info.get('total_tiles', 0)
                 size_mb = cache_info.get('total_size_mb', 0)
-                self.terrainCacheSizeLabel.setText(f"{tiles} tiles ({size_mb:.1f} MB)")
+                self.terrainCacheSizeLabel.setText(
+                    self.tr("{tiles} tiles ({size_mb:.1f} MB)").format(
+                        tiles=tiles,
+                        size_mb=size_mb
+                    )
+                )
             else:
-                self.terrainCacheSizeLabel.setText("Not available")
+                self.terrainCacheSizeLabel.setText(self.tr("Not available"))
         except Exception:
-            self.terrainCacheSizeLabel.setText("Error")
+            self.terrainCacheSizeLabel.setText(self.tr("Error"))
 
     def _clear_terrain_cache(self):
         """Clear the terrain elevation cache."""
         service = self._get_terrain_service()
         if not service:
-            QMessageBox.warning(self, "Error", "Terrain service not available.")
+            QMessageBox.warning(
+                self,
+                self.tr("Error"),
+                self.tr("Terrain service not available.")
+            )
             return
 
         reply = QMessageBox.question(
             self,
-            "Clear Terrain Cache",
-            "Are you sure you want to clear all cached terrain elevation data?\n\n"
-            "This will require re-downloading tiles when terrain elevation is used.",
+            self.tr("Clear Terrain Cache"),
+            self.tr(
+                "Are you sure you want to clear all cached terrain elevation data?\n\n"
+                "This will require re-downloading tiles when terrain elevation is used."
+            ),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -173,11 +190,15 @@ class Preferences(QDialog, Ui_Preferences):
                 self._update_terrain_cache_display()
                 QMessageBox.information(
                     self,
-                    "Cache Cleared",
-                    f"Cleared {count} cached terrain tiles."
+                    self.tr("Cache Cleared"),
+                    self.tr("Cleared {count} cached terrain tiles.").format(count=count)
                 )
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to clear cache: {e}")
+                QMessageBox.warning(
+                    self,
+                    self.tr("Error"),
+                    self.tr("Failed to clear cache: {error}").format(error=e)
+                )
 
     def _droneSensorButton_clicked(self):
         """
@@ -186,9 +207,9 @@ class Preferences(QDialog, Ui_Preferences):
         # Only allow .pkl files
         filename, _ = QFileDialog.getOpenFileName(
             self,
-            "Select a Drone Sensor File",
+            self.tr("Select a Drone Sensor File"),
             "",
-            "Pickle Files (*.pkl)"
+            self.tr("Pickle Files (*.pkl)")
         )
         if not filename:
             return  # User cancelled
@@ -199,4 +220,9 @@ class Preferences(QDialog, Ui_Preferences):
         shutil.copy(filename, dest_file)
         PickleHelper.force_reload()
         drone_sensor_version = PickleHelper.get_drone_sensor_file_version()
-        self.dronSensorVersionLabel.setText(f"{drone_sensor_version['Version']}_{drone_sensor_version['Date']}")
+        self.dronSensorVersionLabel.setText(
+            self.tr("{version}_{date}").format(
+                version=drone_sensor_version['Version'],
+                date=drone_sensor_version['Date']
+            )
+        )

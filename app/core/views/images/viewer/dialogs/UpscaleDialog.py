@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 qimage2ndarray = None
 try:
@@ -123,7 +124,7 @@ class UpscaleWorker(QThread):
                 self.error.emit(str(e))
 
 
-class UpscaleDialog(QDialog):
+class UpscaleDialog(TranslationMixin, QDialog):
     """
     Dialog for displaying and progressively upscaling image portions.
 
@@ -182,7 +183,9 @@ class UpscaleDialog(QDialog):
         self.gpu_available = self._check_gpu_available()
 
         # Set up the dialog
-        self.setWindowTitle(f"Upscaled View - {current_level}x")
+        self.setWindowTitle(
+            self.tr("Upscaled View - {level}x").format(level=current_level)
+        )
         self.setModal(False)  # Non-modal so user can interact with main window
 
         # Set window flags to keep dialog on top (especially important on macOS)
@@ -191,6 +194,7 @@ class UpscaleDialog(QDialog):
 
         # Create UI
         self._setup_ui()
+        self._apply_translations()
 
         # Display the image
         if image_array is not None:
@@ -222,7 +226,7 @@ class UpscaleDialog(QDialog):
 
         # Method selection layout
         method_layout = QHBoxLayout()
-        method_label = QLabel("Upscale Method:")
+        method_label = QLabel(self.tr("Upscale Method:"))
         method_layout.addWidget(method_label)
 
         self.method_combo = QComboBox()
@@ -257,17 +261,17 @@ class UpscaleDialog(QDialog):
         button_layout.setSpacing(10)
 
         # Upres Again button
-        self.upres_button = QPushButton("Upres Again")
+        self.upres_button = QPushButton(self.tr("Upres Again"))
         self.upres_button.setMinimumHeight(40)
         self.upres_button.clicked.connect(self._on_upres_again_clicked)
-        self.upres_button.setToolTip(f"Upscale the currently visible portion by {self.upscale_factor}x")
+        self.upres_button.setToolTip(self.tr("Upscale the currently visible portion by {factor}x").format(factor=self.upscale_factor))
         button_layout.addWidget(self.upres_button)
 
         # Quit button
-        quit_button = QPushButton("Quit")
+        quit_button = QPushButton(self.tr("Quit"))
         quit_button.setMinimumHeight(40)
         quit_button.clicked.connect(self.close)
-        quit_button.setToolTip("Close this upscale window")
+        quit_button.setToolTip(self.tr("Close this upscale window"))
         button_layout.addWidget(quit_button)
 
         main_layout.addLayout(button_layout)
@@ -351,15 +355,17 @@ class UpscaleDialog(QDialog):
             self.current_level = self.current_level * self.upscale_factor
 
             # Update window title
-            self.setWindowTitle(f"Upscaled View - {self.current_level}x")
+            self.setWindowTitle(
+                self.tr("Upscaled View - {level}x").format(level=self.current_level)
+            )
 
             # Display the upscaled image
             self._display_image(upscaled_image)
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Upscale Error",
-                f"Error during initial upscale: {str(e)}"
+                self.tr("Upscale Error"),
+                self.tr("Error during initial upscale: {error}").format(error=str(e))
             )
 
     def _on_upres_again_clicked(self):
@@ -370,8 +376,8 @@ class UpscaleDialog(QDialog):
         if visible_portion is None or visible_portion.size == 0:
             QMessageBox.warning(
                 self,
-                "Upscale Error",
-                "Unable to extract visible image portion."
+                self.tr("Upscale Error"),
+                self.tr("Unable to extract visible image portion.")
             )
             return
 
@@ -380,9 +386,11 @@ class UpscaleDialog(QDialog):
         if next_level > self.MAX_UPSCALE_LEVEL:
             QMessageBox.warning(
                 self,
-                "Maximum Upscale Reached",
-                f"Maximum upscale level of {self.MAX_UPSCALE_LEVEL}x has been reached.\n"
-                f"Further upscaling is not allowed to prevent memory issues."
+                self.tr("Maximum Upscale Reached"),
+                self.tr(
+                    "Maximum upscale level of {level}x has been reached.\n"
+                    "Further upscaling is not allowed to prevent memory issues."
+                ).format(level=self.MAX_UPSCALE_LEVEL)
             )
             return
 
@@ -394,10 +402,12 @@ class UpscaleDialog(QDialog):
         if new_height > self.MAX_DIMENSION or new_width > self.MAX_DIMENSION:
             QMessageBox.warning(
                 self,
-                "Image Too Large",
-                f"Upscaling would result in an image of {new_width}×{new_height} pixels.\n"
-                f"Maximum allowed dimension is {self.MAX_DIMENSION} pixels.\n\n"
-                f"Try zooming in to a smaller area before upscaling."
+                self.tr("Image Too Large"),
+                self.tr(
+                    "Upscaling would result in an image of {width}×{height} pixels.\n"
+                    "Maximum allowed dimension is {max_dim} pixels.\n\n"
+                    "Try zooming in to a smaller area before upscaling."
+                ).format(width=new_width, height=new_height, max_dim=self.MAX_DIMENSION)
             )
             return
 
@@ -405,9 +415,11 @@ class UpscaleDialog(QDialog):
         if height < 10 or width < 10:
             QMessageBox.warning(
                 self,
-                "Image Too Small",
-                f"Visible portion is too small ({width}×{height} pixels).\n"
-                f"Please zoom in to a larger area before upscaling."
+                self.tr("Image Too Small"),
+                self.tr(
+                    "Visible portion is too small ({width}×{height} pixels).\n"
+                    "Please zoom in to a larger area before upscaling."
+                ).format(width=width, height=height)
             )
             return
 
@@ -444,8 +456,8 @@ class UpscaleDialog(QDialog):
             except Exception as e:
                 QMessageBox.critical(
                     self,
-                    "Upscale Error",
-                    f"An error occurred during upscaling:\n{str(e)}"
+                    self.tr("Upscale Error"),
+                    self.tr("An error occurred during upscaling:\n{error}").format(error=str(e))
                 )
             return
 
@@ -463,18 +475,25 @@ class UpscaleDialog(QDialog):
             height, width = image_array.shape[:2]
             new_height, new_width = height * factor, width * factor
             progress_text = (
-                f"Upscaling image with AI enhancement...\n"
-                f"From {width}×{height} to {new_width}×{new_height} pixels\n"
-                f"This may take a few seconds."
+                self.tr(
+                    "Upscaling image with AI enhancement...\n"
+                    "From {width}×{height} to {new_width}×{new_height} pixels\n"
+                    "This may take a few seconds."
+                ).format(
+                    width=width,
+                    height=height,
+                    new_width=new_width,
+                    new_height=new_height
+                )
             )
             self.progress_dialog = QProgressDialog(
                 progress_text,
-                "Cancel",
+                self.tr("Cancel"),
                 0,
                 100,
                 self
             )
-            self.progress_dialog.setWindowTitle("Upscaling (OpenCV EDSR)")
+            self.progress_dialog.setWindowTitle(self.tr("Upscaling (OpenCV EDSR)"))
             self.progress_dialog.setWindowModality(Qt.WindowModal)
             self.progress_dialog.setMinimumDuration(0)  # Show immediately for EDSR
             self.progress_dialog.setValue(0)
@@ -502,8 +521,8 @@ class UpscaleDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Upscale Error",
-                f"Failed to start upscaling:\n{str(e)}"
+                self.tr("Upscale Error"),
+                self.tr("Failed to start upscaling:\n{error}").format(error=str(e))
             )
 
     def _create_new_dialog(self, upscaled_image, next_level):
@@ -534,8 +553,8 @@ class UpscaleDialog(QDialog):
 
         QMessageBox.critical(
             self,
-            "Upscale Error",
-            f"An error occurred during upscaling:\n{error_msg}"
+            self.tr("Upscale Error"),
+            self.tr("An error occurred during upscaling:\n{error}").format(error=error_msg)
         )
 
     def _on_upscale_canceled(self):
@@ -573,8 +592,10 @@ class UpscaleDialog(QDialog):
                 # Real-ESRGAN not implemented yet
                 QMessageBox.warning(
                     self,
-                    "Method Not Available",
-                    "Real-ESRGAN is not yet implemented.\nFalling back to Lanczos interpolation."
+                    self.tr("Method Not Available"),
+                    self.tr(
+                        "Real-ESRGAN is not yet implemented.\nFalling back to Lanczos interpolation."
+                    )
                 )
                 return self._upscale_lanczos(image_array, factor)
             else:  # 'fast' or fallback
@@ -727,8 +748,8 @@ class UpscaleDialog(QDialog):
 
             # Show progress dialog
             progress = QProgressDialog(
-                f"Downloading {model_name} model...",
-                "Cancel",
+                self.tr("Downloading {model_name} model...").format(model_name=model_name),
+                self.tr("Cancel"),
                 0,
                 100,
                 self

@@ -23,7 +23,7 @@ class TestGeoidService:
 
     def test_approximate_undulation_reasonable_values(self):
         """Test that approximate undulation gives reasonable values globally.
-        
+
         Note: The simplified model is only accurate to ~5-10m RMS globally.
         We use relaxed bounds to account for model limitations.
         """
@@ -190,4 +190,3 @@ class TestGeoidService:
             assert info['cached'] is True
             assert 'cache_path' in info
             assert info['cache_size_mb'] > 0
-

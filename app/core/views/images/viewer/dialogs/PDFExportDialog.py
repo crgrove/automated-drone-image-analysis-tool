@@ -2,11 +2,12 @@
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFormLayout, QCheckBox
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 
 from core.services.export.PDFSettingsService import PDFSettingsService
 
 
-class PDFExportDialog(QDialog):
+class PDFExportDialog(TranslationMixin, QDialog):
     """Dialog for entering organization and search name for PDF export."""
 
     def __init__(self, parent):
@@ -19,10 +20,11 @@ class PDFExportDialog(QDialog):
         self.settings_service = PDFSettingsService()
         self.setupUi()
         self.load_settings()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("PDF Export Settings")
+        self.setWindowTitle(self.tr("PDF Export Settings"))
         self.setModal(True)
         self.setMinimumWidth(400)
 
@@ -30,7 +32,7 @@ class PDFExportDialog(QDialog):
         layout = QVBoxLayout()
 
         # Instructions
-        instructions = QLabel("Enter the following information for the PDF report:")
+        instructions = QLabel(self.tr("Enter the following information for the PDF report:"))
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
@@ -39,34 +41,34 @@ class PDFExportDialog(QDialog):
 
         # Organization name input
         self.organization_input = QLineEdit()
-        self.organization_input.setPlaceholderText("Enter organization name")
-        form_layout.addRow("Organization:", self.organization_input)
+        self.organization_input.setPlaceholderText(self.tr("Enter organization name"))
+        form_layout.addRow(self.tr("Organization:"), self.organization_input)
 
         # Search name input
         self.search_name_input = QLineEdit()
-        self.search_name_input.setPlaceholderText("Enter search name")
-        form_layout.addRow("Search Name:", self.search_name_input)
+        self.search_name_input.setPlaceholderText(self.tr("Enter search name"))
+        form_layout.addRow(self.tr("Search Name:"), self.search_name_input)
 
         layout.addLayout(form_layout)
 
         # Options section
-        options_label = QLabel("Export Options:")
+        options_label = QLabel(self.tr("Export Options:"))
         options_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
         layout.addWidget(options_label)
 
         # Include images without flagged AOIs checkbox
-        self.include_images_without_flagged_aois = QCheckBox("Include images without flagged AOIs")
-        self.include_images_without_flagged_aois.setToolTip(
+        self.include_images_without_flagged_aois = QCheckBox(self.tr("Include images without flagged AOIs"))
+        self.include_images_without_flagged_aois.setToolTip(self.tr(
             "When checked, all images will be included in the PDF report, even if they don't have any flagged AOIs. "
             "When unchecked, only images with flagged AOIs will be included."
-        )
+        ))
         layout.addWidget(self.include_images_without_flagged_aois)
 
         # Buttons
         button_layout = QHBoxLayout()
-        self.ok_button = QPushButton("OK")
+        self.ok_button = QPushButton(self.tr("OK"))
         self.ok_button.clicked.connect(self.on_ok_clicked)
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()

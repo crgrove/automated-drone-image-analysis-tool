@@ -17,9 +17,10 @@ from core.services.color.CustomColorsService import get_custom_colors_service
 from algorithms.Shared.views import ColorPickerDialog
 from algorithms.images.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmController):
+class ColorRangeWizardController(TranslationMixin, QWidget, Ui_ColorRangeWizard, AlgorithmController):
     """Wizard controller for Color Range (RGB) algorithm.
 
     Provides a simplified interface for configuring RGB color range detection.
@@ -64,14 +65,20 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
         self.colorsLayout.setContentsMargins(0, 0, 0, 0)
 
         # Empty state label
-        self.emptyLabel = QLabel("No Colors Selected", self.colorsContainer)
+        self.emptyLabel = QLabel(
+            self.tr("No Colors Selected"),
+            self.colorsContainer
+        )
         self.emptyLabel.setAlignment(Qt.AlignCenter)
         self.emptyLabel.setStyleSheet("color: #888; font-style: italic;")
         self.emptyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.colorsLayout.addWidget(self.emptyLabel, 1, Qt.AlignCenter)
 
         # View Range button (hidden until colors are added)
-        self.viewRangeButton = QPushButton("View Range", self.widgetAddButton)
+        self.viewRangeButton = QPushButton(
+            self.tr("View Range"),
+            self.widgetAddButton
+        )
         self.viewRangeButton.setFont(self.addColorButton.font())
         self.viewRangeButton.setIcon(IconHelper.create_icon('fa6s.eye', self.theme))
         self.viewRangeButton.clicked.connect(self.view_range_button_clicked)
@@ -248,7 +255,7 @@ class ColorRangeWizardController(QWidget, Ui_ColorRangeWizard, AlgorithmControll
     def validate(self):
         """Validate configuration."""
         if not self.color_rows:
-            return "Please add at least one color to detect."
+            return self.tr("Please add at least one color to detect.")
         return None
 
     def load_options(self, options):

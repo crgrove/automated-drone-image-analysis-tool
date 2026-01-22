@@ -4,11 +4,12 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QGroupBox, QSlider, QSpinBox,
                                QCheckBox, QColorDialog, QLineEdit, QDoubleSpinBox)
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QColor
 import colorsys
 
 
-class AOIFilterDialog(QDialog):
+class AOIFilterDialog(TranslationMixin, QDialog):
     """Dialog for setting color and pixel area filters for AOIs."""
 
     def __init__(self, parent, current_filters=None, temperature_unit='C', is_thermal=False):
@@ -47,10 +48,11 @@ class AOIFilterDialog(QDialog):
         self.is_thermal = is_thermal
 
         self.setupUi()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("Filter AOIs")
+        self.setWindowTitle(self.tr("Filter AOIs"))
         self.setModal(True)
         self.setMinimumWidth(450)
         self.setMinimumHeight(400)
@@ -59,19 +61,19 @@ class AOIFilterDialog(QDialog):
         layout = QVBoxLayout()
 
         # Instructions
-        instructions = QLabel("Filter Areas of Interest by flagged status, comments, color, and/or pixel area:")
+        instructions = QLabel(self.tr("Filter Areas of Interest by flagged status, comments, color, and/or pixel area:"))
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
         # ===== Flagged AOI Filter =====
-        flagged_group = QGroupBox("Flagged AOIs")
+        flagged_group = QGroupBox(self.tr("Flagged AOIs"))
         flagged_layout = QVBoxLayout()
 
-        self.flagged_filter_enabled = QCheckBox("Show Only Flagged AOIs")
+        self.flagged_filter_enabled = QCheckBox(self.tr("Show Only Flagged AOIs"))
         self.flagged_filter_enabled.setChecked(self.flagged_only)
         flagged_layout.addWidget(self.flagged_filter_enabled)
 
-        info_label = QLabel("Only AOIs marked with a flag will be displayed")
+        info_label = QLabel(self.tr("Only AOIs marked with a flag will be displayed"))
         info_label.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         flagged_layout.addWidget(info_label)
 
@@ -79,21 +81,21 @@ class AOIFilterDialog(QDialog):
         layout.addWidget(flagged_group)
 
         # ===== Comment Filter Group =====
-        comment_group = QGroupBox("Comment Filter")
+        comment_group = QGroupBox(self.tr("Comment Filter"))
         comment_layout = QVBoxLayout()
 
         # Enable comment filter checkbox
-        self.comment_filter_enabled = QCheckBox("Enable Comment Filter")
+        self.comment_filter_enabled = QCheckBox(self.tr("Enable Comment Filter"))
         self.comment_filter_enabled.setChecked(self.comment_filter is not None and self.comment_filter != "")
         self.comment_filter_enabled.toggled.connect(self.on_comment_filter_toggled)
         comment_layout.addWidget(self.comment_filter_enabled)
 
         # Comment pattern input
         pattern_layout = QHBoxLayout()
-        pattern_layout.addWidget(QLabel("Pattern:"))
+        pattern_layout.addWidget(QLabel(self.tr("Pattern:")))
 
         self.comment_pattern_input = QLineEdit()
-        self.comment_pattern_input.setPlaceholderText("e.g., *work* or crack* or *damage")
+        self.comment_pattern_input.setPlaceholderText(self.tr("e.g., *work* or crack* or *damage"))
         if self.comment_filter:
             self.comment_pattern_input.setText(self.comment_filter)
         pattern_layout.addWidget(self.comment_pattern_input)
@@ -101,11 +103,11 @@ class AOIFilterDialog(QDialog):
         comment_layout.addLayout(pattern_layout)
 
         # Info labels
-        info_label1 = QLabel("Use * as wildcard for any characters (case-insensitive)")
+        info_label1 = QLabel(self.tr("Use * as wildcard for any characters (case-insensitive)"))
         info_label1.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         comment_layout.addWidget(info_label1)
 
-        info_label2 = QLabel("Only AOIs with non-empty comments matching the pattern will be shown")
+        info_label2 = QLabel(self.tr("Only AOIs with non-empty comments matching the pattern will be shown"))
         info_label2.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         comment_layout.addWidget(info_label2)
 
@@ -113,20 +115,20 @@ class AOIFilterDialog(QDialog):
         layout.addWidget(comment_group)
 
         # ===== Color Filter Group =====
-        color_group = QGroupBox("Color Filter")
+        color_group = QGroupBox(self.tr("Color Filter"))
         color_layout = QVBoxLayout()
 
         # Enable color filter checkbox
-        self.color_filter_enabled = QCheckBox("Enable Color Filter")
+        self.color_filter_enabled = QCheckBox(self.tr("Enable Color Filter"))
         self.color_filter_enabled.setChecked(self.color_hue is not None)
         self.color_filter_enabled.toggled.connect(self.on_color_filter_toggled)
         color_layout.addWidget(self.color_filter_enabled)
 
         # Color selection button
         color_select_layout = QHBoxLayout()
-        color_select_layout.addWidget(QLabel("Target Hue:"))
+        color_select_layout.addWidget(QLabel(self.tr("Target Hue:")))
 
-        self.color_button = QPushButton("Select Color")
+        self.color_button = QPushButton(self.tr("Select Color"))
         self.color_button.setFixedHeight(30)
         self.color_button.clicked.connect(self.select_color)
         color_select_layout.addWidget(self.color_button)
@@ -138,7 +140,7 @@ class AOIFilterDialog(QDialog):
         color_select_layout.addWidget(self.color_preview)
 
         # Hue value label
-        self.hue_label = QLabel("No color selected")
+        self.hue_label = QLabel(self.tr("No color selected"))
         color_select_layout.addWidget(self.hue_label)
         color_select_layout.addStretch()
 
@@ -146,7 +148,7 @@ class AOIFilterDialog(QDialog):
 
         # Hue range slider
         range_layout = QHBoxLayout()
-        range_layout.addWidget(QLabel("Hue Range (±):"))
+        range_layout.addWidget(QLabel(self.tr("Hue Range (±):")))
 
         self.range_slider = QSlider(Qt.Horizontal)
         self.range_slider.setMinimum(1)
@@ -164,7 +166,7 @@ class AOIFilterDialog(QDialog):
         color_layout.addLayout(range_layout)
 
         # Info label
-        info_label = QLabel("AOIs with hue within ±range of target will be shown")
+        info_label = QLabel(self.tr("AOIs with hue within ±range of target will be shown"))
         info_label.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         color_layout.addWidget(info_label)
 
@@ -172,18 +174,18 @@ class AOIFilterDialog(QDialog):
         layout.addWidget(color_group)
 
         # ===== Pixel Area Filter Group =====
-        area_group = QGroupBox("Pixel Area Filter")
+        area_group = QGroupBox(self.tr("Pixel Area Filter"))
         area_layout = QVBoxLayout()
 
         # Enable area filter checkbox
-        self.area_filter_enabled = QCheckBox("Enable Pixel Area Filter")
+        self.area_filter_enabled = QCheckBox(self.tr("Enable Pixel Area Filter"))
         self.area_filter_enabled.setChecked(self.area_min is not None or self.area_max is not None)
         self.area_filter_enabled.toggled.connect(self.on_area_filter_toggled)
         area_layout.addWidget(self.area_filter_enabled)
 
         # Min area
         min_layout = QHBoxLayout()
-        min_layout.addWidget(QLabel("Minimum Area (px):"))
+        min_layout.addWidget(QLabel(self.tr("Minimum Area (px):")))
 
         self.min_area_spin = QSpinBox()
         self.min_area_spin.setMinimum(0)
@@ -197,7 +199,7 @@ class AOIFilterDialog(QDialog):
 
         # Max area
         max_layout = QHBoxLayout()
-        max_layout.addWidget(QLabel("Maximum Area (px):"))
+        max_layout.addWidget(QLabel(self.tr("Maximum Area (px):")))
 
         self.max_area_spin = QSpinBox()
         self.max_area_spin.setMinimum(0)
@@ -213,11 +215,11 @@ class AOIFilterDialog(QDialog):
         layout.addWidget(area_group)
 
         # ===== Temperature Filter Group =====
-        temp_group = QGroupBox("Temperature Filter")
+        temp_group = QGroupBox(self.tr("Temperature Filter"))
         temp_layout = QVBoxLayout()
 
         # Enable temperature filter checkbox
-        self.temperature_filter_enabled = QCheckBox("Enable Temperature Filter")
+        self.temperature_filter_enabled = QCheckBox(self.tr("Enable Temperature Filter"))
         self.temperature_filter_enabled.setChecked(self.temperature_min is not None or self.temperature_max is not None)
         self.temperature_filter_enabled.toggled.connect(self.on_temperature_filter_toggled)
         temp_layout.addWidget(self.temperature_filter_enabled)
@@ -271,7 +273,7 @@ class AOIFilterDialog(QDialog):
 
         # Info label
         if not self.is_thermal:
-            info_label = QLabel("Temperature filtering unavailable (no thermal data)")
+            info_label = QLabel(self.tr("Temperature filtering unavailable (no thermal data)"))
             info_label.setStyleSheet("QLabel { color: #F44336; font-size: 9pt; font-weight: bold; }")
             temp_layout.addWidget(info_label)
             # Disable temperature filter controls
@@ -286,18 +288,18 @@ class AOIFilterDialog(QDialog):
         # ===== Buttons =====
         button_layout = QHBoxLayout()
 
-        self.clear_button = QPushButton("Clear All Filters")
+        self.clear_button = QPushButton(self.tr("Clear All Filters"))
         self.clear_button.clicked.connect(self.clear_all_filters)
         button_layout.addWidget(self.clear_button)
 
         button_layout.addStretch()
 
-        self.apply_button = QPushButton("Apply")
+        self.apply_button = QPushButton(self.tr("Apply"))
         self.apply_button.setDefault(True)
         self.apply_button.clicked.connect(self.accept)
         button_layout.addWidget(self.apply_button)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
 
@@ -332,7 +334,7 @@ class AOIFilterDialog(QDialog):
             initial_color = QColor(int(r * 255), int(g * 255), int(b * 255))
 
         # Open color dialog
-        color = QColorDialog.getColor(initial_color, self, "Select Target Hue")
+        color = QColorDialog.getColor(initial_color, self, self.tr("Select Target Hue"))
 
         if color.isValid():
             # Convert to HSV and extract hue
@@ -357,7 +359,7 @@ class AOIFilterDialog(QDialog):
             self.hue_label.setText(f"Hue: {self.color_hue}°")
         else:
             self.color_preview.setStyleSheet("QLabel { background-color: white; border: 1px solid gray; }")
-            self.hue_label.setText("No color selected")
+            self.hue_label.setText(self.tr("No color selected"))
 
     def on_range_changed(self, value):
         """Handle range slider changes."""

@@ -32,6 +32,7 @@ import pathlib
 from core.views.components.GroupedComboBox import GroupedComboBox
 from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
@@ -40,7 +41,7 @@ os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 """****End Algorithm Import****"""
 
 
-class MainWindow(QMainWindow, Ui_MainWindow):
+class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
     """Controller for the Main Window (QMainWindow)."""
 
     def __init__(self, theme):
@@ -65,7 +66,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.identifierColor = (0, 255, 0)
         self._auto_start_requested = False
         self.HistogramImgWidget.setVisible(False)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
         self._load_algorithms()
 
         self.results_path = ''
@@ -118,6 +123,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Add Help menu items
         if hasattr(self, 'actionHelp'):
             self.actionHelp.triggered.connect(self._open_help)
+
         if hasattr(self, 'actionCommunityHelp'):
             self.actionCommunityHelp.triggered.connect(self._open_community_help)
         if hasattr(self, 'actionYouTube_Channel'):
@@ -224,39 +230,41 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Set comprehensive tooltip for algorithm selection
         self.algorithmComboBox.setToolTip(
-            "Select the detection algorithm for your image analysis task:\n"
-            "\n"
-            "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
-            "  • Best for: Colored objects in varying lighting conditions\n"
-            "  • Limitation: Requires color tuning, not for camouflaged objects\n"
-            "\n"
-            "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
-            "  • Best for: Basic color detection in controlled lighting\n"
-            "  • Limitation: Sensitive to lighting changes\n"
-            "\n"
-            "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
-            "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
-            "  • Limitation: May detect natural anomalies, slower with more segments\n"
-            "\n"
-            "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
-            "  • Best for: Night searches, detecting people/animals by body heat\n"
-            "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
-            "\n"
-            "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
-            "  • Best for: Human detection with thermal camera (known body temp)\n"
-            "  • Limitation: Requires thermal camera, must know target temperature\n"
-            "\n"
-            "MATCHED FILTER: Matches targets using color signature from sample\n"
-            "  • Best for: Specific known objects when you have a target sample\n"
-            "  • Limitation: Requires reference image, not for unknown targets\n"
-            "\n"
-            "MR MAP: Multi-resolution detection for objects of varying sizes\n"
-            "  • Best for: Complex scenes with unknown target sizes\n"
-            "  • Limitation: Slower processing, more false positives\n"
-            "\n"
-            "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
-            "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
-            "  • Limitation: Only detects people, slower processing"
+            self.tr(
+                "Select the detection algorithm for your image analysis task:\n"
+                "\n"
+                "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
+                "  • Best for: Colored objects in varying lighting conditions\n"
+                "  • Limitation: Requires color tuning, not for camouflaged objects\n"
+                "\n"
+                "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
+                "  • Best for: Basic color detection in controlled lighting\n"
+                "  • Limitation: Sensitive to lighting changes\n"
+                "\n"
+                "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
+                "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
+                "  • Limitation: May detect natural anomalies, slower with more segments\n"
+                "\n"
+                "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
+                "  • Best for: Night searches, detecting people/animals by body heat\n"
+                "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
+                "\n"
+                "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
+                "  • Best for: Human detection with thermal camera (known body temp)\n"
+                "  • Limitation: Requires thermal camera, must know target temperature\n"
+                "\n"
+                "MATCHED FILTER: Matches targets using color signature from sample\n"
+                "  • Best for: Specific known objects when you have a target sample\n"
+                "  • Limitation: Requires reference image, not for unknown targets\n"
+                "\n"
+                "MR MAP: Multi-resolution detection for objects of varying sizes\n"
+                "  • Best for: Complex scenes with unknown target sizes\n"
+                "  • Limitation: Slower processing, more false positives\n"
+                "\n"
+                "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
+                "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
+                "  • Limitation: Only detects people, slower processing"
+            )
         )
 
         self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
@@ -295,7 +303,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         # Get current color to show in picker
         current_color = QColor(*self.identifierColor) if isinstance(self.identifierColor, (tuple, list)) else QColor(0, 255, 0)
-        color = QColorDialog.getColor(current_color, self, "Select AOI Highlight Color")
+        color = QColorDialog.getColor(
+            current_color,
+            self,
+            self.tr("Select AOI Highlight Color")
+        )
         if color.isValid():
             self.identifierColor = (color.red(), color.green(), color.blue())
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
@@ -306,7 +318,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
         dir = dir if isinstance(dir, str) else ""
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Directory"),
+            dir,
+            QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.inputFolderLine.setText(directory)
             if os.name == 'nt':
@@ -319,7 +336,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         dir = self.outputFolderLine.text() or self.settings_service.get_setting('OutputFolder')
         dir = dir if isinstance(dir, str) else ""
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Directory"),
+            dir,
+            QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.outputFolderLine.setText(directory)
             if os.name == 'nt':
@@ -331,7 +353,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens a file dialog to select a reference image for histogram-based analysis.
         """
         dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
-        filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select a Reference Image"),
+            dir,
+            self.tr("Images (*.png *.jpg)")
+        )
         if filename:
             self.histogramLine.setText(filename)
             if os.name == 'nt':
@@ -378,9 +405,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Notify user of the change
             QMessageBox.information(
                 self,
-                "Value Adjusted",
-                f"Maximum area has been adjusted to {new_max} pixels to maintain valid range.\n"
-                f"(Minimum area must be less than maximum area)",
+                self.tr("Value Adjusted"),
+                self.tr(
+                    "Maximum area has been adjusted to {value} pixels to maintain valid range.\n"
+                    "(Minimum area must be less than maximum area)"
+                ).format(value=new_max),
                 QMessageBox.Ok
             )
 
@@ -408,9 +437,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Notify user of the change
             QMessageBox.information(
                 self,
-                "Value Adjusted",
-                f"Minimum area has been adjusted to {new_min} pixels to maintain valid range.\n"
-                f"(Maximum area must be greater than minimum area)",
+                self.tr("Value Adjusted"),
+                self.tr(
+                    "Minimum area has been adjusted to {value} pixels to maintain valid range.\n"
+                    "(Maximum area must be greater than minimum area)"
+                ).format(value=new_min),
                 QMessageBox.Ok
             )
 
@@ -485,12 +516,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
 
             if not (self.inputFolderLine.text() and self.outputFolderLine.text()):
-                self._show_error("Please set the input and output directories.")
+                self._show_error(
+                    self.tr("Please set the input and output directories.")
+                )
                 return
 
             self._set_StartButton(False)
             self._set_ViewResultsButton(False)
-            self._add_log_entry("--- Starting image processing ---")
+            self._add_log_entry(self.tr("--- Starting image processing ---"))
 
             options = self.algorithmWidget.get_options()
             hist_ref_path = self.histogramLine.text() if self.histogramCheckbox.isChecked() else None
@@ -555,7 +588,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                  self.settings_service.get_setting('Theme'))
             self.viewer.show()
         else:
-            self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
+            self._show_error(
+                self.tr(
+                    "Could not parse XML file. Check file paths in \"{file_name}\""
+                ).format(file_name="ADIAT_Data.xml")
+            )
         QApplication.restoreOverrideCursor()
 
     def _add_log_entry(self, text):
@@ -574,8 +611,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Question)
-        msg.setText(f"Area of Interest Limit ({self.settings_service.get_setting('MaxAOIs')}) exceeded. Continue?")
-        msg.setWindowTitle("Area of Interest Limit Exceeded")
+        msg.setText(
+            self.tr(
+                "Area of Interest Limit ({limit}) exceeded. Continue?"
+            ).format(limit=self.settings_service.get_setting('MaxAOIs'))
+        )
+        msg.setWindowTitle(self.tr("Area of Interest Limit Exceeded"))
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         if msg.exec() == QMessageBox.No:
             self._cancelButton_clicked()
@@ -599,12 +640,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             id (int): ID of the calling object.
             images_with_aois (int): Count of images with areas of interest.
         """
-        self._add_log_entry("--- Image Processing Completed ---")
+        self._add_log_entry(self.tr("--- Image Processing Completed ---"))
         if images_with_aois > 0:
-            self._add_log_entry(f"{images_with_aois} images with areas of interest identified")
+            self._add_log_entry(
+                self.tr("{count} images with areas of interest identified").format(
+                    count=images_with_aois
+                )
+            )
             self._set_ViewResultsButton(True)
         else:
-            self._add_log_entry("No areas of interest identified")
+            self._add_log_entry(self.tr("No areas of interest identified"))
             self._set_ViewResultsButton(False)
 
         self.results_path = xml_path
@@ -623,7 +668,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(text)
-        msg.setWindowTitle("Error")
+        msg.setWindowTitle(self.tr("Error"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
@@ -632,7 +677,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens a file dialog to select a file to load.
         """
         try:
-            file, _ = QFileDialog.getOpenFileName(self, "Select File")
+            file, _ = QFileDialog.getOpenFileName(self, self.tr("Select File"))
             if file:
                 self._process_xml_file(file)
         except Exception as e:
@@ -652,7 +697,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Open folder selection dialog
             folder = QFileDialog.getExistingDirectory(
                 self,
-                "Select Results Folder",
+                self.tr("Select Results Folder"),
                 last_folder,
                 QFileDialog.ShowDirsOnly
             )
@@ -684,7 +729,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error opening results folder dialog: {e}")
-            self._show_error(f"Failed to scan folder: {str(e)}")
+            self._show_error(
+                self.tr("Failed to scan folder: {error}").format(error=str(e))
+            )
 
     def _on_scan_progress(self, current: int, total: int, current_dir: str):
         """Handle progress updates from folder scan."""
@@ -705,8 +752,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if not results:
                 QMessageBox.information(
                     self,
-                    "No Results Found",
-                    "No ADIAT_DATA.XML files were found in the selected folder."
+                    self.tr("No Results Found"),
+                    self.tr("No ADIAT_DATA.XML files were found in the selected folder.")
                 )
                 return
 
@@ -722,7 +769,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error displaying scan results: {e}")
-            self._show_error(f"Failed to display results: {str(e)}")
+            self._show_error(
+                self.tr("Failed to display results: {error}").format(error=str(e))
+            )
 
     def _on_scan_error(self, error_msg):
         """Handle scan error."""
@@ -731,7 +780,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._scan_thread.wait()
             if hasattr(self, '_scan_progress') and self._scan_progress:
                 self._scan_progress.close()
-            self._show_error(f"Scan failed: {error_msg}")
+            self._show_error(
+                self.tr("Scan failed: {error}").format(error=error_msg)
+            )
         except Exception as e:
             self.logger.error(f"Error handling scan error: {e}")
 
@@ -772,7 +823,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error opening viewer: {e}")
-            self._show_error(f"Failed to open viewer: {str(e)}")
+            self._show_error(
+                self.tr("Failed to open viewer: {error}").format(error=str(e))
+            )
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -967,8 +1020,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.logger.error(f"Error loading results file: {e}")
                 QMessageBox.critical(
                     self,
-                    "Error Loading Results",
-                    f"Failed to load results file:\n{str(e)}"
+                    self.tr("Error Loading Results"),
+                    self.tr("Failed to load results file:\n{error}").format(error=str(e))
                 )
 
         wizard.wizardCompleted.connect(_on_wizard_completed)
@@ -1018,7 +1071,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.hide()
         except Exception as e:
             self.logger.error(f"Error opening Streaming Detector: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Streaming Detector:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Streaming Detector:\n{error}").format(error=str(e))
+            )
 
     def _open_coordinator(self):
         """
@@ -1037,7 +1094,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.coordinator_window.activateWindow()
         except Exception as e:
             self.logger.error(f"Error opening Coordinator: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Search Coordinator:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Search Coordinator:\n{error}").format(error=str(e))
+            )
 
     def _open_help(self):
         """
@@ -1049,7 +1110,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Help documentation:\n{error}").format(error=str(e))
+            )
 
     def _open_community_help(self):
         """
@@ -1061,7 +1126,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("Community Help Discord opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Community Help:\n{error}").format(error=str(e))
+            )
 
     def _open_youtube_channel(self):
         """
@@ -1073,7 +1142,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("YouTube Channel opened")
         except Exception as e:
             self.logger.error(f"Error opening YouTube Channel URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open YouTube Channel:\n{error}").format(error=str(e))
+            )
 
     def showEvent(self, event):
         """
@@ -1196,7 +1269,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
         msg.setText(message)
-        msg.setWindowTitle("Invalid Value")
+        msg.setWindowTitle(self.tr("Invalid Value"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 

@@ -15,9 +15,10 @@ import qtawesome as qta
 from algorithms.Shared.views.ColorRangeDialog import ColorRangeDialog
 import cv2
 import numpy as np
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ClickableColorSwatch(QFrame):
+class ClickableColorSwatch(TranslationMixin, QFrame):
     """A clickable color swatch. Uses a provided callback when clicked."""
 
     colorChanged = Signal(QColor)
@@ -66,7 +67,9 @@ class ClickableColorSwatch(QFrame):
         self.setStyleSheet(
             f"QFrame {{ background-color: rgb({r}, {g}, {b}); border: 1px solid #888; }}"
         )
-        self.setToolTip(f"HSV: ({h}, {s}, {v})\nClick to change color")
+        self.setToolTip(
+            self.tr("HSV: ({h}, {s}, {v})\nClick to change color").format(h=h, s=s, v=v)
+        )
         self.update()
         self.repaint()
 
@@ -105,7 +108,7 @@ class ClickableColorSwatch(QFrame):
         super().mousePressEvent(event)
 
 
-class HSVColorRowWizardWidget(QWidget):
+class HSVColorRowWizardWidget(TranslationMixin, QWidget):
     """Simplified widget representing an HSV color range configuration for wizard."""
 
     delete_requested = Signal(QWidget)
@@ -152,6 +155,7 @@ class HSVColorRowWizardWidget(QWidget):
         self.row_width = row_width or self.DEFAULT_ROW_WIDTH
 
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Set up the UI layout and widgets."""
@@ -385,7 +389,14 @@ class HSVColorRowWizardWidget(QWidget):
         v_max = min(255, int((v_center + v_plus) * 255))
 
         # Format as "H: min-max°, S: min-max, V: min-max"
-        ranges_text = f"H: {h_min_deg}-{h_max_deg}°, S: {s_min}-{s_max}, V: {v_min}-{v_max}"
+        ranges_text = self.tr("H: {h_min}-{h_max}°, S: {s_min}-{s_max}, V: {v_min}-{v_max}").format(
+            h_min=h_min_deg,
+            h_max=h_max_deg,
+            s_min=s_min,
+            s_max=s_max,
+            v_min=v_min,
+            v_max=v_max
+        )
         self.hsvRangesLabel.setText(ranges_text)
 
     def _apply_mode_visibility(self):

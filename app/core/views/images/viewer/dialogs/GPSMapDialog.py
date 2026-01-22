@@ -6,11 +6,12 @@ This dialog shows all image GPS locations as connected points on an interactive 
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox
 from PySide6.QtCore import Qt, Signal, QPointF, QTimer
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QKeySequence, QShortcut, QColor
 from core.views.images.viewer.widgets.GPSMapView import GPSMapView
 
 
-class GPSMapDialog(QDialog):
+class GPSMapDialog(TranslationMixin, QDialog):
     """
     Dialog window containing the GPS map visualization.
 
@@ -35,7 +36,7 @@ class GPSMapDialog(QDialog):
         self.current_image_index = current_image_index
         self.offline_only = bool(offline_only)
 
-        self.setWindowTitle("GPS Map View")
+        self.setWindowTitle(self.tr("GPS Map View"))
         self.setModal(False)  # Non-modal so user can interact with main window
 
         # Set window flags to keep dialog on top (especially important on macOS)
@@ -45,6 +46,7 @@ class GPSMapDialog(QDialog):
         self.resize(800, 600)
 
         self.setup_ui()
+        self._apply_translations()
         self.setup_shortcuts()
 
         # Get AOI color from parent if available
@@ -86,15 +88,15 @@ class GPSMapDialog(QDialog):
         controls_layout = QHBoxLayout()
 
         # Zoom controls
-        self.zoom_in_btn = QPushButton("Zoom In (+)")
+        self.zoom_in_btn = QPushButton(self.tr("Zoom In (+)"))
         self.zoom_in_btn.clicked.connect(self.map_view.zoom_in)
         controls_layout.addWidget(self.zoom_in_btn)
 
-        self.zoom_out_btn = QPushButton("Zoom Out (-)")
+        self.zoom_out_btn = QPushButton(self.tr("Zoom Out (-)"))
         self.zoom_out_btn.clicked.connect(self.map_view.zoom_out)
         controls_layout.addWidget(self.zoom_out_btn)
 
-        self.fit_btn = QPushButton("Fit All (F)")
+        self.fit_btn = QPushButton(self.tr("Fit All (F)"))
         self.fit_btn.clicked.connect(self.map_view.fit_all_points)
         controls_layout.addWidget(self.fit_btn)
 
@@ -102,7 +104,7 @@ class GPSMapDialog(QDialog):
         controls_layout.addSpacing(20)
 
         # Toggle map/satellite view button
-        self.toggle_view_btn = QPushButton("Satellite View")
+        self.toggle_view_btn = QPushButton(self.tr("Satellite View"))
         self.toggle_view_btn.setCheckable(True)
         self.toggle_view_btn.toggled.connect(self.on_toggle_view)
         controls_layout.addWidget(self.toggle_view_btn)
@@ -110,7 +112,7 @@ class GPSMapDialog(QDialog):
         controls_layout.addStretch()
 
         # Help text
-        help_label = QLabel("Click point to select • Drag to pan • Scroll to zoom")
+        help_label = QLabel(self.tr("Click point to select • Drag to pan • Scroll to zoom"))
         help_label.setStyleSheet("font-size: 10px; color: gray;")
         controls_layout.addWidget(help_label)
 
@@ -181,10 +183,10 @@ class GPSMapDialog(QDialog):
             checked: True for satellite view, False for map view
         """
         if checked:
-            self.toggle_view_btn.setText("Map View")
+            self.toggle_view_btn.setText(self.tr("Map View"))
             self.map_view.set_tile_source('satellite')
         else:
-            self.toggle_view_btn.setText("Satellite View")
+            self.toggle_view_btn.setText(self.tr("Satellite View"))
             self.map_view.set_tile_source('map')
 
     def update_gps_data(self, gps_data, current_image_index):
@@ -218,7 +220,7 @@ class GPSMapDialog(QDialog):
             error_msg: Error message to display
         """
         # Show status message
-        self.status_label.setText(f"⚠ {error_msg}")
+        self.status_label.setText(self.tr("⚠ {error}").format(error=error_msg))
         self.status_label.setVisible(True)
 
         # Auto-hide after 10 seconds
@@ -228,8 +230,10 @@ class GPSMapDialog(QDialog):
         if "rate limit" in error_msg.lower() or "access denied" in error_msg.lower():
             QMessageBox.warning(
                 self,
-                "Map Tile Loading Issue",
-                f"{error_msg}\n\nThe map will continue to work with cached tiles where available.",
+                self.tr("Map Tile Loading Issue"),
+                self.tr(
+                    "{error}\n\nThe map will continue to work with cached tiles where available."
+                ).format(error=error_msg),
                 QMessageBox.StandardButton.Ok
             )
 

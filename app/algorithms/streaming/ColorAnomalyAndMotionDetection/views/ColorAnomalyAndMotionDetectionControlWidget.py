@@ -16,9 +16,10 @@ from core.views.streaming.components import InputProcessingTab, RenderingTab, Co
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services.shared_types import (
     MotionAlgorithm, FusionMode, ContourMethod, ColorSpace
 )
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
+class ColorAnomalyAndMotionDetectionControlWidget(TranslationMixin, QWidget):
     """Control widget for color anomaly and motion detection parameters."""
 
     configChanged = Signal(dict)
@@ -43,20 +44,21 @@ class ColorAnomalyAndMotionDetectionControlWidget(QWidget):
 
         # Connect signals
         self.connect_signals()
+        self._apply_translations()
 
     def _populate_tabs(self):
         """Populate tabs with control panels."""
         # Add actual tabs - Input & Processing moved to right before Rendering
-        self.tabs.addTab(self._create_color_tab(), "Color Anomaly")
-        self.tabs.addTab(self._create_motion_tab(), "Motion Detection")
-        self.tabs.addTab(self._create_fusion_tab(), "Fusion")
+        self.tabs.addTab(self._create_color_tab(), self.tr("Color Anomaly"))
+        self.tabs.addTab(self._create_motion_tab(), self.tr("Motion Detection"))
+        self.tabs.addTab(self._create_fusion_tab(), self.tr("Fusion"))
         # Use shared tabs for Input & Processing, Frame, and Rendering
         self.input_processing_tab = InputProcessingTab()
         self.frame_tab = FrameTab()
         self.rendering_tab = RenderingTab(show_detection_color_option=True)
-        self.tabs.addTab(self.input_processing_tab, "Input && Processing")
-        self.tabs.addTab(self.frame_tab, "Frame")
-        self.tabs.addTab(self.rendering_tab, "Rendering && Cleanup")
+        self.tabs.addTab(self.input_processing_tab, self.tr("Input && Processing"))
+        self.tabs.addTab(self.frame_tab, self.tr("Frame"))
+        self.tabs.addTab(self.rendering_tab, self.tr("Rendering && Cleanup"))
 
     def _create_motion_tab(self) -> QWidget:
         """Create Motion Detection tab with simplified default controls and advanced options."""

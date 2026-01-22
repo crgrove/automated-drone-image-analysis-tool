@@ -21,7 +21,10 @@ class StreamConnectionPage(BasePage):
         # Initialize HDMI device combo with placeholder
         if hasattr(self.dialog, "deviceComboBox"):
             self.dialog.deviceComboBox.clear()
-            self.dialog.deviceComboBox.addItem("Click Scan to find devices...", None)
+            self.dialog.deviceComboBox.addItem(
+                self.tr("Click Scan to find devices..."),
+                None
+            )
             self.dialog.deviceComboBox.setEnabled(False)
             self.dialog.labelHdmiDevices.setVisible(False)
             self.dialog.deviceComboBox.setVisible(False)
@@ -35,10 +38,10 @@ class StreamConnectionPage(BasePage):
 
             # Presets: (label, percentage_value)
             resolution_presets = [
-                ("480p", 25),
-                ("720p", 50),
-                ("1080p", 75),
-                ("4K", 100)
+                (self.tr("480p"), 25),
+                (self.tr("720p"), 50),
+                (self.tr("1080p"), 75),
+                (self.tr("4K"), 100)
             ]
 
             self.resolution_slider = TextLabeledSlider(
@@ -149,23 +152,29 @@ class StreamConnectionPage(BasePage):
     def _get_stream_type_settings(self, stream_type: str) -> dict:
         mapping = {
             "File": {
-                "instructions": "Choose the video file you want to analyze. Use Browse to pick a file from disk.",
-                "field_label": "Video File:",
-                "placeholder": "Click Browse to select a video file...",
+                "instructions": self.tr(
+                    "Choose the video file you want to analyze. Use Browse to pick a file from disk."
+                ),
+                "field_label": self.tr("Video File:"),
+                "placeholder": self.tr("Click Browse to select a video file..."),
                 "show_browse": True,
                 "default_value": "",
             },
             "HDMI Capture": {
-                "instructions": "Enter the capture device index (0, 1, 2, ...) for your HDMI input.",
-                "field_label": "Device Index:",
-                "placeholder": "0",
+                "instructions": self.tr(
+                    "Enter the capture device index (0, 1, 2, ...) for your HDMI input."
+                ),
+                "field_label": self.tr("Device Index:"),
+                "placeholder": self.tr("0"),
                 "show_browse": False,
                 "default_value": "0",
             },
             "RTMP Stream": {
-                "instructions": "Enter the RTMP URL provided by your streaming server (rtmp://server:port/app/key).",
-                "field_label": "Stream URL:",
-                "placeholder": "rtmp://server:port/app/streamKey",
+                "instructions": self.tr(
+                    "Enter the RTMP URL provided by your streaming server (rtmp://server:port/app/key)."
+                ),
+                "field_label": self.tr("Stream URL:"),
+                "placeholder": self.tr("rtmp://server:port/app/streamKey"),
                 "show_browse": False,
                 "default_value": "",
             },
@@ -177,7 +186,10 @@ class StreamConnectionPage(BasePage):
         if cv2 is None:
             # If OpenCV is not available, we cannot scan
             self.dialog.deviceComboBox.clear()
-            self.dialog.deviceComboBox.addItem("OpenCV not available; enter index manually.", None)
+            self.dialog.deviceComboBox.addItem(
+                self.tr("OpenCV not available; enter index manually."),
+                None
+            )
             self.dialog.deviceComboBox.setEnabled(False)
             return
 
@@ -188,7 +200,7 @@ class StreamConnectionPage(BasePage):
             cap = cv2.VideoCapture(index)
             if cap is not None and cap.isOpened():
                 found_any = True
-                label = f"Device {index}"
+                label = self.tr("Device {index}").format(index=index)
                 self.dialog.deviceComboBox.addItem(label, index)
                 cap.release()
             else:
@@ -196,7 +208,10 @@ class StreamConnectionPage(BasePage):
                     cap.release()
 
         if not found_any:
-            self.dialog.deviceComboBox.addItem("No capture devices found.", None)
+            self.dialog.deviceComboBox.addItem(
+                self.tr("No capture devices found."),
+                None
+            )
             self.dialog.deviceComboBox.setEnabled(False)
         else:
             self.dialog.deviceComboBox.setEnabled(True)
@@ -235,9 +250,11 @@ class StreamConnectionPage(BasePage):
         current = self.dialog.streamUrlLineEdit.text().strip() or os.getcwd()
         file_path, _ = QFileDialog.getOpenFileName(
             self.dialog,
-            "Select Video File",
+            self.tr("Select Video File"),
             current,
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm);;All Files (*)",
+            self.tr(
+                "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm);;All Files (*)"
+            ),
         )
         if file_path:
             self.dialog.streamUrlLineEdit.setText(file_path)
