@@ -4,7 +4,18 @@ from ast import literal_eval
 
 from helpers.ColorUtils import ColorUtils
 from algorithms.AlgorithmService import AlgorithmService, AnalysisResult
+from algorithms import DetectionExpansion
 from core.services.LoggerService import LoggerService
+
+
+def _percent_to_u8(value):
+    """Clamp a 0-100 percentage to the OpenCV 0-255 uint8 range."""
+    try:
+        pct = float(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    pct = max(0.0, min(100.0, pct))
+    return int(round(pct / 100.0 * 255.0))
 
 
 class HSVColorRangeService(AlgorithmService):
@@ -30,6 +41,11 @@ class HSVColorRangeService(AlgorithmService):
         """
         self.logger = LoggerService()
         super().__init__('HSVColorRange', identifier, min_area, max_area, aoi_radius, combine_aois, options)
+
+        # Optional hue expansion; default 0 (off) preserves legacy behavior.
+        self.hue_expansion = int(options.get('hue_expansion', 0) or 0)
+        self.hue_expansion_sat_floor = _percent_to_u8(options.get('hue_expansion_sat_floor', 0))
+        self.hue_expansion_val_floor = _percent_to_u8(options.get('hue_expansion_val_floor', 0))
 
         self.target_color_hsv = None
         # Store for backward compatibility
@@ -255,6 +271,13 @@ class HSVColorRangeService(AlgorithmService):
             if areas_of_interest:
                 areas_of_interest = self._add_confidence_scores(areas_of_interest, hsv_distances, mask)
 
+            # Optional hue expansion. Runs after confidence so scores reflect
+            # the original detection, not the expanded footprint.
+            if areas_of_interest and self.hue_expansion > 0:
+                areas_of_interest, mask = self._apply_hue_expansion_aois(
+                    areas_of_interest, img.shape, hsv_image
+                )
+
             output_path = self._construct_output_path(full_path, input_dir, output_dir)
 
             # Store mask instead of duplicating image
@@ -268,6 +291,73 @@ class HSVColorRangeService(AlgorithmService):
         except Exception as e:
             self.logger.error(f"Error processing image {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))
+
+    def _apply_hue_expansion_aois(self, areas_of_interest, img_shape, hsv_image):
+        """Apply iterative hue expansion to each AOI.
+
+        Reference hue per AOI is the circular mean of the AOI's original
+        detected pixels (same basis as the AOI thumbnail color). Neighbors
+        within +/- hue_expansion (circular distance) that are 8-connected
+        through other hue-matching pixels get added. Safety-capped per AOI.
+        Area is replaced with convex-hull area of the expanded pixel set.
+
+        Args:
+            areas_of_interest: List of AOIs (modified in place; also returned).
+            img_shape: (H, W[, C]) of processing image.
+            hsv_image: HxWx3 HSV image.
+
+        Returns:
+            (areas_of_interest, combined_mask). combined_mask is uint8 with
+            255 on every expanded pixel across all AOIs.
+        """
+        h, w = int(img_shape[0]), int(img_shape[1])
+        combined_mask = np.zeros((h, w), dtype=np.uint8)
+
+        for aoi in areas_of_interest:
+            original_pixels = aoi.get('detected_pixels') or []
+            if not original_pixels:
+                continue
+
+            coords = np.asarray(original_pixels, dtype=np.int32)
+            # Clip coords to image bounds for safety (AOIs are at processing resolution).
+            coords[:, 0] = np.clip(coords[:, 0], 0, w - 1)
+            coords[:, 1] = np.clip(coords[:, 1], 0, h - 1)
+
+            seed_mask = np.zeros((h, w), dtype=bool)
+            seed_mask[coords[:, 1], coords[:, 0]] = True
+
+            cluster_rect = [
+                int(coords[:, 0].min()), int(coords[:, 1].min()),
+                int(coords[:, 0].max()), int(coords[:, 1].max()),
+            ]
+            safety_cap = DetectionExpansion.compute_safety_cap(cluster_rect)
+
+            seed_hues = hsv_image[coords[:, 1], coords[:, 0], 0]
+            mean_hue = DetectionExpansion.circular_mean_hue(seed_hues)
+            if mean_hue is None:
+                combined_mask[seed_mask] = 255
+                continue
+
+            hue_ok = DetectionExpansion.hue_distance_mask(
+                hsv_image, mean_hue, self.hue_expansion,
+                sat_floor=self.hue_expansion_sat_floor,
+                val_floor=self.hue_expansion_val_floor,
+            )
+            expanded, cap_hit = DetectionExpansion.expand_hue_flood(seed_mask, hue_ok, safety_cap)
+            if cap_hit:
+                self.logger.warning(
+                    f"HSV hue expansion cap hit for AOI at {aoi.get('center')}; keeping original selection."
+                )
+                expanded = seed_mask
+
+            ys2, xs2 = np.where(expanded)
+            if len(xs2) == 0:
+                continue
+            aoi['detected_pixels'] = np.stack([xs2, ys2], axis=1).tolist()
+            aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(expanded)))
+            combined_mask[expanded] = 255
+
+        return areas_of_interest, combined_mask
 
     def _calculate_hsv_distances(self, hsv_image, target_hsv, mask):
         """

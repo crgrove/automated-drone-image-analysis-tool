@@ -8,7 +8,7 @@ MainWindow_ui.py provides the container for image analysis algorithms.
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QSplitter, QGroupBox, QTextEdit, QStatusBar, QLabel,
                                QScrollArea)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, Qt
 
 
 class Ui_StreamViewerWindow:
@@ -79,29 +79,29 @@ class Ui_StreamViewerWindow:
         right_layout.setSpacing(10)
         
         # Stream controls group
-        streamControlGroup = QGroupBox("Stream Controls")
-        streamControlGroup.setObjectName("streamControlGroup")
-        streamControlLayout = QVBoxLayout(streamControlGroup)
-        
+        self.streamControlGroup = QGroupBox("Stream Controls")
+        self.streamControlGroup.setObjectName("streamControlGroup")
+        streamControlLayout = QVBoxLayout(self.streamControlGroup)
+
         # Stream control placeholder
         self.streamControlPlaceholder = QWidget()
         self.streamControlPlaceholder.setObjectName("streamControlPlaceholder")
         streamControlLayout.addWidget(self.streamControlPlaceholder)
-        
-        right_layout.addWidget(streamControlGroup)
-        
+
+        right_layout.addWidget(self.streamControlGroup)
+
         # Algorithm controls placeholder (will be replaced with loaded algorithm)
-        algorithmControlGroup = QGroupBox("Algorithm Controls")
-        algorithmControlGroup.setObjectName("algorithmControlGroup")
-        self.algorithmControlLayout = QVBoxLayout(algorithmControlGroup)
+        self.algorithmControlGroup = QGroupBox("Algorithm Controls")
+        self.algorithmControlGroup.setObjectName("algorithmControlGroup")
+        self.algorithmControlLayout = QVBoxLayout(self.algorithmControlGroup)
         self.algorithmControlLayout.setObjectName("algorithmControlLayout")
-        
+
         # Placeholder widget for algorithm
         self.algorithmControlPlaceholder = QWidget()
         self.algorithmControlPlaceholder.setObjectName("algorithmControlPlaceholder")
         self.algorithmControlLayout.addWidget(self.algorithmControlPlaceholder)
-        
-        right_layout.addWidget(algorithmControlGroup)
+
+        right_layout.addWidget(self.algorithmControlGroup)
         
         # Recording group placeholder
         self.recordingGroup = QGroupBox("Recording")
@@ -139,6 +139,11 @@ class Ui_StreamViewerWindow:
     
     def retranslateUi(self, StreamViewerWindow):
         """Set UI text/translations."""
-        StreamViewerWindow.setWindowTitle("ADIAT - Real-Time Stream Detection")
-        self.infoPanel.setPlaceholderText("Stream information and logs will appear here...")
+        _translate = QCoreApplication.translate
+        StreamViewerWindow.setWindowTitle(_translate("StreamViewerWindow", "ADIAT - Real-Time Stream Detection"))
+        self.videoLabel.setText(_translate("StreamViewerWindow", "Video Stream"))
+        self.streamControlGroup.setTitle(_translate("StreamViewerWindow", "Stream Controls"))
+        self.algorithmControlGroup.setTitle(_translate("StreamViewerWindow", "Algorithm Controls"))
+        self.recordingGroup.setTitle(_translate("StreamViewerWindow", "Recording"))
+        self.infoPanel.setPlaceholderText(_translate("StreamViewerWindow", "Stream information and logs will appear here..."))
 

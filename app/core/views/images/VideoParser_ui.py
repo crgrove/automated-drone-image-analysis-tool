@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'VideoParser.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -209,14 +209,15 @@ class Ui_VideoParser(object):
 "Click the Select button to browse for a video file.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
-        self.srtSelectLabel.setToolTip(QCoreApplication.translate("VideoParser", u"SRT subtitle file containing GPS telemetry and timestamp data.\n"
+        self.srtSelectLabel.setToolTip(QCoreApplication.translate("VideoParser", u"Metadata file containing GPS telemetry data.\n"
+"Supports DJI SRT subtitle files and Skydio CSV flight logs.\n"
 "Optional: Provides location information for extracted frames.\n"
-"Without SRT file, frames will have no GPS metadata.", None))
+"Without a metadata file, frames will have no GPS data.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(whatsthis)
-        self.srtSelectLabel.setWhatsThis(QCoreApplication.translate("VideoParser", u"The SRT file contains timestamped information about the video file.  It is optional, but without it output images won't include location information.", None))
+        self.srtSelectLabel.setWhatsThis(QCoreApplication.translate("VideoParser", u"The metadata file contains timestamped GPS information for the video.  It is optional, but without it output images won't include location information.  Supports SRT (DJI) and CSV (Skydio) formats.", None))
 #endif // QT_CONFIG(whatsthis)
-        self.srtSelectLabel.setText(QCoreApplication.translate("VideoParser", u"SRT File (optional): ", None))
+        self.srtSelectLabel.setText(QCoreApplication.translate("VideoParser", u"Metadata File (optional): ", None))
 #if QT_CONFIG(tooltip)
         self.outputLabel.setToolTip(QCoreApplication.translate("VideoParser", u"Destination folder where extracted frame images will be saved.\n"
 "Each frame is saved as a separate image file with timestamp information.", None))
@@ -244,15 +245,15 @@ class Ui_VideoParser(object):
 #endif // QT_CONFIG(tooltip)
         self.videoSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))
 #if QT_CONFIG(tooltip)
-        self.srtSelectLine.setToolTip(QCoreApplication.translate("VideoParser", u"Path to the optional SRT subtitle file with GPS telemetry data.\n"
-"SRT files contain timestamp and location information for video frames.\n"
+        self.srtSelectLine.setToolTip(QCoreApplication.translate("VideoParser", u"Path to the optional metadata file with GPS telemetry data.\n"
+"Supports DJI SRT subtitle files and Skydio CSV flight logs.\n"
 "If provided, extracted frames will include GPS metadata (latitude, longitude, altitude).\n"
 "Can be left empty if location data is not needed.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
-        self.srtSelectButton.setToolTip(QCoreApplication.translate("VideoParser", u"Browse for optional SRT subtitle file containing GPS telemetry.\n"
-"SRT files are commonly created by DJI drones and other video recording devices.\n"
-"Opens a file selection dialog for SRT files.", None))
+        self.srtSelectButton.setToolTip(QCoreApplication.translate("VideoParser", u"Browse for optional metadata file containing GPS telemetry.\n"
+"Supports DJI SRT subtitle files and Skydio CSV flight logs.\n"
+"Opens a file selection dialog for SRT and CSV files.", None))
 #endif // QT_CONFIG(tooltip)
         self.srtSelectButton.setText(QCoreApplication.translate("VideoParser", u"Select", None))
 #if QT_CONFIG(tooltip)
@@ -276,7 +277,7 @@ class Ui_VideoParser(object):
 "\u2022 Output folder must be selected\n"
 "\u2022 Time interval must be set (default: 5 seconds)\n"
 "The process will extract frames at the specified interval and save them as images.\n"
-"If SRT file is provided, GPS metadata will be embedded in the extracted frames.", None))
+"If a metadata file (SRT or CSV) is provided, GPS metadata will be embedded in the extracted frames.", None))
 #endif // QT_CONFIG(tooltip)
         self.startButton.setText(QCoreApplication.translate("VideoParser", u"Start", None))
 #if QT_CONFIG(tooltip)

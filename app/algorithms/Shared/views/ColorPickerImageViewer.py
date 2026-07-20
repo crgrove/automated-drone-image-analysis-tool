@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QWidget, QSizePolicy,
     QMessageBox
 )
+from helpers.TranslationMixin import TranslationMixin
 
 qimage2ndarray = None
 try:
@@ -53,7 +54,7 @@ class _FitView(QGraphicsView):
             pass
 
 
-class ColorPickerImageViewer(QWidget):
+class ColorPickerImageViewer(TranslationMixin, QWidget):
     """
     Standalone image viewer with eyedropper tool for color selection.
 
@@ -82,6 +83,7 @@ class ColorPickerImageViewer(QWidget):
 
         # Setup UI
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -92,12 +94,12 @@ class ColorPickerImageViewer(QWidget):
         # Button layout
         button_layout = QHBoxLayout()
 
-        self.load_button = QPushButton("Load Image")
+        self.load_button = QPushButton(self.tr("Load Image"))
         # Avoid passing the clicked(bool) argument into load_image
         self.load_button.clicked.connect(lambda: self.load_image())
         button_layout.addWidget(self.load_button)
 
-        self.eyedropper_button = QPushButton("Color Selector")
+        self.eyedropper_button = QPushButton(self.tr("Color Selector"))
         self.eyedropper_button.setCheckable(True)
         self.eyedropper_button.clicked.connect(self.toggle_eyedropper)
         self.eyedropper_button.setEnabled(False)  # Disabled until image is loaded
@@ -154,7 +156,7 @@ class ColorPickerImageViewer(QWidget):
             initial_dir = os.path.expanduser("~")
             filepath, _ = QFileDialog.getOpenFileName(
                 self,
-                "Select Image",
+                self.tr("Select Image"),
                 initial_dir,
                 "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
             )
@@ -166,7 +168,11 @@ class ColorPickerImageViewer(QWidget):
             # Load image using OpenCV
             img = cv2.imread(filepath)
             if img is None:
-                QMessageBox.warning(self, "Error", f"Could not load image: {filepath}")
+                QMessageBox.warning(
+                    self,
+                    self.tr("Error"),
+                    self.tr("Could not load image: {path}").format(path=filepath)
+                )
                 return False
 
             # Store image arrays
@@ -219,7 +225,11 @@ class ColorPickerImageViewer(QWidget):
             return True
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error loading image: {str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Error loading image: {error}").format(error=str(e))
+            )
             return False
 
     def toggle_eyedropper(self, checked):
@@ -273,11 +283,11 @@ class ColorPickerImageViewer(QWidget):
             # Hotspot at the tip of the dropper (bottom center)
             cursor = QCursor(pixmap, 12, 20)
             self.viewer.setCursor(cursor)
-            self.eyedropper_button.setText("Cancel")
+            self.eyedropper_button.setText(self.tr("Cancel"))
         else:
             # Reset cursor
             self.viewer.setCursor(Qt.ArrowCursor)
-            self.eyedropper_button.setText("Color Selector")
+            self.eyedropper_button.setText(self.tr("Color Selector"))
 
     def _on_mouse_press(self, event: QMouseEvent):
         """Handle mouse press events."""
@@ -344,7 +354,11 @@ class ColorPickerImageViewer(QWidget):
             # Update color label (make visible upon first selection)
             color_hex = f"#{r:02x}{g:02x}{b:02x}"
             self.color_label.setVisible(True)
-            self.color_label.setText(f"RGB: ({r}, {g}, {b}) {color_hex} | HSV: ({h_deg}°, {s_pct}%, {v_pct}%)")
+            self.color_label.setText(
+                self.tr("RGB: ({r}, {g}, {b}) {hex} | HSV: ({h}°, {s}%, {v}%)").format(
+                    r=r, g=g, b=b, hex=color_hex, h=h_deg, s=s_pct, v=v_pct
+                )
+            )
             self.color_label.setStyleSheet(
                 f"padding: 5px; background-color: rgb({r}, {g}, {b}); "
                 f"border: 1px solid #ccc; color: {'white' if (r + g + b) < 384 else 'black'};"
@@ -426,7 +440,11 @@ class ColorPickerImageViewer(QWidget):
                     s_pct = int(round(float(hsv_px[1]) * (100.0 / 255.0)))
                     v_pct = int(round(float(hsv_px[2]) * (100.0 / 255.0)))
                     color_hex = f"#{r:02x}{g:02x}{b:02x}"
-                    self.color_label.setText(f"RGB: ({r}, {g}, {b}) {color_hex} | HSV: {h_deg}°, {s_pct}%, {v_pct}% (hover)")
+                    self.color_label.setText(
+                        self.tr(
+                            "RGB: ({r}, {g}, {b}) {hex} | HSV: {h}°, {s}%, {v}% (hover)"
+                        ).format(r=r, g=g, b=b, hex=color_hex, h=h_deg, s=s_pct, v=v_pct)
+                    )
                     self.color_label.setStyleSheet(
                         f"padding: 5px; background-color: rgb({r}, {g}, {b}); "
                         f"border: 1px solid #ccc; color: {'white' if (r + g + b) < 384 else 'black'};"
@@ -565,5 +583,9 @@ class ColorPickerImageViewer(QWidget):
             return True
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error setting image: {str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Error setting image: {error}").format(error=str(e))
+            )
             return False

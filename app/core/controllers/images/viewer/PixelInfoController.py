@@ -83,7 +83,7 @@ class PixelInfoController:
         # Display color values for non-thermal images only
         # Check if this is actually a non-thermal algorithm
         algorithm_name = self.parent.settings.get('algorithm', '')
-        if algorithm_name not in ['ThermalRange', 'ThermalAnomaly']:
+        if algorithm_name not in ['ThermalRange', 'ThermalAnomaly', 'ThermalResidualAnomaly']:
             if pos.x() >= 0 and pos.y() >= 0:
                 # Only show color values if cursor is on the image
                 if hasattr(self.parent, 'main_image') and self.parent.main_image and self.parent.main_image.hasImage():

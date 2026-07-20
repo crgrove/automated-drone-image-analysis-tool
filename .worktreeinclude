@@ -1,0 +1,19 @@
+# .worktreeinclude
+#
+# Lists gitignored files/paths that `claude --worktree <name>` copies into
+# each new worktree. A git worktree only checks out TRACKED files, so any
+# file the app needs at runtime that is NOT tracked must be listed here
+# (gitignore-style patterns, one per line).
+#
+# Checked 2026-05-21 for ADIAT — nothing is required here:
+#   - AI Person Detector ONNX models
+#     (app/algorithms/images/AIPersonDetector/services/*.onnx) are tracked.
+#   - Native SDK binaries under app/external/ (exiftool.exe, DJI Thermal
+#     SDK, Autel SDK .dll/.so/.lib) are tracked.
+#   - No .env or local config files exist in the repo.
+# A fresh worktree therefore already has everything needed to run the app;
+# only the Python venv must be created per worktree (it cannot be copied).
+#
+# If a gitignored runtime file is added later, list it below, e.g.:
+#   config.local.json
+#   app/secrets/api_keys.json

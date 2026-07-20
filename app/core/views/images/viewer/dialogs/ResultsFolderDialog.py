@@ -13,6 +13,7 @@ from PySide6.QtGui import QDesktopServices, QBrush, QColor
 from core.services.ResultsScannerService import ResultsScannerService, ResultsScanResult
 from core.services.LoggerService import LoggerService
 from helpers.IconHelper import IconHelper
+from helpers.TranslationMixin import TranslationMixin
 
 
 class ScanWorker(QObject):
@@ -42,12 +43,12 @@ class ScanWorker(QObject):
         self.progress.emit(current, total, current_dir)
 
 
-class ScanProgressDialog(QProgressDialog):
+class ScanProgressDialog(TranslationMixin, QProgressDialog):
     """Custom progress dialog for folder scanning."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Scanning for Results")
+        self.setWindowTitle(self.tr("Scanning for Results"))
         self.setWindowModality(Qt.WindowModal)
         self.setMinimumDuration(0)
         self.setMinimumWidth(500)
@@ -76,7 +77,7 @@ class ScanProgressDialog(QProgressDialog):
         self._results_found += 1
 
 
-class ResultsFolderDialog(QDialog):
+class ResultsFolderDialog(TranslationMixin, QDialog):
     """Dialog for displaying and interacting with scanned result folders."""
 
     # Column indices
@@ -107,10 +108,11 @@ class ResultsFolderDialog(QDialog):
 
         self.setupUi()
         self.populate_table()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("Load Results Folder")
+        self.setWindowTitle(self.tr("Load Results Folder"))
         self.setModal(True)
         self.setMinimumSize(900, 500)
         self.resize(1000, 600)
@@ -119,7 +121,7 @@ class ResultsFolderDialog(QDialog):
         layout = QVBoxLayout()
 
         # Header label
-        header = QLabel(f"Found {len(self.results)} result(s)")
+        header = QLabel(self.tr("Found {count} result(s)").format(count=len(self.results)))
         header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(header)
 
@@ -127,7 +129,8 @@ class ResultsFolderDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Folder", "Algorithm", "Images", "Missing", "AOIs", "Map", "View"
+            self.tr("Folder"), self.tr("Algorithm"), self.tr("Images"),
+            self.tr("Missing"), self.tr("AOIs"), self.tr("Map"), self.tr("View")
         ])
 
         # Table configuration
@@ -164,7 +167,7 @@ class ResultsFolderDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.close_button = QPushButton("Close")
+        self.close_button = QPushButton(self.tr("Close"))
         self.close_button.clicked.connect(self.accept)
         button_layout.addWidget(self.close_button)
 
@@ -210,7 +213,7 @@ class ResultsFolderDialog(QDialog):
 
             map_button = QPushButton()
             map_button.setIcon(IconHelper.create_icon('fa6s.map-location-dot', self.theme))
-            map_button.setToolTip("Open in Google Maps")
+            map_button.setToolTip(self.tr("Open in Google Maps"))
             map_button.setFixedSize(40, 28)
 
             # Disable if all images are missing (no GPS available)
@@ -220,9 +223,9 @@ class ResultsFolderDialog(QDialog):
 
             if not map_button.isEnabled():
                 if all_missing:
-                    map_button.setToolTip("No images available - cannot get GPS location")
+                    map_button.setToolTip(self.tr("No images available - cannot get GPS location"))
                 else:
-                    map_button.setToolTip("No GPS coordinates found in images")
+                    map_button.setToolTip(self.tr("No GPS coordinates found in images"))
 
             if result.gps_coordinates:
                 lat, lon = result.gps_coordinates
@@ -242,7 +245,7 @@ class ResultsFolderDialog(QDialog):
 
             view_button = QPushButton()
             view_button.setIcon(IconHelper.create_icon('fa6s.images', self.theme))
-            view_button.setToolTip("Open in Results Viewer")
+            view_button.setToolTip(self.tr("Open in Results Viewer"))
             view_button.setFixedSize(40, 28)
             # Use default argument to capture current value
             view_button.clicked.connect(

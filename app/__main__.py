@@ -1,24 +1,27 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
-from os import path
-import qdarktheme
-import faulthandler
-from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
-from core.controllers.SelectionDialog import SelectionDialog
-from core.controllers.images.MainWindow import MainWindow
-from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
-from core.controllers.streaming.StreamingGuide import StreamingGuide
-from core.services.SettingsService import SettingsService
-from core.services.LoggerService import LoggerService
-from helpers.PickleHelper import PickleHelper
-from multiprocessing import freeze_support
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
-from PySide6.QtGui import QIcon
 import traceback
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from multiprocessing import freeze_support
+from helpers.PickleHelper import PickleHelper
+from helpers.TranslationHelper import install_translator
+from helpers.ThemeHelper import apply_theme
+from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
+from core.controllers.streaming.StreamingGuide import StreamingGuide
+from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
+from core.controllers.images.MainWindow import MainWindow
+from core.controllers.SelectionDialog import SelectionDialog
+from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
+import faulthandler
+import qdarktheme
+from os import path
 import sys
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
-version = '2.0.3'
+
+version = '2.1.0'
 
 
 def update_app_version(app_version):
@@ -128,16 +131,22 @@ def initialize_default_settings():
         if theme is None:
             settings_service.set_setting('Theme', 'Dark')
 
+        # Update checks
+        auto_check_updates = settings_service.get_setting('AutoCheckForUpdates')
+        if not isinstance(auto_check_updates, bool):
+            settings_service.set_setting('AutoCheckForUpdates', True)
+
     except Exception as e:
         logger.error(f"Error initializing default settings: {e}")
         logger.error(traceback.format_exc())
 
 
 def check_and_update_pickle_files(app_version):
-    """Check pickle file versions and update if necessary.
+    """Ensure the bundled drones.csv / xmp.csv lookup tables are present and current.
 
-    This function runs at application startup to ensure that pickle files
-    (drones.pkl and xmp.pkl) are up-to-date with the current app version.
+    Runs at startup. Re-copies the bundled file when the stored app version
+    advances; PickleHelper itself also auto-refreshes when the bundled
+    file's version header advertises a newer revision.
 
     Args:
         app_version (str): The current application version string.
@@ -148,27 +157,24 @@ def check_and_update_pickle_files(app_version):
     try:
         current_version = settings_service.get_setting('app_version')
 
-        # Copy drones.pkl if:
+        # Copy drones.csv if:
         # 1. No app version is stored (first run)
         # 2. No drone sensor file exists in AppData
         # 3. New app version is greater than stored version
         if current_version is None or PickleHelper.get_drone_sensor_file_version() is None:
-            PickleHelper.copy_pickle('drones.pkl')
-            # logger.info("Copied drones.pkl to AppData (first run or missing file)")
+            PickleHelper.copy_pickle('drones.csv')
         else:
             current_version_int = PickleHelper.version_to_int(current_version)
             new_version_int = PickleHelper.version_to_int(app_version)
             if new_version_int > current_version_int:
-                PickleHelper.copy_pickle('drones.pkl')
-                # logger.info(f"Updated drones.pkl to AppData (version upgrade: {current_version} -> {app_version})")
+                PickleHelper.copy_pickle('drones.csv')
 
-        # Ensure xmp.pkl exists
+        # Ensure xmp.csv exists
         if PickleHelper.get_xmp_mapping() is None:
-            PickleHelper.copy_pickle('xmp.pkl')
-            # logger.info("Copied xmp.pkl to AppData")
+            PickleHelper.copy_pickle('xmp.csv')
 
     except Exception as e:
-        logger.error(f"Error checking/updating pickle files: {e}")
+        logger.error(f"Error checking/updating data files: {e}")
 
 
 def main():
@@ -183,7 +189,18 @@ def main():
     ImageAnalysisGuide wizard before opening the MainWindow.
     """
     app = QApplication(sys.argv)
-    qdarktheme.setup_theme()
+
+    # Load translation. Priority: the saved Language preference, then the OS
+    # locale, then English. Resolves the .qm location via sys._MEIPASS so it
+    # works identically from source and from a PyInstaller build on Windows
+    # and macOS (see helpers.TranslationHelper).
+    settings_service = SettingsService()
+    install_translator(app, settings_service.get_setting('Language', None))
+
+    # Apply the stylesheet AND the full palette (see helpers.ThemeHelper): the
+    # palette must be pinned to the theme so custom-painted widgets don't pick
+    # up the OS light/dark text colour.
+    apply_theme('Dark')
     app.setWindowIcon(QIcon(path.abspath(path.join(path.dirname(__file__), 'ADIAT.ico'))))
 
     # Initialize default settings early (before any windows are created)
@@ -224,13 +241,28 @@ def main():
             )
             sys.exit(1)
 
+    def _launch_flight_viewer():
+        """Launch the Flight Viewer window (WebRTC pairing with ADIAT Mobile)."""
+        try:
+            from core.controllers.flight import FlightViewerController
+            app._flight_controller = FlightViewerController()
+            app._flight_controller.show()
+        except Exception as e:
+            QMessageBox.critical(
+                None,
+                "Error",
+                f"Failed to open Flight Viewer:\n{str(e)}"
+            )
+            sys.exit(1)
+
     # Connect signal to launch MainWindow when Images is selected
     def _on_selection(choice: str):
         """
         Handle selection choice from the initial dialog.
 
         Args:
-            choice: String indicating the selected option ('images' or 'stream').
+            choice: String indicating the selected option ('images', 'stream',
+                or 'flight').
         """
         if choice == 'images':
             # Wrap startup in a try so any init error raises to excepthook
@@ -242,6 +274,8 @@ def main():
                 raise
         elif choice == 'stream':
             _launch_stream_viewer()
+        elif choice == 'flight':
+            _launch_flight_viewer()
 
     # Connect signal to show setup wizard when requested
     def _on_wizard_requested():
@@ -284,8 +318,10 @@ def main():
             # Load the XML file
             try:
                 app._main_window._process_xml_file(review_file_path)
-                # Automatically open the Viewer
-                app._main_window._viewResultsButton_clicked()
+                # A Search Coordinator project is already opened by
+                # _process_xml_file; otherwise open the single-run Viewer.
+                if app._main_window._view_results_mode != 'coordinator':
+                    app._main_window._viewResultsButton_clicked()
             except Exception as e:
                 QMessageBox.critical(
                     app._main_window,
@@ -332,6 +368,10 @@ def main():
     dlg.selectionMade.connect(_on_selection)
     dlg.wizardRequested.connect(_on_wizard_requested)
     dlg.streamWizardRequested.connect(_on_stream_wizard_requested)
+    # `flightViewerRequested` is emitted alongside selectionMade('flight');
+    # the launch already happens via _on_selection. Connect anyway so the
+    # signal has at least one consumer for callers that watch it directly.
+    dlg.flightViewerRequested.connect(lambda: None)
     result = dlg.exec()
 
     # If dialog was closed without a selection (and wizard wasn't shown), exit the app
@@ -342,8 +382,9 @@ def main():
 
 
 if __name__ == "__main__":
-    # Enable faulthandler only if stderr is available (avoid issues in packaged apps)
-    if sys.stderr is not None:
+    # Enable faulthandler for crash tracebacks (skip Windows where it catches
+    # benign COM exceptions like RPC_E_WRONGTHREAD 0x8001010d from Qt internals)
+    if sys.stderr is not None and sys.platform != 'win32':
         faulthandler.enable()
     # Install a global exception hook that exits the app on any uncaught error
 
@@ -370,4 +411,25 @@ if __name__ == "__main__":
     sys.excepthook = _fatal_excepthook
 
     freeze_support()
+
+    # Logging policy (baked in): packaged/production builds record warnings and
+    # errors only; running from source stays verbose (DEBUG). Override in the
+    # field with the ADIAT_LOG_LEVEL env var (e.g. ADIAT_LOG_LEVEL=DEBUG). This
+    # runs before both the GUI and the batch CLI so both honor it; see
+    # LoggerService.resolve_log_level. (LoggerService also applies this by
+    # default, so any earlier log line is already at the right level.)
+    LoggerService.set_level()
+
+    # Headless batch mode: "python app batch --input <parent> --output <root>"
+    # (or "ADIAT.exe batch ..." in the packaged build).
+    # Falls through to the normal GUI startup when no batch subcommand is given.
+    if len(sys.argv) > 1 and sys.argv[1] == 'batch':
+        # The packaged Windows exe is windowed (console=False): attach to the
+        # calling terminal so CLI progress/errors are visible. No-op for GUI
+        # launches and on macOS/Linux.
+        from helpers.ConsoleHelper import attach_parent_console
+        attach_parent_console()
+        from core.services.cli.BatchCLI import run_batch_cli
+        sys.exit(run_batch_cli(sys.argv[2:]))
+
     main()

@@ -102,6 +102,25 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(scope='session', autouse=True)
+def _prime_qt_and_qtawesome():
+    """Ensure a QApplication exists and qtawesome icon fonts are registered.
+
+    qtawesome registers its bundled icon fonts on first use; when that first
+    use happens before any QApplication exists the fonts never register and
+    later 'fa6s.*' icon lookups raise "Invalid font prefix". Warming
+    qtawesome here, with the application created, keeps icon-dependent tests
+    independent of collection order.
+    """
+    application = QApplication.instance() or QApplication([])
+    try:
+        import qtawesome
+        qtawesome.icon('fa6s.flag')
+    except Exception:
+        pass
+    return application
+
+
 @pytest.fixture(scope='function')
 def main_window(qtbot):
     if not _MAIN_WINDOW_AVAILABLE:

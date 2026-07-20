@@ -11,6 +11,9 @@ Tests cover:
 from algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController import (
     ColorAnomalyAndMotionDetectionWizardController
 )
+from algorithms.streaming.AIPersonDetector.controllers.AIPersonDetectorWizardController import (
+    AIPersonDetectorWizardController
+)
 from core.controllers.streaming.guidePages import (
     StreamSourcePage,
     StreamConnectionPage,
@@ -108,6 +111,53 @@ class TestStreamingGuide:
 
         wizard2 = StreamingGuide()
         assert wizard2.wizard_data["algorithm"] is None
+
+    def test_algorithm_decision_tree_can_select_ai_person_detector(self, qapp):
+        """Selecting person-focused flow should choose AI Person Detector."""
+        wizard = StreamingGuide()
+        page = wizard.pages[4]  # StreamAlgorithmPage
+
+        page._on_algorithm_answer(True)
+
+        assert page.selected_algorithm == "AIPersonDetector"
+        assert wizard.wizard_data["algorithm"] == "AIPersonDetector"
+        assert wizard.wizard_data["secondary_recommendation"] == "ColorDetection"
+
+    def test_algorithm_decision_tree_routes_known_color_targets(self, qapp):
+        """Known non-person color targets should route to ColorDetection."""
+        wizard = StreamingGuide()
+        page = wizard.pages[4]
+
+        page._on_algorithm_answer(False)
+        assert page.selected_algorithm is None
+        assert "target color" in wizard.labelCurrentQuestion.text().lower()
+
+        page._on_algorithm_answer(True)
+
+        assert page.selected_algorithm == "ColorDetection"
+        assert wizard.wizard_data["algorithm_reason"] == "known_color_target"
+
+    def test_algorithm_decision_tree_routes_unknown_targets_to_anomaly_motion(self, qapp):
+        """Unknown or anomaly-led searches should route to anomaly and motion detection."""
+        wizard = StreamingGuide()
+        page = wizard.pages[4]
+
+        page._on_algorithm_answer(False)
+        page._on_algorithm_answer(False)
+
+        assert page.selected_algorithm == "ColorAnomalyAndMotionDetection"
+        assert wizard.wizard_data["algorithm_reason"] == "unknown_target_or_anomaly_scan"
+
+    def test_algorithm_parameters_page_loads_ai_person_detector_widget(self, qapp):
+        """Parameters page should load the AI Person Detector wizard controller."""
+        wizard = StreamingGuide()
+        wizard.wizard_data["algorithm"] = "AIPersonDetector"
+        params_page = wizard.pages[5]  # StreamAlgorithmParametersPage
+
+        params_page.on_enter()
+
+        assert params_page.algorithm_widget is not None
+        assert params_page.algorithm_widget.__class__.__name__ == "AIPersonDetectorWizardController"
 
     @patch('algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController.TextLabeledSlider')
     def test_aggressiveness_mapping(self, mock_slider_class, qapp):
@@ -476,6 +526,92 @@ class TestColorAnomalyAndMotionDetectionWizardController:
         finally:
             viewer.close()
             QApplication.processEvents()  # Process events to ensure cleanup completes
+
+
+class TestAIPersonDetectorWizardController:
+    """Tests for the streaming AI Person Detector wizard controller."""
+
+    @pytest.fixture
+    def wizard(self, qapp):
+        config = {"name": "AIPersonDetector", "label": "AI Person Detector"}
+        return AIPersonDetectorWizardController(config, "dark")
+
+    def test_default_options(self, wizard):
+        """Default slider position (Balanced) maps to 50% with CPU-only off."""
+        options = wizard.get_options()
+
+        assert options["person_detector_confidence"] == 50
+        assert options["cpu_only"] is False
+        assert options["confidence_index"] == 2
+        assert wizard.validate() is None
+
+    def test_confidence_mapping(self, wizard):
+        """Each slider preset maps to the same percent as the image-analysis wizard."""
+        expected = {0: 90, 1: 70, 2: 50, 3: 30, 4: 10}
+
+        for index, percent in expected.items():
+            wizard.confidenceSlider.setValue(index)
+            options = wizard.get_options()
+            assert options["person_detector_confidence"] == percent, \
+                f"Index {index} should map to {percent}%"
+            assert options["confidence_index"] == index
+
+    def test_load_options_prefers_confidence_index(self, wizard):
+        """confidence_index round-trips the slider position directly."""
+        wizard.load_options({"confidence_index": 4, "person_detector_confidence": 90})
+
+        assert wizard.confidenceSlider.value() == 4
+
+    def test_load_options_maps_percent_confidence(self, wizard):
+        """Percent-scale person_detector_confidence maps to the nearest preset."""
+        for percent, expected_index in [(90, 0), (70, 1), (50, 2), (30, 3), (10, 4)]:
+            wizard.load_options({"person_detector_confidence": percent})
+            assert wizard.confidenceSlider.value() == expected_index, \
+                f"{percent}% should map to index {expected_index}"
+
+    def test_load_options_maps_legacy_fraction_confidence(self, wizard):
+        """Legacy 0-1 confidence_threshold from old streaming configs maps onto the slider."""
+        for fraction, expected_index in [(0.9, 0), (0.7, 1), (0.5, 2), (0.3, 3), (0.1, 4)]:
+            wizard.load_options({"confidence_threshold": fraction})
+            assert wizard.confidenceSlider.value() == expected_index, \
+                f"threshold {fraction} should map to index {expected_index}"
+
+    def test_load_options_ignores_unrelated_streaming_keys(self, wizard):
+        """Old tabbed-config keys and object-size keys must not affect the slider."""
+        wizard.confidenceSlider.setValue(1)
+
+        wizard.load_options({
+            "min_area": 10,
+            "max_area": 5351,
+            "processing_width": 1280,
+            "processing_height": 720,
+            "enable_temporal_voting": True,
+            "high_resolution_model": True,
+        })
+
+        assert wizard.confidenceSlider.value() == 1
+
+    def test_object_size_merge_round_trip(self, wizard):
+        """Parameters-page merge of min/max area into get_options() output round-trips."""
+        wizard.confidenceSlider.setValue(3)
+
+        options = wizard.get_options()
+        options["min_area"] = 10
+        options["max_area"] = 5351
+        wizard.load_options(options)
+
+        assert wizard.confidenceSlider.value() == 3
+        assert wizard.get_options()["person_detector_confidence"] == 30
+
+    def test_load_options_handles_invalid_input(self, wizard):
+        """Non-dict and malformed values leave the slider unchanged."""
+        wizard.confidenceSlider.setValue(0)
+
+        wizard.load_options(None)
+        wizard.load_options("not a dict")
+        wizard.load_options({"person_detector_confidence": "garbage"})
+
+        assert wizard.confidenceSlider.value() == 0
 
 
 class TestStreamAlgorithmParametersPage:

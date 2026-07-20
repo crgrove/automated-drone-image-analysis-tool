@@ -29,6 +29,7 @@ from core.services.SettingsService import SettingsService
 from core.services.streaming.StreamingUtils import (
     FrameQueue, PerformanceMetrics, StageTimings
 )
+from core.services.streaming.DetectionMath import bbox_iou, centroid_distance
 from enum import Enum
 from collections import deque
 import threading
@@ -77,7 +78,7 @@ class Detection:
 @dataclass
 class HSVConfig:
     """HSV color detection configuration."""
-    target_color_rgb: Tuple[int, int, int]  # RGB values
+    target_color_rgb: Optional[Tuple[int, int, int]]  # RGB values
     hue_threshold: int = 20
     saturation_threshold: int = 50
     value_threshold: int = 50
@@ -179,7 +180,7 @@ class ColorDetectionService(QObject):
         self.settings_service = SettingsService()
 
         # Detection configuration
-        self._config = HSVConfig(target_color_rgb=(255, 0, 0))  # Default red
+        self._config = HSVConfig(target_color_rgb=None)
         self._config_lock = Lock()
 
         # Performance tracking
@@ -248,12 +249,20 @@ class ColorDetectionService(QObject):
         self.configurationChanged.emit(self._get_config_dict())
         # self.logger.info("Detection configuration updated")
 
+    def get_config(self) -> HSVConfig:
+        """Return a thread-safe snapshot of the current detection config."""
+        with self._config_lock:
+            return HSVConfig(**self._config.__dict__)
+
     def _update_hsv_values(self):
         """Update HSV conversion values based on current config."""
         try:
-            # Convert RGB to HSV for target color
-            rgb_array = np.uint8([[self._config.target_color_rgb]])
-            self._target_hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)[0][0]
+            self._hsv_ranges = None
+            self._target_hsv = None
+
+            if self._config.target_color_rgb is not None:
+                rgb_array = np.uint8([[self._config.target_color_rgb]])
+                self._target_hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)[0][0]
 
             # Check if we have multiple HSV ranges for multi-color detection
             if self._config.hsv_ranges_list and len(self._config.hsv_ranges_list) > 0:
@@ -335,7 +344,7 @@ class ColorDetectionService(QObject):
                          np.array([h_high, s_high, v_high], dtype=np.uint8))
                     ]
 
-            else:
+            elif self._target_hsv is not None:
                 # Fallback to old ColorUtils method for backward compatibility
                 self._hsv_ranges = ColorUtils.get_hsv_color_range(
                     self._target_hsv,
@@ -377,6 +386,7 @@ class ColorDetectionService(QObject):
                 hsv_ranges = self._hsv_ranges
 
             if hsv_ranges is None:
+                self._update_performance_stats(time.perf_counter() - start_time, 0)
                 return []
 
             # Store original dimensions
@@ -1486,10 +1496,7 @@ class ColorDetectionService(QObject):
                         continue
 
                     # Calculate centroid distance
-                    dist = np.sqrt(
-                        (det1.centroid[0] - det2.centroid[0])**2 +
-                        (det1.centroid[1] - det2.centroid[1])**2
-                    )
+                    dist = centroid_distance(det1.centroid, det2.centroid)
 
                     if dist <= config.clustering_distance:
                         cluster.append(det2)
@@ -1676,24 +1683,7 @@ class ColorDetectionService(QObject):
             IoU value (0-1)
         """
         try:
-            x1, y1, w1, h1 = det1.bbox
-            x2, y2, w2, h2 = det2.bbox
-
-            # Calculate intersection
-            x_left = max(x1, x2)
-            y_top = max(y1, y2)
-            x_right = min(x1 + w1, x2 + w2)
-            y_bottom = min(y1 + h1, y2 + h2)
-
-            if x_right < x_left or y_bottom < y_top:
-                return 0.0
-
-            intersection = (x_right - x_left) * (y_bottom - y_top)
-            area1 = w1 * h1
-            area2 = w2 * h2
-            union = area1 + area2 - intersection
-
-            return intersection / union if union > 0 else 0.0
+            return bbox_iou(det1.bbox, det2.bbox)
 
         except Exception:
             return 0.0
@@ -1971,6 +1961,26 @@ class ColorDetectionService(QObject):
 
         return annotated
 
+    def create_overlay_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Create a frame with algorithm-specific overlays but without detection shapes."""
+        if self._config.render_at_processing_res and self._processing_frame is not None:
+            overlay = self._processing_frame.copy()
+            render_scale = self._current_scale_factor
+            needs_upscale = True
+        else:
+            overlay = frame.copy()
+            render_scale = 1.0
+            needs_upscale = False
+
+        if self._config.mask_enabled and self._config.show_mask_overlay and hasattr(self, '_mask_manager'):
+            overlay = self._draw_mask_overlay(overlay, render_scale)
+
+        if needs_upscale and self._original_frame is not None:
+            original_height, original_width = self._original_frame.shape[:2]
+            overlay = cv2.resize(overlay, (original_width, original_height), interpolation=cv2.INTER_LINEAR)
+
+        return overlay
+
     def _update_performance_stats(self, processing_time: float, detection_count: int):
         """Update and emit performance statistics."""
         self._processing_times.append(processing_time)
@@ -2002,14 +2012,15 @@ class ColorDetectionService(QObject):
 
     def _get_config_dict(self) -> Dict[str, Any]:
         """Get current configuration as dictionary."""
+        config = self.get_config()
         return {
-            'target_color_rgb': self._config.target_color_rgb,
-            'hue_threshold': self._config.hue_threshold,
-            'saturation_threshold': self._config.saturation_threshold,
-            'value_threshold': self._config.value_threshold,
-            'min_area': self._config.min_area,
-            'max_area': self._config.max_area,
-            'morphology_enabled': self._config.morphology_enabled,
+            'target_color_rgb': config.target_color_rgb,
+            'hue_threshold': config.hue_threshold,
+            'saturation_threshold': config.saturation_threshold,
+            'value_threshold': config.value_threshold,
+            'min_area': config.min_area,
+            'max_area': config.max_area,
+            'morphology_enabled': config.morphology_enabled,
             'gpu_acceleration': self._use_gpu
         }
 
@@ -2026,6 +2037,23 @@ class ColorDetectionService(QObject):
             'gpu_available': self._gpu_available,
             'gpu_enabled': self._use_gpu
         }
+
+    def reset(self):
+        """Reset runtime state between sessions."""
+        self._processing_times = []
+        self._frame_count = 0
+        self._last_fps_time = time.time()
+
+        self._prev_frame = None
+        self._mog2_subtractor = None
+        self._knn_subtractor = None
+        self._camera_is_moving = False
+        self._motion_detection_history.clear()
+        self._detection_history.clear()
+
+    def cleanup(self):
+        """Release transient state before shutdown/switch."""
+        self.reset()
 
 
 # Alias for backward compatibility with existing code

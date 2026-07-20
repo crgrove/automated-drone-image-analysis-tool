@@ -17,6 +17,7 @@ Features:
 import numpy as np
 import cv2
 from PySide6.QtCore import Qt, Signal, QTimer
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 
-class ImageAdjustmentDialog(QDialog):
+class ImageAdjustmentDialog(TranslationMixin, QDialog):
     """
     Dialog for real-time image adjustments including exposure, highlights, shadows, clarity, and radius.
 
@@ -44,6 +45,7 @@ class ImageAdjustmentDialog(QDialog):
         """
         super().__init__(parent)
         self._setup_ui()  # Create UI programmatically
+        self._apply_translations()
 
         self.original_pixmap = original_pixmap
         self.original_image = None
@@ -78,7 +80,7 @@ class ImageAdjustmentDialog(QDialog):
 
     def _setup_ui(self):
         """Create UI widgets programmatically."""
-        self.setWindowTitle("Image Adjustment")
+        self.setWindowTitle(self.tr("Image Adjustment"))
         self.setModal(False)
 
         # Set window flags to keep dialog on top (especially important on macOS)
@@ -91,7 +93,7 @@ class ImageAdjustmentDialog(QDialog):
         self.main_layout = QVBoxLayout(self)
 
         # Create adjustment controls group
-        adjustments_group = QGroupBox("Adjustments")
+        adjustments_group = QGroupBox(self.tr("Adjustments"))
         grid_layout = QGridLayout()
 
         # Helper function to create slider row
@@ -119,19 +121,19 @@ class ImageAdjustmentDialog(QDialog):
 
         # Create sliders for each adjustment
         self.exposureSlider, self.exposureValueInput = create_slider_row(
-            "Exposure:", -200, 200, 0, 0
+            self.tr("Exposure:"), -200, 200, 0, 0
         )
         self.highlightsSlider, self.highlightsValueInput = create_slider_row(
-            "Highlights:", -200, 200, 0, 1
+            self.tr("Highlights:"), -200, 200, 0, 1
         )
         self.shadowsSlider, self.shadowsValueInput = create_slider_row(
-            "Shadows:", -200, 200, 0, 2
+            self.tr("Shadows:"), -200, 200, 0, 2
         )
         self.claritySlider, self.clarityValueInput = create_slider_row(
-            "Clarity:", -200, 200, 0, 3
+            self.tr("Clarity:"), -200, 200, 0, 3
         )
         self.radiusSlider, self.radiusValueInput = create_slider_row(
-            "Radius:", 1, 100, 10, 4
+            self.tr("Radius:"), 1, 100, 10, 4
         )
 
         adjustments_group.setLayout(grid_layout)
@@ -141,9 +143,9 @@ class ImageAdjustmentDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.resetButton = QPushButton("Reset")
-        self.applyButton = QPushButton("Apply")
-        self.closeButton = QPushButton("Close")
+        self.resetButton = QPushButton(self.tr("Reset"))
+        self.applyButton = QPushButton(self.tr("Apply"))
+        self.closeButton = QPushButton(self.tr("Close"))
 
         button_layout.addWidget(self.resetButton)
         button_layout.addWidget(self.applyButton)

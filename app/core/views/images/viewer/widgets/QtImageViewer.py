@@ -16,7 +16,8 @@ from PySide6.QtCore import (
     Qt, QRectF, QPoint, QPointF, Signal, QEvent, QSize
 )
 from PySide6.QtGui import (
-    QImage, QPixmap, QPainterPath, QMouseEvent, QPainter, QPen, QCursor, QColor
+    QImage, QPixmap, QPainterPath, QMouseEvent, QPainter, QPen, QCursor, QColor,
+    QInputDevice
 )
 from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QFileDialog, QSizePolicy,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QGraphicsLineItem, QGraphicsPolygonItem, QApplication
 )
 from core.views.images.viewer.dialogs.AOICreationDialog import AOICreationDialog
+from helpers.TranslationMixin import TranslationMixin
 
 # Optional deps
 np = None
@@ -50,7 +52,7 @@ MAX_ZOOM_FACTOR = 100.0  # Maximum zoom factor (100x original)
 # --------------------------------------------------------------------------- #
 #  QtImageViewer                                                              #
 # --------------------------------------------------------------------------- #
-class QtImageViewer(QGraphicsView):
+class QtImageViewer(TranslationMixin, QGraphicsView):
     # -------------------------- public signals --------------------------- #
     leftMouseButtonPressed = Signal(float, float, object)
     leftMouseButtonReleased = Signal(float, float)
@@ -87,11 +89,23 @@ class QtImageViewer(QGraphicsView):
         self._isPanning = False
         self._pixelPosition = QPoint()
         self._scenePosition = QPointF()
+        self._panLastPixel = QPoint()   # last cursor pos during a drag-pan
+        self._space_held = False        # spacebar held -> left-drag pans
 
         # ---- config
         self.aspectRatioMode = Qt.KeepAspectRatio
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # Scrollbars OFF. fitInView + as-needed scrollbars is a Qt feedback
+        # trap: fitting a zoomed sub-rect overflows the scene -> an as-needed
+        # scrollbar appears -> the viewport shrinks -> resizeEvent -> fitInView
+        # -> the bar can flip back off, oscillating forever inside Qt's layout
+        # (the GUI hard-locks at the one-click zoom threshold). With the bars
+        # off they never toggle, so the viewport size is constant and fitInView
+        # converges in a single pass. Panning does NOT use the scrollbars (see
+        # mouseMoveEvent) -- it translates the zoom rect by the raw mouse delta
+        # -- so turning them off costs no functionality and leaves the full
+        # widget for the image (no scrollbar gutter).
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.regionZoomButton = Qt.LeftButton
         self.zoomOutButton = None
@@ -141,11 +155,45 @@ class QtImageViewer(QGraphicsView):
             ev.accept()
             return
 
+        # ---------------- spacebar pan (hold Space + left-drag) ----------
+        # Familiar Photoshop/Figma fallback: works with any pointing device
+        # (single-button mouse, trackpad tap-drag) since it does not need a
+        # right button or a scroll gesture.
+        if ev.key() == Qt.Key_Space and not self.thumbnail and self.canPan:
+            if not ev.isAutoRepeat():
+                self._space_held = True
+                if not self._isPanning:
+                    self.viewport().setCursor(Qt.OpenHandCursor)
+            ev.accept()
+            return
+
         # --------- fall back to original handling
         if self.window is not None:
             self.window.keyPressEvent(ev)
         else:
             super().keyPressEvent(ev)
+
+    def keyReleaseEvent(self, ev):
+        if not self._is_destroyed and ev.key() == Qt.Key_Space and not ev.isAutoRepeat():
+            self._space_held = False
+            # If a drag is still in progress the release handler restores the
+            # cursor; otherwise go back to the normal crosshair immediately.
+            if not self._isPanning and not self.thumbnail:
+                self.viewport().setCursor(Qt.CrossCursor)
+            ev.accept()
+            return
+        super().keyReleaseEvent(ev)
+
+    def focusOutEvent(self, ev):
+        # Losing focus (Alt-Tab, dialog) means we may never see the Space
+        # release, which would strand the viewer in pan mode. Reset defensively.
+        self._space_held = False
+        if not self._is_destroyed and not self._isPanning and not self.thumbnail:
+            try:
+                self.viewport().setCursor(Qt.CrossCursor)
+            except RuntimeError:
+                pass
+        super().focusOutEvent(ev)
     # ===================================================================== #
     #  Helpers                                                               #
     # ===================================================================== #
@@ -248,6 +296,30 @@ class QtImageViewer(QGraphicsView):
             # Keep only the most recent entries
             self.zoomStack = self.zoomStack[-MAX_ZOOM_STACK_DEPTH:]
 
+    def _clamp_rect_to_scene(self, rect, scene_rect):
+        """Shift *rect* to lie within *scene_rect* without changing its size.
+
+        Drag-panning translates the current zoom rectangle; clamping by
+        shifting (rather than intersecting) keeps the zoom level constant when
+        the pan reaches an image edge instead of shrinking the rect.
+        """
+        r = QRectF(rect)
+        if r.width() <= scene_rect.width():
+            if r.left() < scene_rect.left():
+                r.moveLeft(scene_rect.left())
+            elif r.right() > scene_rect.right():
+                r.moveRight(scene_rect.right())
+        else:
+            r.moveCenter(QPointF(scene_rect.center().x(), r.center().y()))
+        if r.height() <= scene_rect.height():
+            if r.top() < scene_rect.top():
+                r.moveTop(scene_rect.top())
+            elif r.bottom() > scene_rect.bottom():
+                r.moveBottom(scene_rect.bottom())
+        else:
+            r.moveCenter(QPointF(r.center().x(), scene_rect.center().y()))
+        return r
+
     # ===================================================================== #
     #  Image handling                                                        #
     # ===================================================================== #
@@ -309,7 +381,7 @@ class QtImageViewer(QGraphicsView):
         if self._is_destroyed:
             return
         if path is None:
-            path, _ = QFileDialog.getOpenFileName(self, "Open image")
+            path, _ = QFileDialog.getOpenFileName(self, self.tr("Open image"))
         if path and os.path.isfile(path):
             self.setImage(QImage(path))
 
@@ -421,6 +493,23 @@ class QtImageViewer(QGraphicsView):
         else:
             self.zoomStack.clear()
 
+    def zoomToRect(self, rect):
+        """Zoom/pan so *rect* (scene coordinates) fills the view.
+
+        Used by grid review mode to frame one grid cell. The rect replaces
+        the whole zoom stack, so a subsequent resetZoom/zoom-out returns to
+        the full image rather than stepping back through prior cells.
+        """
+        if not self.hasImage() or self._recursion_guard or self._is_destroyed:
+            return
+
+        validated_rect = self._validate_zoom_rect(QRectF(rect))
+        if validated_rect is None:
+            return
+
+        self.zoomStack = [validated_rect]
+        self.updateViewer()
+
     def _zoomInAtPos(self, scene_pos, factor=None):
         """Zoom in so that *scene_pos* stays centred on screen."""
         if not self.canZoom or self.thumbnail or not self.hasImage() or self._is_destroyed:
@@ -525,7 +614,14 @@ class QtImageViewer(QGraphicsView):
             self._is_destroyed = True
             return
         if not self._is_destroyed:
-            self.updateViewer()                       # recompute & emit
+            # Refit synchronously. updateViewer() runs under _recursion_guard,
+            # so a viewport resize that fitInView itself provokes (an
+            # as-needed scrollbar flipping on/off right at the zoom threshold)
+            # re-enters updateViewer while the guard is set and is absorbed
+            # instead of driving a resize<->fit oscillation. Deferring this to
+            # a timer would move the refit outside the guard and let that
+            # oscillation run across event-loop turns (visible zoom jitter).
+            self.updateViewer()
 
     def showEvent(self, ev):
         try:
@@ -536,16 +632,71 @@ class QtImageViewer(QGraphicsView):
         if not self._is_destroyed:
             self.resetZoom()
 
-    # -------------------------- wheel zoom ------------------------------ #
+    # ------------------- wheel / trackpad / pinch nav ------------------- #
     def wheelEvent(self, ev):
         if self.thumbnail or self.wheelZoomFactor in (None, 1) or not self.hasImage() or self._is_destroyed:
             return super().wheelEvent(ev)
 
-        zoom_in = ev.angleDelta().y() > 0
-        cursor_scene_pos = self.mapToScene(ev.position().toPoint())
-        factor = self.wheelZoomFactor if zoom_in else 1 / self.wheelZoomFactor
+        # Ctrl (or Cmd on macOS, which Qt maps to ControlModifier) forces zoom.
+        zoom_mod = bool(ev.modifiers() & (Qt.ControlModifier | Qt.MetaModifier))
 
-        # Ensure zoom stack is initialized
+        # A trackpad two-finger scroll PANS (matching macOS Preview/Maps). Zoom
+        # on a trackpad is Ctrl/Cmd+scroll or pinch, so a laptop user with no
+        # mouse never depends on a wheel that isn't there.
+        if self._is_touchpad_scroll(ev) and not zoom_mod:
+            self._pan_by_pixels(ev.pixelDelta())
+            ev.accept()
+            return
+
+        # Mouse wheel, or Ctrl/Cmd + trackpad scroll -> zoom toward the cursor.
+        delta = ev.angleDelta().y() or ev.pixelDelta().y()
+        if delta == 0:
+            ev.accept()
+            return
+        # One 120-unit wheel notch == one full wheelZoomFactor step; small
+        # trackpad deltas accumulate smoothly via the fractional exponent.
+        factor = self.wheelZoomFactor ** (delta / 120.0)
+        self._zoom_toward(ev.position().toPoint(), factor)
+        ev.accept()
+
+    def _is_touchpad_scroll(self, ev):
+        """True when a wheel event came from a trackpad, not a mouse wheel."""
+        try:
+            dev = ev.device()
+            if dev is not None and dev.type() == QInputDevice.DeviceType.TouchPad:
+                return True
+        except Exception:
+            pass
+        # High-resolution pixel deltas are produced by touchpads; a classic
+        # notched wheel reports only angleDelta (in 120-unit steps).
+        return not ev.pixelDelta().isNull()
+
+    def _pan_by_pixels(self, pixel_delta):
+        """Pan by a trackpad scroll delta (translate the current zoom rect)."""
+        if self._is_destroyed or not self.canPan or self.thumbnail:
+            return
+        if not self.zoomStack:
+            return  # nothing to pan at full-fit
+        scale = self.transform().m11() or 1.0
+        zr = QRectF(self.zoomStack[-1])
+        # pixelDelta already reflects the OS scroll direction; move the visible
+        # window with the scroll, the way a scroll area does.
+        zr.translate(-pixel_delta.x() / scale, -pixel_delta.y() / scale)
+        scene_rect = self._safe_scene_rect()
+        if scene_rect:
+            self.zoomStack[-1] = self._clamp_rect_to_scene(zr, scene_rect)
+            self.updateViewer()
+            if not self._is_destroyed:
+                self._safe_emit_view_changed()
+
+    def _zoom_toward(self, viewport_pos, factor):
+        """Zoom by *factor* (>1 in, <1 out) keeping *viewport_pos* fixed."""
+        if not self.canZoom or self.thumbnail or not self.hasImage() or self._is_destroyed:
+            return
+        if factor <= 0:
+            return
+        cursor_scene_pos = self.mapToScene(viewport_pos)
+
         if not self.zoomStack:
             scene_rect = self._safe_scene_rect()
             if not scene_rect:
@@ -553,18 +704,13 @@ class QtImageViewer(QGraphicsView):
             self.zoomStack.append(scene_rect)
 
         current_zr = self.zoomStack[-1]
-
-        # Calculate cursor position ratios
+        if current_zr.width() <= 0 or current_zr.height() <= 0:
+            return
         cursor_ratio_x = (cursor_scene_pos.x() - current_zr.left()) / current_zr.width()
         cursor_ratio_y = (cursor_scene_pos.y() - current_zr.top()) / current_zr.height()
 
-        new_width = current_zr.width() / factor
-        new_height = current_zr.height() / factor
-
-        # Clamp new dimensions to prevent extremely small sizes
-        new_width = max(new_width, MIN_ZOOM_RECT_SIZE)
-        new_height = max(new_height, MIN_ZOOM_RECT_SIZE)
-
+        new_width = max(current_zr.width() / factor, MIN_ZOOM_RECT_SIZE)
+        new_height = max(current_zr.height() / factor, MIN_ZOOM_RECT_SIZE)
         new_left = cursor_scene_pos.x() - cursor_ratio_x * new_width
         new_top = cursor_scene_pos.y() - cursor_ratio_y * new_height
 
@@ -573,13 +719,11 @@ class QtImageViewer(QGraphicsView):
             return
         new_zr = QRectF(new_left, new_top, new_width, new_height).intersected(scene_rect)
 
-        # Check if zoom-out reaches original view
-        if not zoom_in and (new_zr == scene_rect or new_zr.contains(scene_rect)):
+        # Zooming out until the whole scene is visible resets to full view.
+        if factor < 1 and (new_zr == scene_rect or new_zr.contains(scene_rect)):
             self.resetZoom()
-            ev.accept()
             return
 
-        # Ensure zoom rect is valid
         if new_zr.isValid():
             self.zoomStack[-1] = new_zr
             self.updateViewer()
@@ -588,7 +732,34 @@ class QtImageViewer(QGraphicsView):
         else:
             self.resetZoom()
 
-        ev.accept()
+    def event(self, ev):
+        """Route macOS / precision-touchpad pinch gestures to zoom."""
+        try:
+            if ev.type() == QEvent.Type.NativeGesture and self._handle_native_gesture(ev):
+                return True
+        except Exception:
+            pass
+        return super().event(ev)
+
+    def _handle_native_gesture(self, ev):
+        """Handle a pinch-zoom native gesture; return True if consumed.
+
+        Best-effort: enum paths differ across bindings/platforms and many
+        touchpads never emit this, so any failure is swallowed and the
+        Ctrl/Cmd+scroll zoom path remains the reliable fallback.
+        """
+        if self._is_destroyed or self.thumbnail or not self.hasImage():
+            return False
+        try:
+            if ev.gestureType() != Qt.NativeGestureType.ZoomNativeGesture:
+                return False
+            # value() is the incremental scale delta (e.g. 0.03 => +3%).
+            factor = 1.0 + float(ev.value())
+            self._zoom_toward(ev.position().toPoint(), factor)
+            ev.accept()
+            return True
+        except Exception:
+            return False
 
     # -------------------------------------------------------------------- #
     #  Everything below (mousePressEvent, ROIs, etc.) is identical to the  #
@@ -626,6 +797,18 @@ class QtImageViewer(QGraphicsView):
             ev.accept()
             return
 
+        # ------------- spacebar pan start (Space held + left-drag)
+        # Takes precedence over region-zoom so hold-Space turns the left button
+        # into a pan, then release Space to resume region-zoom.
+        if (self._space_held and ev.button() == Qt.LeftButton and self.canPan):
+            self._panLastPixel = ev.position().toPoint()
+            self.setDragMode(QGraphicsView.NoDrag)
+            if not self.thumbnail:
+                self.viewport().setCursor(Qt.ClosedHandCursor)
+            self._isPanning = True
+            ev.accept()
+            return
+
         # ------------- region zoom start
         if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
             self._pixelPosition = ev.position().toPoint()
@@ -646,18 +829,14 @@ class QtImageViewer(QGraphicsView):
             return
 
         # ------------- pan start
+        # Drag-pan by translating the zoom rect from the raw mouse delta. We do
+        # NOT use ScrollHandDrag: it pans by moving the scrollbars, which are
+        # disabled (see __init__) to avoid the fitInView/scrollbar lock-up.
         if (self.panButton and ev.button() == self.panButton and self.canPan):
-            self._pixelPosition = ev.position().toPoint()
-            self.setDragMode(QGraphicsView.ScrollHandDrag)
-            if self.panButton == Qt.LeftButton:
-                super().mousePressEvent(ev)
-            else:  # fake left‑button drag
+            self._panLastPixel = ev.position().toPoint()
+            self.setDragMode(QGraphicsView.NoDrag)
+            if not self.thumbnail:
                 self.viewport().setCursor(Qt.ClosedHandCursor)
-                fakeMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-                fakeEv = QMouseEvent(QEvent.MouseButtonPress, ev.position(),
-                                     Qt.LeftButton, ev.buttons(), fakeMods)
-                self.mousePressEvent(fakeEv)
-            self._scenePosition = self.mapToScene(self.viewport().rect()).boundingRect().topLeft()
             self._isPanning = True
             ev.accept()
             return
@@ -716,6 +895,26 @@ class QtImageViewer(QGraphicsView):
             ev.accept()
             return
 
+        # ---- finish panning (right-button drag OR spacebar + left-drag)
+        # Must run before the region-zoom finish: a spacebar pan releases the
+        # LEFT button, which would otherwise be mistaken for a region-zoom end.
+        # The view was translated incrementally during mouseMoveEvent, so
+        # there is nothing to reconcile -- just restore cursor and clear state.
+        if self._isPanning:
+            self.setDragMode(QGraphicsView.NoDrag)
+            if self.thumbnail:
+                self.viewport().setCursor(Qt.ArrowCursor)
+            elif self._space_held:
+                self.viewport().setCursor(Qt.OpenHandCursor)
+            else:
+                self.viewport().setCursor(Qt.CrossCursor)
+            self._cleanup_zoom_stack()
+            if not self._is_destroyed:
+                self._safe_emit_view_changed()
+            self._isPanning = False
+            ev.accept()
+            return
+
         # ---- finish region zoom
         if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
             super().mouseReleaseEvent(ev)
@@ -739,33 +938,6 @@ class QtImageViewer(QGraphicsView):
                     if not self._is_destroyed:
                         self._safe_emit_view_changed()
             self._isZooming = False
-            ev.accept()
-            return
-
-        # ---- finish panning
-        if (self.panButton and ev.button() == self.panButton and self.canPan):
-            if self.panButton == Qt.LeftButton:
-                super().mouseReleaseEvent(ev)
-            else:
-                self.viewport().setCursor(Qt.ArrowCursor)
-                fakeMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-                fakeEv = QMouseEvent(QEvent.MouseButtonRelease, ev.position(),
-                                     Qt.LeftButton, ev.buttons(), fakeMods)
-                self.mouseReleaseEvent(fakeEv)
-            self.setDragMode(QGraphicsView.NoDrag)
-            if self.zoomStack:
-                currentView = self.mapToScene(self.viewport().rect()).boundingRect()
-                delta = currentView.topLeft() - self._scenePosition
-                self.zoomStack[-1].translate(delta)
-                validated_rect = self._validate_zoom_rect(self.zoomStack[-1])
-                if validated_rect:
-                    self.zoomStack[-1] = validated_rect
-                else:
-                    self.zoomStack.pop()
-                self._cleanup_zoom_stack()
-                if not self._is_destroyed:
-                    self._safe_emit_view_changed()
-            self._isPanning = False
             ev.accept()
             return
 
@@ -834,19 +1006,22 @@ class QtImageViewer(QGraphicsView):
             ev.accept()
             return
 
-        if self._isPanning:
-            super().mouseMoveEvent(ev)
-            if self.zoomStack:
-                currentView = self.mapToScene(self.viewport().rect()).boundingRect()
-                delta = currentView.topLeft() - self._scenePosition
-                self._scenePosition = currentView.topLeft()
-                self.zoomStack[-1].translate(delta)
-                scene_rect = self._safe_scene_rect()
-                if scene_rect:
-                    self.zoomStack[-1] = self.zoomStack[-1].intersected(scene_rect)
-                    self.updateViewer()
-                    if not self._is_destroyed:
-                        self._safe_emit_view_changed()
+        if self._isPanning and self.zoomStack:
+            cur = ev.position().toPoint()
+            dx = cur.x() - self._panLastPixel.x()
+            dy = cur.y() - self._panLastPixel.y()
+            self._panLastPixel = cur
+            scale = self.transform().m11() or 1.0
+            # Grab-drag: the content follows the cursor, so the view window
+            # (zoom rect) moves opposite to the mouse, scaled to scene units.
+            zr = QRectF(self.zoomStack[-1])
+            zr.translate(-dx / scale, -dy / scale)
+            scene_rect = self._safe_scene_rect()
+            if scene_rect:
+                self.zoomStack[-1] = self._clamp_rect_to_scene(zr, scene_rect)
+                self.updateViewer()
+                if not self._is_destroyed:
+                    self._safe_emit_view_changed()
 
         scenePos = self.mapToScene(ev.position().toPoint())
         scene_rect = self._safe_scene_rect()

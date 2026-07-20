@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 import time
 
 from algorithms.streaming.ColorDetection.services.ColorDetectionService import ColorDetectionService, HSVConfig
-from algorithms.streaming.MotionDetection.services.MotionDetectionService import MotionDetectionService, MotionConfig, DetectionMode
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services import (
     ColorAnomalyAndMotionDetectionOrchestrator, ColorAnomalyAndMotionDetectionConfig, FusionMode
 )
@@ -65,55 +64,6 @@ class TestColorDetectionWorkflow:
         detections = service.detect_colors(frame2, 0.033)
 
         assert isinstance(detections, list)
-
-
-class TestMotionDetectionWorkflow:
-    """Integration tests for motion detection workflow."""
-
-    def test_full_motion_detection_workflow(self, qapp):
-        """Test complete motion detection workflow."""
-        service = MotionDetectionService()
-
-        # Configure service
-        service.update_config(mode=DetectionMode.STATIC, sensitivity=0.5, min_area=100)
-
-        # Create test video sequence
-        frames = []
-        for i in range(10):
-            frame = np.zeros((100, 100, 3), dtype=np.uint8)
-            if i >= 3:  # Add object starting at frame 3
-                frame[30:70, 30:70] = [255, 255, 255]
-            frames.append(frame)
-
-        # Process all frames
-        for i, frame in enumerate(frames):
-            service.process_frame(frame)
-
-        # Verify background was learned
-        assert service._prev_frame is not None
-
-    def test_motion_detection_mode_switching(self, qapp):
-        """Test switching between static and moving camera modes."""
-        service = MotionDetectionService()
-
-        # Start in static mode
-        service.update_config(mode=DetectionMode.STATIC)
-
-        frame1 = np.zeros((100, 100, 3), dtype=np.uint8)
-        frame2 = frame1.copy()
-        frame2[30:70, 30:70] = [255, 255, 255]
-
-        service.process_frame(frame1)
-        service.process_frame(frame2)
-
-        # Switch to moving mode
-        service.update_config(mode=DetectionMode.MOVING)
-
-        service.process_frame(frame1)
-        service.process_frame(frame2)
-
-        # Should handle both modes
-        assert service._current_mode == DetectionMode.MOVING
 
 
 class TestIntegratedDetectionWorkflow:
@@ -219,9 +169,8 @@ class TestPerformanceWorkflows:
 
     def test_large_frame_processing(self, qapp):
         """Test processing large frames."""
-        service = MotionDetectionService()
-
-        service.update_config(mode=DetectionMode.STATIC)
+        service = ColorDetectionService()
+        service.update_config(HSVConfig(target_color_rgb=(255, 255, 255), min_area=500))
 
         # Create large frame
         frame1 = np.zeros((1920, 1080, 3), dtype=np.uint8)
@@ -229,7 +178,7 @@ class TestPerformanceWorkflows:
         frame2[500:700, 500:700] = [255, 255, 255]
 
         # Should handle large frames
-        service.process_frame(frame1)
-        service.process_frame(frame2)
+        service.detect_colors(frame1, 0.0)
+        detections = service.detect_colors(frame2, 0.033)
 
-        assert service._prev_frame is not None
+        assert isinstance(detections, list)

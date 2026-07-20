@@ -10,9 +10,6 @@ import shutil
 import tempfile
 import platform
 
-import cv2
-import numpy as np
-
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QApplication, QDialog
 from PySide6.QtCore import QThread, Signal
 from core.services.export.ZipBundleService import ZipBundleService
@@ -23,6 +20,7 @@ from core.services.image.ImageHighlightService import ImageHighlightService
 from helpers.MetaDataHelper import MetaDataHelper
 
 from core.views.images.viewer.dialogs.ZipExportDialog import ZipExportDialog
+from helpers.TranslationMixin import TranslationMixin
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
 
 
@@ -88,7 +86,7 @@ class ZipExportThread(QThread):
                 pass
 
 
-class ZipExportController:
+class ZipExportController(TranslationMixin):
     """
     Controller for managing ZIP export functionality.
 
@@ -129,9 +127,9 @@ class ZipExportController:
             # Open file dialog for ZIP export
             file_name, _ = QFileDialog.getSaveFileName(
                 self.parent,
-                "Save Zip File",
+                self.tr("Save Zip File"),
                 "",
-                "Zip files (*.zip)"
+                self.tr("Zip files (*.zip)")
             )
 
             if not file_name:  # User cancelled
@@ -162,7 +160,7 @@ class ZipExportController:
                 visible_images = filtered_images
 
             if not visible_images:
-                self._show_toast("No images to export", 3000, color="#F44336")
+                self._show_toast(self.tr("No images to export"), 3000, color="#F44336")
                 return False
 
             # Create and show progress dialog
@@ -367,9 +365,8 @@ class ZipExportController:
                         img.get('areas_of_interest', [])
                     )
 
-            # Save RGB numpy array as JPEG (convert to BGR for OpenCV)
-            bgr = cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(dst_path, bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            # Save RGB numpy array as JPEG
+            ImageService.save_rgb_as_jpeg(augmented, dst_path)
 
             # Transfer metadata
             try:
@@ -397,12 +394,14 @@ class ZipExportController:
     def _on_zip_success(self):
         if hasattr(self, 'progress_dialog') and self.progress_dialog:
             self.progress_dialog.accept()
-        self._show_toast("ZIP file created", 3000, color="#00C853")
+        self._show_toast(self.tr("ZIP file created"), 3000, color="#00C853")
 
     def _on_zip_error(self, error_message):
         if hasattr(self, 'progress_dialog') and self.progress_dialog and self.progress_dialog.isVisible():
             self.progress_dialog.reject()
-        self._show_error(f"Failed to generate Zip file: {error_message}")
+        self._show_error(
+            self.tr("Failed to generate Zip file: {error}").format(error=error_message)
+        )
 
     def _on_zip_cancelled(self):
         if hasattr(self, 'zip_thread') and self.zip_thread and self.zip_thread.isRunning():
@@ -422,4 +421,4 @@ class ZipExportController:
             self.parent._show_error(text)
         else:
             # Fallback to message box
-            QMessageBox.critical(self.parent, "Error", text)
+            QMessageBox.critical(self.parent, self.tr("Error"), text)

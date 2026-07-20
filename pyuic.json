@@ -77,8 +77,16 @@
       "app/algorithms/images/ThermalAnomaly/views"
     ],
     [
+      "resources/views/algorithms/ThermalResidualAnomaly.ui",
+      "app/algorithms/images/ThermalResidualAnomaly/views"
+    ],
+    [
       "resources/views/algorithms/ThermalAnomalyWizard.ui",
       "app/algorithms/images/ThermalAnomaly/views"
+    ],
+    [
+      "resources/views/algorithms/ThermalResidualAnomalyWizard.ui",
+      "app/algorithms/images/ThermalResidualAnomaly/views"
     ],
     [
       "resources/views/algorithms/RXAnomalyWizard.ui",
@@ -123,6 +131,14 @@
     [
       "resources/views/algorithms/ColorAnomalyAndMotionDetectionWizard.ui",
       "app/algorithms/streaming/ColorAnomalyAndMotionDetection/views"
+    ],
+    [
+      "resources/views/algorithms/AIPersonDetectorWizard.ui",
+      "app/algorithms/streaming/AIPersonDetector/views"
+    ],
+    [
+      "resources/views/flight/*.ui",
+      "app/core/views/flight"
     ]
   ],
     "hooks": [],

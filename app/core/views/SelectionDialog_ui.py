@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'SelectionDialog.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -23,7 +23,7 @@ class Ui_MediaSelector(object):
     def setupUi(self, MediaSelector):
         if not MediaSelector.objectName():
             MediaSelector.setObjectName(u"MediaSelector")
-        MediaSelector.resize(425, 265)
+        MediaSelector.resize(600, 290)
         self.verticalLayout_3 = QVBoxLayout(MediaSelector)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.label = QLabel(MediaSelector)
@@ -104,6 +104,34 @@ class Ui_MediaSelector(object):
 
         self.horizontalLayout_2.addWidget(self.streamWidget)
 
+        self.flightWidget = QWidget(self.selectionWidget)
+        self.flightWidget.setObjectName(u"flightWidget")
+        sizePolicy1.setHeightForWidth(self.flightWidget.sizePolicy().hasHeightForWidth())
+        self.flightWidget.setSizePolicy(sizePolicy1)
+        self.verticalLayout_4 = QVBoxLayout(self.flightWidget)
+        self.verticalLayout_4.setObjectName(u"verticalLayout_4")
+        self.verticalSpacer_top_3 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.verticalLayout_4.addItem(self.verticalSpacer_top_3)
+
+        self.flightButton = QToolButton(self.flightWidget)
+        self.flightButton.setObjectName(u"flightButton")
+        self.flightButton.setMinimumSize(QSize(150, 150))
+        self.flightButton.setMaximumSize(QSize(150, 150))
+        self.flightButton.setFont(font1)
+        self.flightButton.setStyleSheet(u"QToolButton { border: 3px solid palette(mid); border-radius: 8px; }")
+        self.flightButton.setIconSize(QSize(100, 100))
+        self.flightButton.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+
+        self.verticalLayout_4.addWidget(self.flightButton, 0, Qt.AlignHCenter)
+
+        self.verticalSpacer_bottom_3 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+
+        self.verticalLayout_4.addItem(self.verticalSpacer_bottom_3)
+
+
+        self.horizontalLayout_2.addWidget(self.flightWidget)
+
 
         self.verticalLayout_3.addWidget(self.selectionWidget)
 
@@ -115,11 +143,15 @@ class Ui_MediaSelector(object):
 
     def retranslateUi(self, MediaSelector):
         MediaSelector.setWindowTitle(QCoreApplication.translate("MediaSelector", u"Automated Drone Image Analysis Tool (ADIAT)", None))
-        self.label.setText(QCoreApplication.translate("MediaSelector", u"What type of media are you working with?", None))
-        self.imageButton.setText(QCoreApplication.translate("MediaSelector", u"Images", None))
+        self.label.setText(QCoreApplication.translate("MediaSelector", u"What would you like to do?", None))
+        self.imageButton.setText(QCoreApplication.translate("MediaSelector", u"Image Analysis", None))
 #if QT_CONFIG(tooltip)
         self.streamButton.setToolTip(QCoreApplication.translate("MediaSelector", u"RTMP, Video Files, HDMI Capture", None))
 #endif // QT_CONFIG(tooltip)
-        self.streamButton.setText(QCoreApplication.translate("MediaSelector", u"Streaming", None))
+        self.streamButton.setText(QCoreApplication.translate("MediaSelector", u"Stream Analysis", None))
+#if QT_CONFIG(tooltip)
+        self.flightButton.setToolTip(QCoreApplication.translate("MediaSelector", u"Pair with ADIAT Mobile drone controllers to receive their live camera feeds with detections.", None))
+#endif // QT_CONFIG(tooltip)
+        self.flightButton.setText(QCoreApplication.translate("MediaSelector", u"Flight Viewer", None))
     # retranslateUi
 

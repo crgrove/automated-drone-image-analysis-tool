@@ -14,6 +14,7 @@ from core.services.image.ImageService import ImageService
 from core.services.LoggerService import LoggerService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
+from helpers.PhotogrammetryHelper import validate_alignment
 
 
 class CoverageExtentService:
@@ -24,17 +25,27 @@ class CoverageExtentService:
     then unions overlapping polygons to create consolidated coverage areas.
     """
 
-    def __init__(self, custom_altitude_ft: Optional[float] = None, logger: Optional[LoggerService] = None):
+    def __init__(self, custom_altitude_ft: Optional[float] = None, logger: Optional[LoggerService] = None,
+                 use_terrain: bool = True):
         """
         Initialize the coverage extent service.
 
         Args:
             custom_altitude_ft: Optional custom altitude in feet for GSD calculations
             logger: Optional logger instance for error reporting
+            use_terrain: Whether to use terrain (DEM) elevation data when
+                deriving each image's effective AGL/GSD, matching the
+                terrain-corrected AOI/FOV pipeline
         """
         self.custom_altitude_ft = custom_altitude_ft
         self.logger = logger or LoggerService()
+        self.use_terrain = use_terrain
         self.earth_radius = 6371000  # meters
+        # Camera yaw (deg) used by the most recent FOV polygon calculation, or
+        # None when unavailable. Lets callers (the Align Image dialog) orient the
+        # drone photo to the same heading that seeded the footprint estimate,
+        # without decoding the image a second time.
+        self.last_camera_yaw: Optional[float] = None
 
     def calculate_coverage_extents(self, images: List[Dict[str, Any]], progress_callback=None, cancel_check=None) -> Dict[str, Any]:
         """
@@ -149,6 +160,21 @@ class CoverageExtentService:
             'cancelled': False
         }
 
+    def get_image_fov_corners(self, image: Dict[str, Any]) -> Optional[List[tuple]]:
+        """
+        Compute the estimated FOV corner coordinates for a single image.
+
+        Public wrapper around the FOV polygon calculation, used by the Align
+        Image dialog to seed its starting overlay.
+
+        Args:
+            image: Image data dictionary.
+
+        Returns:
+            List of four (latitude, longitude) tuples (TL, TR, BR, BL), or None.
+        """
+        return self._calculate_image_fov_polygon(image)
+
     def _calculate_image_fov_polygon(self, image: Dict[str, Any]) -> Optional[List[tuple]]:
         """
         Calculate the FOV polygon for a single image.
@@ -159,7 +185,15 @@ class CoverageExtentService:
         Returns:
             List of (latitude, longitude) tuples for polygon corners, or None if calculation fails
         """
+        self.last_camera_yaw = None
         try:
+            # A manually aligned image's user-placed corners are its FOV.
+            refinement = image.get('fov_alignment')
+            if refinement and refinement.get('corners'):
+                corners = refinement['corners']
+                if validate_alignment(corners):
+                    return [tuple(corner) for corner in corners]
+
             image_path = image.get('path', '')
             if not image_path:
                 return None
@@ -175,9 +209,11 @@ class CoverageExtentService:
             image_lon = gps_coords['longitude']
 
             # Load image service
-            image_service = ImageService(image_path, image.get('mask_path', ''))
+            image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
 
-            # Check gimbal angle - must be nadir
+            # Check gimbal angle - must be nadir (allowing for outward roll on
+            # fixed-wing rigs like WALDO, where pitch stays at -90 but roll is
+            # applied about the heading axis to push the footprint sideways).
             gimbal_pitch = image_service.get_camera_pitch()
             if gimbal_pitch is not None:
                 # Nadir is typically -90 degrees (camera pointing straight down)
@@ -186,18 +222,45 @@ class CoverageExtentService:
                     self.logger.warning(f"Image {image.get('name', 'unknown')} skipped: gimbal not nadir ({gimbal_pitch:.1f}°)")
                     return None
 
-            # Get GSD
-            gsd_cm = image_service.get_average_gsd(custom_altitude_ft=self.custom_altitude_ft)
-            if gsd_cm is None or gsd_cm <= 0:
-                self.logger.warning(f"Image {image.get('name', 'unknown')} skipped: no valid GSD")
-                return None
+            # Outward gimbal roll (e.g. WALDO ±22.5°) shifts the ground footprint
+            # cross-track by h*tan(roll). >90° rolls are the DJI "inverted gimbal"
+            # pattern where get_camera_yaw already flips yaw 180°, so skip those.
+            gimbal_roll = image_service.get_gimbal_roll() or 0.0
+            if abs(gimbal_roll) > 90.0:
+                gimbal_roll = 0.0
 
-            # Get image dimensions
+            # Get image dimensions (needed first: terrain GSD samples the center pixel)
             img_array = image_service.img_array
             if img_array is None:
                 return None
 
             height, width = img_array.shape[:2]
+
+            # Get GSD — terrain-corrected at the image center when enabled, so
+            # the footprint size reflects DEM-derived effective AGL (matching
+            # the AOI / GPS-map FOV pipeline) instead of the drone's reported
+            # altitude. Falls back to the flat-ground average GSD.
+            gsd_cm = None
+            effective_agl_m = None
+            if self.use_terrain:
+                try:
+                    gsd_cm = image_service.compute_gsd_at_pixel(
+                        width / 2.0, height / 2.0,
+                        use_terrain=True,
+                        custom_altitude_ft=self.custom_altitude_ft,
+                    )
+                    effective_agl_m = image_service.get_effective_agl_at_pixel(
+                        width / 2.0, height / 2.0,
+                        custom_altitude_ft=self.custom_altitude_ft,
+                    )
+                except Exception:
+                    gsd_cm = None
+                    effective_agl_m = None
+            if gsd_cm is None or gsd_cm <= 0:
+                gsd_cm = image_service.get_average_gsd(custom_altitude_ft=self.custom_altitude_ft)
+            if gsd_cm is None or gsd_cm <= 0:
+                self.logger.warning(f"Image {image.get('name', 'unknown')} skipped: no valid GSD")
+                return None
 
             # Calculate image dimensions in meters
             gsd_m = gsd_cm / 100.0
@@ -206,16 +269,32 @@ class CoverageExtentService:
 
             # Get drone orientation (bearing)
             bearing = image_service.get_camera_yaw()
+            self.last_camera_yaw = bearing
             if bearing is None:
                 bearing = 0  # Default to north if bearing not available
 
             # Calculate the four corners of the image in GPS coordinates
-            # Corners in image space (centered at origin)
+            # Corners in image space (centered at the drone-nadir point on the
+            # ground plane). Outward roll shifts that center cross-track by
+            # h*tan(roll); positive roll points the optical axis to the LEFT
+            # of heading (matches AOIService convention), so the centroid
+            # offset along the camera-X (right) axis is -h*tan(roll).
+            agl_m = effective_agl_m  # DEM-corrected AGL when terrain resolved
+            if agl_m is None or agl_m <= 0:
+                agl_m = image_service.get_relative_altitude('m')
+            if agl_m is None or agl_m <= 0:
+                # Custom altitude already factored into GSD; back-derive in m.
+                if self.custom_altitude_ft and self.custom_altitude_ft > 0:
+                    agl_m = self.custom_altitude_ft / 3.28084
+                else:
+                    agl_m = 0.0
+            roll_offset_x = -agl_m * math.tan(math.radians(gimbal_roll))
+
             corners_image = [
-                (-width_m / 2, -height_m / 2),  # Top-left
-                (width_m / 2, -height_m / 2),   # Top-right
-                (width_m / 2, height_m / 2),    # Bottom-right
-                (-width_m / 2, height_m / 2)    # Bottom-left
+                (roll_offset_x - width_m / 2, -height_m / 2),  # Top-left
+                (roll_offset_x + width_m / 2, -height_m / 2),  # Top-right
+                (roll_offset_x + width_m / 2, height_m / 2),   # Bottom-right
+                (roll_offset_x - width_m / 2, height_m / 2)    # Bottom-left
             ]
 
             # Rotate corners by bearing and convert to GPS

@@ -20,6 +20,11 @@ class ThermalParserService:
         'XTR'
     ]
 
+    SKYDIO_FLIR_MODELS = [
+        'VT300-L_40IR',
+        'VT300-Z_40IR'
+    ]
+
     DJI_MODELS = [
         'ZH20T',
         'XT S',
@@ -63,18 +68,27 @@ class ThermalParserService:
         Returns:
             tuple[str, str]: Camera model name and platform ('FLIR', 'DJI', 'AUTEL', or 'None').
         """
-        camera_model = meta_fields.get('CameraModel', meta_fields.get('Model', '')).strip()
+        make = str(meta_fields.get('Make', '') or '').strip()
+        exif_model = str(meta_fields.get('Model', '') or '').strip()
+        camera_model = str(meta_fields.get('CameraModel', '') or '').strip()
+
+        if make.upper() == 'SKYDIO' and exif_model in self.SKYDIO_FLIR_MODELS:
+            return exif_model, 'FLIR'
+
+        model_candidates = [model for model in (camera_model, exif_model) if model]
 
         # Normalize for easier matching
+        camera_model = camera_model or exif_model
         cam_upper = camera_model.upper()
 
         # Explicit lists first
-        if camera_model in self.FLIR_MODELS:
-            return camera_model, 'FLIR'
-        elif camera_model in self.DJI_MODELS:
-            return camera_model, 'DJI'
-        elif camera_model in self.AUTEL_MODELS:
-            return camera_model, 'AUTEL'
+        for model in model_candidates:
+            if model in self.FLIR_MODELS:
+                return model, 'FLIR'
+            elif model in self.DJI_MODELS:
+                return model, 'DJI'
+            elif model in self.AUTEL_MODELS:
+                return model, 'AUTEL'
 
         # Fallback rules
         if "FLIR" in cam_upper or "BOSON" in cam_upper or "SKYDIO" in cam_upper:

@@ -14,9 +14,10 @@ from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.ImageHighlightService import ImageHighlightService
 from helpers.LocationInfo import LocationInfo
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ImageLoadController:
+class ImageLoadController(TranslationMixin):
     """
     Controller for loading and displaying images with metadata.
 
@@ -54,6 +55,12 @@ class ImageLoadController:
                     self.parent.ui_style_controller.update_magnify_button_style()
 
             image = self.parent.images[self.parent.current_image]
+
+            # A freshly loaded image invalidates the previous image's
+            # selected-AOI overlay; the gallery re-shows it after zooming.
+            overlay = getattr(self.parent, 'aoi_overlay_controller', None)
+            if overlay is not None:
+                overlay.clear()
 
             # Always sync the active thumbnail/index
             self._sync_thumbnail_state(image)
@@ -107,13 +114,28 @@ class ImageLoadController:
 
             self.parent.main_image.setFocus()
             self.parent.hideImageToggle.setChecked(image['hidden'])
-            self.parent.indexLabel.setText(f"(Image {self.parent.current_image + 1} of {len(self.parent.images)})")
+            self.parent.indexLabel.setText(
+                self.tr("(Image {current} of {total})").format(
+                    current=self.parent.current_image + 1,
+                    total=len(self.parent.images)
+                )
+            )
 
             # Update metadata displays
             self._update_metadata_displays(image_service)
 
             # Update overlay
             self._update_overlay(image_service)
+
+            # Refresh tools that depend on GSD (e.g. person size reference)
+            if hasattr(self.parent, '_update_person_overlay_button_enabled'):
+                self.parent._update_person_overlay_button_enabled()
+
+            # Grid review joins the new image last: when active it re-zooms
+            # to the image's first unreviewed cell, overriding the zoom
+            # reset performed above.
+            if hasattr(self.parent, 'grid_review_controller'):
+                self.parent.grid_review_controller.on_image_loaded()
 
         except Exception as e:
             self._handle_load_error(e, image)
@@ -169,6 +191,39 @@ class ImageLoadController:
         self.parent.main_image._emit_zoom_if_changed()
 
         # Restore AOI list scroll position
+        if hasattr(self.parent, 'aoiListWidget') and aoi_scroll_pos > 0:
+            self.parent.aoiListWidget.verticalScrollBar().setValue(aoi_scroll_pos)
+
+    def refresh_image_preserving_view_from_cache(self):
+        """
+        Re-render the current image using cached services and preserve the view.
+
+        This path is used by lightweight overlay updates such as thermal histogram
+        hover highlighting, where reloading metadata from disk would be wasteful.
+        """
+        if not hasattr(self.parent, 'main_image') or self.parent.main_image is None:
+            return
+
+        image = self.parent.images[self.parent.current_image]
+        image_service = getattr(self.parent, 'current_image_service', None)
+        if image_service is None:
+            self.reload_image_preserving_view()
+            return
+
+        saved_zoom_stack = self.parent.main_image.zoomStack.copy() if self.parent.main_image.zoomStack else []
+        saved_transform = self.parent.main_image.transform()
+        aoi_scroll_pos = self.parent.aoiListWidget.verticalScrollBar().value() if hasattr(self.parent, 'aoiListWidget') else 0
+
+        mask_path = image.get('mask_path', '')
+        augmented_image = self._apply_augmentations(image_service, image, mask_path)
+        img = QImage(qimage2ndarray.array2qimage(augmented_image))
+
+        self.parent.main_image.zoomStack = saved_zoom_stack
+        self.parent.main_image.setImage(img)
+        self.parent.main_image.setTransform(saved_transform)
+        self.parent.main_image.zoomStack = saved_zoom_stack
+        self.parent.main_image._emit_zoom_if_changed()
+
         if hasattr(self.parent, 'aoiListWidget') and aoi_scroll_pos > 0:
             self.parent.aoiListWidget.verticalScrollBar().setValue(aoi_scroll_pos)
 
@@ -235,6 +290,29 @@ class ImageLoadController:
                     image['areas_of_interest']
                 )
 
+        histogram_controller = None
+        if getattr(self.parent, 'is_thermal', False):
+            histogram_controller = getattr(self.parent, 'thermal_histogram_controller', None)
+        else:
+            histogram_controller = getattr(self.parent, 'color_histogram_controller', None)
+
+        if histogram_controller is not None:
+            visibility_mask = histogram_controller.get_visibility_mask()
+            if visibility_mask is not None:
+                augmented_image = ImageHighlightService.apply_visibility_mask(
+                    augmented_image,
+                    visibility_mask
+                )
+
+            hover_mask = histogram_controller.get_hover_mask()
+            if hover_mask is not None:
+                augmented_image = ImageHighlightService.apply_boolean_mask_highlight(
+                    augmented_image,
+                    hover_mask,
+                    highlight_color=(0, 255, 255),
+                    alpha=0.55
+                )
+
         return augmented_image
 
     def _reset_zoom_if_valid(self):
@@ -254,6 +332,8 @@ class ImageLoadController:
 
     def _update_metadata_displays(self, image_service):
         """Update metadata displays in status bar."""
+        image = self.parent.images[self.parent.current_image]
+
         # Altitude
         altitude = image_service.get_relative_altitude(self.parent.distance_unit)
         if altitude:
@@ -297,13 +377,25 @@ class ImageLoadController:
             self.parent.coordinate_controller.update_current_coordinates(None)
 
         # Thermal data
+        temperature_data = None
         if self.parent.is_thermal and hasattr(self.parent, 'thermal_controller'):
-            image = self.parent.images[self.parent.current_image]
             image_path = image.get('path', '')
-            self.parent.thermal_controller.load_thermal_data(
+            temperature_data = self.parent.thermal_controller.load_thermal_data(
                 image_service,
                 image_path,
                 self.parent.temperature_unit
+            )
+
+        if hasattr(self.parent, 'thermal_histogram_controller'):
+            self.parent.thermal_histogram_controller.on_temperature_data_updated(
+                temperature_data,
+                image.get('areas_of_interest', [])
+            )
+
+        if hasattr(self.parent, 'color_histogram_controller'):
+            self.parent.color_histogram_controller.on_image_data_updated(
+                image_service.img_array if not self.parent.is_thermal else None,
+                image.get('areas_of_interest', [])
             )
 
     def _update_overlay(self, image_service):
@@ -324,6 +416,15 @@ class ImageLoadController:
                 direction,
                 avg_gsd
             )
+            # Explicitly refresh the scale bar. It is otherwise only updated on a
+            # zoomChanged signal, which (a) does NOT fire when consecutive images
+            # share the same dimensions (identical fit zoom is suppressed by the
+            # >1e-6 guard), and (b) when it does fire during the zoom reset, runs
+            # before the GSD is populated in messages. Either way the bar would
+            # stay hidden until the user manually rescaled. By now messages holds
+            # the current GSD (set in _update_metadata_displays just before this).
+            if hasattr(self.parent, '_update_scale_bar') and self.parent.main_image is not None:
+                self.parent._update_scale_bar(self.parent.main_image.getZoom())
             # Position the overlay after image is loaded and zoomed
             self.parent.overlay._place_overlay()
 
@@ -343,4 +444,4 @@ class ImageLoadController:
         error_msg += f"{'=' * 60}\n"
         self.logger.error(error_msg)
         # Show error to user
-        QMessageBox.critical(self.parent, "Error Loading Image", error_msg)
+        QMessageBox.critical(self.parent, self.tr("Error Loading Image"), error_msg)

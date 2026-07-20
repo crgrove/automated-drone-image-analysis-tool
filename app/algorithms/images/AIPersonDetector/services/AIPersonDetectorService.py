@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import sys
 import os
-from os import path
+from pathlib import Path
 
 # Optional import for onnxruntime - handle DLL load failures gracefully
 try:
@@ -70,21 +70,23 @@ class AIPersonDetectorService(AlgorithmService):
         if self.cpu_only:
             self.slice_size = 1280
             self.model_img_size = 640
-            if getattr(sys, 'frozen', False):
-                # Frozen (PyInstaller)
-                self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model_V2_640.onnx')
-            else:
-                # Not frozen (dev)
-                self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model_V2_640.onnx'))
+            self.model_path = self._resolve_model_path('ai_person_model_V3_640.onnx')
         else:
             self.slice_size = 2048
             self.model_img_size = 1024
-            if getattr(sys, 'frozen', False):
-                # Frozen (PyInstaller)
-                self.model_path = os.path.join(sys._MEIPASS, 'ai_models', 'ai_person_model_V2_1024.onnx')
-            else:
-                # Not frozen (dev)
-                self.model_path = path.abspath(path.join(path.dirname(__file__), 'ai_person_model_V2_1024.onnx'))
+            self.model_path = self._resolve_model_path('ai_person_model_V3_1024.onnx')
+
+    def _resolve_model_path(self, model_name: str) -> str:
+        """Resolve ONNX model path for source and frozen builds."""
+        if getattr(sys, 'frozen', False):
+            return os.path.join(sys._MEIPASS, 'algorithms', 'models', 'AIPersonDetector', model_name)
+
+        return str(
+            Path(__file__).resolve().parents[3]
+            / 'models'
+            / 'AIPersonDetector'
+            / model_name
+        )
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """Process a single image to detect people, aggregate results, and identify areas of interest.

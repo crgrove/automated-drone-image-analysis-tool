@@ -116,10 +116,10 @@ def test_generate_kml_export_mock(kml_service, sample_images):
         # Mock AOIService
         mock_aoi_service = MagicMock()
         mock_aoi_service.calculate_gps_with_custom_altitude.return_value = (37.7750, -122.4195)
-        mock_aoi_service.get_aoi_representative_color.return_value = {
+        mock_aoi_service.get_cached_or_representative_color.return_value = {
             'rgb': (100, 150, 200),
             'hex': '#6496C8',
-            'hue_degrees': 210.0
+            'hue_degrees': 210
         }
         MockAOIService.return_value = mock_aoi_service
 

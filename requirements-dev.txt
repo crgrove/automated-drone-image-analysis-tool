@@ -1,4 +1,5 @@
 qt6-tools
 PyInstaller
 pytest-qt
+pytest-cov
 flake8

@@ -22,9 +22,11 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QSizePolicy, QColorDialog, QToolButton, QStyle,
                                QApplication)
 from .HSVColorRangeAssistant import HSVColorRangeAssistant
+from helpers.TranslationMixin import TranslationMixin
+from core.views.components.HueRingSelector import HueRingSelector
 
 
-class HSVRangePickerWidget(QWidget):
+class HSVRangePickerWidget(TranslationMixin, QWidget):
     """Advanced HSV color range picker with visual feedback."""
 
     # Signals emitted when values change
@@ -56,6 +58,7 @@ class HSVRangePickerWidget(QWidget):
 
         # Initialize UI
         self.setup_ui()
+        self._apply_translations()
         self.setMinimumSize(800, 750)
 
     def setup_ui(self):
@@ -84,37 +87,37 @@ class HSVRangePickerWidget(QWidget):
         header_layout = QHBoxLayout()
 
         # Hex input
-        hex_label = QLabel("HEX:")
+        hex_label = QLabel(self.tr("HEX:"))
         hex_label.setFont(QFont("Arial", 10, QFont.Bold))
-        hex_label.setToolTip(
+        hex_label.setToolTip(self.tr(
             "Hexadecimal color code input.\n"
             "Enter colors as hex codes (e.g., #FF0000 for red)."
-        )
+        ))
 
         self.hex_input = QLineEdit("#FF0000")
         self.hex_input.setMaxLength(7)
         self.hex_input.setFixedWidth(120)
         self.hex_input.setFont(QFont("Courier", 10))
-        self.hex_input.setToolTip(
+        self.hex_input.setToolTip(self.tr(
             "Enter a hexadecimal color code.\n"
             "• Format: #RRGGBB (e.g., #FF0000 for red, #00FF00 for green)\n"
             "• Also accepts short format: #RGB (e.g., #F00 for red)\n"
             "Type or paste a hex code to quickly set a specific color.\n"
             "The color will be converted to HSV automatically."
-        )
+        ))
         self.hex_input.textChanged.connect(self.on_hex_changed)
 
         # Reset button
-        self.reset_button = QPushButton("Reset to Default")
+        self.reset_button = QPushButton(self.tr("Reset to Default"))
         self.reset_button.setFixedHeight(30)
-        self.reset_button.setToolTip(
+        self.reset_button.setToolTip(self.tr(
             "Reset to default color and ranges.\n"
             "• Color: Pure red (H:0°, S:100%, V:100%)\n"
             "• Hue range: ±20° (total 40° range)\n"
             "• Saturation range: ±20%\n"
             "• Value range: ±20%\n"
             "Use this to start over with standard settings."
-        )
+        ))
         self.reset_button.clicked.connect(self.reset_to_default)
 
         header_layout.addWidget(hex_label)
@@ -131,18 +134,18 @@ class HSVRangePickerWidget(QWidget):
 
         # SV Square section
         sv_layout = QVBoxLayout()
-        sv_label = QLabel("Saturation / Value")
+        sv_label = QLabel(self.tr("Saturation / Value"))
         sv_label.setAlignment(Qt.AlignCenter)
         sv_label.setFont(QFont("Arial", 12, QFont.Bold))
-        sv_label.setToolTip(
+        sv_label.setToolTip(self.tr(
             "Saturation and Value (brightness) selector.\n"
             "Saturation controls color intensity (left=gray, right=vivid).\n"
             "Value controls brightness (bottom=dark, top=bright)."
-        )
+        ))
 
         self.sv_widget = SVSquareWidget(self)
         self.sv_widget.setFixedSize(self.sv_square_size, self.sv_square_size)
-        self.sv_widget.setToolTip(
+        self.sv_widget.setToolTip(self.tr(
             "Interactive Saturation/Value selector.\n"
             "• Click anywhere to set the center color's saturation and brightness\n"
             "• White circle = current center color position\n"
@@ -151,7 +154,7 @@ class HSVRangePickerWidget(QWidget):
             "• Horizontal range = saturation tolerance\n"
             "• Vertical range = value/brightness tolerance\n"
             "Larger ranges detect more color variations but may include unwanted colors."
-        )
+        ))
         self.sv_widget.valueChanged.connect(self.on_sv_changed)
 
         sv_layout.addWidget(sv_label)
@@ -159,17 +162,17 @@ class HSVRangePickerWidget(QWidget):
 
         # Hue Ring section
         hue_layout = QVBoxLayout()
-        hue_label = QLabel("Hue")
+        hue_label = QLabel(self.tr("Hue"))
         hue_label.setAlignment(Qt.AlignCenter)
         hue_label.setFont(QFont("Arial", 12, QFont.Bold))
-        hue_label.setToolTip(
+        hue_label.setToolTip(self.tr(
             "Hue (color type) selector.\n"
             "Hue represents the actual color: red, orange, yellow, green, cyan, blue, purple, magenta."
-        )
+        ))
 
-        self.hue_widget = HueRingWidget(self)
+        self.hue_widget = HueRingSelector(self)
         self.hue_widget.setFixedSize(self.hue_ring_size, self.hue_ring_size)
-        self.hue_widget.setToolTip(
+        self.hue_widget.setToolTip(self.tr(
             "Interactive Hue color ring selector.\n"
             "• Click on the ring to select a hue (color type)\n"
             "• White line = current center hue\n"
@@ -178,7 +181,7 @@ class HSVRangePickerWidget(QWidget):
             "• Left handle = lower bound (minus range)\n"
             "• Right handle = upper bound (plus range)\n"
             "Warning: Hue ranges wider than 60° may detect too many colors."
-        )
+        ))
         self.hue_widget.valueChanged.connect(self.on_hue_changed)
 
         hue_layout.addWidget(hue_label)
@@ -199,9 +202,9 @@ class HSVRangePickerWidget(QWidget):
 
         # HSV Assistant button - now a regular button like "Pick Screen Color"
         # Hidden per user request - "Use Image" option should not appear in HSV Color Picker
-        self.hsv_assistant_button = QPushButton("Use Image")
+        self.hsv_assistant_button = QPushButton(self.tr("Use Image"))
         self.hsv_assistant_button.setFixedHeight(35)
-        self.hsv_assistant_button.setToolTip(
+        self.hsv_assistant_button.setToolTip(self.tr(
             "Open HSV Color Range Assistant.\n"
             "Advanced tool for selecting colors from an image:\n"
             "• Load an image from your input folder\n"
@@ -209,33 +212,33 @@ class HSVRangePickerWidget(QWidget):
             "• Automatically calculates optimal HSV ranges\n"
             "• See real-time preview of detection results\n"
             "Recommended for finding the best color range for your target."
-        )
+        ))
         self.hsv_assistant_button.clicked.connect(self.open_hsv_assistant)
         self.hsv_assistant_button.hide()  # Hide the "Use Image" button
 
-        self.pick_screen_button = QPushButton("Pick Screen Color")
+        self.pick_screen_button = QPushButton(self.tr("Pick Screen Color"))
         self.pick_screen_button.setFixedHeight(35)
-        self.pick_screen_button.setToolTip(
+        self.pick_screen_button.setToolTip(self.tr(
             "Pick a color from anywhere on your screen.\n"
             "Opens a color picker that lets you:\n"
             "• Click anywhere on your screen to sample a color\n"
             "• Sample from other applications or images\n"
             "The picked color will be set as the center color.\n"
             "Ranges remain unchanged - adjust manually after picking."
-        )
+        ))
         self.pick_screen_button.clicked.connect(self.pick_screen_color)
         self.pick_screen_button.hide()  # Hide the "Pick Screen Color" button
 
-        self.add_custom_button = QPushButton("Add to Custom Colors")
+        self.add_custom_button = QPushButton(self.tr("Add to Custom Colors"))
         self.add_custom_button.setFixedHeight(35)
-        self.add_custom_button.setToolTip(
+        self.add_custom_button.setToolTip(self.tr(
             "Save current color to Custom Colors palette.\n"
             "Adds the current center color to the first empty slot in Custom Colors.\n"
             "• Only saves the color, not the ranges\n"
             "• Click saved colors to quickly reuse them\n"
             "• Custom colors persist across sessions\n"
             "Useful for building a palette of frequently used colors."
-        )
+        ))
         self.add_custom_button.clicked.connect(self.add_to_custom_colors)
 
         buttons_layout.addWidget(self.hsv_assistant_button)
@@ -247,45 +250,45 @@ class HSVRangePickerWidget(QWidget):
 
         # Basic Colors section
         basic_colors_layout = QVBoxLayout()
-        basic_label = QLabel("Basic Colors:")
+        basic_label = QLabel(self.tr("Basic Colors:"))
         basic_label.setFont(QFont("Arial", 10, QFont.Bold))
-        basic_label.setToolTip(
+        basic_label.setToolTip(self.tr(
             "Preset basic color palette.\n"
             "Quick access to common colors like red, orange, yellow, green, cyan, blue, purple, and grayscale.\n"
             "Click any color swatch to set it as the center color."
-        )
+        ))
         basic_colors_layout.addWidget(basic_label)
 
         self.basic_colors_grid = self.create_basic_colors_grid()
-        self.basic_colors_grid.setToolTip(
+        self.basic_colors_grid.setToolTip(self.tr(
             "Basic color swatches.\n"
             "Click any color to quickly set it as your center color.\n"
             "• Top row: Primary colors and tints\n"
             "• Bottom row: Grayscale and darker shades\n"
             "Useful for quickly selecting standard colors."
-        )
+        ))
         basic_colors_layout.addWidget(self.basic_colors_grid)
 
         # Custom Colors section
         custom_colors_layout = QVBoxLayout()
-        custom_label = QLabel("Custom Colors:")
+        custom_label = QLabel(self.tr("Custom Colors:"))
         custom_label.setFont(QFont("Arial", 10, QFont.Bold))
-        custom_label.setToolTip(
+        custom_label.setToolTip(self.tr(
             "Your saved custom color palette.\n"
             "Colors you've saved using 'Add to Custom Colors' button.\n"
             "Click any saved color to reuse it."
-        )
+        ))
         custom_colors_layout.addWidget(custom_label)
 
         self.custom_colors_grid = self.create_custom_colors_grid()
-        self.custom_colors_grid.setToolTip(
+        self.custom_colors_grid.setToolTip(self.tr(
             "Custom color swatches.\n"
             "Click any color to set it as your center color.\n"
             "• Empty slots shown as gray\n"
             "• Use 'Add to Custom Colors' button to save current color\n"
             "• Custom colors persist across sessions\n"
             "Build your own palette of frequently used colors."
-        )
+        ))
         custom_colors_layout.addWidget(self.custom_colors_grid)
 
         # Side by side layout for color grids
@@ -454,22 +457,22 @@ class HSVRangePickerWidget(QWidget):
         info_frame = QFrame()
         info_frame.setFrameStyle(QFrame.StyledPanel)
         info_frame.setStyleSheet("QFrame { background-color: #555555; border-radius: 8px; }")
-        info_frame.setToolTip(
+        info_frame.setToolTip(self.tr(
             "Current HSV color range summary.\n"
             "Shows the center color and detection ranges in real-time.\n"
             "Warning indicators appear when ranges may cause detection issues."
-        )
+        ))
 
         info_layout = QGridLayout(info_frame)
         info_layout.setContentsMargins(20, 15, 20, 15)
 
         # Labels
-        labels = ["Center HSV:", "Hue Range:", "Sat Range:", "Val Range:"]
+        labels = [self.tr("Center HSV:"), self.tr("Hue Range:"), self.tr("Sat Range:"), self.tr("Val Range:")]
         label_tooltips = [
-            "Current center HSV color values.\nH = Hue (0-360°), S = Saturation (0-100%), V = Value/brightness (0-100%).",
-            "Hue detection range (minus/plus from center).\nTotal range = minus + plus. Warning shown if total > 60°.",
-            "Saturation detection range (minus/plus from center).\nWarning shown if lower bound < 25%.",
-            "Value detection range (minus/plus from center).\nWarning shown if lower bound < 25%."
+            self.tr("Current center HSV color values.\nH = Hue (0-360°), S = Saturation (0-100%), V = Value/brightness (0-100%)."),
+            self.tr("Hue detection range (minus/plus from center).\nTotal range = minus + plus. Warning shown if total > 60°."),
+            self.tr("Saturation detection range (minus/plus from center).\nWarning shown if lower bound < 25%."),
+            self.tr("Value detection range (minus/plus from center).\nWarning shown if lower bound < 25%.")
         ]
         self.info_labels = []
         self.warning_labels = []  # Store warning labels
@@ -491,42 +494,42 @@ class HSVRangePickerWidget(QWidget):
 
             # Add warning labels for Hue, Sat, and Val ranges (to the right)
             if i == 1:  # Hue Range
-                self.h_warning_label = QLabel("⚠ Too wide!")
+                self.h_warning_label = QLabel(self.tr("⚠ Too wide!"))
                 self.h_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
                 self.h_warning_label.setVisible(False)
                 self.h_warning_label.setAlignment(Qt.AlignLeft)
-                self.h_warning_label.setToolTip(
+                self.h_warning_label.setToolTip(self.tr(
                     "Hue range warning.\n"
                     "Your hue range is wider than 60° total.\n"
                     "Wide hue ranges may detect too many different colors.\n"
                     "Consider narrowing the range for more accurate detection."
-                )
+                ))
                 info_layout.addWidget(self.h_warning_label, i, 2)
                 self.warning_labels.append(self.h_warning_label)
             elif i == 2:  # Sat Range
-                self.s_warning_label = QLabel("⚠ Too low!")
+                self.s_warning_label = QLabel(self.tr("⚠ Too low!"))
                 self.s_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
                 self.s_warning_label.setVisible(False)
                 self.s_warning_label.setAlignment(Qt.AlignLeft)
-                self.s_warning_label.setToolTip(
+                self.s_warning_label.setToolTip(self.tr(
                     "Saturation range warning.\n"
                     "Your saturation lower bound is below 25%.\n"
                     "Low saturation includes grayish/washed out colors.\n"
                     "May detect unintended gray or desaturated colors."
-                )
+                ))
                 info_layout.addWidget(self.s_warning_label, i, 2)
                 self.warning_labels.append(self.s_warning_label)
             elif i == 3:  # Val Range
-                self.v_warning_label = QLabel("⚠ Too low!")
+                self.v_warning_label = QLabel(self.tr("⚠ Too low!"))
                 self.v_warning_label.setStyleSheet("QLabel { color: yellow; font-size: 10px; font-weight: bold; }")
                 self.v_warning_label.setVisible(False)
                 self.v_warning_label.setAlignment(Qt.AlignLeft)
-                self.v_warning_label.setToolTip(
+                self.v_warning_label.setToolTip(self.tr(
                     "Value range warning.\n"
                     "Your value lower bound is below 25%.\n"
                     "Low value includes very dark colors.\n"
                     "May detect shadows or dark unintended objects."
-                )
+                ))
                 info_layout.addWidget(self.v_warning_label, i, 2)
                 self.warning_labels.append(self.v_warning_label)
 
@@ -907,223 +910,6 @@ class SVSquareWidget(QWidget):
         self.update()
         self.valueChanged.emit(self.s, self.v, self.s_minus, self.s_plus,
                                self.v_minus, self.v_plus)
-
-
-class HueRingWidget(QWidget):
-    """Hue ring selector with range visualization."""
-
-    valueChanged = Signal(float, float, float)  # h, h_minus, h_plus
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.h = 0.0
-        self.h_minus = 20 / 360
-        self.h_plus = 20 / 360
-
-        self.dragging_hue = False
-        self.dragging_left = False
-        self.dragging_right = False
-
-        self.setMouseTracking(True)
-
-    def set_values(self, h, h_minus, h_plus):
-        """Update values and repaint."""
-        self.h = h
-        self.h_minus = h_minus
-        self.h_plus = h_plus
-        self.update()
-
-    def paintEvent(self, event):
-        """Paint the hue ring with range indicators."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        center = self.rect().center()
-        size = min(self.width(), self.height()) - 20
-        outer_radius = size * 0.4
-        inner_radius = size * 0.27
-        handle_radius = size * 0.33
-
-        # Draw hue ring
-        self.draw_hue_ring(painter, center, outer_radius, inner_radius)
-
-        # Draw range indicators
-        self.draw_range_indicators(painter, center, outer_radius, inner_radius)
-
-        # Draw center line and handles
-        self.draw_handles(painter, center, outer_radius, inner_radius, handle_radius)
-
-    def draw_hue_ring(self, painter, center, outer_radius, inner_radius):
-        """Draw the colorful hue ring."""
-        # Convert to integers for QRect
-        outer_radius = int(outer_radius)
-        inner_radius = int(inner_radius)
-
-        for degree in range(360):
-            # Original working code - hue colors will be upside down but handles work
-            color = QColor.fromHsv(degree, 255, 255)
-
-            painter.setPen(QPen(color, 2))
-            painter.setBrush(QBrush(color))
-
-            # Create arc path using QRectF for floating point precision
-            outer_rect = QRectF(center.x() - outer_radius, center.y() - outer_radius,
-                                outer_radius * 2, outer_radius * 2)
-            inner_rect = QRectF(center.x() - inner_radius, center.y() - inner_radius,
-                                inner_radius * 2, inner_radius * 2)
-
-            path = QPainterPath()
-            path.arcMoveTo(outer_rect, degree - 90)
-            path.arcTo(outer_rect, degree - 90, 1)
-            path.arcTo(inner_rect, degree - 89, -1)
-            path.closeSubpath()
-
-            painter.fillPath(path, color)
-
-    def draw_range_indicators(self, painter, center, outer_radius, inner_radius):
-        """Draw the range selection indicators."""
-        # Convert to integers
-        outer_radius = int(outer_radius)
-        inner_radius = int(inner_radius)
-
-        # Original working coordinate system
-        start_angle = (self.h - self.h_minus) * 360 - 90
-        end_angle = (self.h + self.h_plus) * 360 - 90
-
-        painter.setPen(QPen(QColor(204, 204, 204), 4))
-
-        # Draw outer arc
-        outer_rect = QRect(center.x() - outer_radius - 4, center.y() - outer_radius - 4,
-                           (outer_radius + 4) * 2, (outer_radius + 4) * 2)
-        painter.drawArc(outer_rect, int(start_angle * 16), int((end_angle - start_angle) * 16))
-
-        # Draw inner arc
-        inner_rect = QRect(center.x() - inner_radius + 4, center.y() - inner_radius + 4,
-                           (inner_radius - 4) * 2, (inner_radius - 4) * 2)
-        painter.drawArc(inner_rect, int(start_angle * 16), int((end_angle - start_angle) * 16))
-
-        # Draw radial lines
-        for angle in [start_angle, end_angle]:
-            rad = math.radians(angle)
-            start_point = QPoint(int(center.x() + (inner_radius - 4) * math.cos(rad)),
-                                 int(center.y() - (inner_radius - 4) * math.sin(rad)))  # Negative sin for Qt coordinate system
-            end_point = QPoint(int(center.x() + (outer_radius + 4) * math.cos(rad)),
-                               int(center.y() - (outer_radius + 4) * math.sin(rad)))    # Negative sin for Qt coordinate system
-            painter.drawLine(start_point, end_point)
-
-    def draw_handles(self, painter, center, outer_radius, inner_radius, handle_radius):
-        """Draw center line and range handles."""
-        # Convert to integers
-        outer_radius = int(outer_radius)
-        inner_radius = int(inner_radius)
-        handle_radius = int(handle_radius)
-
-        # Center line - original working coordinate system
-        line_angle = self.h * 360 - 90
-        line_rad = math.radians(line_angle)
-
-        start_point = QPoint(int(center.x() + inner_radius * math.cos(line_rad)),
-                             int(center.y() - inner_radius * math.sin(line_rad)))  # Negative sin for Qt coords
-        end_point = QPoint(int(center.x() + outer_radius * math.cos(line_rad)),
-                           int(center.y() - outer_radius * math.sin(line_rad)))   # Negative sin for Qt coords
-
-        painter.setPen(QPen(QColor(255, 255, 255), 3))
-        painter.drawLine(start_point, end_point)
-
-        # Range handles - original working coordinate system
-        left_angle = (self.h - self.h_minus) * 360 - 90
-        right_angle = (self.h + self.h_plus) * 360 - 90
-
-        for angle in [left_angle, right_angle]:
-            rad = math.radians(angle)
-            handle_center = QPoint(int(center.x() + handle_radius * math.cos(rad)),
-                                   int(center.y() - handle_radius * math.sin(rad)))  # Negative sin for Qt coords
-
-            painter.setPen(QPen(QColor(51, 51, 51), 2))
-            painter.setBrush(QBrush(QColor(255, 255, 255)))
-            painter.drawEllipse(handle_center, 10, 10)
-
-    def mousePressEvent(self, event):
-        """Handle mouse press events."""
-        if event.button() == Qt.LeftButton:
-            pos = event.pos()
-            center = self.rect().center()
-
-            # Check which element was clicked
-            dx = pos.x() - center.x()
-            dy = pos.y() - center.y()
-            distance = math.sqrt(dx * dx + dy * dy)
-
-            size = min(self.width(), self.height()) - 20
-            outer_radius = size * 0.4
-            inner_radius = size * 0.27
-            handle_radius = size * 0.33
-
-            # Check handle clicks - original working coordinate system
-            left_angle = math.radians((self.h - self.h_minus) * 360 - 90)
-            right_angle = math.radians((self.h + self.h_plus) * 360 - 90)
-
-            left_handle = QPoint(int(center.x() + handle_radius * math.cos(left_angle)),
-                                 int(center.y() - handle_radius * math.sin(left_angle)))   # Negative sin for Qt coords
-            right_handle = QPoint(int(center.x() + handle_radius * math.cos(right_angle)),
-                                  int(center.y() - handle_radius * math.sin(right_angle)))  # Negative sin for Qt coords
-
-            if (pos - left_handle).manhattanLength() < 15:
-                self.dragging_left = True
-            elif (pos - right_handle).manhattanLength() < 15:
-                self.dragging_right = True
-            elif inner_radius < distance < outer_radius:
-                self.dragging_hue = True
-                self.update_hue_from_pos(pos)
-
-    def mouseMoveEvent(self, event):
-        """Handle mouse move events."""
-        if self.dragging_hue or self.dragging_left or self.dragging_right:
-            self.update_hue_from_pos(event.pos())
-
-    def mouseReleaseEvent(self, event):
-        """Handle mouse release events."""
-        self.dragging_hue = False
-        self.dragging_left = False
-        self.dragging_right = False
-
-    def update_hue_from_pos(self, pos):
-        """Update hue value from mouse position."""
-        center = self.rect().center()
-        dx = pos.x() - center.x()
-        dy = pos.y() - center.y()
-
-        # Calculate angle from mouse position
-        # We need to match our new drawing coordinate system where:
-        # - Red (hue 0°) is at 12 o'clock (top)
-        # - Drawing uses: qt_angle = (-hue_degrees + 90) % 360
-        # So we need to reverse this: hue_degrees = (90 - qt_angle) % 360
-
-        # First get Qt angle (0° = right, positive clockwise)
-        qt_angle = math.atan2(dy, dx)  # Qt coordinate system
-        qt_angle_degrees = math.degrees(qt_angle)
-
-        # Convert Qt angle back to hue degrees (reverse of drawing conversion)
-        hue_degrees = (90 - qt_angle_degrees) % 360
-
-        # Normalize to 0-1 range
-        normalized_angle = hue_degrees / 360.0
-
-        EPS = 1e-3
-
-        if self.dragging_hue:
-            self.h = normalized_angle
-        elif self.dragging_left:
-            clockwise_gap = (self.h - normalized_angle + 1) % 1
-            clockwise_gap = min(clockwise_gap, 1 - EPS)
-            self.h_minus = min(1 - self.h_plus - EPS, clockwise_gap)
-        elif self.dragging_right:
-            counter_clockwise_gap = (normalized_angle - self.h + 1) % 1
-            counter_clockwise_gap = min(counter_clockwise_gap, 1 - EPS)
-            self.h_plus = min(1 - self.h_minus - EPS, counter_clockwise_gap)
-
-        self.update()
-        self.valueChanged.emit(self.h, self.h_minus, self.h_plus)
 
 
 if __name__ == "__main__":

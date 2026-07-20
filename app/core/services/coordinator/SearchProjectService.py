@@ -429,13 +429,13 @@ class SearchProjectService:
                 all_reviewers.add(review['reviewer_name'])
 
         # Count consolidated AOIs and flagged AOIs
-        root = self.xml.getroot() if self.xml else None
+        root = self.xml.getroot() if self.xml is not None else None
         total_aois = 0
         flagged_aois = 0
 
-        if root:
+        if root is not None:
             consolidated_elem = root.find('consolidated_aois')
-            if consolidated_elem:
+            if consolidated_elem is not None:
                 total_aois = len(consolidated_elem.findall('aoi'))
                 flagged_aois = sum(
                     1 for aoi in consolidated_elem.findall('aoi')
@@ -551,9 +551,9 @@ class SearchProjectService:
             # Add consolidated images and AOIs
             images_elem = ET.SubElement(root, 'images')
 
-            if self.xml:
+            if self.xml is not None:
                 consolidated_elem = self.xml.getroot().find('consolidated_aois')
-                if consolidated_elem:
+                if consolidated_elem is not None:
                     # Group AOIs by image
                     aois_by_image = {}
                     for aoi_elem in consolidated_elem.findall('aoi'):
@@ -580,7 +580,7 @@ class SearchProjectService:
 
                             # Combine all reviewer comments
                             reviews_elem = aoi_elem.find('reviews')
-                            if reviews_elem:
+                            if reviews_elem is not None:
                                 comments = []
                                 for review in reviews_elem.findall('review'):
                                     reviewer = review.get('reviewer_name', 'Unknown')

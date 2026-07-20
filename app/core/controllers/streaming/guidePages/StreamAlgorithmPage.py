@@ -11,7 +11,8 @@ class StreamAlgorithmPage(BasePage):
         super().__init__(wizard_data, settings_service, dialog)
         # Algorithm selection state
         self.algorithm_decision_state = {
-            'specific_color': None
+            'person_target': None,
+            'specific_color': None,
         }
         self.selected_algorithm = None
 
@@ -77,12 +78,17 @@ class StreamAlgorithmPage(BasePage):
     def _reset_algorithm_selection(self):
         """Reset algorithm selection to initial state."""
         self.algorithm_decision_state = {
-            'specific_color': None
+            'person_target': None,
+            'specific_color': None,
         }
         self.selected_algorithm = None
         # Clear algorithm from wizard_data to ensure fresh start
         self.wizard_data["algorithm"] = None
-        self.dialog.labelCurrentQuestion.setText("Are you looking for specific colors?")
+        self.wizard_data.pop("algorithm_reason", None)
+        self.wizard_data.pop("secondary_recommendation", None)
+        self.dialog.labelCurrentQuestion.setText(
+            self.tr("Are you primarily looking for a person?")
+        )
         self.dialog.labelAlgorithmResult.setVisible(False)
         self.dialog.buttonYes.setVisible(True)
         self.dialog.buttonNo.setVisible(True)
@@ -95,7 +101,7 @@ class StreamAlgorithmPage(BasePage):
             QPushButton {
                 background-color: transparent;
                 border: 1px solid #888888;
-                color: #CCCCCC;
+                color: palette(text);
                 border-radius: 4px;
             }
             QPushButton:hover {
@@ -138,27 +144,56 @@ class StreamAlgorithmPage(BasePage):
         """Handle algorithm selection decision tree answers."""
         state = self.algorithm_decision_state
 
-        if state['specific_color'] is None:
+        if state['person_target'] is None:
+            state['person_target'] = answer
+            if answer:
+                self.selected_algorithm = "AIPersonDetector"
+                self.wizard_data["secondary_recommendation"] = "ColorDetection"
+                self.wizard_data["algorithm_reason"] = "person_target"
+                self._show_algorithm_result()
+            else:
+                self.dialog.labelCurrentQuestion.setText(
+                    self.tr("Do you know a distinctive target color?")
+                )
+                self.dialog.labelAlgorithmResult.setVisible(False)
+                self.selected_algorithm = None
+                if hasattr(self, "on_validation_changed"):
+                    self.on_validation_changed()
+                return
+        elif state['specific_color'] is None:
             state['specific_color'] = answer
-            if answer:  # Yes - looking for specific colors
-                # Color Detection (color range)
+            if answer:
                 self.selected_algorithm = "ColorDetection"
-                self._show_algorithm_result()
-            else:  # No - not looking for specific colors
-                # Color Anomaly & Motion Detection (combined detection)
+                self.wizard_data["algorithm_reason"] = "known_color_target"
+                self.wizard_data.pop("secondary_recommendation", None)
+            else:
                 self.selected_algorithm = "ColorAnomalyAndMotionDetection"
+                self.wizard_data["algorithm_reason"] = "unknown_target_or_anomaly_scan"
+                self.wizard_data.pop("secondary_recommendation", None)
                 self._show_algorithm_result()
+            self._show_algorithm_result()
 
     def _show_algorithm_result(self):
         """Display the selected algorithm result."""
         if self.selected_algorithm:
             # Map algorithm key to display name
             algorithm_names = {
-                "ColorDetection": "Color Detection",
-                "ColorAnomalyAndMotionDetection": "Color Anomaly & Motion Detection"
+                "ColorDetection": self.tr("Color Detection"),
+                "ColorAnomalyAndMotionDetection": self.tr("Color Anomaly & Motion Detection"),
+                "AIPersonDetector": self.tr("AI Person Detector"),
             }
             display_name = algorithm_names.get(self.selected_algorithm, self.selected_algorithm)
-            self.dialog.labelAlgorithmResult.setText(f"Selected Algorithm: {display_name}")
+            result_text = self.tr("Selected Algorithm: {algorithm}").format(algorithm=display_name)
+            secondary = self.wizard_data.get("secondary_recommendation")
+            if secondary:
+                secondary_name = algorithm_names.get(secondary, secondary)
+                result_text = self.tr(
+                    "{result}\nSecondary Recommendation: {secondary}"
+                ).format(
+                    result=result_text,
+                    secondary=secondary_name,
+                )
+            self.dialog.labelAlgorithmResult.setText(result_text)
             self.dialog.labelAlgorithmResult.setVisible(True)
             self.dialog.buttonYes.setVisible(False)
             self.dialog.buttonNo.setVisible(False)
@@ -176,5 +211,8 @@ class StreamAlgorithmPage(BasePage):
             },
             "ColorAnomalyAndMotionDetection": {
                 "label": "Color Anomaly & Motion Detection",
+            },
+            "AIPersonDetector": {
+                "label": "AI Person Detector",
             },
         }

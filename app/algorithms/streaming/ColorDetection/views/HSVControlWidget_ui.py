@@ -31,37 +31,37 @@ class Ui_HSVControlWidget(object):
         # Tab 1: Color Selection
         self.tab_color = QtWidgets.QWidget()
         self.tab_color.setObjectName("tab_color")
-        self.tabs.addTab(self.tab_color, "Color Selection")
+        self.tabs.addTab(self.tab_color, "")
         
         # Tab 2: Detection
         self.tab_detection = QtWidgets.QWidget()
         self.tab_detection.setObjectName("tab_detection")
-        self.tabs.addTab(self.tab_detection, "Detection")
+        self.tabs.addTab(self.tab_detection, "")
         
         # Tab 3: Processing
         self.tab_processing = QtWidgets.QWidget()
         self.tab_processing.setObjectName("tab_processing")
-        self.tabs.addTab(self.tab_processing, "Processing")
+        self.tabs.addTab(self.tab_processing, "")
         
         # Tab 4: Motion Detection
         self.tab_motion = QtWidgets.QWidget()
         self.tab_motion.setObjectName("tab_motion")
-        self.tabs.addTab(self.tab_motion, "Motion Detection")
+        self.tabs.addTab(self.tab_motion, "")
         
         # Tab 5: Fusion & Temporal
         self.tab_fusion = QtWidgets.QWidget()
         self.tab_fusion.setObjectName("tab_fusion")
-        self.tabs.addTab(self.tab_fusion, "Fusion & Temporal")
+        self.tabs.addTab(self.tab_fusion, "")
         
         # Tab 6: False Pos. Reduction
         self.tab_fpr = QtWidgets.QWidget()
         self.tab_fpr.setObjectName("tab_fpr")
-        self.tabs.addTab(self.tab_fpr, "False Pos. Reduction")
+        self.tabs.addTab(self.tab_fpr, "")
         
         # Tab 7: Rendering
         self.tab_rendering = QtWidgets.QWidget()
         self.tab_rendering.setObjectName("tab_rendering")
-        self.tabs.addTab(self.tab_rendering, "Rendering")
+        self.tabs.addTab(self.tab_rendering, "")
         
         self.retranslateUi(HSVControlWidget)
         QtCore.QMetaObject.connectSlotsByName(HSVControlWidget)
@@ -69,5 +69,12 @@ class Ui_HSVControlWidget(object):
     def retranslateUi(self, HSVControlWidget):
         """Translate UI strings."""
         _translate = QtCore.QCoreApplication.translate
-        # Tab names are set in setupUi, no additional translation needed
+        HSVControlWidget.setWindowTitle(_translate("HSVControlWidget", "HSVControlWidget"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_color), _translate("HSVControlWidget", "Color Selection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_detection), _translate("HSVControlWidget", "Detection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_processing), _translate("HSVControlWidget", "Processing"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_motion), _translate("HSVControlWidget", "Motion Detection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_fusion), _translate("HSVControlWidget", "Fusion & Temporal"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_fpr), _translate("HSVControlWidget", "False Pos. Reduction"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_rendering), _translate("HSVControlWidget", "Rendering"))
 

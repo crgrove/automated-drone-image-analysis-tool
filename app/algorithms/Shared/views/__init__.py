@@ -10,6 +10,7 @@ from .ColorRangeDialog import ColorRangeDialog
 from .HSVColorRowWizardWidget import HSVColorRowWizardWidget
 from .HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 from .ColorSelectionMenu import ColorSelectionMenu
+from .RecentColorsDialog import RecentColorsDialog
 
 __all__ = [
     'ColorPickerImageViewer',
@@ -20,4 +21,5 @@ __all__ = [
     'HSVColorRowWizardWidget',
     'HSVColorRangeRangeViewer',
     'ColorSelectionMenu',
+    'RecentColorsDialog',
 ]

@@ -22,9 +22,10 @@ from algorithms.images.HSVColorRange.views.HSVColorRangeAssistant import HSVColo
 from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
 from core.services.color.CustomColorsService import get_custom_colors_service
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ColorRangeDialog(QDialog):
+class ColorRangeDialog(TranslationMixin, QDialog):
     """Advanced color range selection dialog with live preview."""
 
     # Signal emitted when color selection is accepted
@@ -35,7 +36,7 @@ class ColorRangeDialog(QDialog):
         super().__init__(parent)
         self.logger = LoggerService()
 
-        self.setWindowTitle("HSV Color Range Selection")
+        self.setWindowTitle(self.tr("HSV Color Range Selection"))
         self.setModal(True)
 
         # Store initial values
@@ -55,6 +56,7 @@ class ColorRangeDialog(QDialog):
 
         # Setup UI
         self.setup_ui()
+        self._apply_translations()
 
         # Set initial values
         h, s, v = initial_hsv
@@ -117,7 +119,7 @@ class ColorRangeDialog(QDialog):
         content_layout = QHBoxLayout()
 
         # Left side - Color picker in scroll area
-        picker_group = QGroupBox("Color Range Selection")
+        picker_group = QGroupBox(self.tr("Color Range Selection"))
         picker_layout = QVBoxLayout(picker_group)
 
         # Determine scale factor based on screen size
@@ -201,47 +203,47 @@ class ColorRangeDialog(QDialog):
 
     def create_preview_panel(self):
         """Create the image preview panel."""
-        preview_group = QGroupBox("Preview")
+        preview_group = QGroupBox(self.tr("Preview"))
         preview_layout = QVBoxLayout(preview_group)
 
         # Original image
-        self.original_label = QLabel("Original Image")
+        self.original_label = QLabel(self.tr("Original Image"))
         self.original_label.setAlignment(Qt.AlignCenter)
         self.original_label.setStyleSheet("QLabel { background-color: black; border: 1px solid gray; }")
         self.original_label.setMinimumSize(300, 225)
         self.original_label.setScaledContents(True)
-        self.original_label.setToolTip(
+        self.original_label.setToolTip(self.tr(
             "Original image preview.\n"
             "Shows the unmodified input image for reference.\n"
             "Use this to compare with the filtered result below."
-        )
+        ))
 
         # Processed image
-        self.processed_label = QLabel("Filtered Result")
+        self.processed_label = QLabel(self.tr("Filtered Result"))
         self.processed_label.setAlignment(Qt.AlignCenter)
         self.processed_label.setStyleSheet("QLabel { background-color: black; border: 1px solid gray; }")
         self.processed_label.setMinimumSize(300, 225)
         self.processed_label.setScaledContents(True)
-        self.processed_label.setToolTip(
+        self.processed_label.setToolTip(self.tr(
             "Filtered result preview.\n"
             "Shows pixels that match your current HSV color range settings.\n"
             "Updates in real-time as you adjust the color and range values.\n"
             "Matching pixels are shown, non-matching pixels appear black."
-        )
+        ))
 
         # Show mask option
-        self.show_mask_cb = QCheckBox("Show mask only")
-        self.show_mask_cb.setToolTip(
+        self.show_mask_cb = QCheckBox(self.tr("Show mask only"))
+        self.show_mask_cb.setToolTip(self.tr(
             "Toggle between masked color result and grayscale mask.\n"
             "• Unchecked (default): Shows the original image with matching colors visible\n"
             "• Checked: Shows a black and white mask where white = matching pixels\n"
             "Use the mask view to clearly see which pixels are being detected."
-        )
+        ))
         self.show_mask_cb.toggled.connect(self.on_preview_option_changed)
 
-        preview_layout.addWidget(QLabel("Original:"))
+        preview_layout.addWidget(QLabel(self.tr("Original:")))
         preview_layout.addWidget(self.original_label)
-        preview_layout.addWidget(QLabel("Result:"))
+        preview_layout.addWidget(QLabel(self.tr("Result:")))
         preview_layout.addWidget(self.processed_label)
         preview_layout.addWidget(self.show_mask_cb)
         preview_layout.addStretch()
@@ -257,37 +259,37 @@ class ColorRangeDialog(QDialog):
         button_layout = QHBoxLayout()
 
         # Pick from Image button
-        self.pick_from_image_button = QPushButton("Pick from Image...")
+        self.pick_from_image_button = QPushButton(self.tr("Pick from Image..."))
         self.pick_from_image_button.clicked.connect(self.open_image_picker)
         button_layout.addWidget(self.pick_from_image_button)
 
         # Test button (if image available)
         if self.original_image is not None:
-            self.test_button = QPushButton("Test on Image")
-            self.test_button.setToolTip(
+            self.test_button = QPushButton(self.tr("Test on Image"))
+            self.test_button.setToolTip(self.tr(
                 "Test current HSV range settings on the loaded image.\n"
                 "Manually triggers a preview update to see detection results.\n"
                 "Preview updates automatically as you adjust settings."
-            )
+            ))
             self.test_button.clicked.connect(self.update_preview)
             button_layout.addWidget(self.test_button)
 
         button_layout.addStretch()
 
         # Standard dialog buttons
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setToolTip(
+        self.cancel_button = QPushButton(self.tr("Cancel"))
+        self.cancel_button.setToolTip(self.tr(
             "Cancel color selection.\n"
             "Discards all changes and closes the dialog without applying the color range."
-        )
+        ))
         self.cancel_button.clicked.connect(self.reject)
 
-        self.ok_button = QPushButton("OK")
-        self.ok_button.setToolTip(
+        self.ok_button = QPushButton(self.tr("OK"))
+        self.ok_button.setToolTip(self.tr(
             "Apply color selection.\n"
             "Saves the current HSV color range settings and closes the dialog.\n"
             "The selected color range will be used for image analysis."
-        )
+        ))
         self.ok_button.clicked.connect(self.accept)
         self.ok_button.setDefault(True)
 
@@ -304,16 +306,16 @@ class ColorRangeDialog(QDialog):
 
         # Title and buttons
         header_layout = QHBoxLayout()
-        header_layout.addWidget(QLabel("Custom Colors"))
+        header_layout.addWidget(QLabel(self.tr("Custom Colors")))
 
         # Standard color dialog button
-        std_dialog_btn = QPushButton("Standard Dialog...")
+        std_dialog_btn = QPushButton(self.tr("Standard Dialog..."))
         std_dialog_btn.setMaximumWidth(120)
         std_dialog_btn.clicked.connect(self.open_standard_dialog)
         header_layout.addWidget(std_dialog_btn)
 
         # Add current color button
-        add_btn = QPushButton("Add Current")
+        add_btn = QPushButton(self.tr("Add Current"))
         add_btn.setMaximumWidth(100)
         add_btn.clicked.connect(self.add_current_to_custom)
         header_layout.addWidget(add_btn)
@@ -376,7 +378,7 @@ class ColorRangeDialog(QDialog):
         custom_colors_service = get_custom_colors_service()
 
         # Open dialog
-        color = QColorDialog.getColor(current_color, self, "Select Color")
+        color = QColorDialog.getColor(current_color, self, self.tr("Select Color"))
 
         # Sync custom colors
         custom_colors_service.sync_with_dialog()
@@ -591,7 +593,7 @@ class ColorSwatchButton(QPushButton):
                     border: 2px solid #fff;
                 }}
             """)
-            self.setToolTip(f"RGB: ({self.color.red()}, {self.color.green()}, {self.color.blue()})")
+            self.setToolTip(self.tr("RGB: ({r}, {g}, {b})").format(r=self.color.red(), g=self.color.green(), b=self.color.blue()))
         else:
             # Empty swatch
             self.setStyleSheet("""
@@ -604,7 +606,7 @@ class ColorSwatchButton(QPushButton):
                     border: 1px dashed #888;
                 }
             """)
-            self.setToolTip("Empty slot - add a custom color")
+            self.setToolTip(self.tr("Empty slot - add a custom color"))
 
     def on_clicked(self):
         """Handle click on swatch."""

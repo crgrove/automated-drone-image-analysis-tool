@@ -89,9 +89,21 @@ class BearingRecoveryController:
         if len(images_missing_bearings) > 0:
             # self.logger.info(f"Found {len(images_missing_bearings)}/{len(images)} images missing bearings")
 
+            # The viewer's heartbeat loading dialog is always-on-top
+            # (WindowStaysOnTopHint), so the modal recovery dialog would open
+            # underneath it. Hide it while the modal is up, then restore it
+            # (mirrors the WALDO pre-pass and dimension-backfill handling).
+            loading_dialog = getattr(self.parent, '_loading_dialog', None)
+            if loading_dialog is not None:
+                loading_dialog.hide()
+
             # Show bearing recovery dialog
             dialog = BearingRecoveryDialog(self.parent, images_missing_bearings)
-            result = dialog.exec()
+            try:
+                result = dialog.exec()
+            finally:
+                if loading_dialog is not None:
+                    loading_dialog.show()
 
             if result == QDialog.Accepted:
                 # Get results and save to XML

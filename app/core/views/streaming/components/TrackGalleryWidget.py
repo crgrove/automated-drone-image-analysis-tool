@@ -9,9 +9,10 @@ import cv2
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel
 from PySide6.QtGui import QImage, QPixmap, QIcon
 from PySide6.QtCore import Qt, Signal, QSize
+from helpers.TranslationMixin import TranslationMixin
 
 
-class TrackGalleryWidget(QWidget):
+class TrackGalleryWidget(TranslationMixin, QWidget):
     """Displays confirmed detections as clickable thumbnails in a gallery view.
 
     Features:
@@ -26,7 +27,9 @@ class TrackGalleryWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.max_items = 200
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Setup the gallery UI components."""
@@ -35,7 +38,7 @@ class TrackGalleryWidget(QWidget):
         layout.setSpacing(5)
 
         # Header
-        self.header = QLabel("Detection Gallery")
+        self.header = QLabel(self.tr("Detection Gallery"))
         self.header.setStyleSheet("font-weight: bold; font-size: 12px;")
         layout.addWidget(self.header)
 
@@ -76,7 +79,7 @@ class TrackGalleryWidget(QWidget):
         layout.addWidget(self.gallery_list)
 
         # Count label
-        self.count_label = QLabel("0 detections")
+        self.count_label = QLabel(self.tr("0 detections"))
         self.count_label.setStyleSheet("color: #888;")
         layout.addWidget(self.count_label)
 
@@ -123,6 +126,10 @@ class TrackGalleryWidget(QWidget):
         # Insert at beginning (newest first)
         self.gallery_list.insertItem(0, item)
 
+        # Keep gallery bounded for long sessions.
+        while self.gallery_list.count() > self.max_items:
+            self.gallery_list.takeItem(self.gallery_list.count() - 1)
+
         # Mark track as saved to prevent duplicates
         track.saved_to_gallery = True
 
@@ -139,9 +146,9 @@ class TrackGalleryWidget(QWidget):
         """Update the detection count label."""
         count = self.gallery_list.count()
         if count == 1:
-            self.count_label.setText("1 detection")
+            self.count_label.setText(self.tr("1 detection"))
         else:
-            self.count_label.setText(f"{count} detections")
+            self.count_label.setText(self.tr("{count} detections").format(count=count))
 
     def clear(self):
         """Clear all gallery items."""

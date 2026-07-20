@@ -529,7 +529,7 @@ QToolButton:checked { border-color: #4CAF50; background-color: #1b2d44; }</strin
           </font>
          </property>
          <property name="text">
-          <string>Image Capture Information</string>
+          <string>Video Capture Information</string>
          </property>
         </widget>
        </item>
@@ -551,7 +551,7 @@ QToolButton:checked { border-color: #4CAF50; background-color: #1b2d44; }</strin
              </font>
             </property>
             <property name="text">
-             <string>What drone/camera was used to capture images?</string>
+             <string>What drone/camera was used to capture the video?</string>
             </property>
            </widget>
           </item>

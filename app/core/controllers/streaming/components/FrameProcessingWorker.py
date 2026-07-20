@@ -24,11 +24,13 @@ class FrameProcessingWorker(QObject):
     """
 
     # Signals emitted from worker thread
-    frameProcessed = Signal(np.ndarray, list, float, bool, int)  # frame, detections, processing_time_ms, was_skipped, video_frame_pos
+    # frame, detections, timestamp, processing_time_ms, was_skipped, video_frame_pos, session
+    frameProcessed = Signal(np.ndarray, list, float, float, bool, int, int)
     errorOccurred = Signal(str)  # error_message
 
     # Signal to request frame processing (emitted from main thread, received in worker thread)
-    processFrameRequested = Signal(np.ndarray, float, int)  # frame, timestamp, video_frame_pos
+    # frame, timestamp, video_frame_pos, session
+    processFrameRequested = Signal(np.ndarray, float, int, int)
 
     # Signal to request stop (emitted from main thread, received in worker thread)
     stopRequested = Signal()
@@ -57,8 +59,9 @@ class FrameProcessingWorker(QObject):
         # Connect stop signal to slot
         self.stopRequested.connect(self._handle_stop_request, Qt.QueuedConnection)
 
-    @Slot(np.ndarray, float, int)
-    def _process_frame_internal(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
+    @Slot(np.ndarray, float, int, int)
+    def _process_frame_internal(self, frame: np.ndarray, timestamp: float,
+                                video_frame_pos: int = 0, session: int = 0):
         """
         Internal slot that processes a frame in the background thread.
 
@@ -69,12 +72,17 @@ class FrameProcessingWorker(QObject):
             frame: Input frame (BGR format) - will be copied for thread safety
             timestamp: Frame timestamp
             video_frame_pos: Video frame position (for file playback seek tracking)
+            session: Stream-session token, echoed back so the main thread can
+                reject results from a superseded session (disconnect/reconnect).
         """
         if self._should_stop or not self.processing_function:
             return
 
         # Check if paused (skip processing if paused)
         if self._pause_check and self._pause_check():
+            # Emit a skipped-frame callback so the coordinator can release the
+            # in-flight slot and continue draining pending frames.
+            self.frameProcessed.emit(frame.copy(), [], timestamp, 0.0, True, video_frame_pos, session)
             return
 
         try:
@@ -96,9 +104,10 @@ class FrameProcessingWorker(QObject):
             # Calculate processing time
             processing_time_ms = (time.time() - start_time) * 1000
 
-            # Emit results back to main thread
+            # Emit results back to main thread (echo the session token)
             # Note: Rendering happens on main thread since Qt operations must be on main thread
-            self.frameProcessed.emit(frame_copy, detections, processing_time_ms, was_skipped, video_frame_pos)
+            self.frameProcessed.emit(frame_copy, detections, timestamp, processing_time_ms,
+                                     was_skipped, video_frame_pos, session)
 
         except Exception as e:
             error_msg = f"Error processing frame: {str(e)}"

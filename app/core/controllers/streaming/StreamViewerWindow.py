@@ -17,30 +17,41 @@ from PySide6.QtWidgets import (QMainWindow, QMessageBox, QLabel, QComboBox, QHBo
                                QFileDialog, QApplication, QDialog, QTabWidget, QSpinBox)
 from PySide6.QtCore import Qt, QTimer, Slot, QSettings, QUrl, QThread, QObject
 from PySide6.QtGui import QAction, QDesktopServices
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List, Callable, Tuple
 import numpy as np
 import cv2
 from types import SimpleNamespace
 import time
 import os
+import sys
+import pathlib
+import platform
 
 import qdarktheme
-from core.controllers.Perferences import Preferences
+from core.controllers.Preferences import Preferences
 from core.controllers.streaming.StreamingGuide import StreamingGuide
 # MainWindow imported lazily in _open_image_analysis() to avoid circular dependency
+from core.controllers.UpdateController import UpdateController
 from core.services.SettingsService import SettingsService
+from helpers import FeatureFlags
+from helpers.ThemeHelper import apply_theme
+from core.services.ConfigService import ConfigService
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
 from core.controllers.streaming.components import StreamCoordinator, DetectionRenderer, StreamStatistics
 from core.controllers.streaming.components.FrameProcessingWorker import FrameProcessingWorker
-from core.controllers.streaming.shared_widgets import VideoDisplayWidget, DetectionThumbnailWidget, StreamControlWidget
-from core.views.streaming.components import PlaybackControlBar
+from core.controllers.streaming.shared_widgets import DetectionThumbnailWidget, StreamControlWidget
+from core.views.streaming.components import PlaybackControlBar, StreamingVideoDisplay
 from core.views.streaming.components.TrackGalleryWidget import TrackGalleryWidget
 from core.controllers.streaming.base import StreamAlgorithmController
+from core.services.streaming.StreamAlgorithmService import StreamAlgorithmService
+from core.services.streaming.StreamAnalyzeService import StreamAnalyzeService
 from core.services.streaming.RTMPStreamService import StreamType
+from core.services.streaming.contracts import FocusTarget
+from helpers.TranslationMixin import TranslationMixin
 
 
-class StreamViewerWindow(QMainWindow):
+class StreamViewerWindow(TranslationMixin, QMainWindow):
     """
     Main streaming detection window.
 
@@ -53,6 +64,11 @@ class StreamViewerWindow(QMainWindow):
 
     Similar architecture to MainWindow for image analysis.
     """
+    _lingering_processing_threads: List[QThread] = []
+    _MAX_ORIGINAL_FRAME_CACHE = 12
+    # Safety net so a backend that never reports the sought frame position
+    # cannot strand an armed gallery focus indefinitely.
+    _FOCUS_TIMEOUT_MS = 1500
 
     def __init__(self, algorithm_name: Optional[str] = None, theme: str = 'dark'):
         """
@@ -68,6 +84,7 @@ class StreamViewerWindow(QMainWindow):
         self.settings = QSettings("ADIAT", "StreamViewer")
         self.settings_service = SettingsService()
         self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
+        self.update_controller = UpdateController(self, settings_service=self.settings_service)
         self.theme = theme
         self._maximized_applied = False
         # Store algorithm name - if None, will load default, if empty string, won't load
@@ -76,11 +93,16 @@ class StreamViewerWindow(QMainWindow):
         self._pending_record_dir = None
         self._pending_algorithm_options = None
         self._pending_processing_resolution = None  # Desired resolution from wizard (to be capped to native)
+        self._active_stream_fps_limit: Optional[int] = None
 
         # Setup UI
         self.ui = Ui_StreamViewerWindow()
         self.ui.setupUi(self)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
 
         # Setup tooltip stylesheet
         self.setStyleSheet("""
@@ -117,6 +139,16 @@ class StreamViewerWindow(QMainWindow):
         # Store track to highlight when seeking from gallery (cleared on play/next action)
         self._highlight_track = None
 
+        # One-shot gallery zoom focus, applied only once the service reports the
+        # sought frame via seekCompleted, correlated by both seek REQUEST ID and
+        # the service's authoritative resolved frame window. Generation-tagged
+        # so superseded selections and stale delayed callbacks are ignored.
+        self._pending_focus_target: Optional[FocusTarget] = None
+        self._pending_focus_seek_id: int = 0
+        self._pending_focus_positions = set()
+        self._focus_generation: int = 0
+        self._pending_focus_generation: Optional[int] = None
+
         # Store algorithm configs for session persistence (forgotten on close)
         self._algorithm_configs: Dict[str, Dict[str, Any]] = {}
 
@@ -124,6 +156,14 @@ class StreamViewerWindow(QMainWindow):
         self._processing_thread: Optional[QThread] = None
         self._processing_worker: Optional[FrameProcessingWorker] = None
         self._is_stopping_worker = False  # Flag to prevent new frames from being queued during cleanup
+        self._worker_frame_in_flight = False
+        self._pending_worker_frame: Optional[Tuple[np.ndarray, float, int]] = None
+
+        # Stream-session generation: bumped on every connection change so a late
+        # async worker result from a superseded session (disconnect/replacement
+        # source) can be rejected instead of repainting a stale frame. The
+        # session travels with each worker job (echoed in frameProcessed).
+        self._frame_session: int = 0
 
         # Setup custom widgets
         self.setup_custom_widgets()
@@ -154,8 +194,13 @@ class StreamViewerWindow(QMainWindow):
         live_layout.setContentsMargins(0, 0, 0, 0)
         live_layout.setSpacing(0)
 
-        # Video display
-        self.video_display = VideoDisplayWidget()
+        # Video display (zoomable graphics view; owning window enables key/nav forwarding)
+        self.video_display = StreamingVideoDisplay(self)
+        self.video_display.playPauseRequested.connect(self.on_play_pause_toggled)
+        # NB: the display resets its own zoom on a source-resolution change; the
+        # window must NOT clear a pending gallery focus there, or a sought frame
+        # that also changes resolution would lose its zoom. Focus is applied via
+        # seekCompleted after the (reset) frame is shown.
         live_layout.addWidget(self.video_display)
 
         # Playback controls
@@ -164,15 +209,16 @@ class StreamViewerWindow(QMainWindow):
 
         # Thumbnail widget
         self.thumbnail_widget = DetectionThumbnailWidget()
+        self.thumbnail_widget.thumbnail_focus_requested.connect(self._on_thumbnail_focus_requested)
         live_layout.addWidget(self.thumbnail_widget)
 
         # Add Live View tab
-        self.tab_widget.addTab(live_view_widget, "Live View")
+        self.tab_widget.addTab(live_view_widget, self.tr("Live View"))
 
         # === Gallery Tab ===
         self.gallery_widget = TrackGalleryWidget()
         self.gallery_widget.track_clicked.connect(self._on_gallery_track_clicked)
-        self.tab_widget.addTab(self.gallery_widget, "Gallery")
+        self.tab_widget.addTab(self.gallery_widget, self.tr("Gallery"))
 
         # Connect track_confirmed signal from tracker to gallery
         self.thumbnail_widget.tracker.track_confirmed.connect(self.gallery_widget.add_track)
@@ -213,20 +259,27 @@ class StreamViewerWindow(QMainWindow):
         menu_bar.clear()
 
         # Primary navigation menu
-        primary_menu = menu_bar.addMenu("Menu")
-        self.action_streaming_guide = QAction("Streaming Analysis Wizard", self)
-        self.action_image_analysis = QAction("Image Analysis", self)
-        self.action_preferences = QAction("Preferences", self)
+        primary_menu = menu_bar.addMenu(self.tr("Menu"))
+        self.action_streaming_guide = QAction(self.tr("Streaming Analysis Wizard"), self)
+        self.action_image_analysis = QAction(self.tr("Image Analysis"), self)
+        self.action_flight_viewer = QAction(self.tr("Flight Viewer"), self)
+        self.action_preferences = QAction(self.tr("Preferences"), self)
         primary_menu.addAction(self.action_streaming_guide)
         primary_menu.addSeparator()
         primary_menu.addAction(self.action_image_analysis)
+        if FeatureFlags.FLIGHT_VIEWER_ENABLED:
+            # Flight Viewer is deferred to a later release
+            primary_menu.addAction(self.action_flight_viewer)
         primary_menu.addAction(self.action_preferences)
 
         # Help menu
-        help_menu = menu_bar.addMenu("Help")
-        self.action_manual = QAction("Manual", self)
-        self.action_community = QAction("Community Forum", self)
-        self.action_youtube = QAction("YouTube Channel", self)
+        help_menu = menu_bar.addMenu(self.tr("Help"))
+        self.action_check_for_updates = QAction(self.tr("Check for Updates"), self)
+        self.action_manual = QAction(self.tr("Manual"), self)
+        self.action_community = QAction(self.tr("Community Forum"), self)
+        self.action_youtube = QAction(self.tr("YouTube Channel"), self)
+        help_menu.addAction(self.action_check_for_updates)
+        help_menu.addSeparator()
         help_menu.addAction(self.action_manual)
         help_menu.addAction(self.action_community)
         help_menu.addAction(self.action_youtube)
@@ -234,7 +287,9 @@ class StreamViewerWindow(QMainWindow):
         # Wire actions
         self.action_streaming_guide.triggered.connect(self._open_streaming_guide)
         self.action_image_analysis.triggered.connect(self._open_image_analysis)
+        self.action_flight_viewer.triggered.connect(self._open_flight_viewer)
         self.action_preferences.triggered.connect(self._open_preferences)
+        self.update_controller.bind_action(self.action_check_for_updates)
         self.action_manual.triggered.connect(self._open_manual)
         self.action_community.triggered.connect(self._open_community_forum)
         self.action_youtube.triggered.connect(self._open_youtube_channel)
@@ -249,33 +304,45 @@ class StreamViewerWindow(QMainWindow):
 
         # Recording buttons
         button_layout = QHBoxLayout()
-        self.start_recording_btn = QPushButton("Start Recording")
+        self.start_recording_btn = QPushButton(self.tr("Start Recording"))
         self.start_recording_btn.setStyleSheet("QPushButton { background-color: #ff4444; color: white; font-weight: bold; }")
-        self.start_recording_btn.setToolTip("Start recording the video stream with detection overlays.")
-        self.stop_recording_btn = QPushButton("Stop Recording")
+        self.start_recording_btn.setToolTip(
+            self.tr("Start recording the video stream with detection overlays.")
+        )
+        self.stop_recording_btn = QPushButton(self.tr("Stop Recording"))
         self.stop_recording_btn.setEnabled(False)
-        self.stop_recording_btn.setToolTip("Stop the current recording and save to file.")
+        self.stop_recording_btn.setToolTip(
+            self.tr("Stop the current recording and save to file.")
+        )
 
         button_layout.addWidget(self.start_recording_btn)
         button_layout.addWidget(self.stop_recording_btn)
 
         # Recording status
-        self.recording_status = QLabel("Status: Not Recording")
+        self.recording_status = QLabel(self.tr("Status: Not Recording"))
         self.recording_status.setStyleSheet("QLabel { color: gray; }")
-        self.recording_status.setToolTip("Current recording status and output file path")
+        self.recording_status.setToolTip(
+            self.tr("Current recording status and output file path")
+        )
 
         # Recording info
-        self.recording_info = QLabel("Duration: --")
-        self.recording_info.setToolTip("Recording statistics: Duration, FPS, Frames")
+        self.recording_info = QLabel(self.tr("Duration: --"))
+        self.recording_info.setToolTip(
+            self.tr("Recording statistics: Duration, FPS, Frames")
+        )
 
         # Recording directory selector
         dir_layout = QHBoxLayout()
-        dir_label = QLabel("Save to:")
+        dir_label = QLabel(self.tr("Save to:"))
         default_recording_dir = os.path.expanduser("~")
         self.recording_dir_edit = QLineEdit(default_recording_dir)
-        self.recording_dir_edit.setToolTip("Directory where video recordings will be saved.")
-        self.recording_dir_browse = QPushButton("Browse...")
-        self.recording_dir_browse.setToolTip("Choose a folder to store recordings.")
+        self.recording_dir_edit.setToolTip(
+            self.tr("Directory where video recordings will be saved.")
+        )
+        self.recording_dir_browse = QPushButton(self.tr("Browse..."))
+        self.recording_dir_browse.setToolTip(
+            self.tr("Choose a folder to store recordings.")
+        )
 
         dir_layout.addWidget(dir_label)
         dir_layout.addWidget(self.recording_dir_edit, 1)
@@ -324,7 +391,9 @@ class StreamViewerWindow(QMainWindow):
     def _browse_recording_directory(self):
         """Browse for recording directory."""
         directory = QFileDialog.getExistingDirectory(
-            self, "Select Recording Directory", self.recording_dir_edit.text()
+            self,
+            self.tr("Select Recording Directory"),
+            self.recording_dir_edit.text()
         )
         if directory:
             self.recording_dir_edit.setText(directory)
@@ -343,30 +412,26 @@ class StreamViewerWindow(QMainWindow):
         algorithm_layout = QHBoxLayout()
         algorithm_layout.setContentsMargins(0, 0, 0, 10)  # Add bottom margin for spacing
 
-        algorithm_label = QLabel("Algorithm:")
-        algorithm_label.setToolTip("Select which streaming detection algorithm to use")
+        algorithm_label = QLabel(self.tr("Algorithm:"))
+        algorithm_label.setToolTip(
+            self.tr("Select which streaming detection algorithm to use")
+        )
 
         self.algorithm_combo = QComboBox()
         self.algorithm_combo.setToolTip(
-            "Choose which streaming detection algorithm to run.\n"
-            "• Color Anomaly & Motion Detection: fused anomaly detectors\n"
-            "• Color Detection: color-based highlighting"
+            self.tr(
+                "Choose which streaming detection algorithm to run.\n"
+                "• Color Anomaly & Motion Detection: fused anomaly detectors\n"
+                "• Color Detection: color-based highlighting"
+            )
         )
 
-        # Populate with available algorithms from registry
+        # Populate with available algorithms from shared registry
         registry = self._algorithm_registry()
-        algorithm_options = []
-        preferred_order = [
-            "ColorAnomalyAndMotionDetection",
-            "ColorDetection",
+        algorithm_options = [
+            (self.tr(cfg.get("label", key)), key)
+            for key, cfg in registry.items()
         ]
-        for key in preferred_order:
-            if key in registry:
-                label = registry[key].get("label", key)
-                algorithm_options.append((label, key))
-        for key, cfg in registry.items():
-            if key not in [k for _, k in algorithm_options]:
-                algorithm_options.append((cfg.get("label", key), key))
 
         # Add to combo box
         for label, key in algorithm_options:
@@ -390,17 +455,23 @@ class StreamViewerWindow(QMainWindow):
         gallery_layout = QHBoxLayout()
         gallery_layout.setContentsMargins(0, 0, 0, 10)
 
-        confirm_label = QLabel("Gallery Threshold:")
-        confirm_label.setToolTip("Number of frames a detection must be seen before appearing in the Gallery tab")
+        confirm_label = QLabel(self.tr("Gallery Threshold:"))
+        confirm_label.setToolTip(
+            self.tr(
+                "Number of frames a detection must be seen before appearing in the Gallery tab"
+            )
+        )
 
         self.confirmation_spinbox = QSpinBox()
         self.confirmation_spinbox.setRange(1, 30)
         self.confirmation_spinbox.setValue(5)
-        self.confirmation_spinbox.setSuffix(" frames")
+        self.confirmation_spinbox.setSuffix(self.tr(" frames"))
         self.confirmation_spinbox.setToolTip(
-            "Detections must be seen for this many consecutive frames\n"
-            "before appearing in the Gallery. Higher values reduce\n"
-            "false positives but delay detection appearance."
+            self.tr(
+                "Detections must be seen for this many consecutive frames\n"
+                "before appearing in the Gallery. Higher values reduce\n"
+                "false positives but delay detection appearance."
+            )
         )
         self.confirmation_spinbox.valueChanged.connect(self._on_confirmation_threshold_changed)
 
@@ -417,8 +488,10 @@ class StreamViewerWindow(QMainWindow):
         self.stream_coordinator.connectionChanged.connect(self.on_connection_changed)
         self.stream_coordinator.frameReceived.connect(self.on_frame_received)
         self.stream_coordinator.recordingStateChanged.connect(self.on_recording_state_changed)
+        self.stream_coordinator.recordingStatsUpdated.connect(self.on_recording_stats_updated)
         self.stream_coordinator.errorOccurred.connect(self.on_error)
         self.stream_coordinator.streamInfoUpdated.connect(self.on_stream_info_updated)
+        self.stream_coordinator.seekCompleted.connect(self._on_seek_completed)
 
         # Stream controls signals
         self.stream_controls.connectRequested.connect(self.on_connect_requested)
@@ -456,7 +529,7 @@ class StreamViewerWindow(QMainWindow):
                     self.stream_controls.hdmi_device_combo.clear()
 
                     # Use friendly name from wizard if available, otherwise generic
-                    device_label = wizard_data.get("device_label", f"Device {device_index}")
+                    device_label = wizard_data.get("device_label", self.tr("Device {index}").format(index=device_index))
                     if hdmi_backend is not None:
                         # Add backend name to label if we have it
                         backend_names = {1400: "MSMF", 700: "DirectShow", 0: "Auto"}
@@ -486,7 +559,12 @@ class StreamViewerWindow(QMainWindow):
         self.settings.sync()
 
         algorithm = wizard_data.get("algorithm")
-        algorithm_options = wizard_data.get("algorithm_options") or {}
+        algorithm_options = dict(wizard_data.get("algorithm_options") or {})
+        # Thread the source type to the algorithm controller so it can pick a
+        # usecase-appropriate model (the AI person detector auto-selects the 1024 model
+        # for file sources and keeps the 640 model for live feeds).
+        if stream_type:
+            algorithm_options["stream_type"] = stream_type
 
         # Calculate and set min/max area from object size and GSD (like MainWindow does)
         # GSD is stored in gsd_list as a list of sensor GSD values
@@ -580,7 +658,7 @@ class StreamViewerWindow(QMainWindow):
                 "RTMP Stream": StreamType.RTMP,
             }
             selected_type = stream_type_map.get(combo_text, StreamType.FILE)
-            # Pass hdmi_backend from wizard for HDMI capture devices
+            # Extract hdmi_backend if specified in wizard data
             hdmi_backend = wizard_data.get("hdmi_backend")
             self.on_connect_requested(stream_url, selected_type, hdmi_backend=hdmi_backend)
 
@@ -607,6 +685,24 @@ class StreamViewerWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error applying algorithm options: {e}")
 
+    def _apply_stream_resolution_to_mask_controls(self, resolution: Optional[Tuple[int, int]]):
+        """Propagate active stream resolution to algorithm frame mask controls."""
+        if not self.algorithm_widget or not resolution:
+            return
+
+        width, height = resolution
+        if width <= 0 or height <= 0:
+            return
+
+        frame_tab = None
+        if hasattr(self.algorithm_widget, 'control_widget'):
+            frame_tab = getattr(self.algorithm_widget.control_widget, 'frame_tab', None)
+        elif hasattr(self.algorithm_widget, 'integrated_controls'):
+            frame_tab = getattr(self.algorithm_widget.integrated_controls, 'frame_tab', None)
+
+        if frame_tab and hasattr(frame_tab, 'set_video_resolution'):
+            frame_tab.set_video_resolution(width, height)
+
     def _open_streaming_guide(self):
         """Open the Streaming Analysis Guide wizard."""
         try:
@@ -625,7 +721,11 @@ class StreamViewerWindow(QMainWindow):
                 self.apply_wizard_data(wizard_data_from_wizard)
         except Exception as e:
             self.logger.error(f"Error opening Streaming Analysis Guide: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Streaming Analysis Guide:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Streaming Analysis Guide:\n{error}").format(error=str(e))
+            )
 
     def _open_image_analysis(self):
         """Open the Image Analysis main window and close this streaming viewer."""
@@ -640,16 +740,48 @@ class StreamViewerWindow(QMainWindow):
             self.close()
         except Exception as e:
             self.logger.error(f"Error opening Image Analysis: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Image Analysis:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Image Analysis:\n{error}").format(error=str(e))
+            )
 
     def _open_preferences(self):
         """Open the Preferences dialog."""
         try:
             pref = Preferences(self)
             pref.exec()
+            self.update_controller.refresh_action_state()
         except Exception as e:
             self.logger.error(f"Error opening Preferences: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Preferences:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Preferences:\n{error}").format(error=str(e))
+            )
+
+    def _open_flight_viewer(self):
+        """Open the Flight Viewer alongside this streaming window."""
+        try:
+            from core.controllers.flight import FlightViewerController
+
+            app = QApplication.instance()
+            existing = getattr(app, '_flight_controller', None) if app else None
+            if existing is not None and existing.window.isVisible():
+                existing.show()
+                return
+
+            controller = FlightViewerController()
+            if app is not None:
+                app._flight_controller = controller
+            controller.show()
+        except Exception as e:
+            self.logger.error(f"Error opening Flight Viewer: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Flight Viewer:\n{error}").format(error=str(e))
+            )
 
     def _open_manual(self):
         """Open the user manual in the default browser."""
@@ -659,7 +791,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Help documentation:\n{error}").format(error=str(e))
+            )
 
     def _open_community_forum(self):
         """Open the community forum link in the default browser."""
@@ -669,7 +805,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("Community forum opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Forum URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Community Forum:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Community Forum:\n{error}").format(error=str(e))
+            )
 
     def _open_youtube_channel(self):
         """Open the YouTube Channel URL in the default browser."""
@@ -679,7 +819,11 @@ class StreamViewerWindow(QMainWindow):
             # self.logger.info("YouTube Channel opened")
         except Exception as e:
             self.logger.error(f"Error opening YouTube Channel URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open YouTube Channel:\n{error}").format(error=str(e))
+            )
 
     def load_algorithm(self, algorithm_name: str):
         """
@@ -710,6 +854,14 @@ class StreamViewerWindow(QMainWindow):
                     self.algorithm_widget.frameProcessed.disconnect(self.on_algorithm_frame_processed)
                 except Exception:
                     pass
+                try:
+                    self.algorithm_widget.configChanged.disconnect(self.on_algorithm_config_changed)
+                except Exception:
+                    pass
+                try:
+                    self.algorithm_widget.cleanup()
+                except Exception as e:
+                    self.logger.warning(f"Algorithm cleanup failed for {self.current_algorithm_name}: {e}")
                 self.ui.algorithmControlLayout.removeWidget(self.algorithm_widget)
                 self.algorithm_widget.deleteLater()
                 self.algorithm_widget = None
@@ -772,6 +924,7 @@ class StreamViewerWindow(QMainWindow):
             # Connect algorithm signals
             self.algorithm_widget.detectionsReady.connect(self.on_detections_ready)
             self.algorithm_widget.frameProcessed.connect(self.on_algorithm_frame_processed)
+            self.algorithm_widget.configChanged.connect(self.on_algorithm_config_changed)
             self.algorithm_widget.statusUpdate.connect(self.on_status_update)
             self.algorithm_widget.requestRecording.connect(self.on_recording_request)
 
@@ -779,7 +932,9 @@ class StreamViewerWindow(QMainWindow):
             self._setup_processing_worker()
 
             # self.logger.info(f"Algorithm loaded: {algorithm_name}")
-            self.ui.statusbar.showMessage(f"Loaded: {algorithm_name}")
+            self.ui.statusbar.showMessage(
+                self.tr("Loaded: {algorithm}").format(algorithm=algorithm_name)
+            )
 
             # Restore saved config for this algorithm if available (session persistence)
             # Only restore if we don't have pending wizard options (wizard takes priority)
@@ -794,9 +949,13 @@ class StreamViewerWindow(QMainWindow):
                 self._apply_algorithm_options(saved_config)
 
         except Exception as e:
-            error_msg = f"Error loading algorithm: {str(e)}"
+            error_msg = self.tr("Error loading algorithm: {error}").format(error=str(e))
             self.logger.error(error_msg)
-            QMessageBox.critical(self, "Algorithm Load Error", error_msg)
+            QMessageBox.critical(
+                self,
+                self.tr("Algorithm Load Error"),
+                error_msg
+            )
 
     def _get_algorithm_service(self) -> Optional[QObject]:
         """
@@ -808,19 +967,15 @@ class StreamViewerWindow(QMainWindow):
         if not self.algorithm_widget:
             return None
 
-        # Different algorithms expose their services differently
-        # ColorDetectionController has color_detector
-        if hasattr(self.algorithm_widget, 'color_detector'):
-            return self.algorithm_widget.color_detector
+        if hasattr(self.algorithm_widget, "get_stream_service"):
+            try:
+                service = self.algorithm_widget.get_stream_service()
+                if service is not None:
+                    return service
+            except Exception as exc:
+                self.logger.warning(f"Failed to get stream service from controller: {exc}")
 
-        # ColorAnomalyAndMotionDetectionController has integrated_detector
-        if hasattr(self.algorithm_widget, 'integrated_detector'):
-            return self.algorithm_widget.integrated_detector
-
-        # MotionDetectionController has motion_detector
-        if hasattr(self.algorithm_widget, 'motion_detector'):
-            return self.algorithm_widget.motion_detector
-
+        self.logger.warning("Algorithm widget does not provide a stream service")
         return None
 
     def _create_processing_function(self, service: QObject) -> Callable:
@@ -836,93 +991,27 @@ class StreamViewerWindow(QMainWindow):
         Returns:
             A function that processes a frame and returns detections
         """
-        # ColorDetectionService
-        if hasattr(service, 'detect_colors'):
-            def process_color(frame: np.ndarray, timestamp: float) -> List[Dict]:
-                detections = service.detect_colors(frame, timestamp)
+        if not isinstance(service, StreamAlgorithmService):
+            self.logger.warning(
+                f"Stream service does not implement StreamAlgorithmService: {type(service)}"
+            )
+            return None
 
-                # Create annotated frame directly on the worker thread so the emitted
-                # frame already contains algorithm-rendered overlays.
-                try:
-                    annotated_frame = service.create_annotated_frame(frame, detections)
-                    if annotated_frame is not None and annotated_frame is not frame:
-                        # Copy annotated frame back into the original buffer that will be emitted
-                        np.copyto(frame, annotated_frame)
-                except Exception:
-                    # Fall back silently if annotation fails – raw frame will be shown
-                    pass
+        analyzer = StreamAnalyzeService(service, self.logger)
 
-                # Convert to standard format
-                detection_dicts = []
-                for detection in detections:
-                    color_id = detection.color_id if detection.color_id is not None else 0
-                    detection_dicts.append({
-                        'bbox': detection.bbox,
-                        'area': detection.area,
-                        'confidence': detection.confidence,
-                        'class_name': f"Color_{color_id}",
-                        'color_id': color_id,
-                        'mean_color': detection.mean_color
-                    })
-                return detection_dicts
-            return process_color
+        def process_normalized(frame: np.ndarray, timestamp: float):
+            result = analyzer.process_frame(frame, timestamp)
 
-        # ColorAnomalyAndMotionDetectionOrchestrator
-        if hasattr(service, 'process_frame'):
-            # Check if it returns (annotated_frame, detections, timings)
-            from typing import Tuple
+            try:
+                annotated_frame = result.rendered_frame
+                if annotated_frame is not None and annotated_frame is not frame:
+                    np.copyto(frame, annotated_frame)
+            except Exception:
+                pass
 
-            def process_integrated(frame: np.ndarray, timestamp: float) -> Tuple[List[Dict], bool]:
-                annotated_frame, detections, timings = service.process_frame(frame, timestamp)
+            return analyzer.to_worker_output(result)
 
-                # Ensure the annotated frame is what gets displayed when the algorithm
-                # provides its own rendering (copy onto the outgoing buffer).
-                try:
-                    if annotated_frame is not None and annotated_frame is not frame:
-                        np.copyto(frame, annotated_frame)
-                except Exception:
-                    pass
-
-                # Convert to standard format
-                detection_dicts = []
-                for detection in detections:
-                    detection_dicts.append({
-                        'bbox': detection.bbox,
-                        'centroid': detection.centroid,
-                        'area': detection.area,
-                        'confidence': detection.confidence,
-                        'class_name': detection.detection_type,
-                        'detection_type': detection.detection_type,
-                        'timestamp': detection.timestamp,
-                        'metadata': detection.metadata
-                    })
-                # Return detections and whether frame was skipped due to frame rate limiting
-                was_skipped = timings.was_skipped if hasattr(timings, 'was_skipped') else False
-                return (detection_dicts, was_skipped)
-            return process_integrated
-
-        # MotionDetectionService
-        if hasattr(service, 'detect_motion'):
-            def process_motion(frame: np.ndarray, timestamp: float) -> List[Dict]:
-                detections = service.detect_motion(frame, timestamp)
-                # Convert to standard format
-                detection_dicts = []
-                for detection in detections:
-                    detection_dicts.append({
-                        'bbox': detection.bbox,
-                        'area': detection.area,
-                        'confidence': detection.confidence,
-                        'class_name': detection.detection_type,
-                        'detection_type': detection.detection_type,
-                        'timestamp': detection.timestamp,
-                        'metadata': detection.metadata
-                    })
-                return detection_dicts
-            return process_motion
-
-        # Fallback: use controller's process_frame (but this won't work from worker thread)
-        # So we return None to indicate we can't use worker thread
-        return None
+        return process_normalized
 
     def _setup_processing_worker(self):
         """Set up the frame processing worker thread."""
@@ -973,6 +1062,8 @@ class StreamViewerWindow(QMainWindow):
 
             # Reset stopping flag when starting new worker
             self._is_stopping_worker = False
+            self._worker_frame_in_flight = False
+            self._pending_worker_frame = None
 
             # self.logger.info("Frame processing worker thread started")
 
@@ -1008,21 +1099,36 @@ class StreamViewerWindow(QMainWindow):
                 pass
 
         # Stop and cleanup thread
-        thread_terminated_forcefully = False
+        thread_stopped = True
         if self._processing_thread:
             if self._processing_thread.isRunning():
                 self._processing_thread.quit()
-                if not self._processing_thread.wait(2000):  # Wait up to 2 seconds
-                    self.logger.warning("Processing thread didn't stop gracefully, terminating")
-                    self._processing_thread.terminate()
-                    self._processing_thread.wait(1000)
-                    thread_terminated_forcefully = True
+                if not self._processing_thread.wait(3000):
+                    # Retry once more before giving up; avoid terminate() to keep shutdown graceful.
+                    self.logger.warning("Processing thread did not stop within 3s, retrying graceful quit")
+                    self._processing_thread.quit()
+                    thread_stopped = self._processing_thread.wait(3000)
+                    if not thread_stopped:
+                        self.logger.error("Processing thread still running after graceful shutdown timeout")
             # Thread will delete itself via deleteLater() connected to finished signal
-            self._processing_thread = None
+            if thread_stopped:
+                self._processing_thread = None
+            else:
+                lingering_thread = self._processing_thread
+
+                def _release_lingering_thread():
+                    try:
+                        StreamViewerWindow._lingering_processing_threads.remove(lingering_thread)
+                    except ValueError:
+                        pass
+                    lingering_thread.deleteLater()
+
+                StreamViewerWindow._lingering_processing_threads.append(lingering_thread)
+                lingering_thread.finished.connect(_release_lingering_thread, Qt.QueuedConnection)
+                self._processing_thread = None
 
         # Disconnect remaining signals after thread is stopped to prevent queued signals from accessing deleted objects
-        # IMPORTANT: Skip this if thread was forcefully terminated - worker may be in invalid state
-        if not thread_terminated_forcefully and self._processing_worker:
+        if self._processing_worker:
             try:
                 self._processing_worker.frameProcessed.disconnect()
                 self._processing_worker.errorOccurred.disconnect()
@@ -1031,10 +1137,8 @@ class StreamViewerWindow(QMainWindow):
                 # Signals may already be disconnected, ignore
                 pass
 
-        # Move service back to main thread after thread is stopped
-        # IMPORTANT: Don't try to move service if thread was forcefully terminated -
-        # the service object may be in an inconsistent state
-        if not thread_terminated_forcefully:
+        # Move service back to main thread after thread is stopped.
+        if thread_stopped:
             service = self._get_algorithm_service()
             if service:
                 try:
@@ -1048,110 +1152,196 @@ class StreamViewerWindow(QMainWindow):
 
         # Clear worker reference (worker will be deleted when thread is deleted)
         self._processing_worker = None
+        self._worker_frame_in_flight = False
+        if self._pending_worker_frame is not None:
+            _, dropped_timestamp, _ = self._pending_worker_frame
+            self._discard_original_frame(dropped_timestamp)
+        self._pending_worker_frame = None
         self._is_stopping_worker = False  # Reset flag after cleanup
 
-    @Slot(np.ndarray, list, float, bool, int)
+    def _discard_original_frame(self, timestamp: float):
+        """Remove a frame from the original-frame queue if present."""
+        if timestamp in self._original_frames_queue:
+            del self._original_frames_queue[timestamp]
+
+    def _queue_worker_frame(self, frame: np.ndarray, timestamp: float, video_frame_pos: int) -> bool:
+        """
+        Queue a frame for worker processing with bounded backpressure.
+
+        Uses a single in-flight frame and one pending latest frame to avoid
+        unbounded queued work under high input rates.
+        """
+        if not (self._processing_worker and self._processing_thread and self._processing_thread.isRunning()):
+            return False
+
+        if self._worker_frame_in_flight:
+            if self._pending_worker_frame is not None:
+                _, dropped_timestamp, _ = self._pending_worker_frame
+                self._discard_original_frame(dropped_timestamp)
+                self.stream_statistics.on_frame_dropped()
+            self._pending_worker_frame = (frame, timestamp, video_frame_pos)
+            return True
+
+        try:
+            self._processing_worker.processFrameRequested.emit(frame, timestamp, video_frame_pos, self._frame_session)
+            self._worker_frame_in_flight = True
+            return True
+        except RuntimeError:
+            return False
+
+    def _dispatch_pending_worker_frame(self):
+        """Dispatch pending latest frame to worker if available."""
+        if self._pending_worker_frame is None:
+            self._worker_frame_in_flight = False
+            return
+
+        if not (self._processing_worker and self._processing_thread and self._processing_thread.isRunning()):
+            _, dropped_timestamp, _ = self._pending_worker_frame
+            self._discard_original_frame(dropped_timestamp)
+            self.stream_statistics.on_frame_dropped()
+            self._pending_worker_frame = None
+            self._worker_frame_in_flight = False
+            return
+
+        frame, timestamp, video_frame_pos = self._pending_worker_frame
+        self._pending_worker_frame = None
+        try:
+            self._processing_worker.processFrameRequested.emit(frame, timestamp, video_frame_pos, self._frame_session)
+            self._worker_frame_in_flight = True
+        except RuntimeError:
+            self._discard_original_frame(timestamp)
+            self.stream_statistics.on_frame_dropped()
+            self._worker_frame_in_flight = False
+
+    @staticmethod
+    def _detections_to_thumbnail_objects(detections: List[Dict]) -> List[SimpleNamespace]:
+        """Convert detection dictionaries to object form required by thumbnail tracker."""
+        detection_objects = []
+        for det_dict in detections:
+            obj = SimpleNamespace()
+            obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
+
+            if 'centroid' in det_dict:
+                obj.centroid = det_dict['centroid']
+            else:
+                x, y, w, h = obj.bbox
+                obj.centroid = (x + w // 2, y + h // 2)
+
+            obj.area = det_dict.get('area', 0.0)
+            obj.confidence = det_dict.get('confidence', 0.0)
+            obj.metadata = det_dict.get('metadata', {})
+            for key, value in det_dict.items():
+                if not hasattr(obj, key):
+                    setattr(obj, key, value)
+
+            detection_objects.append(obj)
+
+        return detection_objects
+
+    @staticmethod
+    def _get_resolution_metadata(detection_objects: List[SimpleNamespace]) -> Tuple[Optional[Tuple[int, int]], Optional[Tuple[int, int]]]:
+        """Extract processing/original resolution metadata from detections."""
+        processing_resolution = None
+        original_resolution = None
+
+        for det in detection_objects:
+            metadata = getattr(det, "metadata", {}) or {}
+            if metadata and processing_resolution is None:
+                processing_resolution = metadata.get('processing_resolution')
+            if metadata and original_resolution is None:
+                original_resolution = metadata.get('original_resolution')
+            if processing_resolution and original_resolution:
+                break
+
+        return processing_resolution, original_resolution
+
+    def _update_thumbnails(
+            self,
+            frame: np.ndarray,
+            detections: List[Dict],
+            timestamp: float,
+            frame_index: int):
+        """Update thumbnails for a processed frame."""
+        detection_objects = self._detections_to_thumbnail_objects(detections or [])
+        processing_resolution, original_resolution = self._get_resolution_metadata(detection_objects)
+
+        thumbnail_frame = self._original_frames_queue.get(timestamp, frame)
+        self._discard_original_frame(timestamp)
+
+        self.thumbnail_widget.update_thumbnails(
+            thumbnail_frame,
+            detection_objects,
+            processing_resolution=processing_resolution,
+            original_resolution=original_resolution,
+            frame_index=frame_index,
+            timestamp=timestamp
+        )
+
+    @Slot(np.ndarray, list, float, float, bool, int, int)
     def _on_worker_frame_processed(
             self,
             frame: np.ndarray,
             detections: List[Dict],
+            timestamp: float,
             processing_time_ms: float,
             was_skipped: bool = False,
-            video_frame_pos: int = 0):
+            video_frame_pos: int = 0,
+            session: int = 0):
         """Handle frame processed by worker thread."""
         # This runs on main thread (via QueuedConnection)
-        self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=was_skipped)
-        self._latest_detections_for_rendering = detections
+        self._worker_frame_in_flight = False
+        try:
+            # Reject results from a superseded stream session (disconnect /
+            # replacement source) so a late queued callback cannot repaint a
+            # stale frame over the placeholder or into a new source. The session
+            # travels WITH the job (echoed by the worker), so per-job identity
+            # is preserved even when newer jobs are dispatched meanwhile.
+            if session != self._frame_session:
+                self._discard_original_frame(timestamp)
+                return
 
-        # Use video_frame_pos that was passed through the worker (not stale instance variable)
-        current_video_frame_pos = video_frame_pos
+            self.stream_statistics.on_frame_processed(processing_time_ms, len(detections), was_skipped=was_skipped)
+            self._latest_detections_for_rendering = detections
 
-        rendered_frame = None
-        if not self.algorithm_renders_frame:
-            # Render detections using the shared renderer (on main thread)
-            rendered_frame = self.detection_renderer.render(frame, detections)
+            rendered_frame = frame
+            if not self.algorithm_renders_frame:
+                # Render detections using the shared renderer (on main thread)
+                rendered_frame = self.detection_renderer.render(frame, detections, copy_frame=False)
+            # else: Frame already carries algorithm-rendered overlays.
 
             # Draw highlight box if a gallery track is selected
             if self._highlight_track is not None:
                 rendered_frame = self._draw_gallery_highlight(rendered_frame)
 
-            # Update display with rendered frame
-            self.video_display.update_frame(rendered_frame)
-        # else: Algorithm provides custom rendering via on_algorithm_frame_processed signal
-        # Don't display here to avoid race condition / flickering
+            # Update display with rendered frame (applies any pending focus).
+            presented = self._present_frame(rendered_frame, video_frame_pos, 'worker')
 
-        # Update thumbnails
-        if detections:
-            # Convert detection dicts to objects with required attributes for tracker
-            detection_objects = []
-            for det_dict in detections:
-                obj = SimpleNamespace()
-                obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
+            if presented:
+                # Gate presentation-coupled side effects: a frame rejected while
+                # paused must not update thumbnails/recording (which would leave
+                # thumbnails - and thumbnail zoom targets - representing a frame
+                # the user is not viewing).
+                self._update_thumbnails(frame, detections, timestamp, video_frame_pos)
 
-                if 'centroid' in det_dict:
-                    obj.centroid = det_dict['centroid']
-                else:
-                    x, y, w, h = obj.bbox
-                    obj.centroid = (x + w // 2, y + h // 2)
+                # Record exactly what is displayed.
+                if self.stream_coordinator.is_recording:
+                    self.stream_coordinator.record_frame(rendered_frame, detections)
+            else:
+                self._discard_original_frame(timestamp)
 
-                obj.area = det_dict.get('area', 0.0)
-                obj.confidence = det_dict.get('confidence', 0.0)
-                obj.metadata = det_dict.get('metadata', {})
-                for key, value in det_dict.items():
-                    if not hasattr(obj, key):
-                        setattr(obj, key, value)
-
-                detection_objects.append(obj)
-
-            processing_resolution = None
-            original_resolution = None
-            for det in detection_objects:
-                metadata = getattr(det, "metadata", {}) or {}
-                if metadata and processing_resolution is None:
-                    processing_resolution = metadata.get('processing_resolution')
-                if metadata and original_resolution is None:
-                    original_resolution = metadata.get('original_resolution')
-                if processing_resolution and original_resolution:
-                    break
-
-            # Use video frame position that was passed through the worker thread
-            # (This is the correct position for THIS specific frame, not affected by race conditions)
-            frame_index = current_video_frame_pos
-            timestamp = self._current_frame_timestamp
-
-            # Use original frame (without detections) for crisp thumbnails
-            # Get synchronized original frame from queue if available
-            thumbnail_frame = self._original_frames_queue.get(timestamp, frame)
-
-            # Clean up used frame from queue
-            if timestamp in self._original_frames_queue:
-                del self._original_frames_queue[timestamp]
-
-            self.thumbnail_widget.update_thumbnails(
-                thumbnail_frame,
-                detection_objects,
-                processing_resolution=processing_resolution,
-                original_resolution=original_resolution,
-                frame_index=frame_index,
-                timestamp=timestamp
-            )
-
-        # Record frame if recording (only when we handle rendering here)
-        # If algorithm_renders_frame is True, recording is handled in on_algorithm_frame_processed
-        if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
-            if rendered_frame is None:
-                rendered_frame = frame
-            self.stream_coordinator.record_frame(rendered_frame, detections)
-
-        # Emit detections via controller (for compatibility with existing signal connections)
-        if self.algorithm_widget:
-            # Emit signal directly (we're already on main thread)
-            self.algorithm_widget.detectionsReady.emit(detections)
+            # Emit detections via controller (for compatibility with existing signal connections)
+            if self.algorithm_widget:
+                # Emit signal directly (we're already on main thread)
+                self.algorithm_widget.detectionsReady.emit(detections)
+        finally:
+            self._dispatch_pending_worker_frame()
 
     @Slot(str)
     def _on_worker_error(self, error_msg: str):
         """Handle error from worker thread."""
         self.logger.error(f"Worker thread error: {error_msg}")
+        self._worker_frame_in_flight = False
+        self._dispatch_pending_worker_frame()
 
     def _get_algorithm_config(self, algorithm_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -1167,19 +1357,39 @@ class StreamViewerWindow(QMainWindow):
         return algorithms.get(algorithm_name)
 
     def _algorithm_registry(self) -> Dict[str, Dict[str, Any]]:
-        """Return the available streaming algorithms."""
-        return {
-            'ColorDetection': {
-                'label': 'Color Detection',
-                'controller': 'ColorDetectionController',
-                'module': 'algorithms.streaming.ColorDetection.controllers.ColorDetectionController'
-            },
-            'ColorAnomalyAndMotionDetection': {
-                'label': 'Color Anomaly & Motion Detection',
-                'controller': 'ColorAnomalyAndMotionDetectionController',
-                'module': 'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionController'
+        """Return available streaming algorithms loaded from algorithms.conf."""
+        config_path = self._get_algorithms_config_path()
+        config_service = ConfigService(config_path)
+        configured_algorithms = config_service.get_streaming_algorithms()
+
+        system = platform.system()
+        registry: Dict[str, Dict[str, Any]] = {}
+        for algorithm in configured_algorithms:
+            name = algorithm.get('name')
+            controller = algorithm.get('controller')
+            if not name or not controller:
+                continue
+
+            platforms = algorithm.get('platforms') or []
+            if platforms and system not in platforms:
+                continue
+
+            module_name = algorithm.get('module') or f'algorithms.streaming.{name}.controllers.{controller}'
+            registry[name] = {
+                'label': algorithm.get('label', name),
+                'controller': controller,
+                'module': module_name
             }
-        }
+
+        return registry
+
+    def _get_algorithms_config_path(self) -> str:
+        """Return the path to algorithms.conf for source and frozen builds."""
+        if getattr(sys, 'frozen', False):
+            app_root = sys._MEIPASS
+        else:
+            app_root = str(pathlib.Path(__file__).resolve().parents[3])
+        return os.path.join(app_root, 'algorithms.conf')
 
     def _import_algorithm_controller(self, algorithm_config: Dict[str, Any]):
         """
@@ -1245,23 +1455,45 @@ class StreamViewerWindow(QMainWindow):
             resolution = self.stream_coordinator.stream_info.get('resolution') or (1920, 1080)
             try:
                 self.algorithm_widget.on_stream_connected(resolution)
+                self._apply_stream_resolution_to_mask_controls(resolution)
             except Exception as e:
                 self.logger.error(f"Error notifying algorithm of active stream: {e}")
         config = self._get_algorithm_config(algorithm_name) or {}
         label = config.get("label", algorithm_name)
-        self.ui.infoPanel.append(f"Algorithm switched to {label}")
+        self.ui.infoPanel.append(
+            self.tr("Algorithm switched to {label}").format(label=label)
+        )
 
     @Slot(str, object, object)
     def on_connect_requested(self, url: str, stream_type: StreamType,
                              hdmi_backend: Optional[int] = None):
         """Handle stream connection request."""
-        # Get FPS limit from algorithm widget config if available
-        fps_limit = None
-        if self.algorithm_widget and hasattr(self.algorithm_widget, 'get_config'):
-            config = self.algorithm_widget.get_config()
-            fps_limit = config.get('target_fps', 0)  # 0 means use default
+        fps_limit = self._get_target_fps_limit_from_widget()
+        self._active_stream_fps_limit = fps_limit
+        connected = self.stream_coordinator.connect_stream(
+            url,
+            stream_type,
+            hdmi_backend=hdmi_backend,
+            fps_limit=fps_limit
+        )
+        if not connected:
+            self._active_stream_fps_limit = None
 
-        self.stream_coordinator.connect_stream(url, stream_type, hdmi_backend=hdmi_backend, fps_limit=fps_limit)
+    def _get_target_fps_limit_from_widget(self) -> Optional[int]:
+        """Read target FPS from the loaded algorithm widget config."""
+        if not self.algorithm_widget or not hasattr(self.algorithm_widget, 'get_config'):
+            return None
+        try:
+            config = self.algorithm_widget.get_config()
+            if not isinstance(config, dict):
+                return None
+            raw_fps_limit = config.get('target_fps')
+            if raw_fps_limit is None:
+                return None
+            fps_limit = int(raw_fps_limit)
+            return fps_limit if fps_limit > 0 else None
+        except (TypeError, ValueError, AttributeError):
+            return None
 
     @Slot()
     def on_disconnect_requested(self):
@@ -1269,6 +1501,7 @@ class StreamViewerWindow(QMainWindow):
         # Disconnect the stream first - this stops frame delivery
         # and signals the stream reader to stop
         self.stream_coordinator.disconnect_stream()
+        self._active_stream_fps_limit = None
         # Then cleanup the processing worker (should be quick since no frames coming)
         self._cleanup_processing_worker()
         # Reset algorithm state for next video session (clears background models,
@@ -1276,9 +1509,10 @@ class StreamViewerWindow(QMainWindow):
         if self.algorithm_widget:
             self.algorithm_widget.cleanup()
 
-        # Reset video display to show "No Stream Connected"
-        self.video_display.clear()
-        self.video_display.setText("No Stream Connected")
+        # Reset video display to show "No Stream Connected" (clears cached
+        # image + zoom) and drop any pending/highlight focus state.
+        self.video_display.clear_display(self.tr("No Stream Connected"))
+        self._reset_focus_state()
 
         # Clear thumbnails
         if hasattr(self, 'thumbnail_widget'):
@@ -1287,15 +1521,28 @@ class StreamViewerWindow(QMainWindow):
     @Slot(bool, str)
     def on_connection_changed(self, connected: bool, message: str):
         """Handle connection status change."""
+        # A new/replacement source or a connection loss invalidates any
+        # gallery/thumbnail focus armed against the previous source, and starts
+        # a new frame session so late async results from the old one are dropped.
+        self._frame_session += 1
+        self._reset_focus_state()
+
         # Update bottom status bar with connection state
-        status_text = f"{'Connected' if connected else 'Disconnected'} - {message}"
+        status_text = self.tr("{state} - {message}").format(
+            state=self.tr("Connected") if connected else self.tr("Disconnected"),
+            message=message
+        )
         self.ui.statusbar.showMessage(status_text)
         # Update stream controls status section
         if hasattr(self, "stream_controls"):
             self.stream_controls.update_connection_status(connected, message)
 
         if connected:
-            self.ui.infoPanel.append(f"✓ Connected: {message}")
+            if self._active_stream_fps_limit is None:
+                self._active_stream_fps_limit = self._get_target_fps_limit_from_widget()
+            self.ui.infoPanel.append(
+                self.tr("✓ Connected: {message}").format(message=message)
+            )
 
             # Show playback controls for file streams
             if self.stream_coordinator.current_stream_type == StreamType.FILE:
@@ -1308,6 +1555,7 @@ class StreamViewerWindow(QMainWindow):
                 # Get stream resolution from stream_info if available, otherwise use placeholder
                 resolution = self.stream_coordinator.stream_info.get('resolution') or (1920, 1080)
                 self.algorithm_widget.on_stream_connected(resolution)
+                self._apply_stream_resolution_to_mask_controls(resolution)
 
             # Recreate processing worker if it was cleaned up during disconnect
             # This ensures second video also uses worker thread for processing
@@ -1320,7 +1568,10 @@ class StreamViewerWindow(QMainWindow):
                 self.on_start_recording_requested(record_dir)
                 self._pending_auto_record = False
         else:
-            self.ui.infoPanel.append(f"✗ Disconnected: {message}")
+            self._active_stream_fps_limit = None
+            self.ui.infoPanel.append(
+                self.tr("✗ Disconnected: {message}").format(message=message)
+            )
 
             # Hide playback controls
             self.playback_controls.hide_for_stream()
@@ -1332,18 +1583,68 @@ class StreamViewerWindow(QMainWindow):
             # Reset statistics
             self.stream_statistics.reset()
 
+            # Reset the video display so an unexpected disconnect (or the
+            # disconnect that precedes a replacement source) does not leave the
+            # last frame + zoom behind. Clearing the cached image also forces a
+            # same-resolution replacement source to rebuild via the full
+            # setImage/reset path instead of inheriting old pan/zoom.
+            self.video_display.clear_display(self.tr("No Stream Connected"))
+
             # Clear gallery and tracks on disconnect
             if hasattr(self, 'gallery_widget'):
                 self.gallery_widget.clear()
             if hasattr(self, 'thumbnail_widget'):
+                self.thumbnail_widget.clear_thumbnails()
                 self.thumbnail_widget.tracker.tracks.clear()
+            self._original_frames_queue.clear()
+            self._pending_worker_frame = None
+            # Do not clear the in-flight flag here. A job from the disconnected
+            # session may still be running; its session-tagged callback will
+            # release this slot and dispatch the latest pending frame from a
+            # subsequently connected source. Clearing it early permits two
+            # worker jobs to overlap after a fast reconnect.
 
             # Clear pending resolution (will be reapplied on next connection if wizard runs again)
             self._pending_processing_resolution = None
 
+    @Slot(dict)
+    def on_algorithm_config_changed(self, config: dict):
+        """
+        Apply runtime FPS-limit changes immediately while connected.
+
+        Controllers emit this whenever controls change; only target_fps is handled here.
+        """
+        if not self.stream_coordinator.is_connected:
+            return
+        if not isinstance(config, dict):
+            return
+        raw_fps_limit = config.get('target_fps')
+        if raw_fps_limit is None:
+            fps_limit = None
+        else:
+            try:
+                fps_limit = int(raw_fps_limit)
+            except (TypeError, ValueError):
+                return
+            if fps_limit <= 0:
+                fps_limit = None
+
+        if fps_limit == self._active_stream_fps_limit:
+            return
+
+        if self.stream_coordinator.update_fps_limit(fps_limit):
+            self._active_stream_fps_limit = fps_limit
+
     @Slot(np.ndarray, float, int)
     def on_frame_received(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
         """Handle frame received from stream."""
+        # A queued raw frame can arrive after an unexpected connection loss.
+        # Keep direct no-manager test/preview use intact, but never let a
+        # disconnected managed source repaint the placeholder.
+        if (self.stream_coordinator.stream_manager is not None and
+                not self.stream_coordinator.is_connected):
+            return
+
         # Store timestamp and video frame position for track storage
         self._current_frame_timestamp = timestamp
         self._current_video_frame_pos = video_frame_pos
@@ -1351,16 +1652,26 @@ class StreamViewerWindow(QMainWindow):
         # Record frame receipt in statistics
         self.stream_statistics.on_frame_received(timestamp)
 
-        # Store original frame for thumbnails (before detection rendering)
-        # This ensures thumbnails are crisp without detection overlays
-        self._original_frame_for_thumbnails = frame.copy()
+        # Check if stream is paused (for file playback) - skip processing if paused
+        is_paused = False
+        if (self.stream_coordinator.stream_manager and
+                hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
+            is_paused = not self.stream_coordinator.stream_manager.is_playing()
 
-        # Add to queue for synchronization with worker thread
-        self._original_frames_queue[timestamp] = self._original_frame_for_thumbnails
-        # Prune queue to prevent memory leak (keep last 50 frames)
-        if len(self._original_frames_queue) > 50:
-            oldest_ts = sorted(self._original_frames_queue.keys())[0]
-            del self._original_frames_queue[oldest_ts]
+        if self.algorithm_widget and not is_paused:
+            # Store original frame for thumbnails (before detection rendering)
+            # This ensures thumbnails are crisp without detection overlays.
+            self._original_frame_for_thumbnails = frame
+
+            # Add to queue for synchronization with worker thread.
+            self._original_frames_queue[timestamp] = self._original_frame_for_thumbnails
+
+            # Prune queue aggressively to keep memory bounded under long sessions.
+            if len(self._original_frames_queue) > self._MAX_ORIGINAL_FRAME_CACHE:
+                oldest_ts = min(self._original_frames_queue.keys())
+                del self._original_frames_queue[oldest_ts]
+        else:
+            self._original_frame_for_thumbnails = None
 
         # Apply resolution capping on first frame (to prevent upscaling)
         if self._pending_processing_resolution is not None:
@@ -1368,35 +1679,30 @@ class StreamViewerWindow(QMainWindow):
             native_height, native_width = frame.shape[:2]
             desired_width, desired_height = self._pending_processing_resolution
 
-            # Cap to native resolution (never upscale)
-            capped_width = min(desired_width, native_width)
-            capped_height = min(desired_height, native_height)
+            if desired_width is not None and desired_height is not None and desired_width > 0 and desired_height > 0:
+                # Cap to native resolution (never upscale)
+                capped_width = min(desired_width, native_width)
+                capped_height = min(desired_height, native_height)
 
-            # Only update if capping actually changed the resolution
-            if capped_width < desired_width or capped_height < desired_height:
-                # self.logger.info(
-                #     f"Capping processing resolution from {desired_width}x{desired_height} "
-                #     f"to {capped_width}x{capped_height} (native: {native_width}x{native_height})"
-                # )
-                pass
+                # Only update if capping actually changed the resolution
+                if capped_width < desired_width or capped_height < desired_height:
+                    # self.logger.info(
+                    #     f"Capping processing resolution from {desired_width}x{desired_height} "
+                    #     f"to {capped_width}x{capped_height} (native: {native_width}x{native_height})"
+                    # )
+                    pass
 
-                # Update algorithm with capped resolution
-                if self.algorithm_widget:
-                    capped_config = {
-                        'processing_width': capped_width,
-                        'processing_height': capped_height,
-                        'processing_resolution': (capped_width, capped_height)
-                    }
-                    self._apply_algorithm_options(capped_config)
+                    # Update algorithm with capped resolution
+                    if self.algorithm_widget:
+                        capped_config = {
+                            'processing_width': capped_width,
+                            'processing_height': capped_height,
+                            'processing_resolution': (capped_width, capped_height)
+                        }
+                        self._apply_algorithm_options(capped_config)
 
             # Clear pending resolution (only apply once)
             self._pending_processing_resolution = None
-
-        # Check if stream is paused (for file playback) - skip processing if paused
-        is_paused = False
-        if (self.stream_coordinator.stream_manager and
-                hasattr(self.stream_coordinator.stream_manager, 'is_playing')):
-            is_paused = not self.stream_coordinator.stream_manager.is_playing()
 
         # Process frame with algorithm if loaded and not paused
         if self.algorithm_widget and not is_paused:
@@ -1405,14 +1711,7 @@ class StreamViewerWindow(QMainWindow):
             # Check if worker is available, running, and not in the process of stopping
             if (self._processing_worker and self._processing_thread and
                     self._processing_thread.isRunning() and not self._is_stopping_worker):
-                # Process frame in worker thread (non-blocking)
-                # Emit signal to request processing in worker thread
-                try:
-                    self._processing_worker.processFrameRequested.emit(frame, timestamp, self._current_video_frame_pos)
-                    use_worker = True
-                except RuntimeError:
-                    # Worker may have been deleted, fall back to main thread processing
-                    use_worker = False
+                use_worker = self._queue_worker_frame(frame, timestamp, video_frame_pos)
 
             if not use_worker:
                 # Fallback to main thread processing (for compatibility)
@@ -1432,68 +1731,18 @@ class StreamViewerWindow(QMainWindow):
                     rendered_frame = None
                     if not self.algorithm_renders_frame:
                         # Render detections using the shared renderer
-                        rendered_frame = self.detection_renderer.render(frame, detections)
+                        display_frame = frame.copy()
+                        rendered_frame = self.detection_renderer.render(display_frame, detections, copy_frame=False)
 
                         # Draw highlight box if a gallery track is selected
                         if self._highlight_track is not None:
                             rendered_frame = self._draw_gallery_highlight(rendered_frame)
 
-                        # Update display with rendered frame
-                        self.video_display.update_frame(rendered_frame)
+                        # Update display with rendered frame (applies any pending focus)
+                        self._present_frame(rendered_frame, video_frame_pos, 'main')
                     # else: Algorithm provides custom rendering via on_algorithm_frame_processed
 
-                    # Update thumbnails
-                    if detections:
-                        # Convert detection dicts to objects with required attributes for tracker
-                        detection_objects = []
-                        for det_dict in detections:
-                            # Create object with required attributes (bbox, centroid, metadata)
-                            obj = SimpleNamespace()
-                            obj.bbox = det_dict.get('bbox', (0, 0, 0, 0))
-
-                            # Calculate centroid from bbox if not provided
-                            if 'centroid' in det_dict:
-                                obj.centroid = det_dict['centroid']
-                            else:
-                                # Calculate from bbox: (x, y, width, height) -> centroid
-                                x, y, w, h = obj.bbox
-                                obj.centroid = (x + w // 2, y + h // 2)
-
-                            obj.area = det_dict.get('area', 0.0)
-                            obj.confidence = det_dict.get('confidence', 0.0)
-                            obj.metadata = det_dict.get('metadata', {})
-                            # Copy any other attributes
-                            for key, value in det_dict.items():
-                                if not hasattr(obj, key):
-                                    setattr(obj, key, value)
-
-                            detection_objects.append(obj)
-
-                        processing_resolution = None
-                        original_resolution = None
-                        for det in detection_objects:
-                            metadata = getattr(det, "metadata", {}) or {}
-                            if metadata and processing_resolution is None:
-                                processing_resolution = metadata.get('processing_resolution')
-                            if metadata and original_resolution is None:
-                                original_resolution = metadata.get('original_resolution')
-                            if processing_resolution and original_resolution:
-                                break
-
-                        # Use video frame position that was passed through the signal chain
-                        # (This is the correct position for THIS frame, not affected by race conditions)
-                        frame_index = self._current_video_frame_pos
-
-                        # Use original frame (without detections) for crisp thumbnails
-                        thumbnail_frame = self._original_frame_for_thumbnails if self._original_frame_for_thumbnails is not None else frame
-                        self.thumbnail_widget.update_thumbnails(
-                            thumbnail_frame,
-                            detection_objects,
-                            processing_resolution=processing_resolution,
-                            original_resolution=original_resolution,
-                            frame_index=frame_index,
-                            timestamp=timestamp
-                        )
+                    self._update_thumbnails(frame, detections, timestamp, video_frame_pos)
 
                     # Record frame if recording (when rendering is handled here)
                     if self.stream_coordinator.is_recording and not self.algorithm_renders_frame:
@@ -1503,9 +1752,18 @@ class StreamViewerWindow(QMainWindow):
 
                 except Exception as e:
                     self.logger.error(f"Error processing frame: {str(e)}")
+                    self._discard_original_frame(timestamp)
         else:
-            # No algorithm loaded, just display frame
-            self.video_display.update_frame(frame)
+            # No algorithm loaded (or stream paused), display raw frame.
+            # This is the path the sought gallery frame travels while paused,
+            # so it is authoritative for applying a pending focus.
+            display_frame = frame
+            if self._highlight_track is not None:
+                display_frame = self._draw_gallery_highlight(display_frame)
+            self._present_frame(display_frame, video_frame_pos, 'raw')
+            self._discard_original_frame(timestamp)
+            if self.stream_coordinator.is_recording:
+                self.stream_coordinator.record_frame(display_frame, [])
 
     @Slot(np.ndarray)
     def on_algorithm_frame_processed(self, annotated_frame: np.ndarray):
@@ -1513,11 +1771,19 @@ class StreamViewerWindow(QMainWindow):
         if not self.algorithm_renders_frame:
             return
 
-        self.video_display.update_frame(annotated_frame)
+        # Drop a late custom-render result after either an unexpected
+        # connection loss (manager retained) or an explicit disconnect
+        # (manager removed), so it cannot repaint over the placeholder.
+        if (self.stream_coordinator.stream_manager is None or
+                not self.stream_coordinator.is_connected):
+            return
 
-        if self.stream_coordinator.is_recording:
-            detections = getattr(self, "_latest_detections_for_rendering", [])
-            self.stream_coordinator.record_frame(annotated_frame, detections)
+        # Only record what was actually presented (a frame rejected while paused
+        # must not be recorded as if it were displayed).
+        if self._present_frame(annotated_frame, self._current_video_frame_pos, 'custom'):
+            if self.stream_coordinator.is_recording:
+                detections = getattr(self, "_latest_detections_for_rendering", [])
+                self.stream_coordinator.record_frame(annotated_frame, detections)
 
     @Slot(list)
     def on_detections_ready(self, detections: list):
@@ -1525,10 +1791,14 @@ class StreamViewerWindow(QMainWindow):
         # Update detection info panel with a concise summary
         self.ui.infoPanel.clear()
         if not detections:
-            self.ui.infoPanel.setPlainText("No detections found.")
+            self.ui.infoPanel.setPlainText(self.tr("No detections found."))
             return
 
-        self.ui.infoPanel.append(f"Detection Results ({len(detections)} found):")
+        self.ui.infoPanel.append(
+            self.tr("Detection Results ({count} found):").format(
+                count=len(detections)
+            )
+        )
         # Show a brief summary of up to first 5 detections
         for idx, det in enumerate(detections[:5], start=1):
             bbox = det.get("bbox") if isinstance(det, dict) else getattr(det, "bbox", None)
@@ -1536,11 +1806,25 @@ class StreamViewerWindow(QMainWindow):
             conf = det.get("confidence") if isinstance(det, dict) else getattr(det, "confidence", None)
             if bbox is not None:
                 x, y, w, h = bbox
-                summary = f"#{idx}: Type({cls}) Pos({x},{y}) Size({w}x{h})"
+                summary = self.tr(
+                    "#{index}: Type({cls}) Pos({x},{y}) Size({w}x{h})"
+                ).format(
+                    index=idx,
+                    cls=cls,
+                    x=x,
+                    y=y,
+                    w=w,
+                    h=h
+                )
             else:
-                summary = f"#{idx}: Type({cls})"
+                summary = self.tr("#{index}: Type({cls})").format(
+                    index=idx,
+                    cls=cls
+                )
             if conf is not None:
-                summary += f" Conf({conf:.2f})"
+                summary += self.tr(" Conf({confidence:.2f})").format(
+                    confidence=conf
+                )
             self.ui.infoPanel.append(summary)
 
     @Slot(str)
@@ -1582,13 +1866,15 @@ class StreamViewerWindow(QMainWindow):
         self._update_recording_state(recording, path)
 
         if recording:
-            self.ui.statusbar.showMessage(f"Recording started: {path}")
+            self.ui.statusbar.showMessage(
+                self.tr("Recording started: {path}").format(path=path)
+            )
 
             # Notify algorithm
             if self.algorithm_widget:
                 self.algorithm_widget.on_recording_started(path)
         else:
-            self.ui.statusbar.showMessage("Recording stopped")
+            self.ui.statusbar.showMessage(self.tr("Recording stopped"))
 
             # Notify algorithm
             if self.algorithm_widget:
@@ -1601,12 +1887,34 @@ class StreamViewerWindow(QMainWindow):
             self.stop_recording_btn.setEnabled(recording)
 
             if recording:
-                self.recording_status.setText(f"Status: Recording to {path}")
+                self.recording_status.setText(
+                    self.tr("Status: Recording to {path}").format(path=path)
+                )
                 self.recording_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             else:
-                self.recording_status.setText("Status: Not Recording")
+                self.recording_status.setText(self.tr("Status: Not Recording"))
                 self.recording_status.setStyleSheet("QLabel { color: gray; }")
-                self.recording_info.setText("Duration: --")
+                self.recording_info.setText(self.tr("Duration: --"))
+
+    @Slot(dict)
+    def on_recording_stats_updated(self, stats: dict):
+        """Render live recording statistics in the recording panel."""
+        if not hasattr(self, 'recording_info') or not isinstance(stats, dict):
+            return
+
+        duration = float(stats.get('segment_duration', 0.0) or 0.0)
+        fps = float(stats.get('recording_fps', 0.0) or 0.0)
+        frames = int(stats.get('frame_count', 0) or 0)
+        queue_size = int(stats.get('queue_size', 0) or 0)
+
+        self.recording_info.setText(
+            self.tr("Duration: {duration:.1f}s | FPS: {fps:.1f} | Frames: {frames} | Queue: {queue}").format(
+                duration=duration,
+                fps=fps,
+                frames=frames,
+                queue=queue_size
+            )
+        )
 
     @Slot(str)
     def on_status_update(self, message: str):
@@ -1617,8 +1925,10 @@ class StreamViewerWindow(QMainWindow):
     def on_error(self, error: str):
         """Handle error."""
         self.logger.error(error)
-        self.ui.infoPanel.append(f"✗ Error: {error}")
-        QMessageBox.warning(self, "Error", error)
+        self.ui.infoPanel.append(
+            self.tr("✗ Error: {error}").format(error=error)
+        )
+        QMessageBox.warning(self, self.tr("Error"), error)
 
     @Slot(bool)
     def on_recording_request(self, start: bool):
@@ -1628,8 +1938,9 @@ class StreamViewerWindow(QMainWindow):
     @Slot()
     def on_play_pause_toggled(self):
         """Handle play/pause toggle (for file playback)."""
-        # Clear gallery highlight when playing (user action)
-        self._clear_gallery_highlight()
+        # A manual play/pause (button or Space) cancels any pending gallery
+        # focus and clears the highlight so a resume can't snap in a stale zoom.
+        self._reset_focus_state()
 
         # Toggle play/pause on stream manager
         if self.stream_coordinator.stream_manager and hasattr(self.stream_coordinator.stream_manager, 'play_pause'):
@@ -1638,8 +1949,9 @@ class StreamViewerWindow(QMainWindow):
     @Slot(float)
     def on_seek_requested(self, time_seconds: float):
         """Handle seek request (for file playback)."""
-        # Clear gallery highlight on manual seek (gallery clicks will re-set it after)
-        self._clear_gallery_highlight()
+        # A manual seek cancels any pending gallery focus/highlight (a gallery
+        # click re-arms it afterwards via its own path).
+        self._reset_focus_state()
 
         # Request seek from stream manager
         if self.stream_coordinator.stream_manager and hasattr(self.stream_coordinator.stream_manager, 'seek_to_time'):
@@ -1657,13 +1969,14 @@ class StreamViewerWindow(QMainWindow):
             if not stream_mgr:
                 return
 
-            # StreamManager wraps RTMPStreamService as _service
-            service = getattr(stream_mgr, '_service', None)
-            if not service:
-                return
+            # A newer selection supersedes any in-flight seek/focus. This bumps
+            # the focus generation so an older delayed seek/timeout no-ops.
+            generation = self._begin_focus_generation()
 
-            # Pause video so user can see the highlighted detection
-            is_playing = getattr(service, '_is_playing', True)
+            # Pause video so user can see the highlighted detection.
+            # (Direct play_pause, not on_play_pause_toggled, so it does not
+            # reset the focus we are about to arm.)
+            is_playing = stream_mgr.is_playing() if hasattr(stream_mgr, "is_playing") else True
             if is_playing:
                 stream_mgr.play_pause()
 
@@ -1673,79 +1986,72 @@ class StreamViewerWindow(QMainWindow):
             # Switch to Live View tab
             self.tab_widget.setCurrentIndex(0)
 
-            # Directly seek, read, and display the frame with highlight
-            # Use a short delay to ensure pause has taken effect
-            QTimer.singleShot(50, lambda: self._display_highlighted_frame(track, service))
+            # The 50 ms delay stays BEFORE the seek (to let pause settle). The
+            # zoom is applied later, only once the sought frame is displayed.
+            QTimer.singleShot(50, lambda g=generation: self._seek_to_track_frame(track, g))
         else:
             # Live stream - cannot seek, show info dialog
             QMessageBox.information(
                 self,
-                "Live Stream",
-                f"Cannot seek in live stream.\n\n"
-                f"Detection was first seen at frame {track.first_frame_index}."
+                self.tr("Live Stream"),
+                self.tr(
+                    "Cannot seek in live stream.\n\n"
+                    "Detection was first seen at frame {frame}."
+                ).format(frame=track.first_frame_index)
             )
 
-    def _display_highlighted_frame(self, track, service):
-        """Read frame at track position from video and display with highlight."""
+    def _seek_to_track_frame(self, track, generation):
+        """Seek to a gallery track's frame and arm the one-shot zoom focus.
+
+        Uses the authoritative resolved frame from ``seek_to_frame`` (no FPS
+        recomputation). ``first_frame_index`` is the position the service
+        reports AFTER decoding the thumbnail's frame (OpenCV advances
+        CAP_PROP_POS_FRAMES past the frame it just read), so it is one greater
+        than that frame's own index. Seeking to ``first_frame_index - 1``
+        re-decodes the exact thumbnail frame; the service then reports
+        ``first_frame_index`` for it, so we correlate against
+        ``{resolved, resolved + 1}``.
+        """
+        # Reject stale delayed callbacks from a superseded selection.
+        if generation != self._focus_generation:
+            return
         try:
-            cap = getattr(service, '_cap', None)
-            if not cap or not cap.isOpened():
+            stream_mgr = self.stream_coordinator.stream_manager
+            if not stream_mgr or not hasattr(stream_mgr, "seek_to_frame"):
+                self._abandon_gallery_focus()
                 return
 
-            # Seek to the exact frame where detection was first seen
-            target_frame = track.first_frame_index
-            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
-
-            # Read the frame
-            ret, frame = cap.read()
-            if not ret or frame is None:
+            target_frame = max(0, int(track.first_frame_index) - 1)
+            resolved = stream_mgr.seek_to_frame(target_frame)
+            if resolved is None:
+                self.logger.warning("Gallery seek failed; clearing pending focus")
+                self._abandon_gallery_focus()
                 return
 
-            # Draw the highlight circle
-            frame_with_highlight = self._draw_gallery_highlight_on_frame(frame, track)
-
-            # Display it
-            self.video_display.update_frame(frame_with_highlight)
+            # Arm the one-shot focus, correlated to THIS seek's request id. The
+            # service reports seekCompleted(request_id, ...) once the sought
+            # frame is painted (success) or the seek fails.
+            self._pending_focus_target = self._focus_target_from_track(track)
+            self._pending_focus_seek_id = stream_mgr.last_seek_id if hasattr(stream_mgr, "last_seek_id") else 0
+            self._pending_focus_positions = {int(resolved), int(resolved) + 1}
+            self._pending_focus_generation = generation
+            QTimer.singleShot(
+                self._FOCUS_TIMEOUT_MS,
+                lambda g=generation: self._on_focus_timeout(g),
+            )
         except Exception as e:
-            self.logger.error(f"Error displaying highlighted frame: {e}")
+            self.logger.error(f"Error seeking to highlighted frame: {e}")
+            self._abandon_gallery_focus()
 
-    def _draw_gallery_highlight_on_frame(self, frame: np.ndarray, track) -> np.ndarray:
-        """Draw highlight circle on a specific frame for a track."""
-        if track is None:
-            return frame
+    def _abandon_gallery_focus(self):
+        """Drop a failed/timed-out gallery focus, including its highlight.
 
-        x, y, w, h = track.bbox
-        cx, cy = track.centroid
-
-        # Scale coordinates if frame resolution differs from when detection was captured
-        current_h, current_w = frame.shape[:2]
-        stored_w, stored_h = track.frame_resolution
-
-        if stored_w > 0 and stored_h > 0 and (stored_w != current_w or stored_h != current_h):
-            scale_x = current_w / stored_w
-            scale_y = current_h / stored_h
-            x = int(x * scale_x)
-            y = int(y * scale_y)
-            w = int(w * scale_x)
-            h = int(h * scale_y)
-            cx = int(cx * scale_x)
-            cy = int(cy * scale_y)
-
-        # Use detection color if available, otherwise bright yellow
-        if track.detection_color is not None:
-            highlight_color = track.detection_color
-        else:
-            highlight_color = (0, 255, 255)  # Yellow in BGR as fallback
-
-        # Calculate circle radius to encompass the detection
-        radius = int(max(w, h) * 0.75)
-        radius = max(radius, 30)  # Minimum radius for visibility
-        thickness = 4
-
-        # Draw single circle around the detection
-        cv2.circle(frame, (cx, cy), radius, highlight_color, thickness)
-
-        return frame
+        A highlight only makes sense on the sought frame; if the seek never
+        lands (failure, exception, or timeout) the highlight must be cleared so
+        later frames are not circled for a detection that was never reached.
+        """
+        self._clear_pending_focus_state()
+        self._clear_gallery_highlight()
 
     def _draw_gallery_highlight(self, frame: np.ndarray) -> np.ndarray:
         """Draw a highlight circle around the selected gallery track's detection.
@@ -1794,19 +2100,141 @@ class StreamViewerWindow(QMainWindow):
         # Draw circle around the detection
         cv2.circle(frame, (cx, cy), radius, highlight_color, thickness)
 
-        # Draw a second outer circle for better visibility
-        cv2.circle(frame, (cx, cy), radius + 8, highlight_color, 2)
-
-        # Draw crosshair at centroid for precise location
-        crosshair_size = 20
-        cv2.line(frame, (cx - crosshair_size, cy), (cx + crosshair_size, cy), highlight_color, 3)
-        cv2.line(frame, (cx, cy - crosshair_size), (cx, cy + crosshair_size), highlight_color, 3)
-
         return frame
 
     def _clear_gallery_highlight(self):
         """Clear the gallery highlight (called on play, new seek, etc.)."""
         self._highlight_track = None
+
+    # ------------------------------------------------------------------ #
+    #  Zoom focus lifecycle (gallery + thumbnail)
+    # ------------------------------------------------------------------ #
+    def _begin_focus_generation(self):
+        """Start a new focus generation, invalidating any in-flight focus.
+
+        Rapid gallery clicks or a competing thumbnail click bump the generation
+        so stale delayed seeks, focus-timeout callbacks and an armed pending
+        focus from an earlier selection are ignored.
+        """
+        self._focus_generation += 1
+        self._clear_pending_focus_state()
+        return self._focus_generation
+
+    def _clear_pending_focus_state(self):
+        """Drop the armed one-shot gallery focus (leaves the highlight alone)."""
+        self._pending_focus_target = None
+        self._pending_focus_seek_id = 0
+        self._pending_focus_positions.clear()
+        self._pending_focus_generation = None
+
+    def _reset_focus_state(self):
+        """Idempotent reset of gallery pending focus + highlight state.
+
+        Used on disconnect, connection loss, new/replacement source, seek
+        failure, manual seek, resume, a newer gallery selection, and a competing
+        thumbnail click. Does NOT reset the display's manual zoom (that survives
+        normal frame replacement and pause/resume).
+
+        It deliberately does NOT clear the thumbnail strip's click payloads:
+        those stay valid as long as their visible pixmaps do, so pausing or
+        seeking never makes a still-visible thumbnail unclickable. Thumbnail
+        payloads are dropped by the strip when a slot empties or a newer frame
+        arrives while it is hidden, and wholesale by ``clear_thumbnails`` on
+        disconnect/new source.
+        """
+        self._focus_generation += 1
+        self._clear_pending_focus_state()
+        self._highlight_track = None
+
+    def _focus_target_from_track(self, track) -> FocusTarget:
+        """Build a source-space focus payload from a gallery track."""
+        width, height = track.frame_resolution
+        return FocusTarget(center_xy=tuple(track.centroid), reference_size=(width, height))
+
+    def _is_file_playback_paused(self) -> bool:
+        """True when a seekable file stream is currently paused."""
+        if self.stream_coordinator.current_stream_type != StreamType.FILE:
+            return False
+        mgr = self.stream_coordinator.stream_manager
+        if mgr is not None and hasattr(mgr, 'is_playing'):
+            try:
+                return not mgr.is_playing()
+            except Exception:
+                return False
+        return False
+
+    def _present_frame(self, frame: np.ndarray, frame_position: int, origin: str) -> bool:
+        """Central display sink: update the view.
+
+        While file playback is paused, only the raw path is authoritative (it
+        carries the sought gallery frame); late worker/custom results are
+        ignored so a pre-seek frame cannot overwrite the sought frame.
+
+        The gallery zoom is NOT applied here: it is applied in
+        :meth:`_on_seek_completed`, correlated by seek request id and emitted by
+        the service AFTER this frame is painted.
+
+        Returns True if the frame was actually presented. Callers MUST gate
+        presentation-coupled side effects (thumbnail refresh, recording) on this
+        so a rejected frame does not leave thumbnails/recordings representing a
+        frame the user is not viewing.
+        """
+        if origin != 'raw' and self._is_file_playback_paused():
+            return False
+        self.video_display.update_frame(frame)
+        return True
+
+    @Slot(int, int, bool)
+    def _on_seek_completed(self, request_id: int, frame_position: int, success: bool):
+        """Apply (or abandon) the one-shot gallery focus for a completed seek.
+
+        Correlated by seek REQUEST ID and the authoritative resolved position
+        window, so neither an older seek nor an unrelated post-seek frame can
+        consume the pending focus. The service emits this AFTER the sought frame
+        is painted, so the scene rect is current when we focus.
+        """
+        if self._pending_focus_target is None:
+            return
+        if request_id != self._pending_focus_seek_id:
+            return  # a superseded or unrelated seek
+        if not success:
+            self.logger.warning(f"Gallery seek {request_id} failed; clearing pending focus")
+            self._abandon_gallery_focus()
+            return
+        if frame_position not in self._pending_focus_positions:
+            self.logger.warning(
+                f"Gallery seek {request_id} completed at unexpected frame "
+                f"{frame_position}; expected one of "
+                f"{sorted(self._pending_focus_positions)}. Clearing pending focus."
+            )
+            self._abandon_gallery_focus()
+            return
+        target = self._pending_focus_target
+        self._clear_pending_focus_state()
+        self.video_display.focus_on(target)
+
+    def _on_focus_timeout(self, generation: int):
+        """Backstop: cancel an armed focus if no seekCompleted ever arrives."""
+        if generation != self._pending_focus_generation:
+            return
+        if self._pending_focus_target is None:
+            return
+        self.logger.warning(
+            f"Gallery focus timed out (seek id {self._pending_focus_seek_id} never "
+            "reported completion). Clearing pending focus and highlight."
+        )
+        self._abandon_gallery_focus()
+
+    def _on_thumbnail_focus_requested(self, target: FocusTarget):
+        """Immediate live focus from a thumbnail click (no pause, no seek).
+
+        Cancels any armed gallery focus and clears the gallery highlight so the
+        two focus sources cannot fight, then centers at 6x. Works while playing
+        or paused.
+        """
+        self._begin_focus_generation()   # supersede any pending gallery focus
+        self._clear_gallery_highlight()
+        self.video_display.focus_on(target)
 
     @Slot(dict)
     def on_stream_info_updated(self, stream_info: dict):
@@ -1827,19 +2255,41 @@ class StreamViewerWindow(QMainWindow):
         # Get video info from stream coordinator
         stream_info = self.stream_coordinator.stream_info if self.stream_coordinator else {}
         video_resolution = stream_info.get('resolution')
-        video_fps = stream_info.get('fps', 0)
+        source_fps = stream_info.get('source_fps', stream_info.get('fps', 0))
+        applied_source_fps = self._get_applied_source_fps(source_fps)
 
         # Get processing resolution from algorithm config
         processing_resolution = None
         if self.algorithm_widget:
             config = self.algorithm_widget.get_config()
-            proc_width = config.get('processing_width', 0)
-            proc_height = config.get('processing_height', 0)
-            # Check for "Original" setting (marker value 99999)
-            if proc_width < 99999 and proc_height < 99999 and proc_width > 0 and proc_height > 0:
-                processing_resolution = (proc_width, proc_height)
-            elif video_resolution:
-                processing_resolution = video_resolution  # Using original resolution
+            resolution_value = config.get('processing_resolution')
+            if isinstance(resolution_value, tuple) and len(resolution_value) == 2:
+                raw_width, raw_height = resolution_value
+                if raw_width is not None and raw_height is not None:
+                    try:
+                        proc_width = int(raw_width)
+                        proc_height = int(raw_height)
+                    except (TypeError, ValueError):
+                        proc_width = proc_height = 0
+                    if proc_width > 0 and proc_height > 0:
+                        processing_resolution = (proc_width, proc_height)
+
+            if processing_resolution is None:
+                proc_width = config.get('processing_width')
+                proc_height = config.get('processing_height')
+                if proc_width is None or proc_height is None:
+                    processing_resolution = video_resolution
+                else:
+                    try:
+                        proc_width = int(proc_width)
+                        proc_height = int(proc_height)
+                    except (TypeError, ValueError):
+                        proc_width = proc_height = 0
+
+                    if proc_width > 0 and proc_height > 0 and proc_width < 99999 and proc_height < 99999:
+                        processing_resolution = (proc_width, proc_height)
+                    elif video_resolution:
+                        processing_resolution = video_resolution
 
         perf_payload = {
             "fps": stats_obj.fps,
@@ -1853,9 +2303,27 @@ class StreamViewerWindow(QMainWindow):
             "dropped_frames": stats_obj.dropped_frames,
             "video_resolution": video_resolution,
             "processing_resolution": processing_resolution,
-            "video_fps": video_fps,
+            "video_fps": source_fps,
+            "applied_source_fps": applied_source_fps,
         }
         self.stream_controls.update_performance(perf_payload)
+
+    def _get_applied_source_fps(self, source_fps: float) -> float:
+        """Estimate the runtime cadence applied to the current source."""
+        explicit_limit = self._active_stream_fps_limit
+        if explicit_limit is not None:
+            if source_fps and source_fps > 0:
+                return min(float(source_fps), float(explicit_limit))
+            return float(explicit_limit)
+
+        stream_type = self.stream_coordinator.current_stream_type if self.stream_coordinator else None
+        if stream_type == StreamType.FILE:
+            return float(source_fps or 0.0)
+        if stream_type in (StreamType.HDMI_CAPTURE, StreamType.RTMP):
+            if source_fps and source_fps > 0:
+                return min(float(source_fps), 60.0)
+            return 60.0
+        return float(source_fps or 0.0)
 
     def update_theme(self, theme: str):
         """
@@ -1867,19 +2335,21 @@ class StreamViewerWindow(QMainWindow):
         normalized = (theme or "dark").lower()
         self.theme = normalized
         try:
-            if normalized == "light":
-                qdarktheme.setup_theme("light")
-            else:
-                qdarktheme.setup_theme("dark")
+            # apply_theme installs the stylesheet AND the full palette so text
+            # colours track the app theme rather than the OS light/dark setting.
+            apply_theme(normalized)
         except Exception as e:
             self.logger.error(f"Error applying theme: {e}")
 
     def showEvent(self, event):
         """Ensure the viewer launches maximized on first show."""
         super().showEvent(event)
+        self.update_controller.refresh_action_state()
         if not self._maximized_applied:
             self._maximized_applied = True
             self.showMaximized()
+        # The automatic startup update check runs on the initial SelectionDialog;
+        # here we only keep the manual "Check for Updates" menu action wired up.
 
     def closeEvent(self, event):
         """Handle window close event."""

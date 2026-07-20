@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from core.services.image.AOINeighborService import AOINeighborService
 from core.services.image.AOIService import AOIService
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class NeighborSearchWorker(QObject):
@@ -61,7 +62,7 @@ class NeighborSearchWorker(QObject):
             self.error.emit(str(e))
 
 
-class AOINeighborTrackingController(QObject):
+class AOINeighborTrackingController(TranslationMixin, QObject):
     """Controller for tracking AOI appearances across neighboring images."""
 
     tracking_started = Signal()
@@ -87,30 +88,43 @@ class AOINeighborTrackingController(QObject):
         # Dialog for displaying results
         self._gallery_dialog = None
 
-    def track_selected_aoi(self):
+    def track_selected_aoi(self, image_idx=None, aoi_idx=None):
         """
-        Track the currently selected AOI across neighboring images.
+        Track a selected AOI across neighboring images.
 
-        This method is triggered by the Z key.
+        Triggered by the Z key. When called with no arguments, the AOI is read
+        from the single-image AOIController. When called with explicit
+        `image_idx` / `aoi_idx`, those are used directly — this is the path
+        used from gallery mode, where the selected AOI may belong to an image
+        other than the one currently displayed in the main viewer.
         """
         try:
-            # Get the currently selected AOI
-            aoi_controller = self.parent.aoi_controller
-            selected_aoi = aoi_controller.get_selected_aoi()
+            if image_idx is not None and aoi_idx is not None:
+                # Gallery-mode selection: resolve AOI from explicit indices
+                if image_idx < 0 or image_idx >= len(self.parent.images):
+                    return
+                current_image = self.parent.images[image_idx]
+                aois = current_image.get('areas_of_interest', [])
+                if aoi_idx < 0 or aoi_idx >= len(aois):
+                    return
+                aoi_data = aois[aoi_idx]
+                current_image_idx = image_idx
+            else:
+                # Single-image selection: read from the AOIController
+                aoi_controller = self.parent.aoi_controller
+                selected_aoi = aoi_controller.get_selected_aoi()
 
-            if not selected_aoi:
-                QMessageBox.information(
-                    self.parent,
-                    "No AOI Selected",
-                    "Please select an AOI first by clicking on it in the thumbnail panel."
-                )
-                return
+                if not selected_aoi:
+                    QMessageBox.information(
+                        self.parent,
+                        self.tr("No AOI Selected"),
+                        self.tr("Please select an AOI first by clicking on it in the thumbnail panel.")
+                    )
+                    return
 
-            aoi_data, aoi_index = selected_aoi
-
-            # Get the current image
-            current_image_idx = self.parent.current_image
-            current_image = self.parent.images[current_image_idx]
+                aoi_data, _ = selected_aoi
+                current_image_idx = self.parent.current_image
+                current_image = self.parent.images[current_image_idx]
 
             # Get altitude override if set
             agl_override_m = None
@@ -119,27 +133,43 @@ class AOINeighborTrackingController(QObject):
                 if alt_ft and alt_ft > 0:
                     agl_override_m = alt_ft * 0.3048
 
-            # Calculate the GPS coordinates of the selected AOI
-            aoi_service = AOIService(current_image, self.parent.current_image_array)
-            aoi_gps = aoi_service.estimate_aoi_gps(current_image, aoi_data, agl_override_m)
+            # Only reuse the viewer's cached pixel array when we're tracking
+            # an AOI on the currently-displayed image; otherwise let
+            # ImageService load the correct image from disk.
+            if current_image_idx == self.parent.current_image:
+                img_array = self.parent.current_image_array
+            else:
+                img_array = None
 
-            if not aoi_gps:
+            # Calculate the GPS coordinates of the selected AOI.
+            # estimate_aoi_gps returns an AOIGPSResult dataclass; the neighbor
+            # service expects a plain (lat, lon) tuple, so convert here.
+            # Honor the terrain-elevation preference like the AOI label does.
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+            aoi_service = AOIService(current_image, img_array)
+            aoi_gps_result = aoi_service.estimate_aoi_gps(current_image, aoi_data, agl_override_m, use_terrain)
+
+            if not aoi_gps_result:
                 QMessageBox.warning(
                     self.parent,
-                    "Cannot Calculate GPS",
-                    "Unable to calculate GPS coordinates for this AOI.\n\n"
-                    "This may be due to missing image metadata (GPS, altitude, or camera info)."
+                    self.tr("Cannot Calculate GPS"),
+                    self.tr(
+                        "Unable to calculate GPS coordinates for this AOI.\n\n"
+                        "This may be due to missing image metadata (GPS, altitude, or camera info)."
+                    )
                 )
                 return
 
+            aoi_gps = aoi_gps_result.to_tuple()
+
             # Show progress dialog
             self.progress_dialog = QProgressDialog(
-                "Searching for AOI in neighboring images...",
-                "Cancel",
+                self.tr("Searching for AOI in neighboring images..."),
+                self.tr("Cancel"),
                 0, 0,
                 self.parent
             )
-            self.progress_dialog.setWindowTitle("Tracking AOI")
+            self.progress_dialog.setWindowTitle(self.tr("Tracking AOI"))
             self.progress_dialog.setWindowModality(Qt.WindowModal)
             self.progress_dialog.setMinimumDuration(0)
             self.progress_dialog.setValue(0)
@@ -175,8 +205,10 @@ class AOINeighborTrackingController(QObject):
             self.logger.error(f"Error starting AOI neighbor tracking: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Tracking Error",
-                f"An error occurred while tracking the AOI:\n{str(e)}"
+                self.tr("Tracking Error"),
+                self.tr("An error occurred while tracking the AOI:\n{error}").format(
+                    error=str(e)
+                )
             )
 
     def _on_progress(self, message):
@@ -199,8 +231,8 @@ class AOINeighborTrackingController(QObject):
             if not results:
                 QMessageBox.information(
                     self.parent,
-                    "No Neighbors Found",
-                    "The AOI was not found in any neighboring images."
+                    self.tr("No Neighbors Found"),
+                    self.tr("The AOI was not found in any neighboring images.")
                 )
                 return
 
@@ -225,8 +257,10 @@ class AOINeighborTrackingController(QObject):
 
             QMessageBox.critical(
                 self.parent,
-                "Search Error",
-                f"An error occurred during the search:\n{error_msg}"
+                self.tr("Search Error"),
+                self.tr("An error occurred during the search:\n{error}").format(
+                    error=error_msg
+                )
             )
 
             self.tracking_error.emit(error_msg)
@@ -275,8 +309,10 @@ class AOINeighborTrackingController(QObject):
             self.logger.error(f"Error showing gallery dialog: {e}")
             QMessageBox.critical(
                 self.parent,
-                "Display Error",
-                f"An error occurred while displaying results:\n{str(e)}"
+                self.tr("Display Error"),
+                self.tr("An error occurred while displaying results:\n{error}").format(
+                    error=str(e)
+                )
             )
 
     def _on_gallery_image_clicked(self, image_idx):
@@ -337,30 +373,39 @@ class AOINeighborTrackingController(QObject):
                             pass
 
                 # Connect signal before loading
+                connected_viewer = None
                 if hasattr(self.parent, 'main_image') and self.parent.main_image:
                     try:
                         self.parent.main_image.viewChanged.connect(zoom_when_ready)
                         zoom_handler = zoom_when_ready
+                        connected_viewer = self.parent.main_image
                     except Exception:
                         pass
 
-                # Load the image
-                self.parent._load_image()
+                try:
+                    # Load the image
+                    self.parent._load_image()
 
-                # Fallback: if image already loaded and zoom not executed
-                if not zoom_executed and hasattr(self.parent, 'main_image'):
-                    viewer = self.parent.main_image
-                    if viewer and viewer.hasImage():
-                        if not getattr(viewer, '_recursion_guard', False):
-                            if not viewer.zoomStack:
-                                zoom_executed = True
-                                if hasattr(viewer, 'zoomToArea'):
-                                    viewer.zoomToArea((pixel_x, pixel_y), 6)
-                                if zoom_handler:
-                                    try:
-                                        viewer.viewChanged.disconnect(zoom_handler)
-                                    except Exception:
-                                        pass
+                    # Fallback: if image already loaded and zoom not executed
+                    if not zoom_executed and hasattr(self.parent, 'main_image'):
+                        viewer = self.parent.main_image
+                        if viewer and viewer.hasImage():
+                            if not getattr(viewer, '_recursion_guard', False):
+                                if not viewer.zoomStack:
+                                    zoom_executed = True
+                                    if hasattr(viewer, 'zoomToArea'):
+                                        viewer.zoomToArea((pixel_x, pixel_y), 6)
+                finally:
+                    # _load_image() is synchronous, so any viewChanged it emits
+                    # has already fired. Unconditionally drop the transient
+                    # handler; a failed/early-returning load would otherwise
+                    # leave it armed on viewChanged, where a later wheel zoom
+                    # would re-enter zoomToArea against a stale location.
+                    if zoom_handler is not None and connected_viewer is not None:
+                        try:
+                            connected_viewer.viewChanged.disconnect(zoom_handler)
+                        except Exception:
+                            pass
             else:
                 # Simple navigation without zoom, or same image
                 if needs_load:

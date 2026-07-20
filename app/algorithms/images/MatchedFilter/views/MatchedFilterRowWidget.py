@@ -13,9 +13,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QLabel,
                                QSlider, QPushButton, QSizePolicy, QColorDialog)
 import qtawesome as qta
 from core.services.color.CustomColorsService import get_custom_colors_service
+from helpers.TranslationMixin import TranslationMixin
 
 
-class ClickableColorSwatch(QFrame):
+class ClickableColorSwatch(TranslationMixin, QFrame):
     """A clickable color swatch that opens a color picker when clicked."""
 
     colorChanged = Signal(QColor)
@@ -58,7 +59,7 @@ class ClickableColorSwatch(QFrame):
         super().mousePressEvent(event)
 
 
-class MatchedFilterRowWidget(QWidget):
+class MatchedFilterRowWidget(TranslationMixin, QWidget):
     """Widget representing a single matched filter color configuration."""
 
     # Signal emitted when this row should be deleted
@@ -89,6 +90,7 @@ class MatchedFilterRowWidget(QWidget):
 
         self._setup_ui()
         self._update_display()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Set up the UI layout and widgets."""

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'StreamingGuide.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -639,8 +639,8 @@ class Ui_StreamingGuide(object):
         self.labelHdmiDevices.setText(QCoreApplication.translate("StreamingGuide", u"Capture Devices:", None))
         self.scanDevicesButton.setText(QCoreApplication.translate("StreamingGuide", u"Scan...", None))
         self.labelProcessingResolution.setText(QCoreApplication.translate("StreamingGuide", u"Processing Resolution:", None))
-        self.labelPageCaptureTitle.setText(QCoreApplication.translate("StreamingGuide", u"Image Capture Information", None))
-        self.labelDrone.setText(QCoreApplication.translate("StreamingGuide", u"What drone/camera was used to capture images?", None))
+        self.labelPageCaptureTitle.setText(QCoreApplication.translate("StreamingGuide", u"Video Capture Information", None))
+        self.labelDrone.setText(QCoreApplication.translate("StreamingGuide", u"What drone/camera was used to capture the video?", None))
         self.labelAltitude.setText(QCoreApplication.translate("StreamingGuide", u"At what above ground level (AGL) altitude was the drone flying?", None))
         self.altitudeUnitComboBox.setItemText(0, QCoreApplication.translate("StreamingGuide", u"ft", None))
         self.altitudeUnitComboBox.setItemText(1, QCoreApplication.translate("StreamingGuide", u"m", None))

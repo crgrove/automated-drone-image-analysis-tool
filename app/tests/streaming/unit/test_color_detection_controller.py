@@ -93,7 +93,9 @@ class TestColorDetectionController:
                     'val_plus': 50
                 }],
                 'min_area': 100,
-                'max_area': 100000
+                'max_area': 100000,
+                'target_fps': 15,
+                'render_at_processing_res': False
             }
 
             controller.set_config(new_config)
@@ -101,6 +103,17 @@ class TestColorDetectionController:
             # Verify config was applied
             assert controller.control_widget is not None
             assert len(controller.control_widget.color_ranges) > 0
+            assert controller.control_widget.input_processing_tab.get_target_fps() == 15
+            assert controller.control_widget.input_processing_tab.render_at_processing_res.isChecked() is False
+
+    def test_set_config_restores_original_resolution_from_legacy_none(self, qapp, algorithm_config, mock_logger):
+        """Legacy processing_resolution=None should map to Original preset in UI."""
+        with patch('algorithms.streaming.ColorDetection.controllers.ColorDetectionController.LoggerService', return_value=mock_logger):
+            controller = ColorDetectionController(algorithm_config, 'dark')
+
+            controller.set_config({'processing_resolution': None})
+
+            assert controller.control_widget.input_processing_tab.resolution_preset.currentData() == "original"
 
     def test_config_changed_signal(self, qapp, algorithm_config, mock_logger):
         """Test config changed signal emission."""

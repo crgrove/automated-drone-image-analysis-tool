@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import cv2
 import piexif
@@ -169,6 +170,28 @@ class LocationInfo:
         minutes = (decimal - degrees) * 60
 
         return f"{degrees}°{minutes:.4f}'{direction}"
+
+    @staticmethod
+    def haversine_m(lat1, lon1, lat2, lon2):
+        """Great-circle distance between two points in meters."""
+        r_earth = 6371000.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+        return 2.0 * r_earth * math.asin(math.sqrt(a))
+
+    @staticmethod
+    def bearing(lat1, lon1, lat2, lon2):
+        """Forward azimuth from point 1 to point 2, in degrees [0, 360)."""
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dlambda = math.radians(lon2 - lon1)
+        x = math.sin(dlambda) * math.cos(phi2)
+        y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlambda)
+        theta = math.atan2(x, y)
+        return (math.degrees(theta) + 360.0) % 360.0
 
     @staticmethod
     def _convert_to_degrees(value):

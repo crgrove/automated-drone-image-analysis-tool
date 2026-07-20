@@ -12,6 +12,7 @@ from core.services.image.ImageService import ImageService
 from core.services.XmlService import XmlService
 from core.services.LoggerService import LoggerService
 from core.controllers.images.viewer.GPSMapController import GPSMapController
+from core.controllers.images.viewer.TeamPlanningController import TeamPlanningController
 from core.controllers.images.viewer.status.StatusController import StatusController
 from core.controllers.images.viewer.CoordinateController import CoordinateController
 from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
@@ -20,15 +21,23 @@ from core.controllers.images.viewer.thumbnails.ThumbnailController import Thumbn
 from core.controllers.images.viewer.gallery.GalleryController import GalleryController
 from core.controllers.images.viewer.aoi.AOIController import AOIController
 from core.controllers.images.viewer.neighbor.AOINeighborTrackingController import AOINeighborTrackingController
+from core.controllers.images.viewer.similarity.AOISimilarityController import AOISimilarityController
 from core.controllers.images.viewer.exports.UnifiedMapExportController import UnifiedMapExportController
 from core.controllers.images.viewer.exports.CoverageExtentExportController import CoverageExtentExportController
 from core.controllers.images.viewer.exports.CalTopoExportController import CalTopoExportController
 from core.controllers.images.viewer.exports.ZipExportController import ZipExportController
 from core.controllers.images.viewer.exports.PDFExportController import PDFExportController
 from core.controllers.images.viewer.AltitudeController import AltitudeController
+from core.controllers.images.viewer.WingtraDataController import WingtraDataController
+from core.controllers.images.viewer.AlignImageController import AlignImageController
+from core.controllers.images.viewer.WaldoPrePassController import WaldoPrePassController
 from core.controllers.images.viewer.image.ImageLoadController import ImageLoadController
+from core.controllers.images.viewer.grid.GridReviewController import GridReviewController
+from core.controllers.images.viewer.AOIOverlayController import AOIOverlayController
 from core.controllers.images.viewer.PixelInfoController import PixelInfoController
 from core.controllers.images.viewer.ThermalDataController import ThermalDataController
+from core.controllers.images.viewer.ThermalHistogramController import ThermalHistogramController
+from core.controllers.images.viewer.ColorHistogramController import ColorHistogramController
 from core.controllers.images.viewer.UIStyleController import UIStyleController
 from core.views.images.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
 from core.views.images.viewer.dialogs.ReviewerNameDialog import ReviewerNameDialog
@@ -37,7 +46,9 @@ from core.views.images.viewer.dialogs.UpscaleDialog import UpscaleDialog
 from core.views.images.viewer.widgets.OverlayWidget import OverlayWidget
 from core.controllers.images.viewer.MagnifyingGlass import MagnifyingGlass
 from core.views.images.viewer.dialogs.MeasureDialog import MeasureDialog
+from core.views.images.viewer.dialogs.PersonReferenceDialog import PersonReferenceDialog
 from core.views.images.viewer.dialogs.LoadingDialog import LoadingDialog
+from core.views.images.viewer.dialogs.ResultsLoadingDialog import ResultsLoadingDialog
 from core.views.images.viewer.widgets.ScaleBarWidget import ScaleBarWidget
 from core.views.images.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
 from core.controllers.images.viewer.status.StatusDict import StatusDict
@@ -45,9 +56,10 @@ from helpers.IconHelper import IconHelper
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
 from core.views.components.Toggle import Toggle
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtWidgets import (
     QDialog, QMainWindow, QMessageBox, QListWidgetItem, QFileDialog, QApplication, QLabel,
-    QHBoxLayout, QWidget, QProgressDialog, QVBoxLayout
+    QHBoxLayout, QWidget, QProgressDialog, QVBoxLayout, QSizePolicy
 )
 from PySide6.QtCore import (
     Qt, QSize, QThread, QPointF, QPoint, QEvent, QTimer, QUrl, QRectF, QObject
@@ -72,7 +84,7 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-class Viewer(QMainWindow, Ui_Viewer):
+class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
     """
     Main application controller for the ADIAT Image Viewer.
 
@@ -106,30 +118,89 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.measure_dialog_open = False
         self.current_gsd = None
 
+        # Person reference overlay state
+        self.person_reference_dialog = None
+        self.person_reference_dialog_open = False
+        # GSDService for the currently loaded image (rebuilt on each image load).
+        # Used by the person-size reference tool to scale silhouettes by
+        # *local* GSD so the size accounts for camera tilt across the frame.
+        self.current_gsd_service = None
+
         self.setupUi(self)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
         self._add_Toggles()
         # self._adjust_ui_sizing()
         # ---------------- settings / data ----------------
+        # A heartbeat dialog so the user knows the app is working during
+        # the synchronous open flow (path validation, source-folder scan,
+        # WALDO pre-pass coordination, AOI init, first image decode).
+        # Without it the window just looks frozen for several seconds.
+        self._loading_dialog = ResultsLoadingDialog(parent=None)
+        self._loading_dialog.show()
+        self._loading_dialog.set_status(self.tr("Reading result file..."))
+
         self.xml_path = xml_path
         self.xml_service = XmlService(xml_path)
         self.images = self.xml_service.get_images()
+        # Backfill persistent run-wide AOI numbers on legacy result files so
+        # every AOI has a stable identifier the reviewer can return to.
+        if self.xml_service.ensure_aoi_numbers(self.images):
+            try:
+                self.xml_service.save_xml_file(self.xml_path)
+            except Exception as e:
+                self.logger.error(f"Could not persist backfilled AOI numbers: {e}")
+        # Settings parsed early so the WALDO pre-pass and source-folder enumeration
+        # can both see settings['input_dir'] (the original capture folder).
+        self.settings, _ = self.xml_service.get_settings()
+
+        self._loading_dialog.set_status(
+            self.tr("Checking image dimensions ({n} images)...").format(n=len(self.images))
+        )
+        # Check for missing image dimensions and offer to backfill
+        self._backfill_image_dimensions_if_needed()
 
         # Initialize controllers needed during early setup
         # (must exist before validation/recovery calls below)
         self.path_validation_controller = PathValidationController(self)
         self.bearing_recovery_controller = BearingRecoveryController(self)
 
+        self._loading_dialog.set_status(self.tr("Validating image paths..."))
         # Validate and fix paths if needed
         if not self.path_validation_controller.validate_and_fix_paths(self.images):
             # User cancelled folder selection - show error and close viewer
+            self._loading_dialog.close()
             QMessageBox.critical(
-                self, "Load Results Failed",
-                "Cannot load results without valid image and mask locations.\n\n"
-                "The viewer will now close."
+                self,
+                self.tr("Load Results Failed"),
+                self.tr(
+                    "Cannot load results without valid image and mask locations.\n\n"
+                    "The viewer will now close."
+                )
             )
             QTimer.singleShot(0, self.close)  # Close after __init__ completes
             return
+
+        self._loading_dialog.set_status(self.tr("Scanning source folder for full flight..."))
+        # Build the full source-folder image list (all captures from the original
+        # flight, not just the AOI subset that lives in the result XML). The map
+        # view, coverage extents, and the WALDO heading derivation all need the
+        # full set; per-AOI navigation continues to iterate self.images.
+        self.source_images = self._build_source_images()
+
+        # WALDO airframe pre-pass runs its own dialog with detailed progress;
+        # hide the heartbeat dialog so we don't have two modals stacked.
+        self._loading_dialog.hide()
+        try:
+            self.waldo_pre_pass_controller = WaldoPrePassController(self)
+            self.waldo_pre_pass_controller.run_pre_pass_if_needed(self.source_images)
+        except Exception as waldo_err:
+            self.logger.warning(f"WALDO pre-pass failed; continuing without synthesis: {waldo_err}")
+        self._loading_dialog.show()
+        self._loading_dialog.set_status(self.tr("Initialising controllers..."))
 
         # Initialize settings service for reviewer name
         self.settings_service = SettingsService()
@@ -139,8 +210,9 @@ class Viewer(QMainWindow, Ui_Viewer):
 
         self.loaded_thumbnails = []
         self.hidden_image_count = sum(1 for image in self.images if image.get("hidden"))
-        self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
-        self.settings, _ = self.xml_service.get_settings()
+        self.skipHidden.setText(
+            self.tr("Skip Hidden ({count}) ").format(count=self.hidden_image_count)
+        )
 
         # Store alternative cache directory (set by _check_and_prompt_for_caches)
         self.alternative_cache_dir = None
@@ -152,17 +224,27 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.coordinate_controller = CoordinateController(self)
         self.status_controller = StatusController(self)
         self.gps_map_controller = GPSMapController(self)
+        self.team_planning_controller = TeamPlanningController(self)
         self.neighbor_tracking_controller = AOINeighborTrackingController(self)
+        self.similarity_controller = AOISimilarityController(self)
 
         self.ui_style_controller = UIStyleController(self, theme)
         self.thermal_controller = ThermalDataController(self)
+        self.thermal_histogram_controller = ThermalHistogramController(self)
+        self.color_histogram_controller = ColorHistogramController(self)
         self.pixel_info_controller = PixelInfoController(self)
         self.image_load_controller = ImageLoadController(self)
+        self.grid_review_controller = GridReviewController(self)
         self.altitude_controller = AltitudeController(self)
+        self.wingtra_controller = WingtraDataController(self)
+        self.align_image_controller = AlignImageController(self)
 
         # Initialize services
         self.cache_path_service = CachePathService()
 
+        self._loading_dialog.set_status(
+            self.tr("Loading detection results from {n} images...").format(n=len(self.images))
+        )
         # Load flagged AOIs from XML
         self.aoi_controller.initialize_from_xml(self.images)
         self.is_thermal = (self.settings['thermal'] == 'True')
@@ -177,6 +259,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.temperature_unit = 'F' if temperature_unit == 'Fahrenheit' else 'C'
         self.distance_unit = 'ft' if distance_unit == 'Feet' else 'm'
         self.show_hidden = show_hidden
+
+        # Terrain elevation preference for AOI positioning
+        self.use_terrain_elevation = self.settings_service.get_bool_setting('UseTerrainElevation', True)
         self.skipHidden.setChecked(not self.show_hidden)
         self.skipHidden.clicked.connect(self._skip_hidden_clicked)
 
@@ -190,14 +275,16 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.messages = StatusDict(callback=self.status_controller.message_listener,
                                    key_order=["GPS Coordinates", "Relative Altitude",
                                               "Gimbal Orientation", "Estimated Average GSD",
-                                              "Temperature", "Color Values"])
+                                              "Temperature", "Color Values", "Grid Review"])
 
         # Apply icons
         self._apply_icons()
         self.statusBar.linkActivated.connect(self.coordinate_controller.on_coordinates_clicked)
         self.statusBar.setToolTip(
-            "Image metadata and information.\n"
-            "Click on GPS Coordinates to copy, share, or open in mapping applications."
+            self.tr(
+                "Image metadata and information.\n"
+                "Click on GPS Coordinates to copy, share, or open in mapping applications."
+            )
         )
 
         # toast (non intrusive) over statusBarWidget
@@ -227,6 +314,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.gallery_loading_overlay = None
 
         # ---- load everything ----
+        self._loading_dialog.set_status(self.tr("Loading first image..."))
         self._load_images()
 
         # Check for missing bearings and offer recovery
@@ -241,6 +329,7 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Set up UI elements for controllers
         # Controllers get UI elements directly from parent
 
+        self._loading_dialog.set_status(self.tr("Preparing thumbnails..."))
         # Defer thumbnail initialization to avoid blocking with large datasets
         # Only initialize visible thumbnails first
         self.thumbnail_controller.initialize_thumbnails_deferred()
@@ -252,6 +341,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.skipHidden.setFocusPolicy(Qt.NoFocus)
         self.setStyleSheet("QToolTip {background-color: lightblue; color:black; border:1px solid blue;}")
 
+        # Heartbeat is no longer needed once the viewer itself is visible.
+        self._loading_dialog.close()
+        self._loading_dialog = None
         self.showMaximized()
 
     def _initial_fit_image(self):
@@ -285,6 +377,12 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'thumbnail_controller'):
             self.thumbnail_controller.cleanup()
 
+        if hasattr(self, 'thermal_histogram_controller'):
+            self.thermal_histogram_controller.cleanup()
+
+        if hasattr(self, 'color_histogram_controller'):
+            self.color_histogram_controller.cleanup()
+
         # Clean up gallery controller
         if hasattr(self, 'gallery_controller'):
             self.gallery_controller.clear_cache()
@@ -308,9 +406,24 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'help_dialog') and self.help_dialog:
             self.help_dialog.close()
 
+        # Close measure dialog if open
+        if hasattr(self, 'measure_dialog') and self.measure_dialog:
+            self.measure_dialog.close()
+
+        # Close person reference dialog if open
+        if hasattr(self, 'person_reference_dialog') and self.person_reference_dialog:
+            self.person_reference_dialog.close()
+
         # Clean up neighbor tracking controller
         if hasattr(self, 'neighbor_tracking_controller'):
             self.neighbor_tracking_controller.cleanup()
+
+        # Clean up similarity search controller
+        if hasattr(self, 'similarity_controller'):
+            self.similarity_controller.cleanup()
+        # Persist any unsaved grid review marks
+        if hasattr(self, 'grid_review_controller'):
+            self.grid_review_controller.cleanup()
 
         event.accept()
 
@@ -328,11 +441,13 @@ class Viewer(QMainWindow, Ui_Viewer):
         font = QFont()
         font.setPointSize(10)
 
-        # Show Overlay toggle with label
+        # Show Overlay toggle with label. Mirror hideImageToggle exactly (same
+        # fixed width, natural height) so the two toggles render identically;
+        # the header height is sized to fit it in _setup_splitter_layout.
         self.showOverlayToggle = Toggle()
         self.showOverlayToggle.setContentsMargins(4, 0, 4, 0)
         self.showOverlayToggle.setFixedWidth(50)
-        self.showOverlayLabel = QLabel("Show Overlay")
+        self.showOverlayLabel = QLabel(self.tr("Show Overlay"))
         self.showOverlayLabel.setFont(font)
 
         # Create container widget for toggle + label
@@ -348,6 +463,29 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.showOverlayToggle.setChecked(True)
         self.showOverlayToggle.clicked.connect(self._show_overlay_change)
 
+    @staticmethod
+    def _tighten_header(header_layout):
+        """Tighten the dense viewer header so its glyphs are not clipped.
+
+        The header is a simple two-part row: a left group (file name, index,
+        Show Overlay) and the right-justified toolbar buttons, separated by an
+        expanding spacer. The only element that yields under width pressure is
+        the file-name label (its minimum width is pinned to 10px in the .ui), so
+        when the two groups would overlap the file name is what gets cut off and
+        every other item keeps its natural width.
+
+        This helper only removes the top/bottom margins (so the 16pt file-name
+        glyphs get the full header height) and tightens the inter-widget spacing.
+
+        Args:
+            header_layout (QHBoxLayout): The main header layout (horizontalLayout_5).
+        """
+        header_layout.setSpacing(2)
+
+        # Give the labels the full header height so descenders aren't clipped.
+        margins = header_layout.contentsMargins()
+        header_layout.setContentsMargins(margins.left(), 0, margins.right(), 0)
+
     def _setup_gallery_mode_ui(self):
         """Set up the gallery mode toggle and stacked widget for AOI display."""
         # Delegate to GalleryController
@@ -361,6 +499,49 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Use the splitter defined in the UI
             self.image_gallery_splitter = self.mainSplitter
 
+            # Header row height. Sized to fit the Toggle widgets at their natural
+            # 45px height so the header "Show Overlay" toggle renders identically
+            # to the "Hide Image" toggle in the button bar.
+            header_height = 46
+
+            # Reduce left/right margins and spacing for tighter layout
+            self.verticalLayout.setContentsMargins(2, 2, 2, 2)
+            self.verticalLayout.setSpacing(2)
+            self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
+
+            # Reduce status bar height to half
+            self.statusBarWidget.setMaximumHeight(20)
+
+            # Extract headers from splitter panels into a shared header row above the splitter
+            self.verticalLayout_3.removeWidget(self.mainHeaderWidget)
+            self.verticalLayout_4.removeWidget(self.aoiHeaderWidget)
+
+            # Remove aoiHeaderWidget max-width constraint and update size policy
+            self.aoiHeaderWidget.setMaximumSize(QSize(16777215, header_height))
+            self.aoiHeaderWidget.setMinimumHeight(header_height)
+            self.aoiHeaderWidget.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed))
+
+            # Constrain mainHeaderWidget height
+            self.mainHeaderWidget.setMinimumHeight(header_height)
+            self.mainHeaderWidget.setMaximumHeight(header_height)
+
+            # Tighten the dense toolbar so its glyphs aren't clipped
+            # (see _tighten_header).
+            self._tighten_header(self.horizontalLayout_5)
+
+            # Create header row with both headers side by side
+            self._header_row = QWidget()
+            self._header_row.setFixedHeight(header_height)
+            self._header_layout = QHBoxLayout(self._header_row)
+            self._header_layout.setContentsMargins(0, 0, 0, 0)
+            self._header_layout.setSpacing(0)
+            self.mainHeaderWidget.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed))
+            self._header_layout.addWidget(self.mainHeaderWidget)
+            self._header_layout.addWidget(self.aoiHeaderWidget)
+
+            # Insert header row above mainWidget in the outer layout
+            self.verticalLayout.insertWidget(0, self._header_row)
+
             # Replace placeholder with the actual image widget in the image area layout
             if hasattr(self, 'placeholderImage') and self.placeholderImage:
                 if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
@@ -368,11 +549,14 @@ class Viewer(QMainWindow, Ui_Viewer):
                 self.placeholderImage.deleteLater()
 
             if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
-                # Insert main image right after the header (index 1)
-                self.verticalLayout_3.insertWidget(1, self.main_image)
+                # Insert main image at index 0 (header was removed from this layout)
+                self.verticalLayout_3.insertWidget(0, self.main_image)
 
             # Delegate gallery-related splitter setup to GalleryController
             self.gallery_controller.setup_splitter_layout(self.image_gallery_splitter)
+
+            # Initial sync of AOI header width with splitter
+            self._sync_aoi_header_width()
 
         except Exception as e:
             self.logger.error(f"Error setting up splitter layout: {e}")
@@ -400,6 +584,22 @@ class Viewer(QMainWindow, Ui_Viewer):
         # Resize main image and reposition overlay when splitter moves
         self._resize_main_image_and_reposition_overlay()
 
+        # Sync AOI header width with splitter panel
+        self._sync_aoi_header_width()
+
+    def _sync_aoi_header_width(self):
+        """Sync aoiHeaderWidget width with the AOI splitter panel."""
+        try:
+            if hasattr(self, 'image_gallery_splitter') and self.image_gallery_splitter:
+                sizes = self.image_gallery_splitter.sizes()
+                if len(sizes) == 2:
+                    self.aoiHeaderWidget.setFixedWidth(sizes[1])
+                    if hasattr(self, '_header_layout'):
+                        self._header_layout.setSpacing(
+                            self.image_gallery_splitter.handleWidth())
+        except Exception:
+            pass
+
     def _update_gallery_geometry(self):
         """Update gallery widget geometry to fill aoiFrame."""
         # Delegate to GalleryController
@@ -418,8 +618,15 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'image_gallery_splitter'):
             self.gallery_controller.save_splitter_position(self.image_gallery_splitter)
 
+    def _on_grid_review_clicked(self):
+        """Handle Grid Review button click - toggle the sweep mode."""
+        self.grid_review_controller.toggle_mode()
+
     def _on_gallery_mode_clicked(self):
         """Handle Gallery Mode button click - update styling and toggle gallery mode."""
+        # Gallery and grid review are mutually exclusive single-surface modes
+        if hasattr(self, 'grid_review_controller'):
+            self.grid_review_controller.deactivate()
         # The button's checked state drives the gallery mode
         if hasattr(self, 'galleryModeButton'):
             should_be_in_gallery_mode = self.galleryModeButton.isChecked()
@@ -438,18 +645,20 @@ class Viewer(QMainWindow, Ui_Viewer):
             if not hasattr(self, 'xml_path') or not self.xml_path:
                 QMessageBox.warning(
                     self,
-                    "No Dataset",
-                    "No dataset is currently loaded."
+                    self.tr("No Dataset"),
+                    self.tr("No dataset is currently loaded.")
                 )
                 return
 
             # Confirm with user
             reply = QMessageBox.question(
                 self,
-                "Generate Cache",
-                "This will regenerate thumbnail and color caches for all AOIs in this dataset.\n\n"
-                "This may take a few minutes depending on the dataset size.\n\n"
-                "Continue?",
+                self.tr("Generate Cache"),
+                self.tr(
+                    "This will regenerate thumbnail and color caches for all AOIs in this dataset.\n\n"
+                    "This may take a few minutes depending on the dataset size.\n\n"
+                    "Continue?"
+                ),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
@@ -459,13 +668,13 @@ class Viewer(QMainWindow, Ui_Viewer):
 
             # Create progress dialog
             self.cache_progress_dialog = QProgressDialog(
-                "Initializing cache generation...",
-                "Cancel",
+                self.tr("Initializing cache generation..."),
+                self.tr("Cancel"),
                 0,
                 100,
                 self
             )
-            self.cache_progress_dialog.setWindowTitle("Generating Cache")
+            self.cache_progress_dialog.setWindowTitle(self.tr("Generating Cache"))
             self.cache_progress_dialog.setWindowModality(Qt.WindowModal)
             self.cache_progress_dialog.setMinimumDuration(0)
             self.cache_progress_dialog.setValue(0)
@@ -502,8 +711,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.logger.error(f"Error starting cache generation: {e}")
             QMessageBox.critical(
                 self,
-                "Error",
-                f"Failed to start cache generation:\n{e}"
+                self.tr("Error"),
+                self.tr("Failed to start cache generation:\n{error}").format(error=e)
             )
 
     def _on_cache_generation_complete(self, total_images: int, total_aois: int):
@@ -521,10 +730,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show completion message
             QMessageBox.information(
                 self,
-                "Cache Generated",
-                f"Cache generation complete!\n\n"
-                f"Processed {total_images} images with {total_aois} AOIs.\n\n"
-                f"The viewer will now load thumbnails and colors much faster."
+                self.tr("Cache Generated"),
+                self.tr(
+                    "Cache generation complete!\n\n"
+                    "Processed {images} images with {aois} AOIs.\n\n"
+                    "The viewer will now load thumbnails and colors much faster."
+                ).format(images=total_images, aois=total_aois)
             )
 
             # Reload gallery if in gallery mode to show cached results
@@ -552,8 +763,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Show error message
             QMessageBox.critical(
                 self,
-                "Cache Generation Error",
-                f"An error occurred during cache generation:\n\n{error_msg}"
+                self.tr("Cache Generation Error"),
+                self.tr(
+                    "An error occurred during cache generation:\n\n{error}"
+                ).format(error=error_msg)
             )
 
             self.logger.error(f"Cache generation error: {error_msg}")
@@ -618,6 +831,10 @@ class Viewer(QMainWindow, Ui_Viewer):
     def resizeEvent(self, event):
         """Handle resize event - adjust main image, gallery widget, and snap aoiFrame."""
         super().resizeEvent(event)
+
+        # Sync AOI header width with splitter panel
+        self._sync_aoi_header_width()
+
         # If gallery widget exists and is visible (in gallery mode), update its geometry
         if (hasattr(self, 'gallery_widget') and self.gallery_widget and
                 hasattr(self, 'gallery_mode') and self.gallery_mode):
@@ -655,10 +872,22 @@ class Viewer(QMainWindow, Ui_Viewer):
                 super().keyPressEvent(e)
                 return
 
+        # Grid review mode gets first claim on keys: while active it owns
+        # Space/arrows/X/Esc (and S toggles it from anywhere). It returns
+        # False for everything else so all bindings below are unaffected.
+        if hasattr(self, 'grid_review_controller') and self.grid_review_controller.handle_key(e):
+            return
+
         if e.key() == Qt.Key_Right:
-            self._nextImageButton_clicked()
+            if self.gallery_mode and hasattr(self, 'gallery_controller'):
+                self.gallery_controller.navigate_gallery_aoi(1)
+            else:
+                self._nextImageButton_clicked()
         if e.key() == Qt.Key_Left:
-            self._previousImageButton_clicked()
+            if self.gallery_mode and hasattr(self, 'gallery_controller'):
+                self.gallery_controller.navigate_gallery_aoi(-1)
+            else:
+                self._previousImageButton_clicked()
         if e.key() == Qt.Key_Down or e.key() == Qt.Key_P:
             self._hide_image_change(True)
         if e.key() == Qt.Key_Up or e.key() == Qt.Key_U:
@@ -676,6 +905,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._open_image_adjustment_dialog()
         if e.key() == Qt.Key_M and e.modifiers() == Qt.ControlModifier:
             self._open_measure_dialog()
+        if e.key() == Qt.Key_P and e.modifiers() == Qt.ControlModifier:
+            self._open_person_reference_dialog()
         if e.key() == Qt.Key_I and e.modifiers() == Qt.ControlModifier:
             self.showPOIsButton.setChecked(not self.showPOIsButton.isChecked())
             self._update_show_pois_button_style()
@@ -720,10 +951,12 @@ class Viewer(QMainWindow, Ui_Viewer):
                     # AOI is not visible in either view, show error
                     QMessageBox.information(
                         self,
-                        "AOI Not Visible",
-                        "The AOI at the cursor position cannot be selected because "
-                        "it is currently hidden due to active filters.\n\n"
-                        "To select this AOI, please clear or adjust your filters."
+                        self.tr("AOI Not Visible"),
+                        self.tr(
+                            "The AOI at the cursor position cannot be selected because "
+                            "it is currently hidden due to active filters.\n\n"
+                            "To select this AOI, please clear or adjust your filters."
+                        )
                     )
         if e.key() == Qt.Key_F and e.modifiers() == Qt.NoModifier:
             # Flag/unflag the currently selected AOI
@@ -751,9 +984,190 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Upscale currently visible portion with 'E' key
             self._open_upscale_dialog()
         if e.key() == Qt.Key_Z and e.modifiers() == Qt.NoModifier:
-            # Track AOI in neighboring images with 'Z' key
+            # Track AOI in neighboring images with 'Z' key. In gallery mode
+            # the selection lives in the gallery model, which may span images,
+            # so resolve it there and pass explicit indices to the tracker.
             if hasattr(self, 'neighbor_tracking_controller'):
-                self.neighbor_tracking_controller.track_selected_aoi()
+                if (hasattr(self, 'gallery_mode') and self.gallery_mode and
+                        hasattr(self, 'gallery_controller') and self.gallery_controller):
+                    gallery_selection = self._resolve_gallery_selected_aoi()
+                    if gallery_selection:
+                        image_idx, aoi_idx = gallery_selection
+                        self.neighbor_tracking_controller.track_selected_aoi(
+                            image_idx=image_idx, aoi_idx=aoi_idx
+                        )
+                else:
+                    self.neighbor_tracking_controller.track_selected_aoi()
+        if e.key() == Qt.Key_Z and e.modifiers() == Qt.ShiftModifier:
+            # Find visually similar AOIs with 'Shift+Z'
+            if hasattr(self, 'similarity_controller'):
+                if (hasattr(self, 'gallery_mode') and self.gallery_mode and
+                        hasattr(self, 'gallery_controller') and self.gallery_controller):
+                    gallery_selection = self._resolve_gallery_selected_aoi()
+                    if gallery_selection:
+                        image_idx, aoi_idx = gallery_selection
+                        self.similarity_controller.find_similar_for_selected(
+                            image_idx=image_idx, aoi_idx=aoi_idx
+                        )
+                else:
+                    self.similarity_controller.find_similar_for_selected()
+        if e.key() == Qt.Key_W and e.modifiers() == Qt.ShiftModifier:
+            # Load Wingtra CSV flight log with 'Shift+W' key
+            self.wingtra_controller.prompt_and_load_csv()
+        if e.key() == Qt.Key_A and e.modifiers() == Qt.NoModifier:
+            # Open the Align Image dialog with 'A' key
+            self.align_image_controller.open_dialog()
+
+    def _resolve_gallery_selected_aoi(self):
+        """Resolve the AOI selected in the gallery model.
+
+        In gallery mode the selection may belong to an image other than the
+        one displayed in the main viewer, so it must be read from the gallery
+        model rather than the single-image AOIController.
+
+        Returns:
+            tuple: (image_idx, aoi_idx) of the selected AOI, or None.
+        """
+        ui_component = self.gallery_controller.ui_component
+        if not ui_component or not ui_component.gallery_view:
+            return None
+        current_index = ui_component.gallery_view.currentIndex()
+        if not current_index.isValid():
+            return None
+        aoi_info = self.gallery_controller.model.get_aoi_info(current_index)
+        if not aoi_info:
+            return None
+        image_idx, aoi_idx, _ = aoi_info
+        return (image_idx, aoi_idx)
+
+    def _build_source_images(self):
+        """Enumerate every capture from the original flight folder.
+
+        The result XML carries only images that produced an AOI; map markers,
+        coverage extents, and WALDO heading derivation all need the full set.
+        Reads settings['input_dir'] (written by AnalyzeService at detection
+        time). When that folder is missing or unreachable, falls back to the
+        AOI subset so the viewer still loads cleanly on relocated projects.
+
+        Each entry: {'path', 'name', 'has_aoi'}.
+        """
+        IMAGE_EXTS = ('.jpg', '.jpeg', '.tif', '.tiff', '.png', '.dng')
+        aoi_paths = {img['path'] for img in self.images if img.get('path')}
+        input_dir = (self.settings or {}).get('input_dir', '') or ''
+
+        if not input_dir or not os.path.isdir(input_dir):
+            if input_dir:
+                self.logger.info(
+                    f"Source folder unreachable ({input_dir}); map and coverage "
+                    f"will use AOI subset only."
+                )
+            return [
+                {'path': img['path'], 'name': os.path.basename(img['path']), 'has_aoi': True}
+                for img in self.images if img.get('path')
+            ]
+
+        source_images = []
+        try:
+            entries = sorted(os.listdir(input_dir))
+        except OSError as e:
+            self.logger.warning(f"Cannot list source folder {input_dir}: {e}")
+            return [
+                {'path': img['path'], 'name': os.path.basename(img['path']), 'has_aoi': True}
+                for img in self.images if img.get('path')
+            ]
+
+        for name in entries:
+            if not name.lower().endswith(IMAGE_EXTS):
+                continue
+            full_path = os.path.join(input_dir, name)
+            if not os.path.isfile(full_path):
+                continue
+            source_images.append({
+                'path': full_path,
+                'name': name,
+                'has_aoi': full_path in aoi_paths,
+            })
+
+        # Append AOI images that aren't in the source folder (relocated/renamed).
+        source_paths = {entry['path'] for entry in source_images}
+        for img in self.images:
+            p = img.get('path')
+            if p and p not in source_paths:
+                source_images.append({'path': p, 'name': os.path.basename(p), 'has_aoi': True})
+
+        return source_images
+
+    def _backfill_image_dimensions_if_needed(self):
+        """Check if image dimensions are missing and offer to backfill from image files."""
+        if not self.images:
+            return
+
+        missingCount = sum(1 for img in self.images
+                           if img.get('width') is None or img.get('height') is None)
+
+        if missingCount == 0:
+            return
+
+        # The heartbeat loading dialog is always-on-top (WindowStaysOnTopHint),
+        # so a modal QMessageBox shown underneath it is hidden from the user and
+        # the app appears frozen. Hide the loading dialog while the modal prompt
+        # is up, then restore it (mirrors the WALDO pre-pass handling above).
+        loading_dialog = getattr(self, '_loading_dialog', None)
+        if loading_dialog is not None:
+            loading_dialog.hide()
+        try:
+            reply = QMessageBox.question(
+                self,
+                self.tr("Update Image Dimensions"),
+                self.tr(
+                    "This dataset is missing image dimensions needed for heatmap filtering "
+                    "({count} images).\n\n"
+                    "Would you like to read dimensions from the image files and update "
+                    "the results file?"
+                ).format(count=missingCount),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+        finally:
+            if loading_dialog is not None:
+                loading_dialog.show()
+
+        if reply != QMessageBox.Yes:
+            return
+
+        from PIL import Image
+        updatedCount = 0
+        for image in self.images:
+            if image.get('width') is not None and image.get('height') is not None:
+                continue
+
+            imagePath = image.get('path')
+            if not imagePath or not os.path.isfile(imagePath):
+                continue
+
+            try:
+                with Image.open(imagePath) as img:
+                    width, height = img.size
+                    image['width'] = width
+                    image['height'] = height
+
+                    # Also update the XML element
+                    xmlElement = image.get('xml')
+                    if xmlElement is not None:
+                        xmlElement.set('width', str(width))
+                        xmlElement.set('height', str(height))
+                    updatedCount += 1
+                    if loading_dialog is not None:
+                        loading_dialog.set_status(
+                            self.tr("Reading image dimensions ({done}/{total})...").format(
+                                done=updatedCount, total=missingCount
+                            )
+                        )
+            except Exception:
+                continue
+
+        if updatedCount > 0:
+            self.xml_service.save_xml_file(self.xml_path)
 
     def _load_images(self):
         """Loads and validates images from the XML file."""
@@ -773,12 +1187,18 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._show_no_images_message()
         else:
             # Check for caches and prompt user if missing
-            alternative_cache_dir, _ = self.cache_path_service.check_and_prompt_for_caches(
-                self.xml_path, self
-            )
-            if alternative_cache_dir:
-                self.alternative_cache_dir = alternative_cache_dir
-                self.cache_path_service.update_cache_paths(Path(alternative_cache_dir), self)
+            missing_caches = self.cache_path_service.get_missing_caches(self.xml_path)
+            if missing_caches:
+                from core.views.images.viewer.dialogs.CacheLocationDialog import CacheLocationDialog
+                from PySide6.QtWidgets import QDialog
+                dialog = CacheLocationDialog(self, missing_caches)
+                if dialog.exec() == QDialog.Accepted:
+                    selected_path = dialog.get_selected_path()
+                    if selected_path:
+                        self.alternative_cache_dir = str(selected_path)
+                        self.cache_path_service.update_cache_paths(
+                            Path(self.alternative_cache_dir), self
+                        )
 
             self._load_initial_image()
 
@@ -798,6 +1218,8 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.pdfButton.clicked.connect(self._pdfButton_clicked)
             self.zipButton.clicked.connect(self._zipButton_clicked)
             self.measureButton.clicked.connect(self._open_measure_dialog)
+            self.personOverlayButton.clicked.connect(self._open_person_reference_dialog)
+            self.gridReviewButton.clicked.connect(self._on_grid_review_clicked)
             self.adjustmentsButton.clicked.connect(self._open_image_adjustment_dialog)
             self.magnifyButton.clicked.connect(self._magnifyButton_clicked)
             self.GPSMapButton.clicked.connect(self._gps_map_button_clicked)
@@ -806,33 +1228,58 @@ class Viewer(QMainWindow, Ui_Viewer):
             self._update_magnify_button_style()
             self.ui_style_controller.update_adjustments_button_style()
             self.ui_style_controller.update_measure_button_style()
+            self.ui_style_controller.update_person_overlay_button_style()
             self.ui_style_controller.update_gps_map_button_style()
             self.ui_style_controller.update_rotate_image_button_style()
+            self.ui_style_controller.update_grid_review_button_style()
 
             # Connect the Gallery Mode button
             if hasattr(self, 'galleryModeButton'):
                 self.galleryModeButton.setCheckable(True)
                 self.galleryModeButton.clicked.connect(self._on_gallery_mode_clicked)
-                self.galleryModeButton.setToolTip("Toggle Gallery Mode (G)\nShows all AOIs from all images in a grid view")
+                self.galleryModeButton.setToolTip(
+                    self.tr(
+                        "Toggle Gallery Mode (G)\n"
+                        "Shows all AOIs from all images in a grid view"
+                    )
+                )
                 # Initialize button styling
                 self._update_gallery_mode_button_style()
 
             # Connect the POIs button
             if hasattr(self, 'showPOIsButton'):
                 self.showPOIsButton.clicked.connect(self._on_show_pois_clicked)
-                self.showPOIsButton.setToolTip("Show Pixels of Interest (H or Ctrl+I)")
+                self.showPOIsButton.setToolTip(
+                    self.tr("Show Pixels of Interest (H or Ctrl+I)")
+                )
                 # Initialize button styling
                 self._update_show_pois_button_style()
+
+            if hasattr(self, 'thermalHistogramButton'):
+                self.thermalHistogramButton.setVisible(True)
+                self.thermalHistogramButton.clicked.connect(self._open_histogram_dialog)
+                self.thermalHistogramButton.setToolTip(
+                    self.tr("Open Histogram")
+                )
 
             # Connect the AOIs button
             if hasattr(self, 'showAOIsButton'):
                 self.showAOIsButton.clicked.connect(self._on_show_aois_clicked)
-                self.showAOIsButton.setToolTip("Toggle AOI Circles")
+                self.showAOIsButton.setToolTip(self.tr("Toggle AOI Circles"))
                 # Initialize button styling
                 self._update_show_aois_button_style()
 
+            # Connect the AOI ruler button
+            if hasattr(self, 'showRulerButton'):
+                self.showRulerButton.clicked.connect(self._on_show_ruler_clicked)
+                self.showRulerButton.setToolTip(self.tr("Toggle AOI Ruler"))
+                # Initialize button styling
+                self._update_show_ruler_button_style()
+
             self.jumpToLine.setValidator(QIntValidator(1, len(self.images), self))
             self.jumpToLine.editingFinished.connect(self._jumpToLine_changed)
+            self.aoiJumpLine.setValidator(QIntValidator(1, 9999999, self))
+            self.aoiJumpLine.editingFinished.connect(self._aoiJumpLine_changed)
             self.thumbnailScrollArea.horizontalScrollBar().valueChanged.connect(self.thumbnail_controller.on_thumbnail_scroll)
 
             # Session variable to store GSD value
@@ -882,8 +1329,12 @@ class Viewer(QMainWindow, Ui_Viewer):
             # Initialize overlay widget
             self.overlay = OverlayWidget(self.main_image, self.scaleBar, self.theme, self.logger)
 
+            # Selected-AOI on-image decoration (number badge + real-world ruler)
+            self.aoi_overlay_controller = AOIOverlayController(self)
+
             # Connect signals
             self.main_image.zoomChanged.connect(self._update_scale_bar)
+            self.main_image.viewChanged.connect(self._on_view_changed)
             self.main_image.mousePositionOnImageChanged.connect(self._mainImage_mouse_pos)
 
             # Initialize export controllers
@@ -892,6 +1343,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.caltopo_export = CalTopoExportController(self, self.logger)
             self.coverage_extent_export = CoverageExtentExportController(self, self.logger)
             self.unified_map_export = UnifiedMapExportController(self, self.logger)
+
+            # Session cache for the last Coverage/POD run (viewer overlay reuses it).
+            from core.services.coverage.CoverageResultCache import CoverageResultCache
+            self.pod_result_cache = CoverageResultCache()
 
             # Force the layout to update and ensure proper sizing
             if hasattr(self, 'verticalLayout_3') and self.verticalLayout_3:
@@ -996,7 +1451,9 @@ class Viewer(QMainWindow, Ui_Viewer):
                 if image['hidden']:
                     self.hidden_image_count -= 1
             image['hidden'] = state
-            self.skipHidden.setText(f"Skip Hidden ({self.hidden_image_count}) ")
+            self.skipHidden.setText(
+                self.tr("Skip Hidden ({count}) ").format(count=self.hidden_image_count)
+            )
             if state:
                 self._nextImageButton_clicked()
         else:
@@ -1040,6 +1497,17 @@ class Viewer(QMainWindow, Ui_Viewer):
         self._update_show_aois_button_style()
         self._draw_aoi_circle_change(self.showAOIsButton.isChecked())
 
+    def _on_show_ruler_clicked(self):
+        """Handle Show Ruler button click - toggle the selected-AOI ruler.
+
+        Only the ruler is affected; the AOI circle and number badge are
+        controlled by the Show AOIs button. The overlay controller rebuilds
+        the decoration on refresh, re-reading this button's state.
+        """
+        self._update_show_ruler_button_style()
+        if hasattr(self, 'aoi_overlay_controller'):
+            self.aoi_overlay_controller.refresh()
+
     def _highlight_pixels_change(self, state):
         """Toggles highlighting of pixels of interest.
 
@@ -1057,6 +1525,9 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         # Simply reload the image with current settings
         self._reload_current_image_preserving_view()
+        # The selected-AOI overlay (number + ruler) follows the circle toggle.
+        if hasattr(self, 'aoi_overlay_controller'):
+            self.aoi_overlay_controller.refresh()
 
     def _reload_current_image_preserving_view(self):
         """Reloads the current image while preserving zoom and pan state.
@@ -1167,18 +1638,31 @@ class Viewer(QMainWindow, Ui_Viewer):
         except ImportError:
             QMessageBox.warning(
                 self,
-                "Missing Dependency",
-                "The qimage2ndarray module is required for the upscale feature.\n"
-                "Please install it using: pip install qimage2ndarray"
+                self.tr("Missing Dependency"),
+                self.tr(
+                    "The qimage2ndarray module is required for the upscale feature.\n"
+                    "Please install it using: pip install qimage2ndarray"
+                )
             )
         except Exception as e:
             self.logger.error(f"Error opening upscale dialog: {e}")
             self.logger.error(traceback.format_exc())
             QMessageBox.warning(
                 self,
-                "Upscale Error",
-                f"An error occurred while opening the upscale dialog:\n{str(e)}"
+                self.tr("Upscale Error"),
+                self.tr(
+                    "An error occurred while opening the upscale dialog:\n{error}"
+                ).format(error=str(e))
             )
+
+    def _open_histogram_dialog(self):
+        """Open the histogram popup for the current image type."""
+        if self.is_thermal:
+            if hasattr(self, 'thermal_histogram_controller'):
+                self.thermal_histogram_controller.open_dialog()
+        else:
+            if hasattr(self, 'color_histogram_controller'):
+                self.color_histogram_controller.open_dialog()
 
     def _skip_hidden_clicked(self, state):
         """Updates visibility setting for hidden images based on skipHidden checkbox.
@@ -1196,6 +1680,18 @@ class Viewer(QMainWindow, Ui_Viewer):
             if hasattr(self.thumbnail_controller, 'ui_component') and self.thumbnail_controller.ui_component:
                 self.thumbnail_controller.ui_component.scroll_thumbnail_into_view()
             self.jumpToLine.setText("")
+
+    def _aoiJumpLine_changed(self):
+        """Selects and scrolls to the AOI whose run-wide number was entered."""
+        text = self.aoiJumpLine.text().strip()
+        if text == "":
+            return
+        try:
+            number = int(text)
+        except ValueError:
+            return
+        self.aoiJumpLine.setText("")
+        self.aoi_controller.go_to_aoi_number(number)
 
     def _kmlButton_clicked(self):
         """Handles clicks on the Map Export button to show unified export options."""
@@ -1249,6 +1745,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         if hasattr(self, 'gps_map_controller'):
             self.gps_map_controller.show_map()
 
+    def _team_planning_button_clicked(self):
+        """Handle Team Planning button click."""
+        if hasattr(self, 'team_planning_controller'):
+            self.team_planning_controller.show()
+
     def _rotate_image_button_clicked(self):
         """Handle Rotate Image button click."""
         if hasattr(self, 'coordinate_controller'):
@@ -1268,6 +1769,11 @@ class Viewer(QMainWindow, Ui_Viewer):
         """Update the Show AOIs button styling based on its checked state."""
         # Delegate to UIStyleController
         self.ui_style_controller.update_show_aois_button_style()
+
+    def _update_show_ruler_button_style(self):
+        """Update the Show Ruler button styling based on its checked state."""
+        # Delegate to UIStyleController
+        self.ui_style_controller.update_show_ruler_button_style()
 
     def _update_gallery_mode_button_style(self):
         """Update the Gallery Mode button styling based on gallery mode state."""
@@ -1310,6 +1816,23 @@ class Viewer(QMainWindow, Ui_Viewer):
         """
         if hasattr(self, 'overlay'):
             self.overlay.update_scale_bar(zoom, self.messages, self.distance_unit)
+
+    def _on_view_changed(self):
+        """Update the GPS map zoom FOV box when the view pans or zooms."""
+        if not hasattr(self, 'main_image') or self.main_image is None or self.main_image._is_destroyed:
+            return
+        if not hasattr(self, 'gps_map_controller'):
+            return
+        try:
+            visible_rect = self.main_image.mapToScene(
+                self.main_image.viewport().rect()
+            ).boundingRect()
+            scene_rect = self.main_image.sceneRect()
+            if scene_rect.isValid():
+                visible_rect = visible_rect.intersected(scene_rect)
+            self.gps_map_controller.update_zoom_fov(visible_rect)
+        except RuntimeError:
+            pass
 
     def _mainImage_mouse_pos(self, pos):
         """Displays temperature data or color values at the mouse position.
@@ -1379,6 +1902,148 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.measure_dialog = None  # Clear reference for proper lifecycle
         self.ui_style_controller.update_measure_button_style()
 
+    def _get_current_image_gsd(self):
+        """Return the current image's GSD in cm/px, or None if unavailable.
+
+        The size-reference tool requires GSD to draw silhouettes to scale, so
+        callers use this to gate the feature.
+        """
+        gsd_text = self.messages.get("Estimated Average GSD") if hasattr(self, 'messages') else None
+        if not gsd_text:
+            return None
+        try:
+            return float(str(gsd_text).replace("cm/px", "").strip())
+        except (ValueError, AttributeError):
+            return None
+
+    def _refresh_current_gsd_service(self):
+        """Rebuild the GSDService for the active image so the person-size tool
+        can query *local* GSD (varies across the frame for tilted shots)."""
+        image_service = getattr(self, 'current_image_service', None)
+        if image_service is None or not hasattr(image_service, 'get_gsd_service'):
+            self.current_gsd_service = None
+            return
+        custom_alt = None
+        if hasattr(self, 'altitude_controller'):
+            try:
+                custom_alt = self.altitude_controller.get_effective_altitude()
+            except Exception:
+                custom_alt = None
+        try:
+            self.current_gsd_service = image_service.get_gsd_service(custom_altitude_ft=custom_alt)
+        except Exception:
+            self.current_gsd_service = None
+
+    def _build_gsd_at_pixel_provider(self):
+        """Return a callable(col, row) -> GSD cm/px for the current image.
+
+        The callable uses ImageService.compute_gsd_at_pixel, which combines
+        the GSDService geometry with DEM-corrected effective AGL when the
+        terrain service is enabled (per the user's UseTerrainElevation
+        setting). Returns None when no image is loaded.
+        """
+        image_service = getattr(self, 'current_image_service', None)
+        if image_service is None or not hasattr(image_service, 'compute_gsd_at_pixel'):
+            return None
+
+        custom_alt = None
+        if hasattr(self, 'altitude_controller'):
+            try:
+                custom_alt = self.altitude_controller.get_effective_altitude()
+            except Exception:
+                custom_alt = None
+
+        use_terrain = bool(getattr(self, 'use_terrain_elevation', True))
+
+        def _provider(col, row):
+            try:
+                return image_service.compute_gsd_at_pixel(
+                    col, row,
+                    use_terrain=use_terrain,
+                    custom_altitude_ft=custom_alt,
+                )
+            except Exception:
+                return None
+
+        return _provider
+
+    def _update_person_overlay_button_enabled(self):
+        """Enable the person reference button only when GSD is available."""
+        if not hasattr(self, 'personOverlayButton'):
+            return
+        # Refresh the per-pixel GSD service alongside the average GSD readout.
+        self._refresh_current_gsd_service()
+        gsd = self._get_current_image_gsd()
+        has_gsd = gsd is not None and gsd > 0
+        self.personOverlayButton.setEnabled(has_gsd)
+        if has_gsd:
+            self.personOverlayButton.setToolTip(
+                self.tr("Person Size Reference (Ctrl+P)")
+            )
+        else:
+            self.personOverlayButton.setToolTip(
+                self.tr("Person Size Reference is unavailable: no GSD for this image")
+            )
+        # If the dialog is open, rebuild it for the current image.
+        if self.person_reference_dialog is not None and self.person_reference_dialog.isVisible():
+            image_service, image_path = self._current_person_reference_inputs()
+            if image_service is not None and image_path:
+                self.person_reference_dialog.update_for_image(
+                    image_service, image_path,
+                    agl_override_m=self._person_reference_agl_override(),
+                )
+
+    def _current_person_reference_inputs(self):
+        """Return (ImageService, image_path) for the current image, or (None, None)."""
+        image_service = getattr(self, 'current_image_service', None)
+        image_path = None
+        images = getattr(self, 'images', None)
+        current = getattr(self, 'current_image', -1)
+        if images and 0 <= current < len(images):
+            image_path = images[current].get('path')
+        return image_service, image_path
+
+    def _person_reference_agl_override(self):
+        """Custom AGL altitude in metres for the person tool, or None."""
+        custom_ft = getattr(self, 'custom_agl_altitude_ft', None)
+        if custom_ft and custom_ft > 0:
+            return custom_ft * 0.3048
+        return None
+
+    def _open_person_reference_dialog(self):
+        """Opens the person-size reference overlay dialog."""
+        if self.main_image is None or not self.main_image.hasImage():
+            return
+
+        gsd = self._get_current_image_gsd()
+        if gsd is None or gsd <= 0:
+            # Tool is supposed to be disabled in this case; bail silently.
+            return
+
+        image_service, image_path = self._current_person_reference_inputs()
+        if image_service is None or not image_path:
+            return
+
+        # Close help dialog if open to prevent blocking
+        self._close_help_dialog_if_open()
+
+        if self.person_reference_dialog is None or not self.person_reference_dialog.isVisible():
+            self.person_reference_dialog = PersonReferenceDialog(
+                self, self.main_image, image_service, image_path,
+                self.distance_unit,
+                agl_override_m=self._person_reference_agl_override(),
+            )
+            self.person_reference_dialog.finished.connect(self._on_person_reference_dialog_closed)
+            self.person_reference_dialog_open = True
+            self.ui_style_controller.update_person_overlay_button_style()
+            self.person_reference_dialog.show()
+
+    def _on_person_reference_dialog_closed(self):
+        """Handle person reference dialog close event."""
+        self.person_reference_dialog_open = False
+        self.person_reference_dialog = None
+        self.ui_style_controller.update_person_overlay_button_style()
+
     def _prompt_for_custom_agl_altitude(self):
         """Prompt user for custom AGL altitude when negative altitude is detected."""
         # Delegate to AltitudeController
@@ -1414,7 +2079,7 @@ class Viewer(QMainWindow, Ui_Viewer):
                     if dialog.remember_name():
                         self.settings_service.set_setting('ReviewerName', reviewer_name)
                 else:
-                    reviewer_name = "Unknown Reviewer"
+                    reviewer_name = self.tr("Unknown Reviewer")
 
             # Generate unique review ID
             review_id = str(uuid.uuid4())
@@ -1477,7 +2142,7 @@ class Viewer(QMainWindow, Ui_Viewer):
             spinner_label.setFont(QFont("Arial", 24))
 
         # Add message label
-        message_label = QLabel("Loading gallery...", overlay)
+        message_label = QLabel(self.tr("Loading gallery..."), overlay)
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setStyleSheet("""
             QLabel {
@@ -1523,6 +2188,8 @@ class Viewer(QMainWindow, Ui_Viewer):
         self.pdfButton.setIcon(IconHelper.create_icon('fa6s.file-pdf', self.theme))
         self.zipButton.setIcon(IconHelper.create_icon('fa5s.file-archive', self.theme))
         self.measureButton.setIcon(IconHelper.create_icon('fa6s.ruler', self.theme))
+        self.personOverlayButton.setIcon(IconHelper.create_icon('fa6s.person', self.theme))
+        self.gridReviewButton.setIcon(IconHelper.create_icon('fa6s.border-all', self.theme))
         self.adjustmentsButton.setIcon(IconHelper.create_icon('fa6s.sliders', self.theme))
         self.previousImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-left', self.theme))
         self.nextImageButton.setIcon(IconHelper.create_icon('fa6s.arrow-right', self.theme))
@@ -1532,6 +2199,10 @@ class Viewer(QMainWindow, Ui_Viewer):
             self.galleryModeButton.setIcon(IconHelper.create_icon('fa5s.th-large', self.theme))
         self.showPOIsButton.setIcon(IconHelper.create_icon('mdi.scatter-plot', self.theme))
         self.showAOIsButton.setIcon(IconHelper.create_icon('fa6.circle', self.theme))
+        if hasattr(self, 'showRulerButton'):
+            self.showRulerButton.setIcon(IconHelper.create_icon('fa6s.arrows-left-right-to-line', self.theme))
+        if hasattr(self, 'thermalHistogramButton'):
+            self.thermalHistogramButton.setIcon(IconHelper.create_icon('fa6s.chart-line', self.theme))
         self.GPSMapButton.setIcon(IconHelper.create_icon('fa6s.map-location-dot', self.theme))
         self.rotateImageButton.setIcon(IconHelper.create_icon('fa6s.compass', self.theme))
 

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'MainWindow.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -53,6 +53,9 @@ class Ui_MainWindow(object):
         self.actionStreaming = QAction(MainWindow)
         self.actionStreaming.setObjectName(u"actionStreaming")
         self.actionStreaming.setFont(font)
+        self.actionFlightViewer = QAction(MainWindow)
+        self.actionFlightViewer.setObjectName(u"actionFlightViewer")
+        self.actionFlightViewer.setFont(font)
         self.actionIntegratedDetection = QAction(MainWindow)
         self.actionIntegratedDetection.setObjectName(u"actionIntegratedDetection")
         self.actionIntegratedDetection.setFont(font)
@@ -62,6 +65,9 @@ class Ui_MainWindow(object):
         self.actionHelp = QAction(MainWindow)
         self.actionHelp.setObjectName(u"actionHelp")
         self.actionHelp.setFont(font)
+        self.actionCheckForUpdates = QAction(MainWindow)
+        self.actionCheckForUpdates.setObjectName(u"actionCheckForUpdates")
+        self.actionCheckForUpdates.setFont(font)
         self.actionCommunityHelp = QAction(MainWindow)
         self.actionCommunityHelp.setObjectName(u"actionCommunityHelp")
         self.actionCommunityHelp.setFont(font)
@@ -444,11 +450,14 @@ class Ui_MainWindow(object):
         self.mainBar.addAction(self.menuHelp.menuAction())
         self.menuFile.addAction(self.actionImageAnalysisGuide)
         self.menuFile.addAction(self.actionStreaming)
+        self.menuFile.addAction(self.actionFlightViewer)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionLoadFile)
         self.menuFile.addAction(self.actionLoadResultsFolder)
         self.menuFile.addAction(self.actionPreferences)
         self.menuFile.addAction(self.actionVideoParser)
+        self.menuHelp.addAction(self.actionCheckForUpdates)
+        self.menuHelp.addSeparator()
         self.menuHelp.addAction(self.actionHelp)
         self.menuHelp.addAction(self.actionCommunityHelp)
         self.menuHelp.addAction(self.actionYouTube_Channel)
@@ -517,6 +526,10 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(tooltip)
         self.actionStreaming.setToolTip(QCoreApplication.translate("MainWindow", u"Switch to the Streaming Detector", None))
 #endif // QT_CONFIG(tooltip)
+        self.actionFlightViewer.setText(QCoreApplication.translate("MainWindow", u"Flight Viewer", None))
+#if QT_CONFIG(tooltip)
+        self.actionFlightViewer.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Flight Viewer to pair with ADIAT Mobile drone controllers and watch their live feeds.", None))
+#endif // QT_CONFIG(tooltip)
         self.actionIntegratedDetection.setText(QCoreApplication.translate("MainWindow", u"Real-Time Anomaly Detection", None))
 #if QT_CONFIG(tooltip)
         self.actionIntegratedDetection.setToolTip(QCoreApplication.translate("MainWindow", u"Open the Real-Time Anomaly Detection window for advanced live analysis.\n"
@@ -551,6 +564,11 @@ class Ui_MainWindow(object):
         self.actionHelp.setToolTip(QCoreApplication.translate("MainWindow", u"Open the online help documentation in your web browser.\n"
 "Access comprehensive documentation, tutorials, and user guides.\n"
 "Provides detailed information on all features and algorithms.", None))
+#endif // QT_CONFIG(tooltip)
+        self.actionCheckForUpdates.setText(QCoreApplication.translate("MainWindow", u"Check for Updates", None))
+#if QT_CONFIG(tooltip)
+        self.actionCheckForUpdates.setToolTip(QCoreApplication.translate("MainWindow", u"Check the update feed for a newer ADIAT installer.\n"
+"If an update is available, you can download and launch the installer from here.", None))
 #endif // QT_CONFIG(tooltip)
         self.actionCommunityHelp.setText(QCoreApplication.translate("MainWindow", u"Community Forum", None))
 #if QT_CONFIG(tooltip)

@@ -9,7 +9,10 @@ Integrated into StreamViewerWindow following the StreamAlgorithmController patte
 from algorithms.streaming.ColorDetection.views import ColorDetectionControlWidget
 from algorithms.streaming.ColorDetection.services import ColorDetectionService, HSVConfig, Detection
 from core.services.LoggerService import LoggerService
+from core.services.streaming import StreamAlgorithmCapabilities
+from core.services.streaming.adapters import ColorDetectionStreamAdapter
 from core.controllers.streaming.base import StreamAlgorithmController
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox
 from PySide6.QtCore import Qt, Slot, Signal
@@ -24,7 +27,7 @@ os.environ.setdefault('NPY_DISABLE_SVML', '1')
 # Import control widget from views
 
 
-class ColorDetectionController(StreamAlgorithmController):
+class ColorDetectionController(TranslationMixin, StreamAlgorithmController):
     """
     HSV color detection algorithm controller.
 
@@ -37,16 +40,19 @@ class ColorDetectionController(StreamAlgorithmController):
     - False positive reduction
     """
 
+    _CAPABILITIES = StreamAlgorithmCapabilities()
+
     def __init__(self, algorithm_config: Dict[str, Any], theme: str, parent=None):
         """Initialize color detection controller."""
         super().__init__(algorithm_config, theme, parent)
 
         self.logger = LoggerService()
-        self.provides_custom_rendering = True
+        self.provides_custom_rendering = False
 
         # Initialize color detector service
         # IMPORTANT: Don't pass parent so it can be moved to worker thread
         self.color_detector = ColorDetectionService(parent=None)
+        self.stream_service = ColorDetectionStreamAdapter(self.color_detector)
 
         # State
         self.detection_count = 0
@@ -69,7 +75,7 @@ class ColorDetectionController(StreamAlgorithmController):
         layout.setSpacing(10)
 
         # Color Detection Control Widget
-        self.control_widget = ColorDetectionControlWidget()
+        self.control_widget = ColorDetectionControlWidget(capabilities=self.get_stream_capabilities())
         self.control_widget.configChanged.connect(self._on_config_changed)
         layout.addWidget(self.control_widget)
 
@@ -77,6 +83,10 @@ class ColorDetectionController(StreamAlgorithmController):
         if hasattr(self, 'color_detector'):
             initial_config = self.control_widget.get_config()
             self._on_config_changed(initial_config)
+
+    def get_stream_capabilities(self) -> StreamAlgorithmCapabilities:
+        """Declare shared streaming controls supported by this algorithm."""
+        return self._CAPABILITIES
 
     def process_frame(self, frame: np.ndarray, timestamp: float) -> List[Dict]:
         """
@@ -90,29 +100,15 @@ class ColorDetectionController(StreamAlgorithmController):
             List of detection dictionaries
         """
         try:
-            # Detect colors
-            detections = self.color_detector.detect_colors(frame, timestamp)
-
-            # Convert to standard format
-            detection_dicts = []
-            for detection in detections:
-                color_id = detection.color_id if detection.color_id is not None else 0
-                detection_dicts.append({
-                    'bbox': detection.bbox,
-                    'area': detection.area,
-                    'confidence': detection.confidence,
-                    'class_name': f"Color_{color_id}",
-                    'color_id': color_id,
-                    'mean_color': detection.mean_color
-                })
-
-            self.detection_count += len(detections)
+            result = self.stream_service.process_frame(frame, timestamp)
+            detection_dicts = result.detection_dicts()
+            self.detection_count += len(detection_dicts)
 
             # Emit detections
             self.detectionsReady.emit(detection_dicts)
 
-            # Create and emit annotated frame
-            annotated_frame = self.color_detector.create_annotated_frame(frame, detections)
+            # Emit overlay frame; shared renderer draws detections in the viewer.
+            annotated_frame = result.rendered_frame if result.rendered_frame is not None else frame.copy()
             # self.logger.debug(f"Emitting frameProcessed signal (frame shape: {annotated_frame.shape})")
             self.frameProcessed.emit(annotated_frame)
 
@@ -135,7 +131,7 @@ class ColorDetectionController(StreamAlgorithmController):
         """Handle performance metrics update."""
         fps = metrics.get('fps', 0)
         processing_time = metrics.get('avg_processing_time_ms', 0)
-        self._emit_status(f"FPS: {fps:.1f} | Processing: {processing_time:.1f}ms")
+        self._emit_status(self.tr("FPS: {fps} | Processing: {time}ms").format(fps=f"{fps:.1f}", time=f"{processing_time:.1f}"))
 
     @Slot(dict)
     def _on_config_changed(self, config: dict):
@@ -148,22 +144,21 @@ class ColorDetectionController(StreamAlgorithmController):
         """Convert UI config to HSVConfig object."""
         # Get target_color_rgb from first color range if available
         color_ranges = ui_config.get('color_ranges', [])
+        target_color_rgb = None
         if color_ranges and len(color_ranges) > 0:
             first_color = color_ranges[0]['color']
             if isinstance(first_color, QColor):
                 target_color_rgb = (first_color.red(), first_color.green(), first_color.blue())
-            else:
-                target_color_rgb = (255, 0, 0)
-        else:
-            target_color_rgb = (255, 0, 0)
+            elif isinstance(first_color, (tuple, list)) and len(first_color) == 3:
+                target_color_rgb = tuple(int(channel) for channel in first_color)
 
         # Create HSVConfig with required parameter
         config = HSVConfig(
             target_color_rgb=target_color_rgb,
-            min_area=ui_config.get('min_area', 100),
-            max_area=ui_config.get('max_area', 100000),
+            min_area=ui_config.get('min_area', 25),
+            max_area=ui_config.get('max_area', 150000),
             processing_resolution=ui_config.get('processing_resolution', None),
-            confidence_threshold=ui_config.get('confidence_threshold', 0.5),
+            confidence_threshold=ui_config.get('confidence_threshold', 0.35),
             show_labels=ui_config.get('render_text', False),  # Map render_text to show_labels
             show_detections=ui_config.get('render_shape', 1) != 3  # Map render_shape != Off to show_detections
         )
@@ -230,6 +225,8 @@ class ColorDetectionController(StreamAlgorithmController):
                 })
 
             config.hsv_ranges_list = hsv_ranges_list
+        else:
+            config.hsv_ranges_list = []
 
         # Set processing mask parameters from UI config (from shared FrameTab)
         config.mask_enabled = ui_config.get('mask_enabled', False)
@@ -255,18 +252,40 @@ class ColorDetectionController(StreamAlgorithmController):
             width = config['processing_width']
             height = config['processing_height']
             self.control_widget.input_processing_tab.set_processing_resolution(width, height)
+        elif (
+            isinstance(config.get('processing_resolution'), tuple) and
+            len(config['processing_resolution']) == 2 and
+            hasattr(self.control_widget, 'input_processing_tab')
+        ):
+            width, height = config['processing_resolution']
+            self.control_widget.input_processing_tab.set_processing_resolution(width, height)
+        elif config.get('processing_resolution') is None and hasattr(self.control_widget, 'input_processing_tab'):
+            # Backward compatibility for older configs that used None to mean "Original".
+            self.control_widget.input_processing_tab.set_processing_resolution(None, None)
+        if hasattr(self.control_widget, 'input_processing_tab'):
+            if 'target_fps' in config:
+                self.control_widget.input_processing_tab.set_target_fps(config['target_fps'])
+            if 'render_at_processing_res' in config:
+                self.control_widget.input_processing_tab.render_at_processing_res.setChecked(
+                    bool(config['render_at_processing_res'])
+                )
 
         # Update rendering config in RenderingTab
         if hasattr(self.control_widget, 'rendering_tab'):
             rendering_config = {}
-            for key in ['render_shape', 'render_text', 'render_contours',
-                        'use_detection_color_for_rendering', 'max_detections_to_render']:
+            for key in [
+                'render_shape', 'render_text', 'render_contours',
+                'use_detection_color_for_rendering', 'max_detections_to_render',
+                'enable_temporal_voting', 'temporal_window_frames', 'temporal_threshold_frames',
+                'enable_aspect_ratio_filter', 'min_aspect_ratio', 'max_aspect_ratio',
+                'enable_detection_clustering', 'clustering_distance'
+            ]:
                 if key in config:
                     rendering_config[key] = config[key]
             if rendering_config:
                 self.control_widget.rendering_tab.set_config(rendering_config)
 
-        # Update cleanup config in CleanupTab
+        # Keep hidden cleanup tab synchronized for backwards compatibility.
         if hasattr(self.control_widget, 'cleanup_tab'):
             cleanup_config = {}
             for key in ['enable_temporal_voting', 'temporal_window_frames', 'temporal_threshold_frames',
@@ -327,3 +346,7 @@ class ColorDetectionController(StreamAlgorithmController):
         if hasattr(self.color_detector, 'cleanup'):
             self.color_detector.cleanup()
         # self.logger.info("ColorDetectionController cleaned up")
+
+    def get_stream_service(self):
+        """Return normalized streaming service used by worker processing."""
+        return self.stream_service

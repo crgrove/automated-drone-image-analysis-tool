@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (
     QRadioButton, QButtonGroup, QGroupBox, QCheckBox
 )
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont
 
 
-class MapExportDialog(QDialog):
+class MapExportDialog(TranslationMixin, QDialog):
     """
     Dialog for configuring map export options.
 
@@ -30,17 +31,18 @@ class MapExportDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.setWindowTitle("Map Export Options")
+        self.setWindowTitle(self.tr("Map Export Options"))
         self.setMinimumWidth(400)
 
         self._setup_ui()
+        self._apply_translations()
 
     def _setup_ui(self):
         """Set up the dialog UI."""
         layout = QVBoxLayout(self)
 
         # Title
-        title_label = QLabel("Configure Map Export")
+        title_label = QLabel(self.tr("Configure Map Export"))
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -48,15 +50,15 @@ class MapExportDialog(QDialog):
         layout.addWidget(title_label)
 
         # Export type selection
-        export_type_group = QGroupBox("Export Type")
+        export_type_group = QGroupBox(self.tr("Export Type"))
         export_type_layout = QVBoxLayout()
 
-        self.kml_radio = QRadioButton("KML File")
+        self.kml_radio = QRadioButton(self.tr("KML File"))
         self.kml_radio.setChecked(True)  # Default selection
-        self.kml_radio.setToolTip("Export to a KML file for use in Google Earth, etc.")
+        self.kml_radio.setToolTip(self.tr("Export to a KML file for use in Google Earth, etc."))
 
-        self.caltopo_radio = QRadioButton("CalTopo")
-        self.caltopo_radio.setToolTip("Export directly to a CalTopo map")
+        self.caltopo_radio = QRadioButton(self.tr("CalTopo"))
+        self.caltopo_radio.setToolTip(self.tr("Export directly to a CalTopo map"))
 
         self.export_type_group = QButtonGroup(self)
         self.export_type_group.addButton(self.kml_radio, 0)
@@ -68,24 +70,24 @@ class MapExportDialog(QDialog):
         layout.addWidget(export_type_group)
 
         # Data to include
-        data_group = QGroupBox("Data to Include")
+        data_group = QGroupBox(self.tr("Data to Include"))
         data_layout = QVBoxLayout()
 
-        self.include_locations = QCheckBox("Drone/Image Locations")
+        self.include_locations = QCheckBox(self.tr("Drone/Image Locations"))
         self.include_locations.setChecked(True)  # Default: on
-        self.include_locations.setToolTip("Include markers for each drone image location")
+        self.include_locations.setToolTip(self.tr("Include markers for each drone image location"))
 
-        self.include_flagged_aois = QCheckBox("Flagged Areas of Interest")
+        self.include_flagged_aois = QCheckBox(self.tr("Flagged Areas of Interest"))
         self.include_flagged_aois.setChecked(True)  # Default: on
-        self.include_flagged_aois.setToolTip("Include markers for flagged AOIs")
+        self.include_flagged_aois.setToolTip(self.tr("Include markers for flagged AOIs"))
 
-        self.include_coverage = QCheckBox("Coverage Area")
+        self.include_coverage = QCheckBox(self.tr("Coverage Area"))
         self.include_coverage.setChecked(True)  # Default: on
-        self.include_coverage.setToolTip("Include polygon(s) showing the geographic coverage extent")
+        self.include_coverage.setToolTip(self.tr("Include polygon(s) showing the geographic coverage extent"))
 
-        self.include_images_without_flagged_aois = QCheckBox("Include images without flagged AOIs")
+        self.include_images_without_flagged_aois = QCheckBox(self.tr("Include images without flagged AOIs"))
         self.include_images_without_flagged_aois.setChecked(True)  # Default: on
-        self.include_images_without_flagged_aois.setToolTip("If unchecked, only export locations for images that have flagged AOIs")
+        self.include_images_without_flagged_aois.setToolTip(self.tr("If unchecked, only export locations for images that have flagged AOIs"))
         self.include_images_without_flagged_aois.setEnabled(True)  # Enabled when locations are checked
 
         data_layout.addWidget(self.include_locations)
@@ -95,13 +97,37 @@ class MapExportDialog(QDialog):
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
 
+        # Probability-of-Detection (POD) coverage
+        self.pod_group = QGroupBox(self.tr("Probability of Detection (POD)"))
+        pod_layout = QVBoxLayout()
+
+        self.include_pod = QCheckBox(self.tr("POD coverage heatmap (terrain-aware)"))
+        self.include_pod.setChecked(False)  # heavy compute -> opt-in
+        self.include_pod.setToolTip(self.tr(
+            "Compute a terrain and canopy aware probability-of-detection raster for the whole "
+            "mission (all non-hidden images, independent of the selections above). KML exports "
+            "embed the heatmap in the KML/KMZ as an image overlay; the GeoTIFF products "
+            "(coverage_pod.tif, coverage_looks.tif, coverage_gaps.geojson, stats.json) are also "
+            "written — the GeoTIFF can be imported into CalTopo Map Sheets. May take several "
+            "minutes."))
+
+        self.show_pod_on_map = QCheckBox(self.tr("Show on map when complete"))
+        self.show_pod_on_map.setChecked(True)  # spec 4.1: default on
+        self.show_pod_on_map.setEnabled(False)
+        self.include_pod.toggled.connect(self.show_pod_on_map.setEnabled)
+
+        pod_layout.addWidget(self.include_pod)
+        pod_layout.addWidget(self.show_pod_on_map)
+        self.pod_group.setLayout(pod_layout)
+        layout.addWidget(self.pod_group)
+
         # CalTopo-specific options
-        self.caltopo_options_group = QGroupBox("CalTopo Options")
+        self.caltopo_options_group = QGroupBox(self.tr("CalTopo Options"))
         caltopo_options_layout = QVBoxLayout()
 
-        self.include_images = QCheckBox("Include Images")
+        self.include_images = QCheckBox(self.tr("Include Images"))
         self.include_images.setChecked(True)  # Default: on
-        self.include_images.setToolTip("Upload photos to CalTopo markers (CalTopo only)")
+        self.include_images.setToolTip(self.tr("Upload photos to CalTopo markers (CalTopo only)"))
         self.include_images.setEnabled(False)  # Disabled by default, enabled when CalTopo is selected
 
         caltopo_options_layout.addWidget(self.include_images)
@@ -121,11 +147,11 @@ class MapExportDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        self.export_button = QPushButton("Export")
+        self.export_button = QPushButton(self.tr("Export"))
         self.export_button.setDefault(True)
         self.export_button.clicked.connect(self.accept)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addWidget(self.export_button)
@@ -185,6 +211,24 @@ class MapExportDialog(QDialog):
             bool: True if images without flagged AOIs should be included
         """
         return self.include_images_without_flagged_aois.isChecked()
+
+    def should_include_pod(self):
+        """
+        Check if the POD coverage heatmap should be computed.
+
+        Returns:
+            bool: True if the POD pass should run and write outputs
+        """
+        return self.include_pod.isChecked()
+
+    def should_show_pod_on_map(self):
+        """
+        Check if the POD result should be shown on the viewer map when complete.
+
+        Returns:
+            bool: True if POD is enabled and the show-on-map option is set
+        """
+        return self.include_pod.isChecked() and self.show_pod_on_map.isChecked()
 
     def _on_export_type_changed(self):
         """Handle export type radio button changes."""

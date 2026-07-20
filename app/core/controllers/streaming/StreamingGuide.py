@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QDialog
 
 from core.views.streaming.StreamingGuide_ui import Ui_StreamingGuide
 from core.services.SettingsService import SettingsService
+from helpers.TranslationMixin import TranslationMixin
 from .guidePages import (
     StreamSourcePage,
     StreamConnectionPage,
@@ -15,7 +16,7 @@ from .guidePages import (
 )
 
 
-class StreamingGuide(QDialog, Ui_StreamingGuide):
+class StreamingGuide(TranslationMixin, QDialog, Ui_StreamingGuide):
     """Multi-step wizard for streaming setup."""
 
     wizardCompleted = Signal(dict)
@@ -80,7 +81,7 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
             page.connect_signals()
             page.load_data()
 
-        self.setWindowTitle("ADIAT Streaming Setup Guide")
+        self.setWindowTitle(self.tr("ADIAT Streaming Setup Guide"))
 
         self.continueButton.clicked.connect(self._on_continue)
         self.backButton.clicked.connect(self._on_back)
@@ -132,9 +133,9 @@ class StreamingGuide(QDialog, Ui_StreamingGuide):
     def _update_navigation_buttons(self) -> None:
         self.backButton.setEnabled(self.current_page > 0)
         if self.current_page == self.total_pages - 1:
-            self.continueButton.setText("Open Stream Viewer")
+            self.continueButton.setText(self.tr("Open Stream Viewer"))
         else:
-            self.continueButton.setText("Continue")
+            self.continueButton.setText(self.tr("Continue"))
 
         valid = True
         if self.current_page < len(self.pages):

@@ -1086,6 +1086,7 @@ Use to review, verify, and export analysis results.</string>
     </property>
     <addaction name="actionImageAnalysisGuide"/>
     <addaction name="actionStreaming"/>
+    <addaction name="actionFlightViewer"/>
     <addaction name="separator"/>
     <addaction name="actionLoadFile"/>
     <addaction name="actionLoadResultsFolder"/>
@@ -1096,6 +1097,8 @@ Use to review, verify, and export analysis results.</string>
     <property name="title">
      <string>Help</string>
     </property>
+    <addaction name="actionCheckForUpdates"/>
+    <addaction name="separator"/>
     <addaction name="actionHelp"/>
     <addaction name="actionCommunityHelp"/>
     <addaction name="actionYouTube_Channel"/>
@@ -1210,6 +1213,19 @@ Use to prepare video footage for image-based analysis.</string>
     </font>
    </property>
   </action>
+  <action name="actionFlightViewer">
+   <property name="text">
+    <string>Flight Viewer</string>
+   </property>
+   <property name="toolTip">
+    <string>Open the Flight Viewer to pair with ADIAT Mobile drone controllers and watch their live feeds.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
   <action name="actionIntegratedDetection">
    <property name="text">
     <string>Real-Time Anomaly Detection</string>
@@ -1265,6 +1281,20 @@ Ideal for large-scale searches with multiple reviewers and image batches.</strin
     <string>Open the online help documentation in your web browser.
 Access comprehensive documentation, tutorials, and user guides.
 Provides detailed information on all features and algorithms.</string>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="actionCheckForUpdates">
+   <property name="text">
+    <string>Check for Updates</string>
+   </property>
+   <property name="toolTip">
+    <string>Check the update feed for a newer ADIAT installer.
+If an update is available, you can download and launch the installer from here.</string>
    </property>
    <property name="font">
     <font>

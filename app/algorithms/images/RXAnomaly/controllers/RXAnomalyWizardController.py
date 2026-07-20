@@ -46,7 +46,13 @@ class RXAnomalyWizardController(QWidget, Ui_RXAnomalyWizard, AlgorithmController
         # Aggressiveness slider with preset text labels
         self.aggressivenessSlider = TextLabeledSlider(
             self,
-            presets=["Very \nConservative", "Conservative", "Moderate", "Aggressive", "Very \nAggressive"],
+            presets=[
+                self.tr("Very \nConservative"),
+                self.tr("Conservative"),
+                self.tr("Moderate"),
+                self.tr("Aggressive"),
+                self.tr("Very \nAggressive"),
+            ],
         )
         placeholder = self.aggressivenessSliderPlaceholder
         layout = QVBoxLayout(placeholder)

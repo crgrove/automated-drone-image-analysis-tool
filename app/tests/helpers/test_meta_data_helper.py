@@ -174,3 +174,142 @@ def test_get_exif_data_piexif(example_image_path):
         result = MetaDataHelper.get_exif_data_piexif(example_image_path)
         assert result == mock_exif_data
         mock_piexif_load.assert_called_once_with(example_image_path)
+
+
+def test_get_xmp_data_merged_prefers_direct_parse():
+    """Direct (pure-Python) parse is primary; ExifTool must NOT be spawned when
+    the XMP packet is directly parseable. Regression for the per-image
+    exiftool.exe spawn introduced in f35a560 (2025-09-22)."""
+    with patch.object(MetaDataHelper, '_parse_xmp_direct',
+                      return_value={'drone-dji:RelativeAltitude': '+275.00'}) as direct, \
+            patch.object(MetaDataHelper, 'get_meta_data_exiftool') as exiftool:
+        result = MetaDataHelper.get_xmp_data_merged('/some/image.jpg')
+
+    assert result == {'drone-dji:RelativeAltitude': '+275.00'}
+    direct.assert_called_once_with('/some/image.jpg')
+    exiftool.assert_not_called()  # the whole point: no subprocess on the hot path
+
+
+def test_get_xmp_data_merged_falls_back_to_exiftool_when_no_xmp():
+    """When direct parsing finds nothing, ExifTool is used as the backup."""
+    with patch.object(MetaDataHelper, '_parse_xmp_direct', return_value={}), \
+            patch.object(MetaDataHelper, '_parse_xmp_exiftool',
+                         return_value={'from': 'exiftool'}) as exiftool_parse:
+        result = MetaDataHelper.get_xmp_data_merged('/some/image.jpg')
+
+    assert result == {'from': 'exiftool'}
+    exiftool_parse.assert_called_once_with('/some/image.jpg')
+
+
+def test_parse_xmp_direct_extracts_drone_fields_without_exiftool():
+    """A real JPEG with an embedded XMP packet must parse via the direct path,
+    surfacing the drone fields, with no ExifTool spawn."""
+    drone_ns = "http://www.dji.com/drone-dji/1.0/"
+    fields = [
+        (drone_ns, "RelativeAltitude", "+275.0000"),
+        (drone_ns, "GimbalYawDegree", "+45.0000"),
+    ]
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        Image.new("RGB", (16, 16), color=(128, 128, 128)).save(tmp_path, "JPEG")
+        MetaDataHelper.add_xmp_fields(tmp_path, fields)
+
+        with patch.object(MetaDataHelper, 'get_meta_data_exiftool') as exiftool:
+            result = MetaDataHelper.get_xmp_data_merged(tmp_path)
+
+        assert result, "direct parse returned no XMP data"
+        # The altitude value must come through (key namespacing may vary).
+        flat = " ".join(f"{k}={v}" for k, v in result.items())
+        assert "275" in flat
+        exiftool.assert_not_called()
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_get_xmp_data_merged_uses_exiftool_when_file_has_no_xmp():
+    """A plain JPEG with no XMP packet falls back to the ExifTool backup."""
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        Image.new("RGB", (16, 16), color=(10, 20, 30)).save(tmp_path, "JPEG")
+        # Sanity: direct parse finds nothing.
+        assert MetaDataHelper._parse_xmp_direct(tmp_path) == {}
+
+        with patch.object(MetaDataHelper, 'get_meta_data_exiftool',
+                          return_value={'EXIF:Make': 'TestCam'}) as exiftool:
+            result = MetaDataHelper.get_xmp_data_merged(tmp_path)
+
+        exiftool.assert_called_once_with(tmp_path)
+        assert result.get('EXIF:Make') == 'TestCam'
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_add_xmp_fields_multi_namespace_round_trip():
+    """Batched writer must register one prefix per unique URI; before the fix this
+    triggered libxml2 'Prefix format reserved for internal use' when six DJI tags
+    were written alongside two WALDO tags in a single call."""
+    drone_ns = "http://www.dji.com/drone-dji/1.0/"
+    waldo_ns = "http://adiat.io/ns/waldo/1.0/"
+    fields = [
+        (drone_ns, "GimbalPitchDegree", "-90.0000"),
+        (drone_ns, "GimbalYawDegree", "+45.0000"),
+        (drone_ns, "GimbalRollDegree", "+22.5000"),
+        (drone_ns, "FlightYawDegree", "+45.0000"),
+        (drone_ns, "RelativeAltitude", "+275.0000"),
+        (drone_ns, "AbsoluteAltitude", "+3245.0000"),
+        (waldo_ns, "Processed", "true"),
+        (waldo_ns, "ProcessorVersion", "1"),
+    ]
+
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        Image.new("RGB", (16, 16), color=(128, 128, 128)).save(tmp_path, "JPEG")
+        MetaDataHelper.add_xmp_fields(tmp_path, fields)
+
+        xmp_xml = MetaDataHelper.get_xmp_data(tmp_path)
+        # Each value must be present, and each unique URI must appear exactly once
+        # as an xmlns declaration with a stable, human-readable prefix.
+        for _, _, value in fields:
+            assert value in xmp_xml, f"value {value} missing from XMP after round-trip"
+        assert xmp_xml.count(f'xmlns:drone-dji="{drone_ns}"') == 1
+        assert xmp_xml.count(f'xmlns:waldo="{waldo_ns}"') == 1
+        # Sanity: no leaked synthetic 'ns0'/'ns1'/... bindings for the well-known URIs.
+        assert f'xmlns:ns0="{drone_ns}"' not in xmp_xml
+        assert f'xmlns:ns1="{drone_ns}"' not in xmp_xml
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_get_xmp_data_direct_delegates_to_parse_xmp_direct():
+    """The public get_xmp_data_direct wrapper must delegate straight to
+    _parse_xmp_direct and return its result unchanged -- no extra processing,
+    no ExifTool spawn. Regression guard for the POD-pass hot path added during
+    the Coverage/POD merge (PR #119)."""
+    sentinel = {'drone-dji:RelativeAltitude': '+275.00', 'GimbalYawDegree': '+45.00'}
+    with patch.object(MetaDataHelper, '_parse_xmp_direct',
+                      return_value=sentinel) as direct, \
+            patch.object(MetaDataHelper, 'get_meta_data_exiftool') as exiftool:
+        result = MetaDataHelper.get_xmp_data_direct('/some/image.jpg')
+
+    # Exact delegation: the wrapper returns the very object it received.
+    assert result is sentinel
+    direct.assert_called_once_with('/some/image.jpg')
+    exiftool.assert_not_called()  # subprocess-free wrapper
+
+
+def test_get_xmp_data_direct_matches_parse_on_real_image(example_image_path):
+    """On a real testData image the public wrapper returns a dict identical to
+    the private _parse_xmp_direct it wraps (no divergence between the two)."""
+    expected = MetaDataHelper._parse_xmp_direct(example_image_path)
+    result = MetaDataHelper.get_xmp_data_direct(example_image_path)
+
+    assert isinstance(result, dict)
+    assert result == expected
+    # DJI_0082.JPG carries real drone XMP, so the direct parse is non-empty.
+    assert result

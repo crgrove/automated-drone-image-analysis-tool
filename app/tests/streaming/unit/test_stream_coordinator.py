@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 from unittest.mock import Mock, MagicMock, patch
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 
 from core.controllers.streaming.components.StreamCoordinator import StreamCoordinator
 from core.services.streaming.RTMPStreamService import StreamType
@@ -137,3 +137,84 @@ class TestStreamCoordinator:
         coordinator.frameReceived.emit(sample_frame, 0.0, 0)
 
         # Signal should be emitted (async, so we just verify it exists)
+
+    def test_frame_ready_does_not_record_raw_frame(self, mock_logger, sample_frame):
+        """Recorded output should be controlled by StreamViewerWindow display path."""
+        coordinator = StreamCoordinator(mock_logger)
+        coordinator.is_recording = True
+        coordinator.record_frame = Mock()
+
+        coordinator._on_frame_ready(sample_frame, 1.25, 12)
+
+        coordinator.record_frame.assert_not_called()
+
+    def test_frame_signal_after_disconnect_is_not_forwarded(self, mock_logger, sample_frame):
+        """A retained manager cannot forward frames while marked disconnected."""
+        class FrameEmitter(QObject):
+            frameReady = Signal(np.ndarray, float, int)
+
+        coordinator = StreamCoordinator(mock_logger)
+        emitter = FrameEmitter()
+        coordinator.stream_manager = emitter
+        coordinator.is_connected = False
+        received = Mock()
+        coordinator.frameReceived.connect(received)
+        emitter.frameReady.connect(coordinator._on_frame_ready)
+
+        emitter.frameReady.emit(sample_frame, 1.25, 12)
+
+        received.assert_not_called()
+
+    def test_replaced_manager_frame_is_not_forwarded(self, mock_logger, sample_frame):
+        """A stale manager cannot forward a queued frame into a new session."""
+        class FrameEmitter(QObject):
+            frameReady = Signal(np.ndarray, float, int)
+
+        coordinator = StreamCoordinator(mock_logger)
+        stale_emitter = FrameEmitter()
+        coordinator.stream_manager = FrameEmitter()
+        coordinator.is_connected = True
+        received = Mock()
+        coordinator.frameReceived.connect(received)
+        stale_emitter.frameReady.connect(coordinator._on_frame_ready)
+
+        stale_emitter.frameReady.emit(sample_frame, 1.25, 12)
+
+        received.assert_not_called()
+
+    def test_update_fps_limit_returns_false_without_stream_manager(self, mock_logger):
+        """FPS update should fail safely when no stream is active."""
+        coordinator = StreamCoordinator(mock_logger)
+
+        assert coordinator.update_fps_limit(15) is False
+
+    def test_update_fps_limit_applies_when_supported(self, mock_logger):
+        """FPS update should delegate to StreamManager when available."""
+        coordinator = StreamCoordinator(mock_logger)
+        coordinator.stream_manager = Mock()
+        coordinator.stream_manager.set_fps_limit = Mock(return_value=True)
+
+        assert coordinator.update_fps_limit(20) is True
+        coordinator.stream_manager.set_fps_limit.assert_called_once_with(20)
+
+    def test_connection_drop_stops_active_recording(self, mock_logger):
+        """Unexpected disconnect should stop recording gracefully."""
+        coordinator = StreamCoordinator(mock_logger)
+        coordinator.is_recording = True
+        coordinator.stop_recording = Mock()
+
+        coordinator._on_connection_status_changed(False, "Disconnected")
+
+        coordinator.stop_recording.assert_called_once()
+        assert coordinator.is_connected is False
+
+    def test_recording_stats_forwarded(self, mock_logger):
+        """Recording stats should be forwarded to UI listeners."""
+        coordinator = StreamCoordinator(mock_logger)
+        received = []
+        coordinator.recordingStatsUpdated.connect(received.append)
+
+        payload = {"recording_fps": 24.0, "frame_count": 10}
+        coordinator._on_recording_manager_stats(payload)
+
+        assert received == [payload]

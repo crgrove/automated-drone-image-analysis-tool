@@ -9,6 +9,7 @@ This module contains algorithms for analyzing static images and image batches:
 - MRMap: Mahalanobis-Reed anomaly mapping
 - ThermalRange: Thermal temperature range detection
 - ThermalAnomaly: Thermal anomaly detection
+- ThermalResidualAnomaly: Local delta-T residual anomaly detection
 - AIPersonDetector: AI-based person detection
 """
 
@@ -20,6 +21,7 @@ __all__ = [
     'MRMap',
     'ThermalRange',
     'ThermalAnomaly',
+    'ThermalResidualAnomaly',
     'AIPersonDetector',
     'Shared'
 ]

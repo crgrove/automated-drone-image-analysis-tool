@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from algorithms.images.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
+from algorithms.Shared.views.RangeViewer_ui import Ui_ColorRangeViewer
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 
 from PySide6.QtGui import QImage

@@ -8,7 +8,13 @@ from PySide6.QtTest import QTest
 
 from algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionController import ColorAnomalyAndMotionDetectionController
 from algorithms.streaming.ColorAnomalyAndMotionDetection.services import (
-    ColorAnomalyAndMotionDetectionOrchestrator, ColorAnomalyAndMotionDetectionConfig, MotionAlgorithm, FusionMode, Detection
+    ColorAnomalyAndMotionDetectionOrchestrator,
+    ColorAnomalyAndMotionDetectionConfig,
+    MotionAlgorithm,
+    FusionMode,
+    ColorSpace,
+    ContourMethod,
+    Detection,
 )
 
 
@@ -101,7 +107,9 @@ class TestColorAnomalyAndMotionDetectionController:
                 'fusion_mode': FusionMode.UNION,
                 'motion_threshold': 15,
                 'min_detection_area': 10,
-                'max_detection_area': 5000
+                'max_detection_area': 5000,
+                'target_fps': 10,
+                'render_at_processing_res': False
             }
 
             controller.set_config(new_config)
@@ -111,6 +119,21 @@ class TestColorAnomalyAndMotionDetectionController:
             # Verify service config was updated
             assert controller.integrated_detector.config.enable_motion is True
             assert controller.integrated_detector.config.motion_threshold == 15
+            assert controller.integrated_controls.input_processing_tab.get_target_fps() == 10
+            assert controller.integrated_controls.input_processing_tab.render_at_processing_res.isChecked() is False
+
+    def test_set_config_restores_original_resolution_from_legacy_none(self, qapp, algorithm_config, mock_logger):
+        """Legacy processing_resolution=None should map to Original preset in UI."""
+        patch_path = (
+            'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.'
+            'ColorAnomalyAndMotionDetectionController.LoggerService'
+        )
+        with patch(patch_path, return_value=mock_logger):
+            controller = ColorAnomalyAndMotionDetectionController(algorithm_config, 'dark')
+
+            controller.set_config({'processing_resolution': None})
+
+            assert controller.integrated_controls.input_processing_tab.resolution_preset.currentData() == "original"
 
     def test_config_changed_signal(self, qapp, algorithm_config, mock_logger):
         """Test config changed signal emission."""
@@ -199,6 +222,36 @@ class TestColorAnomalyAndMotionDetectionController:
             # Verify detection count was updated
             assert controller.detection_count >= 0
 
+    def test_service_frame_processed_handler_does_not_reemit(self, qapp, algorithm_config, sample_frame, mock_logger):
+        """Service frameProcessed callback should not emit duplicate controller signals."""
+        patch_path = (
+            'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.'
+            'ColorAnomalyAndMotionDetectionController.LoggerService'
+        )
+        with patch(patch_path, return_value=mock_logger):
+            controller = ColorAnomalyAndMotionDetectionController(algorithm_config, 'dark')
+
+            emitted_detections = []
+            emitted_frames = []
+            controller.detectionsReady.connect(lambda d: emitted_detections.append(d))
+            controller.frameProcessed.connect(lambda f: emitted_frames.append(f))
+
+            mock_detections = [
+                Detection(
+                    bbox=(100, 100, 50, 50),
+                    centroid=(125, 125),
+                    area=2500.0,
+                    confidence=0.85,
+                    detection_type='fused',
+                    timestamp=0.0
+                )
+            ]
+
+            controller._on_frame_processed(sample_frame, mock_detections, None)
+
+            assert emitted_detections == []
+            assert emitted_frames == []
+
     def test_performance_update(self, qapp, algorithm_config, mock_logger):
         """Test performance update handling."""
         patch_path = (
@@ -243,3 +296,41 @@ class TestColorAnomalyAndMotionDetectionController:
             assert service_config.blur_kernel_size == widget_config['blur_kernel_size']
             assert service_config.morphology_kernel_size == widget_config['morphology_kernel_size']
             # enable_morphology uses service default (not in UI)
+
+    def test_config_conversion_preserves_original_resolution(self, qapp, algorithm_config, mock_logger):
+        """Original resolution marker should normalize to native-resolution mode."""
+        patch_path = (
+            'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.'
+            'ColorAnomalyAndMotionDetectionController.LoggerService'
+        )
+        with patch(patch_path, return_value=mock_logger):
+            controller = ColorAnomalyAndMotionDetectionController(algorithm_config, 'dark')
+
+            service_config = controller._convert_to_config({
+                'processing_width': 99999,
+                'processing_height': 99999,
+            })
+
+            assert service_config.processing_width is None
+            assert service_config.processing_height is None
+
+    def test_config_conversion_maps_string_enums(self, qapp, algorithm_config, mock_logger):
+        """String-based config values should map to expected enums."""
+        patch_path = (
+            'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.'
+            'ColorAnomalyAndMotionDetectionController.LoggerService'
+        )
+        with patch(patch_path, return_value=mock_logger):
+            controller = ColorAnomalyAndMotionDetectionController(algorithm_config, 'dark')
+
+            service_config = controller._convert_to_config({
+                'motion_algorithm': 'KNN',
+                'fusion_mode': 'MOTION_PRIORITY',
+                'color_space': 'RGB',
+                'contour_method': 'Connected Components',
+            })
+
+            assert service_config.motion_algorithm == MotionAlgorithm.KNN
+            assert service_config.fusion_mode == FusionMode.MOTION_PRIORITY
+            assert service_config.color_space == ColorSpace.BGR
+            assert service_config.contour_method == ContourMethod.CONNECTED_COMPONENTS

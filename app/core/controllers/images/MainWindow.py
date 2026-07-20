@@ -1,5 +1,6 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
 from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyController import ThermalResidualAnomalyController
 from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
 from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
@@ -11,18 +12,21 @@ from core.services.ConfigService import ConfigService
 from core.services.XmlService import XmlService
 from core.services.SettingsService import SettingsService
 from core.services.AnalyzeService import AnalyzeService
+from core.services.BatchAnalyzeService import BatchAnalyzeService
 from core.services.LoggerService import LoggerService
 from core.services.ResultsScannerService import ResultsScannerService
+from core.controllers.UpdateController import UpdateController
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
+from helpers import FeatureFlags
 # StreamViewerWindow imported lazily in _open_streaming_detector() to avoid circular dependency
 from core.controllers.images.VideoParser import VideoParser
-from core.controllers.Perferences import Preferences
+from core.controllers.Preferences import Preferences
 from core.controllers.images.viewer.Viewer import Viewer
 from helpers.PickleHelper import PickleHelper
 from core.views.images.MainWindow_ui import Ui_MainWindow
 from core.views.images.viewer.dialogs.ResultsFolderDialog import ResultsFolderDialog, ScanWorker, ScanProgressDialog
 from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
-                               QMessageBox, QSizePolicy, QAbstractButton, QProgressDialog)
+                               QMessageBox, QSizePolicy, QAbstractButton, QCheckBox, QProgressDialog)
 from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
 from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
 import qtawesome as qta
@@ -32,7 +36,11 @@ import pathlib
 from core.views.components.GroupedComboBox import GroupedComboBox
 from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
 from helpers.IconHelper import IconHelper
+from helpers.FormatHelper import FormatHelper
+from helpers.TranslationMixin import TranslationMixin
+from helpers.ThemeHelper import apply_theme
 import os
+import xml.etree.ElementTree as ET
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
@@ -40,7 +48,7 @@ os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 """****End Algorithm Import****"""
 
 
-class MainWindow(QMainWindow, Ui_MainWindow):
+class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
     """Controller for the Main Window (QMainWindow)."""
 
     def __init__(self, theme):
@@ -59,13 +67,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setStylesheets()
         self.settings_service = SettingsService()
         self.app_version = self.settings_service.get_setting('app_version', '2.0.0') or '2.0.0'
+        self.update_controller = UpdateController(self, settings_service=self.settings_service)
         self.__threads = []
         self.images = None
         self.algorithmWidget = None
         self.identifierColor = (0, 255, 0)
         self._auto_start_requested = False
+        self.batchService = None
+        self._batch_running = False
         self.HistogramImgWidget.setVisible(False)
-        self.setWindowTitle(f"Automated Drone Image Analysis Tool v{self.app_version} - Sponsored by TEXSAR")
+        self.setWindowTitle(
+            self.tr(
+                "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
+            ).format(version=self.app_version)
+        )
         self._load_algorithms()
 
         self.results_path = ''
@@ -98,7 +113,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.cancelButton.clicked.connect(self._cancelButton_clicked)
         self.viewResultsButton.clicked.connect(self._viewResultsButton_clicked)
         self.actionLoadFile.triggered.connect(self._open_load_file)
-        self.actionLoadResultsFolder.triggered.connect(self._open_load_results_folder)
+        if hasattr(self, "actionLoadResultsFolder"):
+            self.actionLoadResultsFolder.triggered.connect(self._open_load_results_folder)
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
 
@@ -110,14 +126,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if hasattr(self, 'actionStreaming'):
             self.actionStreaming.triggered.connect(self._open_streaming_detector)
 
+        # Connect Flight Viewer menu item (hidden while the feature is
+        # deferred to a later release)
+        if hasattr(self, 'actionFlightViewer'):
+            if FeatureFlags.FLIGHT_VIEWER_ENABLED:
+                self.actionFlightViewer.triggered.connect(self._open_flight_viewer)
+            else:
+                self.actionFlightViewer.setVisible(False)
+
         # Add Coordinator functionality
         self.coordinator_window = None
+        # The results button doubles as an "Open Search Coordinator" button
+        # after a batch run; track which action it currently performs and the
+        # project it would open.
+        self._view_results_mode = 'results'
+        self._search_project_path = None
         if hasattr(self, 'actionCoordinator'):
             self.actionCoordinator.triggered.connect(self._open_coordinator)
 
         # Add Help menu items
         if hasattr(self, 'actionHelp'):
             self.actionHelp.triggered.connect(self._open_help)
+
+        if hasattr(self, 'actionCheckForUpdates'):
+            self.update_controller.bind_action(self.actionCheckForUpdates)
+
         if hasattr(self, 'actionCommunityHelp'):
             self.actionCommunityHelp.triggered.connect(self._open_community_help)
         if hasattr(self, 'actionYouTube_Channel'):
@@ -154,6 +187,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Store previous valid values
         self._previous_min_area = self.minAreaSpinBox.value()
         self._previous_max_area = self.maxAreaSpinBox.value()
+
+        # Create the batch-mode checkbox below the directory pickers
+        self._create_batch_mode_checkbox()
+        # The automatic startup update check runs on the initial SelectionDialog;
+        # here we only keep the manual "Check for Updates" menu action wired up.
 
     def setStylesheets(self):
         """
@@ -224,39 +262,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Set comprehensive tooltip for algorithm selection
         self.algorithmComboBox.setToolTip(
-            "Select the detection algorithm for your image analysis task:\n"
-            "\n"
-            "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
-            "  • Best for: Colored objects in varying lighting conditions\n"
-            "  • Limitation: Requires color tuning, not for camouflaged objects\n"
-            "\n"
-            "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
-            "  • Best for: Basic color detection in controlled lighting\n"
-            "  • Limitation: Sensitive to lighting changes\n"
-            "\n"
-            "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
-            "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
-            "  • Limitation: May detect natural anomalies, slower with more segments\n"
-            "\n"
-            "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
-            "  • Best for: Night searches, detecting people/animals by body heat\n"
-            "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
-            "\n"
-            "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
-            "  • Best for: Human detection with thermal camera (known body temp)\n"
-            "  • Limitation: Requires thermal camera, must know target temperature\n"
-            "\n"
-            "MATCHED FILTER: Matches targets using color signature from sample\n"
-            "  • Best for: Specific known objects when you have a target sample\n"
-            "  • Limitation: Requires reference image, not for unknown targets\n"
-            "\n"
-            "MR MAP: Multi-resolution detection for objects of varying sizes\n"
-            "  • Best for: Complex scenes with unknown target sizes\n"
-            "  • Limitation: Slower processing, more false positives\n"
-            "\n"
-            "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
-            "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
-            "  • Limitation: Only detects people, slower processing"
+            self.tr(
+                "Select the detection algorithm for your image analysis task:\n"
+                "\n"
+                "HSV COLOR RANGE: Detects brightly colored objects (clothing, vehicles, tents)\n"
+                "  • Best for: Colored objects in varying lighting conditions\n"
+                "  • Limitation: Requires color tuning, not for camouflaged objects\n"
+                "\n"
+                "COLOR RANGE (RGB): Simple RGB color detection, fast processing\n"
+                "  • Best for: Basic color detection in controlled lighting\n"
+                "  • Limitation: Sensitive to lighting changes\n"
+                "\n"
+                "RX ANOMALY: Finds objects that don't match background (no sample needed)\n"
+                "  • Best for: Camouflaged/hidden subjects, unknown targets\n"
+                "  • Limitation: May detect natural anomalies, slower with more segments\n"
+                "\n"
+                "THERMAL ANOMALY: Detects hot/cold spots in thermal imagery\n"
+                "  • Best for: Night searches, detecting people/animals by body heat\n"
+                "  • Limitation: Requires thermal camera, may detect sun-heated objects\n"
+                "\n"
+                "TEMPERATURE RESIDUAL ANOMALY: Detects local delta-T outliers using radiometric residuals\n"
+                "  • Best for: Isolating rare hot/cold thermal signatures in mixed backgrounds\n"
+                "  • Limitation: Requires radiometric thermal data, can be sensitive to threshold choice\n"
+                "\n"
+                "THERMAL RANGE: Temperature-based detection (e.g., 35-40°C for humans)\n"
+                "  • Best for: Human detection with thermal camera (known body temp)\n"
+                "  • Limitation: Requires thermal camera, must know target temperature\n"
+                "\n"
+                "MATCHED FILTER: Matches targets using color signature from sample\n"
+                "  • Best for: Specific known objects when you have a target sample\n"
+                "  • Limitation: Requires reference image, not for unknown targets\n"
+                "\n"
+                "MR MAP: Multi-resolution detection for objects of varying sizes\n"
+                "  • Best for: Complex scenes with unknown target sizes\n"
+                "  • Limitation: Slower processing, more false positives\n"
+                "\n"
+                "AI PERSON DETECTOR: Deep learning model for accurate people detection\n"
+                "  • Best for: Search & Rescue, finding people in any clothing/pose\n"
+                "  • Limitation: Only detects people, slower processing"
+            )
         )
 
         self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
@@ -295,7 +339,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         # Get current color to show in picker
         current_color = QColor(*self.identifierColor) if isinstance(self.identifierColor, (tuple, list)) else QColor(0, 255, 0)
-        color = QColorDialog.getColor(current_color, self, "Select AOI Highlight Color")
+        color = QColorDialog.getColor(
+            current_color,
+            self,
+            self.tr("Select AOI Highlight Color")
+        )
         if color.isValid():
             self.identifierColor = (color.red(), color.green(), color.blue())
             self.identifierColorButton.setStyleSheet("background-color: " + color.name() + ";")
@@ -306,7 +354,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
         dir = dir if isinstance(dir, str) else ""
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Directory"),
+            dir,
+            QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.inputFolderLine.setText(directory)
             if os.name == 'nt':
@@ -319,7 +372,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         dir = self.outputFolderLine.text() or self.settings_service.get_setting('OutputFolder')
         dir = dir if isinstance(dir, str) else ""
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", dir, QFileDialog.ShowDirsOnly)
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Directory"),
+            dir,
+            QFileDialog.ShowDirsOnly
+        )
         if directory:
             self.outputFolderLine.setText(directory)
             if os.name == 'nt':
@@ -331,7 +389,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens a file dialog to select a reference image for histogram-based analysis.
         """
         dir = self.inputFolderLine.text() or self.settings_service.get_setting('InputFolder')
-        filename, _ = QFileDialog.getOpenFileName(self, "Select a Reference Image", dir, "Images (*.png *.jpg)")
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select a Reference Image"),
+            dir,
+            self.tr("Images (*.png *.jpg)")
+        )
         if filename:
             self.histogramLine.setText(filename)
             if os.name == 'nt':
@@ -378,9 +441,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Notify user of the change
             QMessageBox.information(
                 self,
-                "Value Adjusted",
-                f"Maximum area has been adjusted to {new_max} pixels to maintain valid range.\n"
-                f"(Minimum area must be less than maximum area)",
+                self.tr("Value Adjusted"),
+                self.tr(
+                    "Maximum area has been adjusted to {value} pixels to maintain valid range.\n"
+                    "(Minimum area must be less than maximum area)"
+                ).format(value=new_max),
                 QMessageBox.Ok
             )
 
@@ -408,9 +473,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Notify user of the change
             QMessageBox.information(
                 self,
-                "Value Adjusted",
-                f"Minimum area has been adjusted to {new_min} pixels to maintain valid range.\n"
-                f"(Maximum area must be greater than minimum area)",
+                self.tr("Value Adjusted"),
+                self.tr(
+                    "Minimum area has been adjusted to {value} pixels to maintain valid range.\n"
+                    "(Maximum area must be greater than minimum area)"
+                ).format(value=new_min),
                 QMessageBox.Ok
             )
 
@@ -474,6 +541,42 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         resolution_text = self.processingResolutionCombo.currentText()
         self.settings_service.set_setting('ProcessingResolution', resolution_text)
 
+    def _create_batch_mode_checkbox(self):
+        """
+        Creates the batch-mode checkbox and places it below the directory pickers.
+
+        When checked, the input folder is treated as a parent directory and each
+        subfolder that contains images is analyzed as a separate batch.
+        """
+        font = QFont()
+        font.setPointSize(10)
+        self.batchModeCheckbox = QCheckBox(
+            "Batch mode - analyze each subfolder of the input folder as a separate batch",
+            self.setupWidget
+        )
+        self.batchModeCheckbox.setFont(font)
+        self.batchModeCheckbox.setToolTip(
+            "When enabled, the Input Folder is treated as a parent directory.\n"
+            "Every subfolder containing images is analyzed as its own batch with\n"
+            "its own results, written under the Output Folder. If one folder\n"
+            "fails, the remaining folders are still processed."
+        )
+        # Place the checkbox on its own row beneath the input/output pickers.
+        self.directoriesLayout.addWidget(self.batchModeCheckbox, 2, 0, 1, 3)
+
+        # Restore the persisted state and keep it saved across sessions.
+        self.batchModeCheckbox.setChecked(self.settings_service.get_setting('BatchMode') is True)
+        self.batchModeCheckbox.toggled.connect(self._batchModeCheckbox_toggled)
+
+    def _batchModeCheckbox_toggled(self, checked):
+        """
+        Persists the batch-mode checkbox state.
+
+        Args:
+            checked (bool): The new checkbox state.
+        """
+        self.settings_service.set_setting('BatchMode', checked)
+
     def _startButton_clicked(self):
         """
         Starts the image analysis process.
@@ -485,12 +588,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
 
             if not (self.inputFolderLine.text() and self.outputFolderLine.text()):
-                self._show_error("Please set the input and output directories.")
+                self._show_error(
+                    self.tr("Please set the input and output directories.")
+                )
                 return
 
             self._set_StartButton(False)
+            self._set_view_results_mode('results')
             self._set_ViewResultsButton(False)
-            self._add_log_entry("--- Starting image processing ---")
+            self._add_log_entry(self.tr("--- Starting image processing ---"))
 
             options = self.algorithmWidget.get_options()
             hist_ref_path = self.histogramLine.text() if self.histogramCheckbox.isChecked() else None
@@ -512,6 +618,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Normalize identifier color to ensure it's a tuple of integers (R, G, B)
             identifier_color = self._normalize_color(self.identifierColor)
 
+            # Batch mode: analyze each subfolder of the input folder separately.
+            if self.batchModeCheckbox.isChecked():
+                self._start_batch_processing(
+                    identifier_color, options, hist_ref_path, kmeans_clusters,
+                    max_aois, aoi_radius, processing_resolution
+                )
+                return
+
             self.analyzeService = AnalyzeService(
                 1, self.activeAlgorithm, self.inputFolderLine.text(), self.outputFolderLine.text(),
                 identifier_color, self.minAreaSpinBox.value(), self.maxProcessesSpinBox.value(),
@@ -526,6 +640,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.analyzeService.sig_msg.connect(self._on_worker_msg)
             self.analyzeService.sig_aois.connect(self._show_aois_limit_warning)
             self.analyzeService.sig_done.connect(self._on_worker_done)
+            self.analyzeService.sig_progress.connect(self._on_analyze_progress)
 
             thread.started.connect(self.analyzeService.process_files)
             thread.start()
@@ -534,17 +649,137 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.logger.error(e)
 
+    def _start_batch_processing(self, identifier_color, options, hist_ref_path,
+                                kmeans_clusters, max_aois, aoi_radius, processing_resolution):
+        """
+        Starts folder-by-folder batch processing of the input directory.
+
+        Each subfolder that contains images is analyzed as a separate batch on a
+        background thread, so a failure in one folder does not stop the others.
+
+        Args:
+            identifier_color (tuple): RGB color used to highlight areas of interest.
+            options (dict): Algorithm-specific options.
+            hist_ref_path (str): Histogram reference image path, or None.
+            kmeans_clusters: Number of k-means clusters, or None.
+            max_aois (int): Area-of-interest warning threshold.
+            aoi_radius (int): Radius added around each area of interest.
+            processing_resolution (float): Image scaling factor (0.1 - 1.0).
+        """
+        analysis_config = {
+            'algorithm': self.activeAlgorithm,
+            'identifier_color': identifier_color,
+            'min_area': self.minAreaSpinBox.value(),
+            'max_area': self.maxAreaSpinBox.value(),
+            'num_processes': self.maxProcessesSpinBox.value(),
+            'max_aois': max_aois,
+            'aoi_radius': aoi_radius,
+            'hist_ref_path': hist_ref_path,
+            'kmeans_clusters': kmeans_clusters,
+            'options': options,
+            'processing_resolution': processing_resolution
+        }
+
+        self.batchService = BatchAnalyzeService(
+            self.inputFolderLine.text(),
+            self.outputFolderLine.text(),
+            analysis_config
+        )
+
+        # If a previous run of this batch left some folders finished, let the
+        # user resume (skip the finished folders) instead of starting over.
+        if not self._confirm_batch_resume(self.batchService):
+            self._add_log_entry("--- Batch start cancelled ---")
+            self._set_StartButton(True)
+            self.batchService = None
+            return
+
+        thread = QThread()
+        self.__threads.append((thread, self.batchService))
+        self.batchService.moveToThread(thread)
+
+        self.batchService.sig_msg.connect(self._on_worker_msg)
+        self.batchService.sig_batch_progress.connect(self._on_batch_progress)
+        self.batchService.sig_done.connect(self._on_batch_done)
+        self.batchService.sig_progress.connect(self._on_batch_status)
+
+        thread.started.connect(self.batchService.process_batches)
+        self._batch_running = True
+        thread.start()
+
+        self._set_CancelButton(True)
+
+    def _confirm_batch_resume(self, batch_service):
+        """
+        Detect a prior incomplete batch run and ask the user how to proceed.
+
+        Sets batch_service.resume based on the user's choice.
+
+        Args:
+            batch_service (BatchAnalyzeService): The service about to run.
+
+        Returns:
+            bool: True to start the run, False if the user cancelled.
+        """
+        completed, total = batch_service.count_completed_batches()
+        if completed == 0 or total == 0:
+            return True  # nothing previously done -- a normal fresh run
+
+        if completed >= total:
+            choice = QMessageBox.question(
+                self,
+                "Batch Already Complete",
+                f"All {total} folder(s) under the input already have results "
+                f"in the output folder.\n\nRe-run all of them from scratch?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if choice != QMessageBox.Yes:
+                return False
+            batch_service.resume = False
+            return True
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Resume Batch?")
+        box.setText(
+            f"A previous batch run looks incomplete: {completed} of {total} "
+            f"folder(s) already have results.\n\n"
+            f"Resume skips the finished folders and processes the rest. "
+            f"Restart processes every folder from scratch."
+        )
+        resume_btn = box.addButton("Resume", QMessageBox.AcceptRole)
+        restart_btn = box.addButton("Restart", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == resume_btn:
+            batch_service.resume = True
+            return True
+        if clicked == restart_btn:
+            batch_service.resume = False
+            return True
+        return False
+
     def _cancelButton_clicked(self):
         """
         Cancels the in-progress analysis.
         """
-        self.analyzeService.process_cancel()
+        if self._batch_running and self.batchService is not None:
+            self.batchService.process_cancel()
+        elif hasattr(self, 'analyzeService'):
+            self.analyzeService.process_cancel()
         self._set_CancelButton(False)
 
     def _viewResultsButton_clicked(self):
         """
-        Launches the image viewer to display analysis results.
+        Opens the results for the most recent run.
+
+        After a batch run this button opens the Search Coordinator for the
+        generated project; otherwise it launches the single-run image viewer.
         """
+        if self._view_results_mode == 'coordinator':
+            self._open_coordinator(self._search_project_path)
+            return
         QApplication.setOverrideCursor(Qt.WaitCursor)
         file = pathlib.Path(self.results_path)
         if file.is_file():
@@ -555,7 +790,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                  self.settings_service.get_setting('Theme'))
             self.viewer.show()
         else:
-            self._show_error("Could not parse XML file. Check file paths in \"ADIAT_Data.xml\"")
+            self._show_error(
+                self.tr(
+                    "Could not parse XML file. Check file paths in \"{file_name}\""
+                ).format(file_name="ADIAT_Data.xml")
+            )
         QApplication.restoreOverrideCursor()
 
     def _add_log_entry(self, text):
@@ -574,8 +813,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Question)
-        msg.setText(f"Area of Interest Limit ({self.settings_service.get_setting('MaxAOIs')}) exceeded. Continue?")
-        msg.setWindowTitle("Area of Interest Limit Exceeded")
+        msg.setText(
+            self.tr(
+                "Area of Interest Limit ({limit}) exceeded. Continue?"
+            ).format(limit=self.settings_service.get_setting('MaxAOIs'))
+        )
+        msg.setWindowTitle(self.tr("Area of Interest Limit Exceeded"))
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         if msg.exec() == QMessageBox.No:
             self._cancelButton_clicked()
@@ -590,6 +833,34 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self._add_log_entry(text)
 
+    @Slot(int, int, float)
+    def _on_analyze_progress(self, completed, total, eta_seconds):
+        """
+        Shows current-run progress and an ETA in the status bar.
+
+        Args:
+            completed (int): Number of images processed so far.
+            total (int): Total number of images in the run.
+            eta_seconds (float): Estimated seconds remaining.
+        """
+        if completed >= total or eta_seconds <= 0:
+            self.statusBar().showMessage(f"Processing image {completed} of {total}")
+        else:
+            self.statusBar().showMessage(
+                f"Processing image {completed} of {total} - about "
+                f"{FormatHelper.format_duration(eta_seconds)} remaining"
+            )
+
+    @Slot(str)
+    def _on_batch_status(self, text):
+        """
+        Shows batch progress and ETAs in the status bar.
+
+        Args:
+            text (str): A ready-to-display status line from BatchAnalyzeService.
+        """
+        self.statusBar().showMessage(text)
+
     @Slot(int, int, str)
     def _on_worker_done(self, id, images_with_aois, xml_path):
         """
@@ -599,12 +870,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             id (int): ID of the calling object.
             images_with_aois (int): Count of images with areas of interest.
         """
-        self._add_log_entry("--- Image Processing Completed ---")
+        self._add_log_entry(self.tr("--- Image Processing Completed ---"))
+        self.statusBar().showMessage(self.tr("Image processing complete"), 8000)
         if images_with_aois > 0:
-            self._add_log_entry(f"{images_with_aois} images with areas of interest identified")
+            self._add_log_entry(
+                self.tr("{count} images with areas of interest identified").format(
+                    count=images_with_aois
+                )
+            )
             self._set_ViewResultsButton(True)
         else:
-            self._add_log_entry("No areas of interest identified")
+            self._add_log_entry(self.tr("No areas of interest identified"))
             self._set_ViewResultsButton(False)
 
         self.results_path = xml_path
@@ -612,6 +888,71 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._set_CancelButton(False)
         for thread, analyze in self.__threads:
             thread.quit()
+
+    @Slot(int, int, str)
+    def _on_batch_progress(self, current, total, folder_name):
+        """
+        Logs progress as the batch run moves from one folder to the next.
+
+        Args:
+            current (int): 1-based index of the folder now being processed.
+            total (int): Total number of folders to process.
+            folder_name (str): Name of the folder now being processed.
+        """
+        self._add_log_entry(f"--- Processing batch {current} of {total}: {folder_name} ---")
+
+    @Slot(int, int, str)
+    def _on_batch_done(self, succeeded, failed, search_project_path):
+        """
+        Finalizes the UI when batch processing completes.
+
+        Args:
+            succeeded (int): Number of folders processed successfully.
+            failed (int): Number of folders that failed.
+            search_project_path (str): Path to the generated Search Coordinator
+                project, or an empty string if none was created.
+        """
+        self._add_log_entry("--- Batch Processing Completed ---")
+        self.statusBar().showMessage("Batch processing complete", 8000)
+        self._batch_running = False
+        self._set_StartButton(True)
+        self._set_CancelButton(False)
+        for thread, worker in self.__threads:
+            thread.quit()
+
+        # A batch run has no single results file to view; repurpose the results
+        # button to open the generated Search Coordinator project instead.
+        if search_project_path:
+            self._set_view_results_mode('coordinator', search_project_path)
+            self._set_ViewResultsButton(True)
+        else:
+            self._set_view_results_mode('results')
+            self._set_ViewResultsButton(False)
+
+        message = (
+            f"Batch processing finished.\n\n"
+            f"{succeeded} folder(s) succeeded, {failed} folder(s) failed."
+        )
+        if search_project_path:
+            message += (
+                "\n\nA Search Coordinator project linking every batch was created. "
+                "Open it in the Search Coordinator to review all batches together, "
+                "or load an individual folder's ADIAT_Data.xml to review just that batch."
+            )
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information if failed == 0 else QMessageBox.Warning)
+        msg.setWindowTitle("Batch Processing Complete")
+        msg.setText(message)
+        if search_project_path:
+            open_button = msg.addButton("Open Search Coordinator", QMessageBox.AcceptRole)
+            msg.addButton(QMessageBox.Close)
+            msg.exec()
+            if msg.clickedButton() == open_button:
+                self._open_coordinator(search_project_path)
+        else:
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
 
     def _show_error(self, text):
         """
@@ -623,7 +964,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(text)
-        msg.setWindowTitle("Error")
+        msg.setWindowTitle(self.tr("Error"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
@@ -632,7 +973,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Opens a file dialog to select a file to load.
         """
         try:
-            file, _ = QFileDialog.getOpenFileName(self, "Select File")
+            file, _ = QFileDialog.getOpenFileName(
+                self, self.tr("Select File"), "", self.tr("XML Files (*.xml);;All Files (*)")
+            )
             if file:
                 self._process_xml_file(file)
         except Exception as e:
@@ -652,7 +995,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # Open folder selection dialog
             folder = QFileDialog.getExistingDirectory(
                 self,
-                "Select Results Folder",
+                self.tr("Select Results Folder"),
                 last_folder,
                 QFileDialog.ShowDirsOnly
             )
@@ -684,7 +1027,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error opening results folder dialog: {e}")
-            self._show_error(f"Failed to scan folder: {str(e)}")
+            self._show_error(
+                self.tr("Failed to scan folder: {error}").format(error=str(e))
+            )
 
     def _on_scan_progress(self, current: int, total: int, current_dir: str):
         """Handle progress updates from folder scan."""
@@ -705,8 +1050,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if not results:
                 QMessageBox.information(
                     self,
-                    "No Results Found",
-                    "No ADIAT_DATA.XML files were found in the selected folder."
+                    self.tr("No Results Found"),
+                    self.tr("No ADIAT_DATA.XML files were found in the selected folder.")
                 )
                 return
 
@@ -722,7 +1067,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error displaying scan results: {e}")
-            self._show_error(f"Failed to display results: {str(e)}")
+            self._show_error(
+                self.tr("Failed to display results: {error}").format(error=str(e))
+            )
 
     def _on_scan_error(self, error_msg):
         """Handle scan error."""
@@ -731,7 +1078,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._scan_thread.wait()
             if hasattr(self, '_scan_progress') and self._scan_progress:
                 self._scan_progress.close()
-            self._show_error(f"Scan failed: {error_msg}")
+            self._show_error(
+                self.tr("Scan failed: {error}").format(error=error_msg)
+            )
         except Exception as e:
             self.logger.error(f"Error handling scan error: {e}")
 
@@ -772,7 +1121,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except Exception as e:
             self.logger.error(f"Error opening viewer: {e}")
-            self._show_error(f"Failed to open viewer: {str(e)}")
+            self._show_error(
+                self.tr("Failed to open viewer: {error}").format(error=str(e))
+            )
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -784,12 +1135,47 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             full_path (str): Path to the XML file.
         """
         try:
+            # A Search Coordinator project links multiple batches; open it in
+            # the Coordinator rather than the single-run Viewer, and repurpose
+            # the results button to reopen the same project.
+            if self._is_search_project_xml(full_path):
+                self._set_view_results_mode('coordinator', full_path)
+                self._set_ViewResultsButton(True)
+                self._open_coordinator(full_path)
+                return
             image_count = self._get_settings_from_xml(full_path)
+            self._set_view_results_mode('results')
             if image_count > 0:
                 self._set_ViewResultsButton(True)
             self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
+        except ET.ParseError:
+            self.logger.error(f"Failed to parse XML file: {full_path}")
+            self._show_error(
+                self.tr("The selected file is not a valid XML file: {path}").format(path=full_path)
+            )
         except Exception as e:
             self.logger.error(e)
+
+    def _is_search_project_xml(self, full_path):
+        """
+        Detects whether an XML file is a Search Coordinator project.
+
+        Search Coordinator projects (ADIAT_Search_*.xml) use a <search_project>
+        root element, whereas single-run results (ADIAT_Data.xml) use <data>.
+        Only the root element is read.
+
+        Args:
+            full_path (str): Path to the XML file.
+
+        Returns:
+            bool: True if the file is a Search Coordinator project.
+        """
+        try:
+            for _event, elem in ET.iterparse(full_path, events=('start',)):
+                return elem.tag == 'search_project'
+        except (ET.ParseError, OSError):
+            return False
+        return False
 
     def _get_settings_from_xml(self, full_path):
         """
@@ -961,14 +1347,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # self.logger.info(f"Review requested for file: {file_path}")
                 # Load the XML file
                 self._process_xml_file(file_path)
-                # Automatically open the Viewer
-                self._viewResultsButton_clicked()
+                # A Search Coordinator project is already opened by
+                # _process_xml_file; otherwise open the single-run Viewer.
+                if self._view_results_mode != 'coordinator':
+                    self._viewResultsButton_clicked()
             except Exception as e:
                 self.logger.error(f"Error loading results file: {e}")
                 QMessageBox.critical(
                     self,
-                    "Error Loading Results",
-                    f"Failed to load results file:\n{str(e)}"
+                    self.tr("Error Loading Results"),
+                    self.tr("Failed to load results file:\n{error}").format(error=str(e))
                 )
 
         wizard.wizardCompleted.connect(_on_wizard_completed)
@@ -983,6 +1371,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         pref = Preferences(self)
         pref.exec()
+        self.update_controller.refresh_action_state()
 
     def _open_video_parser(self):
         """
@@ -1018,11 +1407,43 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.hide()
         except Exception as e:
             self.logger.error(f"Error opening Streaming Detector: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Streaming Detector:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Streaming Detector:\n{error}").format(error=str(e))
+            )
 
-    def _open_coordinator(self):
+    def _open_flight_viewer(self):
+        """Open the Flight Viewer window without closing the main window."""
+        try:
+            from core.controllers.flight import FlightViewerController
+
+            app = QApplication.instance()
+            existing = getattr(app, '_flight_controller', None) if app else None
+            if existing is not None and existing.window.isVisible():
+                existing.show()
+                return
+
+            controller = FlightViewerController()
+            if app is not None:
+                app._flight_controller = controller
+            controller.show()
+        except Exception as e:
+            self.logger.error(f"Error opening Flight Viewer: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Flight Viewer:\n{error}").format(error=str(e))
+            )
+
+    def _open_coordinator(self, project_path=None):
         """
         Opens the Search Coordinator window for managing multi-batch review projects.
+
+        Args:
+            project_path (str): Optional Search Coordinator project file to load
+                once the window is open. Ignored when it is not a real file
+                (e.g. the boolean emitted by a menu action's triggered signal).
         """
         try:
             if self.coordinator_window is None or not self.coordinator_window.isVisible():
@@ -1035,9 +1456,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # Bring existing window to front
                 self.coordinator_window.raise_()
                 self.coordinator_window.activateWindow()
+            if isinstance(project_path, str) and os.path.isfile(project_path):
+                self.coordinator_window.load_project_file(project_path)
         except Exception as e:
             self.logger.error(f"Error opening Coordinator: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Search Coordinator:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Search Coordinator:\n{error}").format(error=str(e))
+            )
 
     def _open_help(self):
         """
@@ -1049,7 +1476,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("Help documentation opened")
         except Exception as e:
             self.logger.error(f"Error opening Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Help documentation:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Help documentation:\n{error}").format(error=str(e))
+            )
 
     def _open_community_help(self):
         """
@@ -1061,7 +1492,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("Community Help Discord opened")
         except Exception as e:
             self.logger.error(f"Error opening Community Help URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open Community Help:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open Community Help:\n{error}").format(error=str(e))
+            )
 
     def _open_youtube_channel(self):
         """
@@ -1073,13 +1508,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # self.logger.info("YouTube Channel opened")
         except Exception as e:
             self.logger.error(f"Error opening YouTube Channel URL: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to open YouTube Channel:\n{str(e)}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to open YouTube Channel:\n{error}").format(error=str(e))
+            )
 
     def showEvent(self, event):
         """
         Handle window show event. Auto-start processing if requested from wizard.
         """
         super().showEvent(event)
+        self.update_controller.refresh_action_state()
 
         # self.logger.info(f"showEvent called, _auto_start_requested={self._auto_start_requested}")
 
@@ -1132,6 +1572,49 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.viewResultsButton.setEnabled(enabled)
 
+    def _set_view_results_mode(self, mode, project_path=None):
+        """
+        Switches the results button between opening a single run's Viewer and
+        opening the Search Coordinator for a batch run.
+
+        Args:
+            mode (str): 'results' for the single-run Viewer (default), or
+                'coordinator' to open the Search Coordinator.
+            project_path (str): Search Coordinator project file to open when
+                mode is 'coordinator'.
+        """
+        self._view_results_mode = mode
+        if mode == 'coordinator':
+            self._search_project_path = project_path
+            self.viewResultsButton.setText(self.tr(" Open Search Coordinator"))
+            self.viewResultsButton.setToolTip(
+                self.tr("Open the Search Coordinator to review every batch in this run.")
+            )
+        else:
+            self._search_project_path = None
+            self.viewResultsButton.setText(self.tr(" View Results"))
+            self.viewResultsButton.setToolTip(
+                self.tr("Open the Results Viewer to review detection results.")
+            )
+        # The button has a Fixed size policy and a 150px minimum sized for
+        # "View Results"; the longer coordinator label clips unless we widen
+        # the minimum to fit the current text and icon.
+        self._fit_view_results_button_width()
+
+    def _fit_view_results_button_width(self):
+        """
+        Widen the results button so its current label is not clipped.
+
+        The button has a Fixed size policy; a fixed 400px spacer sits beside it,
+        so the layout will not grant the button its preferred width and the
+        longer coordinator label clips. Raising the minimum width to the
+        button's size hint forces the layout to allocate the needed room, while
+        the shared 150px floor keeps parity with the Start/Cancel buttons for
+        short labels.
+        """
+        button = self.viewResultsButton
+        button.setMinimumWidth(max(150, button.sizeHint().width()))
+
     def _set_defaults(self):
         """
         Sets default values for UI elements based on persistent settings and initializes settings if not previously set.
@@ -1179,11 +1662,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Args:
             theme (str): 'Light' or 'Dark'
         """
+        # apply_theme installs the stylesheet AND the full palette so text
+        # colours track the app theme rather than the OS light/dark setting.
         if theme == 'Light':
-            self.theme.setup_theme("light")
+            apply_theme("Light")
             self._apply_icons("Light")
         else:
-            self.theme.setup_theme()
+            apply_theme("Dark")
             self._apply_icons("Dark")
 
     def _show_area_validation_error(self, message):
@@ -1196,7 +1681,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
         msg.setText(message)
-        msg.setWindowTitle("Invalid Value")
+        msg.setWindowTitle(self.tr("Invalid Value"))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 

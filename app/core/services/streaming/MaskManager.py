@@ -255,11 +255,13 @@ class MaskManager:
     def _compute_config_hash(self, config: Dict[str, Any],
                              resolution: Tuple[int, int]) -> str:
         """Compute hash of config for cache invalidation."""
-        return f"{
-            config.get('frame_mask_enabled')}_{
-            config.get('image_mask_enabled')}_{
-            config.get('frame_buffer_pixels')}_{
-                config.get('mask_image_path')}_{resolution}"
+        return (
+            f"{config.get('frame_mask_enabled')}_"
+            f"{config.get('image_mask_enabled')}_"
+            f"{config.get('frame_buffer_pixels')}_"
+            f"{config.get('mask_image_path')}_"
+            f"{resolution}"
+        )
 
     def invalidate_cache(self):
         """Force cache invalidation."""

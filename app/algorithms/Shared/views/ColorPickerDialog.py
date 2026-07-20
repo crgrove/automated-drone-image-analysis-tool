@@ -6,10 +6,11 @@ Provides a simple dialog interface for color selection from images.
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox, QPushButton
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from algorithms.Shared.views.ColorPickerImageViewer import ColorPickerImageViewer
 
 
-class ColorPickerDialog(QDialog):
+class ColorPickerDialog(TranslationMixin, QDialog):
     """
     Dialog for selecting a color from an image using an eyedropper tool.
 
@@ -31,7 +32,7 @@ class ColorPickerDialog(QDialog):
 
         self.selected_color = None  # (r, g, b) tuple
 
-        self.setWindowTitle("Select Color from Image")
+        self.setWindowTitle(self.tr("Select Color from Image"))
         self.setMinimumSize(600, 500)
 
         # Layout
@@ -51,13 +52,14 @@ class ColorPickerDialog(QDialog):
         # Rename OK to 'Use Color' and disable until a color is selected
         self._ok_button = button_box.button(QDialogButtonBox.Ok)
         if self._ok_button is not None:
-            self._ok_button.setText("Use Color")
+            self._ok_button.setText(self.tr("Use Color"))
             self._ok_button.setEnabled(False)
 
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
         layout.addWidget(button_box)
+        self._apply_translations()
 
         # Load initial image if provided
         if initial_image_path:

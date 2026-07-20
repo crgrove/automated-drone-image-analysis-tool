@@ -13,6 +13,7 @@ from PIL import Image
 
 from core.services.GSDService import GSDService
 
+from core.services.LoggerService import LoggerService
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.PickleHelper import PickleHelper
 from helpers.LocationInfo import LocationInfo
@@ -21,7 +22,8 @@ from helpers.LocationInfo import LocationInfo
 class ImageService:
     """Service to calculate various drone and image attributes based on metadata."""
 
-    def __init__(self, path, mask_path=None, img_array=None, calculated_bearing=None):
+    def __init__(self, path, mask_path=None, img_array=None, calculated_bearing=None,
+                 exif_data=None, xmp_data=None):
         """
         Initializes the ImageService by extracting Exif and XMP metadata.
 
@@ -32,9 +34,13 @@ class ImageService:
                                               If provided, skips loading from disk.
             calculated_bearing (float, optional): Calculated bearing in degrees [0, 360).
                                                  Used as fallback if EXIF bearing is missing.
+            exif_data (dict, optional): Pre-read EXIF data. Skips the piexif read when given.
+            xmp_data (dict, optional): Pre-read XMP data. Skips the (ExifTool) XMP read when
+                                       given — used by bulk callers (e.g. the POD pass) to
+                                       avoid launching one ExifTool process per image.
         """
-        self.exif_data = MetaDataHelper.get_exif_data_piexif(path)
-        self.xmp_data = MetaDataHelper.get_xmp_data_merged(path)
+        self.exif_data = exif_data if exif_data is not None else MetaDataHelper.get_exif_data_piexif(path)
+        self.xmp_data = xmp_data if xmp_data is not None else MetaDataHelper.get_xmp_data_merged(path)
         self.drone_make = MetaDataHelper.get_drone_make(self.exif_data)
         self.path = path
         self.mask_path = mask_path
@@ -174,7 +180,23 @@ class ImageService:
         Returns:
             float or None: Camera yaw in degrees (0-360), or None if unavailable.
         """
+        return self.get_camera_yaw_with_source()[0]
+
+    def get_camera_yaw_with_source(self):
+        """
+        Get the camera yaw together with the source that provided it.
+
+        Same priority chain and roll-flip normalization as :meth:`get_camera_yaw`,
+        but also reports which rung of the chain fired so callers (e.g.
+        FrameGeometry) can attach a confidence to track-interpolated yaw.
+
+        Returns:
+            tuple[float | None, str | None]: (yaw_deg in [0, 360), source) where
+            source is 'gimbal', 'flight', 'calculated', or None when no yaw is
+            available.
+        """
         yaw = None
+        source = None
 
         # Prefer gimbal yaw if available (actual camera direction)
         if self.xmp_data is not None and self.drone_make is not None:
@@ -182,19 +204,24 @@ class ImageService:
             if gimbal_yaw is not None:
                 try:
                     yaw = float(gimbal_yaw)
+                    source = 'gimbal'
                 except (TypeError, ValueError):
                     pass
 
         # Fall back to flight yaw (drone body direction)
         if yaw is None:
-            yaw = self._get_drone_orientation()
+            flight_yaw = self._get_drone_orientation()
+            if flight_yaw is not None:
+                yaw = flight_yaw
+                source = 'flight'
 
         # Final fallback: use calculated bearing if available
         if yaw is None and self.calculated_bearing is not None:
             yaw = self.calculated_bearing
+            source = 'calculated'
 
         if yaw is None:
-            return None
+            return None, None
 
         # Normalize to 0-360 range
         if yaw < 0:
@@ -209,7 +236,7 @@ class ImageService:
         if gimbal_roll is not None and abs(gimbal_roll) > 90:
             yaw = (yaw + 180) % 360
 
-        return yaw
+        return yaw, source
 
     def get_camera_intrinsics(self):
         """
@@ -258,16 +285,22 @@ class ImageService:
         hfov = 2 * math.atan(sensor_w / (2 * focal_length))
         return math.degrees(hfov)
 
-    def get_average_gsd(self, custom_altitude_ft=None):
+    def get_gsd_service(self, custom_altitude_ft=None):
         """
-        Computes the estimated average Ground Sampling Distance (GSD).
+        Build a GSDService configured for this image.
+
+        Returns the service so callers can query GSD at specific pixels (for
+        oblique imagery where GSD varies across the frame). Returns None if
+        any required EXIF/XMP/sensor data is missing or if the view is too
+        oblique for a reliable estimate.
 
         Args:
-            custom_altitude_ft (float, optional): Custom altitude in feet to use instead of XMP data.
-                                                  Useful when XMP altitude is negative or incorrect.
+            custom_altitude_ft (float, optional): Custom altitude in feet to use
+                instead of XMP data. Useful when XMP altitude is negative or
+                incorrect.
 
         Returns:
-            float or None: Average GSD in cm/pixel, or None if required data is missing.
+            GSDService or None
         """
         image_width = self.exif_data["Exif"].get(piexif.ExifIFD.PixelXDimension)
         image_height = self.exif_data["Exif"].get(piexif.ExifIFD.PixelYDimension)
@@ -285,7 +318,6 @@ class ImageService:
 
         # Use custom altitude if provided, otherwise get from XMP
         if custom_altitude_ft is not None and custom_altitude_ft > 0:
-            # Convert feet to meters
             altitude_meters = custom_altitude_ft / 3.28084
         else:
             altitude_meters = self.get_relative_altitude()
@@ -293,37 +325,306 @@ class ImageService:
         if altitude_meters is None:
             return None
 
-        # Get camera pitch and convert to tilt angle from nadir
-        # Pitch: -90° = nadir, 0° = horizontal → Tilt: 0° = nadir, 90° = horizontal
+        # Camera pitch -> tilt-from-nadir
         pitch = self.get_camera_pitch()
         if pitch is None:
-            tilt_angle = 0  # Assume nadir if not available
+            tilt_angle = 0
         else:
             tilt_angle = 90 + pitch
-            tilt_angle = max(0, min(90, tilt_angle))  # Clamp to [0, 90]
+            tilt_angle = max(0, min(90, tilt_angle))
 
         if tilt_angle > 60:
             return None  # Too oblique for accurate GSD calculation
 
         camera_info = self._get_camera_info()
-
-        if camera_info is None:
-            return None
-        if camera_info.empty:
+        if camera_info is None or camera_info.empty:
             return None
 
         sensor_w = float(camera_info['sensor_w'].iloc[0])
         sensor_h = float(camera_info['sensor_h'].iloc[0])
         sensor = (sensor_w, sensor_h)
 
-        gsd_service = GSDService(
+        return GSDService(
             focal_length=focal_length,
             image_size=(image_width, image_height),
             altitude=altitude_meters,
             tilt_angle=tilt_angle,
             sensor=sensor
         )
-        return round(gsd_service.compute_average_gsd(), 2)
+
+    def get_average_gsd(self, custom_altitude_ft=None):
+        """
+        Computes the estimated average Ground Sampling Distance (GSD).
+
+        Args:
+            custom_altitude_ft (float, optional): Custom altitude in feet to use instead of XMP data.
+                                                  Useful when XMP altitude is negative or incorrect.
+
+        Returns:
+            float or None: Average GSD in cm/pixel, or None if required data is missing.
+        """
+        gsd_service = self.get_gsd_service(custom_altitude_ft=custom_altitude_ft)
+        if gsd_service is None:
+            return None
+        avg = gsd_service.compute_average_gsd()
+        if avg is None:
+            return None
+        return round(avg, 2)
+
+    def compute_gsd_at_pixel(self, col, row, use_terrain=True, custom_altitude_ft=None):
+        """Compute GSD at a specific image pixel, with optional DEM-corrected AGL.
+
+        For oblique imagery the effective AGL at a pixel can differ
+        substantially from the drone's reported AGL because the ground point
+        sampled by that pixel sits at a different terrain elevation than the
+        ground directly under the drone. When the terrain service is enabled
+        this method projects the pixel ray to the ground, queries the DEM for
+        the terrain elevation at that ground point, derives an effective AGL,
+        and uses it to compute GSD. Falls back to flat-ground GSD when
+        terrain data is unavailable.
+
+        Args:
+            col: Image column (x pixel coordinate).
+            row: Image row (y pixel coordinate).
+            use_terrain (bool): Honor DEM data when available. Default True.
+            custom_altitude_ft (float, optional): User-supplied AGL override
+                in feet (e.g. from the altitude controller).
+
+        Returns:
+            GSD in cm/px, or None if not computable.
+        """
+        gsd_service = self.get_gsd_service(custom_altitude_ft=custom_altitude_ft)
+        if gsd_service is None:
+            return None
+
+        irow = int(round(row))
+        icol = int(round(col))
+
+        if not use_terrain:
+            return gsd_service.compute_gsd(irow, icol)
+
+        effective_agl_m = self._effective_agl_at_pixel(
+            icol, irow, gsd_service, custom_altitude_ft=custom_altitude_ft
+        )
+        if effective_agl_m is None or effective_agl_m <= 0:
+            return gsd_service.compute_gsd(irow, icol)
+
+        return gsd_service.compute_gsd(irow, icol, altitude_override=effective_agl_m)
+
+    def get_effective_agl_at_pixel(self, col, row, use_terrain=True, custom_altitude_ft=None):
+        """Public accessor for the DEM-corrected effective AGL at a pixel.
+
+        Args:
+            col: Image column (x pixel coordinate).
+            row: Image row (y pixel coordinate).
+            use_terrain (bool): Honor DEM data when available. Default True.
+            custom_altitude_ft (float, optional): User-supplied AGL override
+                in feet.
+
+        Returns:
+            Effective AGL in meters when terrain data is available (and
+            use_terrain is True), otherwise None — callers should fall back
+            to the reported/flat AGL.
+        """
+        if not use_terrain:
+            return None
+        gsd_service = self.get_gsd_service(custom_altitude_ft=custom_altitude_ft)
+        if gsd_service is None:
+            return None
+        return self._effective_agl_at_pixel(
+            int(round(col)), int(round(row)), gsd_service, custom_altitude_ft=custom_altitude_ft
+        )
+
+    # ---------------- terrain helpers ----------------
+
+    def get_frame_geometry(self, custom_altitude_ft=None, bearing_quality=None,
+                           agl_override_ft=None):
+        """Collect this image's camera pose + intrinsics as a FrameGeometry.
+
+        A public, terrain-free snapshot (see
+        :class:`core.services.image.FrameGeometry.FrameGeometry`) consumed by the
+        Coverage/POD pipeline and, internally, by :meth:`_get_projection_context`.
+        Cached per ``(custom_altitude_ft, agl_override_ft)``. Returns None when
+        GPS, intrinsics, image size, or a positive AGL is unavailable.
+        """
+        cache_key = (custom_altitude_ft, agl_override_ft)
+        cache = getattr(self, '_frame_geometry_cache', None)
+        if cache is None:
+            cache = {}
+            self._frame_geometry_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        from core.services.image.FrameGeometry import FrameGeometry
+        fg = FrameGeometry.from_image_service(
+            self,
+            custom_altitude_ft=custom_altitude_ft,
+            bearing_quality=bearing_quality,
+            agl_override_ft=agl_override_ft,
+        )
+        cache[cache_key] = fg
+        return fg
+
+    def _get_projection_context(self, custom_altitude_ft=None):
+        """Collect drone pose, intrinsics and per-image terrain data needed for
+        per-pixel projection. Caches the result on the instance so repeated
+        per-pixel queries (e.g. dragging the person-reference overlay) don't
+        re-read EXIF or re-query the DEM for the drone position.
+
+        Built on top of :meth:`get_frame_geometry` (pose + intrinsics), then
+        augmented with the terrain reconciliation fields.
+
+        Returns:
+            dict or None: projection context, or None if any required data is
+            missing.
+        """
+        cache_key = ('proj_ctx', custom_altitude_ft)
+        cached = getattr(self, '_projection_context_cache', {}).get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            # Preserve the historical guard: this path requires the pixel array
+            # (per-pixel projection callers always have it loaded).
+            if self.img_array is None:
+                return None
+
+            fg = self.get_frame_geometry(custom_altitude_ft=custom_altitude_ft)
+            if fg is None:
+                return None
+
+            drone_lat = fg.lat
+            drone_lon = fg.lon
+            img_h, img_w = self.img_array.shape[:2]
+            reported_agl = fg.agl_m
+            absolute_alt = fg.asl_alt_m
+
+            # Lazy import to avoid pulling the terrain stack when unused.
+            try:
+                from core.services.terrain import TerrainService
+                terrain_service = TerrainService()
+            except Exception:
+                terrain_service = None
+
+            drone_terrain_elev_m = None
+            geoid_undulation_m = None
+            drone_absolute_elev_m = None
+
+            if terrain_service is not None and getattr(terrain_service, 'enabled', False):
+                geoid_undulation_m = terrain_service.get_geoid_undulation(drone_lat, drone_lon)
+                drone_terrain = terrain_service.get_elevation(drone_lat, drone_lon)
+                if drone_terrain.source == 'terrain' and drone_terrain.elevation_m is not None:
+                    drone_terrain_elev_m = drone_terrain.elevation_m
+                if absolute_alt is not None and geoid_undulation_m is not None:
+                    drone_absolute_elev_m = absolute_alt - geoid_undulation_m
+                elif drone_terrain_elev_m is not None:
+                    drone_absolute_elev_m = drone_terrain_elev_m + reported_agl
+
+            ctx = {
+                'drone_lat': drone_lat,
+                'drone_lon': drone_lon,
+                'img_w': img_w,
+                'img_h': img_h,
+                'cx': img_w / 2.0,
+                'cy': img_h / 2.0,
+                'focal_mm': fg.focal_mm,
+                'sensor_w_mm': fg.sensor_mm[0],
+                'sensor_h_mm': fg.sensor_mm[1],
+                'pitch': fg.pitch_deg,
+                'yaw': fg.yaw_deg,
+                'roll': fg.roll_deg,
+                'reported_agl': reported_agl,
+                'drone_terrain_elev_m': drone_terrain_elev_m,
+                'drone_absolute_elev_m': drone_absolute_elev_m,
+                'terrain_service': terrain_service,
+            }
+            if not hasattr(self, '_projection_context_cache'):
+                self._projection_context_cache = {}
+            self._projection_context_cache[cache_key] = ctx
+            return ctx
+        except Exception:
+            return None
+
+    def _effective_agl_at_pixel(self, col, row, gsd_service, custom_altitude_ft=None):
+        """Iteratively refine the effective AGL at a pixel using DEM data.
+
+        Mirrors the algorithm used by AOIService for AOI positioning. Returns
+        the effective AGL in meters when terrain data is available, otherwise
+        None (caller should fall back to the flat-ground GSD).
+        """
+        ctx = self._get_projection_context(custom_altitude_ft=custom_altitude_ft)
+        if ctx is None:
+            return None
+        terrain_service = ctx['terrain_service']
+        if terrain_service is None or not getattr(terrain_service, 'enabled', False):
+            return None
+
+        # Lazy import to dodge circular reference between AOIService/ImageService.
+        from core.services.image.AOIService import AOIService
+
+        reported_agl = ctx['reported_agl']
+        drone_terrain_elev = ctx['drone_terrain_elev_m']
+        drone_absolute_elev = ctx['drone_absolute_elev_m']
+
+        # Cache iteration result per (pixel, altitude) so repeated queries from
+        # a dragging overlay don't re-iterate the projection unnecessarily.
+        cache = getattr(self, '_effective_agl_cache', None)
+        if cache is None:
+            cache = {}
+            self._effective_agl_cache = cache
+        # Quantize the pixel to a small grid (every 8 pixels) so we hit the
+        # cache even when the user is dragging continuously without committing
+        # to a stale value for big jumps.
+        ck = (col >> 3, row >> 3, custom_altitude_ft)
+        if ck in cache:
+            return cache[ck]
+
+        # Initial ground projection using the reported AGL.
+        initial = AOIService._calculate_ground_position(
+            ctx['drone_lat'], ctx['drone_lon'], col, row,
+            ctx['cx'], ctx['cy'], ctx['img_w'], ctx['img_h'],
+            ctx['focal_mm'], ctx['sensor_w_mm'], ctx['sensor_h_mm'],
+            reported_agl, ctx['pitch'], ctx['yaw'], ctx['roll'],
+        )
+        if initial is None:
+            cache[ck] = None
+            return None
+
+        current_lat, current_lon = initial
+        effective_agl = reported_agl
+        for _ in range(AOIService.MAX_TERRAIN_ITERATIONS):
+            terrain_result = terrain_service.get_elevation(current_lat, current_lon)
+            if terrain_result.source != 'terrain' or terrain_result.elevation_m is None:
+                cache[ck] = None
+                return None
+
+            terrain_elev = terrain_result.elevation_m
+            if drone_absolute_elev is not None:
+                effective_agl = max(1.0, drone_absolute_elev - terrain_elev)
+            elif drone_terrain_elev is not None:
+                effective_agl = max(1.0, reported_agl + (drone_terrain_elev - terrain_elev))
+            else:
+                effective_agl = reported_agl
+
+            new_pos = AOIService._calculate_ground_position(
+                ctx['drone_lat'], ctx['drone_lon'], col, row,
+                ctx['cx'], ctx['cy'], ctx['img_w'], ctx['img_h'],
+                ctx['focal_mm'], ctx['sensor_w_mm'], ctx['sensor_h_mm'],
+                effective_agl, ctx['pitch'], ctx['yaw'], ctx['roll'],
+            )
+            if new_pos is None:
+                break
+
+            new_lat, new_lon = new_pos
+            dlat_m = (new_lat - current_lat) * 111320
+            dlon_m = (new_lon - current_lon) * 111320 * math.cos(math.radians(current_lat))
+            displacement = math.sqrt(dlat_m * dlat_m + dlon_m * dlon_m)
+            current_lat, current_lon = new_lat, new_lon
+            if displacement < AOIService.CONVERGENCE_THRESHOLD_M:
+                break
+
+        cache[ck] = effective_agl
+        return effective_agl
 
     def get_position(self, position_format='Lat/Long - Decimal Degrees'):
         """
@@ -391,7 +692,7 @@ class ImageService:
             return thermal_data
 
         except Exception as e:
-            print(f"Warning: Failed to read thermal data from {self.mask_path}: {e}")
+            LoggerService().warning(f"Failed to read thermal data from {self.mask_path}: {e}")
             return None
 
     def _is_autel(self):
@@ -546,3 +847,44 @@ class ImageService:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 2)
 
         return image_copy
+
+    @staticmethod
+    def save_rgb_as_jpeg(img_array, path, quality=95):
+        """Save an RGB numpy array as a JPEG file.
+
+        Args:
+            img_array: numpy array in RGB format (HxWx3).
+            path: Destination file path.
+            quality: JPEG quality (0-100).
+        """
+        bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(str(path), bgr, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+
+    @staticmethod
+    def rotate_image(img_array, angle_degrees, border_color=(128, 128, 128)):
+        """Rotate an image by a given angle without cropping.
+
+        Args:
+            img_array: numpy array of the image (HxWxC).
+            angle_degrees: Rotation angle in degrees (counter-clockwise positive).
+            border_color: RGB tuple for the fill color of new border areas.
+
+        Returns:
+            numpy array of the rotated image.
+        """
+        h, w = img_array.shape[:2]
+        center = (w // 2, h // 2)
+
+        M = cv2.getRotationMatrix2D(center, angle_degrees, 1.0)
+
+        cos = abs(M[0, 0])
+        sin = abs(M[0, 1])
+        new_w = int((h * sin) + (w * cos))
+        new_h = int((h * cos) + (w * sin))
+
+        M[0, 2] += (new_w / 2) - center[0]
+        M[1, 2] += (new_h / 2) - center[1]
+
+        return cv2.warpAffine(img_array, M, (new_w, new_h),
+                              borderMode=cv2.BORDER_CONSTANT,
+                              borderValue=border_color)

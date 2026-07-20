@@ -5,7 +5,6 @@ from .StreamImageCapturePage import StreamImageCapturePage
 from .StreamTargetSizePage import StreamTargetSizePage
 from .StreamAlgorithmPage import StreamAlgorithmPage
 from .StreamAlgorithmParametersPage import StreamAlgorithmParametersPage
-from .StreamGeneralPage import StreamGeneralPage
 
 __all__ = [
     "BasePage",
@@ -15,5 +14,4 @@ __all__ = [
     "StreamTargetSizePage",
     "StreamAlgorithmPage",
     "StreamAlgorithmParametersPage",
-    "StreamGeneralPage",
 ]

@@ -74,3 +74,28 @@ def test_should_include_images_default(app):
     dialog = MapExportDialog()
     dialog.caltopo_radio.setChecked(True)  # Enable the option
     assert dialog.should_include_images() is True
+
+
+def test_should_include_pod_default_off(app):
+    """POD is heavy compute, so it is opt-in (off by default)."""
+    dialog = MapExportDialog()
+    assert dialog.should_include_pod() is False
+
+
+def test_show_pod_on_map_gated_on_include(app):
+    """Show-on-map is enabled only when POD is enabled; default on."""
+    dialog = MapExportDialog()
+    assert dialog.show_pod_on_map.isEnabled() is False
+    assert dialog.should_show_pod_on_map() is False
+    dialog.include_pod.setChecked(True)
+    assert dialog.show_pod_on_map.isEnabled() is True
+    assert dialog.show_pod_on_map.isChecked() is True
+    assert dialog.should_show_pod_on_map() is True
+
+
+def test_show_pod_on_map_requires_include(app):
+    """show_pod_on_map returns False when POD itself is disabled."""
+    dialog = MapExportDialog()
+    dialog.show_pod_on_map.setChecked(True)
+    dialog.include_pod.setChecked(False)
+    assert dialog.should_show_pod_on_map() is False

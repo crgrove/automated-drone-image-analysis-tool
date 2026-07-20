@@ -8,10 +8,11 @@ and colors, allowing them to reuse existing caches instead of regenerating.
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton, QFileDialog, QMessageBox)
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 from pathlib import Path
 
 
-class CacheLocationDialog(QDialog):
+class CacheLocationDialog(TranslationMixin, QDialog):
     """
     Dialog for selecting an alternative cache location.
 
@@ -31,7 +32,7 @@ class CacheLocationDialog(QDialog):
         self.selected_path = None
         self.missing_caches = missing_caches or []
 
-        self.setWindowTitle("Cache Not Found")
+        self.setWindowTitle(self.tr("Cache Not Found"))
         self.setModal(True)
         self.setMinimumWidth(500)
 
@@ -43,7 +44,7 @@ class CacheLocationDialog(QDialog):
         layout.setSpacing(15)
 
         # Title label
-        title = QLabel("Cached Data Not Found")
+        title = QLabel(self.tr("Cached Data Not Found"))
         title_font = title.font()
         title_font.setPointSize(12)
         title_font.setBold(True)
@@ -52,7 +53,7 @@ class CacheLocationDialog(QDialog):
 
         # Missing caches info
         if self.missing_caches:
-            missing_text = "The following cached items were not found:\n"
+            missing_text = self.tr("The following cached items were not found:\n")
             for cache_type in self.missing_caches:
                 missing_text += f"  • {cache_type}\n"
             missing_label = QLabel(missing_text)
@@ -61,10 +62,12 @@ class CacheLocationDialog(QDialog):
 
         # Explanation
         explanation = QLabel(
-            "Without cached data, thumbnails and colors will be generated on-demand, "
-            "which may cause delays when viewing results.\n\n"
-            "If you have previously processed this dataset and have an ADIAT_Results "
-            "folder with cached data, you can locate it now to improve performance."
+            self.tr(
+                "Without cached data, thumbnails and colors will be generated on-demand, "
+                "which may cause delays when viewing results.\n\n"
+                "If you have previously processed this dataset and have an ADIAT_Results "
+                "folder with cached data, you can locate it now to improve performance."
+            )
         )
         explanation.setWordWrap(True)
         explanation.setStyleSheet("color: #cccccc;")
@@ -74,12 +77,12 @@ class CacheLocationDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
 
-        locate_btn = QPushButton("Locate Cache Folder...")
+        locate_btn = QPushButton(self.tr("Locate Cache Folder..."))
         locate_btn.clicked.connect(self._browse_for_cache)
         locate_btn.setMinimumWidth(150)
         button_layout.addWidget(locate_btn)
 
-        skip_btn = QPushButton("Skip (Generate On-Demand)")
+        skip_btn = QPushButton(self.tr("Skip (Generate On-Demand)"))
         skip_btn.clicked.connect(self.reject)
         skip_btn.setMinimumWidth(150)
         button_layout.addWidget(skip_btn)
@@ -110,12 +113,13 @@ class CacheLocationDialog(QDialog):
                 background-color: #2a2a2a;
             }
         """)
+        self._apply_translations()
 
     def _browse_for_cache(self):
         """Open a file dialog to browse for the ADIAT_Results folder."""
         folder = QFileDialog.getExistingDirectory(
             self,
-            "Select ADIAT_Results Folder",
+            self.tr("Select ADIAT_Results Folder"),
             "",
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
         )
@@ -129,11 +133,13 @@ class CacheLocationDialog(QDialog):
             if not has_thumbnails:
                 QMessageBox.warning(
                     self,
-                    "Invalid Cache Folder",
-                    "The selected folder does not contain thumbnail cache directory.\n\n"
-                    "Expected to find:\n"
-                    "  • .thumbnails/\n\n"
-                    "Please select a valid ADIAT_Results folder."
+                    self.tr("Invalid Cache Folder"),
+                    self.tr(
+                        "The selected folder does not contain thumbnail cache directory.\n\n"
+                        "Expected to find:\n"
+                        "  • .thumbnails/\n\n"
+                        "Please select a valid ADIAT_Results folder."
+                    )
                 )
                 return
 

@@ -121,8 +121,29 @@ class OverlayWidget(QWidget):
             else:
                 # Only show and position if we have at least one visible component
                 if not self.isVisible():
+                    # Layout may be stale after being hidden; recompute size
+                    # once on the transition, never on the per-tick path.
+                    self.adjustSize()
                     self.show()
                 self._place_overlay()
+
+    def _set_scale_bar_visible(self, visible):
+        """Toggle the scale bar, resizing the overlay only on a real flip.
+
+        The scale bar is the only variable-size element of the HUD layout
+        (compass label is fixed 50x50, ScaleBarWidget is setFixedSize), so a
+        genuine visibility flip is the only event that changes the overlay's
+        size. Keeping the resize here keeps it off the per-zoom-tick path
+        (see _place_overlay).
+        """
+        if not self.scale_bar:
+            return
+        # isHidden() reflects the explicit flag even while the overlay itself
+        # is auto-hidden; isVisible() would be False either way and miss flips.
+        if (not self.scale_bar.isHidden()) == visible:
+            return
+        self.scale_bar.setVisible(visible)
+        self.adjustSize()
 
     def update_visibility(self, show_overlay, direction=None, avg_gsd=None):
         """
@@ -241,7 +262,17 @@ class OverlayWidget(QWidget):
         self._check_autohide()
 
     def _place_overlay(self):
-        """Anchor HUD to bottom‑right corner *of the image*, not viewport."""
+        """Anchor HUD to bottom‑right corner *of the image*, not viewport.
+
+        This runs up to three times per zoom/pan tick (viewChanged,
+        zoomChanged, and the scale-bar autohide path), so it must only
+        move/raise the widget. It must NOT call adjustSize()/updateGeometry():
+        updateGeometry() posts a LayoutRequest to the viewport, which makes
+        QAbstractScrollArea re-layout, which can resize the view, which refits
+        and re-emits — a self-sustaining event-loop livelock that hard-freezes
+        the app during wheel zoom. Size recomputation happens only on real
+        content changes (see _set_scale_bar_visible / _check_autohide).
+        """
         # Check if main_image is still valid before accessing it
         if not hasattr(self.main_image, '_is_destroyed') or self.main_image._is_destroyed:
             return
@@ -250,8 +281,6 @@ class OverlayWidget(QWidget):
         if not self.main_image.hasImage() or self.main_image.sceneRect().isEmpty():
             return
 
-        self.adjustSize()  # Make sure widget/layout is up to date
-        self.updateGeometry()
         vp = self.main_image.viewport()
         margin = 12
 
@@ -295,14 +324,14 @@ class OverlayWidget(QWidget):
 
         try:
             if not self.main_image or not self.main_image.hasImage():
-                self.scale_bar.setVisible(False)
+                self._set_scale_bar_visible(False)
                 self._scale_bar_visible = False
                 self._check_autohide()
                 return
 
             gsd_text = messages.get("Estimated Average GSD")  # e.g. '3.2cm/px'
             if not gsd_text:
-                self.scale_bar.setVisible(False)
+                self._set_scale_bar_visible(False)
                 self._scale_bar_visible = False
                 self._check_autohide()
                 return
@@ -327,7 +356,7 @@ class OverlayWidget(QWidget):
 
             # -------- show --------
             self.scale_bar.setLabel(label)
-            self.scale_bar.setVisible(True)
+            self._set_scale_bar_visible(True)
             self._scale_bar_visible = True
             self._check_autohide()
 

@@ -234,61 +234,53 @@ def test_get_image_coverage_info_default_pitch(aoi_neighbor_service, sample_imag
 
 def test_gps_to_pixel_at_center(aoi_neighbor_service, mock_coverage_info):
     """Test GPS to pixel conversion at image center."""
-    with patch('core.services.image.AOINeighborService.GSDService') as MockGSD:
-        mock_gsd = MagicMock()
-        mock_gsd.compute_average_gsd.return_value = 5.0  # 5 cm per pixel
-        MockGSD.return_value = mock_gsd
+    # The center GPS should project to the center pixel
+    result = aoi_neighbor_service.gps_to_pixel(
+        mock_coverage_info['center_lat'],
+        mock_coverage_info['center_lon'],
+        mock_coverage_info
+    )
 
-        # Test point at the center of the image
-        result = aoi_neighbor_service.gps_to_pixel(
-            mock_coverage_info['center_lat'],
-            mock_coverage_info['center_lon'],
-            mock_coverage_info
-        )
-
-        assert result is not None
-        u, v = result
-        # Should be close to center
-        assert abs(u - mock_coverage_info['width'] / 2) < 1
-        assert abs(v - mock_coverage_info['height'] / 2) < 1
+    assert result is not None
+    u, v = result
+    # Should be close to center
+    assert abs(u - mock_coverage_info['width'] / 2) < 1
+    assert abs(v - mock_coverage_info['height'] / 2) < 1
 
 
 def test_gps_to_pixel_offset_point(aoi_neighbor_service, mock_coverage_info):
     """Test GPS to pixel conversion for offset point."""
-    with patch('core.services.image.AOINeighborService.GSDService') as MockGSD:
-        mock_gsd = MagicMock()
-        mock_gsd.compute_average_gsd.return_value = 5.0  # 5 cm per pixel
-        MockGSD.return_value = mock_gsd
+    # Offset target point slightly
+    target_lat = mock_coverage_info['center_lat'] + 0.0001
+    target_lon = mock_coverage_info['center_lon'] + 0.0001
 
-        # Offset target point slightly
-        target_lat = mock_coverage_info['center_lat'] + 0.0001
-        target_lon = mock_coverage_info['center_lon'] + 0.0001
+    result = aoi_neighbor_service.gps_to_pixel(
+        target_lat,
+        target_lon,
+        mock_coverage_info
+    )
 
-        result = aoi_neighbor_service.gps_to_pixel(
-            target_lat,
-            target_lon,
-            mock_coverage_info
-        )
-
-        assert result is not None
-        u, v = result
-        # Should be offset from center
-        assert u != mock_coverage_info['width'] / 2 or v != mock_coverage_info['height'] / 2
+    assert result is not None
+    u, v = result
+    # Should be offset from center
+    assert u != mock_coverage_info['width'] / 2 or v != mock_coverage_info['height'] / 2
 
 
-def test_gps_to_pixel_zero_gsd(aoi_neighbor_service, mock_coverage_info):
-    """Test GPS to pixel returns None when GSD is zero or invalid."""
-    with patch('core.services.image.AOINeighborService.GSDService') as MockGSD:
-        mock_gsd = MagicMock()
-        mock_gsd.compute_average_gsd.return_value = 0  # Invalid GSD
-        MockGSD.return_value = mock_gsd
+def test_gps_to_pixel_horizontal_camera_returns_none(aoi_neighbor_service, mock_coverage_info):
+    """Test GPS to pixel returns None when camera is horizontal and point is behind it."""
+    # Set camera to horizontal pitch pointing North
+    coverage = dict(mock_coverage_info)
+    coverage['pitch'] = 0  # horizontal
+    coverage['yaw'] = 0  # pointing North
 
-        result = aoi_neighbor_service.gps_to_pixel(
-            37.7749, -122.4194,
-            mock_coverage_info
-        )
+    # Target point directly below the drone — a horizontal camera can't see it
+    result = aoi_neighbor_service.gps_to_pixel(
+        coverage['center_lat'],
+        coverage['center_lon'],
+        coverage
+    )
 
-        assert result is None
+    assert result is None
 
 
 # ============================================================================

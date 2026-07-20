@@ -76,16 +76,20 @@ class TargetSizePage(BasePage):
 
         # Conversion factor: 1 sqft = 0.092903 sqm
         examples = [
-            (1, "Hat, Helmet, Plastic Bag"),
-            (3, "Cat, Daypack"),
-            (6, "Large Pack, Medium Dog"),
-            (12, "Sleeping Bag, Large Dog"),
-            (50, "Small Boat, 2-Person Tent"),
-            (200, "Car/SUV, Small Pickup Truck, Large Tent"),
-            (1000, "House")
+            (1, self.tr("Hat, Helmet, Plastic Bag")),
+            (3, self.tr("Cat, Daypack")),
+            (6, self.tr("Large Pack, Medium Dog")),
+            (12, self.tr("Sleeping Bag, Large Dog")),
+            (50, self.tr("Small Boat, 2-Person Tent")),
+            (200, self.tr("Car/SUV, Small Pickup Truck, Large Tent")),
+            (1000, self.tr("House"))
         ]
 
-        html_parts = ['<html><head/><body><p><span style=" font-weight:700;">More Examples:</span></p><ul>']
+        html_parts = [
+            '<html><head/><body><p><span style=" font-weight:700;">',
+            self.tr("More Examples:"),
+            '</span></p><ul>'
+        ]
 
         for value_sqft, description in examples:
             if unit == 'm':
@@ -96,10 +100,10 @@ class TargetSizePage(BasePage):
                     value_str = f"{value_sqm:.2f}"
                 else:
                     value_str = f"{value_sqm:.1f}"
-                unit_str = "sqm"
+                unit_str = self.tr("sqm")
             else:
                 value_str = str(value_sqft)
-                unit_str = "sqft"
+                unit_str = self.tr("sqft")
 
             html_parts.append(f'<li>&nbsp;&nbsp;{value_str} {unit_str} – {description} </li>')
 

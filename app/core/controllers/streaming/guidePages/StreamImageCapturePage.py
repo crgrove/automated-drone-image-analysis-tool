@@ -63,11 +63,11 @@ class StreamImageCapturePage(BasePage):
         """
         try:
             # Add default "Select Drone/Camera" option first
-            self.dialog.droneComboBox.addItem("Select Drone/Camera", None)
+            self.dialog.droneComboBox.addItem(self.tr("Select Drone/Camera"), None)
 
             drones_df = PickleHelper.get_drone_sensor_info()
             if drones_df is None or drones_df.empty:
-                self.dialog.droneComboBox.addItem("No drones available", None)
+                self.dialog.droneComboBox.addItem(self.tr("No drones available"), None)
                 return
 
             # Group cameras by manufacturer + model (unique cameras)
@@ -109,7 +109,7 @@ class StreamImageCapturePage(BasePage):
 
             # Add "Other" option
             self.dialog.droneComboBox.addItem("──────────", "__SECTION__")
-            self.dialog.droneComboBox.addItem("Other", None)
+            self.dialog.droneComboBox.addItem(self.tr("Other"), None)
 
             # Try to load saved drone selection
             saved_drone_key = self.settings_service.get_setting("StreamingDroneSelection", "")
@@ -145,7 +145,7 @@ class StreamImageCapturePage(BasePage):
 
         except Exception as e:
             self.logger.error(f"Error loading drone data: {e}")
-            self.dialog.droneComboBox.addItem("Error loading drone data", None)
+            self.dialog.droneComboBox.addItem(self.tr("Error loading drone data"), None)
 
     def _load_preferences(self):
         """Load existing preferences if available."""
@@ -219,7 +219,7 @@ class StreamImageCapturePage(BasePage):
                     drone_data = pd.Series(drone_data)
                 else:
                     self.logger.warning(f"Warning: drone_data is unexpected type: {type(drone_data)}")
-                    self.dialog.gsdTextEdit.setPlainText("-- (Invalid camera data)")
+                    self.dialog.gsdTextEdit.setPlainText(self.tr("-- (Invalid camera data)"))
                     return
 
             self.wizard_data['drone'] = drone_data
@@ -420,21 +420,21 @@ class StreamImageCapturePage(BasePage):
                 else:
                     # Missing sensor dimensions (focal length should always be available now with default)
                     sensor_name = self._get_sensor_name(drone_data, sensor_idx)
-                    gsd_results.append(f"{sensor_name}: Sensor dimensions not available")
+                    gsd_results.append(self.tr("{sensor_name}: Sensor dimensions not available").format(sensor_name=sensor_name))
 
             # Display results
             if gsd_results:
                 self.dialog.gsdTextEdit.setPlainText("\n".join(gsd_results))
                 self.wizard_data['gsd'] = None
             else:
-                error_msg = "-- (Missing camera data)\n\n"
-                error_msg += "Unable to calculate GSD. Sensor dimensions are required."
+                error_msg = self.tr("-- (Missing camera data)") + "\n\n"
+                error_msg += self.tr("Unable to calculate GSD. Sensor dimensions are required.")
                 self.dialog.gsdTextEdit.setPlainText(error_msg)
                 self.wizard_data['gsd'] = None
 
         except Exception as e:
             self.logger.error(f"Error calculating GSD: {e}")
-            self.dialog.gsdTextEdit.setPlainText("-- (Error)")
+            self.dialog.gsdTextEdit.setPlainText(self.tr("-- (Error)"))
 
     def _get_sensor_name(self, drone_data, sensor_idx):
         """Get a descriptive name for the sensor configuration."""
@@ -465,8 +465,8 @@ class StreamImageCapturePage(BasePage):
         # If no specific identifier, use sensor index
         if not sensor_parts:
             if len(self.wizard_data['drone_sensors']) > 1:
-                sensor_parts.append(f"Sensor {sensor_idx + 1}")
+                sensor_parts.append(self.tr("Sensor {n}").format(n=sensor_idx + 1))
             else:
-                sensor_parts.append("Primary")
+                sensor_parts.append(self.tr("Primary"))
 
-        return " / ".join(sensor_parts) if sensor_parts else "Sensor"
+        return " / ".join(sensor_parts) if sensor_parts else self.tr("Sensor")

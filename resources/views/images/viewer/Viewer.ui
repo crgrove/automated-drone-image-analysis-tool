@@ -294,9 +294,47 @@ Shows all AOIs from all images in a grid view</string>
                </widget>
               </item>
               <item>
+               <widget class="QToolButton" name="showRulerButton">
+                <property name="toolTip">
+                 <string>Toggle the measurement ruler drawn over the selected AOI</string>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="iconSize">
+                 <size>
+                  <width>25</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
                <widget class="Line" name="line_7">
                 <property name="orientation">
                  <enum>Qt::Vertical</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QToolButton" name="thermalHistogramButton">
+                <property name="toolTip">
+                 <string>Open Histogram</string>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="iconSize">
+                 <size>
+                  <width>25</width>
+                  <height>25</height>
+                 </size>
                 </property>
                </widget>
               </item>
@@ -380,6 +418,47 @@ Shows all AOIs from all images in a grid view</string>
                 </property>
                 <property name="iconName" stdset="0">
                  <string>ruler.png</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QToolButton" name="personOverlayButton">
+                <property name="toolTip">
+                 <string>Person Size Reference (Ctrl+P)</string>
+                </property>
+                <property name="text">
+                 <string>...</string>
+                </property>
+                <property name="iconSize">
+                 <size>
+                  <width>25</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="iconName" stdset="0">
+                 <string>person.png</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QToolButton" name="gridReviewButton">
+                <property name="toolTip">
+                 <string>Toggle Grid Review Mode (S) — sweep the image cell by cell; Shift+S for grid settings</string>
+                </property>
+                <property name="text">
+                 <string>...</string>
+                </property>
+                <property name="iconSize">
+                 <size>
+                  <width>25</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+                <property name="iconName" stdset="0">
+                 <string>grid.png</string>
                 </property>
                </widget>
               </item>
@@ -701,6 +780,48 @@ Example: Type &quot;25&quot; and press Enter to jump to image #25</string>
               </widget>
              </item>
              <item>
+              <widget class="QLabel" name="aoiJumpLabel">
+               <property name="font">
+                <font>
+                 <pointsize>10</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>Jump to a specific AOI by its run-wide number.
+Enter an AOI number and press Enter to select and scroll to it.</string>
+               </property>
+               <property name="text">
+                <string>Go to AOI #:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="aoiJumpLine">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>Enter an AOI number and press Enter.
+Selects that AOI and scrolls it into view in the gallery or single-image list.</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="previousImageButton">
                <property name="font">
                 <font>
@@ -857,19 +978,6 @@ Example: Type &quot;25&quot; and press Enter to jump to image #25</string>
                <number>5</number>
               </property>
               <item>
-               <spacer name="aoiHeaderLeftSpacer">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item>
                <widget class="QLabel" name="areaCountLabel">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
@@ -886,7 +994,7 @@ Example: Type &quot;25&quot; and press Enter to jump to image #25</string>
                  <string>TextLabel</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignCenter</set>
+                 <set>Qt::AlignLeft|Qt::AlignVCenter</set>
                 </property>
                </widget>
               </item>

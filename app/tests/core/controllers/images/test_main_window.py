@@ -18,7 +18,7 @@ from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgress
 # Try to import dependencies, skip tests if not available
 try:
     from core.controllers.images.VideoParser import VideoParser
-    from core.controllers.Perferences import Preferences
+    from core.controllers.Preferences import Preferences
     from core.services.export.PdfGeneratorService import PdfGeneratorService
     from core.services.export.KMLGeneratorService import KMLGeneratorService
     _DEPENDENCIES_AVAILABLE = True
@@ -153,6 +153,7 @@ def test_viewer_toolbar_buttons(main_window, testData, qtbot):
     expected_controls = {
         'galleryModeButton': 'Gallery Mode button',
         'showAOIsButton': 'Show AOIs button',
+        'showRulerButton': 'Show AOI Ruler button',
         'showPOIsButton': 'Show POIs button',
         'GPSMapButton': 'GPS Map button',
         'rotateImageButton': 'North View button',
@@ -431,3 +432,109 @@ def testVideoParser(testData, qtbot):
 
         if path.exists(testData['Video_Output']):
             assert len(os.listdir(testData['Video_Output'])) > 0
+
+
+def test_flight_viewer_menu_hidden_when_feature_disabled(main_window):
+    """Flight Viewer is deferred to a later release: the File-menu action
+    must be invisible while FeatureFlags.FLIGHT_VIEWER_ENABLED is False."""
+    assert hasattr(main_window, 'actionFlightViewer')
+    assert not main_window.actionFlightViewer.isVisible()
+
+
+# --- Search Coordinator: results button + reload routing --------------------
+
+_SEARCH_PROJECT_XML = (
+    '<?xml version="1.0"?><search_project>'
+    '<metadata><name>Batch Run</name></metadata>'
+    '<batches/><consolidated_aois/></search_project>'
+)
+_SINGLE_RESULT_XML = '<?xml version="1.0"?><data><settings/><images/></data>'
+
+
+def _write(tmp_path, name, contents):
+    """Write contents to tmp_path/name and return the string path."""
+    file_path = tmp_path / name
+    file_path.write_text(contents, encoding='utf-8')
+    return str(file_path)
+
+
+def test_is_search_project_xml_detection(main_window, tmp_path):
+    """Only a <search_project> root is recognized as a Coordinator project."""
+    project = _write(tmp_path, 'ADIAT_Search_Batch.xml', _SEARCH_PROJECT_XML)
+    single = _write(tmp_path, 'ADIAT_Data.xml', _SINGLE_RESULT_XML)
+    junk = _write(tmp_path, 'not_xml.xml', 'this is not xml <<<')
+
+    assert main_window._is_search_project_xml(project) is True
+    assert main_window._is_search_project_xml(single) is False
+    assert main_window._is_search_project_xml(junk) is False
+    assert main_window._is_search_project_xml(str(tmp_path / 'missing.xml')) is False
+
+
+def test_batch_done_switches_button_to_coordinator(main_window, tmp_path):
+    """A batch run that produced a project repurposes the results button."""
+    project = _write(tmp_path, 'ADIAT_Search_Batch.xml', _SEARCH_PROJECT_XML)
+
+    with patch.object(main_window, '_open_coordinator') as open_coord, \
+            patch('core.controllers.images.MainWindow.QMessageBox'):
+        main_window._on_batch_done(2, 0, project)
+
+        assert main_window._view_results_mode == 'coordinator'
+        assert main_window._search_project_path == project
+        assert main_window.viewResultsButton.isEnabled()
+        assert 'Search Coordinator' in main_window.viewResultsButton.text()
+
+        # Clicking the repurposed button opens the Coordinator on that project.
+        main_window._viewResultsButton_clicked()
+        open_coord.assert_called_once_with(project)
+
+
+def test_batch_done_without_project_keeps_results_mode(main_window):
+    """A batch run that created no project leaves the button as View Results."""
+    with patch.object(main_window, '_open_coordinator'), \
+            patch('core.controllers.images.MainWindow.QMessageBox'):
+        main_window._on_batch_done(0, 1, '')
+
+    assert main_window._view_results_mode == 'results'
+    assert main_window._search_project_path is None
+    assert not main_window.viewResultsButton.isEnabled()
+
+
+def test_load_search_project_routes_to_coordinator(main_window, tmp_path):
+    """Loading a Search Coordinator project XML opens the Coordinator."""
+    project = _write(tmp_path, 'ADIAT_Search_Batch.xml', _SEARCH_PROJECT_XML)
+
+    with patch.object(main_window, '_open_coordinator') as open_coord, \
+            patch.object(main_window, '_get_settings_from_xml') as get_settings:
+        main_window._process_xml_file(project)
+
+    open_coord.assert_called_once_with(project)
+    get_settings.assert_not_called()
+    # The wizard review handler relies on this to skip the single-run Viewer.
+    assert main_window._view_results_mode == 'coordinator'
+    assert main_window._search_project_path == project
+    assert main_window.viewResultsButton.isEnabled()
+
+
+def test_results_button_widens_for_coordinator_label(main_window):
+    """The results button grows to fit the longer coordinator label."""
+    main_window._set_view_results_mode('results')
+    results_width = main_window.viewResultsButton.minimumWidth()
+
+    main_window._set_view_results_mode('coordinator', 'project.xml')
+    coordinator_width = main_window.viewResultsButton.minimumWidth()
+
+    assert results_width >= 150
+    assert coordinator_width > results_width
+
+
+def test_load_single_result_not_routed_to_coordinator(main_window, tmp_path):
+    """A single-run ADIAT_Data.xml is not sent to the Coordinator."""
+    single = _write(tmp_path, 'ADIAT_Data.xml', _SINGLE_RESULT_XML)
+
+    with patch.object(main_window, '_open_coordinator') as open_coord, \
+            patch.object(main_window, '_get_settings_from_xml', return_value=3):
+        main_window._process_xml_file(single)
+
+    open_coord.assert_not_called()
+    assert main_window._view_results_mode == 'results'
+    assert main_window.viewResultsButton.isEnabled()

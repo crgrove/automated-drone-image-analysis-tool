@@ -52,7 +52,7 @@ class DirectoriesPage(BasePage):
         current_dir = self.dialog.inputDirectoryLineEdit.text() or self.settings_service.get_setting('InputFolder', '')
         directory = QFileDialog.getExistingDirectory(
             self.dialog,
-            "Select Input Directory",
+            self.tr("Select Input Directory"),
             current_dir,
             QFileDialog.ShowDirsOnly
         )
@@ -69,7 +69,7 @@ class DirectoriesPage(BasePage):
         current_dir = self.dialog.outputDirectoryLineEdit.text() or self.settings_service.get_setting('OutputFolder', '')
         directory = QFileDialog.getExistingDirectory(
             self.dialog,
-            "Select Output Directory",
+            self.tr("Select Output Directory"),
             current_dir,
             QFileDialog.ShowDirsOnly
         )

@@ -56,8 +56,7 @@ class DeviceScanWorker(QObject):
                 try:
                     cap = cv2.VideoCapture(index, backend_id)
                     if cap is not None and cap.isOpened():
-                        # Use generic device name - Windows device enumeration order
-                        # doesn't match OpenCV device indices reliably
+                        # Use generic device name - platform-agnostic approach
                         label = f"Device {index} ({backend_name})"
                         found_devices[index] = (label, backend_id, backend_name)
                         consecutive_failures = 0
@@ -89,7 +88,10 @@ class StreamConnectionPage(BasePage):
         # Initialize HDMI device combo with placeholder
         if hasattr(self.dialog, "deviceComboBox"):
             self.dialog.deviceComboBox.clear()
-            self.dialog.deviceComboBox.addItem("Click Scan to find devices...", None)
+            self.dialog.deviceComboBox.addItem(
+                self.tr("Click Scan to find devices..."),
+                None
+            )
             self.dialog.deviceComboBox.setEnabled(False)
             self.dialog.labelHdmiDevices.setVisible(False)
             self.dialog.deviceComboBox.setVisible(False)
@@ -103,10 +105,10 @@ class StreamConnectionPage(BasePage):
 
             # Presets: (label, percentage_value)
             resolution_presets = [
-                ("480p", 25),
-                ("720p", 50),
-                ("1080p", 75),
-                ("4K", 100)
+                (self.tr("480p"), 25),
+                (self.tr("720p"), 50),
+                (self.tr("1080p"), 75),
+                (self.tr("4K"), 100)
             ]
 
             self.resolution_slider = TextLabeledSlider(
@@ -139,13 +141,19 @@ class StreamConnectionPage(BasePage):
 
         self._apply_stream_type_settings()
 
-        # Load resolution preference
-        default_resolution_str = self.settings_service.get_setting("StreamingProcessingResolution", "75%")
+        # Load resolution preference. File sources are high-res recordings meant for deep
+        # analysis -> default to max detail (4K, capped to native on first frame) so the
+        # tiling+letterbox pass isn't fed a pre-downscaled frame. Live sources (RTMP/HDMI)
+        # keep a framerate-friendly 1080p default. An explicit saved preference still wins.
+        stream_type = self.wizard_data.get("stream_type", "File")
+        fallback_resolution = 100 if stream_type == "File" else 75
+        default_resolution_str = self.settings_service.get_setting(
+            "StreamingProcessingResolution", f"{fallback_resolution}%")
         # Convert "75%" to 75
         try:
             default_resolution = int(default_resolution_str.rstrip('%'))
         except (ValueError, AttributeError):
-            default_resolution = 75
+            default_resolution = fallback_resolution
 
         # Get current resolution from wizard_data (as integer) or use default
         current_resolution = self.wizard_data.get("processing_resolution")
@@ -254,23 +262,29 @@ class StreamConnectionPage(BasePage):
     def _get_stream_type_settings(self, stream_type: str) -> dict:
         mapping = {
             "File": {
-                "instructions": "Choose the video file you want to analyze. Use Browse to pick a file from disk.",
-                "field_label": "Video File:",
-                "placeholder": "Click Browse to select a video file...",
+                "instructions": self.tr(
+                    "Choose the video file you want to analyze. Use Browse to pick a file from disk."
+                ),
+                "field_label": self.tr("Video File:"),
+                "placeholder": self.tr("Click Browse to select a video file..."),
                 "show_browse": True,
                 "default_value": "",
             },
             "HDMI Capture": {
-                "instructions": "Click Scan to detect available capture devices, then select one from the dropdown.",
-                "field_label": "Device:",
-                "placeholder": "",
+                "instructions": self.tr(
+                    "Click Scan to detect available capture devices, then select one from the dropdown."
+                ),
+                "field_label": self.tr("Device:"),
+                "placeholder": self.tr(""),
                 "show_browse": False,
                 "default_value": "",
             },
             "RTMP Stream": {
-                "instructions": "Enter the RTMP URL provided by your streaming server (rtmp://server:port/app/key).",
-                "field_label": "Stream URL:",
-                "placeholder": "rtmp://server:port/app/streamKey",
+                "instructions": self.tr(
+                    "Enter the RTMP URL provided by your streaming server (rtmp://server:port/app/key)."
+                ),
+                "field_label": self.tr("Stream URL:"),
+                "placeholder": self.tr("rtmp://server:port/app/streamKey"),
                 "show_browse": False,
                 "default_value": "",
             },
@@ -281,16 +295,16 @@ class StreamConnectionPage(BasePage):
         """Scan for available HDMI capture devices using OpenCV with multiple backends."""
         if cv2 is None:
             self.dialog.deviceComboBox.clear()
-            self.dialog.deviceComboBox.addItem("OpenCV not available", None)
+            self.dialog.deviceComboBox.addItem(self.tr("OpenCV not available"), None)
             self.dialog.deviceComboBox.setEnabled(False)
             return
 
         # Show scanning state
         self.dialog.deviceComboBox.clear()
-        self.dialog.deviceComboBox.addItem("Scanning...", None)
+        self.dialog.deviceComboBox.addItem(self.tr("Scanning..."), None)
         self.dialog.deviceComboBox.setEnabled(False)
         self.dialog.scanDevicesButton.setEnabled(False)
-        self.dialog.scanDevicesButton.setText("Scanning...")
+        self.dialog.scanDevicesButton.setText(self.tr("Scanning..."))
         QApplication.processEvents()  # Update UI immediately
 
         self._device_backends = {}
@@ -314,19 +328,22 @@ class StreamConnectionPage(BasePage):
         """Handle scan completion - update UI with results."""
         # Restore button state
         self.dialog.scanDevicesButton.setEnabled(True)
-        self.dialog.scanDevicesButton.setText("Scan")
+        self.dialog.scanDevicesButton.setText(self.tr("Scan"))
 
         self._device_backends = device_backends
         self.dialog.deviceComboBox.clear()
 
         if not found_devices:
-            self.dialog.deviceComboBox.addItem("No capture devices found", None)
+            self.dialog.deviceComboBox.addItem(self.tr("No capture devices found"), None)
             self.dialog.deviceComboBox.setEnabled(False)
         else:
             # Add found devices to combo box, sorted by index
             for dev_index in sorted(found_devices.keys()):
                 label, backend_id, backend_name = found_devices[dev_index]
-                self.dialog.deviceComboBox.addItem(label, dev_index)
+                # Translate the label
+                translated_label = self.tr("Device {index} ({backend})").format(
+                    index=dev_index, backend=backend_name)
+                self.dialog.deviceComboBox.addItem(translated_label, dev_index)
 
             self.dialog.deviceComboBox.setEnabled(True)
             self.dialog.deviceComboBox.setCurrentIndex(0)
@@ -363,9 +380,11 @@ class StreamConnectionPage(BasePage):
         current = self.dialog.streamUrlLineEdit.text().strip() or os.getcwd()
         file_path, _ = QFileDialog.getOpenFileName(
             self.dialog,
-            "Select Video File",
+            self.tr("Select Video File"),
             current,
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm);;All Files (*)",
+            self.tr(
+                "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv *.m4v *.3gp *.webm);;All Files (*)"
+            ),
         )
         if file_path:
             self.dialog.streamUrlLineEdit.setText(file_path)

@@ -6,11 +6,12 @@ Shows a comprehensive help dialog with all viewer functionality.
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QScrollArea
 from PySide6.QtCore import Qt, QBuffer, QByteArray, QIODevice
+from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont, QPixmap
 import base64
 
 
-class HelpDialog(QDialog):
+class HelpDialog(TranslationMixin, QDialog):
     """Dialog displaying viewer help information."""
 
     def __init__(self, parent=None):
@@ -21,7 +22,7 @@ class HelpDialog(QDialog):
             parent: Parent widget (main viewer)
         """
         super().__init__(parent)
-        self.setWindowTitle("Viewer Help")
+        self.setWindowTitle(self.tr("Viewer Help"))
         self.setModal(False)
 
         # Don't use WindowStaysOnTopHint as it blocks modal dialogs
@@ -32,6 +33,7 @@ class HelpDialog(QDialog):
         self.parent_viewer = parent
 
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """
@@ -55,7 +57,7 @@ class HelpDialog(QDialog):
         layout.addWidget(text_edit)
 
         # Add close button
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(self.tr("Close"))
         close_btn.clicked.connect(self.close)
         layout.addWidget(close_btn)
 
@@ -110,6 +112,7 @@ class HelpDialog(QDialog):
             'rotate': 'rotateImageButton',
             'adjustments': 'adjustmentsButton',
             'measure': 'measureButton',
+            'person_overlay': 'personOverlayButton',
             'magnify': 'magnifyButton',
             'kml': 'kmlButton',
             'pdf': 'pdfButton',
@@ -218,6 +221,11 @@ class HelpDialog(QDialog):
                         <td>Open GPS map view</td>
                     </tr>
                     <tr>
+                        <td>A</td>
+                        <td>Open the Align Image dialog to manually refine the image's
+                            FOV and GPS accuracy against satellite imagery</td>
+                    </tr>
+                    <tr>
                         <td>C</td>
                         <td>Enter AOI creation mode</td>
                     </tr>
@@ -234,6 +242,21 @@ class HelpDialog(QDialog):
                         <td>Track selected AOI across neighboring images (shows where AOI appears in flight path)</td>
                     </tr>
                     <tr>
+                        <td>Shift + Z</td>
+                        <td>Find visually similar AOIs (ranks all other AOIs by color/size similarity to the selected AOI)</td>
+                        <td>S</td>
+                        <td>Toggle Grid Review Mode — sweep the image cell by cell at a fixed zoom.
+                            While active: Space marks the cell reviewed and advances (rolling into the
+                            next image), arrow keys move without marking, X toggles the current cell,
+                            Backspace steps back, Esc exits. Reviewed cells are saved with the results.
+                            (The grid does not appear in the north-oriented R view.)</td>
+                    </tr>
+                    <tr>
+                        <td>Shift + S</td>
+                        <td>Open Grid Review settings (grid size, auto-mark, 3×3 focus guide,
+                            GSD-based suggestion, and "apply this grid size to all images")</td>
+                    </tr>
+                    <tr>
                         <td>Shift + O</td>
                         <td>Override altitude for all images (manually set custom
                             AGL altitude for GSD calculations)</td>
@@ -245,6 +268,10 @@ class HelpDialog(QDialog):
                     <tr>
                         <td>Ctrl + M</td>
                         <td>Open measure tool</td>
+                    </tr>
+                    <tr>
+                        <td>Ctrl + P</td>
+                        <td>Open person size reference tool (requires GSD)</td>
                     </tr>
                     <tr>
                         <td>Scroll Wheel</td>
@@ -289,6 +316,12 @@ class HelpDialog(QDialog):
                     <tr>
                         <td>{icon_html('measure')} Measure</td>
                         <td>Open the measurement tool for distance/area measurements.</td>
+                    </tr>
+                    <tr>
+                        <td>{icon_html('person_overlay')} Person Size Reference</td>
+                        <td>Drop a draggable, to-scale person silhouette on the image
+                            (standing/sitting/recumbent at adult/child/infant sizes).
+                            Requires GSD; disabled when GSD is unavailable.</td>
                     </tr>
                 </table>
 
@@ -464,6 +497,12 @@ class HelpDialog(QDialog):
                     <li>Press <b>R</b> to view images oriented to true north based on drone heading</li>
                     <li>Press <b>Z</b> to track a selected AOI across neighboring images
                         - useful for verifying if a detection appears in multiple overlapping shots</li>
+                    <li>Press <b>Shift+Z</b> (or right-click an AOI thumbnail and choose
+                        <b>Find Similar AOIs</b>) to rank all other AOIs by visual similarity
+                        - useful for finding other detections of the same object or material</li>
+                    <li>In the similar-AOI results, <b>check thumbnails</b> to select them, then
+                        use <b>Flag</b>, <b>Unflag</b>, or <b>Comment</b> to update all checked
+                        AOIs at once</li>
                 </ul>
             </div>
 

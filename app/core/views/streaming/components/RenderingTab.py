@@ -8,12 +8,19 @@ across all streaming detection algorithms.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout,
                                QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QGroupBox)
 from PySide6.QtCore import Qt
+from core.services.streaming.contracts import StreamAlgorithmCapabilities
+from helpers.TranslationMixin import TranslationMixin
 
 
-class RenderingTab(QWidget):
+class RenderingTab(TranslationMixin, QWidget):
     """Shared Rendering tab widget for streaming algorithms."""
 
-    def __init__(self, parent=None, show_detection_color_option: bool = True):
+    def __init__(
+        self,
+        parent=None,
+        show_detection_color_option: bool = True,
+        capabilities: StreamAlgorithmCapabilities | None = None,
+    ):
         """
         Initialize the Rendering tab.
 
@@ -24,188 +31,254 @@ class RenderingTab(QWidget):
         """
         super().__init__(parent)
         self.show_detection_color_option = show_detection_color_option
+        self.capabilities = capabilities or StreamAlgorithmCapabilities()
         self.setup_ui()
+        self.apply_capabilities(self.capabilities)
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""
         layout = QVBoxLayout(self)
 
         # Shape Options
-        shape_group = QGroupBox("Shape Options")
-        shape_layout = QGridLayout(shape_group)
+        self.shape_group = QGroupBox(self.tr("Shape Options"))
+        shape_layout = QGridLayout(self.shape_group)
 
-        shape_layout.addWidget(QLabel("Shape Mode:"), 0, 0)
+        shape_layout.addWidget(QLabel(self.tr("Shape Mode:")), 0, 0)
         self.render_shape = QComboBox()
-        self.render_shape.addItems(["Box", "Circle", "Dot", "Off"])
-        self.render_shape.setCurrentText("Circle")
-        self.render_shape.setToolTip("Shape to draw around detections:\n\n"
-                                     "• Box: Rectangle around detection bounding box.\n"
-                                     "  Use for: Precise boundaries, technical visualization.\n\n"
-                                     "• Circle: Circle encompassing detection (150% of contour radius).\n"
-                                     "  Use for: General use, cleaner look (default).\n\n"
-                                     "• Dot: Small dot at detection centroid.\n"
-                                     "  Use for: Minimal overlay, fast rendering.\n\n"
-                                     "• Off: No shape overlay (only thumbnails/text if enabled).\n"
-                                     "  Use for: Clean video with minimal overlays.")
+        self.render_shape.addItem(self.tr("Box"), 0)
+        self.render_shape.addItem(self.tr("Circle"), 1)
+        self.render_shape.addItem(self.tr("Dot"), 2)
+        self.render_shape.addItem(self.tr("Off"), 3)
+        self.render_shape.setCurrentIndex(1)
+        self.render_shape.setToolTip(self.tr(
+            "Shape to draw around detections:\n\n"
+            "• Box: Rectangle around detection bounding box.\n"
+            "  Use for: Precise boundaries, technical visualization.\n\n"
+            "• Circle: Circle encompassing detection (150% of contour radius).\n"
+            "  Use for: General use, cleaner look (default).\n\n"
+            "• Dot: Small dot at detection centroid.\n"
+            "  Use for: Minimal overlay, fast rendering.\n\n"
+            "• Off: No shape overlay (only thumbnails/text if enabled).\n"
+            "  Use for: Clean video with minimal overlays."
+        ))
         shape_layout.addWidget(self.render_shape, 0, 1)
 
-        layout.addWidget(shape_group)
+        layout.addWidget(self.shape_group)
 
         # Text & Contours
-        vis_group = QGroupBox("Visual Options")
-        vis_layout = QVBoxLayout(vis_group)
+        self.vis_group = QGroupBox(self.tr("Visual Options"))
+        vis_layout = QVBoxLayout(self.vis_group)
 
-        self.render_text = QCheckBox("Show Text Labels (slower)")
-        self.render_text.setToolTip("Displays text labels near detections showing detection information.\n"
-                                    "Adds ~5-15ms processing overhead depending on detection count.\n"
-                                    "Labels show: detection type, confidence, area.\n"
-                                    "Recommended: OFF for speed, ON for debugging/analysis.")
+        self.render_text = QCheckBox(self.tr("Show Text Labels (slower)"))
+        self.render_text.setToolTip(self.tr(
+            "Displays text labels near detections showing detection information.\n"
+            "Adds ~5-15ms processing overhead depending on detection count.\n"
+            "Labels show: detection type, confidence, area.\n"
+            "Recommended: OFF for speed, ON for debugging/analysis."
+        ))
         vis_layout.addWidget(self.render_text)
 
-        self.render_contours = QCheckBox("Show Contours (slowest)")
-        self.render_contours.setToolTip("Draws exact detection contours (pixel-precise boundaries).\n"
-                                        "Adds ~10-20ms processing overhead (very expensive).\n"
-                                        "Shows exact shape detected by algorithm.\n"
-                                        "Recommended: OFF for speed, ON only for detailed analysis.")
+        self.render_contours = QCheckBox(self.tr("Show Contours (slowest)"))
+        self.render_contours.setToolTip(self.tr(
+            "Draws exact detection contours (pixel-precise boundaries).\n"
+            "Adds ~10-20ms processing overhead (very expensive).\n"
+            "Shows exact shape detected by algorithm.\n"
+            "Recommended: OFF for speed, ON only for detailed analysis."
+        ))
         vis_layout.addWidget(self.render_contours)
 
         if self.show_detection_color_option:
-            self.use_detection_color = QCheckBox("Use Detection Color (hue @ 100% sat/val for color anomalies)")
+            self.use_detection_color = QCheckBox(self.tr("Use Detection Color (hue @ 100% sat/val for color anomalies)"))
             self.use_detection_color.setChecked(True)  # Default ON
-            self.use_detection_color.setToolTip("Color the detection overlay based on detected color.\n"
-                                                "For color anomalies: Uses the detected hue at 100% saturation/value.\n"
-                                                "For motion detections: Uses default color (green/blue).\n"
-                                                "Helps visually identify what color was detected.\n"
-                                                "Recommended: ON for color detection, OFF for motion-only.")
+            self.use_detection_color.setToolTip(self.tr(
+                "Color the detection overlay based on detected color.\n"
+                "For color anomalies: Uses the detected hue at 100% saturation/value.\n"
+                "For motion detections: Uses default color (green/blue).\n"
+                "Helps visually identify what color was detected.\n"
+                "Recommended: ON for color detection, OFF for motion-only."
+            ))
             vis_layout.addWidget(self.use_detection_color)
 
-        layout.addWidget(vis_group)
+        layout.addWidget(self.vis_group)
 
         # Detection Limits
-        limit_group = QGroupBox("Performance Limits")
-        limit_layout = QGridLayout(limit_group)
+        self.limit_group = QGroupBox(self.tr("Performance Limits"))
+        limit_layout = QGridLayout(self.limit_group)
 
-        limit_layout.addWidget(QLabel("Max Detections:"), 0, 0)
+        limit_layout.addWidget(QLabel(self.tr("Max Detections:")), 0, 0)
         self.max_detections_to_render = QSpinBox()
         self.max_detections_to_render.setRange(0, 1000)
         self.max_detections_to_render.setValue(100)
         self.max_detections_to_render.setSpecialValueText("Unlimited")
-        self.max_detections_to_render.setToolTip("Maximum number of detections to render on screen (0-1000).\n"
-                                                 "Prevents rendering slowdown when hundreds of detections occur.\n"
-                                                 "Shows highest confidence detections first.\n"
-                                                 "0 = Unlimited (may cause lag with many detections).\n"
-                                                 "Recommended: 10 for general use, 50 for complex rendering (text+contours).")
+        self.max_detections_to_render.setToolTip(self.tr(
+            "Maximum number of detections to render on screen (0-1000).\n"
+            "Prevents rendering slowdown when hundreds of detections occur.\n"
+            "Shows highest confidence detections first.\n"
+            "0 = Unlimited (may cause lag with many detections).\n"
+            "Recommended: 10 for general use, 50 for complex rendering (text+contours)."
+        ))
         limit_layout.addWidget(self.max_detections_to_render, 0, 1)
 
-        layout.addWidget(limit_group)
+        layout.addWidget(self.limit_group)
 
         # Temporal Voting
-        temporal_group = QGroupBox("Temporal Voting")
-        temporal_layout = QVBoxLayout(temporal_group)
+        self.temporal_group = QGroupBox(self.tr("Temporal Voting"))
+        temporal_layout = QVBoxLayout(self.temporal_group)
 
-        self.enable_temporal_voting = QCheckBox("Enable Temporal Voting (reduce flicker)")
+        self.enable_temporal_voting = QCheckBox(self.tr("Enable Temporal Voting (reduce flicker)"))
         self.enable_temporal_voting.setChecked(True)
-        self.enable_temporal_voting.setToolTip("Smooths detections across frames using temporal consistency.\n"
-                                               "Detections must appear in N out of M consecutive frames to be confirmed.\n"
-                                               "Significantly reduces flickering false positives.\n"
-                                               "Recommended: ON for all use cases (default).")
+        self.enable_temporal_voting.setToolTip(self.tr(
+            "Smooths detections across frames using temporal consistency.\n"
+            "Detections must appear in N out of M consecutive frames to be confirmed.\n"
+            "Significantly reduces flickering false positives.\n"
+            "Recommended: ON for all use cases (default)."
+        ))
         temporal_layout.addWidget(self.enable_temporal_voting)
 
         window_layout = QGridLayout()
         window_layout.setColumnMinimumWidth(0, 160)
         window_layout.setColumnStretch(1, 1)
-        window_layout.addWidget(QLabel("Window Frames (M):"), 0, 0)
+        window_layout.addWidget(QLabel(self.tr("Window Frames (M):")), 0, 0)
         self.temporal_window_frames = QSpinBox()
         self.temporal_window_frames.setRange(2, 30)
         self.temporal_window_frames.setValue(5)  # Default 5
-        self.temporal_window_frames.setToolTip("Size of temporal voting window (2-30 frames).\n"
-                                               "Detections must appear in N out of M consecutive frames.\n"
-                                               "Larger values = longer memory, more stable, slower response to new objects.\n"
-                                               "Smaller values = shorter memory, faster response, less stable.\n"
-                                               "Recommended: 5 for 30fps (~167ms window), 7 for 60fps.")
+        self.temporal_window_frames.setToolTip(self.tr(
+            "Size of temporal voting window (2-30 frames).\n"
+            "Detections must appear in N out of M consecutive frames.\n"
+            "Larger values = longer memory, more stable, slower response to new objects.\n"
+            "Smaller values = shorter memory, faster response, less stable.\n"
+            "Recommended: 5 for 30fps (~167ms window), 7 for 60fps."
+        ))
         window_layout.addWidget(self.temporal_window_frames, 0, 1)
 
-        window_layout.addWidget(QLabel("Threshold (N of M):"), 1, 0)
+        window_layout.addWidget(QLabel(self.tr("Threshold (N of M):")), 1, 0)
         self.temporal_threshold_frames = QSpinBox()
         self.temporal_threshold_frames.setRange(1, 30)
         self.temporal_threshold_frames.setValue(3)  # Default 3
-        self.temporal_threshold_frames.setToolTip("Number of frames within window where detection must appear (N of M).\n"
-                                                  "Higher values = more stringent, filters transient false positives.\n"
-                                                  "Lower values = more lenient, faster response to new objects.\n"
-                                                  "Must be ≤ Window Frames.\n"
-                                                  "Recommended: 3 out of 5 (detection in 60% of frames).")
+        self.temporal_threshold_frames.setToolTip(self.tr(
+            "Number of frames within window where detection must appear (N of M).\n"
+            "Higher values = more stringent, filters transient false positives.\n"
+            "Lower values = more lenient, faster response to new objects.\n"
+            "Must be ≤ Window Frames.\n"
+            "Recommended: 3 out of 5 (detection in 60% of frames)."
+        ))
         window_layout.addWidget(self.temporal_threshold_frames, 1, 1)
 
         temporal_layout.addLayout(window_layout)
 
-        layout.addWidget(temporal_group)
+        layout.addWidget(self.temporal_group)
 
         # Detection Cleanup (aspect ratio + clustering)
-        cleanup_group = QGroupBox("Detection Cleanup")
-        cleanup_layout = QVBoxLayout(cleanup_group)
+        self.cleanup_group = QGroupBox(self.tr("Detection Cleanup"))
+        cleanup_layout = QVBoxLayout(self.cleanup_group)
 
         # Aspect Ratio Filter
-        self.enable_aspect_ratio_filter = QCheckBox("Enable Aspect Ratio Filtering")
+        self.enable_aspect_ratio_filter = QCheckBox(self.tr("Enable Aspect Ratio Filtering"))
         self.enable_aspect_ratio_filter.setChecked(False)  # Default OFF
-        self.enable_aspect_ratio_filter.setToolTip("Filter out very thin or stretched detections based on width/height.\n"
-                                                   "Useful for removing wires, long shadows, or other non-object shapes.\n"
-                                                   "Most users can leave this OFF unless you see many long skinny false detections.")
+        self.enable_aspect_ratio_filter.setToolTip(self.tr(
+            "Filter out very thin or stretched detections based on width/height.\n"
+            "Useful for removing wires, long shadows, or other non-object shapes.\n"
+            "Most users can leave this OFF unless you see many long skinny false detections."
+        ))
         cleanup_layout.addWidget(self.enable_aspect_ratio_filter)
 
         ratio_layout = QGridLayout()
         ratio_layout.setColumnMinimumWidth(0, 160)
         ratio_layout.setColumnStretch(1, 1)
-        ratio_layout.addWidget(QLabel("Min Ratio:"), 0, 0)
+        ratio_layout.addWidget(QLabel(self.tr("Min Ratio:")), 0, 0)
         self.min_aspect_ratio = QDoubleSpinBox()
         self.min_aspect_ratio.setRange(0.1, 10.0)
         self.min_aspect_ratio.setValue(0.2)
         self.min_aspect_ratio.setSingleStep(0.1)
-        self.min_aspect_ratio.setToolTip("Minimum width/height ratio to keep (0.1-10.0).\n"
-                                         "Lower values = allow taller, thinner detections.\n"
-                                         "Higher values = require detections to be more square.\n"
-                                         "Example: 0.2 ≈ reject if height is more than 5× width.")
+        self.min_aspect_ratio.setToolTip(self.tr(
+            "Minimum width/height ratio to keep (0.1-10.0).\n"
+            "Lower values = allow taller, thinner detections.\n"
+            "Higher values = require detections to be more square.\n"
+            "Example: 0.2 ≈ reject if height is more than 5× width."
+        ))
         ratio_layout.addWidget(self.min_aspect_ratio, 0, 1)
 
-        ratio_layout.addWidget(QLabel("Max Ratio:"), 1, 0)
+        ratio_layout.addWidget(QLabel(self.tr("Max Ratio:")), 1, 0)
         self.max_aspect_ratio = QDoubleSpinBox()
         self.max_aspect_ratio.setRange(0.1, 20.0)
         self.max_aspect_ratio.setValue(5.0)
         self.max_aspect_ratio.setSingleStep(0.1)
-        self.max_aspect_ratio.setToolTip("Maximum width/height ratio to keep (0.1-20.0).\n"
-                                         "Lower values = reject very wide, thin detections.\n"
-                                         "Higher values = allow wider objects such as vehicles or long equipment.")
+        self.max_aspect_ratio.setToolTip(self.tr(
+            "Maximum width/height ratio to keep (0.1-20.0).\n"
+            "Lower values = reject very wide, thin detections.\n"
+            "Higher values = allow wider objects such as vehicles or long equipment."
+        ))
         ratio_layout.addWidget(self.max_aspect_ratio, 1, 1)
 
         cleanup_layout.addLayout(ratio_layout)
 
         # Detection Clustering
-        clustering_group = QGroupBox("Detection Clustering")
-        clustering_layout = QVBoxLayout(clustering_group)
+        self.clustering_group = QGroupBox(self.tr("Detection Clustering"))
+        clustering_layout = QVBoxLayout(self.clustering_group)
 
-        self.enable_detection_clustering = QCheckBox("Enable Detection Clustering")
+        self.enable_detection_clustering = QCheckBox(self.tr("Enable Detection Clustering"))
         self.enable_detection_clustering.setChecked(False)  # Default OFF
-        self.enable_detection_clustering.setToolTip("Optionally merge nearby detections into a single, larger detection.\n"
-                                                    "Useful when one object appears as many small adjacent detections.\n"
-                                                    "Most users can leave this OFF unless objects look fragmented.")
+        self.enable_detection_clustering.setToolTip(self.tr(
+            "Optionally merge nearby detections into a single, larger detection.\n"
+            "Useful when one object appears as many small adjacent detections.\n"
+            "Most users can leave this OFF unless objects look fragmented."
+        ))
         clustering_layout.addWidget(self.enable_detection_clustering)
 
         cluster_dist_layout = QGridLayout()
         cluster_dist_layout.setColumnMinimumWidth(0, 160)
         cluster_dist_layout.setColumnStretch(1, 1)
-        cluster_dist_layout.addWidget(QLabel("Clustering Distance (px):"), 0, 0)
+        cluster_dist_layout.addWidget(QLabel(self.tr("Clustering Distance (px):")), 0, 0)
         self.clustering_distance = QSpinBox()
         self.clustering_distance.setRange(0, 500)
         self.clustering_distance.setValue(50)  # Default 50px
-        self.clustering_distance.setToolTip("Maximum distance between detection centers to merge them (0-500 pixels).\n"
-                                            "Lower values = only merge very close detections.\n"
-                                            "Higher values = merge detections that are farther apart (may over-merge).")
+        self.clustering_distance.setToolTip(self.tr(
+            "Maximum distance between detection centers to merge them (0-500 pixels).\n"
+            "Lower values = only merge very close detections.\n"
+            "Higher values = merge detections that are farther apart (may over-merge)."
+        ))
         cluster_dist_layout.addWidget(self.clustering_distance, 0, 1)
 
         clustering_layout.addLayout(cluster_dist_layout)
-        cleanup_layout.addWidget(clustering_group)
+        cleanup_layout.addWidget(self.clustering_group)
 
-        layout.addWidget(cleanup_group)
+        layout.addWidget(self.cleanup_group)
         layout.addStretch()
+
+    def apply_capabilities(self, capabilities: StreamAlgorithmCapabilities):
+        """Apply shared-control capability gating."""
+        self.capabilities = capabilities
+
+        supports_contours = bool(capabilities.supports_render_contours)
+        self.render_contours.setVisible(supports_contours)
+        if not supports_contours:
+            self.render_contours.setChecked(False)
+
+        supports_detection_color = bool(capabilities.supports_use_detection_color)
+        if hasattr(self, "use_detection_color"):
+            self.use_detection_color.setVisible(supports_detection_color and self.show_detection_color_option)
+            if not supports_detection_color:
+                self.use_detection_color.setChecked(False)
+
+        supports_temporal = bool(capabilities.supports_temporal_voting)
+        self.temporal_group.setVisible(supports_temporal)
+        if not supports_temporal:
+            self.enable_temporal_voting.setChecked(False)
+
+        supports_aspect_ratio = bool(capabilities.supports_aspect_ratio_filter)
+        self.enable_aspect_ratio_filter.setVisible(supports_aspect_ratio)
+        self.min_aspect_ratio.setVisible(supports_aspect_ratio)
+        self.max_aspect_ratio.setVisible(supports_aspect_ratio)
+        if not supports_aspect_ratio:
+            self.enable_aspect_ratio_filter.setChecked(False)
+
+        supports_clustering = bool(capabilities.supports_detection_clustering)
+        self.clustering_group.setVisible(supports_clustering)
+        if not supports_clustering:
+            self.enable_detection_clustering.setChecked(False)
+
+        self.cleanup_group.setVisible(supports_aspect_ratio or supports_clustering)
 
     def get_config(self) -> dict:
         """
@@ -214,16 +287,12 @@ class RenderingTab(QWidget):
         Returns:
             Dictionary with rendering configuration values
         """
-        # Map shape text to integer (0=Box, 1=Circle, 2=Dot, 3=Off)
-        shape_map = {
-            "Box": 0,
-            "Circle": 1,
-            "Dot": 2,
-            "Off": 3
-        }
+        shape_data = self.render_shape.currentData()
+        if shape_data is None:
+            shape_data = 1
 
         config = {
-            'render_shape': shape_map.get(self.render_shape.currentText(), 1),
+            'render_shape': shape_data,
             'render_text': self.render_text.isChecked(),
             'render_contours': self.render_contours.isChecked(),
             'max_detections_to_render': self.max_detections_to_render.value(),
@@ -252,17 +321,11 @@ class RenderingTab(QWidget):
         Args:
             config: Dictionary with rendering configuration values
         """
-        # Map integer to shape text (0=Box, 1=Circle, 2=Dot, 3=Off)
-        shape_map = {
-            0: "Box",
-            1: "Circle",
-            2: "Dot",
-            3: "Off"
-        }
-
         if 'render_shape' in config:
-            shape_text = shape_map.get(config['render_shape'], "Circle")
-            self.render_shape.setCurrentText(shape_text)
+            shape_index = self.render_shape.findData(config['render_shape'])
+            if shape_index < 0:
+                shape_index = self.render_shape.findData(1)
+            self.render_shape.setCurrentIndex(shape_index)
 
         if 'render_text' in config:
             self.render_text.setChecked(bool(config['render_text']))

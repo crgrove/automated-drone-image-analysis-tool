@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
                                QCheckBox, QGraphicsEllipseItem, QGraphicsItem,
                                QGraphicsTextItem, QMessageBox)
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 @dataclass
@@ -635,7 +636,7 @@ class FastImageViewer(QGraphicsView):
         return self.image_hsv[self.selection_mask]
 
 
-class HSVColorRangeAssistant(QDialog):
+class HSVColorRangeAssistant(TranslationMixin, QDialog):
     """Main dialog for HSV Color Range Assistant tool.
 
     Interactive tool for selecting HSV color ranges by clicking on
@@ -657,7 +658,7 @@ class HSVColorRangeAssistant(QDialog):
         """
         super().__init__(parent)
 
-        self.setWindowTitle("HSV Color Range Assistant - Click Selection")
+        self.setWindowTitle(self.tr("HSV Color Range Assistant - Click Selection"))
         self.setModal(True)
         self.resize(1200, 800)
 
@@ -670,6 +671,7 @@ class HSVColorRangeAssistant(QDialog):
         }
 
         self.setup_ui()
+        self._apply_translations()
 
     def setup_ui(self):
         """Set up the user interface.
@@ -688,7 +690,7 @@ class HSVColorRangeAssistant(QDialog):
 
         # Image viewer
         self.viewer = FastImageViewer()
-        self.viewer.setToolTip(
+        self.viewer.setToolTip(self.tr(
             "Interactive image viewer with color selection.\n\n"
             "NAVIGATION:\n"
             "• Mouse wheel: Zoom in/out\n"
@@ -704,7 +706,7 @@ class HSVColorRangeAssistant(QDialog):
             "• White overlay = selected pixels\n"
             "• Yellow text = HSV values at cursor position\n"
             "• Circular cursor appears when holding CTRL"
-        )
+        ))
         self.viewer.selectionChanged.connect(self.on_selection_changed)
         splitter.addWidget(self.viewer)
 
@@ -736,42 +738,42 @@ class HSVColorRangeAssistant(QDialog):
         layout = QHBoxLayout(toolbar)
 
         # Browse button
-        browse_btn = QPushButton("Browse...")
-        browse_btn.setToolTip(
+        browse_btn = QPushButton(self.tr("Browse..."))
+        browse_btn.setToolTip(self.tr(
             "Browse for an image file to load.\n"
             "Opens a file dialog to select an image from your computer.\n"
             "• Supported formats: PNG, JPG, JPEG, BMP\n"
             "• Load an image to start selecting colors\n"
             "The image will be displayed in the main viewer on the left."
-        )
+        ))
         browse_btn.clicked.connect(self.browse_image)
         layout.addWidget(browse_btn)
 
         # Reset button
-        reset_btn = QPushButton("Reset")
-        reset_btn.setToolTip(
+        reset_btn = QPushButton(self.tr("Reset"))
+        reset_btn.setToolTip(self.tr(
             "Reset all selections and start over.\n"
             "• Clears all selected pixels (white overlay)\n"
             "• Resets HSV ranges to defaults\n"
             "• Clears the mask preview\n"
             "• Undoable with CTRL+Z\n"
             "Use this to start fresh without reloading the image."
-        )
+        ))
         reset_btn.clicked.connect(self.reset_selection)
         layout.addWidget(reset_btn)
 
         # Selection radius
-        radius_label = QLabel("Selection Radius:")
-        radius_label.setToolTip(
+        radius_label = QLabel(self.tr("Selection Radius:"))
+        radius_label.setToolTip(self.tr(
             "Size of the circular selection cursor.\n"
             "Determines how many pixels are sampled when you CTRL+Click."
-        )
+        ))
         layout.addWidget(radius_label)
         self.radius_spin = QSpinBox()
         self.radius_spin.setRange(1, 50)
         self.radius_spin.setValue(1)  # Default 1 px
         self.radius_spin.setSuffix(" px")
-        self.radius_spin.setToolTip(
+        self.radius_spin.setToolTip(self.tr(
             "Set the selection cursor radius in pixels.\n"
             "• Range: 1-50 pixels\n"
             "• Default: 1 pixel (single pixel selection)\n"
@@ -783,21 +785,21 @@ class HSVColorRangeAssistant(QDialog):
             "• More precise selection\n"
             "• Better for solid colors\n"
             "Keyboard shortcuts: [ decrease, ] increase by 2 pixels"
-        )
+        ))
         self.radius_spin.valueChanged.connect(self.on_radius_changed)
         layout.addWidget(self.radius_spin)
 
         # Color tolerance
-        tolerance_label = QLabel("Color Tolerance:")
-        tolerance_label.setToolTip(
+        tolerance_label = QLabel(self.tr("Color Tolerance:"))
+        tolerance_label.setToolTip(self.tr(
             "HSV color matching tolerance.\n"
             "Controls how similar colors must be to get selected."
-        )
+        ))
         layout.addWidget(tolerance_label)
         self.tolerance_spin = QSpinBox()
         self.tolerance_spin.setRange(0, 50)
         self.tolerance_spin.setValue(2)  # Default 2
-        self.tolerance_spin.setToolTip(
+        self.tolerance_spin.setToolTip(self.tr(
             "Set color tolerance for similar pixel detection.\n"
             "• Range: 0-50\n"
             "• Default: 2\n"
@@ -812,22 +814,22 @@ class HSVColorRangeAssistant(QDialog):
             "Lower tolerance:\n"
             "• More precise color matching\n"
             "• May miss some pixels of target color"
-        )
+        ))
         self.tolerance_spin.valueChanged.connect(self.on_tolerance_changed)
         layout.addWidget(self.tolerance_spin)
 
         layout.addStretch()
 
         # Help text
-        help_text = QLabel(
+        help_text = QLabel(self.tr(
             "CTRL+Click: Select similar colors | CTRL+SHIFT+Click: Remove | [ ] : Radius"
-        )
-        help_text.setStyleSheet("color: #666;")
+        ))
+        help_text.setStyleSheet("color: palette(placeholder-text);")
         layout.addWidget(help_text)
 
         # Help button (right side)
-        help_btn = QPushButton("Help")
-        help_btn.setToolTip(
+        help_btn = QPushButton(self.tr("Help"))
+        help_btn.setToolTip(self.tr(
             "Show detailed help and instructions.\n"
             "Opens a dialog with:\n"
             "• Step-by-step usage instructions\n"
@@ -835,7 +837,7 @@ class HSVColorRangeAssistant(QDialog):
             "• Color selection techniques\n"
             "• Keyboard shortcuts reference\n"
             "Click here if you're unsure how to use this tool."
-        )
+        ))
         help_btn.clicked.connect(self.show_help)
         layout.addWidget(help_btn)
 
@@ -854,300 +856,300 @@ class HSVColorRangeAssistant(QDialog):
         layout = QVBoxLayout(panel)
 
         # Color info
-        color_group = QGroupBox("Selected Color")
-        color_group.setToolTip(
+        color_group = QGroupBox(self.tr("Selected Color"))
+        color_group.setToolTip(self.tr(
             "Average color of all selected pixels.\n"
             "Shows the center/mean color that will be used for HSV range detection."
-        )
+        ))
         color_layout = QGridLayout(color_group)
 
-        color_label = QLabel("Color:")
-        color_label.setToolTip(
+        color_label = QLabel(self.tr("Color:"))
+        color_label.setToolTip(self.tr(
             "Visual preview of the average selected color.\n"
             "This is the center color calculated from all selected pixels."
-        )
+        ))
         color_layout.addWidget(color_label, 0, 0)
         self.color_preview = QLabel()
         self.color_preview.setFixedSize(60, 60)
         self.color_preview.setStyleSheet("border: 1px solid black;")
-        self.color_preview.setToolTip(
+        self.color_preview.setToolTip(self.tr(
             "Color swatch showing the average of all selected pixels.\n"
             "This becomes the center color for HSV range detection."
-        )
+        ))
         color_layout.addWidget(self.color_preview, 0, 1)
 
-        hex_info_label = QLabel("HEX:")
-        hex_info_label.setToolTip(
+        hex_info_label = QLabel(self.tr("HEX:"))
+        hex_info_label.setToolTip(self.tr(
             "Hexadecimal representation of the selected color.\n"
             "Format: #RRGGBB"
-        )
+        ))
         color_layout.addWidget(hex_info_label, 1, 0)
         self.hex_label = QLabel("#000000")
-        self.hex_label.setToolTip(
+        self.hex_label.setToolTip(self.tr(
             "Hex color code of the average selected color.\n"
             "Can be used to identify the exact RGB color value."
-        )
+        ))
         color_layout.addWidget(self.hex_label, 1, 1)
 
-        hsv_info_label = QLabel("HSV:")
-        hsv_info_label.setToolTip(
+        hsv_info_label = QLabel(self.tr("HSV:"))
+        hsv_info_label.setToolTip(self.tr(
             "HSV values of the selected color.\n"
             "H = Hue (0-360°), S = Saturation (0-100%), V = Value (0-100%)"
-        )
+        ))
         color_layout.addWidget(hsv_info_label, 2, 0)
         self.hsv_label = QLabel("H:0 S:0 V:0")
-        self.hsv_label.setToolTip(
+        self.hsv_label.setToolTip(self.tr(
             "HSV color values of the average selected color.\n"
             "This is the center point of your color range."
-        )
+        ))
         color_layout.addWidget(self.hsv_label, 2, 1)
 
         layout.addWidget(color_group)
 
         # Ranges with separate minus/plus controls
-        range_group = QGroupBox("HSV Ranges")
-        range_group.setToolTip(
+        range_group = QGroupBox(self.tr("HSV Ranges"))
+        range_group.setToolTip(self.tr(
             "HSV color range configuration.\n"
             "Defines the detection range for each HSV channel.\n"
             "Center values are calculated from selected pixels.\n"
             "Buffer values add extra tolerance to catch color variations."
-        )
+        ))
         range_layout = QGridLayout(range_group)
 
         # Headers
-        channel_header = QLabel("Channel")
-        channel_header.setToolTip("HSV color channel (Hue, Saturation, Value)")
+        channel_header = QLabel(self.tr("Channel"))
+        channel_header.setToolTip(self.tr("HSV color channel (Hue, Saturation, Value)"))
         range_layout.addWidget(channel_header, 0, 0)
 
-        center_header = QLabel("Center")
-        center_header.setToolTip("Average value of selected pixels for this channel")
+        center_header = QLabel(self.tr("Center"))
+        center_header.setToolTip(self.tr("Average value of selected pixels for this channel"))
         range_layout.addWidget(center_header, 0, 1)
 
-        minus_header = QLabel("- Buffer")
-        minus_header.setToolTip("Extra tolerance below center value (lower bound buffer)")
+        minus_header = QLabel(self.tr("- Buffer"))
+        minus_header.setToolTip(self.tr("Extra tolerance below center value (lower bound buffer)"))
         range_layout.addWidget(minus_header, 0, 2)
 
-        plus_header = QLabel("+ Buffer")
-        plus_header.setToolTip("Extra tolerance above center value (upper bound buffer)")
+        plus_header = QLabel(self.tr("+ Buffer"))
+        plus_header.setToolTip(self.tr("Extra tolerance above center value (upper bound buffer)"))
         range_layout.addWidget(plus_header, 0, 3)
 
-        final_header = QLabel("Final Range")
-        final_header.setToolTip("Complete detection range (min-max) after applying buffers")
+        final_header = QLabel(self.tr("Final Range"))
+        final_header.setToolTip(self.tr("Complete detection range (min-max) after applying buffers"))
         range_layout.addWidget(final_header, 0, 4)
 
         # H range
-        hue_label = QLabel("Hue:")
-        hue_label.setToolTip("Hue channel (color type): 0-360 degrees on color wheel")
+        hue_label = QLabel(self.tr("Hue:"))
+        hue_label.setToolTip(self.tr("Hue channel (color type): 0-360 degrees on color wheel"))
         range_layout.addWidget(hue_label, 1, 0)
 
         self.h_center_label = QLabel("0°")
-        self.h_center_label.setToolTip(
+        self.h_center_label.setToolTip(self.tr(
             "Center hue value (average of selected pixels).\n"
             "Automatically calculated from your selection.\n"
             "Range: 0-360° (red=0°, green=120°, blue=240°)"
-        )
+        ))
         range_layout.addWidget(self.h_center_label, 1, 1)
 
         self.h_minus_buffer = QSpinBox()
         self.h_minus_buffer.setRange(0, 360)
         self.h_minus_buffer.setSuffix("°")
-        self.h_minus_buffer.setToolTip(
+        self.h_minus_buffer.setToolTip(self.tr(
             "Hue lower bound buffer (subtract from center).\n"
             "• Range: 0-360°\n"
             "• Adds tolerance below the center hue\n"
             "• Larger values detect more hues in the minus direction\n"
             "• Keep narrow to avoid detecting unwanted colors\n"
             "WARNING: Total hue range (minus + plus) > 60° may cause false positives"
-        )
+        ))
         self.h_minus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.h_minus_buffer, 1, 2)
 
         self.h_plus_buffer = QSpinBox()
         self.h_plus_buffer.setRange(0, 360)
         self.h_plus_buffer.setSuffix("°")
-        self.h_plus_buffer.setToolTip(
+        self.h_plus_buffer.setToolTip(self.tr(
             "Hue upper bound buffer (add to center).\n"
             "• Range: 0-360°\n"
             "• Adds tolerance above the center hue\n"
             "• Larger values detect more hues in the plus direction\n"
             "• Keep narrow to avoid detecting unwanted colors\n"
             "WARNING: Total hue range (minus + plus) > 60° may cause false positives"
-        )
+        ))
         self.h_plus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.h_plus_buffer, 1, 3)
 
         self.h_range_label = QLabel("0-0")
-        self.h_range_label.setToolTip(
+        self.h_range_label.setToolTip(self.tr(
             "Final hue detection range.\n"
             "Shows the complete min-max hue range that will be detected.\n"
             "Calculated as: (center - minus buffer) to (center + plus buffer)"
-        )
+        ))
         range_layout.addWidget(self.h_range_label, 1, 4)
 
         # Hue warning label
-        self.h_warning_label = QLabel("WARNING: Too wide of a Hue range can result in false positives!")
+        self.h_warning_label = QLabel(self.tr("WARNING: Too wide of a Hue range can result in false positives!"))
         self.h_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
         self.h_warning_label.setVisible(False)
-        self.h_warning_label.setToolTip(
+        self.h_warning_label.setToolTip(self.tr(
             "Hue range warning.\n"
             "Your total hue range exceeds 60°.\n"
             "Wide hue ranges may detect many different colors.\n"
             "Consider narrowing the buffers for more accurate detection."
-        )
+        ))
         range_layout.addWidget(self.h_warning_label, 2, 0, 1, 5)  # Span across columns
 
         # S range
-        sat_label = QLabel("Sat:")
-        sat_label.setToolTip("Saturation channel (color intensity): 0-100%")
+        sat_label = QLabel(self.tr("Sat:"))
+        sat_label.setToolTip(self.tr("Saturation channel (color intensity): 0-100%"))
         range_layout.addWidget(sat_label, 3, 0)
 
         self.s_center_label = QLabel("0%")
-        self.s_center_label.setToolTip(
+        self.s_center_label.setToolTip(self.tr(
             "Center saturation value (average of selected pixels).\n"
             "Automatically calculated from your selection.\n"
             "Range: 0-100% (0%=gray, 100%=vivid color)"
-        )
+        ))
         range_layout.addWidget(self.s_center_label, 3, 1)
 
         self.s_minus_buffer = QSpinBox()
         self.s_minus_buffer.setRange(0, 100)
         self.s_minus_buffer.setSuffix("%")
-        self.s_minus_buffer.setToolTip(
+        self.s_minus_buffer.setToolTip(self.tr(
             "Saturation lower bound buffer (subtract from center).\n"
             "• Range: 0-100%\n"
             "• Adds tolerance below the center saturation\n"
             "• Larger values detect more desaturated/grayish colors\n"
             "• Be careful: very low saturation includes gray colors\n"
             "WARNING: Lower bound < 25% may include unwanted gray/desaturated colors"
-        )
+        ))
         self.s_minus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.s_minus_buffer, 3, 2)
 
         self.s_plus_buffer = QSpinBox()
         self.s_plus_buffer.setRange(0, 100)
         self.s_plus_buffer.setSuffix("%")
-        self.s_plus_buffer.setToolTip(
+        self.s_plus_buffer.setToolTip(self.tr(
             "Saturation upper bound buffer (add to center).\n"
             "• Range: 0-100%\n"
             "• Adds tolerance above the center saturation\n"
             "• Larger values detect more saturated/vivid colors\n"
             "• Higher saturation generally safe to increase"
-        )
+        ))
         self.s_plus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.s_plus_buffer, 3, 3)
 
         self.s_range_label = QLabel("0-0")
-        self.s_range_label.setToolTip(
+        self.s_range_label.setToolTip(self.tr(
             "Final saturation detection range.\n"
             "Shows the complete min-max saturation range that will be detected.\n"
             "Calculated as: (center - minus buffer) to (center + plus buffer)"
-        )
+        ))
         range_layout.addWidget(self.s_range_label, 3, 4)
 
         # Saturation warning label
-        self.s_warning_label = QLabel("WARNING: Too low of a Saturation level can result in false positives!")
+        self.s_warning_label = QLabel(self.tr("WARNING: Too low of a Saturation level can result in false positives!"))
         self.s_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
         self.s_warning_label.setVisible(False)
-        self.s_warning_label.setToolTip(
+        self.s_warning_label.setToolTip(self.tr(
             "Saturation range warning.\n"
             "Your lower saturation bound is below 25%.\n"
             "Low saturation includes grayish/washed out colors.\n"
             "May detect unwanted gray or desaturated objects."
-        )
+        ))
         range_layout.addWidget(self.s_warning_label, 4, 0, 1, 5)
 
         # V range
-        val_label = QLabel("Val:")
-        val_label.setToolTip("Value channel (brightness): 0-100%")
+        val_label = QLabel(self.tr("Val:"))
+        val_label.setToolTip(self.tr("Value channel (brightness): 0-100%"))
         range_layout.addWidget(val_label, 5, 0)
 
         self.v_center_label = QLabel("0%")
-        self.v_center_label.setToolTip(
+        self.v_center_label.setToolTip(self.tr(
             "Center value/brightness (average of selected pixels).\n"
             "Automatically calculated from your selection.\n"
             "Range: 0-100% (0%=black, 100%=bright)"
-        )
+        ))
         range_layout.addWidget(self.v_center_label, 5, 1)
 
         self.v_minus_buffer = QSpinBox()
         self.v_minus_buffer.setRange(0, 100)
         self.v_minus_buffer.setSuffix("%")
-        self.v_minus_buffer.setToolTip(
+        self.v_minus_buffer.setToolTip(self.tr(
             "Value lower bound buffer (subtract from center).\n"
             "• Range: 0-100%\n"
             "• Adds tolerance below the center brightness\n"
             "• Larger values detect darker versions of the color\n"
             "• Be careful: very low value includes very dark/black colors\n"
             "WARNING: Lower bound < 25% may include unwanted shadows or dark objects"
-        )
+        ))
         self.v_minus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.v_minus_buffer, 5, 2)
 
         self.v_plus_buffer = QSpinBox()
         self.v_plus_buffer.setRange(0, 100)
         self.v_plus_buffer.setSuffix("%")
-        self.v_plus_buffer.setToolTip(
+        self.v_plus_buffer.setToolTip(self.tr(
             "Value upper bound buffer (add to center).\n"
             "• Range: 0-100%\n"
             "• Adds tolerance above the center brightness\n"
             "• Larger values detect brighter versions of the color\n"
             "• Higher brightness generally safe to increase"
-        )
+        ))
         self.v_plus_buffer.valueChanged.connect(self.update_ranges)
         range_layout.addWidget(self.v_plus_buffer, 5, 3)
 
         self.v_range_label = QLabel("0-0")
-        self.v_range_label.setToolTip(
+        self.v_range_label.setToolTip(self.tr(
             "Final value/brightness detection range.\n"
             "Shows the complete min-max brightness range that will be detected.\n"
             "Calculated as: (center - minus buffer) to (center + plus buffer)"
-        )
+        ))
         range_layout.addWidget(self.v_range_label, 5, 4)
 
         # Value warning label
-        self.v_warning_label = QLabel("WARNING: Too low of a Value level can result in false positives!")
+        self.v_warning_label = QLabel(self.tr("WARNING: Too low of a Value level can result in false positives!"))
         self.v_warning_label.setStyleSheet("color: yellow; font-size: 10px;")
         self.v_warning_label.setVisible(False)
-        self.v_warning_label.setToolTip(
+        self.v_warning_label.setToolTip(self.tr(
             "Value range warning.\n"
             "Your lower value bound is below 25%.\n"
             "Low value includes very dark colors.\n"
             "May detect unwanted shadows or dark objects."
-        )
+        ))
         range_layout.addWidget(self.v_warning_label, 6, 0, 1, 5)
 
         layout.addWidget(range_group)
 
         # Stats
-        stats_group = QGroupBox("Statistics")
-        stats_group.setToolTip(
+        stats_group = QGroupBox(self.tr("Statistics"))
+        stats_group.setToolTip(self.tr(
             "Statistics about your current selection.\n"
             "Shows how many pixels are selected and what percentage of the image they represent."
-        )
+        ))
         stats_layout = QVBoxLayout(stats_group)
-        self.pixel_count_label = QLabel("Selected Pixels: 0")
-        self.pixel_count_label.setToolTip(
+        self.pixel_count_label = QLabel(self.tr("Selected Pixels: 0"))
+        self.pixel_count_label.setToolTip(self.tr(
             "Number of pixels currently selected.\n"
             "Shows the total count of white-highlighted pixels in the main viewer.\n"
             "Updates in real-time as you select colors."
-        )
+        ))
         stats_layout.addWidget(self.pixel_count_label)
-        self.selected_percent_label = QLabel("Coverage: 0%")
-        self.selected_percent_label.setToolTip(
+        self.selected_percent_label = QLabel(self.tr("Coverage: 0%"))
+        self.selected_percent_label.setToolTip(self.tr(
             "Percentage of image covered by selection.\n"
             "Shows what portion of the total image is selected.\n"
             "• Low %: Precise selection, may miss some target pixels\n"
             "• High %: Broad selection, may include unwanted areas"
-        )
+        ))
         stats_layout.addWidget(self.selected_percent_label)
         layout.addWidget(stats_group)
 
         # Preview
-        preview_group = QGroupBox("Mask Preview")
-        preview_group.setToolTip(
+        preview_group = QGroupBox(self.tr("Mask Preview"))
+        preview_group.setToolTip(self.tr(
             "Black and white preview of the detection mask.\n"
             "Shows what pixels will be detected with current HSV ranges and buffers."
-        )
+        ))
         preview_layout = QVBoxLayout(preview_group)
         self.preview_label = QLabel()
         self.preview_label.setMinimumHeight(200)
@@ -1155,13 +1157,13 @@ class HSVColorRangeAssistant(QDialog):
         self.preview_label.setStyleSheet("border: 1px solid black; background: black;")
         self.preview_label.setScaledContents(False)  # We handle scaling manually
         self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setToolTip(
+        self.preview_label.setToolTip(self.tr(
             "Grayscale mask preview.\n"
             "• White pixels: Will be detected with current settings\n"
             "• Black pixels: Will NOT be detected\n"
             "Updates automatically when you adjust buffers.\n"
             "Use this to verify your HSV range captures the target without false positives."
-        )
+        ))
         preview_layout.addWidget(self.preview_label)
         layout.addWidget(preview_group)
 
@@ -1174,8 +1176,8 @@ class HSVColorRangeAssistant(QDialog):
         Opens a file dialog to select an image and loads it into the viewer.
         """
         filepath, _ = QFileDialog.getOpenFileName(
-            self, "Select Image", "",
-            "Images (*.png *.jpg *.jpeg *.bmp)"
+            self, self.tr("Select Image"), "",
+            self.tr("Images (*.png *.jpg *.jpeg *.bmp)")
         )
         if filepath:
             self.viewer.load_image(filepath)
@@ -1220,8 +1222,8 @@ class HSVColorRangeAssistant(QDialog):
         pixels = self.viewer.get_selected_pixels_hsv()
 
         if pixels is None or len(pixels) == 0:
-            self.pixel_count_label.setText("Selected Pixels: 0")
-            self.selected_percent_label.setText("Coverage: 0%")
+            self.pixel_count_label.setText(self.tr("Selected Pixels: 0"))
+            self.selected_percent_label.setText(self.tr("Coverage: 0%"))
             # Clear the mask preview when no pixels are selected
             self.preview_label.clear()
             # Reset all color and HSV range displays to defaults
@@ -1232,8 +1234,8 @@ class HSVColorRangeAssistant(QDialog):
         pixel_count = len(pixels)
         total_pixels = self.viewer.image.shape[0] * self.viewer.image.shape[1]
         percentage = (pixel_count / total_pixels) * 100
-        self.pixel_count_label.setText(f"Selected Pixels: {pixel_count:,}")
-        self.selected_percent_label.setText(f"Coverage: {percentage:.1f}%")
+        self.pixel_count_label.setText(self.tr("Selected Pixels: {0:,}").format(pixel_count))
+        self.selected_percent_label.setText(self.tr("Coverage: {0:.1f}%").format(percentage))
 
         # Calculate average
         h_mean = float(np.mean(pixels[:, 0]))
@@ -1471,7 +1473,7 @@ class HSVColorRangeAssistant(QDialog):
         HSV Color Range Assistant tool, including navigation, selection,
         and range adjustment instructions.
         """
-        help_text = """
+        help_text = self.tr("""
 <h2>HSV Color Range Assistant - Help</h2>
 
 <p>This tool helps you pick the HSV color range of a specific color in a photo.
@@ -1496,10 +1498,10 @@ Click on the BROWSE button to open an image.</p>
         <p>On the right side the Mask Preview section will show you what pixels in the image were selected.
         If you see pixels outside of your target object that you are selecting that means you may need to
         adjust the Color Tolerance or be more careful with your selections.</p>
-"""
+""")
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("HSV Color Range Assistant - Help")
+        msg.setWindowTitle(self.tr("HSV Color Range Assistant - Help"))
         msg.setTextFormat(Qt.RichText)
         msg.setText(help_text)
         msg.setIcon(QMessageBox.Information)

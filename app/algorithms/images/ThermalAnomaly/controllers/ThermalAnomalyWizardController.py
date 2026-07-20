@@ -42,12 +42,19 @@ class ThermalAnomalyWizardController(QWidget, Ui_ThermalAnomalyWizard, Algorithm
         # Labeled preset slider (Very Conservative .. Very Aggressive)
         # Allow labels to be overridden from config; default to desired set
         default_labels = [
-            "Very \nConservative", "Conservative", "Moderate",
-            "Aggressive", "Very \nAggressive"
+            self.tr("Very \nConservative"),
+            self.tr("Conservative"),
+            self.tr("Moderate"),
+            self.tr("Aggressive"),
+            self.tr("Very \nAggressive"),
         ]
         labels = self.config.get('aggressiveness_labels', default_labels)
+        labels = [self.tr(label) for label in labels]
         # Add space between "Very" and next word with line break if not already present
-        labels = [label.replace("Very\n", "Very \n") if "\n" in label and "Very \n" not in label else label for label in labels]
+        labels = [
+            label.replace("Very\n", "Very \n") if "\n" in label and "Very \n" not in label else label
+            for label in labels
+        ]
         # Pass presets to constructor so multiline is detected at init time (like RXAnomaly)
         self.aggressivenessSlider = TextLabeledSlider(self, presets=labels)
         # Put slider into placeholder

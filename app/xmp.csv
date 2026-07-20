@@ -1,0 +1,46 @@
+# version: 1.0.0
+# date: 2026-05-04
+Attribute,DJI,Autel,Skydio
+AGL,RelativeAltitude,AboveGroundAltitude,CameraPositionFLUZ
+Already Applied,AlreadyApplied,Already Applied,
+Altitude Type,AltitudeType,,
+AMSL,AbsoluteAltitude,,AbsoluteAltitude
+Cam Reverse,CamReverse,,
+Camera Model,CameraModelName,,CameraModelName
+Camera SN,CameraSerialNumber,,SerialNumber
+Created On,CreateDate,,CreateDate
+Drone Model,DroneModel,Model,VehicleName
+Drone SN,DroneSerialNumber,,VehicleId
+Flight Pitch,FlightPitchDegree,,VehicleOrientationNEDPitch
+Flight Roll,FlightRollDegree,Roll,VehicleOrientationNEDRoll
+Flight X Speed,FlightXSpeed,,VehicleSpeedNEDX
+Flight Y Speed,FlightYSpeed,,VehicleSpeedNEDY
+Flight Yaw,FlightYawDegree,Yaw,VehicleOrientationNEDYaw
+Flight Z Speed,FlightZSpeed,,VehicleSpeedNEDZ
+Format,Format,Format,Format
+Gimbal Pitch,GimbalPitchDegree,Pitch,CameraOrientationNEDPitch
+Gimbal Reverse,GimbalReverse,,
+Gimbal Roll,GimbalRollDegree,,CameraOrientationNEDRoll
+Gimbal Yaw,GimbalYawDegree,,CameraOrientationNEDYaw
+Gps Status,GpsStatus,,
+Has Crop,HasCrop,Has Crop,
+Has Settings,HasSettings,Has Settings,
+ImageSource,ImageSource,,CameraSource
+Latitude,GPSLatitude,,Latitude
+Longitude,GPSLongitude,,Longitude
+LRF Status,LRFStatus,,
+LRF Target Abs Alt,LRFTargetAbsAlt,,
+LRF Target Alt,LRFTargetAlt,,
+LRF Target Distance,LRFTargetDistance,,
+LRF Target Lat,LRFTargetLat,,
+LRF Target Lon,LRFTargetLon,,
+Make,Make,Make,
+Picture Quality,PictureQuality,,
+Principal Point,,PrincipalPoint,"CalibratedOpticalCenterX,CalibratedOpticalCenterY"
+Self Data,SelfData,,
+Shutter Type,ShutterType,,
+Surveying Mode,SurveyingMode,,
+Updated On,ModifyDate,,ModifiyDate
+UTC Timestamp,UTCAtExposure,,
+Version,Version,,
+Version,Version,Version,

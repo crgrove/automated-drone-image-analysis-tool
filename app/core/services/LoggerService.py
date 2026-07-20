@@ -5,6 +5,39 @@ import logging
 import traceback
 
 
+# Name -> logging level, plus an "OFF" sentinel above CRITICAL.
+_LEVELS = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'WARN': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL,
+    'OFF': logging.CRITICAL + 10,
+    'NONE': logging.CRITICAL + 10,
+}
+
+
+def resolve_log_level():
+    """Resolve the active log level, baked in by build type.
+
+    Precedence:
+      1. ``ADIAT_LOG_LEVEL`` env var (DEBUG/INFO/WARNING/ERROR/OFF) — lets an
+         operator crank a packaged build back up to troubleshoot in the field.
+      2. Packaged ("frozen") production builds -> WARNING: the verbose
+         debug/info chatter (POD timing, canopy indexing, EGM96 load, the
+         benign "no canopy source" note, ...) stays out of adiat_logs.txt;
+         only warnings and errors are recorded.
+      3. Running from source (development) -> DEBUG: full verbosity.
+    """
+    env = os.environ.get('ADIAT_LOG_LEVEL', '').strip().upper()
+    if env in _LEVELS:
+        return _LEVELS[env]
+    if getattr(sys, 'frozen', False):
+        return logging.WARNING
+    return logging.DEBUG
+
+
 class LoggerService:
     """Service to write errors and warnings to an application log file.
 
@@ -50,7 +83,25 @@ class LoggerService:
             fileHandler.setFormatter(stdoutFmt)
             self.logger.addHandler(stdoutHandler)
             self.logger.addHandler(fileHandler)
-            self.logger.setLevel(logging.DEBUG)
+            # Baked in by build type (see resolve_log_level): prod/packaged
+            # builds are quiet (warnings + errors); source runs stay verbose.
+            self.logger.setLevel(resolve_log_level())
+
+    @classmethod
+    def set_level(cls, level=None):
+        """Apply a log level to the shared ADIAT logger.
+
+        Args:
+            level: a logging int, a name ('WARNING'), or None to use the
+                build-type default from resolve_log_level(). Callable at any
+                time (e.g. from ``__main__`` at startup) to (re)assert the
+                policy regardless of when the first logger was created.
+        """
+        if level is None:
+            level = resolve_log_level()
+        elif isinstance(level, str):
+            level = _LEVELS.get(level.strip().upper(), logging.WARNING)
+        logging.getLogger(__name__).setLevel(level)
 
     def info(self, message):
         """
@@ -59,7 +110,6 @@ class LoggerService:
         Args:
             message: The info message to log.
         """
-        print(message)
         self.logger.info(message)
 
     def debug(self, message):
@@ -69,7 +119,6 @@ class LoggerService:
         Args:
             message: The debug message to log.
         """
-        print(message)
         self.logger.debug(message)
 
     def warning(self, message):
@@ -79,7 +128,6 @@ class LoggerService:
         Args:
             message: The warning message to log.
         """
-        print(message)
         self.logger.warning(message)
 
     def error(self, message):
@@ -89,12 +137,10 @@ class LoggerService:
         Args:
             message: The error message to log.
         """
-        print(message)
         self.logger.error(message)
 
         # If we're inside an exception handler, also log the full traceback
         exc_type, exc_value, exc_tb = sys.exc_info()
         if exc_type is not None and exc_tb is not None:
             tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-            print(tb_str)
             self.logger.error(tb_str)

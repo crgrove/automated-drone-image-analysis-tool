@@ -102,3 +102,67 @@ class ImageHighlightService:
                                 highlighted_image[y, x] = highlight_color_array
 
         return highlighted_image
+
+    @staticmethod
+    def apply_visibility_mask(image_array, visible_mask, hidden_value=0):
+        """
+        Hide pixels outside the provided visibility mask.
+
+        Args:
+            image_array (np.ndarray): Input image array.
+            visible_mask (np.ndarray): Boolean mask where True means visible.
+            hidden_value (int): Fill value for hidden pixels.
+
+        Returns:
+            np.ndarray: Image with out-of-range pixels hidden.
+        """
+        if image_array is None or visible_mask is None:
+            return image_array
+
+        mask = np.asarray(visible_mask).astype(bool)
+        if mask.shape[:2] != image_array.shape[:2]:
+            mask = cv2.resize(
+                mask.astype(np.uint8),
+                (image_array.shape[1], image_array.shape[0]),
+                interpolation=cv2.INTER_NEAREST
+            ).astype(bool)
+
+        masked_image = image_array.copy()
+        masked_image[~mask] = hidden_value
+        return masked_image
+
+    @staticmethod
+    def apply_boolean_mask_highlight(image_array, mask, highlight_color=(0, 255, 255), alpha=0.5):
+        """
+        Blend a color overlay onto pixels selected by a boolean mask.
+
+        Args:
+            image_array (np.ndarray): Input image array.
+            mask (np.ndarray): Boolean mask of pixels to highlight.
+            highlight_color (tuple): RGB highlight color.
+            alpha (float): Blend strength for highlighted pixels.
+
+        Returns:
+            np.ndarray: Image with highlighted pixels.
+        """
+        if image_array is None or mask is None:
+            return image_array
+
+        mask = np.asarray(mask).astype(bool)
+        if mask.shape[:2] != image_array.shape[:2]:
+            mask = cv2.resize(
+                mask.astype(np.uint8),
+                (image_array.shape[1], image_array.shape[0]),
+                interpolation=cv2.INTER_NEAREST
+            ).astype(bool)
+
+        if not np.any(mask):
+            return image_array
+
+        highlighted = image_array.copy()
+        highlight_rgb = np.asarray(highlight_color, dtype=np.float32)
+        highlighted[mask] = (
+            (highlighted[mask].astype(np.float32) * (1.0 - alpha)) +
+            (highlight_rgb * alpha)
+        ).astype(np.uint8)
+        return highlighted

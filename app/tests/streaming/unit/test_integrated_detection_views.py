@@ -48,6 +48,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         # Check custom resolution inputs exist
         assert hasattr(widget.input_processing_tab, 'processing_width')
         assert hasattr(widget.input_processing_tab, 'processing_height')
+        assert widget.input_processing_tab.frame_rate_preset.currentData() == "source"
 
         # Check performance options
         assert hasattr(widget.input_processing_tab, 'render_at_processing_res')
@@ -59,7 +60,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
 
         # Check enable motion checkbox
         assert hasattr(widget, 'enable_motion')
-        assert widget.enable_motion.isChecked() is False  # Default OFF
+        assert widget.enable_motion.isChecked() is False
 
         # Check algorithm combo
         assert hasattr(widget, 'motion_algorithm')
@@ -117,7 +118,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
 
         # Check enable fusion
         assert hasattr(widget, 'enable_fusion')
-        assert widget.enable_fusion.isChecked() is False  # Default OFF
+        assert widget.enable_fusion.isChecked() is True
 
         # Check fusion mode
         assert hasattr(widget, 'fusion_mode')
@@ -137,7 +138,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
 
         # Check aspect ratio filter (now in rendering_tab)
         assert hasattr(widget.rendering_tab, 'enable_aspect_ratio_filter')
-        assert widget.rendering_tab.enable_aspect_ratio_filter.isChecked() is False  # Default OFF
+        assert widget.rendering_tab.enable_aspect_ratio_filter.isChecked() is True
         assert hasattr(widget.rendering_tab, 'min_aspect_ratio')
         assert hasattr(widget.rendering_tab, 'max_aspect_ratio')
 
@@ -160,17 +161,17 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         # Check shape options (in shared RenderingTab)
         assert hasattr(widget, 'rendering_tab')
         assert hasattr(widget.rendering_tab, 'render_shape')
-        assert widget.rendering_tab.render_shape.currentText() == "Circle"  # Default Circle
+        assert widget.rendering_tab.render_shape.currentData() == 1  # Default Circle
 
         # Check visual options (in shared RenderingTab)
         assert hasattr(widget.rendering_tab, 'render_text')
         assert hasattr(widget.rendering_tab, 'render_contours')
         assert hasattr(widget.rendering_tab, 'use_detection_color')
-        assert widget.rendering_tab.use_detection_color.isChecked() is True  # Default ON
+        assert widget.rendering_tab.use_detection_color.isChecked() is False
 
         # Check performance limits
         assert hasattr(widget.rendering_tab, 'max_detections_to_render')
-        assert widget.rendering_tab.max_detections_to_render.value() == 100  # Default 100
+        assert widget.rendering_tab.max_detections_to_render.value() == 20
 
     def test_default_values(self, qapp):
         """Test that default values match original implementation."""
@@ -178,6 +179,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         config = widget.get_config()
 
         # Input tab defaults
+        assert config['target_fps'] is None
         assert config['render_at_processing_res'] is True
         # Note: enable_morphology not in UI, uses service default
 
@@ -185,10 +187,10 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert config['enable_motion'] is False
         assert config['motion_algorithm'] == MotionAlgorithm.MOG2
         assert config['motion_threshold'] == 10
-        assert config['min_detection_area'] == 5
-        assert config['max_detection_area'] == 1000
+        assert config['min_detection_area'] == 100
+        assert config['max_detection_area'] == 50000
         assert config['bg_history'] == 50
-        assert config['bg_var_threshold'] == 10.0
+        assert config['bg_var_threshold'] == 15.0
         assert config['pause_on_camera_movement'] is True
         assert config['camera_movement_threshold'] == 0.15  # 15% / 100.0
 
@@ -200,7 +202,7 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert config['enable_hue_expansion'] is False
 
         # Fusion tab defaults
-        assert config['enable_fusion'] is False
+        assert config['enable_fusion'] is True
         assert config['fusion_mode'] == FusionMode.UNION
         # Temporal voting and cleanup are now in rendering_tab
         assert config['enable_temporal_voting'] is True
@@ -208,34 +210,36 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         assert config['temporal_threshold_frames'] == 3
 
         # FPR tab defaults (now in rendering_tab)
-        assert config['enable_aspect_ratio_filter'] is False
+        assert config['enable_aspect_ratio_filter'] is True
         assert config['enable_detection_clustering'] is False
         assert config['clustering_distance'] == 50
         assert config['enable_color_exclusion'] is False
 
         # Rendering tab defaults
         assert config['render_shape'] == 1  # Circle
-        assert config['use_detection_color_for_rendering'] is True
-        assert config['max_detections_to_render'] == 100
+        assert config['use_detection_color_for_rendering'] is False
+        assert config['max_detections_to_render'] == 20
 
     def test_resolution_preset_changes(self, qapp):
         """Test resolution preset changes."""
         widget = ColorAnomalyAndMotionDetectionControlWidget()
 
+        preset_combo = widget.input_processing_tab.resolution_preset
+
         # Test Custom preset enables inputs
-        widget.input_processing_tab.resolution_preset.setCurrentText("Custom")
+        preset_combo.setCurrentIndex(preset_combo.findData("custom"))
         assert widget.input_processing_tab.processing_width.isEnabled() is True
         assert widget.input_processing_tab.processing_height.isEnabled() is True
 
         # Test preset disables inputs and sets values
-        widget.input_processing_tab.resolution_preset.setCurrentText("1080P (1920x1080)")
+        preset_combo.setCurrentIndex(preset_combo.findData("1080P"))
         assert widget.input_processing_tab.processing_width.isEnabled() is False
         assert widget.input_processing_tab.processing_height.isEnabled() is False
         assert widget.input_processing_tab.processing_width.value() == 1920
         assert widget.input_processing_tab.processing_height.value() == 1080
 
         # Test Original preset
-        widget.input_processing_tab.resolution_preset.setCurrentText("Original")
+        preset_combo.setCurrentIndex(preset_combo.findData("original"))
         assert widget.input_processing_tab.processing_width.isEnabled() is False
         assert widget.input_processing_tab.processing_height.isEnabled() is False
 
@@ -370,9 +374,19 @@ class TestColorAnomalyAndMotionDetectionControlWidget:
         """Test that Original resolution preset is handled correctly."""
         widget = ColorAnomalyAndMotionDetectionControlWidget()
 
-        widget.input_processing_tab.resolution_preset.setCurrentText("Original")
+        preset_combo = widget.input_processing_tab.resolution_preset
+        preset_combo.setCurrentIndex(preset_combo.findData("original"))
         config = widget.get_config()
 
-        # Original should set very large values (99999)
-        assert config['processing_width'] >= 99999
-        assert config['processing_height'] >= 99999
+        assert config['processing_width'] is None
+        assert config['processing_height'] is None
+
+    def test_set_processing_resolution_handles_original_marker(self, qapp):
+        """Setting sentinel resolution should restore Original preset, not Custom."""
+        widget = ColorAnomalyAndMotionDetectionControlWidget()
+
+        widget.input_processing_tab.set_processing_resolution(99999, 99999)
+
+        assert widget.input_processing_tab.resolution_preset.currentData() == "original"
+        assert widget.input_processing_tab.processing_width.isEnabled() is False
+        assert widget.input_processing_tab.processing_height.isEnabled() is False

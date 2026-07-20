@@ -124,6 +124,15 @@ class UIStyleController:
                 "buttonActive"
             )
 
+    def update_show_ruler_button_style(self):
+        """Update the Show Ruler button styling based on its checked state."""
+        if hasattr(self.parent, 'showRulerButton'):
+            self.update_toolbutton_style(
+                self.parent.showRulerButton,
+                self.parent.showRulerButton.isChecked(),
+                "buttonActive"
+            )
+
     def update_adjustments_button_style(self):
         """Update the adjustments button styling based on dialog state."""
         if hasattr(self.parent, 'adjustmentsButton') and hasattr(self.parent, 'adjustments_dialog_open'):
@@ -139,6 +148,15 @@ class UIStyleController:
             self.update_toolbutton_style(
                 self.parent.measureButton,
                 self.parent.measure_dialog_open,
+                "dialogActive"
+            )
+
+    def update_person_overlay_button_style(self):
+        """Update the person reference button styling based on dialog state."""
+        if hasattr(self.parent, 'personOverlayButton') and hasattr(self.parent, 'person_reference_dialog_open'):
+            self.update_toolbutton_style(
+                self.parent.personOverlayButton,
+                self.parent.person_reference_dialog_open,
                 "dialogActive"
             )
 
@@ -158,6 +176,15 @@ class UIStyleController:
                 self.parent.rotateImageButton,
                 self.parent.rotate_image_open,
                 "rotateActive"
+            )
+
+    def update_grid_review_button_style(self):
+        """Update the grid review button styling based on the mode state."""
+        if hasattr(self.parent, 'gridReviewButton') and hasattr(self.parent, 'grid_review_controller'):
+            self.update_toolbutton_style(
+                self.parent.gridReviewButton,
+                self.parent.grid_review_controller.active,
+                "buttonActive"
             )
 
     def update_gallery_mode_button_style(self):

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MissionGalleryContents</class>
+ <widget class="QWidget" name="MissionGalleryContents">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>380</width>
+    <height>540</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="missionLayout">
+   <property name="spacing">
+    <number>4</number>
+   </property>
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>4</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="filterGroup">
+     <property name="title">
+      <string>Filters</string>
+     </property>
+     <layout class="QGridLayout" name="filterGrid">
+      <item row="0" column="0">
+       <widget class="QLabel" name="feedFilterLabel">
+        <property name="text">
+         <string>Feed</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="feedFilterCombo"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="detectorFilterLabel">
+        <property name="text">
+         <string>Detector</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="detectorFilterCombo"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="minScoreLabel">
+        <property name="text">
+         <string>Min score</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="minScoreSpin">
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="minimum">
+         <double>0.0</double>
+        </property>
+        <property name="maximum">
+         <double>1.0</double>
+        </property>
+        <property name="singleStep">
+         <double>0.05</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="missionList">
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <property name="iconSize">
+      <size>
+       <width>128</width>
+       <height>96</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="exportRow">
+     <item>
+      <widget class="QLabel" name="rowCountLabel">
+       <property name="text">
+        <string>0 detections</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="exportSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>10</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="exportButton">
+       <property name="text">
+        <string>Export</string>
+       </property>
+       <property name="toolTip">
+        <string>Export filtered detections to the standard ADIAT image-mode gallery format.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

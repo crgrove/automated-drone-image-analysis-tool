@@ -59,15 +59,16 @@ Click the Select button to browse for a video file.</string>
            </font>
           </property>
           <property name="toolTip">
-           <string>SRT subtitle file containing GPS telemetry and timestamp data.
+           <string>Metadata file containing GPS telemetry data.
+Supports DJI SRT subtitle files and Skydio CSV flight logs.
 Optional: Provides location information for extracted frames.
-Without SRT file, frames will have no GPS metadata.</string>
+Without a metadata file, frames will have no GPS data.</string>
           </property>
           <property name="whatsThis">
-           <string>The SRT file contains timestamped information about the video file.  It is optional, but without it output images won't include location information.</string>
+           <string>The metadata file contains timestamped GPS information for the video.  It is optional, but without it output images won't include location information.  Supports SRT (DJI) and CSV (Skydio) formats.</string>
           </property>
           <property name="text">
-           <string>SRT File (optional): </string>
+           <string>Metadata File (optional): </string>
           </property>
          </widget>
         </item>
@@ -173,8 +174,8 @@ Opens a file selection dialog for video files (MP4, AVI, MOV, etc.).</string>
            </font>
           </property>
           <property name="toolTip">
-           <string>Path to the optional SRT subtitle file with GPS telemetry data.
-SRT files contain timestamp and location information for video frames.
+           <string>Path to the optional metadata file with GPS telemetry data.
+Supports DJI SRT subtitle files and Skydio CSV flight logs.
 If provided, extracted frames will include GPS metadata (latitude, longitude, altitude).
 Can be left empty if location data is not needed.</string>
           </property>
@@ -191,9 +192,9 @@ Can be left empty if location data is not needed.</string>
            </font>
           </property>
           <property name="toolTip">
-           <string>Browse for optional SRT subtitle file containing GPS telemetry.
-SRT files are commonly created by DJI drones and other video recording devices.
-Opens a file selection dialog for SRT files.</string>
+           <string>Browse for optional metadata file containing GPS telemetry.
+Supports DJI SRT subtitle files and Skydio CSV flight logs.
+Opens a file selection dialog for SRT and CSV files.</string>
           </property>
           <property name="text">
            <string>Select</string>
@@ -303,7 +304,7 @@ Requirements:
 • Output folder must be selected
 • Time interval must be set (default: 5 seconds)
 The process will extract frames at the specified interval and save them as images.
-If SRT file is provided, GPS metadata will be embedded in the extracted frames.</string>
+If a metadata file (SRT or CSV) is provided, GPS metadata will be embedded in the extracted frames.</string>
        </property>
        <property name="layoutDirection">
         <enum>Qt::LeftToRight</enum>

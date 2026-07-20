@@ -6,9 +6,10 @@ Manages custom altitude settings for GSD calculations when GPS altitude is unrel
 
 from PySide6.QtWidgets import QInputDialog
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AltitudeController:
+class AltitudeController(TranslationMixin):
     """
     Controller for managing custom altitude settings.
 
@@ -94,7 +95,7 @@ class AltitudeController:
             str: Unit name ('feet' or 'meters')
         """
         unit = self._get_distance_unit()
-        return 'meters' if unit == 'm' else 'feet'
+        return self.tr("meters") if unit == 'm' else self.tr("feet")
 
     def prompt_for_custom_altitude(self, auto_triggered=True):
         """
@@ -105,8 +106,11 @@ class AltitudeController:
         """
         unit_name = self._get_unit_name()
         self._show_altitude_override_dialog(
-            "Negative Altitude Detected",
-            f"WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in {unit_name}):",
+            self.tr("Negative Altitude Detected"),
+            self.tr(
+                "WARNING! Relative Altitude is negative. "
+                "Enter an AGL altitude to be used for GSD calculations (in {unit}):"
+            ).format(unit=unit_name),
             auto_triggered=auto_triggered
         )
 
@@ -123,8 +127,10 @@ class AltitudeController:
 
         unit_name = self._get_unit_name()
         self._show_altitude_override_dialog(
-            "Override Altitude",
-            f"Enter a custom AGL altitude to be used for GSD calculations for all images (in {unit_name}):",
+            self.tr("Override Altitude"),
+            self.tr(
+                "Enter a custom AGL altitude to be used for GSD calculations for all images (in {unit}):"
+            ).format(unit=unit_name),
             auto_triggered=False,
             default_value=current_alt_display
         )
@@ -171,7 +177,10 @@ class AltitudeController:
             # Show confirmation toast with user's preferred unit
             if hasattr(self.parent, 'status_controller'):
                 self.parent.status_controller.show_toast(
-                    f"Custom AGL set to {altitude_display:.1f} {unit_label}",
+                    self.tr("Custom AGL set to {value:.1f} {unit}").format(
+                        value=altitude_display,
+                        unit=unit_label
+                    ),
                     3000,
                     color="#00C853"
                 )

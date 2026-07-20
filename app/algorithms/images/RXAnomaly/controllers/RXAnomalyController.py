@@ -20,7 +20,18 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         QWidget.__init__(self)
         AlgorithmController.__init__(self, config)
         self.setupUi(self)
+        self._init_segments_combo_data()
+        self.fixComboBoxForMacOS(self.segmentsComboBox)
         self.sensitivitySlider.valueChanged.connect(self.update_sensitivity)
+
+    def _init_segments_combo_data(self):
+        """Attach stable numeric values so translated labels do not affect config values."""
+        for index in range(self.segmentsComboBox.count()):
+            text = self.segmentsComboBox.itemText(index)
+            try:
+                self.segmentsComboBox.setItemData(index, int(text))
+            except ValueError:
+                continue
 
     def get_options(self):
         """
@@ -31,7 +42,7 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         """
         options = dict()
         options['sensitivity'] = int(self.sensitivityValueLabel.text())
-        options['segments'] = int(self.segmentsComboBox.currentText())
+        options['segments'] = int(self.segmentsComboBox.currentData())
         return options
 
     def update_sensitivity(self):
@@ -62,4 +73,8 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
             self.sensitivityValueLabel.setText(str(options['sensitivity']))
             self.sensitivitySlider.setProperty("value", int(options['sensitivity']))
         if 'segments' in options:
-            self.segmentsComboBox.setCurrentText(str(options['segments']))
+            index = self.segmentsComboBox.findData(int(options['segments']))
+            if index >= 0:
+                self.segmentsComboBox.setCurrentIndex(index)
+            else:
+                self.segmentsComboBox.setCurrentText(str(options['segments']))

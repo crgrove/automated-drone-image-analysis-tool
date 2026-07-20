@@ -14,6 +14,7 @@ from pathlib import Path
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.GeodesicHelper import GeodesicHelper
+from helpers.PhotogrammetryHelper import FovHomography, validate_alignment
 from core.services.image.ImageService import ImageService
 from core.services.GSDService import GSDService
 from core.services.LoggerService import LoggerService
@@ -57,13 +58,21 @@ class AOINeighborService:
             if pitch is None:
                 pitch = -90  # assume nadir
 
+            # A manually aligned image can produce coverage info even when its
+            # metadata (altitude, intrinsics) is missing or unreliable.
+            refinement = image.get('fov_alignment')
+            has_refinement = bool(
+                refinement and refinement.get('corners')
+                and validate_alignment(refinement['corners'])
+            )
+
             # Get altitude
             if agl_override_m and agl_override_m > 0:
                 altitude = agl_override_m
             else:
                 altitude = image_service.get_relative_altitude('m') or 0
 
-            if altitude <= 0:
+            if altitude <= 0 and not has_refinement:
                 return None
 
             # Get image dimensions
@@ -73,11 +82,13 @@ class AOINeighborService:
             # Get camera intrinsics
             intrinsics = image_service.get_camera_intrinsics()
             if intrinsics is None:
-                return None
-
-            focal_mm = intrinsics['focal_length_mm']
-            sensor_w_mm = intrinsics['sensor_width_mm']
-            sensor_h_mm = intrinsics['sensor_height_mm']
+                if not has_refinement:
+                    return None
+                focal_mm = sensor_w_mm = sensor_h_mm = None
+            else:
+                focal_mm = intrinsics['focal_length_mm']
+                sensor_w_mm = intrinsics['sensor_width_mm']
+                sensor_h_mm = intrinsics['sensor_height_mm']
 
             # Convert pitch to tilt angle
             tilt_angle = 90 + pitch
@@ -95,6 +106,7 @@ class AOINeighborService:
                 'focal_mm': focal_mm,
                 'sensor_w_mm': sensor_w_mm,
                 'sensor_h_mm': sensor_h_mm,
+                'fov_alignment': refinement if has_refinement else None,
                 'image_service': image_service
             }
 
@@ -106,7 +118,9 @@ class AOINeighborService:
         """
         Convert GPS coordinates to pixel coordinates in an image.
 
-        This is the reverse operation of estimate_aoi_gps in AOIService.
+        Uses the analytical inverse of the 3D ray-cast in
+        AOIService._calculate_ground_position for accurate results with
+        both nadir and oblique imagery.
 
         Args:
             target_lat (float): Target latitude
@@ -117,68 +131,101 @@ class AOINeighborService:
             tuple or None: (x, y) pixel coordinates or None if not in image
         """
         try:
+            # Manually aligned image: invert the homography directly.
+            refinement = coverage_info.get('fov_alignment')
+            if refinement and refinement.get('corners'):
+                homography = FovHomography(
+                    refinement['corners'],
+                    coverage_info['width'], coverage_info['height'],
+                    refinement.get('tie_points')
+                )
+                return homography.gps_to_pixel(target_lat, target_lon)
+
             lat0 = coverage_info['center_lat']
             lon0 = coverage_info['center_lon']
             yaw = coverage_info['yaw']
+            pitch = coverage_info.get('pitch', -90)
             altitude = coverage_info['altitude']
-            tilt_angle = coverage_info['tilt_angle']
             width = coverage_info['width']
             height = coverage_info['height']
             focal_mm = coverage_info['focal_mm']
             sensor_w_mm = coverage_info['sensor_w_mm']
             sensor_h_mm = coverage_info['sensor_h_mm']
 
-            # Convert GPS difference to ground offset in meters
+            # Convert GPS difference to NED offset in meters
             R_earth = 6378137.0
             dlat_rad = math.radians(target_lat - lat0)
             dlon_rad = math.radians(target_lon - lon0)
-
-            # Ground offset in North-East-Down (NED) coordinates
             north = dlat_rad * R_earth
             east = dlon_rad * R_earth * math.cos(math.radians(lat0))
 
-            # Reverse rotation from NED to image coordinates
-            # Original: north = -ground_offset_x * sin(yaw) - ground_offset_y * cos(yaw)
-            #           east = ground_offset_x * cos(yaw) - ground_offset_y * sin(yaw)
-            # Solving for ground_offset_x and ground_offset_y:
-            yaw_rad = math.radians(yaw)
-            cos_yaw = math.cos(yaw_rad)
-            sin_yaw = math.sin(yaw_rad)
+            # Build the same camera-to-NED rotation matrix as
+            # AOIService._calculate_ground_position
+            opt_elevation = math.radians(pitch)
+            opt_azimuth = math.radians(yaw)
 
-            # Inverse transformation
-            # From the original:
-            # | north |   | -sin_yaw  -cos_yaw | | gx |
-            # | east  | = |  cos_yaw  -sin_yaw | | gy |
-            # Inverse (determinant = sin²(yaw) + cos²(yaw) = 1, so no division needed):
-            # | -sin_yaw   cos_yaw |
-            # | -cos_yaw  -sin_yaw |
-            ground_offset_x = -sin_yaw * north + cos_yaw * east
-            ground_offset_y = -cos_yaw * north - sin_yaw * east
+            cos_elev = math.cos(opt_elevation)
+            sin_elev = math.sin(opt_elevation)
+            cos_az = math.cos(opt_azimuth)
+            sin_az = math.sin(opt_azimuth)
 
-            # Initialize GSD service
-            gsd_service = GSDService(
-                focal_length=focal_mm,
-                image_size=(width, height),
-                altitude=altitude,
-                tilt_angle=tilt_angle,
-                sensor=(sensor_w_mm, sensor_h_mm)
-            )
+            # Optical axis (camera Z) in NED
+            r3 = [cos_elev * cos_az, cos_elev * sin_az, -sin_elev]
 
-            # Get average GSD to approximate pixel offset
-            avg_gsd_cm = gsd_service.compute_average_gsd()
-            avg_gsd_m = avg_gsd_cm / 100.0
+            # Up direction in NED (for constructing camera frame)
+            up_ned = [-sin_elev * cos_az, -sin_elev * sin_az, -cos_elev]
 
-            if avg_gsd_m <= 0:
+            # Camera Y (down in image) = -up_ned
+            r2 = [sin_elev * cos_az, sin_elev * sin_az, cos_elev]
+
+            # Camera X (right in image) = cross(opt_axis, up_ned), normalized
+            r1 = [
+                r3[1] * up_ned[2] - r3[2] * up_ned[1],
+                r3[2] * up_ned[0] - r3[0] * up_ned[2],
+                r3[0] * up_ned[1] - r3[1] * up_ned[0]
+            ]
+            norm = math.sqrt(r1[0] ** 2 + r1[1] ** 2 + r1[2] ** 2)
+            if norm < 1e-10:
+                return None
+            r1 = [c / norm for c in r1]
+
+            # Solve the inverse of the forward projection analytically.
+            # Forward: ground = H * (R @ [a, b, 1]) / (R @ [a, b, 1])_z
+            #   where a = (u-cx)/fx, b = (v-cy)/fy
+            # Rearranging into a 2x2 linear system:
+            #   a*(N*r1z - H*r1x) + b*(N*r2z - H*r2x) = H*r3x - N*r3z
+            #   a*(E*r1z - H*r1y) + b*(E*r2z - H*r2y) = H*r3y - E*r3z
+            H = altitude
+            N = north
+            E = east
+
+            A11 = N * r1[2] - H * r1[0]
+            A12 = N * r2[2] - H * r2[0]
+            A21 = E * r1[2] - H * r1[1]
+            A22 = E * r2[2] - H * r2[1]
+            c1 = H * r3[0] - N * r3[2]
+            c2 = H * r3[1] - E * r3[2]
+
+            det = A11 * A22 - A12 * A21
+            if abs(det) < 1e-12:
                 return None
 
-            # Convert ground offset to pixel offset
-            cx, cy = width / 2.0, height / 2.0
-            pixel_offset_x = ground_offset_x / avg_gsd_m
-            pixel_offset_y = ground_offset_y / avg_gsd_m
+            a = (c1 * A22 - c2 * A12) / det
+            b = (A11 * c2 - A21 * c1) / det
 
-            # Calculate final pixel coordinates
-            u = cx + pixel_offset_x
-            v = cy + pixel_offset_y
+            # Convert normalized camera coordinates back to pixels
+            fx = focal_mm / (sensor_w_mm / width)
+            fy = focal_mm / (sensor_h_mm / height)
+            cx = width / 2.0
+            cy = height / 2.0
+
+            u = a * fx + cx
+            v = b * fy + cy
+
+            # Verify the ray points downward (valid ground intersection)
+            ray_z = r1[2] * a + r2[2] * b + r3[2]
+            if ray_z <= 0:
+                return None
 
             return (u, v)
 
@@ -251,7 +298,10 @@ class AOINeighborService:
                         tilt_angle=coverage_info['tilt_angle'],
                         sensor=(coverage_info['sensor_w_mm'], coverage_info['sensor_h_mm'])
                     )
-                    avg_gsd_m = gsd_service.compute_average_gsd() / 100.0
+                    avg_gsd_cm = gsd_service.compute_average_gsd()
+                    if avg_gsd_cm is None:
+                        continue
+                    avg_gsd_m = avg_gsd_cm / 100.0
 
                     # Diagonal distance from center to corner
                     half_width = (coverage_info['width'] / 2) * avg_gsd_m

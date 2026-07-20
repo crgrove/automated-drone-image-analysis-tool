@@ -2,9 +2,10 @@
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtCore import Qt
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AOICreationDialog(QDialog):
+class AOICreationDialog(TranslationMixin, QDialog):
     """Simple dialog to confirm AOI creation."""
 
     def __init__(self, parent):
@@ -15,10 +16,11 @@ class AOICreationDialog(QDialog):
         """
         super().__init__(parent)
         self.setupUi()
+        self._apply_translations()
 
     def setupUi(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("Create AOI")
+        self.setWindowTitle(self.tr("Create AOI"))
         self.setModal(True)
         self.setMinimumWidth(250)
 
@@ -26,7 +28,7 @@ class AOICreationDialog(QDialog):
         layout = QVBoxLayout()
 
         # Message label
-        message = QLabel("Create AOI?")
+        message = QLabel(self.tr("Create AOI?"))
         message.setAlignment(Qt.AlignCenter)
         message.setStyleSheet("QLabel { font-size: 12pt; padding: 10px; }")
         layout.addWidget(message)
@@ -34,11 +36,11 @@ class AOICreationDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
 
-        self.yes_button = QPushButton("Yes")
+        self.yes_button = QPushButton(self.tr("Yes"))
         self.yes_button.setDefault(True)  # Make Yes the default action
         self.yes_button.clicked.connect(self.accept)
 
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()

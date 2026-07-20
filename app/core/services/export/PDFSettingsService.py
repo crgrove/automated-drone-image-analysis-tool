@@ -35,8 +35,7 @@ class PDFSettingsService:
         """Load previously saved settings from config file.
 
         Returns:
-            dict: Dictionary with 'organization', 'search_name', and 'include_images_without_flagged_aois' keys,
-                  or empty dict if loading fails
+            dict: Dictionary with persisted PDF export settings
         """
         try:
             if os.path.exists(self.config_path):
@@ -45,21 +44,28 @@ class PDFSettingsService:
                     return {
                         'organization': settings.get('organization', ''),
                         'search_name': settings.get('search_name', ''),
-                        'include_images_without_flagged_aois': settings.get('include_images_without_flagged_aois', False)
+                        'include_images_without_flagged_aois': settings.get('include_images_without_flagged_aois', False),
+                        'map_tile_source': settings.get('map_tile_source', 'map')
                     }
         except Exception:
             # If loading fails, return empty values
             pass
 
-        return {'organization': '', 'search_name': '', 'include_images_without_flagged_aois': False}
+        return {
+            'organization': '',
+            'search_name': '',
+            'include_images_without_flagged_aois': False,
+            'map_tile_source': 'map'
+        }
 
-    def save_settings(self, organization, search_name, include_images_without_flagged_aois=False):
+    def save_settings(self, organization, search_name, include_images_without_flagged_aois=False, map_tile_source='map'):
         """Save settings to config file.
 
         Args:
             organization (str): Organization name
             search_name (str): Search name
             include_images_without_flagged_aois (bool): Whether to include images without flagged AOIs
+            map_tile_source (str): Tile source for overview map ('map' or 'satellite')
 
         Returns:
             bool: True if saved successfully, False otherwise
@@ -68,7 +74,8 @@ class PDFSettingsService:
             settings = {
                 'organization': organization.strip(),
                 'search_name': search_name.strip(),
-                'include_images_without_flagged_aois': include_images_without_flagged_aois
+                'include_images_without_flagged_aois': include_images_without_flagged_aois,
+                'map_tile_source': map_tile_source if map_tile_source in ('map', 'satellite') else 'map'
             }
             with open(self.config_path, 'w') as f:
                 json.dump(settings, f, indent=2)

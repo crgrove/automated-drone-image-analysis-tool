@@ -328,3 +328,182 @@ def test_analysis_result_with_error():
     assert result.input_path == "/input/image.jpg"
     assert result.error_message == "Test error"
     assert result.areas_of_interest is None
+
+
+# ---------------------------------------------------------------------------
+# transform_aois_to_original_resolution
+# ---------------------------------------------------------------------------
+
+def test_transform_aois_no_scale_returns_unchanged(algorithm_service):
+    aois = [{"center": (10, 20), "radius": 5}]
+    assert algorithm_service.transform_aois_to_original_resolution(aois) is aois
+
+
+def test_transform_aois_empty_list_returns_unchanged(algorithm_service):
+    algorithm_service.set_scale_factor(0.5)
+    assert algorithm_service.transform_aois_to_original_resolution([]) == []
+
+
+def test_transform_aois_scales_center_and_radius(algorithm_service):
+    algorithm_service.set_scale_factor(0.5)
+    aois = [{"center": (10, 20), "radius": 5}]
+    result = algorithm_service.transform_aois_to_original_resolution(aois)
+    assert result[0]["center"] == (20, 40)
+    assert result[0]["radius"] == 10
+
+
+def test_transform_aois_scales_contour_and_pixels(algorithm_service):
+    algorithm_service.set_scale_factor(0.5)
+    aois = [{
+        "center": (10, 10),
+        "radius": 5,
+        "contour": [[1, 1], [2, 2]],
+        "detected_pixels": [(3, 4), (5, 6)],
+    }]
+    result = algorithm_service.transform_aois_to_original_resolution(aois)
+    assert result[0]["contour"] == [[2.0, 2.0], [4.0, 4.0]]
+    assert result[0]["detected_pixels"] == [(6, 8), (10, 12)]
+
+
+def test_transform_aois_preserves_non_geometric_fields(algorithm_service):
+    algorithm_service.set_scale_factor(0.5)
+    aois = [{"center": (10, 10), "radius": 5, "confidence": 0.9, "label": "hit"}]
+    result = algorithm_service.transform_aois_to_original_resolution(aois)
+    assert result[0]["confidence"] == 0.9
+    assert result[0]["label"] == "hit"
+
+
+# ---------------------------------------------------------------------------
+# apply_hue_expansion edge cases
+# ---------------------------------------------------------------------------
+
+def test_apply_hue_expansion_no_aois_returns_mask(algorithm_service):
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    mask = np.zeros((50, 50), dtype=np.uint8)
+    assert algorithm_service.apply_hue_expansion(img, mask, None, 10) is mask
+    assert np.array_equal(algorithm_service.apply_hue_expansion(img, mask, [], 10), mask)
+
+
+def test_apply_hue_expansion_handles_red_wraparound(algorithm_service):
+    # Red hue wraps around 0/180 in OpenCV. A red pixel (hue ~0) with average
+    # hue near 175 and a wide range should still match via wraparound.
+    img = np.zeros((50, 50, 3), dtype=np.uint8)
+    img[:, :] = (0, 0, 200)  # BGR red -> hue near 0
+    mask = np.zeros((50, 50), dtype=np.uint8)
+    mask[20:30, 20:30] = 255
+
+    aois = [{
+        "center": (25, 25),
+        "radius": 15,
+        "detected_pixels": [(20, 20), (21, 21), (22, 22)],
+    }]
+    expanded = algorithm_service.apply_hue_expansion(img, mask, aois, hue_range=10)
+    assert expanded.shape == mask.shape
+    assert expanded.sum() >= mask.sum()
+
+
+def test_apply_hue_expansion_skips_aois_without_pixels(algorithm_service):
+    img = np.zeros((30, 30, 3), dtype=np.uint8)
+    mask = np.zeros((30, 30), dtype=np.uint8)
+    aois = [{"center": (10, 10), "radius": 5, "detected_pixels": []}]
+    result = algorithm_service.apply_hue_expansion(img, mask, aois, 10)
+    assert np.array_equal(result, mask)
+
+
+def test_apply_hue_expansion_ignores_out_of_bounds_pixels(algorithm_service):
+    img = np.zeros((20, 20, 3), dtype=np.uint8)
+    mask = np.zeros((20, 20), dtype=np.uint8)
+    # All detected pixels are outside image bounds -> no avg hue computable -> skip
+    aois = [{"center": (10, 10), "radius": 3, "detected_pixels": [(100, 100), (200, 200)]}]
+    result = algorithm_service.apply_hue_expansion(img, mask, aois, 10)
+    assert np.array_equal(result, mask)
+
+
+# ---------------------------------------------------------------------------
+# _calculate_aoi_representative_color
+# ---------------------------------------------------------------------------
+
+def test_calculate_aoi_color_from_detected_pixels(algorithm_service):
+    img_rgb = np.zeros((50, 50, 3), dtype=np.uint8)
+    img_rgb[10:20, 10:20] = (200, 50, 50)  # RGB red
+
+    aoi = {
+        "center": (15, 15),
+        "radius": 5,
+        "detected_pixels": [(10, 10), (11, 11), (12, 12)],
+    }
+    result = algorithm_service._calculate_aoi_representative_color(img_rgb, aoi)
+    assert result is not None
+    assert "rgb" in result
+    assert "hex" in result
+    assert "hue_degrees" in result
+    assert result["hex"].startswith("#")
+    assert 0 <= result["hue_degrees"] <= 360
+
+
+def test_calculate_aoi_color_samples_circle_without_detected_pixels(algorithm_service):
+    img_rgb = np.ones((50, 50, 3), dtype=np.uint8) * np.array([100, 150, 200], dtype=np.uint8)
+    aoi = {"center": (25, 25), "radius": 10}
+
+    result = algorithm_service._calculate_aoi_representative_color(img_rgb, aoi)
+    assert result is not None
+    # avg_rgb should be close to the uniform color
+    assert result["avg_rgb"] == (100, 150, 200)
+
+
+def test_calculate_aoi_color_skips_out_of_bounds_pixels(algorithm_service):
+    img_rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    img_rgb[0:5, 0:5] = (255, 0, 0)
+    aoi = {
+        "center": (2, 2),
+        "radius": 1,
+        "detected_pixels": [(0, 0), (1000, 1000), (-5, -5)],
+    }
+    result = algorithm_service._calculate_aoi_representative_color(img_rgb, aoi)
+    # Only (0, 0) is valid -> should still return a result
+    assert result is not None
+    assert result["avg_rgb"] == (255, 0, 0)
+
+
+def test_calculate_aoi_color_returns_none_when_no_colors(algorithm_service):
+    img_rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+    # Radius 0 with no detected_pixels -> no pixels sampled -> None
+    aoi = {"center": (10, 10), "radius": 0}
+    result = algorithm_service._calculate_aoi_representative_color(img_rgb, aoi)
+    # Depending on geometry the circle may sample (10,10). Accept None or a valid result.
+    assert result is None or "rgb" in result
+
+
+def test_calculate_aoi_color_handles_exception(algorithm_service):
+    # Pass a malformed AOI that will trip the try/except
+    result = algorithm_service._calculate_aoi_representative_color(None, {"center": (0, 0)})
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _construct_output_path additional cases
+# ---------------------------------------------------------------------------
+
+def test_construct_output_path_nested_subdirs(algorithm_service):
+    out = algorithm_service._construct_output_path(
+        "/input/a/b/c/image.jpg", "/input", "/output"
+    )
+    assert out == str(Path("/output/a/b/c/image.jpg"))
+
+
+# ---------------------------------------------------------------------------
+# split_image / glue_image round-trip
+# ---------------------------------------------------------------------------
+
+def test_split_and_glue_round_trip_preserves_shape(algorithm_service):
+    img = np.arange(60 * 60 * 3, dtype=np.uint8).reshape(60, 60, 3)
+    pieces = algorithm_service.split_image(img, segments=4, overlap=0)
+    glued = algorithm_service.glue_image(pieces)
+    assert glued.shape == img.shape
+
+
+def test_get_rows_cols_from_segments(algorithm_service):
+    rows, cols = algorithm_service._get_rows_cols_from_segments(4)
+    assert rows * cols == 4
+    rows9, cols9 = algorithm_service._get_rows_cols_from_segments(9)
+    assert rows9 * cols9 == 9

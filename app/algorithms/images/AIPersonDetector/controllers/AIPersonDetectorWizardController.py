@@ -29,7 +29,13 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
         # Confidence slider with text labels matching mockup
         self.confidenceSlider = TextLabeledSlider(
             self,
-            presets=["Very \nConfident", "Confident", "Balanced", "Permissive", "Very \nPermissive"]
+            presets=[
+                self.tr("Very \nConfident"),
+                self.tr("Confident"),
+                self.tr("Balanced"),
+                self.tr("Permissive"),
+                self.tr("Very \nPermissive"),
+            ]
         )
         placeholder = self.confidenceSliderPlaceholder
         layout = QVBoxLayout(placeholder)
@@ -58,7 +64,7 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
         }
 
         # Service-expected fields
-        options['person_detector_confidence'] = confidence_map.get(confidence_index, 0.5)
+        options['person_detector_confidence'] = confidence_map.get(confidence_index, 50)
         options['cpu_only'] = self.cpu_only
 
         # Wizard fields retained for reference
@@ -82,15 +88,21 @@ class AIPersonDetectorWizardController(QWidget, Ui_AIPersonDetectorWizard, Algor
             if isinstance(confidence_index, int):
                 self.confidenceSlider.setValue(max(0, min(4, confidence_index)))
         elif 'person_detector_confidence' in options:
-            # Reverse map confidence to index
-            confidence = float(options['person_detector_confidence'])
-            if confidence >= 0.8:
+            # Reverse map confidence to index. Saved values are percent (90/70/...),
+            # but older configs may hold a 0-1 fraction; normalize to percent first.
+            try:
+                confidence = float(options['person_detector_confidence'])
+            except (TypeError, ValueError):
+                return
+            if confidence <= 1.0:
+                confidence *= 100.0
+            if confidence >= 80:
                 index = 0  # Very Confident
-            elif confidence >= 0.6:
+            elif confidence >= 60:
                 index = 1  # Confident
-            elif confidence >= 0.4:
+            elif confidence >= 40:
                 index = 2  # Balanced
-            elif confidence >= 0.2:
+            elif confidence >= 20:
                 index = 3  # Permissive
             else:
                 index = 4  # Very Permissive

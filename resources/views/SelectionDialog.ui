@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>425</width>
-    <height>265</height>
+    <width>600</width>
+    <height>290</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,13 +28,13 @@
       </font>
      </property>
      <property name="text">
-      <string>What type of media are you working with?</string>
+      <string>What would you like to do?</string>
      </property>
     </widget>
    </item>
    <item>
     <widget class="QWidget" name="selectionWidget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0">
+     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0">
       <item>
        <widget class="QWidget" name="imageWidget" native="true">
         <property name="sizePolicy">
@@ -83,7 +83,7 @@
             <string notr="true">QToolButton { border: 3px solid palette(mid); border-radius: 8px; }</string>
            </property>
            <property name="text">
-            <string>Images</string>
+            <string>Image Analysis</string>
            </property>
            <property name="iconSize">
             <size>
@@ -166,7 +166,7 @@
             <string notr="true">QToolButton { border: 3px solid palette(mid); border-radius: 8px; }</string>
            </property>
            <property name="text">
-            <string>Streaming</string>
+            <string>Stream Analysis</string>
            </property>
            <property name="iconSize">
             <size>
@@ -181,6 +181,89 @@
          </item>
          <item>
           <spacer name="verticalSpacer_bottom_2">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Expanding</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="flightWidget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_4">
+         <item>
+          <spacer name="verticalSpacer_top_3">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Expanding</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item alignment="Qt::AlignHCenter">
+          <widget class="QToolButton" name="flightButton">
+           <property name="minimumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>12</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Pair with ADIAT Mobile drone controllers to receive their live camera feeds with detections.</string>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QToolButton { border: 3px solid palette(mid); border-radius: 8px; }</string>
+           </property>
+           <property name="text">
+            <string>Flight Viewer</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>100</width>
+             <height>100</height>
+            </size>
+           </property>
+           <property name="toolButtonStyle">
+            <enum>Qt::ToolButtonTextUnderIcon</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer_bottom_3">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
            </property>

@@ -1,1 +1,0 @@
-"""Motion Detection controllers."""

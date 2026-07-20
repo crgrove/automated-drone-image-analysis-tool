@@ -118,6 +118,7 @@ class RangeSlider(QWidget):
         Returns:
             str: Formatted label with unit conversion applied if needed.
         """
+        base_label = self.tr(base_label)
         # Extract the base label text (before the unit part in parentheses)
         # Labels are like "Small\nArticle\n(1 sqft)" - extract "Small\nArticle"
         lines = base_label.split('\n')

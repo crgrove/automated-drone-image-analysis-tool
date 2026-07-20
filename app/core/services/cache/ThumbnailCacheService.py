@@ -406,48 +406,56 @@ class ThumbnailCacheService:
         Returns:
             QIcon or None
         """
-        with QMutexLocker(self.mutex):
-            cache_key = self.get_cache_key(image_path, aoi_data)
+        cache_key = self.get_cache_key(image_path, aoi_data)
 
-            # Check memory cache first
+        # Fast path: in-memory cache lookup. Hold the mutex only for the
+        # microsecond in-memory operations, never across the disk reads and
+        # full-resolution image decode below. Up to four worker threads and the
+        # GUI thread (which loads already-cached rows synchronously) all call
+        # this; holding the lock across generation let a worker's decode +
+        # LANCZOS resize + JPEG encode block the GUI thread for the whole
+        # operation. Concurrent generation of the same key is harmless: both
+        # threads write the same file and return an equivalent array.
+        with QMutexLocker(self.mutex):
             cached_icon = self.get_thumbnail_from_memory(cache_key)
             if cached_icon is not None:
                 return cached_icon
 
-            # Check disk cache with new (portable) key
-            thumbnail_array = self.load_thumbnail_from_disk(cache_key)
+        # Check disk cache with new (portable) key
+        thumbnail_array = self.load_thumbnail_from_disk(cache_key)
 
-            # If not found, try legacy key (for backward compatibility with old caches)
+        # If not found, try legacy key (for backward compatibility with old caches)
+        if thumbnail_array is None:
+            xml_path = aoi_data.get('_xml_path')  # Extract original XML path if provided
+            legacy_key = self.get_legacy_cache_key(image_path, aoi_data, xml_path)
+            if legacy_key != cache_key:  # Only try if different
+                thumbnail_array = self.load_thumbnail_from_disk(legacy_key)
+
+        if thumbnail_array is None:
+            # Generate new thumbnail
+            thumbnail_array = self.extract_aoi_region_fast(image_path, aoi_data, target_size)
+
             if thumbnail_array is None:
-                xml_path = aoi_data.get('_xml_path')  # Extract original XML path if provided
-                legacy_key = self.get_legacy_cache_key(image_path, aoi_data, xml_path)
-                if legacy_key != cache_key:  # Only try if different
-                    thumbnail_array = self.load_thumbnail_from_disk(legacy_key)
+                return None
 
-            if thumbnail_array is None:
-                # Generate new thumbnail
-                thumbnail_array = self.extract_aoi_region_fast(image_path, aoi_data, target_size)
+            # Save to disk cache with new key (prefer dataset cache)
+            target_cache_dir = self.dataset_cache_dir if self.dataset_cache_dir else self.cache_dir
+            if target_cache_dir:
+                self.save_thumbnail_to_disk(cache_key, thumbnail_array, target_cache_dir)
 
-                if thumbnail_array is None:
-                    return None
+        # Convert to QIcon
+        qimage = qimage2ndarray.array2qimage(thumbnail_array, normalize=False)
+        pixmap = QPixmap.fromImage(qimage)
+        icon = QIcon(pixmap)
 
-                # Save to disk cache with new key (prefer dataset cache)
-                target_cache_dir = self.dataset_cache_dir if self.dataset_cache_dir else self.cache_dir
-                if target_cache_dir:
-                    self.save_thumbnail_to_disk(cache_key, thumbnail_array, target_cache_dir)
-
-            # Convert to QIcon
-            qimage = qimage2ndarray.array2qimage(thumbnail_array, normalize=False)
-            pixmap = QPixmap.fromImage(qimage)
-            icon = QIcon(pixmap)
-
-            # Update memory cache (replace the None placeholder)
-            # We need to clear the specific cache entry and re-add it
+        # Update memory cache (replace the None placeholder)
+        # We need to clear the specific cache entry and re-add it
+        with QMutexLocker(self.mutex):
             self.get_thumbnail_from_memory.cache_clear()
             self.get_thumbnail_from_memory.__wrapped__(self, cache_key)  # Call uncached version
             self.get_thumbnail_from_memory.cache_info()  # Refresh cache
 
-            return icon
+        return icon
 
     def clear_disk_cache(self):
         """Clear all thumbnails from disk cache."""

@@ -9,6 +9,29 @@ from PySide6.QtWidgets import QWidget, QSlider, QStyle, QStyleOptionSlider
 from PySide6.QtGui import QPainter, QPen, QPalette, QFont, QFontMetrics, QColor
 
 
+def _slider_label_colors(widget):
+    """Return (text_color, tick_color, accent_color) for a slider's labels.
+
+    These sliders paint their own labels, so they read colours from the
+    palette. qdarktheme applies its theme as a stylesheet plus a *minimal*
+    palette that only sets the ``Text`` and ``Link`` roles reliably; it leaves
+    ``WindowText`` and ``Mid`` to the OS palette, which follows the Windows
+    light/dark setting. Reading ``WindowText`` therefore rendered these labels
+    black on light-mode machines. Read the roles qdarktheme always sets so the
+    colours track the ADIAT theme instead of the OS:
+
+    - ``Text``  -> foreground (light in dark theme, dark in light theme)
+    - ``Link``  -> accent used to highlight the selected label
+    - tick marks reuse the foreground at reduced opacity so they stay subtle.
+    """
+    palette = widget.palette()
+    text_color = palette.color(QPalette.Text)
+    accent_color = palette.color(QPalette.Link)
+    tick_color = QColor(text_color)
+    tick_color.setAlpha(110)
+    return text_color, tick_color, accent_color
+
+
 class LabeledSlider(QWidget):
     """A slider widget with tick marks and value display above the slider.
 
@@ -143,10 +166,9 @@ class LabeledSlider(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Get theme colors
-        palette = self.palette()
-        text_color = palette.color(QPalette.WindowText)
-        tick_color = palette.color(QPalette.Mid)
+        # Theme colors (read the palette roles qdarktheme reliably sets so the
+        # labels track the app theme, not the OS light/dark setting).
+        text_color, tick_color, accent_color = _slider_label_colors(self)
 
         # Use the actual slider groove/handle rects from style for perfect alignment
         opt = QStyleOptionSlider()
@@ -190,9 +212,8 @@ class LabeledSlider(QWidget):
                     font = QFont(base_font)
                     font.setBold(True)
                     fm = QFontMetrics(font)
-                    # Use highlight color for selected value
-                    highlight_color = QColor(138, 180, 247)
-                    label_color = highlight_color
+                    # Use the theme accent color for the selected value
+                    label_color = accent_color
                 else:
                     font = base_font
                     fm = base_fm
@@ -234,7 +255,13 @@ class TextLabeledSlider(QWidget):
 
         # Default presets matching the image
         if presets is None:
-            presets = ["Very Conservative", "Conservative", "Moderate", "Aggressive", "Very Aggressive"]
+            presets = [
+                self.tr("Very Conservative"),
+                self.tr("Conservative"),
+                self.tr("Moderate"),
+                self.tr("Aggressive"),
+                self.tr("Very Aggressive"),
+            ]
 
         # Normalize presets to a list of (text, optional_numeric) tuples
         if presets and isinstance(presets[0], str):
@@ -352,10 +379,9 @@ class TextLabeledSlider(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Get theme colors
-        palette = self.palette()
-        text_color = palette.color(QPalette.WindowText)
-        tick_color = palette.color(QPalette.Mid)
+        # Theme colors (read the palette roles qdarktheme reliably sets so the
+        # labels track the app theme, not the OS light/dark setting).
+        text_color, tick_color, accent_color = _slider_label_colors(self)
 
         # Use the actual slider groove/handle rects from style for perfect alignment
         opt = QStyleOptionSlider()
@@ -394,7 +420,7 @@ class TextLabeledSlider(QWidget):
                 font = QFont(text_font)
                 font.setBold(True)
                 fm = QFontMetrics(font)
-                label_color = QColor(138, 180, 247)
+                label_color = accent_color
             else:
                 font = text_font
                 fm = text_fm

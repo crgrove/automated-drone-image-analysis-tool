@@ -32,8 +32,10 @@ class StreamCoordinator(QObject):
     connectionChanged = Signal(bool, str)  # (connected, message)
     frameReceived = Signal(np.ndarray, float, int)  # (frame, timestamp, video_frame_pos)
     recordingStateChanged = Signal(bool, str)  # (recording, path)
+    recordingStatsUpdated = Signal(dict)  # Recording performance/queue stats
     streamInfoUpdated = Signal(dict)  # Stream info (fps, resolution, etc.)
     errorOccurred = Signal(str)  # Error message
+    seekCompleted = Signal(int, int, bool)  # (request_id, frame_position, success)
 
     def __init__(self, logger: Optional[LoggerService] = None):
         super().__init__()
@@ -68,8 +70,9 @@ class StreamCoordinator(QObject):
         Args:
             url: Stream URL or file path
             stream_type: Type of stream (RTMP, HLS, File, HDMI) - can be StreamType enum or string
-            hdmi_backend: Optional OpenCV backend for HDMI capture (e.g., cv2.CAP_MSMF)
-            fps_limit: Optional target FPS limit (0 or None = use defaults)
+            hdmi_backend: Optional OpenCV backend ID for HDMI capture
+            fps_limit: Optional target FPS limit (`None`/`0` = safe default cap,
+                `>0` = explicit cap)
 
         Returns:
             True if connection initiated successfully
@@ -104,6 +107,8 @@ class StreamCoordinator(QObject):
                 self.stream_manager.statsUpdated.connect(self._on_stream_stats_updated)
             if hasattr(self.stream_manager, "videoPositionChanged"):
                 self.stream_manager.videoPositionChanged.connect(self._on_video_position_changed)
+            if hasattr(self.stream_manager, "seekCompleted"):
+                self.stream_manager.seekCompleted.connect(self.seekCompleted)
 
             # Connect to stream (pass hdmi_backend for HDMI capture, fps_limit for rate control)
             if self.stream_manager.connect_to_stream(url, stream_type, hdmi_backend=hdmi_backend, fps_limit=fps_limit):
@@ -145,6 +150,11 @@ class StreamCoordinator(QObject):
                         self.stream_manager.videoPositionChanged.disconnect(self._on_video_position_changed)
                     except TypeError:
                         pass
+                if hasattr(self.stream_manager, "seekCompleted"):
+                    try:
+                        self.stream_manager.seekCompleted.disconnect(self.seekCompleted)
+                    except TypeError:
+                        pass
             except Exception:
                 pass
 
@@ -157,6 +167,27 @@ class StreamCoordinator(QObject):
             self.current_stream_type = None
 
             self.connectionChanged.emit(False, "Disconnected")
+
+    def update_fps_limit(self, fps_limit: Optional[int]) -> bool:
+        """
+        Update active stream FPS limit while connected.
+
+        Args:
+            fps_limit: Requested FPS limit (`None`/`0` = safe default cap)
+
+        Returns:
+            True if update applied, False otherwise.
+        """
+        if not self.stream_manager:
+            return False
+        if not hasattr(self.stream_manager, "set_fps_limit"):
+            return False
+        try:
+            return bool(self.stream_manager.set_fps_limit(fps_limit))
+        except Exception as e:
+            self.logger.error(f"Failed to update FPS limit: {e}")
+            self.errorOccurred.emit(f"Failed to update FPS limit: {e}")
+            return False
 
     def start_recording(self, output_directory: str, metadata: Optional[dict] = None) -> bool:
         """
@@ -189,6 +220,11 @@ class StreamCoordinator(QObject):
             self.recording_manager = RecordingManager(output_directory)
             # Connect signals BEFORE starting so we catch the initial recording started signal
             self.recording_manager.recordingStateChanged.connect(self._on_recording_manager_state_changed)
+            if hasattr(self.recording_manager, "recordingStats"):
+                try:
+                    self.recording_manager.recordingStats.connect(self._on_recording_manager_stats)
+                except Exception:
+                    pass
 
             # Start recording
             success = self.recording_manager.start_recording(resolution)
@@ -250,15 +286,19 @@ class StreamCoordinator(QObject):
 
     def _on_frame_ready(self, frame: np.ndarray, timestamp: float, video_frame_pos: int = 0):
         """Handle frame received from stream."""
+        # Signals queued before a disconnect or emitted by a replaced manager
+        # must not escape into the viewer. Direct calls have no QObject sender;
+        # they are retained for diagnostic/unit-test use.
+        sender = self.sender()
+        if sender is not None:
+            if sender is not self.stream_manager or not self.is_connected:
+                return
+
         # Store video frame position for access by StreamViewerWindow
         self._current_video_frame_pos = video_frame_pos
 
         # Update stream info
         self._update_stream_info()
-
-        # Record frame if recording
-        if self.is_recording:
-            self.record_frame(frame)
 
         # Emit frame for processing with video position
         self.frameReceived.emit(frame, timestamp, video_frame_pos)
@@ -266,6 +306,8 @@ class StreamCoordinator(QObject):
     def _on_connection_status_changed(self, connected: bool, message: str):
         """Handle connection status change."""
         self.is_connected = connected
+        if not connected and self.is_recording:
+            self.stop_recording()
         self.connectionChanged.emit(connected, message)
 
     def _on_stream_error(self, error: str):
@@ -298,6 +340,11 @@ class StreamCoordinator(QObject):
 
         # Forward to UI
         self.recordingStateChanged.emit(recording, path_or_message)
+
+    def _on_recording_manager_stats(self, stats: dict):
+        """Forward live recording stats to UI consumers."""
+        if isinstance(stats, dict):
+            self.recordingStatsUpdated.emit(stats)
 
     def _update_stream_info(self):
         """Update stream statistics (polling fallback)."""

@@ -66,6 +66,55 @@ def test_save_thumbnail_from_array(thumbnail_cache_service, sample_aoi):
         assert os.path.exists(cache_dir)
 
 
+# ---------------------------------------------------------------------------
+# Freeze regression: get_thumbnail must NOT hold the cache mutex across the
+# expensive disk read / full-resolution decode / JPEG encode. Otherwise a
+# worker thread mid-generation blocks the GUI thread, which calls get_thumbnail
+# synchronously for already-cached rows. QMutex is non-recursive, so if this
+# thread already held the lock, tryLock() from inside the generation step would
+# return False; it returning True proves the lock was released first.
+# ---------------------------------------------------------------------------
+
+def test_get_thumbnail_releases_mutex_during_generation(thumbnail_cache_service, sample_aoi):
+    svc = thumbnail_cache_service
+    observed = {}
+
+    def fake_extract(image_path, aoi_data, target_size):
+        got = svc.mutex.tryLock()
+        observed['lock_available'] = got
+        if got:
+            svc.mutex.unlock()
+        return np.zeros((180, 180, 3), dtype=np.uint8)
+
+    # Force a full cache miss so the generation branch runs.
+    svc.load_thumbnail_from_disk = lambda key: None
+    svc.extract_aoi_region_fast = fake_extract
+
+    icon = svc.get_thumbnail('nonexistent.jpg', sample_aoi)
+
+    assert observed.get('lock_available') is True
+    assert icon is not None
+
+
+def test_get_thumbnail_releases_mutex_during_disk_load(thumbnail_cache_service, sample_aoi):
+    svc = thumbnail_cache_service
+    observed = {}
+
+    def fake_disk_load(cache_key):
+        got = svc.mutex.tryLock()
+        observed['lock_available'] = got
+        if got:
+            svc.mutex.unlock()
+        return np.zeros((180, 180, 3), dtype=np.uint8)
+
+    svc.load_thumbnail_from_disk = fake_disk_load
+
+    icon = svc.get_thumbnail('nonexistent.jpg', sample_aoi)
+
+    assert observed.get('lock_available') is True
+    assert icon is not None
+
+
 def test_color_cache_service_initialization():
     """Test ColorCacheService initialization."""
     service = ColorCacheService()

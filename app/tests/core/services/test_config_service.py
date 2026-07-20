@@ -30,6 +30,15 @@ def sample_config_data():
                 "platforms": ["Windows"],
                 "type": "Thermal"
             }
+        ],
+        "streaming_algorithms": [
+            {
+                "name": "ColorDetection",
+                "label": "Color Detection",
+                "controller": "ColorDetectionController",
+                "module": "algorithms.streaming.ColorDetection.controllers.ColorDetectionController",
+                "platforms": ["Windows", "Darwin", "Linux"]
+            }
         ]
     }
 
@@ -57,6 +66,19 @@ def test_get_algorithms(sample_config_data):
         assert algorithms[1]["name"] == "ThermalRange"
         assert algorithms[0]["label"] == "Color Range (RGB)"
         assert algorithms[1]["label"] == "Temperature Range"
+
+
+def test_get_streaming_algorithms(sample_config_data):
+    """Test retrieving the list of streaming algorithms from configuration."""
+    mock_path = "/path/to/config.json"
+
+    with patch("builtins.open", mock_open(read_data=json.dumps(sample_config_data))):
+        config_service = ConfigService(mock_path)
+        algorithms = config_service.get_streaming_algorithms()
+
+        assert len(algorithms) == 1
+        assert algorithms[0]["name"] == "ColorDetection"
+        assert algorithms[0]["controller"] == "ColorDetectionController"
 
 
 def test_get_algorithms_empty_config():

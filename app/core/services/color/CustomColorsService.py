@@ -7,8 +7,6 @@ that are shared between RGB and HSV color pickers, persisting across sessions.
 
 import json
 from typing import List, Tuple, Optional
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QColorDialog
 from core.services.SettingsService import SettingsService
 
 
@@ -20,75 +18,58 @@ class CustomColorsService:
     def __init__(self):
         """Initialize the CustomColorsService."""
         self.settings_service = SettingsService()
-        self._load_custom_colors()
+        self._colors: List[Optional[List[int]]] = [None] * self.MAX_CUSTOM_COLORS
+        self._load_from_settings()
 
-    def _load_custom_colors(self):
-        """Load custom colors from settings and apply to QColorDialog."""
+    def _load_from_settings(self):
+        """Load custom colors from settings."""
         try:
-            # Get stored custom colors from settings
             colors_json = self.settings_service.get_setting('custom_colors')
             if colors_json:
                 colors = json.loads(colors_json)
-                # Apply colors to QColorDialog's static custom colors
                 for i, color_rgb in enumerate(colors[:self.MAX_CUSTOM_COLORS]):
-                    if color_rgb:
-                        color = QColor(color_rgb[0], color_rgb[1], color_rgb[2])
-                        QColorDialog.setCustomColor(i, color)
+                    self._colors[i] = color_rgb
         except (json.JSONDecodeError, TypeError, ValueError):
-            # If there's an error loading, start fresh
             pass
 
+    def _save_to_settings(self):
+        """Save current colors to settings."""
+        self.settings_service.set_setting('custom_colors', json.dumps(self._colors))
+
     def save_custom_colors(self):
-        """Save current custom colors from QColorDialog to settings."""
-        colors = []
-        for i in range(self.MAX_CUSTOM_COLORS):
-            color = QColorDialog.customColor(i)
-            if color.isValid():
-                colors.append([color.red(), color.green(), color.blue()])
-            else:
-                colors.append(None)
+        """Save current custom colors to settings (called after dialog sync)."""
+        self._save_to_settings()
 
-        # Save to settings
-        self.settings_service.set_setting('custom_colors', json.dumps(colors))
-
-    def add_custom_color(self, color: QColor) -> int:
+    def add_custom_color_rgb(self, rgb: Tuple[int, int, int]) -> int:
         """
-        Add a color to the custom colors palette.
+        Add a color as an RGB tuple to the custom colors palette.
 
         Args:
-            color: QColor to add
+            rgb: (r, g, b) tuple to add
 
         Returns:
-            Index where the color was added, or -1 if palette is full
+            Index where the color was added, or -1 if invalid
         """
-        if not color.isValid():
-            return -1
+        r, g, b = rgb
 
         # Check if color already exists
         for i in range(self.MAX_CUSTOM_COLORS):
-            existing = QColorDialog.customColor(i)
-            if existing.isValid() and existing == color:
-                return i  # Color already exists
-
-        # Find first empty slot or overwrite the oldest (last) one
-        for i in range(self.MAX_CUSTOM_COLORS):
-            existing = QColorDialog.customColor(i)
-            if not existing.isValid():
-                # Found empty slot
-                QColorDialog.setCustomColor(i, color)
-                self.save_custom_colors()
+            existing = self._colors[i]
+            if existing and existing[0] == r and existing[1] == g and existing[2] == b:
                 return i
 
-        # No empty slots, overwrite the last one (rotating behavior)
-        # Shift all colors down by one position
-        for i in range(self.MAX_CUSTOM_COLORS - 1, 0, -1):
-            prev_color = QColorDialog.customColor(i - 1)
-            if prev_color.isValid():
-                QColorDialog.setCustomColor(i, prev_color)
+        # Find first empty slot
+        for i in range(self.MAX_CUSTOM_COLORS):
+            if not self._colors[i]:
+                self._colors[i] = [r, g, b]
+                self._save_to_settings()
+                return i
 
-        # Add new color at position 0
-        QColorDialog.setCustomColor(0, color)
-        self.save_custom_colors()
+        # No empty slots - shift down and insert at 0
+        for i in range(self.MAX_CUSTOM_COLORS - 1, 0, -1):
+            self._colors[i] = self._colors[i - 1]
+        self._colors[0] = [r, g, b]
+        self._save_to_settings()
         return 0
 
     def get_custom_colors(self) -> List[Optional[Tuple[int, int, int]]]:
@@ -98,21 +79,52 @@ class CustomColorsService:
         Returns:
             List of RGB tuples or None for empty slots
         """
-        colors = []
+        result = []
+        for color_rgb in self._colors:
+            if color_rgb:
+                result.append((color_rgb[0], color_rgb[1], color_rgb[2]))
+            else:
+                result.append(None)
+        return result
+
+    def apply_to_qt_dialog(self):
+        """Apply stored colors to QColorDialog's static custom colors.
+
+        Call this from a controller/view before showing a QColorDialog.
+        """
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QColorDialog
+
+        for i, color_rgb in enumerate(self._colors[:self.MAX_CUSTOM_COLORS]):
+            if color_rgb:
+                color = QColor(color_rgb[0], color_rgb[1], color_rgb[2])
+                QColorDialog.setCustomColor(i, color)
+
+    def sync_from_qt_dialog(self):
+        """Read custom colors from QColorDialog and save.
+
+        Call this from a controller/view after a QColorDialog is closed.
+        """
+        from PySide6.QtWidgets import QColorDialog
+
         for i in range(self.MAX_CUSTOM_COLORS):
             color = QColorDialog.customColor(i)
             if color.isValid():
-                colors.append((color.red(), color.green(), color.blue()))
+                self._colors[i] = [color.red(), color.green(), color.blue()]
             else:
-                colors.append(None)
-        return colors
+                self._colors[i] = None
+        self._save_to_settings()
+
+    # Legacy aliases for backward compatibility
+    def add_custom_color(self, color) -> int:
+        """Add a QColor to the custom colors palette (legacy bridge)."""
+        if not color.isValid():
+            return -1
+        return self.add_custom_color_rgb((color.red(), color.green(), color.blue()))
 
     def sync_with_dialog(self):
-        """
-        Synchronize custom colors after a QColorDialog has been used.
-        This should be called after any QColorDialog.getColor() call.
-        """
-        self.save_custom_colors()
+        """Synchronize after a QColorDialog has been used (legacy bridge)."""
+        self.sync_from_qt_dialog()
 
 
 # Global instance for sharing across the application

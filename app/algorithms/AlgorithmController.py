@@ -1,3 +1,8 @@
+import sys
+
+from PySide6.QtWidgets import QComboBox, QListView
+
+
 class AlgorithmController:
     """Base class for algorithm controllers that manages algorithm options and validation.
 
@@ -50,3 +55,19 @@ class AlgorithmController:
             NotImplementedError: Must be implemented by subclasses.
         """
         raise NotImplementedError
+
+    @staticmethod
+    def fixComboBoxForMacOS(combo):
+        """Fix combobox dropdown positioning and truncation on macOS.
+
+        Sets size-adjust policy on all platforms and forces Qt's own list-style
+        popup on macOS instead of the native Cocoa menu-style popup.
+
+        Args:
+            combo: QComboBox instance to fix.
+        """
+        combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        if sys.platform == 'darwin':
+            combo.setView(QListView())
+            combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
+            combo.view().setMinimumWidth(combo.minimumSizeHint().width())

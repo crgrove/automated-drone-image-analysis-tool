@@ -126,13 +126,13 @@ class TestFullApplicationFlow:
 
             with patch.object(window, '_get_algorithm_config', side_effect=get_config_side_effect):
                 with patch.object(window, '_import_algorithm_controller', return_value=MockAlgorithmController):
-                    # Switch to MotionDetection
-                    window.load_algorithm('MotionDetection')
-                    assert window.current_algorithm_name == 'MotionDetection'
-
                     # Switch to ColorDetection
                     window.load_algorithm('ColorDetection')
                     assert window.current_algorithm_name == 'ColorDetection'
+
+                    # Switch back to integrated algorithm
+                    window.load_algorithm('ColorAnomalyAndMotionDetection')
+                    assert window.current_algorithm_name == 'ColorAnomalyAndMotionDetection'
         finally:
             window.close()
             QApplication.processEvents()  # Process events to ensure cleanup completes

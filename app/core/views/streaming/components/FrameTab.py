@@ -13,9 +13,11 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 from PySide6.QtCore import Qt, Signal
 from typing import Optional, Dict, Any
 import os
+from core.services.streaming.contracts import StreamAlgorithmCapabilities
+from helpers.TranslationMixin import TranslationMixin
 
 
-class FrameTab(QWidget):
+class FrameTab(TranslationMixin, QWidget):
     """
     Shared Frame tab widget for streaming algorithms.
 
@@ -31,26 +33,29 @@ class FrameTab(QWidget):
 
     configChanged = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, capabilities: StreamAlgorithmCapabilities | None = None):
         """Initialize the Frame tab."""
         super().__init__(parent)
+        self.capabilities = capabilities or StreamAlgorithmCapabilities()
         self._mask_image_path: Optional[str] = None
         self._video_aspect_ratio: Optional[float] = None
         self.setup_ui()
         self.connect_signals()
+        self.apply_capabilities(self.capabilities)
+        self._apply_translations()
 
     def setup_ui(self):
         """Setup the UI components."""
         layout = QVBoxLayout(self)
 
         # Enable checkbox
-        self.enable_mask = QCheckBox("Enable Processing Region Mask")
+        self.enable_mask = QCheckBox(self.tr("Enable Processing Region Mask"))
         self.enable_mask.setChecked(False)
-        self.enable_mask.setToolTip(
+        self.enable_mask.setToolTip(self.tr(
             "Enable to restrict detection processing to a specific region of the video.\n"
             "Useful for excluding edges, UI overlays, or focusing on specific areas.\n"
             "Improves performance by not processing masked regions."
-        )
+        ))
         layout.addWidget(self.enable_mask)
 
         # Container for all mask settings (enabled/disabled with checkbox)
@@ -59,68 +64,68 @@ class FrameTab(QWidget):
         settings_layout.setContentsMargins(0, 0, 0, 0)
 
         # Frame Buffer Mode with checkbox
-        self.enable_frame_buffer = QCheckBox("Enable Frame Buffer")
-        self.enable_frame_buffer.setToolTip(
+        self.enable_frame_buffer = QCheckBox(self.tr("Enable Frame Buffer"))
+        self.enable_frame_buffer.setToolTip(self.tr(
             "Exclude a uniform border from all edges of the video.\n"
             "Enter the number of pixels to exclude from each edge.\n"
             "The inner area will be processed for detections."
-        )
+        ))
         self.enable_frame_buffer.setChecked(True)
         settings_layout.addWidget(self.enable_frame_buffer)
 
         # Frame Mode Settings
-        self.frame_settings_group = QGroupBox("Frame Buffer Settings")
+        self.frame_settings_group = QGroupBox(self.tr("Frame Buffer Settings"))
         frame_layout = QGridLayout(self.frame_settings_group)
         frame_layout.setColumnMinimumWidth(0, 120)
         frame_layout.setColumnStretch(1, 1)
 
-        frame_layout.addWidget(QLabel("Buffer (pixels):"), 0, 0)
+        frame_layout.addWidget(QLabel(self.tr("Buffer (pixels):")), 0, 0)
         self.buffer_spinbox = QSpinBox()
         self.buffer_spinbox.setRange(0, 1000)
         self.buffer_spinbox.setValue(50)
-        self.buffer_spinbox.setToolTip(
+        self.buffer_spinbox.setToolTip(self.tr(
             "Number of pixels to exclude from all edges (0-1000).\n"
             "A value of 50 excludes 50 pixels from top, bottom, left, and right.\n"
             "Useful for removing UI overlays or camera lens distortion at edges.\n"
             "This value is based on the original video resolution."
-        )
+        ))
         frame_layout.addWidget(self.buffer_spinbox, 0, 1)
 
         settings_layout.addWidget(self.frame_settings_group)
 
         # Image Mask Mode with checkbox
-        self.enable_image_mask = QCheckBox("Enable Image Mask")
-        self.enable_image_mask.setToolTip(
+        self.enable_image_mask = QCheckBox(self.tr("Enable Image Mask"))
+        self.enable_image_mask.setToolTip(self.tr(
             "Load a black/white image as a custom mask.\n"
             "White areas will be processed, black areas excluded.\n"
             "The mask will be scaled to match the video resolution."
-        )
+        ))
         self.enable_image_mask.setChecked(False)
         settings_layout.addWidget(self.enable_image_mask)
 
         # Image Mask Settings
-        self.image_settings_group = QGroupBox("Image Mask Settings")
+        self.image_settings_group = QGroupBox(self.tr("Image Mask Settings"))
         image_layout = QVBoxLayout(self.image_settings_group)
 
         # File selection row
         file_layout = QHBoxLayout()
         self.mask_path_display = QLineEdit()
         self.mask_path_display.setReadOnly(True)
-        self.mask_path_display.setPlaceholderText("No mask image selected")
+        self.mask_path_display.setPlaceholderText(self.tr("No mask image selected"))
         file_layout.addWidget(self.mask_path_display)
 
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.setToolTip("Select a black/white image file to use as mask")
+        self.browse_button = QPushButton(self.tr("Browse..."))
+        self.browse_button.setToolTip(self.tr("Select a black/white image file to use as mask"))
         file_layout.addWidget(self.browse_button)
 
-        self.clear_button = QPushButton("Clear")
-        self.clear_button.setToolTip("Clear the selected mask image")
+        self.clear_button = QPushButton(self.tr("Clear"))
+        self.clear_button.setToolTip(self.tr("Clear the selected mask image"))
         file_layout.addWidget(self.clear_button)
 
         image_layout.addLayout(file_layout)
 
         # Info label
-        info_label = QLabel("White = Process, Black = Exclude")
+        info_label = QLabel(self.tr("White = Process, Black = Exclude"))
         info_label.setStyleSheet("color: gray; font-style: italic;")
         image_layout.addWidget(info_label)
 
@@ -128,16 +133,16 @@ class FrameTab(QWidget):
         settings_layout.addWidget(self.image_settings_group)
 
         # Visualization settings
-        vis_group = QGroupBox("Visualization")
+        vis_group = QGroupBox(self.tr("Visualization"))
         vis_layout = QVBoxLayout(vis_group)
 
-        self.show_mask_overlay = QCheckBox("Show mask overlay on video")
+        self.show_mask_overlay = QCheckBox(self.tr("Show mask overlay on video"))
         self.show_mask_overlay.setChecked(True)
-        self.show_mask_overlay.setToolTip(
+        self.show_mask_overlay.setToolTip(self.tr(
             "Display the processing region on the rendered video.\n"
             "Frame mode: Shows a cyan rectangle outline of the processed area.\n"
             "Image mask: Shows a semi-transparent overlay of excluded regions."
-        )
+        ))
         vis_layout.addWidget(self.show_mask_overlay)
 
         settings_layout.addWidget(vis_group)
@@ -168,6 +173,15 @@ class FrameTab(QWidget):
         enabled = self.enable_mask.isChecked()
         self.settings_container.setEnabled(enabled)
 
+    def apply_capabilities(self, capabilities: StreamAlgorithmCapabilities):
+        """Apply shared-control capability gating."""
+        self.capabilities = capabilities
+        supports_mask_controls = bool(capabilities.supports_mask_controls)
+        self.setVisible(supports_mask_controls)
+        self.setEnabled(supports_mask_controls)
+        if not supports_mask_controls:
+            self.enable_mask.setChecked(False)
+
     def _on_frame_buffer_toggled(self, checked: bool):
         """Handle frame buffer checkbox toggle."""
         self.frame_settings_group.setEnabled(checked)
@@ -194,7 +208,7 @@ class FrameTab(QWidget):
         """Handle clear button click to remove mask image."""
         self._mask_image_path = None
         self.mask_path_display.clear()
-        self.mask_path_display.setPlaceholderText("No mask image selected")
+        self.mask_path_display.setPlaceholderText(self.tr("No mask image selected"))
         self._emit_config_changed()
 
     def _validate_and_set_mask_image(self, file_path: str):
@@ -209,18 +223,24 @@ class FrameTab(QWidget):
 
         if not is_valid:
             QMessageBox.warning(
-                self, "Invalid Image",
-                error_msg or "Could not load the selected image. Please choose a valid image file."
+                self, self.tr("Invalid Image"),
+                self.tr("{error}").format(
+                    error=error_msg or self.tr(
+                        "Could not load the selected image. Please choose a valid image file."
+                    )
+                )
             )
             return
 
         # If there's an aspect ratio warning, show it
         if error_msg:  # This is the aspect ratio mismatch warning
             result = QMessageBox.warning(
-                self, "Aspect Ratio Mismatch",
-                f"{error_msg}\n\n"
-                "The mask will be scaled to fit, which may cause distortion.\n\n"
-                "Do you want to continue?",
+                self, self.tr("Aspect Ratio Mismatch"),
+                self.tr(
+                    "{error}\n\n"
+                    "The mask will be scaled to fit, which may cause distortion.\n\n"
+                    "Do you want to continue?"
+                ).format(error=error_msg),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
@@ -302,9 +322,14 @@ class FrameTab(QWidget):
             if 'frame_buffer_pixels' in config:
                 self.buffer_spinbox.setValue(int(config['frame_buffer_pixels']))
 
-            if 'mask_image_path' in config and config['mask_image_path']:
-                self._mask_image_path = config['mask_image_path']
-                self.mask_path_display.setText(os.path.basename(config['mask_image_path']))
+            if 'mask_image_path' in config:
+                if config['mask_image_path']:
+                    self._mask_image_path = config['mask_image_path']
+                    self.mask_path_display.setText(os.path.basename(config['mask_image_path']))
+                else:
+                    self._mask_image_path = None
+                    self.mask_path_display.clear()
+                    self.mask_path_display.setPlaceholderText(self.tr("No mask image selected"))
 
             if 'show_mask_overlay' in config:
                 self.show_mask_overlay.setChecked(bool(config['show_mask_overlay']))

@@ -4,7 +4,9 @@ Wizard controller for MRMap algorithm.
 Provides a simplified, guided interface for configuring MRMap detection parameters.
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QButtonGroup
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QButtonGroup, QHBoxLayout, QLabel, QCheckBox
+
+from algorithms import DetectionExpansion as _DE
 
 from algorithms.AlgorithmController import AlgorithmController
 from core.views.components.LabeledSlider import TextLabeledSlider
@@ -33,12 +35,59 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
         # Aggressiveness slider with text labels matching mockup
         self.aggressivenessSlider = TextLabeledSlider(
             self,
-            presets=["Very \nConservative", "Conservative", "Moderate", "Aggressive", "Very \nAggressive"]
+            presets=[
+                self.tr("Very \nConservative"),
+                self.tr("Conservative"),
+                self.tr("Moderate"),
+                self.tr("Aggressive"),
+                self.tr("Very \nAggressive"),
+            ]
         )
         placeholder = self.aggressivenessSliderPlaceholder
         layout = QVBoxLayout(placeholder)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.aggressivenessSlider)
+
+        self._build_expansion_controls()
+
+    def _build_expansion_controls(self):
+        """Add optional AOI expansion checkboxes. Defaults are fixed in DetectionExpansion."""
+        container = QWidget(self)
+        v = QVBoxLayout(container)
+        v.setContentsMargins(0, 10, 0, 0)
+        v.setSpacing(4)
+
+        header = QLabel(self.tr("Detection Expansion (optional)"))
+        header_font = header.font()
+        header_font.setPointSize(12)
+        header.setFont(header_font)
+        v.addWidget(header)
+
+        row = QHBoxLayout()
+        self.thresholdExpansionCheck = QCheckBox(self.tr("Threshold Expansion"), container)
+        self.thresholdExpansionCheck.setToolTip(self.tr(
+            "When enabled, expand each AOI to also include pixels with histogram bin-counts\n"
+            "below (threshold + {0}). Pixels inside the cluster rectangle are added unconditionally;\n"
+            "pixels outside are added if they are connected through other qualifying pixels."
+        ).format(_DE.DEFAULT_THRESHOLD_EXPANSION))
+        row.addWidget(self.thresholdExpansionCheck)
+
+        row.addSpacing(20)
+        self.hueExpansionCheck = QCheckBox(self.tr("Hue Expansion"), container)
+        self.hueExpansionCheck.setToolTip(self.tr(
+            "When enabled, expand each AOI through neighbors whose hue is within +/- {0}\n"
+            "(OpenCV units) of the mean hue of the original detected pixels.\n"
+            "Pixels with saturation below {1}% or value below {2}% are excluded."
+        ).format(
+            _DE.DEFAULT_HUE_EXPANSION,
+            _DE.DEFAULT_HUE_EXPANSION_SAT_FLOOR_PCT,
+            _DE.DEFAULT_HUE_EXPANSION_VAL_FLOOR_PCT,
+        ))
+        row.addWidget(self.hueExpansionCheck)
+        row.addStretch(1)
+        v.addLayout(row)
+
+        self.verticalLayout_root.insertWidget(self.verticalLayout_root.count() - 1, container)
 
     def _read_ui_state(self):
         """Read current UI selections into simple values."""
@@ -72,6 +121,17 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
         options['segments'] = segments
         options['window'] = window
         options['colorspace'] = 'LAB'  # Default to LAB to match UI default
+        options['threshold_expansion'] = (
+            _DE.DEFAULT_THRESHOLD_EXPANSION if self.thresholdExpansionCheck.isChecked() else 0
+        )
+        if self.hueExpansionCheck.isChecked():
+            options['hue_expansion'] = _DE.DEFAULT_HUE_EXPANSION
+            options['hue_expansion_sat_floor'] = _DE.DEFAULT_HUE_EXPANSION_SAT_FLOOR_PCT
+            options['hue_expansion_val_floor'] = _DE.DEFAULT_HUE_EXPANSION_VAL_FLOOR_PCT
+        else:
+            options['hue_expansion'] = 0
+            options['hue_expansion_sat_floor'] = 0
+            options['hue_expansion_val_floor'] = 0
 
         # Wizard fields retained for reference
         options['complex_scene'] = complex_scene
@@ -116,3 +176,14 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
             else:
                 index = 4  # Very Aggressive
             self.aggressivenessSlider.setValue(index)
+
+        if 'threshold_expansion' in options:
+            try:
+                self.thresholdExpansionCheck.setChecked(int(options.get('threshold_expansion') or 0) > 0)
+            except (TypeError, ValueError):
+                self.thresholdExpansionCheck.setChecked(False)
+        if 'hue_expansion' in options:
+            try:
+                self.hueExpansionCheck.setChecked(int(options.get('hue_expansion') or 0) > 0)
+            except (TypeError, ValueError):
+                self.hueExpansionCheck.setChecked(False)

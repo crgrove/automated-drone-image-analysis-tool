@@ -10,6 +10,7 @@ from core.services.SettingsService import SettingsService
 from core.services.streaming.StreamingUtils import (
     FrameQueue, PerformanceMetrics, StageTimings
 )
+from core.services.streaming.DetectionMath import bbox_iou, centroid_distance
 from PySide6.QtCore import QObject, Signal
 from threading import Lock
 from collections import deque
@@ -85,6 +86,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Frame rate limiting state
         self._last_processed_time = 0.0
         self._last_detections: List[Detection] = []  # Persist detections when skipping frames
+        self._last_camera_moving = False
 
         # self.logger.info("Color anomaly and motion detection orchestrator initialized")
 
@@ -247,26 +249,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
     def _calculate_iou(self, bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]) -> float:
         """Calculate Intersection over Union (IoU) between two bounding boxes."""
-        x1, y1, w1, h1 = bbox1
-        x2, y2, w2, h2 = bbox2
-
-        x_left = max(x1, x2)
-        y_top = max(y1, y2)
-        x_right = min(x1 + w1, x2 + w2)
-        y_bottom = min(y1 + h1, y2 + h2)
-
-        if x_right < x_left or y_bottom < y_top:
-            return 0.0
-
-        intersection_area = (x_right - x_left) * (y_bottom - y_top)
-        box1_area = w1 * h1
-        box2_area = w2 * h2
-        union_area = box1_area + box2_area - intersection_area
-
-        if union_area == 0:
-            return 0.0
-
-        return intersection_area / union_area
+        return bbox_iou(bbox1, bbox2)
 
     def _merge_detections(self, detections: List[Detection]) -> Detection:
         """Merge multiple overlapping detections into one."""
@@ -374,7 +357,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
                 det2 = detections[j]
                 cx2, cy2 = det2.centroid
-                distance = np.sqrt((cx2 - cx1) ** 2 + (cy2 - cy1) ** 2)
+                distance = centroid_distance((cx1, cy1), (cx2, cy2))
 
                 if distance <= config.clustering_distance:
                     cluster.append(det2)
@@ -592,6 +575,59 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         return result
 
+    def create_overlay_frame(
+        self,
+        frame: np.ndarray,
+        is_camera_moving: Optional[bool] = None,
+    ) -> np.ndarray:
+        """Create a frame with non-detection overlays only."""
+        config = self.config
+        camera_moving = self._last_camera_moving if is_camera_moving is None else is_camera_moving
+
+        if config.render_at_processing_res and self._processing_frame is not None:
+            overlay_frame = self._processing_frame.copy()
+            render_scale = self._current_scale_factor if self._current_scale_factor < 1.0 else 1.0
+            needs_upscale = True
+        else:
+            overlay_frame = frame.copy()
+            render_scale = 1.0
+            needs_upscale = False
+
+        if camera_moving and config.enable_motion:
+            overlay = overlay_frame.copy()
+            h, w = overlay_frame.shape[:2]
+            cv2.rectangle(overlay, (0, 0), (w, 80), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.7, overlay_frame, 0.3, 0, overlay_frame)
+            cv2.putText(
+                overlay_frame,
+                "CAMERA MOVEMENT DETECTED",
+                (w // 2 - 190, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 165, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                overlay_frame,
+                "Motion detection paused (color still active)",
+                (w // 2 - 210, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+        if config.mask_enabled and config.show_mask_overlay:
+            overlay_frame = self._draw_mask_overlay(overlay_frame, config, render_scale)
+
+        if needs_upscale and self._original_frame is not None:
+            h_orig, w_orig = self._original_frame.shape[:2]
+            overlay_frame = cv2.resize(overlay_frame, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
+
+        return overlay_frame
+
     def _render_detections_fast(self, frame: np.ndarray, detections: List[Detection]) -> np.ndarray:
         """
         Fast rendering of detections onto a frame (used when skipping frames for FPS limiting).
@@ -691,7 +727,12 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
         return annotated_frame
 
-    def process_frame(self, frame: np.ndarray, timestamp: float) -> Tuple[np.ndarray, List[Detection], StageTimings]:
+    def process_frame(
+        self,
+        frame: np.ndarray,
+        timestamp: float,
+        render_detections: bool = True,
+    ) -> Tuple[np.ndarray, List[Detection], StageTimings]:
         """
         Process a frame through the color anomaly and motion detection pipeline.
 
@@ -709,7 +750,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         with self.config_lock:
             target_fps = self.config.target_fps
 
-        if target_fps > 0:
+        if target_fps is not None and target_fps > 0:
             target_interval = 1.0 / target_fps
             current_time = time.perf_counter()
             elapsed = current_time - self._last_processed_time
@@ -721,7 +762,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
 
                 # Render previous detections onto current frame if we have any
                 if self._last_detections:
-                    annotated_frame = self._render_detections_fast(frame, self._last_detections)
+                    if render_detections:
+                        annotated_frame = self._render_detections_fast(frame, self._last_detections)
+                    else:
+                        annotated_frame = self.create_overlay_frame(frame)
                     return annotated_frame, self._last_detections, timings
                 return frame, [], timings
 
@@ -745,8 +789,15 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         h, w = working_frame.shape[:2]
         scale_factor = 1.0
 
-        if w > config.processing_width or h > config.processing_height:
-            scale_factor = min(config.processing_width / w, config.processing_height / h)
+        processing_width = config.processing_width
+        processing_height = config.processing_height
+
+        if (
+            processing_width is not None and
+            processing_height is not None and
+            (w > processing_width or h > processing_height)
+        ):
+            scale_factor = min(processing_width / w, processing_height / h)
             new_w, new_h = int(w * scale_factor), int(h * scale_factor)
             new_w = max(1, new_w)
             new_h = max(1, new_h)
@@ -776,6 +827,7 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Check for camera movement
         detection_start = time.perf_counter()
         is_camera_moving = self.motion_service.check_camera_movement(processing_gray, config)
+        self._last_camera_moving = is_camera_moving
 
         # Calculate early stopping limit
         max_to_detect = config.max_detections_to_render * 2 if config.max_detections_to_render > 0 else 0
@@ -827,149 +879,152 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Rendering
         render_start = time.perf_counter()
 
-        # Choose rendering resolution
-        # Note: Detections are now at ORIGINAL resolution after immediate scaling
-        if config.render_at_processing_res:
-            render_frame = processing_frame.copy()
-            # Detections are at original res, scale DOWN for processing res rendering
-            render_scale = scale_factor if scale_factor < 1.0 else 1.0
-        else:
-            render_frame = working_frame.copy()
-            # No scaling needed - detections already at original resolution
-            render_scale = 1.0
+        if render_detections:
+            # Choose rendering resolution
+            # Note: Detections are now at ORIGINAL resolution after immediate scaling
+            if config.render_at_processing_res:
+                render_frame = processing_frame.copy()
+                # Detections are at original res, scale DOWN for processing res rendering
+                render_scale = scale_factor if scale_factor < 1.0 else 1.0
+            else:
+                render_frame = working_frame.copy()
+                # No scaling needed - detections already at original resolution
+                render_scale = 1.0
 
-        annotated_frame = render_frame
+            annotated_frame = render_frame
 
-        # Limit detections for performance
-        detections_to_render = detections
-        total_detections = len(detections)
-        detections_dropped = 0
+            # Limit detections for performance
+            detections_to_render = detections
+            total_detections = len(detections)
+            detections_dropped = 0
 
-        if config.show_detections and detections:
-            if config.max_detections_to_render > 0 and len(detections) > config.max_detections_to_render:
-                detections_sorted = sorted(
-                    detections,
-                    key=lambda d: d.confidence * d.area,
-                    reverse=True
-                )
-                detections_to_render = detections_sorted[:config.max_detections_to_render]
-                detections_dropped = len(detections) - config.max_detections_to_render
+            if config.show_detections and detections:
+                if config.max_detections_to_render > 0 and len(detections) > config.max_detections_to_render:
+                    detections_sorted = sorted(
+                        detections,
+                        key=lambda d: d.confidence * d.area,
+                        reverse=True
+                    )
+                    detections_to_render = detections_sorted[:config.max_detections_to_render]
+                    detections_dropped = len(detections) - config.max_detections_to_render
 
-            # Draw detections
-            for i, detection in enumerate(detections_to_render):
-                x, y, w, h = detection.bbox
-                x_scaled = int(x * render_scale)
-                y_scaled = int(y * render_scale)
-                w_scaled = int(w * render_scale)
-                h_scaled = int(h * render_scale)
+                # Draw detections
+                for i, detection in enumerate(detections_to_render):
+                    x, y, w, h = detection.bbox
+                    x_scaled = int(x * render_scale)
+                    y_scaled = int(y * render_scale)
+                    w_scaled = int(w * render_scale)
+                    h_scaled = int(h * render_scale)
 
-                cx_scaled = int(detection.centroid[0] * render_scale)
-                cy_scaled = int(detection.centroid[1] * render_scale)
+                    cx_scaled = int(detection.centroid[0] * render_scale)
+                    cy_scaled = int(detection.centroid[1] * render_scale)
 
-                # Color based on detection type
-                if config.use_detection_color_for_rendering and 'dominant_color' in detection.metadata:
-                    try:
-                        bgr_color = detection.metadata['dominant_color']
-                        bgr_pixel = np.uint8([[[bgr_color[0], bgr_color[1], bgr_color[2]]]])
-                        hsv_pixel = cv2.cvtColor(bgr_pixel, cv2.COLOR_BGR2HSV)
-                        hue = hsv_pixel[0][0][0]
-                        hsv_vibrant = np.uint8([[[hue, 255, 255]]])
-                        bgr_vibrant = cv2.cvtColor(hsv_vibrant, cv2.COLOR_HSV2BGR)
-                        color = tuple(int(x) for x in bgr_vibrant[0][0])
-                    except Exception:
-                        color = (255, 0, 255)
-                elif detection.detection_type == 'fused':
-                    if detection.confidence > 0.7:
-                        color = (255, 255, 0)
-                    elif detection.confidence > 0.4:
-                        color = (255, 128, 0)
-                    else:
-                        color = (200, 100, 0)
-                elif detection.detection_type == 'color_anomaly':
-                    if detection.confidence > 0.7:
-                        color = (255, 0, 255)
-                    elif detection.confidence > 0.4:
-                        color = (255, 0, 128)
-                    else:
-                        color = (200, 0, 100)
-                else:
-                    if detection.confidence > 0.7:
-                        color = (0, 255, 0)
-                    elif detection.confidence > 0.4:
-                        color = (0, 255, 255)
-                    else:
-                        color = (0, 165, 255)
-
-                # Render based on toggles
-                if config.render_contours and detection.contour is not None:
-                    scaled_contour = (detection.contour * render_scale).astype(np.int32)
-                    cv2.drawContours(annotated_frame, [scaled_contour], -1, color, 2)
-
-                if config.render_shape == 0:  # Box
-                    # Add AOI radius buffer from preferences to expand the box
-                    aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
-                    x_expanded = max(0, x_scaled - int(aoi_radius))
-                    y_expanded = max(0, y_scaled - int(aoi_radius))
-                    w_expanded = w_scaled + int(aoi_radius) * 2
-                    h_expanded = h_scaled + int(aoi_radius) * 2
-                    # Ensure expanded box doesn't exceed image bounds
-                    w_expanded = min(w_expanded, annotated_frame.shape[1] - x_expanded)
-                    h_expanded = min(h_expanded, annotated_frame.shape[0] - y_expanded)
-                    cv2.rectangle(annotated_frame, (x_expanded, y_expanded),
-                                  (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
-                    cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
-                elif config.render_shape == 1:  # Circle
-                    if detection.contour is not None:
-                        scaled_contour = (detection.contour * render_scale).astype(np.int32)
-                        (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
-                        base_radius = max(5, int(contour_radius * 1.5))
-                    else:
-                        # Calculate diagonal distance from centroid to corner of bounding box, then add 10% margin
-                        diagonal = np.sqrt(w_scaled * w_scaled + h_scaled * h_scaled) / 2.0
-                        base_radius = max(5, int(diagonal * 1.1))  # 10% margin to ensure full coverage
-                    # Add AOI radius buffer from preferences
-                    aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
-                    radius = base_radius + int(aoi_radius)
-                    cv2.circle(annotated_frame, (cx_scaled, cy_scaled), radius, color, 2)
-                elif config.render_shape == 2:  # Dot
-                    cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 5, color, -1)
-
-                if config.render_text:
-                    if detection.detection_type == 'fused':
-                        label = f"#{i + 1} FUSED {int(detection.area)}px"
+                    # Color based on detection type
+                    if config.use_detection_color_for_rendering and 'dominant_color' in detection.metadata:
+                        try:
+                            bgr_color = detection.metadata['dominant_color']
+                            bgr_pixel = np.uint8([[[bgr_color[0], bgr_color[1], bgr_color[2]]]])
+                            hsv_pixel = cv2.cvtColor(bgr_pixel, cv2.COLOR_BGR2HSV)
+                            hue = hsv_pixel[0][0][0]
+                            hsv_vibrant = np.uint8([[[hue, 255, 255]]])
+                            bgr_vibrant = cv2.cvtColor(hsv_vibrant, cv2.COLOR_HSV2BGR)
+                            color = tuple(int(x) for x in bgr_vibrant[0][0])
+                        except Exception:
+                            color = (255, 0, 255)
+                    elif detection.detection_type == 'fused':
+                        if detection.confidence > 0.7:
+                            color = (255, 255, 0)
+                        elif detection.confidence > 0.4:
+                            color = (255, 128, 0)
+                        else:
+                            color = (200, 100, 0)
                     elif detection.detection_type == 'color_anomaly':
-                        label = f"#{i + 1} COLOR {int(detection.area)}px"
+                        if detection.confidence > 0.7:
+                            color = (255, 0, 255)
+                        elif detection.confidence > 0.4:
+                            color = (255, 0, 128)
+                        else:
+                            color = (200, 0, 100)
                     else:
-                        label = f"#{i + 1} MOTION {int(detection.area)}px"
-                    cv2.putText(annotated_frame, label, (x_scaled, max(15, y_scaled - 5)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
+                        if detection.confidence > 0.7:
+                            color = (0, 255, 0)
+                        elif detection.confidence > 0.4:
+                            color = (0, 255, 255)
+                        else:
+                            color = (0, 165, 255)
 
-            if detections_dropped > 0:
-                warning_text = f"⚠ {total_detections} detections ({detections_dropped} not shown for performance)"
-                cv2.putText(annotated_frame, warning_text, (10, annotated_frame.shape[0] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 1, cv2.LINE_AA)
+                    # Render based on toggles
+                    if config.render_contours and detection.contour is not None:
+                        scaled_contour = (detection.contour * render_scale).astype(np.int32)
+                        cv2.drawContours(annotated_frame, [scaled_contour], -1, color, 2)
 
-        # Show camera movement indicator
-        if is_camera_moving and config.enable_motion:
-            overlay = annotated_frame.copy()
-            h, w = annotated_frame.shape[:2]
-            cv2.rectangle(overlay, (0, 0), (w, 80), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.7, annotated_frame, 0.3, 0, annotated_frame)
-            cv2.putText(annotated_frame, "CAMERA MOVEMENT DETECTED",
-                        (w // 2 - 190, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2, cv2.LINE_AA)
-            cv2.putText(annotated_frame, "Motion detection paused (color still active)",
-                        (w // 2 - 210, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+                    if config.render_shape == 0:  # Box
+                        # Add AOI radius buffer from preferences to expand the box
+                        aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                        x_expanded = max(0, x_scaled - int(aoi_radius))
+                        y_expanded = max(0, y_scaled - int(aoi_radius))
+                        w_expanded = w_scaled + int(aoi_radius) * 2
+                        h_expanded = h_scaled + int(aoi_radius) * 2
+                        # Ensure expanded box doesn't exceed image bounds
+                        w_expanded = min(w_expanded, annotated_frame.shape[1] - x_expanded)
+                        h_expanded = min(h_expanded, annotated_frame.shape[0] - y_expanded)
+                        cv2.rectangle(annotated_frame, (x_expanded, y_expanded),
+                                      (x_expanded + w_expanded, y_expanded + h_expanded), color, 2)
+                        cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 3, color, -1)
+                    elif config.render_shape == 1:  # Circle
+                        if detection.contour is not None:
+                            scaled_contour = (detection.contour * render_scale).astype(np.int32)
+                            (_, _), contour_radius = cv2.minEnclosingCircle(scaled_contour)
+                            base_radius = max(5, int(contour_radius * 1.5))
+                        else:
+                            # Calculate diagonal distance from centroid to corner of bounding box, then add 10% margin
+                            diagonal = np.sqrt(w_scaled * w_scaled + h_scaled * h_scaled) / 2.0
+                            base_radius = max(5, int(diagonal * 1.1))  # 10% margin to ensure full coverage
+                        # Add AOI radius buffer from preferences
+                        aoi_radius = self.settings_service.get_setting('AOIRadius', 15)
+                        radius = base_radius + int(aoi_radius)
+                        cv2.circle(annotated_frame, (cx_scaled, cy_scaled), radius, color, 2)
+                    elif config.render_shape == 2:  # Dot
+                        cv2.circle(annotated_frame, (cx_scaled, cy_scaled), 5, color, -1)
 
-        # Draw mask overlay if enabled
-        if config.mask_enabled and config.show_mask_overlay:
-            annotated_frame = self._draw_mask_overlay(annotated_frame, config, render_scale)
+                    if config.render_text:
+                        if detection.detection_type == 'fused':
+                            label = f"#{i + 1} FUSED {int(detection.area)}px"
+                        elif detection.detection_type == 'color_anomaly':
+                            label = f"#{i + 1} COLOR {int(detection.area)}px"
+                        else:
+                            label = f"#{i + 1} MOTION {int(detection.area)}px"
+                        cv2.putText(annotated_frame, label, (x_scaled, max(15, y_scaled - 5)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
 
-        # Upscale if rendered at processing res
-        if config.render_at_processing_res and scale_factor < 1.0:
-            h_orig, w_orig = working_frame.shape[:2]
-            annotated_frame = cv2.resize(annotated_frame, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
+                if detections_dropped > 0:
+                    warning_text = f"⚠ {total_detections} detections ({detections_dropped} not shown for performance)"
+                    cv2.putText(annotated_frame, warning_text, (10, annotated_frame.shape[0] - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 1, cv2.LINE_AA)
+
+            # Show camera movement indicator
+            if is_camera_moving and config.enable_motion:
+                overlay = annotated_frame.copy()
+                h, w = annotated_frame.shape[:2]
+                cv2.rectangle(overlay, (0, 0), (w, 80), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.7, annotated_frame, 0.3, 0, annotated_frame)
+                cv2.putText(annotated_frame, "CAMERA MOVEMENT DETECTED",
+                            (w // 2 - 190, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2, cv2.LINE_AA)
+                cv2.putText(annotated_frame, "Motion detection paused (color still active)",
+                            (w // 2 - 210, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+            # Draw mask overlay if enabled
+            if config.mask_enabled and config.show_mask_overlay:
+                annotated_frame = self._draw_mask_overlay(annotated_frame, config, render_scale)
+
+            # Upscale if rendered at processing res
+            if config.render_at_processing_res and scale_factor < 1.0:
+                h_orig, w_orig = working_frame.shape[:2]
+                annotated_frame = cv2.resize(annotated_frame, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
+        else:
+            annotated_frame = self.create_overlay_frame(working_frame, is_camera_moving=is_camera_moving)
 
         timings.render_ms = (time.perf_counter() - render_start) * 1000
         timings.total_ms = (time.perf_counter() - overall_start) * 1000
@@ -1052,3 +1107,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self.metrics = PerformanceMetrics()
         self._fps_counter = 0
         self._fps_start_time = time.time()
+
+    def reset(self):
+        """Reset per-session metrics and transient processing state."""
+        self.reset_metrics()
+
+    def cleanup(self):
+        """Reset complete algorithm state for stream shutdown/switch."""
+        self.reset_for_new_video()

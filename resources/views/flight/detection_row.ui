@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DetectionRowWidget</class>
+ <widget class="QWidget" name="DetectionRowWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>360</width>
+    <height>104</height>
+   </rect>
+  </property>
+  <layout class="QHBoxLayout" name="rowLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>4</number>
+   </property>
+   <property name="topMargin">
+    <number>4</number>
+   </property>
+   <property name="rightMargin">
+    <number>4</number>
+   </property>
+   <property name="bottomMargin">
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="thumbnailLabel">
+     <property name="minimumSize">
+      <size>
+       <width>128</width>
+       <height>96</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>128</width>
+       <height>96</height>
+      </size>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QLabel { background-color: #222; border: 1px solid #444; }</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="metaLayout">
+     <property name="spacing">
+      <number>2</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="classLabel">
+       <property name="text">
+        <string>CLASS</string>
+       </property>
+       <property name="font">
+        <font>
+         <bold>true</bold>
+        </font>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="confidenceLabel">
+       <property name="text">
+        <string>--%</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="locationLabel">
+       <property name="text">
+        <string>--, --</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="timestampLabel">
+       <property name="text">
+        <string>--:--:--</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="feedLabel">
+       <property name="text">
+        <string>Feed: --</string>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QLabel { color: palette(mid); font-size: 10px; }</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="actionsLayout">
+     <item>
+      <widget class="QPushButton" name="viewButton">
+       <property name="text">
+        <string>View</string>
+       </property>
+       <property name="toolTip">
+        <string>Open the full-size thumbnail and metadata.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="copyCoordsButton">
+       <property name="text">
+        <string>Copy GPS</string>
+       </property>
+       <property name="toolTip">
+        <string>Copy the detection's coordinates to the clipboard in the operator-preferred format.</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

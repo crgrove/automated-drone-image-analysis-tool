@@ -24,7 +24,7 @@ def video_parser_service():
         service = VideoParserService(
             id=1,
             video=video_path,
-            srt=srt_path,
+            metadata_path=srt_path,
             output=output_dir,
             interval=1.0
         )

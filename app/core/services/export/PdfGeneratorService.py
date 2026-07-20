@@ -175,7 +175,7 @@ class PDFDocTemplate(BaseDocTemplate):
 class PdfGeneratorService:
     """Service for generating PDF reports from analysis results."""
 
-    def __init__(self, viewer, organization="", search_name="", images=None, include_images_without_flagged_aois=False):
+    def __init__(self, viewer, organization="", search_name="", images=None, include_images_without_flagged_aois=False, map_tile_source="map"):
         """
         Initialize the PDF generator service.
 
@@ -185,6 +185,7 @@ class PdfGeneratorService:
             search_name: Search/mission name for the report
             images: List of images to include in the PDF (if None, will use viewer.images)
             include_images_without_flagged_aois: Whether to include images without flagged AOIs
+            map_tile_source: Tile source for overview map ('map' or 'satellite')
         """
 
         self.logger = LoggerService()
@@ -192,6 +193,7 @@ class PdfGeneratorService:
         self.organization = organization if organization else "[ORGANIZATION]"
         self.search_name = search_name if search_name else "Analysis"
         self.include_images_without_flagged_aois = include_images_without_flagged_aois
+        self.map_tile_source = map_tile_source if map_tile_source in ("map", "satellite") else "map"
         self.images = images  # Store the images to use for PDF generation
         self.story = []
         self.doc = None
@@ -545,8 +547,17 @@ class PdfGeneratorService:
                 # Add AOI GPS coordinates if available
                 aoi_gps = self._calculate_aoi_gps(img, aoi)
                 if aoi_gps:
-                    aoi_gps_str = f"{aoi_gps['latitude']:.6f}, {aoi_gps['longitude']:.6f}"
-                    metadata_lines.append(f"<b>Estimated AOI GPS Location:</b> {aoi_gps_str}")
+                    lat, lon = aoi_gps['latitude'], aoi_gps['longitude']
+                    aoi_gps_str = f"{lat:.6f}, {lon:.6f}"
+
+                    # Create Google Maps link
+                    maps_url = f"https://www.google.com/maps?q={lat},{lon}"
+                    maps_link = f'<a href="{maps_url}" color="blue"><u>(Open in Google Maps)</u></a>'
+                    placemark_name = f"{img['name']} - AOI {aoi_idx + 1}"
+                    geo_url = f"geo:{lat},{lon},u=20&({placemark_name})"
+                    geo_link = f'<a href="{geo_url}" color="blue"><u>(Open in GPS)</u></a>'
+
+                    metadata_lines.append(f"<b>Estimated AOI GPS Location:</b> {aoi_gps_str} {maps_link} {geo_link}")
 
                 metadata_lines.append(f"<b>AOI Pixel Area:</b> {aoi.get('area', 0):.0f}")
 
@@ -944,8 +955,7 @@ class PdfGeneratorService:
             np.ndarray: Tile image (256x256x3) or None
         """
         try:
-            # Use OpenStreetMap tiles (prefer 'map' for streets/trails visibility)
-            tile_source = 'map'
+            tile_source = self.map_tile_source
             cache_path = cache_dir / f"{tile_source}_{zoom}_{x_tile}_{y_tile}.png"
 
             # Check cache first
@@ -954,8 +964,11 @@ class PdfGeneratorService:
                 if tile_img is not None and tile_img.shape[0] == 256 and tile_img.shape[1] == 256:
                     return tile_img
 
-            # Download tile
-            url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
+            # Download tile from selected source
+            if tile_source == 'satellite':
+                url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{zoom}/{y_tile}/{x_tile}"
+            else:
+                url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
 
             # Use requests with timeout
             headers = {'User-Agent': 'ADIAT/1.0'}
@@ -1014,8 +1027,11 @@ class PdfGeneratorService:
             if hasattr(self.viewer, 'custom_agl_altitude_ft') and self.viewer.custom_agl_altitude_ft and self.viewer.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.viewer.custom_agl_altitude_ft
 
+            # Get terrain preference
+            use_terrain = getattr(self.viewer, 'use_terrain_elevation', True)
+
             # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft)
+            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft, use_terrain)
 
             if result:
                 lat, lon = result
@@ -1201,7 +1217,7 @@ class PdfGeneratorService:
 
             aoi_service = AOIService(image, img_array=img_array)
 
-            color_result = aoi_service.get_aoi_representative_color(aoi)
+            color_result = aoi_service.get_cached_or_representative_color(aoi)
             if color_result:
                 # Return hue angle with color square (matching viewer display)
                 color_hex = color_result['hex']

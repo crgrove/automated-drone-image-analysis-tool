@@ -64,7 +64,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Please select the ADIAT_Data.xml file from previous analysis:</string>
+             <string>Select a results file from a previous analysis: an ADIAT_Data.xml result, or a batch's Search Coordinator project (ADIAT_Search_*.xml).</string>
             </property>
             <property name="wordWrap">
              <bool>true</bool>

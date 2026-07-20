@@ -8,15 +8,17 @@ from core.services.image.AOIService import AOIService
 class KMLGeneratorService:
     """Service to generate a KML file with placemarks for flagged AOIs."""
 
-    def __init__(self, custom_altitude_ft=None):
+    def __init__(self, custom_altitude_ft=None, use_terrain=True):
         """
         Initializes the KMLGeneratorService by creating a new KML document.
 
         Args:
             custom_altitude_ft: Optional custom altitude in feet to use for GSD calculations
+            use_terrain: Whether to use terrain elevation data for AOI positioning
         """
         self.kml = simplekml.Kml()
         self.custom_altitude_ft = custom_altitude_ft
+        self.use_terrain = use_terrain
 
     def add_aoi_placemark(self, name, lat, lon, description, color_rgb=None):
         """
@@ -90,14 +92,52 @@ class KMLGeneratorService:
         # Assign StyleMap to placemark
         pnt.stylemap = style_map
 
+    def add_pod_overlay(self, image_path, box, name="POD Coverage",
+                        description=None, packed=False, href=None):
+        """
+        Adds the POD heatmap as a KML GroundOverlay.
+
+        Args:
+            image_path (str): Path to the overlay PNG on disk.
+            box (dict): WGS84 bounds {'north', 'south', 'east', 'west'}.
+            name (str): Overlay name shown in the KML tree.
+            description (str): Optional description text.
+            packed (bool): Pack the image into the document so a .kmz save is
+                self-contained. When False, the overlay references ``href``
+                (or the absolute image path) instead.
+            href (str): Relative href to use when not packing (e.g. a sidecar
+                folder next to the .kml).
+
+        Returns:
+            The created GroundOverlay.
+        """
+        overlay = self.kml.newgroundoverlay(name=name)
+        if packed:
+            overlay.icon.href = self.kml.addfile(image_path)
+        else:
+            overlay.icon.href = href or image_path
+        overlay.latlonbox.north = box['north']
+        overlay.latlonbox.south = box['south']
+        overlay.latlonbox.east = box['east']
+        overlay.latlonbox.west = box['west']
+        if description:
+            overlay.description = description
+        return overlay
+
     def save_kml(self, path):
         """
         Saves the KML document to a file.
 
+        A ``.kmz`` path saves a zipped document (packing any files added via
+        ``add_pod_overlay(packed=True)``); anything else saves plain KML.
+
         Args:
             path (str): The file path where the KML document will be stored.
         """
-        self.kml.save(path)
+        if str(path).lower().endswith('.kmz'):
+            self.kml.savekmz(path)
+        else:
+            self.kml.save(path)
 
     def generate_kml_export(self, images, output_path, progress_callback=None, cancel_check=None):
         """
@@ -132,7 +172,7 @@ class KMLGeneratorService:
             # Get image GPS coordinates and metadata
             try:
                 # Create ImageService to extract EXIF data
-                image_service = ImageService(image_path, image.get('mask_path', ''))
+                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
 
                 # Get GPS from EXIF data as a dict (not formatted string)
                 image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
@@ -185,7 +225,7 @@ class KMLGeneratorService:
                     custom_alt_ft = self.custom_altitude_ft
 
                     # Calculate AOI GPS coordinates using the convenience method
-                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft, self.use_terrain)
 
                     if result:
                         aoi_lat, aoi_lon = result
@@ -199,7 +239,7 @@ class KMLGeneratorService:
                 color_info = ""
                 marker_rgb = None
                 try:
-                    color_result = aoi_service.get_aoi_representative_color(aoi)
+                    color_result = aoi_service.get_cached_or_representative_color(aoi)
                     if color_result:
                         marker_rgb = color_result['rgb']
                         color_info = f"Color: Hue: {color_result['hue_degrees']}° {color_result['hex']}\n"
@@ -264,7 +304,7 @@ class KMLGeneratorService:
             # Get image GPS coordinates
             try:
                 # Create ImageService to extract EXIF data
-                image_service = ImageService(image_path, image.get('mask_path', ''))
+                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
 
                 # Get GPS from EXIF data
                 image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)

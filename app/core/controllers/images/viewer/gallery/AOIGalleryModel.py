@@ -503,8 +503,11 @@ class AOIGalleryModel(QAbstractListModel):
     def _get_display_text(self, image_idx, aoi_idx, aoi_data):
         """Get display text for an AOI item."""
         try:
+            number = aoi_data.get('number')
+            aoi_label = f"AOI #{number}" if number is not None else f"AOI {aoi_idx}"
+
             if not self.viewer or image_idx >= len(self.viewer.images):
-                return f"AOI {aoi_idx}"
+                return aoi_label
 
             image = self.viewer.images[image_idx]
             image_name = image.get('name', f'Image {image_idx}')
@@ -512,12 +515,13 @@ class AOIGalleryModel(QAbstractListModel):
             # Get confidence if available
             confidence = aoi_data.get('confidence')
             if confidence is not None:
-                return f"{image_name}\nAOI {aoi_idx} - {confidence:.1%}"
+                return f"{image_name}\n{aoi_label} - {confidence:.1%}"
             else:
-                return f"{image_name}\nAOI {aoi_idx}"
+                return f"{image_name}\n{aoi_label}"
 
         except Exception:
-            return f"AOI {aoi_idx}"
+            number = aoi_data.get('number') if isinstance(aoi_data, dict) else None
+            return f"AOI #{number}" if number is not None else f"AOI {aoi_idx}"
 
     def _get_tooltip_text(self, image_idx, aoi_idx, aoi_data):
         """Get tooltip text with detailed AOI information."""
@@ -528,7 +532,9 @@ class AOIGalleryModel(QAbstractListModel):
             image = self.viewer.images[image_idx]
             image_name = image.get('name', f'Image {image_idx}')
 
-            lines = [f"Image: {image_name}", f"AOI Index: {aoi_idx}"]
+            number = aoi_data.get('number')
+            aoi_line = f"AOI #{number}" if number is not None else f"AOI Index: {aoi_idx}"
+            lines = [f"Image: {image_name}", aoi_line]
 
             # Add AOI details
             center = aoi_data.get('center')

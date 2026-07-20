@@ -388,18 +388,16 @@ class AlgorithmService:
             if not areas_of_interest:
                 return
 
-            # Set up thumbnail cache directory (still needed for disk storage)
+            # Set up thumbnail cache directory
             thumbnail_cache_dir = Path(output_dir) / '.thumbnails'
             thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
 
             # Initialize cache services
-            # Note: Color and temperature cache data goes to XML, not JSON files
             thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
             color_service = ColorCacheService()  # In-memory only - data goes to XML
-            temperature_service = TemperatureCacheService() if thermal else None  # In-memory only - data goes to XML
+            temperature_service = TemperatureCacheService() if thermal else None
 
             # Convert BGR to RGB for color calculations
-            # The img from detection is typically in BGR (OpenCV default)
             if len(img.shape) == 3 and img.shape[2] == 3:
                 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             else:
@@ -410,7 +408,6 @@ class AlgorithmService:
             # Process each AOI
             for aoi in areas_of_interest:
                 try:
-                    # Extract thumbnail from in-memory image
                     center = aoi.get('center')
                     radius = aoi.get('radius', 50)
 
@@ -418,40 +415,31 @@ class AlgorithmService:
                         continue
 
                     cx, cy = center
-                    crop_radius = radius + 10  # Add padding
+                    crop_radius = radius + 10
 
-                    # Calculate crop bounds
                     x1 = max(0, int(cx - crop_radius))
                     y1 = max(0, int(cy - crop_radius))
                     x2 = min(width, int(cx + crop_radius))
                     y2 = min(height, int(cy + crop_radius))
 
-                    # Extract region from in-memory image
                     thumbnail_region = img[y1:y2, x1:x2]
 
                     if thumbnail_region.size == 0:
                         continue
 
-                    # Resize to target thumbnail size
-                    # Use INTER_AREA for downscaling - faster and better quality than INTER_LANCZOS4
                     thumbnail_resized = cv2.resize(thumbnail_region, (180, 180), interpolation=cv2.INTER_AREA)
 
-                    # Convert to RGB if needed (some algorithms work in different color spaces)
                     if len(thumbnail_resized.shape) == 2:
-                        # Grayscale
                         thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_GRAY2RGB)
                     elif thumbnail_resized.shape[2] == 4:
-                        # RGBA
                         thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGRA2RGB)
                     else:
-                        # BGR to RGB
                         thumbnail_rgb = cv2.cvtColor(thumbnail_resized, cv2.COLOR_BGR2RGB)
 
                     # Save thumbnail to dataset cache
                     thumbnail_service.save_thumbnail_from_array(image_path, aoi, thumbnail_rgb, thumbnail_cache_dir)
 
-                    # Calculate representative color directly from in-memory image
-                    # This avoids creating AOIService/ImageService which reads metadata from disk
+                    # Calculate representative color
                     color_result = self._calculate_aoi_representative_color(img_rgb, aoi)
                     if color_result:
                         color_info = {
@@ -459,25 +447,17 @@ class AlgorithmService:
                             'hex': color_result['hex'],
                             'hue_degrees': color_result['hue_degrees']
                         }
-                        # Store color info directly in AOI dict for XML export (no JSON file)
                         aoi['color_info'] = color_info
-                        # Also store in cache service for memory tracking (will be written to XML later)
                         color_service.save_color_info(image_path, aoi, color_info)
 
-                    # Temperature is already in aoi dict, just track in cache service
                     if 'temperature' in aoi and aoi['temperature'] is not None:
                         temperature_service.save_temperature(image_path, aoi, aoi['temperature'])
 
                 except Exception as e:
-                    # Log error but continue processing other AOIs
                     self.logger.error(f"Error caching AOI at {center}: {e}")
                     continue
 
-            # Note: Color and temperature cache data is now stored in AOI dicts and will be written to XML
-            # No need to save JSON files - data goes directly to XML via AnalyzeService
-
         except Exception as e:
-            # Don't fail the entire detection if cache generation fails
             self.logger.error(f"Error generating AOI cache: {e}")
 
     def _calculate_aoi_representative_color(self, img_rgb: np.ndarray, aoi: dict) -> dict:
@@ -741,7 +721,8 @@ class AnalysisResult:
     """Class representing the result of an image processing operation."""
 
     def __init__(self, input_path=None, output_path=None, output_dir=None,
-                 areas_of_interest=None, base_contour_count=None, error_message=None):
+                 areas_of_interest=None, base_contour_count=None, error_message=None,
+                 image_width=None, image_height=None):
         """
         Initializes an AnalysisResult with the given parameters.
 
@@ -752,6 +733,8 @@ class AnalysisResult:
             areas_of_interest (list, optional): List of detected areas of interest. Defaults to None.
             base_contour_count (int, optional): Count of base contours. Defaults to None.
             error_message (str, optional): Error message if processing failed. Defaults to None.
+            image_width (int, optional): Original image width in pixels. Defaults to None.
+            image_height (int, optional): Original image height in pixels. Defaults to None.
         """
         self.input_path = input_path
 
@@ -767,3 +750,5 @@ class AnalysisResult:
         self.areas_of_interest = areas_of_interest
         self.base_contour_count = base_contour_count
         self.error_message = error_message
+        self.image_width = image_width
+        self.image_height = image_height

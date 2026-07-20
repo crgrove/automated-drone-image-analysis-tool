@@ -55,16 +55,16 @@ class ColorSpace(Enum):
 class ColorAnomalyAndMotionDetectionConfig:
     """Configuration for color anomaly and motion detection."""
     # Processing resolution
-    processing_width: int = 1280
-    processing_height: int = 720
+    processing_width: Optional[int] = 1280
+    processing_height: Optional[int] = 720
 
     # Detection toggles
-    enable_motion: bool = True
-    enable_color_quantization: bool = False
+    enable_motion: bool = False
+    enable_color_quantization: bool = True
     enable_rx_anomaly: bool = False
 
     # Performance settings
-    target_fps: int = 0  # Target FPS for processing (0 = use video's native FPS, no limiting)
+    target_fps: Optional[int] = None
 
     # Motion algorithm selection
     motion_algorithm: MotionAlgorithm = MotionAlgorithm.MOG2
@@ -72,7 +72,7 @@ class ColorAnomalyAndMotionDetectionConfig:
     # Detection parameters
     min_detection_area: int = 100
     max_detection_area: int = 50000
-    motion_threshold: int = 25
+    motion_threshold: int = 10
     blur_kernel_size: int = 5
     morphology_kernel_size: int = 3
     enable_morphology: bool = True
@@ -82,8 +82,8 @@ class ColorAnomalyAndMotionDetectionConfig:
     persistence_threshold: int = 2
 
     # Background subtraction parameters
-    bg_history: int = 100
-    bg_var_threshold: float = 25.0
+    bg_history: int = 50
+    bg_var_threshold: float = 15.0
     bg_detect_shadows: bool = False
 
     # Display options
@@ -94,7 +94,7 @@ class ColorAnomalyAndMotionDetectionConfig:
     render_shape: int = 1  # 0=box, 1=circle, 2=dot, 3=off
     render_text: bool = False
     render_contours: bool = False
-    render_at_processing_res: bool = False
+    render_at_processing_res: bool = True
     use_detection_color_for_rendering: bool = False
 
     # Camera movement detection
@@ -109,7 +109,7 @@ class ColorAnomalyAndMotionDetectionConfig:
     use_tile_analysis: bool = False
 
     # Color space selection for anomaly detection
-    color_space: ColorSpace = ColorSpace.BGR
+    color_space: ColorSpace = ColorSpace.LAB
     hsv_min_saturation: int = 30  # Min saturation (0-255) for HSV mode - filters out grays/whites
     lab_min_chroma: int = 10  # Min distance from neutral for LAB mode - filters out grays
 
@@ -124,8 +124,8 @@ class ColorAnomalyAndMotionDetectionConfig:
     enable_fusion: bool = True
     fusion_mode: FusionMode = FusionMode.UNION
     enable_temporal_voting: bool = True
-    temporal_window_frames: int = 3
-    temporal_threshold_frames: int = 2
+    temporal_window_frames: int = 5
+    temporal_threshold_frames: int = 3
 
     # False Positive Reduction
     enable_aspect_ratio_filter: bool = True

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'ImageAnalysisGuide.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -708,7 +708,7 @@ class Ui_ImageAnalysisGuide(object):
     def retranslateUi(self, ImageAnalysisGuide):
         ImageAnalysisGuide.setWindowTitle(QCoreApplication.translate("ImageAnalysisGuide", u"Image Analysis Guide", None))
         self.labelPageReviewOrNewTitle.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Welcome to ADIAT", None))
-        self.labelFileInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Please select the ADIAT_Data.xml file from previous analysis:", None))
+        self.labelFileInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Select a results file from a previous analysis: an ADIAT_Data.xml result, or a batch's Search Coordinator project (ADIAT_Search_*.xml).", None))
         self.filePathLabel.setText(QCoreApplication.translate("ImageAnalysisGuide", u"No file selected", None))
         self.browseFileButton.setText(QCoreApplication.translate("ImageAnalysisGuide", u"Browse...", None))
         self.labelInstructions.setText(QCoreApplication.translate("ImageAnalysisGuide", u"What would you like to do?", None))

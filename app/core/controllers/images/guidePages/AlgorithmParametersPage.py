@@ -6,6 +6,7 @@ based on the algorithm selected in the previous page.
 """
 
 from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyWizardController import ThermalAnomalyWizardController
+from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyWizardController import ThermalResidualAnomalyWizardController
 from algorithms.images.ThermalRange.controllers.ThermalRangeWizardController import ThermalRangeWizardController
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeWizardController import HSVColorRangeWizardController
 from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorWizardController import AIPersonDetectorWizardController
@@ -14,6 +15,7 @@ from algorithms.images.MatchedFilter.controllers.MatchedFilterWizardController i
 from algorithms.images.RXAnomaly.controllers.RXAnomalyWizardController import RXAnomalyWizardController
 from algorithms.images.ColorRange.controllers.ColorRangeWizardController import ColorRangeWizardController
 from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
+from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyController import ThermalResidualAnomalyController
 from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
 from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
 from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
@@ -160,7 +162,9 @@ class AlgorithmParametersPage(BasePage):
                 page_title_widget = getattr(self.dialog, 'labelPage5Title_AlgorithmParameters', None)
                 if page_title_widget is not None:
                     algo_label = self.active_algorithm.get('label', 'Algorithm')
-                    page_title_widget.setText(f"{algo_label} Algorithm Settings")
+                    page_title_widget.setText(
+                        self.tr("{algorithm} Algorithm Settings").format(algorithm=algo_label)
+                    )
             except Exception:
                 # Best-effort only; ignore if not available
                 pass

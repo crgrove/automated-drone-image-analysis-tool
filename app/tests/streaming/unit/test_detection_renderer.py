@@ -113,3 +113,54 @@ class TestDetectionRenderer:
 
         assert result is not None
         assert result.shape == sample_frame.shape
+
+    def test_render_with_normalized_metadata_controls_shape_and_color(self, sample_frame):
+        """Renderer should honor normalized per-detection render metadata."""
+        detections = [
+            {
+                'bbox': (60, 60, 40, 40),
+                'centroid': (80, 80),
+                'confidence': 0.9,
+                'class_name': 'Color_0',
+                'metadata': {
+                    'render_shape': 2,
+                    'render_text': True,
+                    'render_color': (0, 0, 255),
+                    'render_label': 'Tracked',
+                }
+            }
+        ]
+
+        renderer = DetectionRenderer()
+        result = renderer.render(sample_frame, detections)
+
+        assert result is not None
+        assert result.shape == sample_frame.shape
+        assert not np.array_equal(result, sample_frame)
+
+    def test_render_skips_detections_marked_hidden(self, sample_frame):
+        """Renderer should skip detections explicitly marked as non-rendered."""
+        detections = [
+            {
+                'bbox': (40, 40, 20, 20),
+                'confidence': 0.9,
+                'class_name': 'hidden',
+                'metadata': {'render_skip': True}
+            }
+        ]
+
+        renderer = DetectionRenderer()
+        result = renderer.render(sample_frame, detections)
+
+        assert np.array_equal(result, sample_frame)
+
+    def test_render_can_draw_in_place_when_copy_disabled(self, sample_frame):
+        """Renderer should support drawing directly onto an owned display frame."""
+        detections = [{'bbox': (40, 40, 20, 20), 'confidence': 0.9, 'class_name': 'person'}]
+        renderer = DetectionRenderer()
+        original = sample_frame.copy()
+
+        result = renderer.render(sample_frame, detections, copy_frame=False)
+
+        assert result is sample_frame
+        assert not np.array_equal(result, original)

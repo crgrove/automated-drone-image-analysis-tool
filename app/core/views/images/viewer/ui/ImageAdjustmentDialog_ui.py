@@ -70,6 +70,8 @@ class Ui_ImageAdjustmentDialog(object):
 
         self.verticalLayout.addLayout(self.buttonLayout)
 
+        self.retranslateUi(ImageAdjustmentDialog)
+
     def _create_slider_group(self, label_text, slider_name, label_name, value_name, min_val, max_val, default_val):
         """Create a labeled slider group with value display."""
         # Group widget
@@ -133,3 +135,12 @@ class Ui_ImageAdjustmentDialog(object):
     def retranslateUi(self, ImageAdjustmentDialog):
         _translate = QtCore.QCoreApplication.translate
         ImageAdjustmentDialog.setWindowTitle(_translate("ImageAdjustmentDialog", "Image Adjustments"))
+        self.titleLabel.setText(_translate("ImageAdjustmentDialog", "Image Adjustments"))
+        self.resetButton.setText(_translate("ImageAdjustmentDialog", "Reset"))
+        self.applyButton.setText(_translate("ImageAdjustmentDialog", "Apply"))
+        self.closeButton.setText(_translate("ImageAdjustmentDialog", "Close"))
+        self.exposureLabel.setText(_translate("ImageAdjustmentDialog", "Exposure"))
+        self.highlightsLabel.setText(_translate("ImageAdjustmentDialog", "Highlights"))
+        self.shadowsLabel.setText(_translate("ImageAdjustmentDialog", "Shadows"))
+        self.clarityLabel.setText(_translate("ImageAdjustmentDialog", "Clarity"))
+        self.radiusLabel.setText(_translate("ImageAdjustmentDialog", "Radius"))

@@ -6,6 +6,8 @@ import glob
 import json
 import re
 import os
+import sys
+import shutil
 from subprocess import check_call
 
 from setuptools import setup, find_packages, Command
@@ -139,7 +141,30 @@ class bdist_app(Command):
             self.run_command('build_res')
         else:
             print("Warning: pyqt-distutils not found, skipping UI resource build")
-        check_call(['pyinstaller', '-y', 'app.spec'])
+        # Compile translation files before packaging
+        repo_root = Path(__file__).resolve().parent
+        translation_ts = glob.glob(str(repo_root / 'translations' / '*.ts'))
+        if translation_ts:
+            try:
+                check_call(['pyside6-lrelease', *translation_ts], cwd=str(repo_root))
+            except Exception as e:
+                print(f"Warning: failed to compile translations: {e}")
+            missing_qm = []
+            for ts_path in translation_ts:
+                qm_path = Path(ts_path).with_suffix('.qm')
+                if not qm_path.exists():
+                    missing_qm.append(str(qm_path))
+            if missing_qm:
+                raise RuntimeError(f"Missing compiled translations: {', '.join(missing_qm)}")
+        check_call([sys.executable, '-m', 'PyInstaller', '-y', 'app.spec'])
+        # Ensure compiled translations are present in the dist output
+        dist_root = repo_root / 'dist' / 'ADIAT'
+        target_dir = dist_root / '_internal' / 'translations'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for ts_path in translation_ts:
+            qm_path = Path(ts_path).with_suffix('.qm')
+            if qm_path.exists():
+                shutil.copy2(qm_path, target_dir / qm_path.name)
 
 
 cmdclass['bdist_app'] = bdist_app

@@ -6,10 +6,12 @@ Similar to AlgorithmController for image analysis algorithms.
 """
 
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Signal, QMetaObject
+from PySide6.QtCore import Signal, QMetaObject, QObject
 import numpy as np
 from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod, ABCMeta
+
+from core.services.streaming.contracts import StreamAlgorithmCapabilities
 
 
 # Create a metaclass that combines QWidget's metaclass with ABCMeta
@@ -121,6 +123,19 @@ class StreamAlgorithmController(QWidget, ABC, metaclass=QABCMeta):
         Must be implemented by subclass.
         """
         pass
+
+    def get_stream_service(self) -> Optional[QObject]:
+        """
+        Return the stream processing service object used by this controller.
+
+        Controllers should override this to expose a unified processing service
+        that can be moved to the worker thread.
+        """
+        return None
+
+    def get_stream_capabilities(self) -> StreamAlgorithmCapabilities:
+        """Return shared-control capabilities for this algorithm."""
+        return StreamAlgorithmCapabilities()
 
     def on_stream_connected(self, resolution: tuple):
         """

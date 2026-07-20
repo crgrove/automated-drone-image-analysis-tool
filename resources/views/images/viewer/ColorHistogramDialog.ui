@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ColorHistogramDialog</class>
+ <widget class="QDialog" name="ColorHistogramDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>760</width>
+    <height>520</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Hue Histogram</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="descriptionLabel">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Hue distribution of all pixels vs. AOI pixels. Hovering the chart highlights matching pixels in the image.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="selectionLayout">
+     <item>
+      <widget class="QCheckBox" name="showAoiOnlyCheckBox">
+       <property name="text">
+        <string>AOIs Only</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="selectionSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="resetZoomButton">
+       <property name="text">
+        <string>Reset Zoom</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="zoomInfoLabel">
+     <property name="text">
+      <string>Drag on the histogram or use the mouse wheel to zoom. Double-click or use Reset Zoom to return to the full range.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="chartContainer" native="true"/>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rangeGroupBox">
+     <property name="title">
+      <string>Visible Hue Range</string>
+     </property>
+     <layout class="QVBoxLayout" name="rangeLayout">
+      <item>
+       <widget class="QWidget" name="rangeSliderContainer" native="true"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="rangeValueLayout">
+        <item>
+         <widget class="QLabel" name="minValueLabel">
+          <property name="text">
+           <string>Minimum: --</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="maxValueLabel">
+          <property name="text">
+           <string>Maximum: --</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="rangeSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="resetRangeButton">
+          <property name="text">
+           <string>Reset Range</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="hoverInfoLabel">
+     <property name="text">
+      <string>Hover over the histogram to inspect a hue band.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -7,7 +7,7 @@ Tests cache path detection and management.
 import pytest
 import tempfile
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from pathlib import Path
 from core.services.cache.CachePathService import CachePathService
 
@@ -24,36 +24,24 @@ def test_cache_path_service_initialization(cache_path_service):
     assert cache_path_service.logger is not None
 
 
-def test_check_and_prompt_for_caches_all_exist(cache_path_service):
+def test_get_missing_caches_all_exist(cache_path_service):
     """Test when all caches exist."""
     with tempfile.TemporaryDirectory() as tmpdir:
         xml_path = os.path.join(tmpdir, 'ADIAT_Data.xml')
         thumbnail_cache = Path(tmpdir) / '.thumbnails'
         thumbnail_cache.mkdir(exist_ok=True)
 
-        with patch('core.services.cache.CachePathService.CacheLocationDialog'):
-            alt_dir, success = cache_path_service.check_and_prompt_for_caches(
-                xml_path, None
-            )
-
-            assert success is True
+        missing = cache_path_service.get_missing_caches(xml_path)
+        assert missing == []
 
 
-def test_check_and_prompt_for_caches_missing(cache_path_service):
+def test_get_missing_caches_missing(cache_path_service):
     """Test when caches are missing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         xml_path = os.path.join(tmpdir, 'ADIAT_Data.xml')
 
-        mock_dialog = MagicMock()
-        mock_dialog.exec.return_value = 0  # Rejected
-        mock_dialog.get_selected_path.return_value = None
-
-        with patch('core.services.cache.CachePathService.CacheLocationDialog', return_value=mock_dialog):
-            alt_dir, success = cache_path_service.check_and_prompt_for_caches(
-                xml_path, None
-            )
-
-            assert success is True  # Should continue anyway
+        missing = cache_path_service.get_missing_caches(xml_path)
+        assert 'Thumbnails' in missing
 
 
 def test_update_cache_paths(cache_path_service):

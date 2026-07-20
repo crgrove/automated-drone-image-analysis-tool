@@ -6,7 +6,8 @@ UI manipulation is handled by AOIUIComponent.
 """
 
 import colorsys
-import fnmatch
+import cv2
+import json
 import math
 import numpy as np
 import qtawesome as qta
@@ -26,9 +27,10 @@ from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
 from helpers.LocationInfo import LocationInfo
 from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
 from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
+from helpers.TranslationMixin import TranslationMixin
 
 
-class AOIController:
+class AOIController(TranslationMixin):
     """
     Controller for managing Areas of Interest (AOI) business logic.
 
@@ -56,11 +58,21 @@ class AOIController:
         self.sort_color_hue = None  # Hue value (0-360) for color-based sorting
         self.filter_color_hue = None  # Hue value (0-360) for color filtering
         self.filter_color_range = None  # ± degrees for color filtering
+        self.filter_color_mode = 'include'  # 'include' or 'exclude'
         self.filter_area_min = None  # Minimum pixel area for filtering
         self.filter_area_max = None  # Maximum pixel area for filtering
         self.filter_comment_pattern = None  # Wildcard pattern for comment filtering
         self.filter_temperature_min = None  # Minimum temperature (Celsius) for filtering
         self.filter_temperature_max = None  # Maximum temperature (Celsius) for filtering
+        self.filter_heatmap_mode = 'off'  # 'off', 'filter', or 'display'
+        self.filter_heatmap_threshold = 75  # Percentile threshold (0-100)
+        self.filter_mask_path = None  # File path to mask image
+        self.filter_mask_mode = 'include'  # 'include' or 'exclude'
+
+        # Mask cache for image mask filter
+        self._mask_image_raw = None  # Raw grayscale mask (loaded once from file)
+        self._mask_cache = {}  # {(width, height): binary_mask_ndarray}
+        self._mask_cache_path = None  # Path of currently cached mask file
 
         # Index mapping from original AOI index to visible container index
         # This is rebuilt when thumbnails are loaded (after sorting and filtering)
@@ -91,10 +103,15 @@ class AOIController:
                     self._cached_image_index == current_image_idx):
                 return self._cached_aoi_service
 
-            # Create new service for current image
+            # Create new service for current image. Reuse the viewer's already
+            # built ImageService when available so the AOI colour/geometry path
+            # does not re-decode the image and re-read its metadata each load.
             if current_image_idx < len(self.parent.images):
                 image = self.parent.images[current_image_idx]
-                self._cached_aoi_service = AOIService(image)
+                self._cached_aoi_service = AOIService(
+                    image,
+                    image_service=getattr(self.parent, 'current_image_service', None)
+                )
                 self._cached_image_index = current_image_idx
                 return self._cached_aoi_service
 
@@ -184,9 +201,24 @@ class AOIController:
                 else:
                     return None, None
 
-            # For non-thermal images, calculate average color
+            # For non-thermal images, use the representative color.
             else:
-                # Use cached AOIService for current image
+                # Prefer the color computed at analysis time from the actual
+                # detected pixels (persisted as color_info). Recomputing here is
+                # unreliable: detected_pixels are not persisted for AOIs larger
+                # than 100 px (see XmlService.save_xml), so the live path falls
+                # back to sampling the whole AOI circle -- including background --
+                # which skews the hue. The gallery already prefers color_info, so
+                # using it here keeps the AOI list and gallery swatches consistent.
+                color_info = area_of_interest.get('color_info')
+                if color_info and color_info.get('rgb') is not None:
+                    hex_color = color_info.get('hex', '')
+                    hue_degrees = int(round(float(color_info.get('hue_degrees', 0))))
+                    full_sat_rgb = tuple(color_info['rgb'])
+                    return f"Hue: {hue_degrees}° {hex_color}", full_sat_rgb
+
+                # Fall back to a live calculation when no cached color is available
+                # (e.g. user-created AOIs or legacy result files without color_info).
                 aoi_service = self._get_aoi_service()
                 if not aoi_service:
                     return None, None
@@ -289,6 +321,116 @@ class AOIController:
                 self.parent.gallery_controller.sync_selection_from_aoi_controller(
                     self.parent.current_image, aoi_index
                 )
+
+        # Update the on-image selected-AOI overlay (number badge + ruler).
+        overlay = getattr(self.parent, 'aoi_overlay_controller', None)
+        if overlay is not None:
+            selected = self.get_selected_aoi()
+            if selected is not None:
+                overlay.show_for_aoi(selected[0])
+            else:
+                overlay.clear()
+
+    def find_aoi_by_number(self, number):
+        """Resolve a run-wide AOI number to its (image_index, aoi_index).
+
+        Args:
+            number (int): The run-wide unique AOI number.
+
+        Returns:
+            tuple | None: (image_index, aoi_index), or None if no AOI in the
+                project carries that number.
+        """
+        for image_index, image in enumerate(getattr(self.parent, 'images', None) or []):
+            for aoi_index, aoi in enumerate(image.get('areas_of_interest', [])):
+                if aoi.get('number') == number:
+                    return (image_index, aoi_index)
+        return None
+
+    def go_to_aoi_number(self, number):
+        """Select and scroll to the AOI with the given run-wide number.
+
+        Works in both gallery mode and single-image mode. Shows a transient
+        status message when no AOI carries the requested number or when the
+        AOI exists but is hidden by the active filter.
+
+        Args:
+            number (int): The run-wide unique AOI number to navigate to.
+
+        Returns:
+            bool: True if the AOI was found and revealed.
+        """
+        location = self.find_aoi_by_number(number)
+        if location is None:
+            self._show_aoi_jump_message(
+                self.tr("No AOI #{number} in this analysis.").format(number=number)
+            )
+            return False
+
+        image_index, aoi_index = location
+
+        # Gallery mode: the gallery controller owns the flattened model and
+        # knows how to reveal a specific row.
+        if (getattr(self.parent, 'gallery_mode', False)
+                and hasattr(self.parent, 'gallery_controller')):
+            if self.parent.gallery_controller.go_to_aoi(image_index, aoi_index):
+                return True
+            self._show_aoi_jump_message(
+                self.tr("AOI #{number} is hidden by the current filter.").format(number=number)
+            )
+            return False
+
+        # Single-image mode: load the parent image, then select the AOI.
+        if self.parent.current_image != image_index:
+            self.parent.current_image = image_index
+            self.parent._load_image()
+        if not self._select_and_reveal_aoi(aoi_index):
+            self._show_aoi_jump_message(
+                self.tr("AOI #{number} is hidden by the current filter.").format(number=number)
+            )
+            return False
+        return True
+
+    def _select_and_reveal_aoi(self, aoi_index):
+        """Select an AOI in single-image mode and zoom the main image to it.
+
+        Args:
+            aoi_index (int): Index of the AOI within the current image.
+
+        Returns:
+            bool: True if the AOI is visible (not filtered out) and was selected.
+        """
+        visible_index = self.aoi_index_to_visible_index.get(aoi_index)
+        if visible_index is None and self.ui_component is not None:
+            # The visible-index map can be stale (for example right after a
+            # new AOI was created); rebuild the AOI list once and retry.
+            self.ui_component.refresh_aoi_display()
+            visible_index = self.aoi_index_to_visible_index.get(aoi_index)
+        if visible_index is None:
+            return False
+        self.select_aoi(aoi_index, visible_index)
+        try:
+            image = self.parent.images[self.parent.current_image]
+            aois = image.get('areas_of_interest', [])
+            if 0 <= aoi_index < len(aois):
+                center = aois[aoi_index].get('center')
+                if center and hasattr(self.parent, 'main_image'):
+                    self.parent.main_image.zoomToArea(center, 6)
+        except Exception as e:
+            self.logger.error(f"Error zooming to AOI during jump: {e}")
+        return True
+
+    def _show_aoi_jump_message(self, message):
+        """Show a transient status message about an AOI jump.
+
+        Args:
+            message (str): The already-translated message to display.
+        """
+        status_controller = getattr(self.parent, 'status_controller', None)
+        if status_controller is not None and hasattr(status_controller, 'show_toast'):
+            status_controller.show_toast(message, 3000, color="#FFA500")
+        else:
+            self.logger.info(message)
 
     def find_aoi_at_position(self, x, y):
         """Find the AOI at the given cursor position.
@@ -397,17 +539,119 @@ class AOIController:
                         except Exception:
                             pass
 
-    def edit_aoi_comment(self, aoi_index):
+    def set_aoi_flags_bulk(self, items, flagged):
+        """Set the flag state on multiple AOIs with a single XML save.
+
+        Args:
+            items: Iterable of (image_index, aoi_index) pairs.
+            flagged (bool): Desired flag state for every item.
+
+        Returns:
+            int: Number of AOIs actually updated.
+        """
+        touched_images = set()
+        applied = 0
+        for image_index, aoi_index in items:
+            aoi = self._get_aoi_safe(image_index, aoi_index)
+            if aoi is None:
+                continue
+            aoi['flagged'] = flagged
+            if aoi.get('xml') is not None:
+                aoi['xml'].set('flagged', str(flagged))
+
+            flagged_set = self.flagged_aois.setdefault(image_index, set())
+            if flagged:
+                flagged_set.add(aoi_index)
+            else:
+                flagged_set.discard(aoi_index)
+            touched_images.add(image_index)
+            applied += 1
+
+        if touched_images:
+            self._save_xml_and_refresh_bulk(touched_images)
+        return applied
+
+    def set_aoi_comments_bulk(self, items, comment):
+        """Set the same comment on multiple AOIs with a single XML save.
+
+        An empty comment clears the comment (mirrors save_aoi_comment_to_xml).
+
+        Args:
+            items: Iterable of (image_index, aoi_index) pairs.
+            comment (str): Comment text to apply to every item.
+
+        Returns:
+            int: Number of AOIs actually updated.
+        """
+        touched_images = set()
+        applied = 0
+        for image_index, aoi_index in items:
+            aoi = self._get_aoi_safe(image_index, aoi_index)
+            if aoi is None:
+                continue
+            aoi['user_comment'] = comment
+            if aoi.get('xml') is not None:
+                if comment:
+                    aoi['xml'].set('user_comment', str(comment))
+                elif 'user_comment' in aoi['xml'].attrib:
+                    del aoi['xml'].attrib['user_comment']
+            touched_images.add(image_index)
+            applied += 1
+
+        if touched_images:
+            self._save_xml_and_refresh_bulk(touched_images)
+        return applied
+
+    def _get_aoi_safe(self, image_index, aoi_index):
+        """Return the AOI dict at (image_index, aoi_index), or None if invalid."""
+        if image_index is None or aoi_index is None:
+            return None
+        if not hasattr(self.parent, 'images'):
+            return None
+        if not (0 <= image_index < len(self.parent.images)):
+            return None
+        aois = self.parent.images[image_index].get('areas_of_interest', [])
+        if not (0 <= aoi_index < len(aois)):
+            return None
+        return aois[aoi_index]
+
+    def _save_xml_and_refresh_bulk(self, touched_images):
+        """Persist bulk AOI edits with one XML save and refresh affected displays."""
+        if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+            try:
+                self.parent.xml_service.save_xml_file(self.parent.xml_path)
+            except Exception:
+                pass
+
+        if getattr(self.parent, 'current_image', None) in touched_images and self.ui_component:
+            self.ui_component.refresh_aoi_display()
+
+        if hasattr(self.parent, 'gallery_controller') and self.parent.gallery_controller:
+            try:
+                self.parent.gallery_controller.refresh_gallery()
+            except Exception:
+                pass
+
+    def edit_aoi_comment(self, aoi_index, image_idx=None):
         """Open dialog to edit the comment for an AOI.
 
         Args:
             aoi_index (int): Index of the AOI to edit comment for
+            image_idx (int, optional): Index of the AOI's parent image. If
+                None, the currently displayed image is used. Gallery mode
+                passes this explicitly because the selected AOI may live on
+                a different image than the one on screen.
         """
         if aoi_index < 0:
             return
 
-        # Get current image and AOI
-        image = self.parent.images[self.parent.current_image]
+        if image_idx is None:
+            image_idx = self.parent.current_image
+
+        if image_idx < 0 or image_idx >= len(self.parent.images):
+            return
+
+        image = self.parent.images[image_idx]
         if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
             return
 
@@ -420,18 +664,27 @@ class AOIController:
         if dialog.exec():
             # User clicked OK - save the comment
             new_comment = dialog.get_comment()
-            self.save_aoi_comment_to_xml(self.parent.current_image, aoi_index, new_comment)
+            self.save_aoi_comment_to_xml(image_idx, aoi_index, new_comment)
 
-            # Refresh the AOI display to update the icon (UI component handles this)
-            if self.ui_component:
+            # Refresh the single-image AOI display if the edit was for the
+            # currently displayed image.
+            if image_idx == self.parent.current_image and self.ui_component:
                 self.ui_component.refresh_aoi_display()
+
+            # Refresh the gallery view if it exists so the comment icon
+            # state updates immediately.
+            if hasattr(self.parent, 'gallery_controller') and self.parent.gallery_controller:
+                try:
+                    self.parent.gallery_controller.refresh_gallery()
+                except Exception:
+                    pass
 
             # Show confirmation toast
             if hasattr(self.parent, 'status_controller'):
                 if new_comment:
-                    self.parent.status_controller.show_toast("Comment saved", 2000, color="#00C853")
+                    self.parent.status_controller.show_toast(self.tr("Comment saved"), 2000, color="#00C853")
                 else:
-                    self.parent.status_controller.show_toast("Comment cleared", 2000, color="#808080")
+                    self.parent.status_controller.show_toast(self.tr("Comment cleared"), 2000, color="#808080")
 
     def toggle_aoi_flag(self):
         """Toggle the flag status of the currently selected AOI."""
@@ -487,7 +740,7 @@ class AOIController:
                         current_gps_index
                     )
 
-    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None):
+    def show_aoi_context_menu(self, pos, label_widget, center, pixel_area, avg_info=None, aoi_index=None, image_idx=None):
         """Show context menu for AOI coordinate label with copy option.
 
         Args:
@@ -497,6 +750,8 @@ class AOIController:
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
             aoi_index: Index of the AOI
+            image_idx: Optional parent-image index for gallery mode. None means
+                the copy will target the currently displayed image.
         """
         menu = QMenu(label_widget)
 
@@ -518,8 +773,18 @@ class AOIController:
         """)
 
         # Add copy action
-        copy_action = menu.addAction("Copy Data")
-        copy_action.triggered.connect(lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index))
+        copy_action = menu.addAction(self.tr("Copy Data"))
+        copy_action.triggered.connect(
+            lambda: self.copy_aoi_data(center, pixel_area, avg_info, aoi_index, image_idx=image_idx)
+        )
+
+        # Add find-similar action
+        similar_action = menu.addAction(self.tr("Find Similar AOIs"))
+        similar_action.setEnabled(aoi_index is not None and hasattr(self.parent, 'similarity_controller'))
+        similar_action.triggered.connect(
+            lambda: self.parent.similarity_controller.find_similar_for_selected(
+                image_idx=image_idx, aoi_idx=aoi_index)
+        )
 
         # Get the current cursor position (global coordinates)
         global_pos = QCursor.pos()
@@ -527,7 +792,7 @@ class AOIController:
         # Show menu at cursor position
         menu.exec(global_pos)
 
-    def copy_aoi_data(self, center, pixel_area, avg_info=None, aoi_index=None):
+    def copy_aoi_data(self, center, pixel_area, avg_info=None, aoi_index=None, image_idx=None):
         """Copy AOI data to clipboard including image name, coordinates, and GPS.
 
         Args:
@@ -535,13 +800,38 @@ class AOIController:
             pixel_area: The area of the AOI in pixels
             avg_info: Average color/temperature information string
             aoi_index: Index of the AOI
+            image_idx: Optional parent-image index. If None, uses the currently
+                displayed image. Gallery mode passes this explicitly so AOIs
+                from images other than the one on screen can be copied.
         """
-        # Get current image information
-        image = self.parent.images[self.parent.current_image]
+        if image_idx is None:
+            image_idx = self.parent.current_image
+
+        if image_idx < 0 or image_idx >= len(self.parent.images):
+            return
+
+        # Get image information
+        image = self.parent.images[image_idx]
         image_name = image.get('name', 'Unknown')
 
-        # Get image GPS coordinates if available
-        image_gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
+        # Get image GPS coordinates. For the currently displayed image the
+        # viewer already has a formatted string cached in self.parent.messages;
+        # for any other image we compute it from EXIF so gallery copies produce
+        # the same output.
+        if image_idx == self.parent.current_image:
+            image_gps_coords = self.parent.messages.get('GPS Coordinates', 'N/A')
+        else:
+            image_gps_coords = 'N/A'
+            try:
+                img_service = AOIService(image).image_service
+                gps_exif = LocationInfo.get_gps(exif_data=img_service.exif_data)
+                if gps_exif:
+                    position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
+                    image_gps_coords = LocationInfo.format_coordinates(
+                        gps_exif['latitude'], gps_exif['longitude'], position_format
+                    )
+            except Exception as e:
+                self.logger.error(f"Error reading image GPS for clipboard copy: {e}")
 
         # Get user comment if available
         user_comment = ""
@@ -550,8 +840,17 @@ class AOIController:
                 aoi = image['areas_of_interest'][aoi_index]
                 user_comment = aoi.get('user_comment', '')
 
-        # Calculate AOI GPS coordinates
-        aoi_gps_coords = self.calculate_aoi_gps(aoi_index)
+        # Calculate AOI GPS coordinates with metadata
+        gps_result = self.calculate_aoi_gps(aoi_index, return_metadata=True, image_idx=image_idx)
+
+        if gps_result:
+            aoi_gps_coords = gps_result['coords_text']
+            elevation_source = gps_result.get('elevation_source', 'flat')
+            terrain_elev = gps_result.get('terrain_elevation_m')
+        else:
+            aoi_gps_coords = "N/A"
+            elevation_source = None
+            terrain_elev = None
 
         # Format the data for clipboard
         clipboard_text = f"Image: {image_name}\n"
@@ -570,32 +869,47 @@ class AOIController:
             clipboard_text += f"Average: {avg_info}\n"
 
         clipboard_text += f"Image GPS Coordinates: {image_gps_coords}\n"
-        clipboard_text += f"AOI GPS Coordinates: {aoi_gps_coords}"
+        clipboard_text += f"AOI GPS Coordinates: {aoi_gps_coords}\n"
+
+        # Add elevation source info
+        if elevation_source == 'terrain' and terrain_elev is not None:
+            clipboard_text += f"Elevation Method: Terrain-corrected ({terrain_elev:.1f}m terrain elevation)"
+        else:
+            clipboard_text += "Elevation Method: Flat terrain assumed"
 
         # Copy to clipboard
         QApplication.clipboard().setText(clipboard_text)
 
         # Show confirmation toast
         if hasattr(self.parent, 'status_controller'):
-            self.parent.status_controller.show_toast("AOI data copied", 2000, color="#00C853")
+            self.parent.status_controller.show_toast(self.tr("AOI data copied"), 2000, color="#00C853")
 
-    def calculate_aoi_gps(self, aoi_index):
+    def calculate_aoi_gps(self, aoi_index, return_metadata=False, image_idx=None):
         """Calculate GPS coordinates for a specific AOI.
 
         Args:
             aoi_index: Index of the AOI
+            return_metadata: If True, return dict with coordinates and elevation source info
+            image_idx: Optional parent-image index. If None, uses the currently
+                displayed image. Gallery mode passes this explicitly.
 
         Returns:
-            String with formatted GPS coordinates or "N/A" if calculation fails
+            If return_metadata=False: String with formatted GPS coordinates or "N/A"
+            If return_metadata=True: Dict with 'coords_text', 'lat', 'lon', 'elevation_source', etc.
         """
         try:
             if aoi_index is None or aoi_index < 0:
-                return "N/A"
+                return "N/A" if not return_metadata else None
 
-            # Get current image and AOI
-            image = self.parent.images[self.parent.current_image]
+            if image_idx is None:
+                image_idx = self.parent.current_image
+
+            if image_idx < 0 or image_idx >= len(self.parent.images):
+                return "N/A" if not return_metadata else None
+
+            image = self.parent.images[image_idx]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
-                return "N/A"
+                return "N/A" if not return_metadata else None
 
             aoi = image['areas_of_interest'][aoi_index]
 
@@ -607,23 +921,38 @@ class AOIController:
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+            # Check if terrain is enabled in preferences
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
+            # Calculate AOI GPS coordinates with full metadata
+            result = aoi_service.calculate_gps_with_metadata(image, aoi, custom_alt_ft, use_terrain)
 
             if result:
-                lat, lon = result
+                lat, lon = result.latitude, result.longitude
 
                 # Get position format preference
                 position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
 
                 # Use LocationInfo for formatting
-                return LocationInfo.format_coordinates(lat, lon, position_format)
+                coords_text = LocationInfo.format_coordinates(lat, lon, position_format)
 
-            return "N/A"
+                if return_metadata:
+                    return {
+                        'coords_text': coords_text,
+                        'lat': lat,
+                        'lon': lon,
+                        'elevation_source': result.elevation_source,
+                        'terrain_elevation_m': result.terrain_elevation_m,
+                        'effective_agl_m': result.effective_agl_m,
+                        'terrain_resolution_m': result.terrain_resolution_m
+                    }
+                return coords_text
+
+            return "N/A" if not return_metadata else None
 
         except Exception as e:
             self.logger.error(f"Error calculating AOI GPS: {e}")
-            return "N/A"
+            return "N/A" if not return_metadata else None
 
     def show_aoi_location(self, aoi_index, image_idx=None, anchor_widget=None, anchor_point=None):
         """Calculate and show GPS location for an AOI.
@@ -640,12 +969,12 @@ class AOIController:
                 image_idx = self.parent.current_image
 
             if image_idx < 0 or image_idx >= len(self.parent.images):
-                self.parent.status_controller.show_toast("Invalid image index", 3000, color="#F44336")
+                self.parent.status_controller.show_toast(self.tr("Invalid image index"), 3000, color="#F44336")
                 return
 
             image = self.parent.images[image_idx]
             if 'areas_of_interest' not in image or aoi_index >= len(image['areas_of_interest']):
-                self.parent.status_controller.show_toast("Invalid AOI index", 3000, color="#F44336")
+                self.parent.status_controller.show_toast(self.tr("Invalid AOI index"), 3000, color="#F44336")
                 return
 
             aoi = image['areas_of_interest'][aoi_index]
@@ -658,14 +987,66 @@ class AOIController:
             if hasattr(self.parent, 'custom_agl_altitude_ft') and self.parent.custom_agl_altitude_ft and self.parent.custom_agl_altitude_ft > 0:
                 custom_alt_ft = self.parent.custom_agl_altitude_ft
 
-            # Calculate AOI GPS coordinates
-            result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft)
+            # Check if terrain is enabled in preferences
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
+            # Calculate AOI GPS coordinates with metadata
+            result = aoi_service.calculate_gps_with_metadata(image, aoi, custom_alt_ft, use_terrain)
 
             if not result:
-                self.parent.status_controller.show_toast("Could not calculate AOI location", 3000, color="#F44336")
+                # Collect diagnostic information for the user to share
+                try:
+                    # Get basic info from image service
+                    img_service = aoi_service.image_service
+                    gps_exif = LocationInfo.get_gps(exif_data=img_service.exif_data)
+
+                    diag_info = {
+                        "error": "Could not calculate AOI location",
+                        "image_path": str(image.get('path', 'N/A')),
+                        "aoi_center": aoi.get('center', 'N/A'),
+                        "custom_alt_ft": custom_alt_ft,
+                        "use_terrain_preference": use_terrain,
+                        "drone_make": img_service.drone_make if hasattr(img_service, 'drone_make') else 'N/A',
+                        "reported_agl_m": img_service.get_relative_altitude('m'),
+                        "reported_asl_m": img_service.get_asl_altitude('m'),
+                        "camera_pitch": img_service.get_camera_pitch(),
+                        "camera_yaw": img_service.get_camera_yaw(),
+                        "camera_intrinsics": img_service.get_camera_intrinsics(),
+                        "gps_exif": gps_exif,
+                        "image_shape": img_service.img_array.shape[:2] if hasattr(img_service, 'img_array') and img_service.img_array is not None else 'N/A'
+                    }
+
+                    # Deduce possible reasons for failure
+                    reasons = []
+                    if not gps_exif:
+                        reasons.append("Missing GPS coordinates in image EXIF data.")
+                    if not diag_info["camera_intrinsics"]:
+                        reasons.append("Camera model not recognized or missing focal length/sensor data in database.")
+
+                    agl = custom_alt_ft * 0.3048 if custom_alt_ft else diag_info["reported_agl_m"]
+                    if agl is None or agl <= 0:
+                        reasons.append(f"Invalid altitude for calculation: {agl}m. Ensure image has AGL metadata or set a custom altitude.")
+
+                    if diag_info["camera_pitch"] is not None and diag_info["camera_pitch"] > -5:
+                        reasons.append(f"Camera pitch ({diag_info['camera_pitch']}°) is too close to horizontal; the AOI might be above the horizon.")
+
+                    diag_info["potential_reasons"] = reasons
+
+                    # Copy to clipboard
+                    diag_json = json.dumps(diag_info, indent=4)
+                    QApplication.clipboard().setText(diag_json)
+
+                    self.parent.status_controller.show_toast(
+                        self.tr("Could not calculate AOI location. Diagnostic info copied to clipboard!"),
+                        6000,
+                        color="#F44336"
+                    )
+                except Exception as diag_err:
+                    self.logger.error(f"Error generating diagnostic info: {diag_err}")
+                    self.parent.status_controller.show_toast(self.tr("Could not calculate AOI location"), 3000, color="#F44336")
                 return
 
-            lat, lon = result
+            lat, lon = result.latitude, result.longitude
 
             # Get position format preference
             position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
@@ -673,14 +1054,39 @@ class AOIController:
             # Format coordinates
             coord_text = LocationInfo.format_coordinates(lat, lon, position_format)
 
+            # Add elevation source indicator
+            if result.elevation_source == 'terrain':
+                # Terrain elevation was used
+                source_icon = "🏔️"
+                source_tooltip = f"Terrain elevation: {result.terrain_elevation_m:.1f}m" if result.terrain_elevation_m else "Terrain-corrected"
+                if result.terrain_resolution_m:
+                    source_tooltip += f" (~{result.terrain_resolution_m:.0f}m resolution)"
+            else:
+                # Flat terrain assumed
+                source_icon = "⬜"
+                source_tooltip = "Flat terrain assumed"
+
             # Show popup using coordinate controller's method
             if hasattr(self.parent, 'coordinate_controller'):
                 # Store decimal coordinates for sharing (needed for coordinate controller methods)
                 self.parent.coordinate_controller.current_decimal_coords = (lat, lon)
-                self.parent.coordinate_controller.show_coordinates_popup(coord_text, anchor_widget=anchor_widget, anchor_point=anchor_point)
+
+                # Build display text with elevation source
+                display_text = f"{coord_text} {source_icon}"
+
+                self.parent.coordinate_controller.show_coordinates_popup(
+                    display_text,
+                    anchor_widget=anchor_widget,
+                    anchor_point=anchor_point,
+                    tooltip=source_tooltip
+                )
             else:
-                # Fallback: show simple message
-                self.parent.status_controller.show_toast(f"AOI Location: {coord_text}", 5000, color="#00C853")
+                # Fallback: show simple message with source
+                self.parent.status_controller.show_toast(
+                    f"AOI Location: {coord_text} {source_icon}",
+                    5000,
+                    color="#00C853"
+                )
 
         except Exception as e:
             self.logger.error(f"Error showing AOI location: {e}")
@@ -721,7 +1127,9 @@ class AOIController:
             if not aoi_service:
                 return None
 
-            color_result = aoi_service.get_aoi_representative_color(aoi)
+            # Prefer the analysis-time color so color sort/filter matches the hue
+            # shown on the AOI swatch (see get_cached_or_representative_color).
+            color_result = aoi_service.get_cached_or_representative_color(aoi)
 
             if color_result:
                 return color_result['hue_degrees']
@@ -832,13 +1240,21 @@ class AOIController:
             # Apply color filter
             if self.filter_color_hue is not None and self.filter_color_range is not None:
                 hue = self.get_aoi_hue(aoi)
-                if hue is not None:
-                    distance = self.calculate_hue_distance(hue, self.filter_color_hue)
-                    if distance > self.filter_color_range:
-                        continue
+                if self.filter_color_mode == 'exclude':
+                    # Exclude mode: remove AOIs that match the color, keep the rest
+                    if hue is not None:
+                        distance = self.calculate_hue_distance(hue, self.filter_color_hue)
+                        if distance <= self.filter_color_range:
+                            continue
+                    # AOIs without hue data are kept in exclude mode
                 else:
-                    # Skip AOIs without hue information when color filter is active
-                    continue
+                    # Include mode: keep only AOIs that match the color
+                    if hue is not None:
+                        distance = self.calculate_hue_distance(hue, self.filter_color_hue)
+                        if distance > self.filter_color_range:
+                            continue
+                    else:
+                        continue
 
             # Apply pixel area filter
             area = aoi.get('area', 0)
@@ -847,12 +1263,15 @@ class AOIController:
             if self.filter_area_max is not None and area > self.filter_area_max:
                 continue
 
-            # Apply comment filter
+            # Apply comment filter — case-insensitive substring match.
+            # Any '*' characters are stripped so saved wildcard patterns from
+            # earlier versions (e.g. "*blue*", "crack*") keep working.
             if self.filter_comment_pattern is not None:
                 comment = aoi.get('user_comment', '').strip()
                 if not comment:
                     continue
-                if not fnmatch.fnmatch(comment.lower(), self.filter_comment_pattern.lower()):
+                needle = self.filter_comment_pattern.replace('*', '').lower()
+                if needle and needle not in comment.lower():
                     continue
 
             # Apply temperature filter (in Celsius)
@@ -865,10 +1284,88 @@ class AOIController:
                 if self.filter_temperature_max is not None and temp > self.filter_temperature_max:
                     continue
 
+            # Apply heatmap density filter
+            if self.filter_heatmap_mode != 'off' and hasattr(self.parent, 'gallery_controller'):
+                hs = self.parent.gallery_controller.heatmap_service
+                if hs.is_valid():
+                    image = self.parent.images[img_idx] if hasattr(self.parent, 'images') else None
+                    if image:
+                        imgWidth = image.get('width')
+                        imgHeight = image.get('height')
+                        if imgWidth and imgHeight:
+                            inHotZone = hs.is_in_hot_zone(
+                                aoi.get('center', (0, 0)), imgWidth, imgHeight,
+                                self.filter_heatmap_threshold
+                            )
+                            if self.filter_heatmap_mode == 'filter' and inHotZone:
+                                continue
+                            if self.filter_heatmap_mode == 'display' and not inHotZone:
+                                continue
+
+            # Apply image mask filter
+            if self.filter_mask_path is not None:
+                image = self.parent.images[img_idx] if hasattr(self.parent, 'images') else None
+                if image:
+                    imgWidth = image.get('width')
+                    imgHeight = image.get('height')
+                    if imgWidth and imgHeight:
+                        mask = self._get_scaled_mask(imgWidth, imgHeight)
+                        if mask is not None:
+                            cx, cy = aoi.get('center', (0, 0))
+                            cx = max(0, min(int(cx), imgWidth - 1))
+                            cy = max(0, min(int(cy), imgHeight - 1))
+                            in_mask = mask[int(cy), int(cx)] > 0
+                            if self.filter_mask_mode == 'include' and not in_mask:
+                                continue
+                            if self.filter_mask_mode == 'exclude' and in_mask:
+                                continue
+
             # AOI passed all filters
             filtered.append((original_idx, aoi))
 
         return filtered
+
+    def _get_scaled_mask(self, width, height):
+        """Get binary mask scaled to the specified dimensions, using cache.
+
+        Args:
+            width: Target width
+            height: Target height
+
+        Returns:
+            Binary numpy array (height, width) where 255=white, 0=black, or None
+        """
+        if self.filter_mask_path is None:
+            return None
+
+        # Reload if path changed
+        if self._mask_cache_path != self.filter_mask_path:
+            self._mask_image_raw = cv2.imread(self.filter_mask_path, cv2.IMREAD_GRAYSCALE)
+            self._mask_cache = {}
+            self._mask_cache_path = self.filter_mask_path
+            if self._mask_image_raw is None:
+                self.logger.warning(f"Could not load mask image: {self.filter_mask_path}")
+                return None
+
+        if self._mask_image_raw is None:
+            return None
+
+        # Check cache
+        key = (width, height)
+        if key in self._mask_cache:
+            return self._mask_cache[key]
+
+        # Resize and threshold
+        scaled = cv2.resize(self._mask_image_raw, (width, height), interpolation=cv2.INTER_LINEAR)
+        _, binary = cv2.threshold(scaled, 127, 255, cv2.THRESH_BINARY)
+        self._mask_cache[key] = binary
+        return binary
+
+    def _invalidate_mask_cache(self):
+        """Clear the mask image cache."""
+        self._mask_image_raw = None
+        self._mask_cache = {}
+        self._mask_cache_path = None
 
     def set_sort_method(self, method, color_hue=None):
         """Set the sort method for AOIs.
@@ -908,11 +1405,19 @@ class AOIController:
         self.filter_flagged_only = filters.get('flagged_only', False)
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
+        self.filter_color_mode = filters.get('color_filter_mode', 'include')
         self.filter_area_min = filters.get('area_min')
         self.filter_area_max = filters.get('area_max')
         self.filter_comment_pattern = filters.get('comment_filter')
         self.filter_temperature_min = filters.get('temperature_min')
         self.filter_temperature_max = filters.get('temperature_max')
+        self.filter_heatmap_mode = filters.get('heatmap_mode', 'off')
+        self.filter_heatmap_threshold = filters.get('heatmap_threshold', 75)
+        new_mask_path = filters.get('mask_filter_path')
+        if new_mask_path != self.filter_mask_path:
+            self._invalidate_mask_cache()
+        self.filter_mask_path = new_mask_path
+        self.filter_mask_mode = filters.get('mask_filter_mode', 'include')
 
         # Refresh AOI display
         self.refresh_aoi_display()
@@ -994,7 +1499,9 @@ class AOIController:
                 model = combo.model()
                 item = model.item(idx)
                 item.setEnabled(False)
-                item.setToolTip("Temperature sorting unavailable (no thermal data)")
+                item.setToolTip(
+                    self.tr("Temperature sorting unavailable (no thermal data)")
+                )
 
         # Set current selection based on current sort method
         if self.sort_method is None:
@@ -1138,22 +1645,57 @@ class AOIController:
             'flagged_only': self.filter_flagged_only,
             'color_hue': self.filter_color_hue,
             'color_range': self.filter_color_range if self.filter_color_range is not None else 30,
+            'color_filter_mode': self.filter_color_mode,
             'area_min': self.filter_area_min,
             'area_max': self.filter_area_max,
             'comment_filter': self.filter_comment_pattern,
             'temperature_min': self.filter_temperature_min,
-            'temperature_max': self.filter_temperature_max
+            'temperature_max': self.filter_temperature_max,
+            'heatmap_mode': self.filter_heatmap_mode,
+            'heatmap_threshold': self.filter_heatmap_threshold,
+            'mask_filter_path': self.filter_mask_path,
+            'mask_filter_mode': self.filter_mask_mode
         }
 
         # Get temperature unit and thermal flag from parent viewer
         temperature_unit = getattr(self.parent, 'temperature_unit', 'C')
         is_thermal = getattr(self.parent, 'is_thermal', False)
 
-        dialog = AOIFilterDialog(self.parent, current_filters, temperature_unit, is_thermal)
+        # Get heatmap service and availability from gallery controller
+        heatmap_service = None
+        heatmap_available = False
+        if hasattr(self.parent, 'gallery_controller'):
+            gc = self.parent.gallery_controller
+            heatmap_service = gc.heatmap_service
+            # Ensure heatmap is computed even if gallery mode hasn't been entered yet
+            if not heatmap_service.is_valid() and self.parent.images:
+                heatmap_service.compute_heatmap(self.parent.images)
+            heatmap_available = heatmap_service.has_data()
+
+        dialog = AOIFilterDialog(self.parent, current_filters, temperature_unit, is_thermal,
+                                 heatmap_available=heatmap_available, heatmap_service=heatmap_service)
         if dialog.exec():
             # User clicked Apply
             filters = dialog.get_filters()
             self.set_filters(filters)
+
+    def _next_aoi_number(self):
+        """Return the next unused run-wide AOI number.
+
+        User-created AOIs get a number one past the current maximum so the
+        identifier never collides with an existing AOI or one that was
+        previously deleted.
+
+        Returns:
+            int: The number to assign to a newly created AOI.
+        """
+        highest = 0
+        for image in getattr(self.parent, 'images', None) or []:
+            for aoi in image.get('areas_of_interest', []):
+                number = aoi.get('number')
+                if isinstance(number, int) and number > highest:
+                    highest = number
+        return highest + 1
 
     def create_aoi_from_circle(self, center_x, center_y, radius):
         """Create a new AOI from a user-drawn circle.
@@ -1198,6 +1740,7 @@ class AOIController:
                 'center': (center_x, center_y),
                 'radius': radius,
                 'area': aoi_area,
+                'number': self._next_aoi_number(),
                 'flagged': False,
                 'user_comment': '',
                 'user_created': True  # Mark as manually created
@@ -1218,6 +1761,7 @@ class AOIController:
                 aoi_xml.set('center', str((center_x, center_y)))
                 aoi_xml.set('radius', str(radius))
                 aoi_xml.set('area', str(aoi_area))
+                aoi_xml.set('number', str(new_aoi['number']))
                 aoi_xml.set('flagged', 'False')
                 aoi_xml.set('user_created', 'True')
 
@@ -1308,16 +1852,21 @@ class AOIController:
             if not is_user_created:
                 QMessageBox.warning(
                     self.parent,
-                    "Cannot Delete AOI",
-                    "Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted."
+                    self.tr("Cannot Delete AOI"),
+                    self.tr(
+                        "Only manually created AOIs can be deleted. "
+                        "Algorithm-detected AOIs cannot be deleted."
+                    )
                 )
                 return
 
             # Show confirmation dialog
             reply = QMessageBox.question(
                 self.parent,
-                "Delete AOI",
-                "Are you sure you want to delete this AOI? This action cannot be undone.",
+                self.tr("Delete AOI"),
+                self.tr(
+                    "Are you sure you want to delete this AOI? This action cannot be undone."
+                ),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )

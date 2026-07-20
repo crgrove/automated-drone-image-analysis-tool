@@ -6,7 +6,6 @@ for displaying AOIs from all loaded images.
 """
 
 import colorsys
-import fnmatch
 import math
 import numpy as np
 import os
@@ -16,6 +15,7 @@ from PySide6.QtWidgets import QProgressDialog, QApplication
 from PySide6.QtCore import Qt
 from core.services.LoggerService import LoggerService
 from core.services.image.AOIService import AOIService
+from core.services.HeatmapService import HeatmapService
 from .AOIGalleryModel import AOIGalleryModel
 from .GalleryUIComponent import GalleryUIComponent
 
@@ -58,16 +58,29 @@ class GalleryController:
         self.filter_comment_pattern = None
         self.filter_color_hue = None
         self.filter_color_range = None
+        self.filter_color_mode = 'include'
         self.filter_area_min = None
         self.filter_area_max = None
         self.filter_temperature_min = None
         self.filter_temperature_max = None
+        self.filter_heatmap_mode = 'off'
+        self.filter_heatmap_threshold = 75
+        self.filter_mask_path = None
+        self.filter_mask_mode = 'include'
+
+        # Heatmap service for spatial density filtering
+        self.heatmap_service = HeatmapService()
 
         # Cache for AOIService instances per image
         self._aoi_service_cache = {}
 
         # Progress dialog for color calculation
         self.color_calc_progress_dialog = None
+
+        # Tracks whether we currently hold a connection to the model's
+        # color_calc_complete signal, so we only disconnect when connected
+        # (Qt warns when disconnecting a slot that was never connected).
+        self._color_calc_complete_connected = False
 
         # Gallery column width constants (thumbnail + spacing)
         self.GALLERY_COLUMN_WIDTH = 200  # 190px thumbnail + 10px spacing
@@ -116,6 +129,9 @@ class GalleryController:
             all_aois = self._collect_all_aois()
             # self.logger.debug(f"Collected {len(all_aois)} AOIs")
 
+            # Compute heatmap grid for spatial filtering
+            self.heatmap_service.compute_heatmap(self.parent.images)
+
             # Set items without triggering color calculation
             self.model.set_aoi_items(all_aois, skip_color_calc=True)
             # self.logger.debug("Set AOI items in model")
@@ -153,6 +169,7 @@ class GalleryController:
             # Loading overlay is already shown in load_all_aois()
             # Just connect model signals (no progress updates needed for overlay)
             self.model.color_calc_complete.connect(self._on_color_calc_complete)
+            self._color_calc_complete_connected = True
 
             # Start color calculation
             self.model._precalculate_color_info()
@@ -168,44 +185,28 @@ class GalleryController:
             self.model._precalculate_color_info()
             self._finalize_gallery_load()
 
-    def _on_color_calc_progress(self, current, total):
-        """Handle color calculation progress update."""
-        # Progress updates no longer needed with overlay
-        # Keep method for compatibility but don't do anything
-        pass
-
-    def _on_color_calc_message(self, message):
-        """Handle color calculation status message."""
-        # Message updates no longer needed with overlay
-        # Keep method for compatibility but don't do anything
-        pass
-
     def _disconnect_color_calc_signals(self):
-        """Disconnect all color calculation signal connections."""
-        try:
-            # Disconnect model signals
-            try:
-                self.model.color_calc_progress.disconnect(self._on_color_calc_progress)
-            except Exception:
-                pass
-            try:
-                self.model.color_calc_message.disconnect(self._on_color_calc_message)
-            except Exception:
-                pass
+        """Disconnect color calculation signal connections.
+
+        Only ``color_calc_complete`` is ever connected (the progress/message
+        signals drive the overlay via the model and are never wired here), and
+        only while ``_color_calc_complete_connected`` is set. Guarding on that
+        flag avoids Qt's RuntimeWarning for disconnecting a slot that was never
+        connected -- a warning that a try/except cannot suppress.
+        """
+        if self._color_calc_complete_connected:
             try:
                 self.model.color_calc_complete.disconnect(self._on_color_calc_complete)
-            except Exception:
+            except (RuntimeError, TypeError):
                 pass
+            self._color_calc_complete_connected = False
 
-            # Disconnect dialog signals
-            if self.color_calc_progress_dialog:
-                try:
-                    self.color_calc_progress_dialog.canceled.disconnect(self._on_color_calc_cancelled)
-                except Exception:
-                    pass
-        except Exception:
-            # self.logger.debug(f"Error disconnecting signals: {e}")
-            pass
+        # Disconnect dialog signals (legacy progress-dialog path)
+        if self.color_calc_progress_dialog:
+            try:
+                self.color_calc_progress_dialog.canceled.disconnect(self._on_color_calc_cancelled)
+            except (RuntimeError, TypeError):
+                pass
 
     def _on_color_calc_complete(self):
         """Handle color calculation completion."""
@@ -390,25 +391,36 @@ class GalleryController:
                 if not aoi.get('flagged', False):
                     continue
 
-            # Apply comment filter
+            # Apply comment filter — case-insensitive substring match. Any
+            # '*' characters are stripped so saved wildcard patterns from
+            # earlier versions (e.g. "*blue*", "crack*") keep working.
             if self.filter_comment_pattern is not None:
                 comment = aoi.get('user_comment', '').strip()
                 # Skip AOIs with empty comments when filter is active
                 if not comment:
                     continue
-                # Case-insensitive wildcard matching
-                if not fnmatch.fnmatch(comment.lower(), self.filter_comment_pattern.lower()):
+                needle = self.filter_comment_pattern.replace('*', '').lower()
+                if needle and needle not in comment.lower():
                     continue
 
             # Apply color filter
             if self.filter_color_hue is not None and self.filter_color_range is not None:
                 hue = self._get_aoi_hue(img_idx, aoi_idx)
-                if hue is not None:
-                    distance = self._calculate_hue_distance(hue, self.filter_color_hue)
-                    if distance > self.filter_color_range:
-                        continue
+                if self.filter_color_mode == 'exclude':
+                    # Exclude mode: remove AOIs that match the color, keep the rest
+                    if hue is not None:
+                        distance = self._calculate_hue_distance(hue, self.filter_color_hue)
+                        if distance <= self.filter_color_range:
+                            continue
+                    # AOIs without hue data are kept in exclude mode
                 else:
-                    continue
+                    # Include mode: keep only AOIs that match the color
+                    if hue is not None:
+                        distance = self._calculate_hue_distance(hue, self.filter_color_hue)
+                        if distance > self.filter_color_range:
+                            continue
+                    else:
+                        continue
 
             # Apply area filter
             area = aoi.get('area', 0)
@@ -428,6 +440,40 @@ class GalleryController:
                     continue
                 if self.filter_temperature_max is not None and temp > self.filter_temperature_max:
                     continue
+
+            # Apply heatmap density filter
+            if self.filter_heatmap_mode != 'off' and self.heatmap_service.is_valid():
+                image = self.parent.images[img_idx] if self.parent and hasattr(self.parent, 'images') else None
+                if image:
+                    imgWidth = image.get('width')
+                    imgHeight = image.get('height')
+                    if imgWidth and imgHeight:
+                        inHotZone = self.heatmap_service.is_in_hot_zone(
+                            aoi.get('center', (0, 0)), imgWidth, imgHeight,
+                            self.filter_heatmap_threshold
+                        )
+                        if self.filter_heatmap_mode == 'filter' and inHotZone:
+                            continue
+                        if self.filter_heatmap_mode == 'display' and not inHotZone:
+                            continue
+
+            # Apply image mask filter
+            if self.filter_mask_path is not None and hasattr(self.parent, 'aoi_controller'):
+                image = self.parent.images[img_idx] if self.parent and hasattr(self.parent, 'images') else None
+                if image:
+                    imgWidth = image.get('width')
+                    imgHeight = image.get('height')
+                    if imgWidth and imgHeight:
+                        mask = self.parent.aoi_controller._get_scaled_mask(imgWidth, imgHeight)
+                        if mask is not None:
+                            cx, cy = aoi.get('center', (0, 0))
+                            cx = max(0, min(int(cx), imgWidth - 1))
+                            cy = max(0, min(int(cy), imgHeight - 1))
+                            in_mask = mask[int(cy), int(cx)] > 0
+                            if self.filter_mask_mode == 'include' and not in_mask:
+                                continue
+                            if self.filter_mask_mode == 'exclude' and in_mask:
+                                continue
 
             # AOI passed all filters
             filtered.append((img_idx, aoi_idx, aoi))
@@ -546,10 +592,15 @@ class GalleryController:
         self.filter_comment_pattern = filters.get('comment_filter')
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
+        self.filter_color_mode = filters.get('color_filter_mode', 'include')
         self.filter_area_min = filters.get('area_min')
         self.filter_area_max = filters.get('area_max')
         self.filter_temperature_min = filters.get('temperature_min')
         self.filter_temperature_max = filters.get('temperature_max')
+        self.filter_heatmap_mode = filters.get('heatmap_mode', 'off')
+        self.filter_heatmap_threshold = filters.get('heatmap_threshold', 75)
+        self.filter_mask_path = filters.get('mask_filter_path')
+        self.filter_mask_mode = filters.get('mask_filter_mode', 'include')
 
         self.load_all_aois()  # Reload with new filters
 
@@ -570,12 +621,22 @@ class GalleryController:
             self.filter_comment_pattern = aoi_ctrl.filter_comment_pattern
         self.filter_color_hue = aoi_ctrl.filter_color_hue
         self.filter_color_range = aoi_ctrl.filter_color_range
+        if hasattr(aoi_ctrl, 'filter_color_mode'):
+            self.filter_color_mode = aoi_ctrl.filter_color_mode
         self.filter_area_min = aoi_ctrl.filter_area_min
         self.filter_area_max = aoi_ctrl.filter_area_max
         if hasattr(aoi_ctrl, 'filter_temperature_min'):
             self.filter_temperature_min = aoi_ctrl.filter_temperature_min
         if hasattr(aoi_ctrl, 'filter_temperature_max'):
             self.filter_temperature_max = aoi_ctrl.filter_temperature_max
+        if hasattr(aoi_ctrl, 'filter_heatmap_mode'):
+            self.filter_heatmap_mode = aoi_ctrl.filter_heatmap_mode
+        if hasattr(aoi_ctrl, 'filter_heatmap_threshold'):
+            self.filter_heatmap_threshold = aoi_ctrl.filter_heatmap_threshold
+        if hasattr(aoi_ctrl, 'filter_mask_path'):
+            self.filter_mask_path = aoi_ctrl.filter_mask_path
+        if hasattr(aoi_ctrl, 'filter_mask_mode'):
+            self.filter_mask_mode = aoi_ctrl.filter_mask_mode
 
         # Sync sort settings
         self.sort_method = aoi_ctrl.sort_method
@@ -608,10 +669,11 @@ class GalleryController:
                 # We need to wait for the second one (after resetZoom) to ensure zoom stack is clear
                 zoom_handler = None
                 zoom_executed = False
+                zoom_disconnected = False
                 view_changed_count = 0
 
                 def zoom_when_ready():
-                    nonlocal zoom_executed, view_changed_count
+                    nonlocal zoom_executed, zoom_disconnected, view_changed_count
                     view_changed_count += 1
 
                     # Check if _recursion_guard is set - if so, updateViewer() is still running
@@ -651,66 +713,80 @@ class GalleryController:
                         if zoom_handler:
                             try:
                                 self.parent.main_image.viewChanged.disconnect(zoom_handler)
+                                zoom_disconnected = True
                             except Exception:
                                 pass
 
                 # Connect to viewChanged signal BEFORE loading (critical for race condition)
+                connected_viewer = None
                 if hasattr(self.parent, 'main_image') and self.parent.main_image:
                     try:
                         self.parent.main_image.viewChanged.connect(zoom_when_ready)
                         zoom_handler = zoom_when_ready
+                        connected_viewer = self.parent.main_image
                     except Exception:
                         # self.logger.debug(f"Could not connect to viewChanged: {e}")
                         pass
 
-                # Now load the image - this will emit viewChanged signals which our handler will catch
-                if hasattr(self.parent, '_load_image'):
-                    self.parent._load_image()
+                try:
+                    # Now load the image - this will emit viewChanged signals which our handler will catch
+                    if hasattr(self.parent, '_load_image'):
+                        self.parent._load_image()
 
-                # Check if image is ready and zoom stack is cleared but signal handler hasn't executed
-                # Only check if zoom hasn't already executed via the signal
-                if (not zoom_executed and
-                        hasattr(self.parent, 'main_image') and
-                        self.parent.main_image and
-                        self.parent.main_image.hasImage()):
-                    # Check if recursion guard is active - if so, wait for signal handler
-                    recursion_guard_active = False
-                    if hasattr(self.parent.main_image, '_recursion_guard'):
-                        recursion_guard_active = self.parent.main_image._recursion_guard
-
-                    # Check if zoom stack is cleared (resetZoom has been called)
-                    zoom_stack_cleared = False
-                    if hasattr(self.parent.main_image, 'zoomStack'):
-                        zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
-
-                    # Only zoom if recursion guard is not active and zoom stack is cleared
-                    if not recursion_guard_active and zoom_stack_cleared:
-                        # Disconnect the signal handler to prevent double-zoom
-                        if zoom_handler:
-                            try:
-                                self.parent.main_image.viewChanged.disconnect(zoom_handler)
-                            except Exception:
-                                pass
-                        # Zoom directly since image is ready and zoom is reset
-                        zoom_executed = True
-                        self._zoom_to_aoi(aoi_data)
-                elif not zoom_handler:
-                    # Couldn't connect to signal, try zooming directly if image is ready and zoom is reset
-                    if (hasattr(self.parent, 'main_image') and
+                    # Check if image is ready and zoom stack is cleared but signal handler hasn't executed
+                    # Only check if zoom hasn't already executed via the signal
+                    if (not zoom_executed and
+                            hasattr(self.parent, 'main_image') and
                             self.parent.main_image and
                             self.parent.main_image.hasImage()):
-                        # Check if recursion guard is active
+                        # Check if recursion guard is active - if so, wait for signal handler
                         recursion_guard_active = False
                         if hasattr(self.parent.main_image, '_recursion_guard'):
                             recursion_guard_active = self.parent.main_image._recursion_guard
 
-                        # Check if zoom stack is cleared before zooming
+                        # Check if zoom stack is cleared (resetZoom has been called)
                         zoom_stack_cleared = False
                         if hasattr(self.parent.main_image, 'zoomStack'):
                             zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
 
+                        # Only zoom if recursion guard is not active and zoom stack is cleared
                         if not recursion_guard_active and zoom_stack_cleared:
+                            # Zoom directly since image is ready and zoom is reset
+                            zoom_executed = True
                             self._zoom_to_aoi(aoi_data)
+                    elif not zoom_handler:
+                        # Couldn't connect to signal, try zooming directly if image is ready and zoom is reset
+                        if (hasattr(self.parent, 'main_image') and
+                                self.parent.main_image and
+                                self.parent.main_image.hasImage()):
+                            # Check if recursion guard is active
+                            recursion_guard_active = False
+                            if hasattr(self.parent.main_image, '_recursion_guard'):
+                                recursion_guard_active = self.parent.main_image._recursion_guard
+
+                            # Check if zoom stack is cleared before zooming
+                            zoom_stack_cleared = False
+                            if hasattr(self.parent.main_image, 'zoomStack'):
+                                zoom_stack_cleared = len(self.parent.main_image.zoomStack) == 0
+
+                            if not recursion_guard_active and zoom_stack_cleared:
+                                self._zoom_to_aoi(aoi_data)
+                finally:
+                    # _load_image() is synchronous, so every viewChanged it can
+                    # emit has already fired by now. Unconditionally drop the
+                    # transient handler: a failed or early-returning load (missing
+                    # file, destroyed viewer) otherwise leaves it armed on the
+                    # viewChanged signal, where a later wheel zoom would re-enter
+                    # zoomToArea against a stale AOI. Disconnect from the exact
+                    # viewer we connected to. Skip if the handler already
+                    # disconnected itself on success, otherwise PySide6 warns
+                    # about a failed disconnect from an already-severed slot.
+                    if (zoom_handler is not None and connected_viewer is not None
+                            and not zoom_disconnected):
+                        try:
+                            connected_viewer.viewChanged.disconnect(zoom_handler)
+                        except Exception:
+                            pass
             else:
                 # Same image - zoom immediately
                 self._zoom_to_aoi(aoi_data)
@@ -718,6 +794,60 @@ class GalleryController:
         except Exception as e:
             self.logger.error(f"Error handling AOI click: {e}")
             self.logger.error(traceback.format_exc())
+
+    def go_to_aoi(self, image_index, aoi_index):
+        """Select and reveal a specific AOI in the gallery by its location.
+
+        Args:
+            image_index (int): Index of the parent image.
+            aoi_index (int): Index of the AOI within that image.
+
+        Returns:
+            bool: True if the AOI is present in the (possibly filtered)
+                gallery and was revealed; False if it is filtered out.
+        """
+        if not self.model:
+            return False
+        row = self.model.aoi_to_row.get((image_index, aoi_index))
+        if row is None:
+            # The model can be stale (for example right after a new AOI was
+            # created); rebuild the gallery once and retry before reporting
+            # the AOI as filtered out.
+            self.load_all_aois()
+            row = self.model.aoi_to_row.get((image_index, aoi_index))
+        if row is None:
+            return False
+        self._select_and_activate_aoi(row)
+        return True
+
+    def navigate_gallery_aoi(self, direction):
+        """Navigate to the next or previous AOI in the gallery.
+
+        Args:
+            direction: 1 for next (right), -1 for previous (left)
+        """
+        row_count = self.model.rowCount()
+        if row_count == 0:
+            return
+
+        current_index = self.ui_component.gallery_view.currentIndex()
+        if not current_index.isValid():
+            target_row = 0 if direction == 1 else row_count - 1
+        else:
+            target_row = (current_index.row() + direction) % row_count
+
+        self._select_and_activate_aoi(target_row)
+
+    def _select_and_activate_aoi(self, row):
+        """Select an AOI by row index and trigger click behavior."""
+        index = self.model.index(row, 0)
+        self.ui_component.gallery_view.setCurrentIndex(index)
+        self.ui_component.gallery_view.scrollTo(index)
+
+        aoi_info = self.model.get_aoi_info(index)
+        if aoi_info:
+            image_idx, aoi_idx, aoi_data = aoi_info
+            self.on_aoi_clicked(image_idx, aoi_idx, aoi_data)
 
     def _zoom_to_aoi(self, aoi_data):
         """Zoom to an AOI in the image viewer and highlight it."""
@@ -754,6 +884,11 @@ class GalleryController:
                 # self.logger.info(f"Successfully zoomed to AOI at {center}")
             else:
                 self.logger.warning("Viewer does not have zoomToArea method")
+
+            # Show the on-image number badge + ruler for this AOI.
+            overlay = getattr(self.parent, 'aoi_overlay_controller', None)
+            if overlay is not None:
+                overlay.show_for_aoi(aoi_data)
 
         except Exception as e:
             self.logger.error(f"Error zooming to AOI: {e}")
@@ -1125,6 +1260,9 @@ class GalleryController:
                 # Resize main image and reposition overlay
                 if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                     self.parent._resize_main_image_and_reposition_overlay()
+                # Keep the AOI header aligned with the (locked) AOI pane width
+                if hasattr(self.parent, '_sync_aoi_header_width'):
+                    self.parent._sync_aoi_header_width()
                 return
 
             # Gallery mode: allow resizing with snapping to column widths
@@ -1169,6 +1307,11 @@ class GalleryController:
             # Resize main image and reposition overlay when splitter moves
             if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                 self.parent._resize_main_image_and_reposition_overlay()
+
+            # Keep the AOI header aligned with the AOI pane as it is dragged so
+            # the "N Areas of Interest" header tracks the resized gallery pane.
+            if hasattr(self.parent, '_sync_aoi_header_width'):
+                self.parent._sync_aoi_header_width()
 
         except Exception as e:
             self.logger.error(f"Error handling splitter movement: {e}")
@@ -1310,6 +1453,8 @@ class GalleryController:
                                 # Resize main image and reposition overlay
                                 if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                                     self.parent._resize_main_image_and_reposition_overlay()
+                                if hasattr(self.parent, '_sync_aoi_header_width'):
+                                    self.parent._sync_aoi_header_width()
                         except Exception:
                             # self.logger.debug(f"Could not restore gallery splitter position: {e}")
                             pass
@@ -1329,6 +1474,8 @@ class GalleryController:
                         # Resize main image and reposition overlay
                         if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                             self.parent._resize_main_image_and_reposition_overlay()
+                        if hasattr(self.parent, '_sync_aoi_header_width'):
+                            self.parent._sync_aoi_header_width()
 
                 # Gallery widget fills the frame width
                 frame_rect = self.parent.aoiFrame.rect()
@@ -1407,6 +1554,8 @@ class GalleryController:
                     # Resize main image and reposition overlay
                     if hasattr(self.parent, '_resize_main_image_and_reposition_overlay'):
                         self.parent._resize_main_image_and_reposition_overlay()
+                    if hasattr(self.parent, '_sync_aoi_header_width'):
+                        self.parent._sync_aoi_header_width()
 
                 # Reset to reasonable single-column width
                 self.parent.aoiFrame.setMinimumWidth(250)

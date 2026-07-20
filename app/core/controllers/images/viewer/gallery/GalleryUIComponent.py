@@ -14,6 +14,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, 
 import qtawesome as qta
 
 from core.services.LoggerService import LoggerService
+from helpers.TranslationMixin import TranslationMixin
 
 
 class AOIGalleryDelegate(QStyledItemDelegate):
@@ -34,6 +35,11 @@ class AOIGalleryDelegate(QStyledItemDelegate):
 
         # Create location icon
         self.location_icon = qta.icon('fa6s.location-dot', color='#4CAF50').pixmap(16, 16)
+
+        # Create comment icons — gold when an AOI has a comment, gray otherwise,
+        # matching the single-image view's color convention.
+        self.comment_icon_active = qta.icon('fa6s.comment', color='#FFD700').pixmap(16, 16)
+        self.comment_icon_inactive = qta.icon('fa6s.comment', color='#808080').pixmap(16, 16)
 
     def sizeHint(self, option, index):
         """Return the size hint for each item."""
@@ -91,35 +97,25 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             painter.setPen(QPen(QColor(100, 100, 100), 1))
             painter.drawRect(thumbnail_rect)
 
-            # Draw flag icon first (to the left of location)
+            # Draw the run-wide AOI number badge in the top-left corner.
+            number = aoi_data.get('number')
+            if number is not None:
+                self._draw_number_badge(painter, thumbnail_rect, number)
+
+            # Draw bottom-right icon cluster: flag | comment | location.
+            # Positions are reflowed from the original flag/location pair so
+            # the new comment icon can slot between them without overlap.
+            icon_y = thumbnail_rect.bottom() - 20
+
             flagged = aoi_data.get('flagged', False)
             flag_icon = self.flag_icon_active if flagged else self.flag_icon_inactive
-            flag_x = thumbnail_rect.right() - 40
-            flag_y = thumbnail_rect.bottom() - 20
-            painter.drawPixmap(flag_x, flag_y, flag_icon)
+            painter.drawPixmap(thumbnail_rect.right() - 60, icon_y, flag_icon)
 
-            # Draw location icon in bottom-right corner - at the end
-            location_x = thumbnail_rect.right() - 20
-            location_y = thumbnail_rect.bottom() - 20
-            painter.drawPixmap(location_x, location_y, self.location_icon)
+            has_comment = bool(aoi_data.get('user_comment', '').strip())
+            comment_icon = self.comment_icon_active if has_comment else self.comment_icon_inactive
+            painter.drawPixmap(thumbnail_rect.right() - 40, icon_y, comment_icon)
 
-            # Draw comment indicator in top-left corner
-            comment = aoi_data.get('user_comment', '').strip()
-            if comment:
-                # Use similar icon approach for comments
-                comment_x = thumbnail_rect.left() + 5
-                comment_y = thumbnail_rect.top() + 5
-                # Draw a simple colored circle to indicate comment
-                painter.setBrush(QColor(255, 215, 0))  # Gold color for comments
-                painter.setPen(QPen(QColor(255, 255, 255), 1))
-                painter.drawEllipse(comment_x, comment_y, 16, 16)
-                # Draw text indicator
-                painter.setPen(QPen(QColor(0, 0, 0), 2))
-                font = painter.font()
-                font.setPointSize(8)
-                font.setBold(True)
-                painter.setFont(font)
-                painter.drawText(QRect(comment_x, comment_y, 16, 16), Qt.AlignCenter, "C")
+            painter.drawPixmap(thumbnail_rect.right() - 20, icon_y, self.location_icon)
 
             # Draw color swatch indicator (bottom-left corner of thumbnail)
             color_info = user_data.get('color_info')
@@ -146,6 +142,35 @@ class AOIGalleryDelegate(QStyledItemDelegate):
 
         painter.restore()
 
+    def _draw_number_badge(self, painter, thumbnail_rect, number):
+        """Draw the run-wide AOI number badge in the thumbnail's top-left corner.
+
+        Args:
+            painter: The active QPainter.
+            thumbnail_rect: The thumbnail's QRect.
+            number: The AOI's run-wide unique number.
+        """
+        painter.save()
+        text = f"#{number}"
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        metrics = QFontMetrics(font)
+        padding_x, padding_y = 5, 2
+        badge_rect = QRect(
+            thumbnail_rect.left() + 4,
+            thumbnail_rect.top() + 4,
+            metrics.horizontalAdvance(text) + padding_x * 2,
+            metrics.height() + padding_y * 2,
+        )
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 180))
+        painter.drawRoundedRect(badge_rect, 4, 4)
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.drawText(badge_rect, Qt.AlignCenter, text)
+        painter.restore()
+
     def _get_confidence_color(self, confidence):
         """Get color based on confidence level."""
         if confidence >= 0.8:
@@ -156,7 +181,7 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             return QColor(255, 100, 50)  # Orange/Red
 
 
-class GalleryUIComponent(QObject):
+class GalleryUIComponent(TranslationMixin, QObject):
     """
     UI component for the AOI gallery view.
 
@@ -167,6 +192,36 @@ class GalleryUIComponent(QObject):
     aoi_clicked = Signal(int, int)  # image_idx, aoi_idx
     # Emitted when the view is first laid out with a valid size
     view_ready = Signal()
+
+    @staticmethod
+    def _snap_wheel_scroll_value(scroll_up, current, scroll_amount,
+                                 minimum, maximum, grid_row_height):
+        """Compute the page-at-a-time wheel scroll target, snapped to rows.
+
+        Snaps to row boundaries for clean alignment, but always allows reaching
+        the very bottom even when the scroll range is not an exact multiple of a
+        row height. Without the bottom guard, snapping the target down to the
+        nearest row boundary strands the view a fraction of a row short of the
+        end, so the final wheel notch cannot reach the last row.
+
+        Args:
+            scroll_up (bool): True when scrolling toward the top.
+            current (int): Current scrollbar value.
+            scroll_amount (int): Pixels to advance per wheel notch.
+            minimum (int): Scrollbar minimum.
+            maximum (int): Scrollbar maximum.
+            grid_row_height (int): Height of one grid row in pixels.
+
+        Returns:
+            int: The scrollbar value to set.
+        """
+        if scroll_up:
+            target = max(minimum, current - scroll_amount)
+            return (target // grid_row_height) * grid_row_height
+        target = min(maximum, current + scroll_amount)
+        if target >= maximum:
+            return maximum
+        return (target // grid_row_height) * grid_row_height
 
     def __init__(self, gallery_controller):
         """
@@ -230,13 +285,39 @@ class GalleryUIComponent(QObject):
         original_keyPressEvent = self.gallery_view.keyPressEvent
 
         def keyPressEvent(event):
-            if event.key() == Qt.Key_F and event.modifiers() == Qt.NoModifier:
-                # Forward F key to parent window's keyPressEvent
-                if self.gallery_view.window():
-                    self.gallery_view.window().keyPressEvent(event)
-                return
+            # Arrow keys and F key are handled in eventFilter (which reliably
+            # intercepts before the C++ QListView::keyPressEvent runs).
+            # This fallback only handles keys not caught by the event filter.
             original_keyPressEvent(event)
         self.gallery_view.keyPressEvent = keyPressEvent
+
+        # Override wheelEvent for page-at-a-time scrolling
+        gridRowHeight = 200  # Must match setGridSize() below
+
+        def wheelEvent(event):
+            viewportHeight = self.gallery_view.viewport().height()
+            if viewportHeight <= 0 or gridRowHeight <= 0:
+                QListView.wheelEvent(self.gallery_view, event)
+                return
+
+            # Calculate full rows visible, scroll by that many rows
+            rowsPerPage = max(1, viewportHeight // gridRowHeight)
+            scrollAmount = rowsPerPage * gridRowHeight
+
+            scrollBar = self.gallery_view.verticalScrollBar()
+            newValue = self._snap_wheel_scroll_value(
+                scroll_up=event.angleDelta().y() > 0,
+                current=scrollBar.value(),
+                scroll_amount=scrollAmount,
+                minimum=scrollBar.minimum(),
+                maximum=scrollBar.maximum(),
+                grid_row_height=gridRowHeight,
+            )
+
+            scrollBar.setValue(newValue)
+            event.accept()
+
+        self.gallery_view.wheelEvent = wheelEvent
 
         # Set fixed grid size for consistent columns
         self.gallery_view.setGridSize(QSize(200, 200))  # Width, Height (thumbnail + spacing)
@@ -285,7 +366,7 @@ class GalleryUIComponent(QObject):
         header.setMaximumHeight(0)
 
         # Keep count_label for internal tracking (but don't display it)
-        self.count_label = QLabel("0 AOIs")
+        self.count_label = QLabel(self.tr("0 AOIs"))
         self.count_label.setVisible(False)  # Hidden - we'll update main title instead
 
         return header
@@ -326,7 +407,10 @@ class GalleryUIComponent(QObject):
     def _update_count_label(self, count):
         """Update the count label with the number of AOIs."""
         if self.count_label:
-            self.count_label.setText(f"{count} AOI{'s' if count != 1 else ''}")
+            label = self.tr("AOI") if count == 1 else self.tr("AOIs")
+            self.count_label.setText(
+                self.tr("{count} {label}").format(count=count, label=label)
+            )
 
         # Also update the main AOI header title when in gallery mode
         if (self.gallery_controller and
@@ -342,8 +426,14 @@ class GalleryUIComponent(QObject):
             area_count_label = self.gallery_controller.parent.areaCountLabel
             if area_count_label:
                 # Format: "# Areas of Interest - Gallery Mode" (matching single-image format)
-                area_text = f"{count} {'Area' if count == 1 else 'Areas'} of Interest"
-                area_count_label.setText(area_text)
+                area_label = (
+                    self.tr("Area of Interest")
+                    if count == 1
+                    else self.tr("Areas of Interest")
+                )
+                area_count_label.setText(
+                    self.tr("{count} {label}").format(count=count, label=area_label)
+                )
 
     def _on_item_clicked(self, index):
         """Handle item click in the gallery."""
@@ -446,10 +536,39 @@ class GalleryUIComponent(QObject):
     def eventFilter(self, obj, event):
         """Watch for the first time the view/viewport has a valid size, handle flag button clicks, and keyboard events."""
         try:
-            # Handle mouse clicks on flag button
+            # Intercept arrow keys on the gallery view to navigate AOIs
+            # Note: no modifier check for arrows (Mac reports KeypadModifier
+            # for arrow keys), matching Viewer.keyPressEvent behaviour
+            if (obj is self.gallery_view and
+                    event.type() == QEvent.KeyPress):
+                if event.key() == Qt.Key_Right:
+                    self.gallery_controller.navigate_gallery_aoi(1)
+                    return True
+                if event.key() == Qt.Key_Left:
+                    self.gallery_controller.navigate_gallery_aoi(-1)
+                    return True
+                # Forward global Viewer shortcuts to the parent window so they
+                # fire even when the gallery has keyboard focus. Without this,
+                # QAbstractItemView's keyboard-search feature swallows letter
+                # keys before Viewer.keyPressEvent sees them.
+                global_shortcut_keys = {
+                    Qt.Key_A, Qt.Key_F, Qt.Key_G, Qt.Key_Z, Qt.Key_C, Qt.Key_R,
+                    Qt.Key_H, Qt.Key_M, Qt.Key_E, Qt.Key_W, Qt.Key_O,
+                    Qt.Key_I,
+                }
+                if event.key() in global_shortcut_keys:
+                    window = self.gallery_view.window()
+                    if window is not None:
+                        window.keyPressEvent(event)
+                    return True
+
+            # Handle mouse clicks on the thumbnail's interactive icons and
+            # right-click copy. Both left- and right-click are handled from a
+            # single branch so the hit-testing and thumbnail-rect calculation
+            # are not duplicated.
             if (obj == self.gallery_view.viewport() and
                     event.type() == QEvent.MouseButtonPress and
-                    event.button() == Qt.LeftButton):
+                    event.button() in (Qt.LeftButton, Qt.RightButton)):
                 # Get the item at the click position
                 index = self.gallery_view.indexAt(event.pos())
                 if index.isValid():
@@ -468,6 +587,7 @@ class GalleryUIComponent(QObject):
                         if user_data:
                             image_idx = user_data.get('image_idx')
                             aoi_idx = user_data.get('aoi_idx')
+                            aoi_data = user_data.get('aoi_data', {}) or {}
 
                             if image_idx is not None and aoi_idx is not None:
                                 # Calculate thumbnail rect
@@ -480,8 +600,35 @@ class GalleryUIComponent(QObject):
                                     thumbnail_size.height()
                                 )
 
-                                # Check if click is on flag button (to the left of location, 16x16 icon)
-                                flag_rect = QRect(thumbnail_rect.right() - 40, thumbnail_rect.bottom() - 20, 16, 16)
+                                aoi_controller = None
+                                if hasattr(delegate.gallery_controller.parent, 'aoi_controller'):
+                                    aoi_controller = delegate.gallery_controller.parent.aoi_controller
+
+                                # Right-click on the thumbnail copies AOI data
+                                # via the same context menu used by single-image view.
+                                if event.button() == Qt.RightButton:
+                                    if thumbnail_rect.contains(event.pos()):
+                                        if self.gallery_view.currentIndex() != index:
+                                            self.gallery_view.setCurrentIndex(index)
+                                        if aoi_controller:
+                                            aoi_controller.show_aoi_context_menu(
+                                                event.pos(),
+                                                self.gallery_view,
+                                                aoi_data.get('center', (0, 0)),
+                                                aoi_data.get('area', 0),
+                                                None,
+                                                aoi_idx,
+                                                image_idx=image_idx,
+                                            )
+                                        event.accept()
+                                        return True
+                                    # Right-clicks outside the thumbnail fall through.
+                                    return False
+
+                                # Left-click handlers below.
+
+                                # Flag icon — leftmost of the bottom-right cluster.
+                                flag_rect = QRect(thumbnail_rect.right() - 60, thumbnail_rect.bottom() - 20, 16, 16)
                                 if flag_rect.contains(event.pos()):
                                     # Ensure this item is selected before toggling
                                     if self.gallery_view.currentIndex() != index:
@@ -493,7 +640,17 @@ class GalleryUIComponent(QObject):
                                     event.accept()
                                     return True
 
-                                # Check if click is on location button (bottom-right corner, 16x16 icon) - at the end
+                                # Comment icon — middle of the bottom-right cluster.
+                                comment_rect = QRect(thumbnail_rect.right() - 40, thumbnail_rect.bottom() - 20, 16, 16)
+                                if comment_rect.contains(event.pos()):
+                                    if self.gallery_view.currentIndex() != index:
+                                        self.gallery_view.setCurrentIndex(index)
+                                    if aoi_controller:
+                                        aoi_controller.edit_aoi_comment(aoi_idx, image_idx=image_idx)
+                                    event.accept()
+                                    return True
+
+                                # Location icon — rightmost of the bottom-right cluster.
                                 location_rect = QRect(thumbnail_rect.right() - 20, thumbnail_rect.bottom() - 20, 16, 16)
                                 if location_rect.contains(event.pos()):
                                     # Ensure this item is selected
@@ -502,17 +659,9 @@ class GalleryUIComponent(QObject):
                                     # Show AOI location - get the visual rect for anchoring
                                     visual_rect = self.gallery_view.visualRect(index)
                                     anchor_point = self.gallery_view.mapToGlobal(visual_rect.bottomRight())
-                                    if delegate.gallery_controller and hasattr(delegate.gallery_controller.parent, 'aoi_controller'):
-                                        delegate.gallery_controller.parent.aoi_controller.show_aoi_location(aoi_idx, image_idx, anchor_point=anchor_point)
+                                    if aoi_controller:
+                                        aoi_controller.show_aoi_location(aoi_idx, image_idx, anchor_point=anchor_point)
                                     # Prevent the click from propagating
-                                    event.accept()
-                                    return True
-
-                                # Check if click is on comment button (top-left corner, 16x16 icon)
-                                comment_rect = QRect(thumbnail_rect.left() + 5, thumbnail_rect.top() + 5, 16, 16)
-                                if comment_rect.contains(event.pos()):
-                                    # Could add comment editing here in the future
-                                    # For now, just accept the event to prevent item selection
                                     event.accept()
                                     return True
 

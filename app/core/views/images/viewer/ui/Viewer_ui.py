@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Viewer.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.2
+## Created by: Qt User Interface Compiler version 6.10.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -162,12 +162,26 @@ class Ui_Viewer(object):
 
         self.horizontalLayout_5.addWidget(self.showAOIsButton)
 
+        self.showRulerButton = QToolButton(self.mainHeaderWidget)
+        self.showRulerButton.setObjectName(u"showRulerButton")
+        self.showRulerButton.setIconSize(QSize(25, 25))
+        self.showRulerButton.setCheckable(True)
+        self.showRulerButton.setChecked(True)
+
+        self.horizontalLayout_5.addWidget(self.showRulerButton)
+
         self.line_7 = QFrame(self.mainHeaderWidget)
         self.line_7.setObjectName(u"line_7")
         self.line_7.setFrameShape(QFrame.Shape.VLine)
         self.line_7.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.horizontalLayout_5.addWidget(self.line_7)
+
+        self.thermalHistogramButton = QToolButton(self.mainHeaderWidget)
+        self.thermalHistogramButton.setObjectName(u"thermalHistogramButton")
+        self.thermalHistogramButton.setIconSize(QSize(25, 25))
+
+        self.horizontalLayout_5.addWidget(self.thermalHistogramButton)
 
         self.GPSMapButton = QToolButton(self.mainHeaderWidget)
         self.GPSMapButton.setObjectName(u"GPSMapButton")
@@ -201,6 +215,19 @@ class Ui_Viewer(object):
         self.measureButton.setIconSize(QSize(25, 25))
 
         self.horizontalLayout_5.addWidget(self.measureButton)
+
+        self.personOverlayButton = QToolButton(self.mainHeaderWidget)
+        self.personOverlayButton.setObjectName(u"personOverlayButton")
+        self.personOverlayButton.setIconSize(QSize(25, 25))
+
+        self.horizontalLayout_5.addWidget(self.personOverlayButton)
+
+        self.gridReviewButton = QToolButton(self.mainHeaderWidget)
+        self.gridReviewButton.setObjectName(u"gridReviewButton")
+        self.gridReviewButton.setIconSize(QSize(25, 25))
+        self.gridReviewButton.setCheckable(True)
+
+        self.horizontalLayout_5.addWidget(self.gridReviewButton)
 
         self.magnifyButton = QToolButton(self.mainHeaderWidget)
         self.magnifyButton.setObjectName(u"magnifyButton")
@@ -370,6 +397,21 @@ class Ui_Viewer(object):
 
         self.ButtonLayout.addWidget(self.jumpToLine)
 
+        self.aoiJumpLabel = QLabel(self.imageWidget)
+        self.aoiJumpLabel.setObjectName(u"aoiJumpLabel")
+        self.aoiJumpLabel.setFont(font2)
+
+        self.ButtonLayout.addWidget(self.aoiJumpLabel)
+
+        self.aoiJumpLine = QLineEdit(self.imageWidget)
+        self.aoiJumpLine.setObjectName(u"aoiJumpLine")
+        sizePolicy4.setHeightForWidth(self.aoiJumpLine.sizePolicy().hasHeightForWidth())
+        self.aoiJumpLine.setSizePolicy(sizePolicy4)
+        self.aoiJumpLine.setMinimumSize(QSize(50, 0))
+        self.aoiJumpLine.setMaximumSize(QSize(50, 16777215))
+
+        self.ButtonLayout.addWidget(self.aoiJumpLine)
+
         self.previousImageButton = QPushButton(self.imageWidget)
         self.previousImageButton.setObjectName(u"previousImageButton")
         self.previousImageButton.setFont(font2)
@@ -440,10 +482,6 @@ class Ui_Viewer(object):
         self.horizontalLayout_3 = QHBoxLayout(self.aoiHeaderWidget)
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.horizontalLayout_3.setContentsMargins(0, 5, 0, 5)
-        self.aoiHeaderLeftSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_3.addItem(self.aoiHeaderLeftSpacer)
-
         self.areaCountLabel = QLabel(self.aoiHeaderWidget)
         self.areaCountLabel.setObjectName(u"areaCountLabel")
         sizePolicy7 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
@@ -452,7 +490,7 @@ class Ui_Viewer(object):
         sizePolicy7.setHeightForWidth(self.areaCountLabel.sizePolicy().hasHeightForWidth())
         self.areaCountLabel.setSizePolicy(sizePolicy7)
         self.areaCountLabel.setFont(font)
-        self.areaCountLabel.setAlignment(Qt.AlignCenter)
+        self.areaCountLabel.setAlignment(Qt.AlignLeft|Qt.AlignVCenter)
 
         self.horizontalLayout_3.addWidget(self.areaCountLabel)
 
@@ -579,6 +617,14 @@ class Ui_Viewer(object):
 #endif // QT_CONFIG(tooltip)
         self.showAOIsButton.setText("")
 #if QT_CONFIG(tooltip)
+        self.showRulerButton.setToolTip(QCoreApplication.translate("Viewer", u"Toggle the measurement ruler drawn over the selected AOI", None))
+#endif // QT_CONFIG(tooltip)
+        self.showRulerButton.setText("")
+#if QT_CONFIG(tooltip)
+        self.thermalHistogramButton.setToolTip(QCoreApplication.translate("Viewer", u"Open Histogram", None))
+#endif // QT_CONFIG(tooltip)
+        self.thermalHistogramButton.setText("")
+#if QT_CONFIG(tooltip)
         self.GPSMapButton.setToolTip(QCoreApplication.translate("Viewer", u"Map with Image Locations (M)", None))
 #endif // QT_CONFIG(tooltip)
         self.GPSMapButton.setText("")
@@ -596,6 +642,16 @@ class Ui_Viewer(object):
 #endif // QT_CONFIG(tooltip)
         self.measureButton.setText(QCoreApplication.translate("Viewer", u"...", None))
         self.measureButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"ruler.png", None))
+#if QT_CONFIG(tooltip)
+        self.personOverlayButton.setToolTip(QCoreApplication.translate("Viewer", u"Person Size Reference (Ctrl+P)", None))
+#endif // QT_CONFIG(tooltip)
+        self.personOverlayButton.setText(QCoreApplication.translate("Viewer", u"...", None))
+        self.personOverlayButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"person.png", None))
+#if QT_CONFIG(tooltip)
+        self.gridReviewButton.setToolTip(QCoreApplication.translate("Viewer", u"Toggle Grid Review Mode (S) \u2014 sweep the image cell by cell; Shift+S for grid settings", None))
+#endif // QT_CONFIG(tooltip)
+        self.gridReviewButton.setText(QCoreApplication.translate("Viewer", u"...", None))
+        self.gridReviewButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"grid.png", None))
 #if QT_CONFIG(tooltip)
         self.magnifyButton.setToolTip(QCoreApplication.translate("Viewer", u"Toggle Magnifying Glass (Middle Mouse)", None))
 #endif // QT_CONFIG(tooltip)
@@ -647,6 +703,15 @@ class Ui_Viewer(object):
         self.jumpToLine.setToolTip(QCoreApplication.translate("Viewer", u"Enter an image number (1 to total) and press Enter.\n"
 "Quickly navigate to any image in the analysis results.\n"
 "Example: Type \"25\" and press Enter to jump to image #25", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.aoiJumpLabel.setToolTip(QCoreApplication.translate("Viewer", u"Jump to a specific AOI by its run-wide number.\n"
+"Enter an AOI number and press Enter to select and scroll to it.", None))
+#endif // QT_CONFIG(tooltip)
+        self.aoiJumpLabel.setText(QCoreApplication.translate("Viewer", u"Go to AOI #:", None))
+#if QT_CONFIG(tooltip)
+        self.aoiJumpLine.setToolTip(QCoreApplication.translate("Viewer", u"Enter an AOI number and press Enter.\n"
+"Selects that AOI and scrolls it into view in the gallery or single-image list.", None))
 #endif // QT_CONFIG(tooltip)
         self.previousImageButton.setText(QCoreApplication.translate("Viewer", u"Previous Image", None))
         self.previousImageButton.setProperty(u"iconName", QCoreApplication.translate("Viewer", u"previous.png", None))
