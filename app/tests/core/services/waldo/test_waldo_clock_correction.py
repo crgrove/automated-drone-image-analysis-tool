@@ -206,6 +206,30 @@ def test_apply_is_idempotent(tmp_path, monkeypatch):
     assert calls == []
 
 
+def test_apply_stays_idempotent_with_refined_stamp_present(tmp_path, monkeypatch):
+    # The flight-log stage writes waldo:CaptureUtcRefined ALONGSIDE the
+    # corrected stamp. The remembered clock auto-apply must keep seeing its
+    # own stamp as current, or every folder open would rewrite every image
+    # and clobber the refinement (the two-rewrite loop).
+    path = _make_image(tmp_path)
+    monkeypatch.setattr(waldo_module.MetaDataHelper, 'get_exif_data_piexif',
+                        staticmethod(lambda p: _fault_exif()))
+    monkeypatch.setattr(waldo_module.MetaDataHelper, 'get_xmp_data_merged',
+                        staticmethod(lambda p: {
+                            'waldo:CaptureUtcCorrected': '2026-07-23T13:49:37+00:00',
+                            'waldo:CaptureUtcRefined': '2026-07-23T13:49:20+00:00',
+                        }))
+    calls = []
+    monkeypatch.setattr(waldo_module.MetaDataHelper, 'add_xmp_fields',
+                        staticmethod(lambda p, fields: calls.append(p)))
+
+    svc = WaldoMetadataService(terrain_service=None)
+    assert svc.get_corrected_utc_stamp(path) == '2026-07-23T13:49:37+00:00'
+    result = svc.apply_clock_correction([path], -12, tz_name="America/Los_Angeles")
+    assert result.already_current == 1 and result.processed == 0
+    assert calls == []
+
+
 def test_apply_skips_non_waldo_and_reports_missing_exif(tmp_path, monkeypatch):
     waldo = _make_image(tmp_path, name="0_000_02_035.jpg")
     other = _make_image(tmp_path, name="DJI_0001.jpg")

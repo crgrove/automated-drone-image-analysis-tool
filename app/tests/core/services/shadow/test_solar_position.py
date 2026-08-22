@@ -69,6 +69,35 @@ def test_resolve_utc_bad_corrected_value_falls_through():
     assert utc == datetime(2025, 6, 15, 19, 30, 0, tzinfo=timezone.utc)
 
 
+@pytest.mark.parametrize("key", [
+    'CaptureUtcRefined',
+    'waldo:CaptureUtcRefined',
+    'XMP-waldo:CaptureUtcRefined',
+])
+def test_resolve_utc_prefers_refined_over_corrected(key):
+    # The track-log refinement is seconds-accurate GPS-true time computed ON
+    # TOP of the operator's hour/zone repair - it must outrank it.
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'CaptureUtcCorrected': '2026-07-23T13:49:37+00:00',
+        key: '2026-07-23T13:49:20+00:00',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_refined'
+    assert utc == datetime(2026, 7, 23, 13, 49, 20, tzinfo=timezone.utc)
+
+
+def test_resolve_utc_bad_refined_value_falls_to_corrected():
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'CaptureUtcRefined': 'not-a-timestamp',
+        'CaptureUtcCorrected': '2026-07-23T13:49:37+00:00',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_corrected'
+    assert utc == datetime(2026, 7, 23, 13, 49, 37, tzinfo=timezone.utc)
+
+
 def test_timezone_name_for_position_returns_zone_or_none():
     name = solar_mod.timezone_name_for_position(_TX_LAT, _TX_LON)
     assert name in ('America/Chicago', None)  # None only if tzfinder missing

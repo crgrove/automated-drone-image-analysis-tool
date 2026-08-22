@@ -598,9 +598,10 @@ class CalTopoExportController(TranslationMixin):
                         "No coverage area polygons could be calculated.\n\n"
                         "This usually means:\n"
                         "• The images don't have GPS data in their EXIF metadata\n"
-                        "• The images are not nadir (gimbal pitch must be between -85° and -95°)\n"
+                        "• The images are not nadir (gimbal pitch must be between -85° and -95°;\n"
+                        "  WALDO images: boresight within 40° of nadir)\n"
                         "• GSD (ground sample distance) could not be calculated\n\n"
-                        "Please ensure your images have GPS coordinates and are nadir shots."
+                        "Please ensure your images have GPS coordinates and are near-nadir shots."
                     )
                 else:
                     message = self.tr(

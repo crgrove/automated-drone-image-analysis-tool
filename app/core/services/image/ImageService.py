@@ -265,6 +265,13 @@ class ImageService:
     def get_asl_altitude(self, distance_unit):
         """Retrieve the drone's altitude above sea level from EXIF data.
 
+        WALDO imagery (waldo:ProcessorVersion stamped) prefers the
+        pre-pass's drone-dji:AbsoluteAltitude: the synthesis computed a
+        true orthometric ASL there (GPS ellipsoidal minus geoid
+        undulation), while the raw EXIF GPSAltitude on these cameras is
+        WGS84-ellipsoidal - tens of meters off as "sea level". Non-WALDO
+        behaviour is unchanged.
+
         Args:
             distance_unit (str): Unit to return altitude in ("ft" or "m").
 
@@ -272,6 +279,17 @@ class ImageService:
             float or None: Altitude in the requested unit, or None if unavailable.
         """
         METERS_TO_FEET = 3.28084
+
+        if self.get_waldo_processor_version() is not None and self.xmp_data is not None:
+            for key in ('drone-dji:AbsoluteAltitude', 'AbsoluteAltitude',
+                        'XMP-drone-dji:AbsoluteAltitude'):
+                value = self.xmp_data.get(key)
+                if value is not None:
+                    try:
+                        asl_m = float(value)
+                        return round(asl_m * METERS_TO_FEET, 2) if distance_unit == 'ft' else asl_m
+                    except (TypeError, ValueError):
+                        break
 
         if self.exif_data is None:
             return None

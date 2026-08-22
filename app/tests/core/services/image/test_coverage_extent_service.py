@@ -86,7 +86,8 @@ class _FakeImageService:
     """Configurable stand-in for ImageService in the FOV polygon path."""
 
     def __init__(self, terrain_gsd_cm=None, terrain_agl_m=None, flat_gsd_cm=4.0,
-                 roll_deg=0.0, reported_agl_m=100.0, yaw_deg=0.0):
+                 roll_deg=0.0, reported_agl_m=100.0, yaw_deg=0.0,
+                 pitch_deg=-90.0, waldo_version=None, roll_axis_deg=None):
         import math as _math
         self._math = _math
         self.terrain_gsd_cm = terrain_gsd_cm
@@ -95,18 +96,27 @@ class _FakeImageService:
         self.roll_deg = roll_deg
         self.reported_agl_m = reported_agl_m
         self.yaw_deg = yaw_deg
+        self.pitch_deg = pitch_deg
+        self.waldo_version = waldo_version
+        self.roll_axis_deg = roll_axis_deg
         self.img_array = MagicMock(shape=(3000, 4000))
         self.compute_calls = []
         self.average_calls = []
 
     def get_camera_pitch(self):
-        return -90.0
+        return self.pitch_deg
 
     def get_gimbal_roll(self):
         return self.roll_deg
 
     def get_camera_yaw(self):
         return self.yaw_deg
+
+    def get_waldo_processor_version(self):
+        return self.waldo_version
+
+    def get_roll_axis_azimuth(self):
+        return self.roll_axis_deg
 
     def get_relative_altitude(self, unit):
         assert unit == 'm'
@@ -149,6 +159,14 @@ def _span_east_m(corners):
     import math
     lons = [lon for _lat, lon in corners]
     return (max(lons) - min(lons)) * _EARTH_RADIUS * math.cos(math.radians(_LAT)) * math.pi / 180.0
+
+
+def _centroid_north_m(corners):
+    """Mean north-offset of the corners from the drone position, in meters."""
+    import math
+    lats = [lat for lat, _lon in corners]
+    mean_dlat = sum(lats) / len(lats) - _LAT
+    return mean_dlat * _EARTH_RADIUS * math.pi / 180.0
 
 
 def test_fov_polygon_uses_terrain_gsd_and_agl():
@@ -275,3 +293,73 @@ def test_fov_polygon_legacy_camera_axis_roll_unchanged():
     expected_east = offset_m * math.sin(math.radians(((heading + 180.0) % 360.0) + 90.0))
     assert expected_east < 0  # sanity: SW means east-negative
     assert _centroid_east_m(corners) == pytest.approx(expected_east, rel=0.02)
+
+
+# ---------------------------------------------------------------------------
+# Composite off-nadir gate (WALDO flight-log attitude)
+# ---------------------------------------------------------------------------
+
+def test_gate_dji_oblique_still_skipped_and_nadir_still_passes():
+    """Non-WALDO images keep the historical pitch gate, unchanged."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    service = CoverageExtentService(use_terrain=False)
+    oblique = _FakeImageService(pitch_deg=-60.0)
+    assert _fov_corners_with(service, oblique) is None
+    nadir = _FakeImageService(pitch_deg=-89.0)
+    assert _fov_corners_with(service, nadir) is not None
+
+
+def test_gate_waldo_constants_pass_as_before():
+    """WALDO without a flight log: (-90, ±22.5) is 22.5° off nadir - inside."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    service = CoverageExtentService(use_terrain=False)
+    fake = _FakeImageService(waldo_version="9", roll_deg=22.5, roll_axis_deg=0.0)
+    assert _fov_corners_with(service, fake) is not None
+
+
+def test_gate_waldo_composed_attitude_inside_threshold_passes():
+    """Flight-log attitude: pitch -92 with roll -35 is ~35° off nadir - inside."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    service = CoverageExtentService(use_terrain=False)
+    fake = _FakeImageService(waldo_version="9", pitch_deg=-92.0, roll_deg=-35.0,
+                             roll_axis_deg=0.0)
+    assert _fov_corners_with(service, fake) is not None
+
+
+def test_gate_waldo_steep_bank_skipped():
+    """A banked turn frame past the composite threshold drops out of coverage."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    service = CoverageExtentService(use_terrain=False)
+    fake = _FakeImageService(waldo_version="9", roll_deg=45.0, roll_axis_deg=0.0)
+    assert _fov_corners_with(service, fake) is None
+
+
+def test_waldo_pitch_shifts_footprint_along_image_top_azimuth():
+    """WALDO pitch off -90 adds an along-azimuth h*tan(pitch+90) offset."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    import math
+    fake = _FakeImageService(waldo_version="9", pitch_deg=-95.0, roll_deg=0.0,
+                             yaw_deg=0.0, flat_gsd_cm=4.0, reported_agl_m=100.0)
+    service = CoverageExtentService(use_terrain=False)
+    corners = _fov_corners_with(service, fake)
+    assert corners is not None
+    # pitch+90 = -5°: shifted AWAY from the yaw azimuth (south of the drone).
+    expected_north = 100.0 * math.tan(math.radians(-5.0))
+    assert _centroid_north_m(corners) == pytest.approx(expected_north, rel=0.02)
+
+
+def test_dji_pitch_gets_no_footprint_shift():
+    """Non-WALDO: a -89 pitch keeps the historical footprint center."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    fake = _FakeImageService(pitch_deg=-89.0, roll_deg=0.0, yaw_deg=0.0,
+                             flat_gsd_cm=4.0, reported_agl_m=100.0)
+    service = CoverageExtentService(use_terrain=False)
+    corners = _fov_corners_with(service, fake)
+    assert corners is not None
+    assert _centroid_north_m(corners) == pytest.approx(0.0, abs=0.01)

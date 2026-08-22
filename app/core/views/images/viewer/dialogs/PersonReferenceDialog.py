@@ -397,6 +397,15 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.adjust_clock_button = QPushButton(self.tr("Adjust camera clock..."))
         self.adjust_clock_button.setVisible(False)
 
+        # WALDO imagery: attach the pilot's ForeFlight track log to stamp
+        # true per-image bank/pitch and GPS-accurate capture times.
+        self.flight_log_button = QPushButton(self.tr("Flight track log..."))
+        self.flight_log_button.setToolTip(self.tr(
+            "Attach a ForeFlight track log CSV to stamp true aircraft "
+            "attitude (bank/pitch) and GPS-accurate capture times onto "
+            "these images."))
+        self.flight_log_button.setVisible(False)
+
         # Trace a real shadow in the image to recover the true time of day
         # (works even when the camera clock is wrong).
         self.trace_shadow_button = QPushButton(self.tr("Trace shadow..."))
@@ -422,6 +431,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         button_row.addWidget(self.recenter_button)
         button_row.addWidget(self.trace_shadow_button)
         button_row.addWidget(self.adjust_clock_button)
+        button_row.addWidget(self.flight_log_button)
         button_row.addStretch()
         button_row.addWidget(self.close_button)
 
@@ -448,6 +458,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.color_button.clicked.connect(self._on_color_button_clicked)
         self.recenter_button.clicked.connect(self._recenter)
         self.adjust_clock_button.clicked.connect(self._on_adjust_clock)
+        self.flight_log_button.clicked.connect(self._on_flight_log)
         self.trace_shadow_button.clicked.connect(self._on_trace_shadow_clicked)
         self.close_button.clicked.connect(self.close)
 
@@ -495,11 +506,116 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
                         {'decision': 'accepted',
                          'face_shift_h': dialog.accepted_face_shift_h,
                          'tz_text': dialog.accepted_tz_text})
+                # A changed clock invalidates any applied flight-log stamps
+                # (their signature records the correction the fit used) -
+                # silently re-apply a remembered log against the new clock.
+                self._reapply_flight_log_if_remembered(paths)
+                self._invalidate_viewer_caches()
                 self._resolve_sun()
                 self._update_sun_label()
                 self._on_params_changed()
         except Exception as e:
             LoggerService().error(f"PersonReferenceDialog: clock adjustment failed - {e}")
+
+    def _waldo_folder_paths(self):
+        """All WALDO image paths in this image's folder (sorted)."""
+        import glob as _glob
+        import os as _os
+        from core.services.waldo import WaldoMetadataService
+        folder = _os.path.dirname(self.image_path)
+        return [p for p in sorted(_glob.glob(_os.path.join(folder, '*.jpg')))
+                if WaldoMetadataService.is_waldo_image(p) is not None]
+
+    def _invalidate_viewer_caches(self):
+        """Drop viewer caches built from the (just restamped) attitude XMP."""
+        try:
+            from core.controllers.images.viewer.WaldoPrePassController import (
+                invalidate_attitude_caches,
+            )
+            invalidate_attitude_caches(self.parent())
+        except Exception as e:
+            LoggerService().error(f"PersonReferenceDialog: cache invalidation failed - {e}")
+
+    def _reapply_flight_log_if_remembered(self, paths):
+        """Silently re-run the flight-log stage when this folder has one attached."""
+        import os as _os
+        from core.services.waldo import (
+            WaldoMetadataService, WaldoClockDecisions, WaldoFlightLogDecisions,
+        )
+        from core.services.waldo.WaldoFlightLog import WaldoFlightLogService
+        from core.views.images.viewer.dialogs.WaldoFlightLogDialog import (
+            WaldoFlightLogDialog,
+        )
+        try:
+            decision = WaldoFlightLogDecisions.get_decision(
+                WaldoClockDecisions.folder_key_for(paths[0]))
+            log_path = (decision or {}).get('log_path')
+            if (decision or {}).get('decision') != 'accepted' or not log_path:
+                return
+            if not _os.path.isfile(log_path):
+                return
+            service = WaldoMetadataService(terrain_service=None)
+            dialog = WaldoFlightLogDialog(
+                self, service, WaldoFlightLogService(), paths, [log_path],
+                auto_apply=True)
+            dialog.exec()
+        except Exception as e:
+            LoggerService().error(f"PersonReferenceDialog: flight-log re-apply failed - {e}")
+
+    def _on_flight_log(self):
+        """Attach (or re-run) a ForeFlight track log for this image's folder.
+
+        Discovers candidate CSVs near the folder; falls back to a file picker
+        when none are found. After an apply, viewer caches rebuild so the
+        FOV boxes / AOI positions reflect the new attitude immediately.
+        """
+        from PySide6.QtWidgets import QFileDialog
+        from core.services.waldo import WaldoClockDecisions, WaldoFlightLogDecisions
+        from core.services.waldo import WaldoMetadataService
+        from core.services.waldo.WaldoFlightLog import WaldoFlightLogService
+        from core.views.images.viewer.dialogs.WaldoFlightLogDialog import (
+            WaldoFlightLogDialog,
+        )
+        import os as _os
+        try:
+            paths = self._waldo_folder_paths()
+            if not paths:
+                return
+            folder_key = WaldoClockDecisions.folder_key_for(paths[0])
+            flight_service = WaldoFlightLogService()
+
+            candidates = []
+            remembered = WaldoFlightLogDecisions.get_decision(folder_key)
+            remembered_path = (remembered or {}).get('log_path')
+            if remembered_path and _os.path.isfile(remembered_path):
+                candidates.append(remembered_path)
+            candidates.extend(p for p in flight_service.candidate_files(
+                _os.path.dirname(paths[0])) if p not in candidates)
+            if not candidates:
+                picked, _filter = QFileDialog.getOpenFileName(
+                    self, self.tr("Select ForeFlight track log"),
+                    _os.path.dirname(paths[0]),
+                    self.tr("Track logs (*.csv);;All files (*.*)"))
+                if not picked:
+                    return
+                candidates = [picked]
+
+            service = WaldoMetadataService(terrain_service=None)
+            dialog = WaldoFlightLogDialog(
+                self, service, flight_service, paths, candidates, auto_apply=False)
+            dialog.exec()
+            if dialog.applied and dialog.fit is not None:
+                if dialog.remember_choice:
+                    WaldoFlightLogDecisions.store_decision(folder_key, {
+                        'decision': 'accepted',
+                        'log_path': dialog.fit.log_path,
+                    })
+                self._invalidate_viewer_caches()
+                self._resolve_sun()
+                self._update_sun_label()
+                self._on_params_changed()
+        except Exception as e:
+            LoggerService().error(f"PersonReferenceDialog: flight-log attach failed - {e}")
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -674,6 +790,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
     def _update_sun_label(self):
         """Refresh the sun-info line and enable/disable the shadow toggle."""
         self.adjust_clock_button.setVisible(self._is_waldo_image())
+        self.flight_log_button.setVisible(self._is_waldo_image())
         self.trace_shadow_button.setEnabled(
             self.camera is not None and self.drone_lat is not None
             and self._capture_utc is not None)

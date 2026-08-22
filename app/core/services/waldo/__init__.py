@@ -22,6 +22,12 @@ from .WaldoTriggerLog import (
     WaldoTriggerLogService,
     TriggerPoint,
 )
+from .WaldoFlightLog import (
+    WaldoFlightLogService,
+    FlightLogFit,
+    FlightLogTrack,
+)
+from . import WaldoFlightLogDecisions
 
 __all__ = [
     'WaldoMetadataService',
@@ -35,4 +41,8 @@ __all__ = [
     'WALDO_PROCESSOR_VERSION',
     'WaldoTriggerLogService',
     'TriggerPoint',
+    'WaldoFlightLogService',
+    'FlightLogFit',
+    'FlightLogTrack',
+    'WaldoFlightLogDecisions',
 ]

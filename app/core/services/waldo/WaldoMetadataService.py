@@ -6,7 +6,9 @@ WALDO airframe assumptions (per user spec):
     - Two Canon EOS 5DS R DSLRs in left/right pods.
     - Filename prefix `0_*` = left camera, `1_*` = right camera.
     - 22.5° outward roll about the heading axis. Camera otherwise nadir.
-    - Plane assumed roughly level (bank ignored).
+    - Plane assumed roughly level UNLESS a ForeFlight track log is attached:
+      apply_flight_log_attitude then composes true per-image bank/pitch into
+      the stamps (see WaldoFlightLog).
     - GPS altitude is ellipsoidal (WGS84-native).
 
 The synthesised XMP fields use the standard `drone-dji:` namespace so the
@@ -45,6 +47,11 @@ from core.services.waldo.WaldoTriggerLog import (
     TRIGGER_MIN_CHRONOLOGY_FRACTION,
     WaldoTriggerLogService,
 )
+from core.services.waldo.WaldoFlightLog import (
+    FlightLogFit,
+    FlightLogTrack,
+    WaldoFlightLogService,
+)
 
 
 WALDO_NAMESPACE_URI = "http://adiat.io/ns/waldo/1.0/"
@@ -81,6 +88,38 @@ DRONE_DJI_NS = "http://www.dji.com/drone-dji/1.0/"
 CLOCK_CORRECTED_UTC_XMP = "CaptureUtcCorrected"
 CLOCK_FACE_SHIFT_XMP = "ClockFaceShiftHours"
 CLOCK_TIMEZONE_XMP = "ClockTimeZone"
+
+# Flight-log attitude XMP fields (waldo namespace), stamped by
+# apply_flight_log_attitude from a calibrated ForeFlight track log.
+# CaptureUtcRefined is deliberately a SEPARATE field from
+# CaptureUtcCorrected: apply_clock_correction's idempotence compares the
+# exact CaptureUtcCorrected string, so refining that stamp in place would
+# make every remembered clock auto-apply rewrite the whole folder on every
+# open (clobbering the refinement) and the flight-log stage restamp it
+# right back - a permanent two-rewrite loop.
+CLOCK_REFINED_UTC_XMP = "CaptureUtcRefined"
+CLOCK_OFFSET_SECONDS_XMP = "ClockOffsetSeconds"
+ATTITUDE_SOURCE_XMP = "AttitudeSource"
+FLIGHTLOG_SIGNATURE_XMP = "FlightLogSignature"
+# The level-airframe image-top bearing the composition starts from. Stamped
+# so a re-run (new log, new clock decision) can rebuild from the true
+# baseline instead of double-composing on already-composed gimbal values.
+LEVEL_YAW_XMP = "LevelYawDegree"
+LEVEL_YAW_VERSION_XMP = "LevelYawVersion"
+
+# Bump to re-apply flight-log attitude on stamped datasets when this stage's
+# algorithm changes (independent of WALDO_PROCESSOR_VERSION, which would
+# force a full re-synthesis of every log-less dataset too).
+FLIGHTLOG_STAGE_VERSION = "1"
+
+# Composed roll beyond this bound falls back to the constant mount attitude:
+# every consumer treats |roll| > 90 as DJI's inverted-gimbal encoding
+# (yaw flipped 180, roll zeroed), so steep-bank turn frames must never be
+# stamped anywhere near that regime.
+FLIGHTLOG_MAX_ROLL_DEG = 60.0
+
+ATTITUDE_SOURCE_TRACKLOG = "foreflight-tracklog"
+ATTITUDE_SOURCE_CONSTANTS = "constants"
 
 # Heading-derivation tunables
 STATIONARY_THRESHOLD_M = 5.0
@@ -152,6 +191,33 @@ class WaldoProcessResult:
     warnings: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)  # informational, non-warning
     cancelled: bool = False
+
+
+@dataclass
+class FlightLogImageRecord:
+    """Per-image inputs for the flight-log attitude stage.
+
+    Built by collect_flight_log_records in its OWN read pass: the stage runs
+    on already-stamped folders where process_folder built no records at all.
+    ``capture_epoch`` is resolved through the clock-correction chain but
+    NEVER through a previous CaptureUtcRefined stamp - the fit must always
+    reference the same un-refined clock, or re-runs would chase their own
+    output.
+    """
+    path: str
+    name: str
+    cam_idx: int
+    capture_epoch: Optional[float] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    flight_yaw_deg: Optional[float] = None
+    gimbal_yaw_deg: Optional[float] = None
+    level_yaw_deg: Optional[float] = None       # trusted stamped baseline, if any
+    processor_version: Optional[str] = None
+    clock_face_shift: Optional[str] = None
+    clock_tz: Optional[str] = None
+    existing_signature: Optional[str] = None
+    error: Optional[str] = None
 
 
 @dataclass
@@ -267,6 +333,334 @@ class WaldoMetadataService:
             'yaw': yaw,
             'roll': roll,
         }
+
+    # ------------------------------------------------------------------
+    # Flight-log attitude: aircraft bank/pitch composed into the stamps
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _horizontal_axis(azimuth_deg: float) -> np.ndarray:
+        """Horizontal NED unit vector at the given compass azimuth."""
+        az = math.radians(azimuth_deg)
+        return np.array([math.cos(az), math.sin(az), 0.0])
+
+    @staticmethod
+    def _rodrigues_horizontal(azimuth_deg: float, angle_deg: float) -> np.ndarray:
+        """Rodrigues rotation about the horizontal axis at ``azimuth_deg``.
+
+        Same construction as AOIService._calculate_ground_position's roll
+        step; the two must stay identical or stamps and consumers diverge.
+        """
+        k = WaldoMetadataService._horizontal_axis(azimuth_deg)
+        kx, ky, kz = k
+        big_k = np.array([
+            [0.0, -kz, ky],
+            [kz, 0.0, -kx],
+            [-ky, kx, 0.0],
+        ])
+        ang = math.radians(angle_deg)
+        return np.eye(3) + math.sin(ang) * big_k + (1.0 - math.cos(ang)) * (big_k @ big_k)
+
+    @staticmethod
+    def _base_rotation(pitch_deg: float, yaw_deg: float) -> np.ndarray:
+        """Camera-to-NED rotation of the consumer model at zero roll.
+
+        Mirrors AOIService._calculate_ground_position exactly: optical axis
+        at (pitch, yaw), camera image-right horizontal, image-up toward the
+        horizon at the yaw azimuth.
+        """
+        el = math.radians(pitch_deg)
+        az = math.radians(yaw_deg)
+        opt = np.array([
+            math.cos(el) * math.cos(az),
+            math.cos(el) * math.sin(az),
+            -math.sin(el),
+        ])
+        up = np.array([
+            -math.sin(el) * math.cos(az),
+            -math.sin(el) * math.sin(az),
+            -math.cos(el),
+        ])
+        cam_y = -up
+        cam_x = np.cross(opt, up)
+        cam_x = cam_x / np.linalg.norm(cam_x)
+        return np.column_stack([cam_x, cam_y, opt])
+
+    @staticmethod
+    def compose_attitude_rotation(level_yaw_deg: float, level_roll_deg: float,
+                                  flight_yaw_deg: float,
+                                  aircraft_pitch_deg: float,
+                                  aircraft_bank_deg: float) -> np.ndarray:
+        """True camera-to-NED rotation of a banked/pitched airframe.
+
+        Starts from the level-airframe camera rotation the v9 stamps encode
+        (nadir pitch, stored image-top ``level_yaw_deg``, mount roll about
+        the flight axis) and applies the aircraft attitude in world axes:
+        bank about the forward flight axis, then pitch about the lateral
+        (wing) axis. Signs follow the ForeFlight log: bank + = right wing
+        down (which IS a positive Rodrigues angle about the forward axis -
+        it tilts a belly camera's boresight to plane LEFT), pitch + = nose
+        up (tilts the boresight ahead of the aircraft).
+        """
+        r_level = (WaldoMetadataService._rodrigues_horizontal(flight_yaw_deg, level_roll_deg)
+                   @ WaldoMetadataService._base_rotation(-90.0, level_yaw_deg))
+        r_bank = WaldoMetadataService._rodrigues_horizontal(flight_yaw_deg, aircraft_bank_deg)
+        r_pitch = WaldoMetadataService._rodrigues_horizontal(flight_yaw_deg + 90.0, aircraft_pitch_deg)
+        return r_pitch @ r_bank @ r_level
+
+    @staticmethod
+    def invert_to_gimbal_angles(r_true: np.ndarray,
+                                flight_yaw_deg: float) -> Tuple[float, float, float]:
+        """Exact (pitch, yaw, roll) stamp triple reproducing ``r_true``.
+
+        The consumer model is R = Rodrigues(flight axis, roll) @ Base(pitch,
+        yaw), where Base keeps camera image-right horizontal. Un-rolling by
+        the right angle must therefore make the camera-X row horizontal
+        again: with x = R_true[:,0], solving x_D*cos(r) - (k x x)_D*sin(r)
+        = 0 gives r = atan2(x_D, (k x x)_D) up to 180 deg. BOTH roots are
+        exact decompositions (the other one views the scene from an
+        above-horizon Base rolled ~180 deg further), so the physical branch
+        is chosen: the one whose Base looks below the horizon (pitch < 0).
+        """
+        x = r_true[:, 0]
+        k = WaldoMetadataService._horizontal_axis(flight_yaw_deg)
+        kx_d = float(np.cross(k, x)[2])
+        r0 = math.degrees(math.atan2(float(x[2]), kx_d))
+
+        best_exact: Optional[Tuple[float, float, float]] = None
+        best_any: Optional[Tuple[float, Tuple[float, float, float]]] = None
+        for cand in (r0, r0 + 180.0):
+            roll = ((cand + 180.0) % 360.0) - 180.0
+            unrolled = (WaldoMetadataService._rodrigues_horizontal(flight_yaw_deg, -roll)
+                        @ r_true)
+            cam_x = unrolled[:, 0]
+            opt = unrolled[:, 2]
+            yaw = math.degrees(math.atan2(-float(cam_x[0]), float(cam_x[1]))) % 360.0
+            # Elevation from the SIGNED horizontal component along the yaw
+            # azimuth: negative means the axis tilts beyond nadir, away from
+            # the image-top azimuth (pitch < -90) - routine for cam 0, whose
+            # image-top faces backward while nose-up pitch tilts the axis
+            # forward. atan2 keeps the quadrant and stays well-conditioned
+            # at nadir (asin(~1) would lose ~1e-6 deg to float noise).
+            az = math.radians(yaw)
+            along = float(opt[0]) * math.cos(az) + float(opt[1]) * math.sin(az)
+            pitch = math.degrees(math.atan2(-float(opt[2]), along))
+            recomposed = (WaldoMetadataService._rodrigues_horizontal(flight_yaw_deg, roll)
+                          @ WaldoMetadataService._base_rotation(pitch, yaw))
+            err = float(np.linalg.norm(recomposed - r_true))
+            if best_any is None or err < best_any[0]:
+                best_any = (err, (pitch, yaw, roll))
+            if err < 1e-9 and pitch < 0.0 and best_exact is None:
+                best_exact = (pitch, yaw, roll)
+        return best_exact if best_exact is not None else best_any[1]
+
+    def collect_flight_log_records(
+        self,
+        image_paths: List[str],
+        progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        cancel_cb: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[List[FlightLogImageRecord], bool]:
+        """Read the per-image inputs for the flight-log stage.
+
+        Returns (records, cancelled). Runs over ALL WALDO paths - unlike
+        process_folder's records, already-current images are included, since
+        the stage restamps them too.
+        """
+        cancel_cb = cancel_cb or (lambda: False)
+        records: List[FlightLogImageRecord] = []
+        total = len(image_paths)
+        for i, path in enumerate(image_paths):
+            if cancel_cb():
+                return records, True
+            cam_idx = self.is_waldo_image(path)
+            if cam_idx is None:
+                continue
+            if progress_cb is not None and (i % 10 == 0 or i == total - 1):
+                try:
+                    progress_cb(i + 1, total, f"Reading metadata {i + 1}/{total}")
+                except Exception:
+                    pass
+            rec = FlightLogImageRecord(path=path, name=os.path.basename(path), cam_idx=cam_idx)
+            records.append(rec)
+            try:
+                exif = MetaDataHelper.get_exif_data_piexif(path)
+                xmp = MetaDataHelper.get_xmp_data_merged(path) or {}
+            except Exception as e:
+                rec.error = f"Metadata read failed: {e}"
+                continue
+
+            gps = LocationInfo.get_gps(exif_data=exif)
+            if gps:
+                rec.lat = gps['latitude']
+                rec.lon = gps['longitude']
+
+            def xmp_value(tag, prefixes=('waldo:', '', 'XMP-waldo:')):
+                for prefix in prefixes:
+                    value = xmp.get(f"{prefix}{tag}")
+                    if value is not None and str(value) != '':
+                        return str(value)
+                return None
+
+            dji = ('drone-dji:', '', 'XMP-drone-dji:')
+            rec.flight_yaw_deg = self._parse_float(xmp_value('FlightYawDegree', dji))
+            rec.gimbal_yaw_deg = self._parse_float(xmp_value('GimbalYawDegree', dji))
+            rec.processor_version = xmp_value('ProcessorVersion')
+            rec.clock_face_shift = xmp_value(CLOCK_FACE_SHIFT_XMP)
+            rec.clock_tz = xmp_value(CLOCK_TIMEZONE_XMP)
+            rec.existing_signature = xmp_value(FLIGHTLOG_SIGNATURE_XMP)
+            level_yaw = self._parse_float(xmp_value(LEVEL_YAW_XMP))
+            level_version = xmp_value(LEVEL_YAW_VERSION_XMP)
+            # A stamped baseline is only trusted while the synthesis that
+            # produced it is still current; after a version bump the fresh
+            # GimbalYawDegree is the new baseline.
+            if level_yaw is not None and level_version == rec.processor_version:
+                rec.level_yaw_deg = level_yaw
+
+            # Resolve capture UTC through the clock-correction chain but
+            # never through our own refinement (see class docstring).
+            xmp_for_time = {key: value for key, value in xmp.items()
+                            if CLOCK_REFINED_UTC_XMP not in key}
+            try:
+                utc, _source = resolve_capture_utc(exif, xmp_for_time, rec.lat, rec.lon)
+                rec.capture_epoch = utc.timestamp()
+            except SolarTimeUnresolvable:
+                rec.error = "Capture time unresolvable"
+        return records, False
+
+    def _flight_log_signature(self, rec: FlightLogImageRecord, fit: FlightLogFit) -> str:
+        """Per-image idempotence signature for the flight-log stage.
+
+        Encodes every input whose change must retrigger a restamp: stage
+        algorithm version, the synthesis version the stamps sit on, the log
+        file's content, and the clock decision the fit referenced.
+        """
+        clock = f"{rec.clock_face_shift or 'none'}/{rec.clock_tz or 'none'}"
+        return (f"v{FLIGHTLOG_STAGE_VERSION}|p{rec.processor_version or '?'}|"
+                f"{fit.log_sha256[:16]}|clk:{clock}")
+
+    def apply_flight_log_attitude(
+        self,
+        records: List[FlightLogImageRecord],
+        fit: FlightLogFit,
+        track: FlightLogTrack,
+        progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        cancel_cb: Optional[Callable[[], bool]] = None,
+    ) -> WaldoProcessResult:
+        """Stamp per-image attitude (and refined capture UTC) from a calibrated log.
+
+        Per image the composed camera rotation is exactly re-expressed in the
+        consumer model's (pitch, yaw, roll-about-flight-axis) parameters, so
+        AOIService / FOV / coverage read true attitude with no code changes.
+        Images the log cannot cover (outside its window, steep-bank guard,
+        unreliable attitude channel) are restamped with the constant mount
+        attitude instead - never left holding a stale composition.
+        """
+        result = WaldoProcessResult()
+        cancel_cb = cancel_cb or (lambda: False)
+        if not fit.accepted:
+            result.warnings.append(f"Flight log rejected: {fit.reason}")
+            return result
+
+        stats = {'composed': 0, 'constants': 0}
+        total = len(records)
+        for i, rec in enumerate(records):
+            if cancel_cb():
+                result.cancelled = True
+                break
+            if progress_cb is not None:
+                try:
+                    progress_cb(i + 1, total, f"Applying flight-log attitude {i + 1}/{total}: {rec.name}")
+                except Exception:
+                    pass
+            if rec.error:
+                result.errors.append((rec.name, rec.error))
+                continue
+            signature = self._flight_log_signature(rec, fit)
+            if rec.existing_signature == signature:
+                result.already_current += 1
+                continue
+            level_yaw = rec.level_yaw_deg if rec.level_yaw_deg is not None else rec.gimbal_yaw_deg
+            if level_yaw is None or rec.flight_yaw_deg is None:
+                result.errors.append((rec.name, "No stamped yaw baseline (pre-pass has not run?)"))
+                continue
+
+            level_roll = (-OUTWARD_ROLL_DEG) if rec.cam_idx == 0 else (+OUTWARD_ROLL_DEG)
+            fields = [
+                (WALDO_NAMESPACE_URI, FLIGHTLOG_SIGNATURE_XMP, signature),
+                (WALDO_NAMESPACE_URI, CLOCK_OFFSET_SECONDS_XMP, f"{fit.clock_offset_s:+.2f}"),
+                (WALDO_NAMESPACE_URI, LEVEL_YAW_XMP, f"{level_yaw:+.4f}"),
+                (WALDO_NAMESPACE_URI, LEVEL_YAW_VERSION_XMP, rec.processor_version or "?"),
+            ]
+            if rec.capture_epoch is not None:
+                refined = datetime.fromtimestamp(
+                    round(rec.capture_epoch + fit.clock_offset_s), tz=timezone.utc)
+                fields.append((WALDO_NAMESPACE_URI, CLOCK_REFINED_UTC_XMP,
+                               refined.strftime("%Y-%m-%dT%H:%M:%S+00:00")))
+
+            sample = None
+            if fit.attitude_reliable and rec.capture_epoch is not None:
+                sample = WaldoFlightLogService.sample_attitude(
+                    track, rec.capture_epoch + fit.clock_offset_s, fit.attitude_lag_s)
+
+            composed = None
+            if sample is not None and sample.in_coverage and sample.bank_deg is not None:
+                r_true = self.compose_attitude_rotation(
+                    level_yaw, level_roll, rec.flight_yaw_deg,
+                    sample.pitch_deg or 0.0, sample.bank_deg)
+                pitch, yaw, roll = self.invert_to_gimbal_angles(r_true, rec.flight_yaw_deg)
+                if abs(roll) <= FLIGHTLOG_MAX_ROLL_DEG:
+                    composed = (pitch, yaw, roll, sample.pitch_deg or 0.0, sample.bank_deg)
+
+            if composed is not None:
+                pitch, yaw, roll, raw_pitch, raw_bank = composed
+                fields.extend([
+                    (DRONE_DJI_NS, "GimbalPitchDegree", f"{pitch:+.4f}"),
+                    (DRONE_DJI_NS, "GimbalYawDegree", f"{yaw:+.4f}"),
+                    (DRONE_DJI_NS, "GimbalRollDegree", f"{roll:+.4f}"),
+                    (DRONE_DJI_NS, "FlightPitchDegree", f"{raw_pitch:+.4f}"),
+                    (DRONE_DJI_NS, "FlightRollDegree", f"{raw_bank:+.4f}"),
+                    (WALDO_NAMESPACE_URI, ATTITUDE_SOURCE_XMP, ATTITUDE_SOURCE_TRACKLOG),
+                ])
+                stats['composed'] += 1
+            else:
+                # Constants restamp: also RESETS any stale composition from a
+                # previous log/decision (never leave composed values behind a
+                # signature that no longer matches how they were made).
+                fields.extend([
+                    (DRONE_DJI_NS, "GimbalPitchDegree", f"{-90.0:+.4f}"),
+                    (DRONE_DJI_NS, "GimbalYawDegree", f"{level_yaw:+.4f}"),
+                    (DRONE_DJI_NS, "GimbalRollDegree", f"{level_roll:+.4f}"),
+                    (WALDO_NAMESPACE_URI, ATTITUDE_SOURCE_XMP, ATTITUDE_SOURCE_CONSTANTS),
+                ])
+                stats['constants'] += 1
+
+            try:
+                MetaDataHelper.add_xmp_fields(rec.path, fields)
+            except Exception as e:
+                result.errors.append((rec.name, f"Flight-log XMP write failed: {e}"))
+                continue
+            result.processed += 1
+
+        if result.processed:
+            note = (f"Flight log applied: clock {fit.clock_offset_s:+.1f} s, "
+                    f"attitude lag {fit.attitude_lag_s:+.0f} s, "
+                    f"{stats['composed']} images with measured attitude, "
+                    f"{stats['constants']} kept mount constants")
+            if not fit.attitude_reliable:
+                note += " (attitude channel unreliable - clock refinement only)"
+            result.notes.append(note)
+            self.logger.info(f"WALDO {note}")
+        return result
+
+    @staticmethod
+    def _parse_float(value: Optional[str]) -> Optional[float]:
+        """Float from a stamped '+123.4567'-style string; None when absent/garbage."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     # ------------------------------------------------------------------
     # Image-orientation measurement

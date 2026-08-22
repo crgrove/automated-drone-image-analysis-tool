@@ -25,6 +25,12 @@ class CoverageExtentService:
     then unions overlapping polygons to create consolidated coverage areas.
     """
 
+    # WALDO composite gate: maximum total boresight off-nadir angle. The
+    # 22.5° mount plus ordinary lane-flight bank/pitch stays well inside;
+    # steep banked turn frames (where the flat-rectangle footprint model
+    # breaks down) fall outside and are skipped.
+    WALDO_MAX_OFF_NADIR_DEG = 40.0
+
     def __init__(self, custom_altitude_ft: Optional[float] = None, logger: Optional[LoggerService] = None,
                  use_terrain: bool = True):
         """
@@ -211,23 +217,40 @@ class CoverageExtentService:
             # Load image service
             image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
 
-            # Check gimbal angle - must be nadir (allowing for outward roll on
-            # fixed-wing rigs like WALDO, where pitch stays at -90 but roll is
-            # applied about the heading axis to push the footprint sideways).
+            # Outward gimbal roll (e.g. WALDO ±22.5°) shifts the ground footprint
+            # cross-track by h*tan(roll). >90° rolls are the DJI "inverted gimbal"
+            # pattern where get_camera_yaw already flips yaw 180°, so skip those.
             gimbal_pitch = image_service.get_camera_pitch()
-            if gimbal_pitch is not None:
+            gimbal_roll = image_service.get_gimbal_roll() or 0.0
+            if abs(gimbal_roll) > 90.0:
+                gimbal_roll = 0.0
+
+            # Gimbal-angle gate. WALDO images (waldo:ProcessorVersion present)
+            # may carry TRUE per-image attitude from a flight track log: pitch
+            # wanders off -90 with the airframe and roll combines the ±22.5°
+            # mount with aircraft bank - so both axes are gated TOGETHER by
+            # the boresight's total off-nadir angle (the flat-rectangle model
+            # below degrades ~1/cos² off nadir; steep banked turn frames must
+            # drop out). Constant WALDO stamps (-90, ±22.5° -> 22.5° off
+            # nadir) pass exactly as before. Non-WALDO images keep the
+            # historical nadir pitch gate unchanged.
+            is_waldo = image_service.get_waldo_processor_version() is not None
+            if is_waldo:
+                pitch_for_gate = gimbal_pitch if gimbal_pitch is not None else -90.0
+                cos_off_nadir = (math.cos(math.radians(pitch_for_gate + 90.0))
+                                 * math.cos(math.radians(gimbal_roll)))
+                off_nadir = math.degrees(math.acos(max(-1.0, min(1.0, cos_off_nadir))))
+                if off_nadir > self.WALDO_MAX_OFF_NADIR_DEG:
+                    self.logger.warning(
+                        f"Image {image.get('name', 'unknown')} skipped: boresight "
+                        f"{off_nadir:.1f}° off nadir (banked/turning frame)")
+                    return None
+            elif gimbal_pitch is not None:
                 # Nadir is typically -90 degrees (camera pointing straight down)
                 # Allow range from -85 to -95 degrees (5 degree tolerance)
                 if not (-95 <= gimbal_pitch <= -85):
                     self.logger.warning(f"Image {image.get('name', 'unknown')} skipped: gimbal not nadir ({gimbal_pitch:.1f}°)")
                     return None
-
-            # Outward gimbal roll (e.g. WALDO ±22.5°) shifts the ground footprint
-            # cross-track by h*tan(roll). >90° rolls are the DJI "inverted gimbal"
-            # pattern where get_camera_yaw already flips yaw 180°, so skip those.
-            gimbal_roll = image_service.get_gimbal_roll() or 0.0
-            if abs(gimbal_roll) > 90.0:
-                gimbal_roll = 0.0
 
             # Get image dimensions (needed first: terrain GSD samples the center pixel)
             img_array = image_service.img_array
@@ -310,6 +333,17 @@ class CoverageExtentService:
                 offset_m = agl_m * math.tan(math.radians(gimbal_roll))
                 roll_east_m = offset_m * math.sin(left_bearing)
                 roll_north_m = offset_m * math.cos(left_bearing)
+
+            # WALDO flight-log attitude also moves pitch off -90: the
+            # footprint shifts h*tan(pitch+90) ALONG the image-top azimuth
+            # (toward it above nadir, away when tilted beyond nadir).
+            # WALDO-scoped: DJI nadir footprints keep their historical
+            # center, exactly as before.
+            if is_waldo and gimbal_pitch is not None and gimbal_pitch != -90.0:
+                az_rad = math.radians(bearing)
+                pitch_offset_m = agl_m * math.tan(math.radians(gimbal_pitch + 90.0))
+                roll_east_m += pitch_offset_m * math.sin(az_rad)
+                roll_north_m += pitch_offset_m * math.cos(az_rad)
 
             corners_image = [
                 (-width_m / 2, -height_m / 2),  # Top-left

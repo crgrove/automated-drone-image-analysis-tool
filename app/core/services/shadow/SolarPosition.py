@@ -56,6 +56,11 @@ def resolve_capture_utc(
     """Resolve image capture time to a tz-aware UTC datetime.
 
     Resolution order (first match wins, most authoritative first):
+        -1. XMP waldo:CaptureUtcRefined — the capture time calibrated to
+           GPS-true time by fitting the image GPS positions against an
+           aircraft track log (WaldoMetadataService.apply_flight_log_attitude).
+           Seconds-accurate, so it outranks the operator-confirmed hour/zone
+           repair below (which it was computed on top of).
         0. XMP waldo:CaptureUtcCorrected — an operator-confirmed repair of a
            known-faulty camera clock (see WaldoMetadataService clock
            correction). When present it outranks everything: the EXIF fields
@@ -87,8 +92,8 @@ def resolve_capture_utc(
 
     Returns:
         (utc_datetime, source_tag) where source_tag is one of
-        'waldo_corrected', 'gps', 'exif_with_offset', 'xmp_create_date',
-        'xmp_modify_date', 'exif_local_tz_from_gps'.
+        'waldo_refined', 'waldo_corrected', 'gps', 'exif_with_offset',
+        'xmp_create_date', 'xmp_modify_date', 'exif_local_tz_from_gps'.
 
     Raises:
         SolarTimeUnresolvable: no resolvable timestamp present.
@@ -96,14 +101,15 @@ def resolve_capture_utc(
     if xmp_data:
         # Key shape depends on the XMP reader: bare when parsed per-namespace,
         # prefixed when merged across namespaces.
-        for key in ('CaptureUtcCorrected', 'waldo:CaptureUtcCorrected',
-                    'XMP-waldo:CaptureUtcCorrected'):
-            value = xmp_data.get(key)
-            if value:
-                try:
-                    return _from_iso8601(value), 'waldo_corrected'
-                except ValueError:
-                    break
+        for tag, source in (('CaptureUtcRefined', 'waldo_refined'),
+                            ('CaptureUtcCorrected', 'waldo_corrected')):
+            for key in (tag, f'waldo:{tag}', f'XMP-waldo:{tag}'):
+                value = xmp_data.get(key)
+                if value:
+                    try:
+                        return _from_iso8601(value), source
+                    except ValueError:
+                        break
 
     gps = exif_data.get('GPS') or {}
     gps_date = gps.get(piexif.GPSIFD.GPSDateStamp)

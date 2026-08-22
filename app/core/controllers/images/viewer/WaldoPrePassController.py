@@ -20,9 +20,45 @@ from core.services.LoggerService import LoggerService
 from core.services.SettingsService import SettingsService
 from core.services.waldo import WaldoMetadataService
 from core.services.waldo import WaldoClockDecisions
+from core.services.waldo import WaldoFlightLogDecisions
 from core.services.waldo.WaldoClockDecisions import CLOCK_DECISIONS_SETTING
+from core.services.waldo.WaldoFlightLog import WaldoFlightLogService
 from core.views.images.viewer.dialogs.WaldoPrePassDialog import WaldoPrePassDialog
 from core.views.images.viewer.dialogs.WaldoClockCorrectionDialog import WaldoClockCorrectionDialog
+from core.views.images.viewer.dialogs.WaldoFlightLogDialog import WaldoFlightLogDialog
+
+
+def invalidate_attitude_caches(viewer):
+    """Best-effort invalidation of caches built from stamped attitude XMP.
+
+    Needed after a MID-SESSION restamp (manual flight-log attach or clock
+    amendment while the viewer is open): ImageService parses XMP once at
+    construction, the GPS map caches per-image bearings and FOV parameters,
+    and POD coverage products fingerprint only terrain settings - none of
+    them notice the files changing underneath. Folder-open restamps run
+    before any of these exist, so this is a no-op there.
+    """
+    if viewer is None:
+        return
+    if hasattr(viewer, 'current_image_service'):
+        viewer.current_image_service = None
+    pod_cache = getattr(viewer, 'pod_result_cache', None)
+    if pod_cache is not None:
+        try:
+            pod_cache.invalidate()
+        except Exception:
+            pass
+    map_controller = getattr(viewer, 'gps_map_controller', None)
+    map_dialog = getattr(map_controller, 'map_dialog', None)
+    map_view = getattr(map_dialog, 'map_view', None)
+    if map_view is not None:
+        try:
+            map_view._fov_cache = None
+            for entry in getattr(map_view, 'gps_data', None) or []:
+                if isinstance(entry, dict) and 'bearing' in entry:
+                    entry['bearing'] = None
+        except Exception:
+            pass
 
 
 class WaldoPrePassController:
@@ -77,6 +113,9 @@ class WaldoPrePassController:
         if not any_pending:
             self.logger.info("WaldoPrePassController: all WALDO images already processed.")
             self._offer_clock_correction(waldo_paths, proposal, service=detect_service)
+            # Strictly after the clock offer: the flight-log fit reads the
+            # corrected capture times the offer may just have stamped.
+            self._offer_flight_log(waldo_paths, service=detect_service)
             return
 
         # Build a TerrainService that respects the configured provider preference.
@@ -97,6 +136,68 @@ class WaldoPrePassController:
         )
         if not result.cancelled:
             self._offer_clock_correction(waldo_paths, proposal, service=service)
+            self._offer_flight_log(waldo_paths, service=service)
+
+    # ------------------------------------------------------------------
+    # Flight-log attitude
+    # ------------------------------------------------------------------
+
+    def _offer_flight_log(self, waldo_paths: List[str],
+                          service: Optional[WaldoMetadataService] = None):
+        """Discover, calibrate, and offer a ForeFlight track log for the folder.
+
+        Runs strictly AFTER the clock-correction offer in both pre-pass
+        branches: the fit resolves capture times through any correction just
+        stamped, and its signature records the correction it used - a later
+        clock change retriggers the restamp on the next open.
+
+        A remembered acceptance re-applies silently (auto mode); a remembered
+        decline suppresses the offer. With no memory, only a candidate whose
+        clock-offset fit actually matches this folder opens the dialog.
+        """
+        if not waldo_paths:
+            return
+        try:
+            folder_key = WaldoClockDecisions.folder_key_for(waldo_paths[0])
+            decision = WaldoFlightLogDecisions.get_decision(folder_key, self.settings_service)
+            if decision and decision.get('decision') == 'declined':
+                return
+
+            flight_service = WaldoFlightLogService()
+            candidates: List[str] = []
+            remembered_path = (decision or {}).get('log_path')
+            if remembered_path and os.path.isfile(remembered_path):
+                candidates.append(remembered_path)
+            auto = bool(decision and decision.get('decision') == 'accepted' and candidates)
+            if not candidates:
+                candidates = flight_service.candidate_files(os.path.dirname(waldo_paths[0]))
+            if not candidates:
+                return
+
+            if service is None:
+                service = WaldoMetadataService(terrain_service=None)
+            dialog = WaldoFlightLogDialog(
+                self.parent, service, flight_service, waldo_paths, candidates,
+                auto_apply=auto)
+            dialog.exec()
+
+            if dialog.applied and dialog.fit is not None and dialog.remember_choice and not auto:
+                WaldoFlightLogDecisions.store_decision(folder_key, {
+                    'decision': 'accepted',
+                    'log_path': dialog.fit.log_path,
+                }, self.settings_service)
+            elif dialog.declined and dialog.remember_choice:
+                WaldoFlightLogDecisions.store_decision(
+                    folder_key, {'decision': 'declined'}, self.settings_service)
+
+            result = dialog.result_data
+            self.logger.info(
+                "WaldoPrePassController: flight log stamped=%d current=%d "
+                "errors=%d declined=%s"
+                % (result.processed, result.already_current, len(result.errors),
+                   dialog.declined))
+        except Exception as e:
+            self.logger.error(f"WaldoPrePassController: flight-log offer failed - {e}")
 
     # ------------------------------------------------------------------
     # Clock correction

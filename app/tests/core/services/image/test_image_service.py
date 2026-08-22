@@ -112,6 +112,38 @@ def test_get_asl_altitude(image_service):
     assert altitude_ft is None or isinstance(altitude_ft, (int, float))
 
 
+def _asl_service(xmp_data, gps_alt_m=1500.0, make=b'Canon'):
+    """ImageService with injected metadata for the ASL preference tests."""
+    exif = {'0th': {piexif.ImageIFD.Make: make},
+            'GPS': {piexif.GPSIFD.GPSAltitude: (int(gps_alt_m * 100), 100),
+                    piexif.GPSIFD.GPSAltitudeRef: 0}}
+    return ImageService(
+        "dummy.jpg",
+        img_array=np.zeros((10, 10, 3), dtype=np.uint8),
+        exif_data=exif, xmp_data=xmp_data)
+
+
+def test_get_asl_altitude_waldo_prefers_stamped_orthometric():
+    """WALDO images use the pre-pass's orthometric AbsoluteAltitude, not the
+    (ellipsoidal) EXIF GPSAltitude - a geoid-magnitude difference."""
+    svc = _asl_service({'waldo:ProcessorVersion': '9',
+                        'drone-dji:AbsoluteAltitude': '+1470.2500'})
+    assert svc.get_asl_altitude('m') == pytest.approx(1470.25)
+    assert svc.get_asl_altitude('ft') == pytest.approx(1470.25 * 3.28084, abs=0.01)
+
+
+def test_get_asl_altitude_waldo_without_stamp_falls_back_to_exif():
+    svc = _asl_service({'waldo:ProcessorVersion': '9'})
+    assert svc.get_asl_altitude('m') == pytest.approx(1500.0)
+
+
+def test_get_asl_altitude_non_waldo_unchanged():
+    """DJI images keep reading EXIF GPSAltitude even when AbsoluteAltitude
+    exists in XMP (DJI's own field; historical behaviour preserved)."""
+    svc = _asl_service({'drone-dji:AbsoluteAltitude': '+1470.2500'}, make=b'DJI')
+    assert svc.get_asl_altitude('m') == pytest.approx(1500.0)
+
+
 def test_get_camera_pitch(image_service):
     """Test getting camera pitch angle."""
     pitch = image_service.get_camera_pitch()

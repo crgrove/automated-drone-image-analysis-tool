@@ -170,3 +170,116 @@ def test_no_proposal_and_healthy_stamp_stays_quiet(monkeypatch, tmp_path):
     controller._offer_clock_correction(
         [str(tmp_path / "0_a.jpg")], None, service=service)
     assert _FakeDialog.instances == []
+
+
+# --------------------------------------------------------------------------
+# Flight-log offer
+# --------------------------------------------------------------------------
+
+from core.services.waldo.WaldoFlightLog import FlightLogFit  # noqa: E402
+from core.services.waldo.WaldoFlightLogDecisions import (  # noqa: E402
+    FLIGHTLOG_DECISIONS_SETTING,
+)
+
+
+class _FakeFlightDialog:
+    """Stands in for WaldoFlightLogDialog; scripted outcome."""
+
+    instances = []
+    script = {}
+
+    def __init__(self, parent, service, flight_service, image_paths,
+                 candidate_logs, auto_apply=False):
+        self.image_paths = image_paths
+        self.candidate_logs = candidate_logs
+        self.auto_apply = auto_apply
+        self.applied = self.script.get('applied', False)
+        self.declined = self.script.get('declined', False)
+        self.remember_choice = self.script.get('remember', False)
+        self.fit = self.script.get('fit', None)
+        self.result_data = WaldoProcessResult()
+        _FakeFlightDialog.instances.append(self)
+
+    def exec(self):
+        return None
+
+
+def _accepted_fit(log_path="E:/logs/tracklog.csv"):
+    return FlightLogFit(log_path=log_path, log_sha256="ab" * 32, accepted=True,
+                        clock_offset_s=-17.0, mean_track_dist_m=15.0,
+                        matched_fraction=1.0, attitude_reliable=True,
+                        attitude_lag_s=4.0, lag_correlation=0.95)
+
+
+def _make_flight_controller(monkeypatch, candidates):
+    controller = _make_controller(monkeypatch)
+    monkeypatch.setattr(controller_module, 'WaldoFlightLogDialog', _FakeFlightDialog)
+    monkeypatch.setattr(controller_module.WaldoFlightLogService, 'candidate_files',
+                        staticmethod(lambda image_dir: list(candidates)))
+    _FakeFlightDialog.instances = []
+    _FakeFlightDialog.script = {}
+    return controller
+
+
+def test_flight_log_no_candidates_stays_quiet(monkeypatch, tmp_path):
+    controller = _make_flight_controller(monkeypatch, candidates=[])
+    controller._offer_flight_log([str(tmp_path / "0_a.jpg")], service=_StubService())
+    assert _FakeFlightDialog.instances == []
+
+
+def test_flight_log_accept_with_remember_persists_log_path(monkeypatch, tmp_path):
+    log = tmp_path / "tracklog.csv"
+    controller = _make_flight_controller(monkeypatch, candidates=[str(log)])
+    _FakeFlightDialog.script = {'applied': True, 'remember': True,
+                                'fit': _accepted_fit(str(log))}
+    controller._offer_flight_log([str(tmp_path / "0_a.jpg")], service=_StubService())
+    assert len(_FakeFlightDialog.instances) == 1
+    assert _FakeFlightDialog.instances[0].auto_apply is False
+    stored = json.loads(controller.settings_service.values[FLIGHTLOG_DECISIONS_SETTING])
+    decision = next(iter(stored.values()))
+    assert decision == {'decision': 'accepted', 'log_path': str(log)}
+
+
+def test_flight_log_declined_with_remember_suppresses_future_offers(monkeypatch, tmp_path):
+    log = tmp_path / "tracklog.csv"
+    controller = _make_flight_controller(monkeypatch, candidates=[str(log)])
+    _FakeFlightDialog.script = {'declined': True, 'remember': True}
+    paths = [str(tmp_path / "0_a.jpg")]
+    controller._offer_flight_log(paths, service=_StubService())
+    assert len(_FakeFlightDialog.instances) == 1
+
+    controller._offer_flight_log(paths, service=_StubService())
+    assert len(_FakeFlightDialog.instances) == 1
+
+
+def test_flight_log_remembered_acceptance_runs_auto_with_stored_path(monkeypatch, tmp_path):
+    log = tmp_path / "tracklog.csv"
+    log.write_text("Pilot,Tail Number\n", encoding="utf-8")
+    controller = _make_flight_controller(monkeypatch, candidates=[])
+    import os
+    folder_key = os.path.normcase(os.path.abspath(str(tmp_path)))
+    controller.settings_service.values[FLIGHTLOG_DECISIONS_SETTING] = json.dumps({
+        folder_key: {'decision': 'accepted', 'log_path': str(log)}})
+    _FakeFlightDialog.script = {'applied': True, 'remember': False,
+                                'fit': _accepted_fit(str(log))}
+    controller._offer_flight_log([str(tmp_path / "0_a.jpg")], service=_StubService())
+    assert len(_FakeFlightDialog.instances) == 1
+    dlg = _FakeFlightDialog.instances[0]
+    assert dlg.auto_apply is True
+    assert dlg.candidate_logs == [str(log)]
+
+
+def test_flight_log_missing_remembered_file_falls_back_to_discovery(monkeypatch, tmp_path):
+    fresh = tmp_path / "tracklog-2.csv"
+    controller = _make_flight_controller(monkeypatch, candidates=[str(fresh)])
+    import os
+    folder_key = os.path.normcase(os.path.abspath(str(tmp_path)))
+    controller.settings_service.values[FLIGHTLOG_DECISIONS_SETTING] = json.dumps({
+        folder_key: {'decision': 'accepted', 'log_path': str(tmp_path / 'gone.csv')}})
+    _FakeFlightDialog.script = {'applied': False}
+    controller._offer_flight_log([str(tmp_path / "0_a.jpg")], service=_StubService())
+    assert len(_FakeFlightDialog.instances) == 1
+    dlg = _FakeFlightDialog.instances[0]
+    # The remembered file is gone: not auto mode, discovery candidates offered.
+    assert dlg.auto_apply is False
+    assert dlg.candidate_logs == [str(fresh)]

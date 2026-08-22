@@ -281,7 +281,8 @@ class CoverageExtentExportController(TranslationMixin):
                 "Images may be skipped for the following reasons:\n"
                 "  • Missing GPS data in EXIF\n"
                 "  • No valid GSD (missing altitude/focal length)\n"
-                "  • Gimbal not nadir (must be -85° to -95°)"
+                "  • Gimbal not nadir (must be -85° to -95°;\n"
+                "    WALDO: boresight within 40° of nadir)"
             ).format(
                 processed=coverage_data['image_count'],
                 skipped=coverage_data['skipped_count']
