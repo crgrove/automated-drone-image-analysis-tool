@@ -7,33 +7,19 @@ images in the flight path. Supports zoom, pan, and navigation to specific images
 
 import numpy as np
 import cv2
-from pathlib import Path
-from PySide6.QtCore import Qt, QSize, Signal, QRectF, QPointF, QTimer
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF
 from PySide6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QPen, QFont, QBrush,
-    QWheelEvent, QMouseEvent, QTransform
+    QWheelEvent, QMouseEvent
 )
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QScrollArea, QWidget, QFrame, QGridLayout, QSizePolicy,
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsTextItem,
     QGraphicsRectItem
 )
 
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
-
-
-class ThumbnailItem:
-    """Represents a single thumbnail in the gallery."""
-
-    def __init__(self, image_idx, image_name, thumbnail, pixel_x, pixel_y, is_current=False):
-        self.image_idx = image_idx
-        self.image_name = image_name
-        self.thumbnail = thumbnail
-        self.pixel_x = pixel_x
-        self.pixel_y = pixel_y
-        self.is_current = is_current
 
 
 class NeighborGalleryView(QGraphicsView):
@@ -81,6 +67,7 @@ class NeighborGalleryView(QGraphicsView):
         self._selected_index = -1  # Currently selected thumbnail
         self._border_items = []  # List of (image_idx, border_rect) for updating borders
         self._results = []  # Store results for reference
+        self._current_rect = None  # Cell of the originating capture, if shown
 
         # Style settings
         self.thumbnail_spacing = 20
@@ -92,6 +79,10 @@ class NeighborGalleryView(QGraphicsView):
         """
         Load thumbnails from neighbor search results.
 
+        Laid out as a single horizontal strip, scrolled sideways. This is the
+        established shape of this gallery and reviewers navigate it by
+        position along the flight; a wrapping grid was tried and reverted.
+
         Args:
             results (list): List of dicts with thumbnail info
         """
@@ -100,11 +91,11 @@ class NeighborGalleryView(QGraphicsView):
         self._border_items = []
         self._results = results or []
         self._selected_index = -1
+        self._current_rect = None
 
         if not results:
             return
 
-        # Calculate layout
         x = self.thumbnail_spacing
         y = self.thumbnail_spacing
 
@@ -174,12 +165,14 @@ class NeighborGalleryView(QGraphicsView):
                 # Store rect for click detection
                 click_rect = QRectF(x, y, self.thumbnail_size, self.thumbnail_size)
                 self._thumbnail_rects.append((click_rect, image_idx))
+                if is_current:
+                    self._current_rect = click_rect
 
                 # Add label
-                image_name = result.get('image_name', 'Unknown')
+                image_name = result.get('image_name', self.tr("Unknown"))
                 label_text = f"{image_name}"
                 if is_current:
-                    label_text += " (Current)"
+                    label_text += self.tr(" (Current)")
 
                 text_item = QGraphicsTextItem(label_text)
                 text_item.setDefaultTextColor(QColor(255, 255, 255))
@@ -196,43 +189,36 @@ class NeighborGalleryView(QGraphicsView):
                 x += self.thumbnail_size + self.thumbnail_spacing
 
             except Exception as e:
+                # Advance regardless: leaving x put stacked the next thumbnail
+                # on top of this one and mis-routed its clicks.
                 self.logger.error(f"Error loading thumbnail: {e}")
+                x += self.thumbnail_size + self.thumbnail_spacing
                 continue
 
-        # Set scene rect
         total_width = x + self.thumbnail_spacing
         total_height = self.thumbnail_size + self.label_height + 2 * self.thumbnail_spacing
         self.scene.setSceneRect(0, 0, total_width, total_height)
 
-        # Reset transform and set a reasonable initial scale
-        # Don't fit all thumbnails - let user scroll horizontally
-        self.resetTransform()
-        self._zoom = 1.0
-
-        # If content is wider than view, just show from the start
-        # If content fits, center it
-        view_width = self.viewport().width()
-        if total_width <= view_width:
-            # Content fits - center it
-            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-        else:
-            # Content is wider - show at 1:1 scale, scrollable
-            self.centerOn(self.thumbnail_spacing + self.thumbnail_size / 2,
-                          self.thumbnail_spacing + self.thumbnail_size / 2)
+        self.reset_view()
 
     def wheelEvent(self, event: QWheelEvent):
-        """Handle mouse wheel for zooming."""
-        # Get zoom factor
+        """Handle mouse wheel for zooming.
+
+        Both bounds are enforced against the transform actually applied, so
+        _zoom cannot drift from the view's real scale. It used to: zoom-in was
+        unbounded while _zoom kept counting, so a user who scrolled in and back
+        out ended up far below the nominal floor with the view no longer
+        matching the number.
+        """
         zoom_factor = 1.15
         if event.angleDelta().y() > 0:
-            # Zoom in - no upper limit
-            self._zoom *= zoom_factor
-            self.scale(zoom_factor, zoom_factor)
+            target = min(self._max_zoom, self._zoom * zoom_factor)
         else:
-            # Zoom out - keep minimum limit
-            if self._zoom > self._min_zoom:
-                self._zoom /= zoom_factor
-                self.scale(1 / zoom_factor, 1 / zoom_factor)
+            target = max(self._min_zoom, self._zoom / zoom_factor)
+
+        if target != self._zoom:
+            self.scale(target / self._zoom, target / self._zoom)
+            self._zoom = target
 
         event.accept()
 
@@ -284,11 +270,25 @@ class NeighborGalleryView(QGraphicsView):
             super().mouseMoveEvent(event)
 
     def reset_view(self):
-        """Reset zoom and fit all thumbnails in view."""
+        """Return to 1:1 and bring the originating image into view.
+
+        Deliberately NOT fitInView on the whole scene: with a capped 50
+        results that scales every thumbnail to roughly 16 px, which is not a
+        view of anything. 1:1 keeps them legible and the strip scrolls.
+
+        The originating capture is the one the reviewer is oriented by, so it
+        is what the view lands on -- previously it could be anywhere in the
+        strip with nothing to lead the eye to it.
+        """
         self._zoom = 1.0
         self.resetTransform()
-        if self.scene.sceneRect().width() > 0:
-            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        if self.scene.sceneRect().width() <= 0:
+            return
+        if self._current_rect is not None:
+            self.centerOn(self._current_rect.center())
+        else:
+            self.centerOn(self.thumbnail_spacing + self.thumbnail_size / 2,
+                          self.thumbnail_spacing + self.thumbnail_size / 2)
 
     def select_thumbnail(self, image_idx):
         """
@@ -321,17 +321,20 @@ class AOINeighborGalleryDialog(TranslationMixin, QDialog):
 
     image_clicked = Signal(int)  # Emits image_idx when user clicks a thumbnail
 
-    def __init__(self, parent=None, results=None):
+    def __init__(self, parent=None, results=None, truncated=False):
         """
         Initialize the AOI Neighbor Gallery dialog.
 
         Args:
             parent: Parent widget (usually the Viewer)
             results (list): List of dicts with thumbnail info from neighbor search
+            truncated (bool): The search stopped at its result cap with
+                candidates unchecked, so the count is a floor, not the answer.
         """
         super().__init__(parent)
         self.logger = LoggerService()
         self.results = results or []
+        self.truncated = truncated
         self._thumbnails_loaded = False
 
         # Setup dialog
@@ -349,13 +352,40 @@ class AOINeighborGalleryDialog(TranslationMixin, QDialog):
         self.resize(900, 400)
 
     def showEvent(self, event):
-        """Load thumbnails when dialog is shown (viewport is ready)."""
+        """Load thumbnails when the dialog is shown.
+
+        Loads directly rather than after a settle timer (CLAUDE.md 2.9). The
+        strip's geometry does not depend on the viewport width -- it is one
+        row, scrolled sideways -- so there is nothing to wait for; the timer
+        only ever created a window in which a closed dialog still received the
+        callback and cleared an already-deleted scene.
+        """
         super().showEvent(event)
-        # Only load once, after dialog is visible and viewport has valid size
         if not self._thumbnails_loaded and self.results:
             self._thumbnails_loaded = True
-            # Use a small delay to ensure viewport is fully initialized
-            QTimer.singleShot(10, lambda: self.gallery_view.load_thumbnails(self.results))
+            self.gallery_view.load_thumbnails(self.results)
+
+    def _info_text(self):
+        """The header line, translated and honest about a capped search.
+
+        Built through tr().format() rather than an f-string: an interpolated
+        string can never match a catalogue entry, so the old version was
+        untranslatable in every language. The truncated wording matters as
+        much -- presenting the cap ("Found AOI in 50 image(s)") as the answer
+        told a searcher the AOI appears in 50 captures when the real number
+        was unknown and larger.
+        """
+        if self.truncated:
+            return self.tr(
+                "Showing the {count} nearest images containing this AOI; there are more. "
+                "Use mouse wheel to zoom, right-click drag to pan. "
+                "Click a thumbnail to navigate to that image."
+            ).format(count=len(self.results))
+        return self.tr(
+            "Found AOI in {count} image(s). "
+            "Use mouse wheel to zoom, right-click drag to pan. "
+            "Click a thumbnail to navigate to that image."
+        ).format(count=len(self.results))
 
     def _setup_ui(self):
         """Create the dialog UI components."""
@@ -364,12 +394,7 @@ class AOINeighborGalleryDialog(TranslationMixin, QDialog):
         main_layout.setSpacing(10)
 
         # Info label
-        info_text = (
-            f"Found AOI in {len(self.results)} image(s). "
-            "Use mouse wheel to zoom, right-click drag to pan. "
-            "Click a thumbnail to navigate to that image."
-        )
-        self.info_label = QLabel(info_text)
+        self.info_label = QLabel(self._info_text())
         self.info_label.setWordWrap(True)
         self.info_label.setStyleSheet("QLabel { color: palette(placeholder-text); padding: 5px; }")
         main_layout.addWidget(self.info_label)
@@ -403,6 +428,17 @@ class AOINeighborGalleryDialog(TranslationMixin, QDialog):
 
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
+
+    def _apply_translations(self):
+        """Re-translate, including the interpolated header the mixin cannot.
+
+        The base implementation round-trips each QLabel's *current* text
+        through tr(), which for an already-interpolated string is a no-op, so
+        the header has to be rebuilt from its source form.
+        """
+        super()._apply_translations()
+        if getattr(self, 'info_label', None) is not None:
+            self.info_label.setText(self._info_text())
 
     def _on_thumbnail_clicked(self, image_idx):
         """

@@ -250,11 +250,25 @@ class AOIController(TranslationMixin):
     def area_of_interest_click(self, x, y, img):
         """Handles clicks on area of interest thumbnails.
 
+        Selects the AOI as well as zooming to it: the thumbnail is the
+        natural click target, but only clicks on the surrounding container
+        frame used to reach select_aoi - so the list styling, the on-image
+        overlay and the GPS-map marker never followed thumbnail clicks.
+
         Args:
             x (int): X coordinate of the cursor.
             y (int): Y coordinate of the cursor.
             img (QtImageViewer): The clicked thumbnail image viewer.
         """
+        name = img.objectName() or ''
+        if name.startswith('highlight'):
+            try:
+                aoi_index = int(name[len('highlight'):])
+            except ValueError:
+                aoi_index = -1
+            if aoi_index >= 0:
+                visible_index = self.aoi_index_to_visible_index.get(aoi_index, -1)
+                self.select_aoi(aoi_index, visible_index)
         self.parent.main_image.zoomToArea(img.center, 6)
 
     def get_selected_aoi(self):

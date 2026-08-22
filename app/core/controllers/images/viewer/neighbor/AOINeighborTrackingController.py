@@ -13,22 +13,43 @@ from core.services.image.AOINeighborService import AOINeighborService
 from core.services.image.AOIService import AOIService
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
+from helpers.PathHelper import path_match_key
 
 
 class NeighborSearchWorker(QObject):
-    """Worker thread for searching neighbor images."""
+    """Worker thread for searching neighbor images.
 
-    progress = Signal(str)  # Progress message
-    finished = Signal(list)  # Results list
-    error = Signal(str)  # Error message
+    Owns the AOI's own GPS calculation as well as the search. That calculation
+    decodes the source image and can query a DEM over the network, so on the
+    GUI thread it froze the window for seconds -- and did so *before* the
+    progress dialog could paint, which is the worst place for it: the user has
+    pressed Z and has no indication anything is happening.
+    """
 
-    def __init__(self, neighbor_service, images, current_image_idx, aoi_gps,
-                 agl_override_m=None, thumbnail_radius=100):
+    # The generation rides in the signal rather than being bound into a lambda
+    # at connect time. A lambda has no receiver QObject, so Qt cannot use the
+    # controller's thread affinity and resolves the connection as Direct: the
+    # handler then ran ON THE WORKER THREAD, where _cleanup_thread waits on the
+    # very thread it is running on and the dialog calls touch GUI objects from
+    # the wrong thread. That deadlocked the app at the last image of the search.
+    # Bound methods of the controller keep the connection queued to the GUI thread.
+    progress = Signal(str)               # Progress message
+    finished = Signal(list, bool, int)   # Results, cap-truncated, generation
+    error = Signal(str, int)             # Error message, generation
+    gps_unavailable = Signal(int)        # The AOI's own GPS is not computable
+
+    def __init__(self, neighbor_service, images, current_image_idx,
+                 current_image, aoi_data, img_array=None, use_terrain=True,
+                 agl_override_m=None, thumbnail_radius=100, generation=0):
         super().__init__()
+        self.generation = generation
         self.neighbor_service = neighbor_service
         self.images = images
         self.current_image_idx = current_image_idx
-        self.aoi_gps = aoi_gps
+        self.current_image = current_image
+        self.aoi_data = aoi_data
+        self.img_array = img_array
+        self.use_terrain = use_terrain
         self.agl_override_m = agl_override_m
         self.thumbnail_radius = thumbnail_radius
         self._cancelled = False
@@ -38,28 +59,49 @@ class NeighborSearchWorker(QObject):
         self._cancelled = True
 
     def run(self):
-        """Execute the neighbor search."""
+        """Compute the AOI's GPS, then find it in the other captures."""
         try:
             if self._cancelled:
-                self.finished.emit([])
+                self.finished.emit([], False, self.generation)
                 return
 
-            results = self.neighbor_service.find_aoi_in_neighbors(
+            self.progress.emit(self.tr("Locating the selected AOI..."))
+            aoi_service = AOIService(self.current_image, self.img_array)
+            aoi_gps_result = aoi_service.estimate_aoi_gps(
+                self.current_image, self.aoi_data,
+                self.agl_override_m, self.use_terrain
+            )
+            if aoi_gps_result is None:
+                self.gps_unavailable.emit(self.generation)
+                return
+
+            if self._cancelled:
+                self.finished.emit([], False, self.generation)
+                return
+
+            results, truncated = self.neighbor_service.find_aoi_in_neighbors(
                 images=self.images,
                 current_image_idx=self.current_image_idx,
-                aoi_gps=self.aoi_gps,
+                aoi_gps=aoi_gps_result.to_tuple(),
                 agl_override_m=self.agl_override_m,
                 thumbnail_radius=self.thumbnail_radius,
+                # The ground elevation the forward calculation settled on, so
+                # each candidate is projected from its height above THAT point
+                # rather than above its own.
+                aoi_terrain_elevation_m=aoi_gps_result.terrain_elevation_m,
+                # Actually stops the search. cancel() used to only set a flag
+                # that nothing read, so a cancelled search ran to completion.
+                should_cancel=lambda: self._cancelled,
                 progress_callback=lambda msg: self.progress.emit(msg) if not self._cancelled else None
             )
 
             if self._cancelled:
-                self.finished.emit([])
+                self.finished.emit([], False, self.generation)
             else:
-                self.finished.emit(results)
+                self.finished.emit(results, truncated, self.generation)
 
         except Exception as e:
-            self.error.emit(str(e))
+            self.error.emit(str(e), self.generation)
 
 
 class AOINeighborTrackingController(TranslationMixin, QObject):
@@ -68,6 +110,12 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
     tracking_started = Signal()
     tracking_completed = Signal(list)  # List of neighbor results
     tracking_error = Signal(str)
+
+    # Half-width of the crop taken around the projected point, in pixels of
+    # the source image. Covers the inter-image metadata disagreement measured
+    # on real flights (see track_selected_aoi), so the AOI is inside the
+    # thumbnail even though the projected centre is off by metres.
+    UNCERTAINTY_RADIUS_PX = 400
 
     def __init__(self, parent):
         """
@@ -84,6 +132,20 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
         # Thread management
         self._worker = None
         self._thread = None
+        self._cancelled = False
+        # Bumped whenever a search is retired. A cancelled worker is still
+        # running and still connected, and its queued `finished` arrives after
+        # the next search has started; without a generation stamp that late
+        # signal tore down the NEW thread and reported "No Neighbors Found"
+        # for a search that was still running.
+        self._generation = 0
+        # Threads still winding down, kept alive until Qt reports them
+        # stopped. See _cleanup_thread for why this must not be skipped.
+        self._retiring = {}
+        # Reentrancy state: a modal QProgressDialog can pump the event loop, so
+        # terminal handlers can arrive while _on_progress is mid-body.
+        self._in_progress_update = False
+        self._deferred = None
 
         # Dialog for displaying results
         self._gallery_dialog = None
@@ -99,6 +161,16 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
         other than the one currently displayed in the main viewer.
         """
         try:
+            # One search at a time. Without this, a second Z press while a
+            # search is running reassigns self._thread and drops the last
+            # Python reference to a *running* QThread. ~QThread() answers that
+            # with qFatal(), which abort()s the process immediately -- the
+            # whole application dies with no Python traceback. A reentrant
+            # press is easy to produce: key auto-repeat, or an event loop
+            # re-entered from inside a slot.
+            if self._thread is not None:
+                return
+
             if image_idx is not None and aoi_idx is not None:
                 # Gallery-mode selection: resolve AOI from explicit indices
                 if image_idx < 0 or image_idx >= len(self.parent.images):
@@ -141,26 +213,12 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
             else:
                 img_array = None
 
-            # Calculate the GPS coordinates of the selected AOI.
-            # estimate_aoi_gps returns an AOIGPSResult dataclass; the neighbor
-            # service expects a plain (lat, lon) tuple, so convert here.
             # Honor the terrain-elevation preference like the AOI label does.
+            # The AOI's own GPS is computed on the worker thread (see
+            # NeighborSearchWorker.run): it decodes the source image and can
+            # query a DEM over the network, and doing that here froze the
+            # window before the progress dialog below could even paint.
             use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
-            aoi_service = AOIService(current_image, img_array)
-            aoi_gps_result = aoi_service.estimate_aoi_gps(current_image, aoi_data, agl_override_m, use_terrain)
-
-            if not aoi_gps_result:
-                QMessageBox.warning(
-                    self.parent,
-                    self.tr("Cannot Calculate GPS"),
-                    self.tr(
-                        "Unable to calculate GPS coordinates for this AOI.\n\n"
-                        "This may be due to missing image metadata (GPS, altitude, or camera info)."
-                    )
-                )
-                return
-
-            aoi_gps = aoi_gps_result.to_tuple()
 
             # Show progress dialog
             self.progress_dialog = QProgressDialog(
@@ -172,29 +230,60 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
             self.progress_dialog.setWindowTitle(self.tr("Tracking AOI"))
             self.progress_dialog.setWindowModality(Qt.WindowModal)
             self.progress_dialog.setMinimumDuration(0)
+            # Own the dialog's lifetime explicitly; see AOISimilarityController.
+            self.progress_dialog.setAutoClose(False)
+            self.progress_dialog.setAutoReset(False)
             self.progress_dialog.setValue(0)
 
-            # Calculate thumbnail radius based on AOI size
+            # Size the crop to the POSITIONAL UNCERTAINTY, not to the AOI.
+            #
+            # The projection is only as good as each image's own gimbal/GPS
+            # metadata, and neighbouring captures disagree about where the same
+            # ground object is. Measured on a real DJI flight: the same tarp
+            # placed 1.5 m apart by adjacent frames, rising to ~4 m five frames
+            # out. At the 1.33 cm/px GSD of that flight, 4 m is ~300 px.
+            #
+            # A radius derived from the AOI (max(100, radius*2) = 100 px here)
+            # produced a 200 px crop covering 2.7 m of ground -- narrower than
+            # the error -- so the object sat just outside almost every
+            # thumbnail and the whole gallery looked like bare ground. The
+            # crop has to be wide enough that the AOI is inside it even when
+            # the metadata is off by metres; the red circle marks the
+            # projected point, and the reviewer's eye finds the object near it.
             aoi_radius = aoi_data.get('radius', 50)
-            thumbnail_radius = max(100, aoi_radius * 2)
+            thumbnail_radius = max(self.UNCERTAINTY_RADIUS_PX, aoi_radius * 2)
+
+            # Search the full flight, not just the AOI-bearing subset from the
+            # XML: an image that produced no detections of its own can still
+            # show this AOI. Viewer.source_images already holds every capture
+            # from the original flight folder.
+            search_images, search_idx = self._build_search_scope(current_image, current_image_idx)
 
             # Create worker and thread
+            self._cancelled = False
             self._thread = QThread()
             self._worker = NeighborSearchWorker(
                 neighbor_service=self.neighbor_service,
-                images=self.parent.images,
-                current_image_idx=current_image_idx,
-                aoi_gps=aoi_gps,
+                images=search_images,
+                current_image_idx=search_idx,
+                current_image=current_image,
+                aoi_data=aoi_data,
+                img_array=img_array,
+                use_terrain=use_terrain,
                 agl_override_m=agl_override_m,
-                thumbnail_radius=thumbnail_radius
+                thumbnail_radius=thumbnail_radius,
+                generation=self._generation,
             )
             self._worker.moveToThread(self._thread)
 
-            # Connect signals
+            # Connect signals. The terminal handlers carry the generation this
+            # search was started with, so a previous worker's late signal is
+            # recognised as stale instead of acting on the current search.
             self._thread.started.connect(self._worker.run)
             self._worker.progress.connect(self._on_progress)
             self._worker.finished.connect(self._on_search_complete)
             self._worker.error.connect(self._on_search_error)
+            self._worker.gps_unavailable.connect(self._on_gps_unavailable)
             self.progress_dialog.canceled.connect(self._on_cancelled)
 
             # Start the search
@@ -211,22 +300,135 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
                 )
             )
 
-    def _on_progress(self, message):
-        """Handle progress updates from the worker."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
-            self.progress_dialog.setLabelText(message)
-            QApplication.processEvents()
+    def _build_search_scope(self, current_image, current_image_idx):
+        """Choose the image list to search and locate the current image in it.
 
-    def _on_search_complete(self, results):
+        Returns the viewer's full-flight ``source_images`` when available so
+        the search also covers captures that produced no detections of their
+        own; otherwise falls back to the AOI subset. The current image is
+        matched by path because indices differ between the two lists.
+
+        Args:
+            current_image (dict): Viewer image the tracked AOI belongs to
+            current_image_idx (int): Index of that image in the viewer's list
+
+        Returns:
+            tuple: (images list to search, index of current_image within it)
+        """
+        current_path = current_image.get('path')
+        source_images = getattr(self.parent, 'source_images', None)
+        if source_images and current_path:
+            current_key = path_match_key(current_path)
+            for idx, img in enumerate(source_images):
+                if path_match_key(img.get('path')) == current_key:
+                    return source_images, idx
+        # Legacy viewers without source_images, or the current image is
+        # missing from the source folder listing: search the AOI subset
+        return self.parent.images, current_image_idx
+
+    def _on_progress(self, message):
+        """Handle progress updates from the worker.
+
+        Deliberately does NOT call QApplication.processEvents(). This slot is
+        already queued onto the GUI thread from the worker, so the label
+        repaints on its own as soon as the slot returns and the event loop
+        continues -- pumping events here bought nothing and re-entered the
+        event loop from inside a slot, which delivered pending key events mid
+        search. A reentrant Z press then reassigned self._thread and abort()ed
+        the process (see track_selected_aoi), and a nested queued `finished`
+        could open the results dialog from inside this handler.
+        """
+        dialog = getattr(self, 'progress_dialog', None)
+        if dialog is None:
+            return
+        self._in_progress_update = True
+        try:
+            dialog.setLabelText(message)
+        except RuntimeError:
+            return  # dialog's C++ object was destroyed during a nested loop
+        finally:
+            self._in_progress_update = False
+            self._flush_deferred()
+
+    def _flush_deferred(self):
+        """Run a completion/error handler that arrived during a progress pump."""
+        deferred = self._deferred
+        self._deferred = None
+        if deferred is None:
+            return
+        deferred()
+
+    def _defer_while_pumping(self, run):
+        """True if *run* was deferred because a progress update is active.
+
+        Terminal handlers must never run nested inside _on_progress: they close
+        the progress dialog that _on_progress is still using, and they open
+        another dialog inside its modal session, which macOS reports as
+        "modalSession has been exited prematurely".
+
+        Takes a zero-argument callable so the deferred replay carries every
+        argument the handler was called with, including which search it belongs
+        to.
+        """
+        if not self._in_progress_update:
+            return False
+        # Last one wins: only one terminal event can be meaningful per search.
+        self._deferred = run
+        return True
+
+    def _is_stale(self, generation):
+        """True when *generation* belongs to a search that has been retired.
+
+        A cancelled worker keeps running -- Qt cannot interrupt a Python slot
+        mid-execution -- and stays connected to these handlers. Its `finished`
+        is queued, so it lands after the user has started the next search.
+        Acting on it tore down the live thread and reported the cancelled
+        search's (empty) results as the new search's answer.
+        """
+        return generation is not None and generation != self._generation
+
+    def _on_gps_unavailable(self, generation=None):
+        """The AOI's own GPS could not be computed, so there is nothing to find."""
+        if self._is_stale(generation):
+            return
+        if self._defer_while_pumping(
+                lambda: self._on_gps_unavailable(generation=generation)):
+            return
+        try:
+            self._cleanup_thread()
+            self._close_progress_dialog()
+            if self._cancelled:
+                return
+            QMessageBox.warning(
+                self.parent,
+                self.tr("Cannot Calculate GPS"),
+                self.tr(
+                    "Unable to calculate GPS coordinates for this AOI.\n\n"
+                    "This may be due to missing image metadata (GPS, altitude, or camera info)."
+                )
+            )
+        except Exception as e:
+            self.logger.error(f"Error reporting unavailable AOI GPS: {e}")
+
+    def _on_search_complete(self, results, truncated=False, generation=None):
         """Handle search completion."""
+        if self._is_stale(generation):
+            return
+        if self._defer_while_pumping(
+                lambda: self._on_search_complete(results, truncated, generation=generation)):
+            return
         try:
             # Clean up thread
             self._cleanup_thread()
 
-            # Close progress dialog
-            if hasattr(self, 'progress_dialog') and self.progress_dialog:
-                self.progress_dialog.close()
-                self.progress_dialog = None
+            self._close_progress_dialog()
+
+            # The worker emits `finished` even when cancelled, and that signal
+            # is queued, so it lands after _on_cancelled has already run.
+            # Without this the gallery still opened for a search the user
+            # explicitly cancelled.
+            if self._cancelled:
+                return
 
             if not results:
                 QMessageBox.information(
@@ -237,23 +439,28 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
                 return
 
             # Show the gallery dialog
-            self._show_gallery_dialog(results)
+            self._show_gallery_dialog(results, truncated)
 
             self.tracking_completed.emit(results)
 
         except Exception as e:
             self.logger.error(f"Error handling search completion: {e}")
 
-    def _on_search_error(self, error_msg):
+    def _on_search_error(self, error_msg, generation=None):
         """Handle search error."""
+        if self._is_stale(generation):
+            return
+        if self._defer_while_pumping(
+                lambda: self._on_search_error(error_msg, generation)):
+            return
         try:
             # Clean up thread
             self._cleanup_thread()
 
-            # Close progress dialog
-            if hasattr(self, 'progress_dialog') and self.progress_dialog:
-                self.progress_dialog.close()
-                self.progress_dialog = None
+            self._close_progress_dialog()
+
+            if self._cancelled:
+                return
 
             QMessageBox.critical(
                 self.parent,
@@ -270,24 +477,97 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
 
     def _on_cancelled(self):
         """Handle cancellation."""
-        if self._worker:
-            self._worker.cancel()
+        self._cancelled = True
         self._cleanup_thread()
+        # Close it here rather than leaving it to the worker's `finished`:
+        # that signal is now correctly ignored as stale, so nothing else would
+        # release the dialog, and the next search would overwrite the
+        # reference and strand this one as a child of the viewer.
+        self._close_progress_dialog()
+
+    def _close_progress_dialog(self):
+        """Close the progress dialog without triggering a spurious cancellation.
+
+        QProgressDialog emits canceled() from its closeEvent, so the canceled
+        handler must be disconnected before closing or a *completed* search
+        would be treated as user-cancelled and its results silently dropped.
+        """
+        if getattr(self, 'progress_dialog', None):
+            try:
+                self.progress_dialog.canceled.disconnect(self._on_cancelled)
+            except (RuntimeError, TypeError):
+                pass
+            self.progress_dialog.close()
+            # Parented to the viewer, so Qt owns it: without this each search
+            # strands a QProgressDialog alive for the session.
+            try:
+                self.progress_dialog.deleteLater()
+            except RuntimeError:
+                pass  # C++ object already gone
+            self.progress_dialog = None
 
     def _cleanup_thread(self):
-        """Clean up the worker thread."""
-        if self._thread:
-            self._thread.quit()
-            self._thread.wait()
-            self._thread = None
-        self._worker = None
+        """Release the worker thread without ever destroying a running one.
 
-    def _show_gallery_dialog(self, results):
+        Two hazards make the obvious teardown wrong:
+
+        * ``~QThread()`` calls ``qFatal()`` -- an immediate ``abort()`` that
+          takes the whole application down with no Python traceback -- if the
+          thread is still running. Dropping the last Python reference to a live
+          QThread is therefore a hard crash, not an exception.
+        * Destroying the worker while its ``run()`` is still executing on that
+          thread is a use-after-free on the C++ object.
+
+        Blocking on ``wait()`` here is not the answer either: this runs on the
+        GUI thread, and when the user cancels mid-search the worker is inside a
+        long computation, so ``wait()`` froze the UI for the rest of the search.
+
+        Instead both objects are moved to ``self._retiring``, which holds them
+        alive while the thread unwinds, and are released from the thread's own
+        ``finished`` signal. ``self._thread`` is cleared immediately so a new
+        search can start right away.
+        """
+        thread, worker = self._thread, self._worker
+        self._thread = None
+        self._worker = None
+        # Anything still connected from this search is now stale by definition.
+        # Bumping here (rather than only when a new search starts) means a
+        # cancelled worker's late signals are ignored even if the user never
+        # presses Z again.
+        self._generation += 1
+        if thread is None:
+            return
+
+        if worker is not None:
+            worker.cancel()
+
+        # Hold both alive until Qt reports the thread stopped.
+        self._retiring[thread] = worker
+        thread.finished.connect(lambda t=thread: self._release_thread(t))
+        thread.requestInterruption()
+        thread.quit()
+        if not thread.isRunning():
+            # Already stopped, so `finished` will not fire again.
+            self._release_thread(thread)
+
+    def _release_thread(self, thread):
+        """Drop the retained references once *thread* has actually stopped."""
+        try:
+            # Returns promptly: `finished` is emitted from the thread's own
+            # unwind, so this only covers the last instructions of that unwind.
+            thread.wait(5000)
+        except RuntimeError:
+            pass  # C++ object already gone
+        self._retiring.pop(thread, None)
+
+    def _show_gallery_dialog(self, results, truncated=False):
         """
         Show the gallery dialog with the found thumbnails.
 
         Args:
             results (list): List of neighbor results with thumbnails
+            truncated (bool): The result cap stopped the search early, so the
+                count shown is a floor rather than the answer.
         """
         try:
             # Import here to avoid circular imports
@@ -296,12 +576,19 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
             # Store results for later use when zooming
             self._neighbor_results = results
 
+            # Label results from captures outside the viewer's result set so a
+            # reviewer understands why clicking them cannot navigate
+            viewer_keys = {path_match_key(img.get('path')) for img in self.parent.images}
+            for result in results:
+                if path_match_key(result.get('image_path')) not in viewer_keys:
+                    result['image_name'] = result.get('image_name', '') + self.tr(" (no detections)")
+
             # Close existing dialog if open
             if self._gallery_dialog:
                 self._gallery_dialog.close()
 
             # Create and show new dialog
-            self._gallery_dialog = AOINeighborGalleryDialog(self.parent, results)
+            self._gallery_dialog = AOINeighborGalleryDialog(self.parent, results, truncated)
             self._gallery_dialog.image_clicked.connect(self._on_gallery_image_clicked)
             self._gallery_dialog.show()
 
@@ -330,93 +617,51 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
             if hasattr(self, '_neighbor_results') and self._neighbor_results:
                 result = next((r for r in self._neighbor_results if r['image_idx'] == image_idx), None)
 
+            # Result indices refer to the searched full-flight list; the viewer
+            # navigates its own AOI-subset list, so map back by path.
+            viewer_idx = None
+            result_path = result.get('image_path') if result else None
+            if result_path:
+                result_key = path_match_key(result_path)
+                viewer_idx = next(
+                    (i for i, img in enumerate(self.parent.images)
+                     if path_match_key(img.get('path')) == result_key),
+                    None
+                )
+            elif 0 <= image_idx < len(self.parent.images):
+                # No result payload: treat the index as a viewer index (legacy)
+                viewer_idx = image_idx
+
+            if viewer_idx is None:
+                # A capture with no detections isn't in the viewer's list; the
+                # gallery thumbnail is all there is to show for it (same
+                # convention as source-only markers on the GPS map)
+                self.logger.info(
+                    f"Neighbor result {result_path} is not in the result set (no detections); not navigating"
+                )
+                return
+
             pixel_x = result.get('pixel_x') if result else None
             pixel_y = result.get('pixel_y') if result else None
 
             # Check if we need to load a new image
-            needs_load = (self.parent.current_image != image_idx)
+            needs_load = (self.parent.current_image != viewer_idx)
 
             if needs_load and pixel_x is not None and pixel_y is not None:
-                # Set up zoom-after-load using viewChanged signal pattern
-                self.parent.current_image = image_idx
-
-                zoom_handler = None
-                zoom_executed = False
-
-                def zoom_when_ready():
-                    nonlocal zoom_executed
-                    if zoom_executed:
-                        return
-
-                    viewer = self.parent.main_image
-                    if not viewer or not viewer.hasImage():
-                        return
-
-                    # Check recursion guard
-                    if hasattr(viewer, '_recursion_guard') and viewer._recursion_guard:
-                        return
-
-                    # Check zoom stack is cleared (resetZoom has been called)
-                    if hasattr(viewer, 'zoomStack') and len(viewer.zoomStack) != 0:
-                        return
-
-                    zoom_executed = True
-                    # Zoom to the AOI location (scale 6 matches AOI click behavior)
-                    if hasattr(viewer, 'zoomToArea'):
-                        viewer.zoomToArea((pixel_x, pixel_y), 6)
-
-                    # Disconnect handler
-                    if zoom_handler:
-                        try:
-                            viewer.viewChanged.disconnect(zoom_handler)
-                        except Exception:
-                            pass
-
-                # Connect signal before loading
-                connected_viewer = None
-                if hasattr(self.parent, 'main_image') and self.parent.main_image:
-                    try:
-                        self.parent.main_image.viewChanged.connect(zoom_when_ready)
-                        zoom_handler = zoom_when_ready
-                        connected_viewer = self.parent.main_image
-                    except Exception:
-                        pass
-
-                try:
-                    # Load the image
-                    self.parent._load_image()
-
-                    # Fallback: if image already loaded and zoom not executed
-                    if not zoom_executed and hasattr(self.parent, 'main_image'):
-                        viewer = self.parent.main_image
-                        if viewer and viewer.hasImage():
-                            if not getattr(viewer, '_recursion_guard', False):
-                                if not viewer.zoomStack:
-                                    zoom_executed = True
-                                    if hasattr(viewer, 'zoomToArea'):
-                                        viewer.zoomToArea((pixel_x, pixel_y), 6)
-                finally:
-                    # _load_image() is synchronous, so any viewChanged it emits
-                    # has already fired. Unconditionally drop the transient
-                    # handler; a failed/early-returning load would otherwise
-                    # leave it armed on viewChanged, where a later wheel zoom
-                    # would re-enter zoomToArea against a stale location.
-                    if zoom_handler is not None and connected_viewer is not None:
-                        try:
-                            connected_viewer.viewChanged.disconnect(zoom_handler)
-                        except Exception:
-                            pass
+                # State the framing intent with the navigation; the load
+                # pipeline applies it as its own final step (same mechanism
+                # as the gallery's AOI click - Viewer.load_image_with_zoom).
+                self.parent.load_image_with_zoom(
+                    viewer_idx, lambda: self._zoom_main_image(pixel_x, pixel_y))
             else:
                 # Simple navigation without zoom, or same image
                 if needs_load:
-                    self.parent.current_image = image_idx
+                    self.parent.current_image = viewer_idx
                     self.parent._load_image()
 
                 # If same image, still zoom to location
                 if not needs_load and pixel_x is not None and pixel_y is not None:
-                    viewer = self.parent.main_image
-                    if viewer and hasattr(viewer, 'zoomToArea'):
-                        viewer.zoomToArea((pixel_x, pixel_y), 6)
+                    self._zoom_main_image(pixel_x, pixel_y)
 
             # Scroll thumbnail into view
             if hasattr(self.parent, 'thumbnail_controller') and self.parent.thumbnail_controller:
@@ -425,6 +670,12 @@ class AOINeighborTrackingController(TranslationMixin, QObject):
 
         except Exception as e:
             self.logger.error(f"Error navigating to image: {e}")
+
+    def _zoom_main_image(self, pixel_x, pixel_y):
+        """Zoom the main viewer to a pixel location (scale 6 matches AOI clicks)."""
+        viewer = getattr(self.parent, 'main_image', None)
+        if viewer and hasattr(viewer, 'zoomToArea'):
+            viewer.zoomToArea((pixel_x, pixel_y), 6)
 
     def cleanup(self):
         """Clean up resources."""

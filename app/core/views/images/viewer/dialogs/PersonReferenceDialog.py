@@ -54,6 +54,14 @@ SETTING_SHOW_SHADOWS = 'PersonReferenceShowShadows'
 SETTING_USE_TERRAIN = 'PersonReferenceUseTerrain'
 DEFAULT_OVERLAY_COLOR = '#00ff00'  # bright green
 
+# On-screen span below which the reference person is effectively invisible
+# and the viewer auto-zooms to it. High-altitude fixed-wing imagery (e.g.
+# WALDO tiles at ~1500m AGL / ~13cm/px) renders a person only ~15 image px
+# tall, which fit zoom reduces to 2-3 screen px.
+MIN_LEGIBLE_SCREEN_PX = 28
+# After auto-zoom the viewport spans about this many person-heights.
+AUTO_ZOOM_VIEW_SPAN = 10
+
 # Reference size classes: key, label, standing height (inches), weight (lb).
 SIZE_CLASSES = [
     ("large_adult", "Large adult",           6 * 12 + 2,  220),
@@ -355,6 +363,13 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.sun_label.setWordWrap(True)
         self.sun_label.setStyleSheet("QLabel { color: gray; }")
 
+        # WALDO imagery: the camera clock is corrected via stamped metadata;
+        # when the rendered shadow reveals a wrong correction, this is the
+        # place the operator notices - offer the amendment right here.
+        # (Visibility is decided in _update_sun_label, after the image loads.)
+        self.adjust_clock_button = QPushButton(self.tr("Adjust camera clock..."))
+        self.adjust_clock_button.setVisible(False)
+
         instructions = QLabel(self.tr(
             "Drag the white handle to position the reference person. "
             "Silhouettes are drawn at true ground scale for this image's "
@@ -367,6 +382,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.recenter_button = QPushButton(self.tr("Recenter"))
         self.close_button = QPushButton(self.tr("Close"))
         button_row.addWidget(self.recenter_button)
+        button_row.addWidget(self.adjust_clock_button)
         button_row.addStretch()
         button_row.addWidget(self.close_button)
 
@@ -392,7 +408,58 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.rotation_spin.valueChanged.connect(self._on_rotation_changed)
         self.color_button.clicked.connect(self._on_color_button_clicked)
         self.recenter_button.clicked.connect(self._recenter)
+        self.adjust_clock_button.clicked.connect(self._on_adjust_clock)
         self.close_button.clicked.connect(self.close)
+
+    def _is_waldo_image(self) -> bool:
+        try:
+            from core.services.waldo import WaldoMetadataService
+            return (self.image_path is not None
+                    and WaldoMetadataService.is_waldo_image(self.image_path) is not None)
+        except Exception:
+            return False
+
+    def _on_adjust_clock(self):
+        """Open the clock-correction dialog for this image's folder.
+
+        Prefilled from the currently stamped correction when one exists,
+        else from fresh fault detection. After an apply, the sun position
+        and shadows re-render with the corrected time.
+        """
+        import glob as _glob
+        import os as _os
+        from core.services.waldo import WaldoMetadataService, WaldoClockDecisions
+        from core.views.images.viewer.dialogs.WaldoClockCorrectionDialog import (
+            WaldoClockCorrectionDialog,
+        )
+        try:
+            folder = _os.path.dirname(self.image_path)
+            paths = [p for p in sorted(_glob.glob(_os.path.join(folder, '*.jpg')))
+                     if WaldoMetadataService.is_waldo_image(p) is not None]
+            if not paths:
+                return
+            service = WaldoMetadataService(terrain_service=None)
+            proposal = (service.propose_amendment(paths)
+                        or service.propose_clock_correction(paths))
+            if proposal is None:
+                self.sun_label.setText(self.tr(
+                    "No camera clock fault or applied correction was found "
+                    "for this folder."))
+                return
+            dialog = WaldoClockCorrectionDialog(self, service, paths, proposal)
+            dialog.exec()
+            if dialog.applied:
+                if dialog.remember_choice:
+                    WaldoClockDecisions.store_decision(
+                        WaldoClockDecisions.folder_key_for(paths[0]),
+                        {'decision': 'accepted',
+                         'face_shift_h': dialog.accepted_face_shift_h,
+                         'tz_text': dialog.accepted_tz_text})
+                self._resolve_sun()
+                self._update_sun_label()
+                self._on_params_changed()
+        except Exception as e:
+            LoggerService().error(f"PersonReferenceDialog: clock adjustment failed - {e}")
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -425,6 +492,59 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
             ))
         else:
             self._show_status(None)
+            self._ensure_reference_visible()
+
+    def _reference_bounds_scene(self):
+        """United scene-space bounding rect of the visible silhouettes, or None.
+
+        The shadow is deliberately excluded: a low sun casts a shadow many
+        person-lengths long, and framing it would zoom the person itself back
+        out to illegibility.
+        """
+        bounds = None
+        for item in self.pose_items.values():
+            if item is None or not item.isVisible():
+                continue
+            rect = item.path().boundingRect()
+            if rect.isNull() or rect.isEmpty():
+                continue
+            bounds = rect if bounds is None else bounds.united(rect)
+        return bounds
+
+    def _ensure_reference_visible(self):
+        """Zoom the viewer to the reference person when it is sub-visible.
+
+        Drone imagery renders a person tens to hundreds of screen pixels
+        tall, but high-altitude fixed-wing imagery renders one a couple of
+        screen pixels tall at fit zoom, which reads as the tool doing nothing
+        at all. When the projected silhouette would be illegible on screen,
+        frame it in the viewer instead. Runs only on image load, so it never
+        fights manual zooming afterwards.
+        """
+        viewer = self.image_viewer
+        if self.camera is None or viewer is None:
+            return
+        bounds = self._reference_bounds_scene()
+        if bounds is None:
+            return
+        try:
+            on_screen = viewer.mapFromScene(bounds).boundingRect()
+            screen_span = max(on_screen.width(), on_screen.height())
+            if screen_span >= MIN_LEGIBLE_SCREEN_PX:
+                return
+            span = max(bounds.width(), bounds.height()) * AUTO_ZOOM_VIEW_SPAN
+            # Floor keeps a degenerate sub-pixel person from zooming absurdly
+            span = max(span, 80.0)
+            target = QRectF(0.0, 0.0, span, span)
+            target.moveCenter(bounds.center())
+            viewer.zoomToRect(target)
+        except Exception:
+            # Zooming is a convenience; never let it break the overlay
+            return
+        self._show_status(self.tr(
+            "Zoomed to the reference person: at this altitude a person spans "
+            "only a few pixels."
+        ))
 
     def update_for_image(self, image_service, image_path, agl_override_m=None):
         """Rebuild the camera/sun for a newly selected image (called by Viewer)."""
@@ -472,6 +592,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
 
     def _update_sun_label(self):
         """Refresh the sun-info line and enable/disable the shadow toggle."""
+        self.adjust_clock_button.setVisible(self._is_waldo_image())
         if self.sun_elev is not None and self.sun_elev > 0:
             text = self.tr(
                 "Sun at capture: {elev:.0f}° above horizon, "
@@ -480,6 +601,9 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
             if self.sun_time_source == 'exif_local_tz_from_gps':
                 text += " " + self.tr(
                     "Capture time zone estimated from GPS location.")
+            elif self.sun_time_source == 'waldo_corrected':
+                text += " " + self.tr(
+                    "Using repaired capture time (camera clock fault).")
             self.sun_label.setText(text)
             self.shadow_check.setEnabled(True)
         else:

@@ -189,6 +189,12 @@ class ColorDetectionService(QObject):
         self._frame_count = 0
         self._last_fps_time = time.time()
 
+        # Set while a run of unusable frames is being skipped, so a bad stream
+        # reports itself once instead of once per frame. At 30 fps the
+        # per-frame warning wrote thousands of identical lines into the user's
+        # log, which is how a real fault gets buried rather than found.
+        self._invalid_frame_warned = False
+
         # GPU acceleration
         self._gpu_available = self._check_gpu_availability()
         self._use_gpu = self._gpu_available and self._config.gpu_acceleration
@@ -371,15 +377,28 @@ class ColorDetectionService(QObject):
         detections = []
 
         try:
-            # Validate input frame
+            # Validate input frame. Both guards report the first frame of a bad
+            # run and then stay quiet until usable frames resume: the condition
+            # persists for as long as the stream is broken, so repeating it per
+            # frame adds no information and floods the log.
             if frame is None or frame.size == 0:
-                self.logger.warning("Invalid frame received for detection")
+                if not self._invalid_frame_warned:
+                    self.logger.warning(
+                        "Invalid frame received for detection; "
+                        "suppressing further reports until frames recover")
+                    self._invalid_frame_warned = True
                 return []
 
             # Ensure frame is in the correct format
             if len(frame.shape) != 3 or frame.shape[2] != 3:
-                self.logger.warning(f"Invalid frame shape: {frame.shape}")
+                if not self._invalid_frame_warned:
+                    self.logger.warning(
+                        f"Invalid frame shape: {frame.shape}; suppressing "
+                        "further reports until frames recover")
+                    self._invalid_frame_warned = True
                 return []
+
+            self._invalid_frame_warned = False
 
             with self._config_lock:
                 config = self._config
@@ -2043,6 +2062,8 @@ class ColorDetectionService(QObject):
         self._processing_times = []
         self._frame_count = 0
         self._last_fps_time = time.time()
+        # A new session must be able to report its own bad frames.
+        self._invalid_frame_warned = False
 
         self._prev_frame = None
         self._mog2_subtractor = None

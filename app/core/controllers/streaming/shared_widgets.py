@@ -25,6 +25,7 @@ from core.services.streaming.RTMPStreamService import StreamType
 from core.services.streaming.contracts import FocusTarget
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
+from helpers.WidgetHelper import hand_off_focus
 
 
 class HDMIDeviceScanWorker(QObject):
@@ -1122,8 +1123,16 @@ class StreamControlWidget(TranslationMixin, QWidget):
                 self.tr("Status: {message}").format(message=message)
             )
             self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; }")
-            self.connect_button.setEnabled(False)
+            # Enable the successor first, then hand focus to it: disabling the
+            # widget that has focus makes Qt walk the focus chain into whatever
+            # control was created next, which is nowhere near this panel.
             self.disconnect_button.setEnabled(True)
+            hand_off_focus(
+                self.disconnect_button,
+                self.connect_button, self.type_combo, self.hdmi_device_combo,
+                self.scan_button, self.url_input, self.browse_button
+            )
+            self.connect_button.setEnabled(False)
             # Disable device selection while connected
             self.type_combo.setEnabled(False)
             self.hdmi_device_combo.setEnabled(False)
@@ -1136,6 +1145,7 @@ class StreamControlWidget(TranslationMixin, QWidget):
             )
             self.status_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             self.connect_button.setEnabled(True)
+            hand_off_focus(self.connect_button, self.disconnect_button)
             self.disconnect_button.setEnabled(False)
             # Re-enable device selection after disconnect
             self.type_combo.setEnabled(True)
@@ -1164,9 +1174,10 @@ class StreamControlWidget(TranslationMixin, QWidget):
 
         if recording:
             # Recording started
+            self.stop_recording_btn.setEnabled(True)
+            hand_off_focus(self.stop_recording_btn, self.start_recording_btn)
             self.start_recording_btn.setEnabled(False)
             self.start_recording_btn.setStyleSheet(start_disabled_style)
-            self.stop_recording_btn.setEnabled(True)
             self.stop_recording_btn.setStyleSheet(stop_active_style)
             self.recording_status.setText(self.tr("Status: Recording"))
             self.recording_status.setStyleSheet("QLabel { color: #ff4444; font-weight: bold; }")
@@ -1178,6 +1189,7 @@ class StreamControlWidget(TranslationMixin, QWidget):
             # Recording stopped
             self.start_recording_btn.setEnabled(True)
             self.start_recording_btn.setStyleSheet(start_active_style)
+            hand_off_focus(self.start_recording_btn, self.stop_recording_btn)
             self.stop_recording_btn.setEnabled(False)
             self.stop_recording_btn.setStyleSheet(stop_inactive_style)
             self.recording_status.setText(self.tr("Status: Not Recording"))

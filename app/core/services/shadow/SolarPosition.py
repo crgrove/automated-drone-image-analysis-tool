@@ -56,6 +56,10 @@ def resolve_capture_utc(
     """Resolve image capture time to a tz-aware UTC datetime.
 
     Resolution order (first match wins, most authoritative first):
+        0. XMP waldo:CaptureUtcCorrected — an operator-confirmed repair of a
+           known-faulty camera clock (see WaldoMetadataService clock
+           correction). When present it outranks everything: the EXIF fields
+           below are exactly what the repair was confirmed against.
         1. EXIF GPSDateStamp + GPSTimeStamp — already UTC, preferred.
         2. EXIF DateTimeOriginal + OffsetTimeOriginal — canonical local+offset.
         3. XMP xmp:CreateDate / xmp:ModifyDate — ISO 8601 with offset.
@@ -83,12 +87,24 @@ def resolve_capture_utc(
 
     Returns:
         (utc_datetime, source_tag) where source_tag is one of
-        'gps', 'exif_with_offset', 'xmp_create_date', 'xmp_modify_date',
-        'exif_local_tz_from_gps'.
+        'waldo_corrected', 'gps', 'exif_with_offset', 'xmp_create_date',
+        'xmp_modify_date', 'exif_local_tz_from_gps'.
 
     Raises:
         SolarTimeUnresolvable: no resolvable timestamp present.
     """
+    if xmp_data:
+        # Key shape depends on the XMP reader: bare when parsed per-namespace,
+        # prefixed when merged across namespaces.
+        for key in ('CaptureUtcCorrected', 'waldo:CaptureUtcCorrected',
+                    'XMP-waldo:CaptureUtcCorrected'):
+            value = xmp_data.get(key)
+            if value:
+                try:
+                    return _from_iso8601(value), 'waldo_corrected'
+                except ValueError:
+                    break
+
     gps = exif_data.get('GPS') or {}
     gps_date = gps.get(piexif.GPSIFD.GPSDateStamp)
     gps_time = gps.get(piexif.GPSIFD.GPSTimeStamp)
@@ -192,6 +208,18 @@ def _get_timezone_finder():
         from timezonefinder import TimezoneFinder
         _TZ_FINDER = TimezoneFinder()
     return _TZ_FINDER
+
+
+def timezone_name_for_position(lat: float, lon: float) -> Optional[str]:
+    """IANA timezone name covering lat/lon, or None when undeterminable.
+
+    Wraps the optional timezonefinder dependency: returns None instead of
+    raising when the package is missing or the position has no zone.
+    """
+    try:
+        return _get_timezone_finder().timezone_at(lat=lat, lng=lon)
+    except Exception:
+        return None
 
 
 def _from_local_via_gps_timezone(dt_orig, lat: float, lon: float) -> datetime:

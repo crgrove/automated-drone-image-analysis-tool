@@ -53,6 +53,10 @@ class FrameGeometry:
     bearing_confidence: float                    # 1.0 for gimbal/flight; mapped for 'calculated'; 0.25 for 'default'
     asl_alt_m: Optional[float] = None            # raw EXIF ASL altitude (datum fallback only)
     cam_elev_m: Optional[float] = None           # filled by the caller: DEM(nadir) + agl_m
+    # Azimuth of the axis roll_deg rotates about; None = camera-yaw axis.
+    # WALDO processor version >= 6 expresses roll about the FLIGHT axis -
+    # rolling about the wrong axis mirrors the footprint across the track.
+    roll_axis_deg: Optional[float] = None
 
     @classmethod
     def from_image_service(cls, image_service: "ImageService",
@@ -105,6 +109,14 @@ class FrameGeometry:
             if abs(roll_deg) > 90.0:
                 roll_deg = 0.0
 
+            roll_axis_deg = None
+            if roll_deg:
+                try:
+                    axis_raw = image_service.get_roll_axis_azimuth()
+                    roll_axis_deg = float(axis_raw) if axis_raw is not None else None
+                except Exception:
+                    roll_axis_deg = None
+
             return cls(
                 lat=lat,
                 lon=lon,
@@ -120,6 +132,7 @@ class FrameGeometry:
                 bearing_confidence=cls._confidence_for(yaw_source, bearing_quality),
                 asl_alt_m=image_service.get_asl_altitude('m'),
                 cam_elev_m=None,
+                roll_axis_deg=roll_axis_deg,
             )
         except Exception:
             return None

@@ -21,6 +21,7 @@ def _parent():
     parent.altitude_controller.get_effective_altitude.return_value = None
     parent.use_terrain_elevation = True
     parent.status_controller = MagicMock()
+    parent.distance_unit = 'ft'
     return parent
 
 
@@ -297,7 +298,8 @@ def test_pod_dir_for_kml():
 
 
 def _make_result(cancelled=False, skipped=None, image_count=1,
-                 dem_fallback_frames=0, stats=None, canopy_coverage_fraction=None):
+                 dem_fallback_frames=0, stats=None, canopy_coverage_fraction=None,
+                 altitude_anchor_m=None, altitude_source_counts=None):
     r = MagicMock()
     r.cancelled = cancelled
     # Real values: _pod_completion_summary iterates skipped and does arithmetic.
@@ -305,6 +307,9 @@ def _make_result(cancelled=False, skipped=None, image_count=1,
     r.image_count = image_count
     r.dem_fallback_frames = dem_fallback_frames
     r.canopy_coverage_fraction = canopy_coverage_fraction
+    # Real values (not MagicMocks): the summary formats these numerically.
+    r.altitude_anchor_m = altitude_anchor_m
+    r.altitude_source_counts = altitude_source_counts
     r.stats = stats if stats is not None else {}
     return r
 
@@ -758,6 +763,62 @@ def test_pod_summary_mentions_fallback_on_clean_run(controller):
     msg, color = controller._pod_completion_summary(result)
     assert color == "#00C853"
     assert "4" in msg and "online" in msg
+
+
+# --- camera-elevation basis -------------------------------------------------
+
+def test_pod_summary_reports_takeoff_elevation_in_viewer_units(controller):
+    """The anchor is the one number that reveals a GPS-altitude datum mismatch,
+    so it is shown for the user to check against the known launch point."""
+    result = _make_result(altitude_anchor_m=900.0,
+                          altitude_source_counts={'anchor': 12})
+
+    msg, color = controller._pod_completion_summary(result)
+
+    assert "takeoff elevation 2953 ft" in msg
+    assert color == "#00C853"
+
+
+def test_pod_summary_reports_takeoff_elevation_in_metres(controller):
+    controller.parent.distance_unit = 'm'
+    result = _make_result(altitude_anchor_m=900.0,
+                          altitude_source_counts={'anchor': 12})
+
+    msg, _ = controller._pod_completion_summary(result)
+
+    assert "takeoff elevation 900 m" in msg
+
+
+def test_pod_summary_warns_when_no_takeoff_elevation_was_validated(controller):
+    """Without an anchor POD is skewed wherever the ground is off launch level."""
+    result = _make_result(altitude_source_counts={'agl_nadir': 12})
+
+    msg, color = controller._pod_completion_summary(result)
+
+    assert "no takeoff elevation" in msg
+    assert color == "#FFA726"
+
+
+def test_pod_summary_stays_quiet_for_an_all_override_run(controller):
+    """An explicit AGL is the user's own assertion — nothing to warn about."""
+    result = _make_result(altitude_source_counts={'agl_override': 12})
+
+    msg, color = controller._pod_completion_summary(result)
+
+    assert "takeoff elevation" not in msg
+    assert color == "#00C853"
+
+
+def test_pod_summary_tolerates_a_legacy_result_without_altitude_fields(controller):
+    """Back-compat: a cached result from before the anchor existed still reads."""
+    result = _make_result()
+    del result.altitude_anchor_m
+    del result.altitude_source_counts
+
+    msg, color = controller._pod_completion_summary(result)
+
+    assert msg == "POD coverage complete"
+    assert color == "#00C853"
 
 
 def test_on_pod_finished_toasts_summary(controller):

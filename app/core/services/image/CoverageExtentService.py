@@ -276,9 +276,14 @@ class CoverageExtentService:
             # Calculate the four corners of the image in GPS coordinates
             # Corners in image space (centered at the drone-nadir point on the
             # ground plane). Outward roll shifts that center cross-track by
-            # h*tan(roll); positive roll points the optical axis to the LEFT
-            # of heading (matches AOIService convention), so the centroid
-            # offset along the camera-X (right) axis is -h*tan(roll).
+            # h*tan(roll). The AXIS the roll rotates about depends on the
+            # stamping convention: WALDO processor version >= 6 expresses it
+            # about the FLIGHT axis (positive roll tilts LEFT of the flight
+            # direction), older stamps about the camera-yaw axis (positive
+            # roll tilts LEFT of the image-up bearing). Using the wrong axis
+            # mirrors the footprint to the opposite side of the track, so the
+            # shift is computed in earth (east/north) space and added after
+            # the corner rotation.
             agl_m = effective_agl_m  # DEM-corrected AGL when terrain resolved
             if agl_m is None or agl_m <= 0:
                 agl_m = image_service.get_relative_altitude('m')
@@ -288,13 +293,29 @@ class CoverageExtentService:
                     agl_m = self.custom_altitude_ft / 3.28084
                 else:
                     agl_m = 0.0
-            roll_offset_x = -agl_m * math.tan(math.radians(gimbal_roll))
+
+            roll_east_m = 0.0
+            roll_north_m = 0.0
+            if gimbal_roll:
+                roll_axis = None
+                try:
+                    axis_raw = image_service.get_roll_axis_azimuth()
+                    roll_axis = float(axis_raw) if axis_raw is not None else None
+                except Exception:
+                    roll_axis = None
+                # Positive roll points the optical axis LEFT of the axis
+                # bearing (AOIService Rodrigues convention).
+                axis_bearing = roll_axis if roll_axis is not None else bearing
+                left_bearing = math.radians(axis_bearing - 90.0)
+                offset_m = agl_m * math.tan(math.radians(gimbal_roll))
+                roll_east_m = offset_m * math.sin(left_bearing)
+                roll_north_m = offset_m * math.cos(left_bearing)
 
             corners_image = [
-                (roll_offset_x - width_m / 2, -height_m / 2),  # Top-left
-                (roll_offset_x + width_m / 2, -height_m / 2),  # Top-right
-                (roll_offset_x + width_m / 2, height_m / 2),   # Bottom-right
-                (roll_offset_x - width_m / 2, height_m / 2)    # Bottom-left
+                (-width_m / 2, -height_m / 2),  # Top-left
+                (width_m / 2, -height_m / 2),   # Top-right
+                (width_m / 2, height_m / 2),    # Bottom-right
+                (-width_m / 2, height_m / 2)    # Bottom-left
             ]
 
             # Rotate corners by bearing and convert to GPS
@@ -308,6 +329,10 @@ class CoverageExtentService:
                 # Rotate
                 x_rot = x * cos_b - y * sin_b
                 y_rot = x * sin_b + y * cos_b
+
+                # Apply the cross-track roll shift in earth space
+                x_rot += roll_east_m
+                y_rot += roll_north_m
 
                 # Convert to lat/lon offset
                 delta_lat = y_rot / self.earth_radius * (180 / math.pi)

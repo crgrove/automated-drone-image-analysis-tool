@@ -35,6 +35,80 @@ def _real_result(rows=40, cols=30):
                           cancelled=False, params=PodParams())
 
 
+def _controller_with_result(app, result):
+    ctrl = _controller(app)
+    ctrl.parent.distance_unit = 'ft'
+    cache = MagicMock()
+    cache.has_result.return_value = result is not None
+    cache.get_result.return_value = result
+    ctrl.parent.pod_result_cache = cache
+    return ctrl
+
+
+def test_altitude_basis_reports_takeoff_elevation_in_viewer_units(app):
+    """The inspect menu outlives the completion toast, so the takeoff elevation
+    stays checkable against the known launch point while the overlay is up."""
+    result = _real_result()
+    result.altitude_anchor_m = 900.0
+    result.altitude_source_counts = {'anchor': 12}
+
+    label = _controller_with_result(app, result)._altitude_basis_label()
+
+    assert label == "Altitude basis: takeoff elevation 2953 ft"
+
+
+def test_altitude_basis_reports_takeoff_elevation_in_metres(app):
+    result = _real_result()
+    result.altitude_anchor_m = 900.0
+    result.altitude_source_counts = {'anchor': 12}
+    ctrl = _controller_with_result(app, result)
+    ctrl.parent.distance_unit = 'm'
+
+    assert ctrl._altitude_basis_label() == "Altitude basis: takeoff elevation 900 m"
+
+
+def test_altitude_basis_flags_the_reported_agl_fallback(app):
+    result = _real_result()
+    result.altitude_source_counts = {'agl_nadir': 12}
+
+    label = _controller_with_result(app, result)._altitude_basis_label()
+
+    assert label == "Altitude basis: reported AGL (approximate over terrain)"
+
+
+def test_altitude_basis_is_absent_for_an_all_override_run(app):
+    result = _real_result()
+    result.altitude_source_counts = {'agl_override': 12}
+
+    assert _controller_with_result(app, result)._altitude_basis_label() is None
+
+
+def test_altitude_basis_is_absent_without_a_cached_result(app):
+    assert _controller_with_result(app, None)._altitude_basis_label() is None
+
+
+def test_altitude_basis_tolerates_a_legacy_result(app):
+    """Back-compat: results cached before the anchor existed lack both fields."""
+    ctrl = _controller_with_result(app, _real_result())
+
+    assert ctrl._altitude_basis_label() is None
+
+
+def test_inspect_menu_includes_the_altitude_basis(app):
+    result = _real_result()
+    result.altitude_anchor_m = 900.0
+    result.altitude_source_counts = {'anchor': 12}
+    ctrl = _controller_with_result(app, result)
+    ctrl.map_dialog = None
+    sample = {'pod': 0.6, 'looks': 2, 'limiting_factor': LIMIT_CANOPY, 'frames': []}
+
+    with patch('core.controllers.images.viewer.GPSMapController.QMenu') as menu_cls:
+        ctrl._show_pod_inspect_menu(sample, 38.71, -120.49)
+
+    labels = [c.args[0] for c in menu_cls.return_value.addAction.call_args_list]
+    assert any("takeoff elevation 2953 ft" in text for text in labels)
+
+
 def test_click_with_overlay_shows_inspect_menu(app):
     ctrl = _controller(app)
     ctrl._pod_overlay_enabled = True

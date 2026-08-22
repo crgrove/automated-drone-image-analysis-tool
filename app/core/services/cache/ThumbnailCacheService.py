@@ -25,6 +25,7 @@ from PySide6.QtGui import QPixmap, QIcon, QImage
 import qimage2ndarray
 
 from core.services.LoggerService import LoggerService
+from core.services.cache.ThumbnailBlobStore import ThumbnailBlobStore
 
 
 class ThumbnailCacheService:
@@ -63,6 +64,12 @@ class ThumbnailCacheService:
 
         # Thread safety
         self.mutex = QMutex()
+
+        # One SQLite blob container per cache directory, created lazily. New
+        # thumbnails are written there instead of as loose .jpg files, so a
+        # results folder copies as one file; legacy loose files stay readable.
+        self._blob_stores: Dict[str, ThumbnailBlobStore] = {}
+        self._blob_stores_lock = QMutex()
 
         # Memory cache size
         self.max_memory_cache = max_memory_cache
@@ -242,9 +249,37 @@ class ThumbnailCacheService:
         # Actual loading happens in get_thumbnail
         return None
 
+    def _resolve_cache_dir(self, cache_dir: Optional[Path] = None) -> Optional[Path]:
+        """Pick the effective cache directory (override > dataset > global)."""
+        if cache_dir:
+            return Path(cache_dir)
+        if self.dataset_cache_dir:
+            return self.dataset_cache_dir
+        return self.cache_dir
+
+    def _blob_store(self, cache_dir: Optional[Path]) -> Optional[ThumbnailBlobStore]:
+        """Get (or lazily create) the blob container for a cache directory."""
+        if cache_dir is None:
+            return None
+        key = str(cache_dir)
+        with QMutexLocker(self._blob_stores_lock):
+            store = self._blob_stores.get(key)
+            if store is None:
+                try:
+                    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+                    store = ThumbnailBlobStore(cache_dir, logger=self.logger)
+                except Exception as e:
+                    self.logger.error(f"Could not open thumbnail store in {cache_dir}: {e}")
+                    return None
+                self._blob_stores[key] = store
+            return store
+
     def save_thumbnail_to_disk(self, cache_key: str, thumbnail_array: np.ndarray, cache_dir: Optional[Path] = None) -> bool:
         """
         Save thumbnail to disk cache.
+
+        Written into the directory's SQLite blob container rather than as a
+        loose .jpg, so large searches copy as one file per cache directory.
 
         Args:
             cache_key: Unique cache key
@@ -255,19 +290,22 @@ class ThumbnailCacheService:
             True if saved successfully
         """
         try:
-            cache_path = self.get_cache_path(cache_key, cache_dir)
+            store = self._blob_store(self._resolve_cache_dir(cache_dir))
+            if store is None:
+                return False
 
-            # Convert RGB to BGR for cv2.imwrite (cv2 expects BGR format)
+            # Convert RGB to BGR for cv2 encoding (cv2 expects BGR format)
             if len(thumbnail_array.shape) == 3 and thumbnail_array.shape[2] == 3:
                 thumbnail_bgr = cv2.cvtColor(thumbnail_array, cv2.COLOR_RGB2BGR)
             else:
                 thumbnail_bgr = thumbnail_array
 
-            # Save as JPEG with balanced quality (80 = good balance of quality and speed)
-            # Reduced from 90 for faster writes with minimal visual difference for thumbnails
-            cv2.imwrite(str(cache_path), thumbnail_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            # Encode as JPEG with balanced quality (80 = good balance of quality and speed)
+            success, encoded = cv2.imencode('.jpg', thumbnail_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if not success:
+                return False
 
-            return True
+            return store.put(cache_key, encoded.tobytes())
 
         except Exception as e:
             self.logger.error(f"Error saving thumbnail to disk: {e}")
@@ -305,7 +343,7 @@ class ThumbnailCacheService:
         """
         Load thumbnail from disk cache.
 
-        Checks in order:
+        Checks in order (blob container first, then legacy loose files):
         1. Per-dataset cache (if configured)
         2. Global cache
 
@@ -316,16 +354,21 @@ class ThumbnailCacheService:
             Numpy array or None
         """
         try:
-            # Try dataset cache first if available
-            if self.dataset_cache_dir:
-                dataset_cache_path = self.get_cache_path(cache_key, self.dataset_cache_dir)
-                if dataset_cache_path.exists():
-                    img = Image.open(dataset_cache_path)
-                    return np.array(img)
+            for base_dir in (self.dataset_cache_dir, self.cache_dir):
+                if not base_dir:
+                    continue
 
-            # Fall back to global cache (if available)
-            if self.cache_dir:
-                cache_path = self.get_cache_path(cache_key)
+                # Blob container (where new thumbnails live)
+                store = self._blob_store(base_dir)
+                if store is not None:
+                    jpeg_bytes = store.get(cache_key)
+                    if jpeg_bytes:
+                        decoded = cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if decoded is not None:
+                            return cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB)
+
+                # Legacy loose .jpg written by older builds
+                cache_path = self.get_cache_path(cache_key, base_dir)
                 if cache_path.exists():
                     with Image.open(cache_path) as img:
                         return np.array(img.convert('RGB'))
@@ -357,33 +400,23 @@ class ThumbnailCacheService:
         if cached_icon is not None:
             return True
 
-        # Check per-dataset cache
-        if self.dataset_cache_dir:
-            dataset_cache_path = Path(self.dataset_cache_dir) / f"{cache_key}.jpg"
-            if dataset_cache_path.exists():
-                return True
-
-        # Check global cache (if available)
-        if self.cache_dir:
-            cache_path = self.get_cache_path(cache_key)
-            if cache_path.exists():
-                return True
-
-        # Fallback: Try legacy cache key (for backward compatibility with old caches)
+        # Legacy key covers caches written by old builds (loose files only)
         xml_path = aoi_data.get('_xml_path')  # Extract original XML path if provided
         legacy_key = self.get_legacy_cache_key(image_path, aoi_data, xml_path)
-        if legacy_key != cache_key:  # Only try if different
-            # Check per-dataset cache with legacy key
-            if self.dataset_cache_dir:
-                legacy_dataset_path = Path(self.dataset_cache_dir) / f"{legacy_key}.jpg"
-                if legacy_dataset_path.exists():
-                    return True
 
-            # Check global cache with legacy key (if available)
-            if self.cache_dir:
-                legacy_cache_path = self.get_cache_path(legacy_key)
-                if legacy_cache_path.exists():
-                    return True
+        for base_dir in (self.dataset_cache_dir, self.cache_dir):
+            if not base_dir:
+                continue
+
+            store = self._blob_store(base_dir)
+            if store is not None and store.has(cache_key):
+                return True
+
+            if self.get_cache_path(cache_key, base_dir).exists():
+                return True
+
+            if legacy_key != cache_key and self.get_cache_path(legacy_key, base_dir).exists():
+                return True
 
         return False
 
@@ -460,6 +493,10 @@ class ThumbnailCacheService:
     def clear_disk_cache(self):
         """Clear all thumbnails from disk cache."""
         try:
+            # Drop the store handles first: their database files are about to
+            # be deleted, and fresh stores will recreate the schema lazily
+            with QMutexLocker(self._blob_stores_lock):
+                self._blob_stores = {}
             if self.cache_dir:
                 shutil.rmtree(self.cache_dir)
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -477,15 +514,18 @@ class ThumbnailCacheService:
         Returns:
             Dictionary with cache statistics
         """
-        # Count disk cache files
+        # Count disk cache entries: blob containers plus legacy loose files
         disk_count = 0
         disk_size = 0
-        if self.cache_dir:
-            disk_count += sum(1 for _ in self.cache_dir.rglob("*.jpg"))
-            disk_size += sum(f.stat().st_size for f in self.cache_dir.rglob("*.jpg"))
-        if self.dataset_cache_dir:
-            disk_count += sum(1 for _ in self.dataset_cache_dir.rglob("*.jpg"))
-            disk_size += sum(f.stat().st_size for f in self.dataset_cache_dir.rglob("*.jpg"))
+        for base_dir in (self.cache_dir, self.dataset_cache_dir):
+            if not base_dir:
+                continue
+            store = self._blob_store(base_dir)
+            if store is not None:
+                disk_count += store.count()
+                disk_size += store.total_bytes()
+            disk_count += sum(1 for _ in base_dir.rglob("*.jpg"))
+            disk_size += sum(f.stat().st_size for f in base_dir.rglob("*.jpg"))
 
         # Get memory cache stats
         cache_info = self.get_thumbnail_from_memory.cache_info()

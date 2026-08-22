@@ -1,3 +1,4 @@
+import ast
 import os
 import uuid
 from datetime import datetime
@@ -5,6 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
+from helpers.PathHelper import cross_platform_basename
 
 
 class SearchProjectService:
@@ -317,6 +319,48 @@ class SearchProjectService:
             self.logger.error(f"Error adding review: {e}")
             return False
 
+    @staticmethod
+    def _parse_center(text):
+        """Parse a stored AOI center like "(100, 200)" without executing it.
+
+        The previous implementation used eval() on file content, which runs
+        whatever a crafted or corrupted review XML contains; a center is only
+        ever two numbers. Malformed input degrades to (0, 0), matching the old
+        default.
+
+        Args:
+            text (str): Stored center text, e.g. "(100, 200)" or "[100, 200]".
+
+        Returns:
+            tuple: (x, y) as floats.
+        """
+        if text:
+            try:
+                parsed = ast.literal_eval(text.strip())
+                if isinstance(parsed, (list, tuple)) and len(parsed) >= 2:
+                    return (float(parsed[0]), float(parsed[1]))
+            except (ValueError, SyntaxError, TypeError):
+                pass
+        return (0.0, 0.0)
+
+    @staticmethod
+    def _image_match_key(image_path):
+        """Key used to decide two review rows refer to the same capture.
+
+        Reviewers run on different machines, so the same image arrives with
+        different absolute paths, separators, and casing. Raw string equality
+        made every cross-machine review create duplicates instead of merging.
+        The filename (case-insensitive, split on both separator styles) plus
+        the center-proximity check identifies the AOI across machines.
+
+        Args:
+            image_path (str): Stored image path from a review or the project.
+
+        Returns:
+            str: Normalized match key.
+        """
+        return cross_platform_basename(image_path or '').lower()
+
     def _merge_aoi_data(self, batch_id, images, review_meta):
         """
         Merge AOI data from a review into consolidated_aois.
@@ -329,30 +373,38 @@ class SearchProjectService:
         root = self.xml.getroot()
         consolidated_elem = root.find('consolidated_aois')
 
+        # Index existing AOIs by filename once, instead of rescanning (and
+        # re-parsing every center of) the whole consolidated list per AOI
+        existing_by_name = {}
+        for existing_aoi in consolidated_elem.findall('aoi'):
+            key = self._image_match_key(existing_aoi.findtext('image_path', ''))
+            center = self._parse_center(existing_aoi.findtext('center', '(0, 0)'))
+            existing_by_name.setdefault(key, []).append((existing_aoi, center))
+
         for image in images:
             image_path = image.get('path', '')
+            image_key = self._image_match_key(image_path)
 
             for aoi in image.get('areas_of_interest', []):
                 # Try to find matching AOI
                 matched = False
                 center = aoi.get('center', (0, 0))
 
-                for existing_aoi in consolidated_elem.findall('aoi'):
-                    # Match by image path and center coordinates (within tolerance)
-                    existing_path = existing_aoi.findtext('image_path', '')
-                    existing_center = eval(existing_aoi.findtext('center', '(0, 0)'))
-
-                    if existing_path == image_path:
-                        # Check if centers are close (within 10 pixels)
-                        if abs(existing_center[0] - center[0]) <= 10 and abs(existing_center[1] - center[1]) <= 10:
-                            # Match found - update existing AOI
-                            self._update_existing_aoi(existing_aoi, aoi, review_meta, batch_id)
-                            matched = True
-                            break
+                for existing_aoi, existing_center in existing_by_name.get(image_key, []):
+                    # Check if centers are close (within 10 pixels)
+                    if abs(existing_center[0] - center[0]) <= 10 and abs(existing_center[1] - center[1]) <= 10:
+                        # Match found - update existing AOI
+                        self._update_existing_aoi(existing_aoi, aoi, review_meta, batch_id)
+                        matched = True
+                        break
 
                 if not matched:
                     # Create new AOI entry
-                    self._create_new_aoi(consolidated_elem, aoi, image_path, review_meta, batch_id)
+                    new_elem = self._create_new_aoi(consolidated_elem, aoi, image_path, review_meta, batch_id)
+                    # Later AOIs in this same review must be able to match it
+                    existing_by_name.setdefault(image_key, []).append(
+                        (new_elem, (float(center[0]), float(center[1])) if len(center) >= 2 else (0.0, 0.0))
+                    )
 
     def _update_existing_aoi(self, aoi_elem, new_aoi, review_meta, batch_id):
         """Update an existing consolidated AOI with new review data."""
@@ -381,7 +433,11 @@ class SearchProjectService:
             ET.SubElement(review, 'comment').text = comment
 
     def _create_new_aoi(self, consolidated_elem, aoi, image_path, review_meta, batch_id):
-        """Create a new consolidated AOI entry."""
+        """Create a new consolidated AOI entry.
+
+        Returns:
+            xml.etree.ElementTree.Element: The created <aoi> element.
+        """
         aoi_elem = ET.SubElement(consolidated_elem, 'aoi')
         ET.SubElement(aoi_elem, 'image_path').text = image_path
         ET.SubElement(aoi_elem, 'center').text = str(aoi.get('center', (0, 0)))
@@ -402,6 +458,8 @@ class SearchProjectService:
         comment = aoi.get('user_comment', '')
         if comment:
             ET.SubElement(review, 'comment').text = comment
+
+        return aoi_elem
 
     def get_project_summary(self):
         """

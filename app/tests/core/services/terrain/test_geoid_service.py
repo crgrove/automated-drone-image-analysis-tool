@@ -1,13 +1,23 @@
-"""Tests for GeoidService."""
+"""Tests for GeoidService (EGM96 via pyproj/PROJ, bundled global grid)."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 import tempfile
-import struct
-import os
+from unittest.mock import patch
 
 from core.services.terrain.GeoidService import GeoidService
+
+
+# Authoritative EGM96 undulations (m), reproduced from pyproj EPSG:4979 -> EPSG:4326+5773.
+# Tolerance covers 15' grid interpolation; the point is to be within a couple of
+# metres of truth and, above all, NOT the old ~-1.55 m synthetic-fallback value.
+REFERENCE_UNDULATIONS = [
+    (30.654, -97.952, -26.56),   # central Texas (the bug's dataset)
+    (51.5074, -0.1278, 45.97),   # London
+    (-33.8688, 151.2093, 22.42),  # Sydney
+    (35.6762, 139.6503, 36.92),  # Tokyo
+    (-5.0, 80.0, -92.93),        # Indian Ocean low
+]
 
 
 class TestGeoidService:
@@ -18,208 +28,95 @@ class TestGeoidService:
         with tempfile.TemporaryDirectory() as tmpdir:
             service = GeoidService(cache_dir=tmpdir)
             assert service.cache_dir == Path(tmpdir)
-            assert service._grid_data is None
-            assert service._grid_loaded is False
+            assert service._transformer is None
+            assert service._available is None
 
-    def test_approximate_undulation_reasonable_values(self):
-        """Test that approximate undulation gives reasonable values globally.
-
-        Note: The simplified model is only accurate to ~5-10m RMS globally.
-        We use relaxed bounds to account for model limitations.
-        """
+    def test_reference_values_are_authoritative_egm96(self):
+        """Undulation must match authoritative EGM96 worldwide (regression guard
+        against the -1.55 m synthetic-fallback bug that shortened AOI throws)."""
         service = GeoidService()
+        for lat, lon, expected in REFERENCE_UNDULATIONS:
+            N = service.get_undulation(lat, lon)
+            assert N is not None, f"no undulation at ({lat}, {lon})"
+            assert abs(N - expected) < 2.0, (
+                f"undulation at ({lat}, {lon}) = {N:.2f} m, expected ~{expected} m"
+            )
 
-        # Test various known locations with relaxed bounds for simplified model
-        test_cases = [
-            # (lat, lon, min_expected, max_expected)
-            (0, 0, -30, 30),  # Equator/prime meridian
-            (40.7128, -74.0060, -60, 10),  # NYC (typically negative in NA)
-            (51.5074, -0.1278, -20, 60),  # London (simplified model may underestimate)
-            (35.6762, 139.6503, -10, 60),  # Tokyo
-            (-33.8688, 151.2093, -10, 50),  # Sydney
-            (-5, 80, -130, -30),  # Indian Ocean low
-        ]
+    def test_central_texas_is_not_synthetic_fallback(self):
+        """The specific regression: central TX must be ~-26.5 m, never the
+        synthetic model's ~-1.55 m."""
+        service = GeoidService()
+        N = service.get_undulation(30.654, -97.952)
+        assert N is not None
+        assert N < -20.0, f"central TX N={N} looks like the synthetic fallback"
 
-        for lat, lon, min_exp, max_exp in test_cases:
-            N = service._approximate_undulation(lat, lon)
-            assert min_exp < N < max_exp, f"Undulation at ({lat}, {lon}) = {N} not in range [{min_exp}, {max_exp}]"
+    def test_get_undulation_returns_float(self):
+        service = GeoidService()
+        N = service.get_undulation(40.7128, -74.0060)
+        assert isinstance(N, float)
 
-    def test_generate_simplified_grid(self):
-        """Test grid generation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-            grid_file = Path(tmpdir) / 'egm96_15.bin'
+    def test_longitude_normalization(self):
+        """-90 and 270 denote the same meridian and must agree."""
+        service = GeoidService()
+        n1 = service.get_undulation(0, -90)
+        n2 = service.get_undulation(0, 270)
+        assert n1 is not None and n2 is not None
+        assert abs(n1 - n2) < 0.01
 
-            success = service._generate_simplified_grid(grid_file)
-            assert success
-            assert grid_file.exists()
+    def test_invalid_latitude_returns_none(self):
+        service = GeoidService()
+        assert service.get_undulation(100, 0) is None
+        assert service.get_undulation(-100, 0) is None
 
-            # Check file size is correct
-            expected_size = 721 * 1441 * 4  # nlat * nlon * 4 bytes per float
-            assert grid_file.stat().st_size == expected_size
+    def test_unavailable_grid_returns_none_not_zero(self):
+        """When no real grid is reachable the probe fails; get_undulation must
+        return None (never the PROJ null-transform's bogus 0 m)."""
+        service = GeoidService()
+        # Simulate a genuinely-absent grid: the identity probe fails.
+        with patch.object(service, '_probe', return_value=False):
+            assert service.get_undulation(30.654, -97.952) is None
+            assert service.get_undulation(30.654, -97.952, offline_only=True) is None
+            assert service.is_available() is False
 
-    def test_load_grid_binary(self):
-        """Test loading binary grid file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-            grid_file = Path(tmpdir) / 'egm96_15.bin'
-
-            # Generate and load grid
-            service._generate_simplified_grid(grid_file)
-            success = service._load_grid_binary(grid_file)
-
-            assert success
-            assert service._grid_loaded
-            assert len(service._grid_data) == 721 * 1441
-
-    def test_interpolate_undulation(self):
-        """Test bilinear interpolation of undulation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-            grid_file = Path(tmpdir) / 'egm96_15.bin'
-
-            # Generate and load grid
-            service._generate_simplified_grid(grid_file)
-            service._load_grid_binary(grid_file)
-
-            # Test interpolation at grid points
-            N = service._interpolate_undulation(0, 0)
-            assert isinstance(N, float)
-
-            # Test at different locations
-            N1 = service._interpolate_undulation(45, 90)
-            N2 = service._interpolate_undulation(-45, -90)
-            # Values should be different
-            assert N1 != N2
-
-    def test_get_undulation(self):
-        """Test public get_undulation method."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            # Should automatically load grid
-            N = service.get_undulation(40.7128, -74.0060)
-            assert N is not None
-            assert isinstance(N, float)
-
-    def test_get_undulation_normalized_longitude(self):
-        """Test longitude normalization (negative to 0-360)."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            # These should give the same result
-            N1 = service.get_undulation(0, -90)
-            N2 = service.get_undulation(0, 270)
-
-            assert N1 is not None
-            assert N2 is not None
-            assert abs(N1 - N2) < 0.01
-
-    def test_get_undulation_invalid_coords(self):
-        """Test handling of invalid coordinates."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            # Invalid latitude
-            N = service.get_undulation(100, 0)
-            assert N is None
-
-            # Invalid longitude after normalization shouldn't happen,
-            # but test edge cases
-            N = service.get_undulation(0, 361)  # Will be normalized
-            # After normalization, this becomes valid
-
-    def test_get_undulation_offline_only_skips_grid_download(self):
-        """Freeze regression: offline_only must never download or synthesize
-        the grid on the calling (GUI) thread. With no local grid it returns
-        None so the map zoom-FOV redraw cannot block on a network download."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            with patch.object(service, '_download_grid') as mock_dl, \
-                    patch.object(service, '_generate_simplified_grid') as mock_gen:
-                N = service.get_undulation(40.7128, -74.0060, offline_only=True)
-
-            assert N is None
-            mock_dl.assert_not_called()
-            mock_gen.assert_not_called()
-            assert service._grid_loaded is False
-
-    def test_get_undulation_offline_only_uses_already_loaded_grid(self):
-        """offline_only still returns a value once the grid is available."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            # Prime the grid via the normal (download/synthesize-allowed) path.
-            primed = service.get_undulation(40.7128, -74.0060)
-            assert primed is not None
-            assert service._grid_loaded is True
-
-            # Now an offline-only lookup reuses it with no download/synthesis.
-            with patch.object(service, '_download_grid') as mock_dl:
-                N = service.get_undulation(40.7128, -74.0060, offline_only=True)
-
-            assert N is not None
-            mock_dl.assert_not_called()
+    def test_offline_only_does_not_enable_network(self):
+        """offline_only must never toggle PROJ network on; the bundled grid
+        answers locally (freeze-safe on the GUI hot path)."""
+        service = GeoidService()
+        with patch('core.services.terrain.GeoidService.pyproj.network.set_network_enabled') as mock_net:
+            N = service.get_undulation(30.654, -97.952, offline_only=True)
+        assert N is not None
+        assert abs(N + 26.56) < 2.0
+        mock_net.assert_not_called()
 
     def test_ellipsoidal_to_orthometric(self):
-        """Test ellipsoidal to orthometric conversion."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            lat, lon = 40.7128, -74.0060  # NYC
-            h_ellipsoidal = 100.0
-
-            h_orthometric = service.ellipsoidal_to_orthometric(lat, lon, h_ellipsoidal)
-
-            assert h_orthometric is not None
-            # NYC has negative geoid undulation (~-30m), so orthometric should be higher
-            # h_orthometric = h_ellipsoidal - N
-            # If N < 0, then h_orthometric > h_ellipsoidal
+        service = GeoidService()
+        # central TX N ~ -26.5, so orthometric = ellipsoidal - N ~ ellipsoidal + 26.5
+        h_ortho = service.ellipsoidal_to_orthometric(30.654, -97.952, 100.0)
+        assert h_ortho is not None
+        assert abs(h_ortho - (100.0 + 26.56)) < 2.0
 
     def test_orthometric_to_ellipsoidal(self):
-        """Test orthometric to ellipsoidal conversion."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            lat, lon = 40.7128, -74.0060
-            h_orthometric = 100.0
-
-            h_ellipsoidal = service.orthometric_to_ellipsoidal(lat, lon, h_orthometric)
-
-            assert h_ellipsoidal is not None
+        service = GeoidService()
+        h_ellip = service.orthometric_to_ellipsoidal(30.654, -97.952, 100.0)
+        assert h_ellip is not None
+        assert abs(h_ellip - (100.0 - 26.56)) < 2.0
 
     def test_round_trip_conversion(self):
-        """Test that converting back and forth gives original value."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            lat, lon = 35.6762, 139.6503  # Tokyo
-            original_height = 50.0
-
-            # Convert ellipsoidal -> orthometric -> ellipsoidal
-            h_ortho = service.ellipsoidal_to_orthometric(lat, lon, original_height)
-            h_ellip = service.orthometric_to_ellipsoidal(lat, lon, h_ortho)
-
-            assert abs(h_ellip - original_height) < 0.001
+        service = GeoidService()
+        original = 50.0
+        h_ortho = service.ellipsoidal_to_orthometric(35.6762, 139.6503, original)
+        h_ellip = service.orthometric_to_ellipsoidal(35.6762, 139.6503, h_ortho)
+        assert abs(h_ellip - original) < 0.001
 
     def test_is_available(self):
-        """Test availability check."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-            assert service.is_available()
+        service = GeoidService()
+        assert service.is_available() is True
 
     def test_get_cache_info(self):
-        """Test cache info retrieval."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            service = GeoidService(cache_dir=tmpdir)
-
-            # Trigger grid generation
-            service.get_undulation(0, 0)
-
-            info = service.get_cache_info()
-            assert info['model'] == 'EGM96'
-            assert info['resolution_arcmin'] == 15
-            assert info['cached'] is True
-            assert 'cache_path' in info
-            assert info['cache_size_mb'] > 0
+        service = GeoidService()
+        info = service.get_cache_info()
+        assert info['model'] == 'EGM96'
+        assert info['resolution_arcmin'] == 15
+        assert info['bundled'] is True
+        assert info['available'] is True
+        assert 'cache_path' in info

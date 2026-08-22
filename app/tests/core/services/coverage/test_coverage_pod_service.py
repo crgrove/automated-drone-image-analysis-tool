@@ -101,8 +101,8 @@ def test_skip_taxonomy_and_processing():
     assert reasons['shallow'] == SKIP_PITCH_TOO_SHALLOW
     assert reasons['err'] == SKIP_ERROR
     assert result.stats['skipped_counts'][SKIP_ERROR] == 1
-    # Per-image progress (5) + 2 finalize ticks.
-    assert len(calls) == len(images) + 2
+    # Altitude-anchor pre-pass (1) + per-image progress (5) + 2 finalize ticks.
+    assert len(calls) == len(images) + 3
 
 
 def test_no_dem_skips_all():

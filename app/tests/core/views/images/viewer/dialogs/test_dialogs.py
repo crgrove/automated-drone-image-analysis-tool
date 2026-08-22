@@ -7,7 +7,9 @@ Tests all dialogs used in the viewer.
 import pytest
 import numpy as np
 from unittest.mock import patch, MagicMock
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QApplication, QDialog
 
 from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
 from core.views.images.viewer.dialogs.AOICreationDialog import AOICreationDialog
@@ -75,6 +77,262 @@ def test_caltopo_auth_dialog_initialization(app):
     """Test CalTopoAuthDialog initialization."""
     dialog = CalTopoAuthDialog(None)
     assert dialog is not None
+
+    # Return belongs to the embedded login form, not to this dialog's buttons.
+    # With autoDefault left on, typing a password and pressing Enter fired
+    # "I'm Logged In" and produced a spurious "No Map Selected" warning.
+    assert dialog.manual_done_button.autoDefault() is False
+    assert dialog.manual_done_button.isDefault() is False
+    assert dialog.cancel_button.autoDefault() is False
+    assert dialog.cancel_button.isDefault() is False
+
+
+def test_caltopo_auth_dialog_swallows_return_key(app):
+    """Return must not reach QDialog's default-button handling."""
+    dialog = CalTopoAuthDialog(None)
+    accepted = []
+    dialog.accepted.connect(lambda: accepted.append(True))
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier)
+    dialog.keyPressEvent(event)
+
+    assert accepted == []
+    assert dialog.result() != QDialog.Accepted
+
+
+def _write_chromium_cookie_db(path, rows):
+    """Build a minimal Chromium-shaped Cookies database for testing."""
+    import sqlite3
+
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, "
+        "encrypted_value BLOB, path TEXT, is_secure INTEGER, "
+        "is_httponly INTEGER, expires_utc INTEGER)"
+    )
+    connection.executemany(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows
+    )
+    connection.commit()
+    connection.close()
+
+
+def test_caltopo_auth_dialog_reads_session_cookie_from_disk(app, tmp_path):
+    """The HttpOnly session cookie must be recoverable from the profile store.
+
+    QWebEngineCookieStore announces cookies only as they are SET, and
+    loadAllCookies() delivers nothing for cookies restored from disk (measured:
+    0 of 35 on a real profile). CalTopo's SESSION cookie is HttpOnly, so
+    document.cookie cannot see it either - a returning, already-logged-in user
+    was left with nothing but analytics cookies.
+    """
+    _write_chromium_cookie_db(str(tmp_path / "Cookies"), [
+        # Chromium epoch: microseconds since 1601-01-01.
+        ('caltopo.com', 'SESSION', 'the-real-session', None, '/', 1, 1, 0),
+        ('.caltopo.com', '_ssid', 'incidental', None, '/', 1, 1, 13000000000000000),
+        ('caltopo.com', '_pk_id.7.62df', 'analytics', None, '/', 0, 0, 0),
+        ('accounts.google.com', 'LSID', 'unrelated', None, '/', 1, 1, 0),
+        ('caltopo.com', 'ENCRYPTED', '', b'\x01\x02\x03', '/', 1, 1, 0),
+    ])
+
+    cookies = CalTopoAuthDialog._read_persisted_cookies(str(tmp_path))
+    by_name = {c['name']: c for c in cookies.values()}
+
+    # Only caltopo.com cookies, and the Google ones are left alone.
+    assert set(by_name) == {'SESSION', '_ssid', '_pk_id.7.62df'}
+
+    session = by_name['SESSION']
+    assert session['value'] == 'the-real-session'
+    assert session['rest'] == {'HttpOnly': True}
+    assert session['secure'] is True
+    assert session['expires'] is None      # session cookie
+    assert session['discard'] is True
+
+    # Leading dot is normalised the same way the live store path does it.
+    assert by_name['_ssid']['domain'] == 'caltopo.com'
+    assert by_name['_ssid']['domain_initial_dot'] is True
+    assert by_name['_ssid']['expires'] is not None
+
+    # An encrypted value cannot be used, so it is skipped rather than guessed.
+    assert 'ENCRYPTED' not in by_name
+
+
+def test_caltopo_auth_dialog_disk_read_survives_a_missing_store(app, tmp_path):
+    """A profile with no cookie database must not raise."""
+    assert CalTopoAuthDialog._read_persisted_cookies(str(tmp_path / "nope")) == {}
+    assert CalTopoAuthDialog._read_persisted_cookies("") == {}
+
+
+def test_caltopo_auth_dialog_captures_a_newly_set_httponly_cookie(app):
+    """A sign-in performed in this window must be captured.
+
+    cookieAdded DOES report HttpOnly cookies as they are set - verified against
+    a fresh profile visiting caltopo.com, which delivered the HttpOnly SESSION
+    cookie. Only cookies RESTORED from a previous run go unreported, which is
+    what the disk snapshot covers. A first login therefore needs no restart.
+    """
+    from PySide6.QtNetwork import QNetworkCookie
+
+    dialog = CalTopoAuthDialog.__new__(CalTopoAuthDialog)
+    CalTopoAuthDialog._cookies_from_store = {}
+    try:
+        cookie = QNetworkCookie(b"SESSION", b"freshly-set")
+        cookie.setDomain("caltopo.com")
+        cookie.setPath("/")
+        cookie.setHttpOnly(True)
+
+        dialog._on_cookie_added(cookie)
+
+        captured = CalTopoAuthDialog._cookies_from_store
+        assert [c['name'] for c in captured.values()] == ['SESSION']
+        assert list(captured.values())[0]['rest'] == {'HttpOnly': True}
+    finally:
+        CalTopoAuthDialog._cookies_from_store = {}
+
+
+def test_caltopo_auth_dialog_snapshots_cookies_before_opening_the_profile(app, tmp_path):
+    """The store must be read before a profile locks it.
+
+    While a QWebEngineProfile is live the cookie file cannot be opened by any
+    means on Windows - copy, plain read, sqlite read-only and a full-sharing
+    Win32 CreateFileW all fail with a sharing violation. The snapshot taken at
+    profile-creation time is therefore the only source for a restored session.
+    """
+    _write_chromium_cookie_db(str(tmp_path / "Cookies"), [
+        ('caltopo.com', 'SESSION', 'restored', None, '/', 1, 1, 0),
+    ])
+
+    snapshot = CalTopoAuthDialog._read_persisted_cookies(str(tmp_path))
+    CalTopoAuthDialog._disk_cookies = snapshot
+    try:
+        reader = CalTopoAuthDialog.__new__(CalTopoAuthDialog)
+        recovered = reader._cookies_from_disk()
+        assert [c['name'] for c in recovered.values()] == ['SESSION']
+        # A copy, so a caller cannot corrupt the shared snapshot.
+        recovered.clear()
+        assert CalTopoAuthDialog._disk_cookies
+    finally:
+        CalTopoAuthDialog._disk_cookies = {}
+
+
+def test_caltopo_auth_dialog_stays_open_until_done_is_called(app, qtbot):
+    """The dialog must not end its own wait before the user acts.
+
+    Attaching a QWebEngineView forces native-window re-creation, which delivers
+    a Hide event; QDialog::setVisible(False) exits a modal loop. exec() was
+    therefore returning Rejected a fraction of a second after being called,
+    before the user had logged in, and the export was silently abandoned while
+    the login window stayed on screen.
+    """
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    dialog = CalTopoAuthDialog(None)
+    qtbot.addWidget(dialog)
+
+    finished = []
+    dialog.finished.connect(finished.append)
+
+    # Give the dialog a full second of event processing with no user action.
+    loop = QEventLoop()
+    QTimer.singleShot(1000, loop.quit)
+    loop.exec()
+
+    assert finished == [], "the dialog ended its own wait without done() being called"
+    assert dialog.result() != QDialog.Accepted
+
+    # And it still finishes properly when something actually accepts it.
+    dialog.accept()
+    assert finished == [QDialog.Accepted]
+
+
+def test_caltopo_auth_dialog_web_view_is_attached_before_any_wait(app):
+    """The web view must exist by the time the caller starts waiting."""
+    dialog = CalTopoAuthDialog(None)
+
+    assert dialog.web_view is not None
+    assert dialog.profile is not None
+
+
+def test_caltopo_auth_dialog_rereads_url_for_map_id_on_export(app):
+    """The map ID must be re-derived when the user clicks, not only on urlChanged.
+
+    A map that was already open, or reached by a route that emitted no
+    urlChanged, otherwise leaves map_id unset and the export refuses with
+    "No Map Selected" while the user is looking straight at their map.
+    """
+    from PySide6.QtCore import QUrl
+
+    dialog = CalTopoAuthDialog(None)
+    dialog.web_view = MagicMock()
+    dialog.web_view.url.return_value = QUrl("https://caltopo.com/map.html#ll=30.6,-97.9&z=15&id=ABC123")
+
+    assert dialog.map_id is None  # no urlChanged was ever delivered
+
+    with patch.object(dialog, 'extract_all_cookies'):
+        dialog.on_manual_done_clicked()
+
+    assert dialog.map_id == 'ABC123'
+
+
+def test_caltopo_auth_dialog_keeps_dialog_open_when_no_map_id(app):
+    """Refusing a payload must not close the dialog silently."""
+    dialog = CalTopoAuthDialog(None)
+    dialog.web_view = MagicMock()
+    dialog.web_view.url.return_value = MagicMock(toString=lambda: "https://caltopo.com/map.html")
+    dialog.manual_done_button.setEnabled(True)  # as it is once the page has loaded
+
+    with patch('core.views.images.viewer.dialogs.CalTopoAuthDialog.QMessageBox') as mock_msgbox:
+        dialog.on_manual_done_clicked()
+
+    mock_msgbox.warning.assert_called_once()
+    assert dialog.result() != QDialog.Accepted
+    # Still usable: the user can navigate to a map and click again.
+    assert dialog.manual_done_button.isEnabled()
+
+
+def test_caltopo_auth_dialog_defers_cookie_extraction_off_the_js_callback(app):
+    """Cookie capture must not run on a runJavaScript reply stack.
+
+    While that stack is live the browser process runs no further tasks:
+    cookieAdded is never delivered and the fetch that forces HttpOnly cookie
+    processing never reaches the network. Any real work done there deadlocks.
+    """
+    dialog = CalTopoAuthDialog(None)
+    dialog.profile = MagicMock()
+    dialog.web_view = MagicMock()
+
+    captured = {}
+
+    def fake_run_javascript(js, callback=None):
+        captured['callback'] = callback
+
+    dialog.web_view.page.return_value.runJavaScript.side_effect = fake_run_javascript
+
+    with patch.object(CalTopoAuthDialog, '_extract_cookies_from_store') as extract, \
+         patch('core.views.images.viewer.dialogs.CalTopoAuthDialog.QTimer') as mock_timer:
+        dialog.extract_all_cookies()
+        captured['callback']('{"cookies": {}, "isLoggedIn": true}')
+
+        # Deferred to a later event-loop turn, not called inline.
+        extract.assert_not_called()
+        mock_timer.singleShot.assert_called_once()
+        assert mock_timer.singleShot.call_args[0][0] == 0
+
+
+def test_caltopo_auth_dialog_shares_one_browser_profile(app):
+    """Every dialog reuses one profile so a login survives the dialog closing.
+
+    A per-dialog profile died with its dialog, forcing re-authentication for a
+    second export in the same run.
+    """
+    first = CalTopoAuthDialog._get_shared_profile()
+    second = CalTopoAuthDialog._get_shared_profile()
+
+    assert first is second
+    assert first.persistentStoragePath() != first.cachePath()
+    assert first.persistentCookiesPolicy() == (
+        first.PersistentCookiesPolicy.ForcePersistentCookies
+    )
 
 
 def test_color_histogram_dialog_initialization(app):
@@ -192,6 +450,58 @@ def test_export_progress_dialog_initialization(app):
     """Test ExportProgressDialog initialization."""
     dialog = ExportProgressDialog(None, "Test Export", 100)
     assert dialog is not None
+    assert dialog._completed_result is None
+
+
+def test_export_progress_dialog_exec_returns_immediately_after_accept(app):
+    """accept() before exec() must not strand the user in a dialog.
+
+    Worker threads deliver completion through the event loop, and callers pump
+    events before exec(). A fast failure could therefore accept the dialog
+    while it was not in a modal loop; exec() then re-showed it with no worker
+    left to close it and (for the CalTopo account load) a Cancel button that
+    was wired to nothing.
+    """
+    dialog = ExportProgressDialog(None, "Test Export", 100)
+    dialog.accept()
+
+    # Would block forever before the fix.
+    assert dialog.exec() == QDialog.Accepted
+    assert not dialog.isVisible()
+
+
+def test_export_progress_dialog_exec_returns_immediately_after_reject(app):
+    """reject() before exec() is preserved too (the cancel path does this)."""
+    dialog = ExportProgressDialog(None, "Test Export", 100)
+    dialog.reject()
+
+    assert dialog.exec() == QDialog.Rejected
+    assert not dialog.isVisible()
+
+
+def test_export_progress_dialog_can_be_reused_after_completing(app):
+    """Showing the dialog again starts a fresh operation.
+
+    Without this, the guard that remembers an early completion would make a
+    reused instance permanently unshowable.
+    """
+    dialog = ExportProgressDialog(None, "Test Export", 100)
+    dialog.accept()
+    assert dialog.exec() == QDialog.Accepted
+
+    dialog.show()
+    assert dialog._completed_result is None
+    dialog.hide()
+
+
+def test_export_progress_dialog_cancel_button_marks_cancelled(app):
+    """Cancel records the request so worker loops can stop."""
+    dialog = ExportProgressDialog(None, "Test Export", 100)
+    assert dialog.is_cancelled() is False
+
+    dialog.on_cancel_clicked()
+
+    assert dialog.is_cancelled() is True
 
 
 def test_gps_map_dialog_initialization(app):

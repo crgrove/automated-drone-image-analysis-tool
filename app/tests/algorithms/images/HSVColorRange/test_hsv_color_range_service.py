@@ -531,3 +531,136 @@ def test_add_confidence_scores_scale_factor_transforms_coords(hsv_color_range_se
     result = hsv_color_range_service._add_confidence_scores(aois, distances, mask)
     assert 'confidence' in result[0]
     assert result[0]['raw_score'] > 0
+
+
+# ---------------------------------------------------------------------------
+# Windowed hue expansion equivalence vs the old full-frame implementation
+# ---------------------------------------------------------------------------
+
+from algorithms import DetectionExpansion
+
+
+def _reference_hue_expansion(service, areas_of_interest, img_shape, hsv_image):
+    """The pre-windowing full-frame implementation, kept as the oracle."""
+    h, w = int(img_shape[0]), int(img_shape[1])
+    combined_mask = np.zeros((h, w), dtype=np.uint8)
+
+    for aoi in areas_of_interest:
+        original_pixels = aoi.get('detected_pixels') or []
+        if not original_pixels:
+            continue
+        coords = np.asarray(original_pixels, dtype=np.int32)
+        coords[:, 0] = np.clip(coords[:, 0], 0, w - 1)
+        coords[:, 1] = np.clip(coords[:, 1], 0, h - 1)
+
+        seed_mask = np.zeros((h, w), dtype=bool)
+        seed_mask[coords[:, 1], coords[:, 0]] = True
+        cluster_rect = [int(coords[:, 0].min()), int(coords[:, 1].min()),
+                        int(coords[:, 0].max()), int(coords[:, 1].max())]
+        safety_cap = DetectionExpansion.compute_safety_cap(cluster_rect)
+
+        seed_hues = hsv_image[coords[:, 1], coords[:, 0], 0]
+        mean_hue = DetectionExpansion.circular_mean_hue(seed_hues)
+        if mean_hue is None:
+            combined_mask[seed_mask] = 255
+            continue
+
+        hue_ok = DetectionExpansion.hue_distance_mask(
+            hsv_image, mean_hue, service.hue_expansion,
+            sat_floor=service.hue_expansion_sat_floor,
+            val_floor=service.hue_expansion_val_floor)
+        expanded, cap_hit = DetectionExpansion.expand_hue_flood(seed_mask, hue_ok, safety_cap)
+        if cap_hit:
+            expanded = seed_mask
+
+        ys2, xs2 = np.where(expanded)
+        if len(xs2) == 0:
+            continue
+        aoi['detected_pixels'] = np.stack([xs2, ys2], axis=1).tolist()
+        aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(expanded)))
+        combined_mask[expanded] = 255
+
+    return areas_of_interest, combined_mask
+
+
+def _hue_expansion_service():
+    options = {
+        'hsv_configs': [{'selected_color': (200, 30, 30),
+                         'hsv_ranges': {'h_minus': 0.05, 'h_plus': 0.05,
+                                        's_minus': 0.1, 's_plus': 0.1,
+                                        'v_minus': 0.1, 'v_plus': 0.1}}],
+        'hue_expansion': 5,
+        'hue_expansion_sat_floor': 35,
+        'hue_expansion_val_floor': 20,
+    }
+    return HSVColorRangeService(
+        identifier=(255, 255, 0), min_area=1, max_area=0,
+        aoi_radius=10, combine_aois=True, options=options
+    )
+
+
+def _hue_aoi(pixels):
+    return {'center': (int(pixels[0][0]), int(pixels[0][1])), 'radius': 10,
+            'area': len(pixels), 'detected_pixels': [list(p) for p in pixels]}
+
+
+def _assert_hue_expansion_equivalent(aois, hsv):
+    import copy
+    service = _hue_expansion_service()
+    actual, actual_mask = service._apply_hue_expansion_aois(
+        copy.deepcopy(aois), hsv.shape, hsv)
+    expected, expected_mask = _reference_hue_expansion(
+        service, copy.deepcopy(aois), hsv.shape, hsv)
+
+    assert np.array_equal(actual_mask, expected_mask)
+    for got, want in zip(actual, expected):
+        assert sorted(map(tuple, got['detected_pixels'])) == sorted(map(tuple, want['detected_pixels']))
+        assert got['area'] == want['area']
+
+
+def test_windowed_hue_expansion_matches_full_frame_locally():
+    hsv = np.zeros((400, 600, 3), dtype=np.uint8)
+    hsv[:, :, 0] = 120
+    hsv[:, :, 1] = 200
+    hsv[:, :, 2] = 200
+    hsv[190:214, 290:330, 0] = 2  # matching patch around the seeds
+    aois = [_hue_aoi([(300, 200), (301, 200), (300, 201)])]
+
+    _assert_hue_expansion_equivalent(aois, hsv)
+
+
+def test_windowed_hue_expansion_follows_ribbon_across_windows():
+    hsv = np.zeros((300, 2400, 3), dtype=np.uint8)
+    hsv[:, :, 0] = 120
+    hsv[:, :, 1] = 200
+    hsv[:, :, 2] = 200
+    hsv[149:152, 80:2300, 0] = 3
+    aois = [_hue_aoi([(100, 150), (101, 150)])]
+
+    _assert_hue_expansion_equivalent(aois, hsv)
+
+    service = _hue_expansion_service()
+    expanded, _ = service._apply_hue_expansion_aois(
+        [_hue_aoi([(100, 150), (101, 150)])], hsv.shape, hsv)
+    assert max(p[0] for p in expanded[0]['detected_pixels']) >= 2290
+
+
+def test_windowed_hue_expansion_cap_hit_matches_full_frame():
+    hsv = np.zeros((500, 800, 3), dtype=np.uint8)
+    hsv[:, :, 0] = 3       # entire frame matches the seed hue
+    hsv[:, :, 1] = 200
+    hsv[:, :, 2] = 200
+    aois = [_hue_aoi([(400, 250), (401, 250)])]
+
+    _assert_hue_expansion_equivalent(aois, hsv)
+
+
+def test_windowed_hue_expansion_seed_at_corner():
+    hsv = np.zeros((200, 200, 3), dtype=np.uint8)
+    hsv[:, :, 0] = 120
+    hsv[:, :, 1] = 200
+    hsv[:, :, 2] = 200
+    hsv[0:6, 0:6, 0] = 3
+    aois = [_hue_aoi([(1, 1), (1, 2)])]
+
+    _assert_hue_expansion_equivalent(aois, hsv)

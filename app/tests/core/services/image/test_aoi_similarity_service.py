@@ -368,8 +368,9 @@ class TestCropFallback:
         assert crop.shape == (THUMB_SIZE, THUMB_SIZE, 3)
 
         key = service.thumbnail_cache.get_cache_key(str(source_path), aoi)
-        cached = service.thumbnail_cache.dataset_cache_dir / f'{key}.jpg'
-        assert cached.exists()
+        # The write-back lands in the cache's blob container; assert through
+        # the cache API rather than the on-disk layout
+        assert service.thumbnail_cache.load_thumbnail_from_disk(key) is not None
 
         descriptor = service.compute_descriptor(crop, aoi)
         assert descriptor.is_chromatic

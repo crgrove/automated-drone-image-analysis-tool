@@ -11,8 +11,16 @@ from datetime import datetime, timedelta, timezone
 from PySide6.QtCore import QObject, Signal, Slot
 
 from core.services.LoggerService import LoggerService
-from helpers.MetaDataHelper import MetaDataHelper
+from helpers.MetaDataHelper import MetaDataHelper, DRONE_DJI_NS
 from helpers.VideoFileHelper import detect_thumbnail_track, get_video_creation_time, remux_to_main_track, is_ffmpeg_available, _FFMPEG_USER_MSG
+
+
+# Recorded as the frame's EXIF Make, and only when the telemetry came from a
+# DJI-format SRT - that bracketed subtitle layout is DJI's own, so the source
+# aircraft is known rather than assumed. Readers need *a* make before they will
+# look up XMP attributes at all (ImageService.get_relative_altitude), and a
+# frame extracted from a video otherwise carries none.
+DRONE_MAKE_DJI = 'DJI'
 
 
 class VideoParserService(QObject):
@@ -29,6 +37,20 @@ class VideoParserService(QObject):
     # Signals to send info back to the GUI
     sig_msg = Signal(str)
     sig_done = Signal(int, int)
+
+    # One "[key: value]" group of a DJI subtitle payload may hold more than one
+    # pair. Firmware from the Mavic 3 era on writes altitude as a single group:
+    #
+    #     [rel_alt: 561.745 abs_alt: 4563.571]
+    #
+    # Splitting a group on its first colon reads that value as
+    # "561.745 abs_alt" and drops the second number; worse, those files carry
+    # no "altitude" key at all, so every extracted frame was stamped with
+    # altitude 0 while the real height sat unread in the file. Matching pairs
+    # *inside* each group reads the newer layout and the older one-pair-per-
+    # group layout alike.
+    _SRT_FIELD = re.compile(r'(\w+)\s*:\s*([^\s\]]+)')
+    _SRT_GROUP = re.compile(r'(?<=\[).+?(?=\])')
 
     def __init__(self, id, video, metadata_path, output, interval):
         """Initialize the VideoParserService with parameters for video processing.
@@ -113,6 +135,33 @@ class VideoParserService(QObject):
             else:
                 self.sig_msg.emit("Metadata File Not Provided")
 
+            # A frame has no capture time of its own, and without one nothing
+            # downstream can put the images in flight order (the GPS map traces
+            # its path by timestamp, and auto-bearing sorts by it). A video is
+            # one continuous recording, so the frame's time is the recording's
+            # start plus its offset. The SRT's own per-frame wall clock is used
+            # instead where there is one - it needs no such reconstruction.
+            #
+            # Clocks are never mixed inside one video: the SRT's wall clock is
+            # drone local time and the container's is UTC, so where the SRT
+            # supplies times a frame that falls in a gap between its entries is
+            # left without one rather than stamped hours off its neighbours.
+            srt_has_times = any(entry.get("timestamp") for entry in srt_list)
+            video_start = None if srt_has_times else (
+                video_start_utc or get_video_creation_time(self.video_path, self.logger)
+            )
+            if srt_has_times:
+                self.sig_msg.emit("Frame timestamps: from the SRT (drone local time)")
+            elif video_start is not None:
+                self.sig_msg.emit(
+                    f"Frame timestamps: video start {video_start.strftime('%Y-%m-%d %H:%M:%S')} UTC plus offset"
+                )
+            else:
+                self.sig_msg.emit(
+                    "No video start time available (creation_time metadata missing, or ffprobe not "
+                    "installed) - frames will have no timestamp."
+                )
+
             self._setup_output_dir()
             time_marker = 0
             image_count = 0
@@ -138,18 +187,40 @@ class VideoParserService(QObject):
                 output_file = f"{self.output_dir}/{base_name}_{time_marker}s.jpg"
                 cv2.imwrite(output_file, image)
 
+                gps = None
+                capture_time = None
+
+                relative_altitude = None
+
                 if metadata_format == 'srt':
                     # Get the actual timestamp after reading the frame
                     ms = cap.get(cv2.CAP_PROP_POS_MSEC)
                     video_time = datetime(1900, 1, 1) + timedelta(milliseconds=ms)
                     item = next((item for item in srt_list if item["start"] <= video_time <= item["end"]), None)
-                    if item and item["latitude"] and item["longitude"]:
-                        MetaDataHelper.add_gps_data(output_file, item["latitude"], item["longitude"], item["altitude"])
+                    if item:
+                        capture_time = item.get("timestamp")
+                        relative_altitude = item.get("relative_altitude")
+                        if item["latitude"] and item["longitude"]:
+                            gps = (item["latitude"], item["longitude"], item["altitude"])
                 elif metadata_format == 'csv':
                     frame_utc = video_start_utc + timedelta(seconds=time_marker)
                     entry = self._find_closest_csv_entry(csv_entries, frame_utc)
                     if entry and entry['latitude'] and entry['longitude']:
-                        MetaDataHelper.add_gps_data(output_file, entry['latitude'], entry['longitude'], entry['altitude_m'])
+                        gps = (entry['latitude'], entry['longitude'], entry['altitude_m'])
+
+                if capture_time is None and video_start is not None:
+                    capture_time = video_start + timedelta(seconds=time_marker)
+
+                # One rewrite per frame, whichever of the two it needs.
+                if gps is not None:
+                    MetaDataHelper.add_gps_data(
+                        output_file, gps[0], gps[1], gps[2],
+                        timestamp=capture_time,
+                        make=DRONE_MAKE_DJI if relative_altitude is not None else None
+                    )
+                    self._stamp_relative_altitude(output_file, relative_altitude, gps[2])
+                elif capture_time is not None:
+                    MetaDataHelper.add_capture_time(output_file, capture_time)
 
                 image_count += 1
                 time_marker += self.interval
@@ -215,23 +286,120 @@ class VideoParserService(QObject):
                     start_time = datetime.strptime(times[0], '%H:%M:%S,%f')
                     end_time = datetime.strptime(times[1], '%H:%M:%S,%f')
 
-                    uav_data = re.findall(r'(?<=\[).+?(?=\])', data[4])
-                    uav_dict = {split[0]: split[1] for entry in uav_data for split in [re.split(r"\s*:\s*", entry)]}
-                    longitude = float(uav_dict.get('longitude')) if 'longitude' in uav_dict else None
-                    # Extra logic for longitude misspelling in some SRT files
-                    if longitude is None:
-                        longitude = float(uav_dict.get('longtitude')) if 'longtitude' in uav_dict else None
+                    uav_dict = self._parse_srt_fields(data[4])
                     srt_list.append({
                         "start": start_time,
                         "end": end_time,
-                        "latitude": float(uav_dict.get('latitude')) if 'latitude' in uav_dict else None,
-                        "longitude": longitude,
-                        "altitude": float(uav_dict.get('altitude', 0))
+                        # Wall-clock capture time of this entry (drone local
+                        # time), as opposed to start/end which are offsets into
+                        # the video used for matching.
+                        "timestamp": self._parse_srt_timestamp(data[3]),
+                        "latitude": self._srt_float(uav_dict, 'latitude', default=None),
+                        # 'longtitude' is a misspelling seen in some SRT files.
+                        "longitude": self._srt_float(uav_dict, 'longitude', 'longtitude', default=None),
+                        # Height above sea level: 'abs_alt' on newer firmware,
+                        # 'altitude' on older files.
+                        "altitude": self._srt_float(uav_dict, 'abs_alt', 'altitude'),
+                        # Height above the takeoff point, when the file has it.
+                        "relative_altitude": self._srt_float(uav_dict, 'rel_alt', default=None),
                     })
             return srt_list
         except Exception as e:
             self.sig_msg.emit(f"Error parsing SRT file: {str(e)}")
             return None
+
+    def _stamp_relative_altitude(self, output_file, relative_alt_m, absolute_alt_m):
+        """Record height above takeoff on a frame, the way ADIAT reads it.
+
+        ADIAT reads AGL from ``drone-dji:RelativeAltitude`` - the drone-dji
+        namespace is its house schema for flight telemetry, not a claim about
+        the airframe (WaldoMetadataService writes the same fields onto Canon
+        imagery). EXIF has no relative-altitude tag, so without this the height
+        parsed out of the SRT has nowhere to live and every AGL-based
+        calculation downstream falls back or fails.
+
+        Args:
+            output_file: The extracted frame.
+            relative_alt_m: Height above the takeoff point, in metres.
+            absolute_alt_m: Height above sea level, in metres.
+        """
+        if relative_alt_m is None:
+            return
+        try:
+            MetaDataHelper.add_xmp_fields(output_file, [
+                (DRONE_DJI_NS, "RelativeAltitude", f"{relative_alt_m:+.4f}"),
+                (DRONE_DJI_NS, "AbsoluteAltitude", f"{absolute_alt_m:+.4f}"),
+            ])
+        except Exception as e:
+            # A frame with no XMP is still a usable frame; do not lose it.
+            self.logger.warning(f"Could not write altitude XMP to {output_file}: {e}")
+
+    @classmethod
+    def _parse_srt_fields(cls, payload):
+        """Collect the telemetry key/value pairs in one subtitle payload line.
+
+        Args:
+            payload: The bracketed telemetry line of an SRT entry.
+
+        Returns:
+            dict: Every 'key: value' pair found inside the brackets, as strings.
+        """
+        fields = {}
+        for group in cls._SRT_GROUP.findall(payload):
+            fields.update(cls._SRT_FIELD.findall(group))
+        return fields
+
+    # Wall-clock line of an SRT entry. DJI has written it several ways:
+    # "2026-08-15 12:09:26.002", "2019-08-01 10:23:12,123,456" (comma-grouped
+    # sub-seconds), and plain seconds. Anything unrecognised falls back to the
+    # leading "YYYY-MM-DD HH:MM:SS", which every variant so far starts with.
+    _SRT_TIMESTAMP_FORMATS = (
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%Y-%m-%d %H:%M:%S,%f',
+        '%Y-%m-%d %H:%M:%S',
+    )
+
+    @classmethod
+    def _parse_srt_timestamp(cls, text):
+        """Absolute capture time from an SRT entry's date line.
+
+        Args:
+            text: The date line of the entry.
+
+        Returns:
+            datetime: The capture time, or None if the line does not hold one.
+        """
+        text = (text or '').strip()
+        for time_format in cls._SRT_TIMESTAMP_FORMATS:
+            try:
+                return datetime.strptime(text, time_format)
+            except ValueError:
+                continue
+        try:
+            return datetime.strptime(text[:19], '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _srt_float(fields, *names, default=0.0):
+        """Read the first of *names* present in *fields* as a float.
+
+        Args:
+            fields: Parsed SRT key/value pairs.
+            *names: Candidate keys, most specific first.
+            default: Returned when no candidate is present or parseable, so a
+                single malformed value cannot abandon the whole file.
+
+        Returns:
+            float: The parsed value, or default.
+        """
+        for name in names:
+            if name in fields:
+                try:
+                    return float(fields[name])
+                except (TypeError, ValueError):
+                    continue
+        return default
 
     def _parse_csv_flight_log(self, csv_path, video_path):
         """Parse a Skydio CSV flight log for GPS metadata.

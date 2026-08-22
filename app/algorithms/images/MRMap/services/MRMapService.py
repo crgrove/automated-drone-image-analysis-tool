@@ -88,11 +88,9 @@ class MRMapService(AlgorithmService):
 
             hist = Histogram(img_converted, self.colorspace)
 
-            # Extract channels (order depends on colorspace)
-            # For all colorspaces, channels are in order [0, 1, 2]
-            ch0, ch1, ch2 = img_converted[:, :, 0], img_converted[:, :, 1], img_converted[:, :, 2]
-            # Compute bin counts for each pixel
-            bin_counts = hist.bin_count(ch0, ch1, ch2)
+            # Bin counts for the histogram's own image: reuses the quantization
+            # computed while the histogram was built
+            bin_counts = hist.bin_count_for_image()
             bin_counts = bin_counts * ((8000 * 6000) / (width * height))
             # Adjust counts based on image size
             # adjusted_counts = bin_counts * (STANDARD_IMAGE_SIZE / (width * height))
@@ -428,10 +426,7 @@ class MRMapService(AlgorithmService):
             if not original_pixels:
                 continue
 
-            # Seed mask from original detected pixels.
             coords = np.asarray(original_pixels, dtype=np.int32)
-            seed_mask = np.zeros((h, w), dtype=bool)
-            seed_mask[coords[:, 1], coords[:, 0]] = True
 
             # Derive cluster rect from the stored contour corners. MRMap stores
             # the axis-aligned cluster rectangle as 4 corner points.
@@ -446,45 +441,117 @@ class MRMapService(AlgorithmService):
                     int(coords[:, 0].max()), int(coords[:, 1].max()),
                 ]
 
-            safety_cap = DetectionExpansion.compute_safety_cap(cluster_rect)
+            selected_roi, origin = self._expand_single_aoi(
+                aoi, coords, cluster_rect, expanded_bin_mask, hsv_img, h, w
+            )
+            if selected_roi is None:
+                continue
+            x0, y0 = origin
+
+            # Commit expanded selection back to AOI (ROI coords -> image coords).
+            ys2, xs2 = np.nonzero(selected_roi)
+            if len(xs2) == 0:
+                continue
+            aoi['detected_pixels'] = np.stack([xs2 + x0, ys2 + y0], axis=1).tolist()
+            # Hull area is translation-invariant, so the ROI mask suffices
+            aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(selected_roi)))
+
+            roi_view = combined_mask[y0:y0 + selected_roi.shape[0], x0:x0 + selected_roi.shape[1]]
+            roi_view[selected_roi] = 255
+
+        return areas_of_interest, combined_mask
+
+    def _expand_single_aoi(self, aoi, coords, cluster_rect, expanded_bin_mask, hsv_img, h, w):
+        """Run both expansion stages for one AOI inside a bounded window.
+
+        Every stage used to run on full-frame arrays per AOI (a full-frame hue
+        mask, two full-frame connected-component floods, full-frame commits),
+        which made expansion cost ~1.4s per AOI on 48MP imagery - the dominant
+        cost of an MRMap batch with many small detections.
+
+        The flood is computed inside a window around the cluster rect instead.
+        A flood confined to the window (not touching a border that has more
+        image beyond it) is exactly the global flood, because any pixel
+        connected from the seed must be reached through the border. If the
+        result does touch such a border, the window grows and the stages
+        re-run; the pathological worst case degrades to the old full-frame
+        behavior. A safety-cap overflow inside the window implies overflow
+        globally (the window flood is a subset of the global flood), so cap
+        decisions are exact too.
+
+        Args:
+            aoi (dict): The AOI being expanded (used for logging only).
+            coords (np.ndarray): (N, 2) original detected pixels as (x, y).
+            cluster_rect (list): [xmin, ymin, xmax, ymax] cluster rectangle.
+            expanded_bin_mask: Full-frame bool mask for threshold expansion, or None.
+            hsv_img: Full-frame HSV image for hue expansion, or None.
+            h, w (int): Full-frame dimensions.
+
+        Returns:
+            tuple: (selected_roi bool mask, (x0, y0) window origin), or
+            (None, None) when there is nothing to expand.
+        """
+        xmin, ymin, xmax, ymax = (int(v) for v in cluster_rect)
+        safety_cap = DetectionExpansion.compute_safety_cap(cluster_rect)
+
+        # Precompute the hue reference once; it depends only on the seeds.
+        mean_hue = None
+        if hsv_img is not None and self.hue_expansion > 0:
+            seed_hues = hsv_img[coords[:, 1], coords[:, 0], 0]
+            mean_hue = DetectionExpansion.circular_mean_hue(seed_hues)
+
+        # Window sized so the safety cap usually resolves without regrowth
+        margin = max(128, xmax - xmin + 1, ymax - ymin + 1)
+        while True:
+            x0, y0 = max(0, xmin - margin), max(0, ymin - margin)
+            x1, y1 = min(w, xmax + 1 + margin), min(h, ymax + 1 + margin)
+            roi_shape = (y1 - y0, x1 - x0)
+
+            seed_roi = np.zeros(roi_shape, dtype=bool)
+            seed_roi[coords[:, 1] - y0, coords[:, 0] - x0] = True
 
             # Stage 1: threshold expansion (MRMap only).
-            selected = seed_mask
+            selected = seed_roi
             if expanded_bin_mask is not None:
+                rect_roi = [xmin - x0, ymin - y0, xmax - x0, ymax - y0]
                 threshold_selected = DetectionExpansion.expand_threshold_mrmap(
-                    expanded_bin_mask, cluster_rect, (h, w)
+                    expanded_bin_mask[y0:y1, x0:x1], rect_roi, roi_shape
                 )
-                selected = seed_mask | threshold_selected
+                selected = seed_roi | threshold_selected
 
             # Stage 2: hue expansion. Reference = circular mean of *original*
             # detected pixel hues.
-            if hsv_img is not None and self.hue_expansion > 0:
-                seed_hues = hsv_img[coords[:, 1], coords[:, 0], 0]
-                mean_hue = DetectionExpansion.circular_mean_hue(seed_hues)
-                if mean_hue is not None:
-                    hue_ok = DetectionExpansion.hue_distance_mask(
-                        hsv_img, mean_hue, self.hue_expansion,
-                        sat_floor=self.hue_expansion_sat_floor,
-                        val_floor=self.hue_expansion_val_floor,
+            if mean_hue is not None:
+                hue_ok = DetectionExpansion.hue_distance_mask(
+                    hsv_img[y0:y1, x0:x1], mean_hue, self.hue_expansion,
+                    sat_floor=self.hue_expansion_sat_floor,
+                    val_floor=self.hue_expansion_val_floor,
+                )
+                flooded, cap_hit = DetectionExpansion.expand_hue_flood(selected, hue_ok, safety_cap)
+                if cap_hit:
+                    # Exceeding the cap inside the window means the global
+                    # flood exceeds it too; keep the pre-hue selection, but it
+                    # must still be window-exact before we accept it
+                    self.logger.warning(
+                        f"MRMap hue expansion cap hit for AOI at {aoi.get('center')}; keeping pre-hue selection."
                     )
-                    flooded, cap_hit = DetectionExpansion.expand_hue_flood(selected, hue_ok, safety_cap)
-                    if cap_hit:
-                        self.logger.warning(
-                            f"MRMap hue expansion cap hit for AOI at {aoi.get('center')}; keeping pre-hue selection."
-                        )
-                    else:
-                        selected = flooded
+                else:
+                    selected = flooded
 
-            # Commit expanded selection back to AOI.
-            ys2, xs2 = np.where(selected)
-            if len(xs2) == 0:
-                continue
-            aoi['detected_pixels'] = np.stack([xs2, ys2], axis=1).tolist()
-            aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(selected)))
-
-            combined_mask[selected] = 255
-
-        return areas_of_interest, combined_mask
+            # The result is exact unless it touches a window border with more
+            # image beyond it - then connectivity may continue outside
+            touches_open_border = (
+                (y0 > 0 and selected[0, :].any())
+                or (y1 < h and selected[-1, :].any())
+                or (x0 > 0 and selected[:, 0].any())
+                or (x1 < w and selected[:, -1].any())
+            )
+            if not touches_open_border:
+                return selected, (x0, y0)
+            if x0 == 0 and y0 == 0 and x1 == w and y1 == h:
+                # Full frame: nothing beyond the border, result is final
+                return selected, (x0, y0)
+            margin *= 4
 
     def _add_confidence_scores(self, areas_of_interest, bin_counts, mask):
         """Add confidence scores to AOIs based on histogram bin counts (rarity scores).
@@ -578,6 +645,17 @@ class Histogram:
         # Create color-space-aware quantization mappings
         self.mapping_ch0, self.mapping_ch1, self.mapping_ch2 = self._create_mappings()
 
+        # Premultiplied lookup tables: value -> its term of the fused flat bin
+        # index. B^3 = 17576 fits in uint16, so the whole fused index is three
+        # table lookups and two uint16 adds per pixel - no wide temporaries.
+        bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS
+        self._fused_ch0 = self.mapping_ch0.astype(np.uint16) * (bins * bins)
+        self._fused_ch1 = self.mapping_ch1.astype(np.uint16) * bins
+        self._fused_ch2 = self.mapping_ch2.astype(np.uint16)
+
+        # Fused index of this image's own pixels, kept for bin_count_for_image
+        self._own_fused = None
+
         self.q_histogram = None
         self.create_histogram()
 
@@ -655,23 +733,49 @@ class Histogram:
             mapping = np.clip(mapping, 0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS - 1)
             return mapping, mapping, mapping
 
+    def _fused_bin_index(self, ch0, ch1, ch2):
+        """Map channel values to a single flat index into the 3D histogram.
+
+        Args:
+            ch0, ch1, ch2: Channel value arrays (0-255 / 0-179 raw values).
+
+        Returns:
+            numpy.ndarray: uint16 flat indices into the B*B*B histogram.
+        """
+        fused = self._fused_ch0[ch0]
+        fused += self._fused_ch1[ch1]
+        fused += self._fused_ch2[ch2]
+        return fused
+
     def create_histogram(self):
         """Create quantized 3D histogram from image.
 
-        Maps pixel values to quantized bins using color-space-aware mappings
-        and computes histogram for efficient bin count lookups.
+        The channels are quantized to integer bin indices by the mapping
+        tables, so the counts come from np.bincount on a fused index.
+        np.histogramdd computed the identical result here, but through
+        generic float bin-edge searches (searchsorted) over every pixel -
+        the single largest cost of an MRMap pass on 48MP imagery.
         """
-        # Use channel-specific mappings for better quantization
-        ch0_mapped = self.mapping_ch0[self.image_array[:, :, 0]]
-        ch1_mapped = self.mapping_ch1[self.image_array[:, :, 1]]
-        ch2_mapped = self.mapping_ch2[self.image_array[:, :, 2]]
-
-        # Compute histogram directly without storing a large intermediate array
-        self.q_histogram, _ = np.histogramdd(
-            (ch0_mapped.ravel(), ch1_mapped.ravel(), ch2_mapped.ravel()),  # Direct ravel to avoid memory overhead
-            bins=(NUMBER_OF_QUANTIZED_HISTOGRAM_BINS,) * 3,
-            range=((0, NUMBER_OF_QUANTIZED_HISTOGRAM_BINS),) * 3
+        bins = NUMBER_OF_QUANTIZED_HISTOGRAM_BINS
+        self._own_fused = self._fused_bin_index(
+            self.image_array[:, :, 0],
+            self.image_array[:, :, 1],
+            self.image_array[:, :, 2]
         )
+        counts = np.bincount(self._own_fused.ravel(), minlength=bins ** 3)
+        # float64 to match np.histogramdd's output dtype for downstream math
+        self.q_histogram = counts.reshape(bins, bins, bins).astype(np.float64)
+
+    def bin_count_for_image(self):
+        """Bin counts for every pixel of the image this histogram was built on.
+
+        Reuses the fused index computed while building the histogram, so the
+        per-pixel quantization is not paid a second time.
+
+        Returns:
+            numpy.ndarray: Bin counts, shaped like the image's first two dims.
+        """
+        return self.q_histogram.ravel()[self._own_fused]
 
     def bin_count(self, ch0, ch1, ch2):
         """
@@ -683,9 +787,5 @@ class Histogram:
         Returns:
             numpy.ndarray: Bin counts for each pixel
         """
-        # Use channel-specific mappings
-        q0 = self.mapping_ch0[ch0]
-        q1 = self.mapping_ch1[ch1]
-        q2 = self.mapping_ch2[ch2]
-
-        return self.q_histogram[q0, q1, q2]
+        # Single flat gather instead of broadcast 3-array fancy indexing
+        return self.q_histogram.ravel()[self._fused_bin_index(ch0, ch1, ch2)]

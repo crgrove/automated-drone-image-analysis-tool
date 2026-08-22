@@ -9,6 +9,7 @@ import pytest
 from helpers.PhotogrammetryHelper import (
     FovHomography,
     build_camera_matrix,
+    build_camera_to_ned,
     camera_center_world,
     corners_are_mirrored,
     local_enu_to_gps,
@@ -241,3 +242,87 @@ def test_project_pixel_to_plane_roundtrip():
     assert hit is not None
     assert hit[0] == pytest.approx(40.0, abs=1e-3)
     assert hit[1] == pytest.approx(-20.0, abs=1e-3)
+
+
+# ----------------------------- build_camera_to_ned -------------------------- #
+#
+# The single definition of the camera model, shared by the ground-position
+# ray-cast and its analytic inverse. When each built its own, they drifted.
+
+
+def test_camera_to_ned_is_a_rotation():
+    """Orthonormal with determinant +1, for every attitude it accepts."""
+    for pitch, yaw, roll in [(-90.0, 0.0, 0.0), (-45.0, 137.0, 0.0),
+                             (-90.0, 45.0, 22.5), (-60.0, 310.0, -22.5)]:
+        R = build_camera_to_ned(pitch, yaw, roll)
+        assert np.allclose(R.T @ R, np.eye(3), atol=1e-12)
+        assert np.linalg.det(R) == pytest.approx(1.0)
+
+
+def test_nadir_optical_axis_points_straight_down():
+    """Camera Z is the optical axis; NED's third component is Down."""
+    R = build_camera_to_ned(-90.0, 0.0)
+    assert np.allclose(R[:, 2], [0.0, 0.0, 1.0], atol=1e-12)
+
+
+@pytest.mark.parametrize("yaw,expected_north,expected_east", [
+    (0.0, 1.0, 0.0),      # north
+    (90.0, 0.0, 1.0),     # east
+    (180.0, -1.0, 0.0),   # south
+    (270.0, 0.0, -1.0),   # west
+])
+def test_horizontal_optical_axis_follows_yaw(yaw, expected_north, expected_east):
+    """Yaw is a compass azimuth: 0 = North, 90 = East."""
+    R = build_camera_to_ned(0.0, yaw)
+    assert R[0, 2] == pytest.approx(expected_north, abs=1e-12)
+    assert R[1, 2] == pytest.approx(expected_east, abs=1e-12)
+
+
+def test_image_down_points_south_for_a_north_facing_nadir_camera():
+    """Camera Y is "down in the image".
+
+    A nadir frame shot facing north has north at the top, so moving DOWN the
+    image moves south. Pinning the sign matters: an inverted camera Y flips
+    every AOI about the image centre without changing the footprint, so the
+    error survives any check that only looks at coverage.
+    """
+    R = build_camera_to_ned(-90.0, 0.0)
+    assert np.allclose(R[:, 1], [-1.0, 0.0, 0.0], atol=1e-12)
+
+
+def test_zero_roll_is_identical_to_omitting_roll():
+    """The roll branch must not perturb existing pitch/yaw behaviour."""
+    assert np.allclose(build_camera_to_ned(-50.0, 200.0),
+                       build_camera_to_ned(-50.0, 200.0, 0.0))
+
+
+def test_roll_tilts_the_optical_axis_off_nadir():
+    """A rolled pod looks sideways: the WALDO +-22.5 degree mount."""
+    R = build_camera_to_ned(-90.0, 0.0, 22.5)
+    optical_axis = R[:, 2]
+    off_nadir = math.degrees(math.acos(min(1.0, optical_axis[2])))
+    assert off_nadir == pytest.approx(22.5, abs=1e-9)
+
+
+def test_roll_axis_azimuth_overrides_the_yaw_axis():
+    """WALDO processor >= 6 rolls about the flight axis, not image orientation."""
+    about_yaw = build_camera_to_ned(-90.0, 0.0, 22.5)
+    about_flight = build_camera_to_ned(-90.0, 0.0, 22.5, roll_axis_azimuth_deg=90.0)
+    assert not np.allclose(about_yaw, about_flight)
+    # Rolling about the yaw axis itself must match passing that same azimuth.
+    assert np.allclose(about_yaw,
+                       build_camera_to_ned(-90.0, 0.0, 22.5, roll_axis_azimuth_deg=0.0))
+
+
+@pytest.mark.parametrize("pitch", [-90.0, -45.0, 0.0, 45.0, 90.0])
+@pytest.mark.parametrize("yaw", [0.0, 90.0, 217.0])
+def test_a_frame_exists_for_every_attitude(pitch, yaw):
+    """The optical axis and "up" are orthogonal by construction, at any attitude.
+
+    So the degenerate-cross-product branch is unreachable defensive code, not a
+    case callers have to handle -- including straight down and straight up,
+    where a naive construction would collapse.
+    """
+    R = build_camera_to_ned(pitch, yaw)
+    assert R is not None
+    assert np.allclose(R.T @ R, np.eye(3), atol=1e-12)

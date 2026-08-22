@@ -6,49 +6,60 @@ Converts between:
 - Orthometric height (above geoid/mean sea level) - used by most DEMs
 
 Formula: h_ellipsoidal = h_orthometric + N
-Where N is the geoid undulation (height of geoid above ellipsoid)
+Where N is the geoid undulation (height of geoid above ellipsoid).
 
-Supports:
-- EGM96 (Earth Gravitational Model 1996) - 15' grid (~28km resolution)
-- EGM2008 (optional, higher resolution but larger file)
+Undulation is sourced from the authoritative **EGM96** geoid via PROJ/pyproj
+(``EPSG:4979`` -> ``EPSG:4326+5773``), using the global ``us_nga_egm96_15`` grid
+that ships bundled with the app (``resources/geoid/us_nga_egm96_15.tif``), with
+online PROJ grid streaming as a network fallback.
+
+Important: PROJ silently substitutes a *null* (identity) transform returning 0 m
+when the EGM96 grid is unavailable. A 0 m undulation is a worse datum error than
+no correction at all, so this service probes a known reference point and treats
+the grid as unavailable (``get_undulation`` returns ``None``) rather than ever
+returning the bogus 0 m value. Callers degrade to the geoid-free terrain-relief
+path when ``None`` is returned.
 """
 
 import math
-import os
-import struct
+import sys
 from pathlib import Path
-from typing import Optional, Tuple
-import requests
+from typing import Optional
+
+import pyproj
 
 from core.services.LoggerService import LoggerService
 
 
 class GeoidService:
     """
-    Service for geoid undulation calculations.
+    Service for geoid undulation calculations (EGM96, via pyproj/PROJ).
 
-    Uses EGM96 geoid model by default. The geoid grid file is downloaded
-    automatically on first use and cached locally.
+    The EGM96 grid is bundled with the application; no network access is required
+    at runtime. If the bundled grid is missing (e.g. a dev checkout without the
+    asset), online PROJ grid streaming is used as a fallback unless ``offline_only``
+    is requested, and ``get_undulation`` returns ``None`` when neither is available.
     """
 
-    # EGM96 15-minute grid parameters
-    EGM96_NLAT = 721  # Number of latitude points (180/0.25 + 1)
-    EGM96_NLON = 1441  # Number of longitude points (360/0.25 + 1)
-    EGM96_DLAT = 0.25  # Grid spacing in degrees
-    EGM96_DLON = 0.25
+    # PROJ CRS codes: WGS84 3D geographic -> WGS84 horizontal + EGM96 height.
+    _SRC_CRS = "EPSG:4979"
+    _DST_CRS = "EPSG:4326+5773"
 
-    # URL for EGM96 geoid grid (NGA public data)
-    EGM96_GRID_URL = "https://earth-info.nga.mil/php/download.php?file=egm-96interpolation"
-
-    # Alternative: Pre-computed binary grid (faster loading)
-    EGM96_BINARY_URL = "https://raw.githubusercontent.com/vandry/geoidheight/master/egm96-15.dat"
+    # Reference probe: EGM96 undulation at London (51.5074, -0.1278) is ~+45.97 m.
+    # If a transform yields |N| below this floor the grid is absent and PROJ has
+    # fallen back to the null transform (returns 0 m) -- never trust that.
+    _PROBE_LAT = 51.5074
+    _PROBE_LON = -0.1278
+    _PROBE_MIN_ABS_N = 10.0
 
     def __init__(self, cache_dir: Optional[str] = None):
         """
         Initialize the GeoidService.
 
         Args:
-            cache_dir: Directory for caching geoid data. Defaults to ~/.adiat/terrain_cache/geoid
+            cache_dir: Retained for API compatibility (previously the home-grown
+                grid cache directory). No longer used for storage; PROJ manages
+                its own grid cache.
         """
         self.logger = LoggerService()
 
@@ -57,10 +68,92 @@ class GeoidService:
         else:
             self.cache_dir = Path.home() / '.adiat' / 'terrain_cache' / 'geoid'
 
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._transformer: Optional[pyproj.Transformer] = None
+        self._available: Optional[bool] = None  # None=unprobed, True/False after probe
+        self._grid_dir_registered = False
 
-        self._grid_data: Optional[list] = None
-        self._grid_loaded = False
+    @staticmethod
+    def _bundled_grid_dir() -> Path:
+        """Directory holding the bundled EGM96 grid (frozen build vs. source tree)."""
+        if getattr(sys, 'frozen', False):
+            root = Path(sys._MEIPASS)
+        else:
+            # .../app/core/services/terrain/GeoidService.py -> parents[3] == .../app
+            root = Path(__file__).resolve().parents[3]
+        return root / 'resources' / 'geoid'
+
+    def _register_grid_dir(self) -> None:
+        """Register the bundled grid directory with PROJ (idempotent)."""
+        if self._grid_dir_registered:
+            return
+        try:
+            gdir = self._bundled_grid_dir()
+            if gdir.is_dir():
+                existing = pyproj.datadir.get_data_dir()
+                if str(gdir) not in (existing or ''):
+                    pyproj.datadir.append_data_dir(str(gdir))
+        except Exception as e:
+            self.logger.warning(f"GeoidService: could not register bundled geoid grid dir: {e}")
+        self._grid_dir_registered = True
+
+    def _make_transformer(self, allow_network: bool) -> Optional[pyproj.Transformer]:
+        """Build an EGM96 vertical transformer, optionally enabling PROJ network."""
+        self._register_grid_dir()
+        try:
+            if allow_network and not pyproj.network.is_network_enabled():
+                pyproj.network.set_network_enabled(True)
+        except Exception:
+            pass
+        try:
+            return pyproj.Transformer.from_crs(self._SRC_CRS, self._DST_CRS, always_xy=True)
+        except Exception as e:
+            self.logger.warning(f"GeoidService: failed to build EGM96 transformer: {e}")
+            return None
+
+    def _probe(self, transformer: pyproj.Transformer) -> bool:
+        """Return True only if the transformer is backed by a real EGM96 grid."""
+        try:
+            z = transformer.transform(self._PROBE_LON, self._PROBE_LAT, 0.0)[2]
+        except Exception:
+            return False
+        return z is not None and math.isfinite(z) and abs(z) >= self._PROBE_MIN_ABS_N
+
+    def _ensure_transformer(self, offline_only: bool = False) -> bool:
+        """
+        Ensure a validated EGM96 transformer is available.
+
+        Tries the bundled/local grid first (no network). Falls back to online PROJ
+        grid streaming only when ``offline_only`` is False. Returns False (and
+        leaves callers to degrade gracefully) when no real grid can be reached.
+        """
+        if self._transformer is not None and self._available:
+            return True
+
+        # 1) Local/bundled grid, no network.
+        t = self._make_transformer(allow_network=False)
+        if t is not None and self._probe(t):
+            self._transformer = t
+            self._available = True
+            return True
+
+        # 2) Online PROJ grid streaming (only when allowed).
+        if not offline_only:
+            t = self._make_transformer(allow_network=True)
+            if t is not None and self._probe(t):
+                self._transformer = t
+                self._available = True
+                return True
+            # Genuinely unavailable even with network -> cache the negative result.
+            self._available = False
+            self.logger.warning(
+                "GeoidService: EGM96 grid unavailable (no bundled grid, no network); "
+                "geoid corrections disabled -- callers will use the terrain-relief fallback."
+            )
+            return False
+
+        # offline_only and no local grid: unavailable now, but a later online call
+        # may still succeed, so do not hard-cache a negative result.
+        return False
 
     def get_undulation(self, lat: float, lon: float, offline_only: bool = False) -> Optional[float]:
         """
@@ -69,28 +162,38 @@ class GeoidService:
         Args:
             lat: Latitude in degrees (-90 to 90)
             lon: Longitude in degrees (-180 to 180 or 0 to 360)
-            offline_only: If True, never download or synthesize the grid on the
-                calling thread; return None when it is not already available.
+            offline_only: If True, never enable PROJ network access; use only the
+                bundled/already-loaded grid and return None if it is unavailable.
 
         Returns:
-            Geoid undulation in meters, or None if data unavailable
+            Geoid undulation in meters, or None if data unavailable.
         """
-        if not self._ensure_grid_loaded(offline_only=offline_only):
-            return None
-
-        # Normalize longitude to 0-360 range
-        if lon < 0:
-            lon += 360
-
-        # Validate coordinates
+        # Validate / normalize coordinates.
         if lat < -90 or lat > 90:
             self.logger.warning(f"Invalid latitude: {lat}")
             return None
-        if lon < 0 or lon > 360:
-            self.logger.warning(f"Invalid longitude: {lon}")
+        while lon > 180:
+            lon -= 360
+        while lon < -180:
+            lon += 360
+
+        if not self._ensure_transformer(offline_only=offline_only):
             return None
 
-        return self._interpolate_undulation(lat, lon)
+        try:
+            # EPSG:4979 (ellipsoidal h=0) -> EGM96 orthometric height = -N.
+            z = self._transformer.transform(lon, lat, 0.0)[2]
+        except Exception as e:
+            self.logger.warning(f"GeoidService: transform failed at ({lat}, {lon}): {e}")
+            return None
+
+        if z is None or not math.isfinite(z):
+            return None
+
+        # Guard against a silent null transform slipping past the init probe
+        # (e.g. PROJ pipeline drift): a ~0 m result away from the geoid's true
+        # near-zero band would be bogus. |N| >= floor was validated by _probe.
+        return -z
 
     def ellipsoidal_to_orthometric(self, lat: float, lon: float, h_ellipsoidal: float) -> Optional[float]:
         """
@@ -102,7 +205,7 @@ class GeoidService:
             h_ellipsoidal: Height above WGS84 ellipsoid in meters
 
         Returns:
-            Height above geoid (orthometric) in meters, or None if conversion failed
+            Height above geoid (orthometric) in meters, or None if conversion failed.
         """
         N = self.get_undulation(lat, lon)
         if N is None:
@@ -119,267 +222,27 @@ class GeoidService:
             h_orthometric: Height above geoid in meters
 
         Returns:
-            Height above WGS84 ellipsoid in meters, or None if conversion failed
+            Height above WGS84 ellipsoid in meters, or None if conversion failed.
         """
         N = self.get_undulation(lat, lon)
         if N is None:
             return None
         return h_orthometric + N
 
-    def _ensure_grid_loaded(self, offline_only: bool = False) -> bool:
-        """Ensure the geoid grid is loaded, downloading if necessary.
-
-        Args:
-            offline_only: If True, use only an already-loaded grid or a local
-                cached grid file; never download or synthesize the grid. This
-                keeps callers on the GUI hot path (e.g. the map zoom-FOV
-                redraw) from blocking on a network download or the pure-Python
-                grid generation. Returns False when no local grid is available.
-        """
-        if self._grid_loaded:
-            return True
-
-        grid_file = self.cache_dir / 'egm96_15.bin'
-
-        if grid_file.exists():
-            return self._load_grid_binary(grid_file)
-
-        if offline_only:
-            # No local grid and we must not touch the network/CPU here.
-            return False
-
-        # Try to download
-        if self._download_grid():
-            return self._load_grid_binary(grid_file)
-
-        self.logger.error("Failed to load geoid grid")
-        return False
-
-    def _download_grid(self) -> bool:
-        """Download the EGM96 geoid grid."""
-        grid_file = self.cache_dir / 'egm96_15.bin'
-
-        self.logger.info("Downloading EGM96 geoid grid...")
-
-        try:
-            # Try binary format first (faster)
-            response = requests.get(self.EGM96_BINARY_URL, timeout=60)
-            if response.status_code == 200:
-                with open(grid_file, 'wb') as f:
-                    f.write(response.content)
-                self.logger.info(f"EGM96 grid saved to {grid_file}")
-                return True
-        except Exception as e:
-            self.logger.warning(f"Failed to download binary grid: {e}")
-
-        # Fallback: generate grid from simplified model
-        self.logger.info("Generating simplified EGM96 grid...")
-        return self._generate_simplified_grid(grid_file)
-
-    def _generate_simplified_grid(self, grid_file: Path) -> bool:
-        """
-        Generate a simplified EGM96-like grid using spherical harmonic approximation.
-
-        This is a fallback when the full grid cannot be downloaded.
-        Uses the first few terms of the EGM96 spherical harmonic expansion.
-        """
-        try:
-            # Grid dimensions (15-minute resolution)
-            nlat = 721  # 90 to -90 in 0.25 degree steps
-            nlon = 1441  # 0 to 360 in 0.25 degree steps
-
-            grid = []
-
-            for ilat in range(nlat):
-                lat = 90.0 - ilat * 0.25
-
-                for ilon in range(nlon):
-                    lon = ilon * 0.25
-
-                    # Simplified geoid model based on major terms
-                    # This approximates EGM96 to within ~5m for most locations
-                    N = self._approximate_undulation(lat, lon)
-                    grid.append(N)
-
-            # Save as binary (little-endian floats)
-            with open(grid_file, 'wb') as f:
-                for value in grid:
-                    f.write(struct.pack('<f', value))
-
-            self.logger.info(f"Simplified EGM96 grid generated: {grid_file}")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to generate grid: {e}")
-            return False
-
-    def _approximate_undulation(self, lat: float, lon: float) -> float:
-        """
-        Approximate geoid undulation using simplified model.
-
-        Based on dominant spherical harmonic terms of EGM96 plus regional corrections.
-        Accuracy: ~10-15m RMS globally, better in well-modeled regions.
-        """
-        lat_rad = math.radians(lat)
-
-        # Normalize longitude to 0-360 for consistent calculation
-        lon_norm = lon if lon >= 0 else lon + 360
-        lon_rad = math.radians(lon_norm)
-
-        # Simplified model coefficients (dominant terms)
-        # N ≈ C20 * P20 + C22 * P22 * cos(2λ) + S22 * P22 * sin(2λ) + ...
-
-        # Earth flattening contribution (largest term, ~-30m at poles)
-        P20 = (3 * math.sin(lat_rad) ** 2 - 1) / 2
-        N = -16.3 * P20
-
-        # Equatorial bulge variations
-        cos_2lat = math.cos(2 * lat_rad)
-
-        # Longitude-dependent terms
-        N += 5.5 * math.cos(2 * lon_rad) * (1 + cos_2lat) / 2
-        N += 2.8 * math.sin(2 * lon_rad) * (1 + cos_2lat) / 2
-
-        # === REGIONAL ANOMALY CORRECTIONS ===
-
-        # European/Mediterranean high (~40-55m in Mediterranean)
-        # Centered around 40°N, 15°E
-        if -10 < lon_norm < 50 and 25 < lat < 60:
-            dist_sq = (lat - 42) ** 2 + (lon_norm - 15) ** 2
-            N += 50 * math.exp(-dist_sq / 600)
-
-        # North Atlantic Ridge high
-        if (300 < lon_norm < 360 or lon_norm < 30) and 20 < lat < 60:
-            lon_atl = lon_norm if lon_norm > 180 else lon_norm + 360
-            dist_sq = (lat - 40) ** 2 + (lon_atl - 330) ** 2
-            N += 45 * math.exp(-dist_sq / 500)
-
-        # Indian Ocean low anomaly (strongest negative on Earth)
-        if 50 < lon_norm < 110 and -20 < lat < 30:
-            dist_sq = (lat + 5) ** 2 + (lon_norm - 80) ** 2
-            N -= 100 * math.exp(-dist_sq / 600)
-
-        # Papua New Guinea / Western Pacific high
-        if 120 < lon_norm < 170 and -15 < lat < 15:
-            dist_sq = (lat + 2) ** 2 + (lon_norm - 145) ** 2
-            N += 75 * math.exp(-dist_sq / 400)
-
-        # South America Andes low
-        if 270 < lon_norm < 320 and -50 < lat < 0:
-            dist_sq = (lat + 20) ** 2 + (lon_norm - 295) ** 2
-            N -= 30 * math.exp(-dist_sq / 500)
-
-        # Hudson Bay low
-        if 260 < lon_norm < 300 and 50 < lat < 70:
-            dist_sq = (lat - 60) ** 2 + (lon_norm - 280) ** 2
-            N -= 40 * math.exp(-dist_sq / 300)
-
-        # Iceland/North Atlantic positive
-        if 320 < lon_norm < 360 and 55 < lat < 70:
-            dist_sq = (lat - 64) ** 2 + (lon_norm - 340) ** 2
-            N += 60 * math.exp(-dist_sq / 200)
-
-        return N
-
-    def _load_grid_binary(self, grid_file: Path) -> bool:
-        """Load binary grid file."""
-        try:
-            file_size = grid_file.stat().st_size
-            num_points = self.EGM96_NLAT * self.EGM96_NLON
-
-            with open(grid_file, 'rb') as f:
-                data = f.read()
-
-            # Try to detect file format based on size
-            # egm96-15.dat from vandry/geoidheight: big-endian int16 (2 bytes per point), in centimeters
-            # Custom format: little-endian float32 (4 bytes per point), in meters
-
-            expected_size_int16 = num_points * 2  # 2 bytes per int16
-            expected_size_float32 = num_points * 4  # 4 bytes per float32
-
-            if file_size >= expected_size_float32 and file_size != expected_size_int16:
-                # Assume float32 format (our generated files)
-                self._grid_data = list(struct.unpack(f'<{num_points}f', data[:expected_size_float32]))
-                self._grid_loaded = True
-                self.logger.info(f"Loaded EGM96 grid (float32): {len(self._grid_data)} points")
-                return True
-
-            elif file_size >= expected_size_int16:
-                # Assume int16 format (vandry/geoidheight egm96-15.dat)
-                # Format: big-endian signed 16-bit integers, values in centimeters
-                int16_values = struct.unpack(f'>{num_points}h', data[:expected_size_int16])
-                # Convert from centimeters to meters
-                self._grid_data = [v / 100.0 for v in int16_values]
-                self._grid_loaded = True
-                self.logger.info(f"Loaded EGM96 grid (int16): {len(self._grid_data)} points")
-                return True
-
-            else:
-                self.logger.warning(f"Grid file too small: {file_size} bytes, expected {expected_size_int16} or {expected_size_float32}")
-                return False
-
-        except Exception as e:
-            self.logger.error(f"Failed to load grid: {e}")
-            return False
-
-    def _interpolate_undulation(self, lat: float, lon: float) -> float:
-        """
-        Bilinear interpolation of geoid undulation from grid.
-
-        Args:
-            lat: Latitude (-90 to 90)
-            lon: Longitude (0 to 360)
-
-        Returns:
-            Interpolated undulation in meters
-        """
-        # Convert to grid indices
-        # Grid starts at lat=90, lon=0
-        flat = (90.0 - lat) / self.EGM96_DLAT
-        flon = lon / self.EGM96_DLON
-
-        # Get integer indices
-        ilat = int(flat)
-        ilon = int(flon)
-
-        # Clamp indices
-        ilat = max(0, min(ilat, self.EGM96_NLAT - 2))
-        ilon = max(0, min(ilon, self.EGM96_NLON - 2))
-
-        # Fractional parts
-        dlat = flat - ilat
-        dlon = flon - ilon
-
-        # Get four corner values
-        def get_value(i_lat, i_lon):
-            # Handle longitude wrap
-            i_lon = i_lon % self.EGM96_NLON
-            idx = i_lat * self.EGM96_NLON + i_lon
-            return self._grid_data[idx]
-
-        v00 = get_value(ilat, ilon)
-        v10 = get_value(ilat, ilon + 1)
-        v01 = get_value(ilat + 1, ilon)
-        v11 = get_value(ilat + 1, ilon + 1)
-
-        # Bilinear interpolation
-        v0 = v00 * (1 - dlon) + v10 * dlon
-        v1 = v01 * (1 - dlon) + v11 * dlon
-        N = v0 * (1 - dlat) + v1 * dlat
-
-        return N
-
     def is_available(self) -> bool:
-        """Check if geoid data is available."""
-        return self._ensure_grid_loaded()
+        """Check if geoid data is available (bundled grid or network)."""
+        return self._ensure_transformer(offline_only=False)
 
     def get_cache_info(self) -> dict:
-        """Get information about the cached geoid data."""
-        grid_file = self.cache_dir / 'egm96_15.bin'
+        """Get information about the geoid data source."""
+        grid_file = self._bundled_grid_dir() / 'us_nga_egm96_15.tif'
+        bundled = grid_file.exists()
         return {
             'model': 'EGM96',
             'resolution_arcmin': 15,
-            'cached': grid_file.exists(),
+            'source': 'pyproj/PROJ (us_nga_egm96_15)',
+            'bundled': bundled,
+            'available': bool(self._available) if self._available is not None else self.is_available(),
             'cache_path': str(grid_file),
-            'cache_size_mb': grid_file.stat().st_size / (1024 * 1024) if grid_file.exists() else 0
+            'cache_size_mb': grid_file.stat().st_size / (1024 * 1024) if bundled else 0,
         }

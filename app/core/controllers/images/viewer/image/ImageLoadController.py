@@ -100,7 +100,7 @@ class ImageLoadController(TranslationMixin):
                 return
 
             self.parent.main_image.setImage(img)
-            self.parent.fileNameLabel.setText(image['name'])
+            self._show_image_name(image['name'])
 
             # Load AOIs
             self.parent.aoi_controller.load_areas_of_interest(image_service.img_array, image['areas_of_interest'])
@@ -136,6 +136,14 @@ class ImageLoadController(TranslationMixin):
             # reset performed above.
             if hasattr(self.parent, 'grid_review_controller'):
                 self.parent.grid_review_controller.on_image_loaded()
+
+            # A navigation that requested a zoom for this load (gallery AOI
+            # click, neighbor tracking) gets it applied as the very last
+            # step: the requester's intent is the newest, and nothing later
+            # in the pipeline is left to stomp it. Event-driven replacement
+            # for the transient viewChanged handlers and settle-window
+            # timers that used to chase the zoom reset above.
+            self._apply_pending_view_zoom()
 
         except Exception as e:
             self._handle_load_error(e, image)
@@ -329,6 +337,39 @@ class ImageLoadController(TranslationMixin):
             self.parent.main_image.resetZoom()
         except RuntimeError:
             return
+
+    def _apply_pending_view_zoom(self):
+        """Apply the zoom the initiating navigation requested for this load.
+
+        Consumes the viewer's single pending-zoom slot (a hard dependency:
+        if the Viewer API goes missing this must raise loudly, not silently
+        stop applying zooms - that silence was the original field bug). A
+        request made for a different image than the one that loaded is
+        dropped as stale. The callable is the requester's own (it may do
+        companion UI work such as the AOI overlay badge), so its failures
+        are contained here rather than failing the load.
+        """
+        apply_zoom = self.parent.take_pending_view_zoom(self.parent.current_image)
+        if apply_zoom is None:
+            return
+        try:
+            apply_zoom()
+        except Exception as e:
+            self.logger.error(f"Post-load zoom request failed: {e}")
+
+    def _show_image_name(self, name):
+        """Put the image name in the header, with the full name on hover.
+
+        The header label is clipped by the space the toolbar leaves it, and the
+        names that suffer most are the ones that differ only in their tail -
+        frames pulled from a video ("..._262.5s.jpg") are identical up to the
+        offset that tells them apart. The tooltip gives the whole name back.
+
+        Args:
+            name (str): The image's file name.
+        """
+        self.parent.fileNameLabel.setText(name)
+        self.parent.fileNameLabel.setToolTip(name)
 
     def _update_metadata_displays(self, image_service):
         """Update metadata displays in status bar."""

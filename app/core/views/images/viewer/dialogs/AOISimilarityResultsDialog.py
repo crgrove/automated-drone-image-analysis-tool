@@ -9,7 +9,7 @@ index because multiple AOIs from the same image can appear in the results.
 
 import numpy as np
 import cv2
-from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QTimer
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF
 from PySide6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QPen, QFont, QBrush,
     QWheelEvent, QMouseEvent
@@ -450,12 +450,21 @@ class AOISimilarityResultsDialog(TranslationMixin, QDialog):
         self.resize(900, 430)
 
     def showEvent(self, event):
-        """Load thumbnails when dialog is shown (viewport is ready)."""
+        """Load thumbnails when the dialog is shown.
+
+        Loads directly rather than after a settle timer (CLAUDE.md 2.9). The
+        timer was not just a style violation: a dialog closed within its 10 ms
+        window still got the callback, and load_thumbnails' first act is
+        self.scene.clear(), so it reached an already-deleted QGraphicsScene and
+        raised out of the Qt event loop. That is a real, reproducible flake --
+        it took down test_success_flow_with_mocked_service roughly one run in
+        three -- and in the app it lands on whatever code happens to be
+        pumping events when the timer fires.
+        """
         super().showEvent(event)
         if not self._thumbnails_loaded and self.results:
             self._thumbnails_loaded = True
-            # Small delay to ensure the viewport is fully initialized
-            QTimer.singleShot(10, lambda: self.gallery_view.load_thumbnails(self.results))
+            self.gallery_view.load_thumbnails(self.results)
 
     def _setup_ui(self):
         """Create the dialog UI components."""

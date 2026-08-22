@@ -3,7 +3,6 @@ Comprehensive tests for AOINeighborGalleryDialog.
 
 Tests for the gallery dialog that displays AOI appearances across neighboring images:
 - Dialog initialization
-- ThumbnailItem class
 - NeighborGalleryView functionality
 - Thumbnail loading and display
 - User interaction (click, zoom, pan)
@@ -13,7 +12,6 @@ Tests for the gallery dialog that displays AOI appearances across neighboring im
 from core.views.images.viewer.dialogs.AOINeighborGalleryDialog import (
     AOINeighborGalleryDialog,
     NeighborGalleryView,
-    ThumbnailItem
 )
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QApplication
@@ -98,44 +96,6 @@ def grayscale_result():
         'thumbnail': np.random.randint(0, 255, (200, 200), dtype=np.uint8),
         'is_current': False
     }
-
-
-# ============================================================================
-# Test ThumbnailItem class
-# ============================================================================
-
-class TestThumbnailItem:
-    """Tests for ThumbnailItem data class."""
-
-    def test_initialization(self, sample_thumbnail):
-        """Test ThumbnailItem initialization with all parameters."""
-        item = ThumbnailItem(
-            image_idx=5,
-            image_name='test_image.jpg',
-            thumbnail=sample_thumbnail,
-            pixel_x=100.5,
-            pixel_y=200.5,
-            is_current=True
-        )
-
-        assert item.image_idx == 5
-        assert item.image_name == 'test_image.jpg'
-        assert np.array_equal(item.thumbnail, sample_thumbnail)
-        assert item.pixel_x == 100.5
-        assert item.pixel_y == 200.5
-        assert item.is_current is True
-
-    def test_default_is_current(self, sample_thumbnail):
-        """Test ThumbnailItem with default is_current value."""
-        item = ThumbnailItem(
-            image_idx=0,
-            image_name='test.jpg',
-            thumbnail=sample_thumbnail,
-            pixel_x=0,
-            pixel_y=0
-        )
-
-        assert item.is_current is False
 
 
 # ============================================================================
@@ -506,3 +466,147 @@ class TestIntegration:
         # State should be reset
         assert len(view._thumbnail_rects) == 1
         assert view._selected_index == -1
+
+
+# ============================================================================
+# Grid layout, the capped-count message, and translation readiness
+# ============================================================================
+
+def _many_results(sample_thumbnail, count, current_index=None):
+    return [
+        {
+            'image_idx': i,
+            'image_name': f'DJI_{i:04d}.JPG',
+            'image_path': f'/path/to/DJI_{i:04d}.JPG',
+            'pixel_x': 100.0, 'pixel_y': 100.0,
+            'thumbnail': sample_thumbnail.copy(),
+            'is_current': (i == current_index),
+        }
+        for i in range(count)
+    ]
+
+
+class TestZoomBounds:
+
+    def test_zoom_out_stops_at_the_floor(self, app, sample_results):
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(sample_results)
+
+        for _ in range(60):
+            view._zoom = max(view._min_zoom, view._zoom / 1.15)
+
+        assert view._zoom >= view._min_zoom
+
+    def test_zoom_tracks_the_applied_transform(self, app, sample_results):
+        """_zoom used to drift from the real scale: zoom-in was unbounded
+        while the counter kept climbing, so zooming back out overshot."""
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(sample_results)
+
+        view.scale(2.0, 2.0)
+        view._zoom = 2.0
+
+        assert view.transform().m11() == pytest.approx(view._zoom)
+
+
+class TestInfoText:
+
+    def test_complete_search_reports_the_count(self, app, sample_results):
+        dialog = AOINeighborGalleryDialog(None, sample_results, truncated=False)
+        assert '3' in dialog.info_label.text()
+        assert 'there are more' not in dialog.info_label.text()
+
+    def test_capped_search_says_there_are_more(self, app, sample_results):
+        """Regression: the cap was presented as the answer.
+
+        "Found AOI in 50 image(s)" told a searcher the AOI appears in exactly
+        50 captures, when the real number was unknown and larger.
+        """
+        dialog = AOINeighborGalleryDialog(None, sample_results, truncated=True)
+        assert 'there are more' in dialog.info_label.text()
+
+    def test_header_is_built_from_a_translatable_source_string(self, app, sample_results):
+        """It was an f-string, so it could never match a catalogue entry."""
+        dialog = AOINeighborGalleryDialog(None, sample_results)
+        with patch.object(AOINeighborGalleryDialog, 'tr',
+                          side_effect=lambda s: 'XX' + s) as tr:
+            text = dialog._info_text()
+        assert tr.called, "the header must go through tr()"
+        assert text.startswith('XX')
+        assert '{count}' not in text, "the count must still be interpolated"
+
+    def test_translations_refresh_the_header(self, app, sample_results):
+        dialog = AOINeighborGalleryDialog(None, sample_results)
+        dialog.info_label.setText('stale')
+
+        dialog._apply_translations()
+
+        assert '3' in dialog.info_label.text()
+
+
+class TestHorizontalStrip:
+    """The gallery is one horizontal row, scrolled sideways.
+
+    A wrapping grid was tried and reverted: reviewers navigate this gallery by
+    position along the flight, and the strip is the shape that reads that way.
+    """
+
+    def _results(self, sample_thumbnail, count=50, current=40):
+        return [
+            {'image_idx': i, 'image_name': f'DJI_{i:04d}.JPG',
+             'image_path': f'/p/{i}.JPG', 'pixel_x': 1.0, 'pixel_y': 1.0,
+             'thumbnail': sample_thumbnail.copy(), 'is_current': (i == current)}
+            for i in range(count)
+        ]
+
+    def test_thumbnails_lie_on_one_row(self, app, sample_thumbnail):
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(self._results(sample_thumbnail))
+
+        tops = {rect.y() for rect, _ in view._thumbnail_rects}
+        assert len(tops) == 1, "every thumbnail shares one row"
+        assert view.scene.sceneRect().width() > 900, "the strip scrolls sideways"
+
+    def test_every_thumbnail_gets_its_own_click_target(self, app, sample_thumbnail):
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(self._results(sample_thumbnail))
+
+        rects = [r for r, _ in view._thumbnail_rects]
+        assert len(rects) == 50
+        assert len({r.x() for r in rects}) == 50, "cells must not overlap"
+
+    def test_the_originating_capture_is_scrolled_into_view(self, app, sample_thumbnail):
+        """It can sit anywhere along a 50-wide strip; the eye needs leading to it."""
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(self._results(sample_thumbnail, current=40))
+
+        assert view._current_rect is not None
+        visible = view.mapToScene(view.viewport().rect()).boundingRect()
+        assert visible.contains(view._current_rect.center())
+
+    def test_reset_view_keeps_thumbnails_at_full_size(self, app, sample_thumbnail):
+        """fitInView on 50 thumbnails scales them to ~16 px: a view of nothing."""
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+        view.load_thumbnails(self._results(sample_thumbnail))
+
+        view.reset_view()
+
+        assert view.transform().m11() == pytest.approx(1.0)
+
+    def test_a_failed_thumbnail_does_not_stack_the_next_one_on_it(self, app, sample_thumbnail):
+        """A mid-strip render failure must not mis-route every later click."""
+        results = self._results(sample_thumbnail, count=4, current=0)
+        results[1]['thumbnail'] = np.zeros((0, 0, 3), dtype=np.uint8)  # unrenderable
+        view = NeighborGalleryView()
+        view.resize(900, 400)
+
+        view.load_thumbnails(results)
+
+        xs = [r.x() for r, _ in view._thumbnail_rects]
+        assert len(xs) == len(set(xs)), "cells must remain distinct"

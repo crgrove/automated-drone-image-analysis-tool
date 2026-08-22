@@ -151,11 +151,15 @@ class AlgorithmService:
         # Store original detected pixels for each valid contour
         original_pixels_mask = np.zeros((height, width), dtype=np.uint8)
 
-        # First pass: filter contours and optionally mark them for combining
+        # First pass: filter contours and optionally mark them for combining.
+        # Each contour is rasterized into a mask of just its bounding rect:
+        # a full-frame mask per contour makes this pass O(contours x image
+        # area), which dominated whole-batch processing time on 48MP images.
         for cnt in contours:
-            mask = np.zeros((height, width), dtype=np.uint8)
-            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
-            contour_area = cv2.countNonZero(mask)
+            bx, by, bw, bh = cv2.boundingRect(cnt)
+            roi_mask = np.zeros((bh, bw), dtype=np.uint8)
+            cv2.drawContours(roi_mask, [cnt], -1, 255, thickness=-1, offset=(-bx, -by))
+            contour_area = cv2.countNonZero(roi_mask)
 
             if contour_area >= self.min_area and (self.max_area == 0 or contour_area <= self.max_area):
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
@@ -167,15 +171,19 @@ class AlgorithmService:
                 cv2.circle(temp_mask, center, radius, 255, -1)
 
                 # Also keep track of original pixels
-                original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
+                roi_slice = original_pixels_mask[by:by + bh, bx:bx + bw]
+                np.bitwise_or(roi_slice, roi_mask, out=roi_slice)
 
                 if not self.combine_aois:
                     # Store the contour points for drawing the boundary
                     contour_points = cnt.reshape(-1, 2).tolist()
 
-                    # Get the detected pixels for this AOI
-                    detected_pixels = np.argwhere(mask > 0)
-                    detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
+                    # Get the detected pixels for this AOI (ROI coords -> image coords)
+                    detected_pixels = np.argwhere(roi_mask > 0)
+                    if len(detected_pixels) > 0:
+                        detected_pixels_list = (detected_pixels[:, [1, 0]] + (bx, by)).tolist()
+                    else:
+                        detected_pixels_list = []
 
                     # Use actual detected pixel count for area
                     area = len(detected_pixels_list)
@@ -203,8 +211,11 @@ class AlgorithmService:
                 contours = new_contours
 
             for cnt in contours:
-                mask = np.zeros((height, width), dtype=np.uint8)
-                cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+                # Same bounding-rect trick as the first pass: never rasterize
+                # one contour onto a full-frame canvas
+                bx, by, bw, bh = cv2.boundingRect(cnt)
+                roi_mask = np.zeros((bh, bw), dtype=np.uint8)
+                cv2.drawContours(roi_mask, [cnt], -1, 255, thickness=-1, offset=(-bx, -by))
                 (x, y), radius = cv2.minEnclosingCircle(cnt)
                 center = (int(x), int(y))
                 radius = int(radius)
@@ -212,9 +223,14 @@ class AlgorithmService:
                 contour_points = cnt.reshape(-1, 2).tolist()
 
                 # Get the original detected pixels that belong to this combined AOI
-                aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
+                aoi_pixels_mask = cv2.bitwise_and(
+                    original_pixels_mask[by:by + bh, bx:bx + bw], roi_mask
+                )
                 aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
-                aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
+                if len(aoi_pixels) > 0:
+                    aoi_pixels_list = (aoi_pixels[:, [1, 0]] + (bx, by)).tolist()
+                else:
+                    aoi_pixels_list = []
 
                 # Use actual detected pixel count, not the expanded circle area
                 area = len(aoi_pixels_list)
@@ -488,16 +504,29 @@ class AlgorithmService:
             radius = aoi.get('radius', 0)
             cx, cy = int(center[0]), int(center[1])
 
-            # Collect RGB values within the AOI
-            colors = []
+            # Collect RGB values within the AOI (vectorized: the previous
+            # per-pixel Python loops were a measurable cost per AOI on 48MP
+            # frames, multiplied by every AOI of every image in a batch)
 
             # If we have detected pixels, use those
             if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                for pixel in aoi['detected_pixels']:
-                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                        px, py = int(pixel[0]), int(pixel[1])
-                        if 0 <= py < height and 0 <= px < width:
-                            colors.append(img_rgb[py, px])
+                try:
+                    pts = np.asarray(aoi['detected_pixels'], dtype=np.int64)
+                    if pts.ndim != 2 or pts.shape[1] < 2:
+                        raise ValueError('unexpected detected_pixels shape')
+                    xs, ys = pts[:, 0], pts[:, 1]
+                    valid = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+                    colors = img_rgb[ys[valid], xs[valid]]
+                except (ValueError, TypeError):
+                    # Ragged/malformed entries: fall back to the tolerant
+                    # per-pixel path that skips bad entries instead of failing
+                    fallback = []
+                    for pixel in aoi['detected_pixels']:
+                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
+                            px, py = int(pixel[0]), int(pixel[1])
+                            if 0 <= py < height and 0 <= px < width:
+                                fallback.append(img_rgb[py, px])
+                    colors = np.asarray(fallback)
             # Otherwise sample within the circle
             else:
                 y_min = max(0, cy - radius)
@@ -505,12 +534,11 @@ class AlgorithmService:
                 x_min = max(0, cx - radius)
                 x_max = min(width, cx + radius + 1)
 
-                for y in range(y_min, y_max):
-                    for x in range(x_min, x_max):
-                        if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                            colors.append(img_rgb[y, x])
+                ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
+                in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
+                colors = img_rgb[y_min:y_max, x_min:x_max][in_circle]
 
-            if not colors:
+            if len(colors) == 0:
                 return None
 
             # Calculate average RGB

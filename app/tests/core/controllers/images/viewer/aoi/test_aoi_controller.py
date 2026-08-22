@@ -658,3 +658,45 @@ def test_set_aoi_comments_bulk_empty_clears_attribute(bulk_controller):
     aoi = bulk_controller.parent.images[0]["areas_of_interest"][0]
     assert aoi["user_comment"] == ""
     assert "user_comment" not in aoi["xml"].attrib
+
+
+# ---------------------------------------------------------------------------
+# area_of_interest_click (thumbnail click must SELECT, not just zoom)
+# ---------------------------------------------------------------------------
+
+def _thumb(name, center=(120, 80)):
+    img = MagicMock()
+    img.objectName.return_value = name
+    img.center = center
+    return img
+
+
+def test_thumbnail_click_selects_and_zooms(controller):
+    """Clicking the AOI thumbnail must run the full selection path (list
+    styling, overlays, GPS-map marker), not only zoom the main image -
+    field report: the map marker never appeared for thumbnail clicks."""
+    controller.aoi_index_to_visible_index = {2: 1}
+    controller.select_aoi = MagicMock()
+
+    controller.area_of_interest_click(10, 10, _thumb("highlight2"))
+
+    controller.select_aoi.assert_called_once_with(2, 1)
+    controller.parent.main_image.zoomToArea.assert_called_once_with((120, 80), 6)
+
+
+def test_thumbnail_click_with_unmapped_index_still_selects(controller):
+    controller.aoi_index_to_visible_index = {}
+    controller.select_aoi = MagicMock()
+
+    controller.area_of_interest_click(0, 0, _thumb("highlight0"))
+
+    controller.select_aoi.assert_called_once_with(0, -1)
+
+
+def test_thumbnail_click_with_odd_name_only_zooms(controller):
+    controller.select_aoi = MagicMock()
+
+    controller.area_of_interest_click(0, 0, _thumb("somethingelse"))
+
+    controller.select_aoi.assert_not_called()
+    controller.parent.main_image.zoomToArea.assert_called_once()

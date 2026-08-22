@@ -1,5 +1,6 @@
 import pytest
 import platform
+from datetime import datetime
 import piexif
 import json
 import numpy as np
@@ -12,13 +13,22 @@ from app.helpers.MetaDataHelper import MetaDataHelper
 
 
 @pytest.fixture
-def example_image_path():
-    return "app/tests/data/rgb/input/DJI_0082.JPG"
+def example_image_path(testData):
+    """Absolute path, via the shared testData fixture.
+
+    These were hardcoded as "app/tests/data/..." relative strings, which only
+    resolve when pytest's working directory happens to be the repo root -
+    running from app/ made every real read miss. The miss was silent:
+    _parse_xmp_direct answers {} for any IO failure (by design, to signal the
+    ExifTool fallback), so a missing file was indistinguishable from an image
+    with no XMP.
+    """
+    return testData['EXIF_Input_Path']
 
 
 @pytest.fixture
-def example_destination_path():
-    return "app/tests/data/rgb/output/ADIAT_Results/DJI_0082.JPG"
+def example_destination_path(testData):
+    return testData['EXIF_Output_Path']
 
 
 def test__get_exif_tool_path_windows():
@@ -306,6 +316,13 @@ def test_get_xmp_data_direct_delegates_to_parse_xmp_direct():
 def test_get_xmp_data_direct_matches_parse_on_real_image(example_image_path):
     """On a real testData image the public wrapper returns a dict identical to
     the private _parse_xmp_direct it wraps (no divergence between the two)."""
+    # Checked explicitly: _parse_xmp_direct returns {} for a missing file just
+    # as it does for an image without XMP, so without this the failure below
+    # is a bare "assert {}" that says nothing about the real cause.
+    assert path.isfile(example_image_path), (
+        f"test image missing: {example_image_path} (app/tests/data is gitignored - "
+        f"unpack app/tests/data.zip)")
+
     expected = MetaDataHelper._parse_xmp_direct(example_image_path)
     result = MetaDataHelper.get_xmp_data_direct(example_image_path)
 
@@ -313,3 +330,129 @@ def test_get_xmp_data_direct_matches_parse_on_real_image(example_image_path):
     assert result == expected
     # DJI_0082.JPG carries real drone XMP, so the direct parse is non-empty.
     assert result
+
+
+# --- capture-time extraction -------------------------------------------------
+#
+# DateTimeOriginal/DateTimeDigitized are Exif-IFD tags; plain DateTime (306) is
+# an ImageIFD tag in the "0th" IFD. piexif.ExifIFD.DateTime does not exist, so
+# the hand-rolled fallbacks that read it there raised AttributeError once per
+# image instead of returning a timestamp.
+
+def test_timestamp_prefers_date_time_original():
+    exif = {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026:08:15 12:09:26',
+                     piexif.ExifIFD.DateTimeDigitized: b'2020:01:01 00:00:00'},
+            '0th': {piexif.ImageIFD.DateTime: b'2019:01:01 00:00:00'}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+
+
+def test_timestamp_falls_back_to_digitized():
+    exif = {'Exif': {piexif.ExifIFD.DateTimeDigitized: b'2026:08:15 12:09:26'}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+
+
+def test_timestamp_falls_back_to_zeroth_ifd_date_time():
+    """The fallback that never ran: DateTime lives in '0th', not 'Exif'."""
+    exif = {'0th': {piexif.ImageIFD.DateTime: b'2026:08:15 12:09:26'}, 'Exif': {}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+
+
+def test_timestamp_accepts_str_and_trailing_nulls():
+    exif = {'Exif': {piexif.ExifIFD.DateTimeOriginal: '2026:08:15 12:09:26\x00'}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+
+
+def test_timestamp_accepts_dashed_dates():
+    """EXIF specifies colons, but some writers emit dashes."""
+    exif = {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026-08-15 12:09:26'}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+
+
+def test_timestamp_none_when_image_has_no_date():
+    """Frames cut from video carry GPS and nothing else - no raise, just None."""
+    exif = {'0th': {34853: 26}, 'Exif': {}, 'GPS': {1: b'N', 2: ((39, 1), (28, 1), (0, 1))}}
+
+    assert MetaDataHelper.get_exif_timestamp(exif) is None
+
+
+def test_timestamp_none_for_unparseable_and_empty_input():
+    assert MetaDataHelper.get_exif_timestamp({'Exif': {piexif.ExifIFD.DateTimeOriginal: b'not a date'}}) is None
+    assert MetaDataHelper.get_exif_timestamp({}) is None
+    assert MetaDataHelper.get_exif_timestamp(None) is None
+
+
+# --- capture-time writing ----------------------------------------------------
+
+def _tiny_jpeg(tmp_path, name='frame.jpg'):
+    """A real JPEG on disk, as cv2.imwrite would leave it: no EXIF at all."""
+    target = tmp_path / name
+    Image.new('RGB', (32, 24), (120, 90, 60)).save(str(target), 'jpeg', quality=95)
+    return str(target)
+
+
+def test_add_capture_time_round_trips(tmp_path):
+    """Frames from video carry no date; this is what puts one there."""
+    image = _tiny_jpeg(tmp_path)
+
+    MetaDataHelper.add_capture_time(image, datetime(2026, 8, 15, 16, 59, 59))
+
+    assert MetaDataHelper.get_exif_timestamp(
+        MetaDataHelper.get_exif_data_piexif(image)) == datetime(2026, 8, 15, 16, 59, 59)
+
+
+def test_add_capture_time_sets_all_three_date_tags(tmp_path):
+    """Readers differ on which tag they prefer; they must not disagree."""
+    image = _tiny_jpeg(tmp_path)
+
+    MetaDataHelper.add_capture_time(image, datetime(2026, 8, 15, 12, 0, 0))
+
+    exif = MetaDataHelper.get_exif_data_piexif(image)
+    stamp = b'2026:08:15 12:00:00'
+    assert exif['Exif'][piexif.ExifIFD.DateTimeOriginal] == stamp
+    assert exif['Exif'][piexif.ExifIFD.DateTimeDigitized] == stamp
+    assert exif['0th'][piexif.ImageIFD.DateTime] == stamp
+
+
+def test_add_gps_data_can_stamp_time_in_the_same_pass(tmp_path):
+    """A frame needing both is only rewritten once."""
+    image = _tiny_jpeg(tmp_path)
+
+    MetaDataHelper.add_gps_data(image, 39.4835, 73.5852, 4563.5,
+                                timestamp=datetime(2026, 8, 15, 12, 9, 26))
+
+    exif = MetaDataHelper.get_exif_data_piexif(image)
+    assert MetaDataHelper.get_exif_timestamp(exif) == datetime(2026, 8, 15, 12, 9, 26)
+    assert exif['GPS'][piexif.GPSIFD.GPSAltitude] == (456350, 100)
+
+
+def test_add_gps_data_without_timestamp_leaves_dates_alone(tmp_path):
+    """The timestamp argument is opt-in; existing callers are unaffected."""
+    image = _tiny_jpeg(tmp_path)
+
+    MetaDataHelper.add_gps_data(image, 39.4835, 73.5852, 4563.5)
+
+    assert MetaDataHelper.get_exif_timestamp(MetaDataHelper.get_exif_data_piexif(image)) is None
+
+
+def test_metadata_edit_does_not_touch_the_image_data(tmp_path):
+    """Stamping metadata must not put a second generation of JPEG loss on the
+    image an analysis then has to find people in. The old path re-saved through
+    PIL with no quality argument, dropping frames cv2 wrote at 95 to PIL's
+    default 75; the metadata segment is patched in place instead."""
+    image = _tiny_jpeg(tmp_path)
+    with Image.open(image) as original:
+        before_tables = [list(t) for t in original.quantization.values()]
+        before_pixels = original.convert('RGB').tobytes()
+
+    MetaDataHelper.add_capture_time(image, datetime(2026, 8, 15, 12, 0, 0))
+    MetaDataHelper.add_gps_data(image, 39.4835, 73.5852, 4563.5)
+
+    with Image.open(image) as after:
+        assert [list(t) for t in after.quantization.values()] == before_tables
+        # Byte-identical, not merely similar - two edits later.
+        assert after.convert('RGB').tobytes() == before_pixels

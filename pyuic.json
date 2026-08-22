@@ -58,7 +58,7 @@
     ],
     [
       "resources/views/algorithms/RangeViewer.ui",
-      "app/algorithms/images/Shared/views"
+      "app/algorithms/Shared/views"
     ],
     [
       "resources/views/algorithms/MatchedFilter.ui",

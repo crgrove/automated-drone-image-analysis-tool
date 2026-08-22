@@ -109,6 +109,75 @@ def test_build_histogram_context_deduplicates_overlapping_aoi_pixels():
     assert int(context['histogram_data']['anomaly_counts'].sum()) == 2
 
 
+def test_aoi_overlay_uses_contour_when_detected_pixels_missing():
+    """AOIs without persisted detected_pixels should sample the filled contour, not the circle."""
+    service = ColorHistogramService()
+    image_array = np.zeros((20, 20, 3), dtype=np.uint8)
+    image_array[5:9, 5:9] = [255, 0, 0]
+    areas_of_interest = [
+        {
+            'center': (7, 7),
+            'radius': 9,
+            'contour': [[5, 5], [8, 5], [8, 8], [5, 8]],
+        },
+    ]
+
+    context = service.build_histogram_context(image_array, 'RGB', 'R', areas_of_interest=areas_of_interest, bin_count=8)
+
+    assert context is not None
+    assert context['histogram_data']['anomaly_pixels'] == 16
+    counts = context['histogram_data']['anomaly_counts']
+    assert int(counts.sum()) == 16
+    assert int(counts[-1]) == 16
+
+
+def test_aoi_overlay_prefers_detected_pixels_over_contour():
+    """Exact detected pixels should win over the contour when both are present."""
+    service = ColorHistogramService()
+    image_array = np.zeros((5, 5, 3), dtype=np.uint8)
+    areas_of_interest = [
+        {
+            'center': (2, 2),
+            'radius': 3,
+            'contour': [[0, 0], [3, 0], [3, 3], [0, 3]],
+            'detected_pixels': [(1, 1)],
+        },
+    ]
+
+    context = service.build_histogram_context(image_array, 'RGB', 'R', areas_of_interest=areas_of_interest, bin_count=8)
+
+    assert context is not None
+    assert context['histogram_data']['anomaly_pixels'] == 1
+
+
+def test_aoi_overlay_falls_back_to_circle_without_pixel_data():
+    """User-created AOIs with no pixel-level data should still sample the circle."""
+    service = ColorHistogramService()
+    image_array = np.zeros((3, 3, 3), dtype=np.uint8)
+    areas_of_interest = [
+        {'center': (1, 1), 'radius': 1},
+    ]
+
+    context = service.build_histogram_context(image_array, 'RGB', 'R', areas_of_interest=areas_of_interest, bin_count=8)
+
+    assert context is not None
+    assert context['histogram_data']['anomaly_pixels'] == 5
+
+
+def test_aoi_overlay_ignores_malformed_contour():
+    """A malformed contour should fall through to the circle instead of raising."""
+    service = ColorHistogramService()
+    image_array = np.zeros((3, 3, 3), dtype=np.uint8)
+    areas_of_interest = [
+        {'center': (1, 1), 'radius': 1, 'contour': 'not-a-contour'},
+    ]
+
+    context = service.build_histogram_context(image_array, 'RGB', 'R', areas_of_interest=areas_of_interest, bin_count=8)
+
+    assert context is not None
+    assert context['histogram_data']['anomaly_pixels'] == 5
+
+
 def test_build_component_mask_filters_values_inside_range():
     """Component masks should only keep values inside the selected band."""
     service = ColorHistogramService()

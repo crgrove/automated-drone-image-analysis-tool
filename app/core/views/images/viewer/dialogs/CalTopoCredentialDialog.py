@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
 from PySide6.QtCore import Qt, QUrl
 from helpers.TranslationMixin import TranslationMixin
 from PySide6.QtGui import QFont, QDesktopServices
-from core.services.export.CalTopoAPIService import CalTopoAPIService
+from core.services.export.CalTopoAPIService import CalTopoAPIService, decode_credential_secret
 
 
 class CalTopoCredentialDialog(TranslationMixin, QDialog):
@@ -234,8 +234,40 @@ class CalTopoCredentialDialog(TranslationMixin, QDialog):
             QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential Secret."))
             return
 
+        if not self._validate_secret_format(credential_secret):
+            return
+
         self.credentials = (team_id, credential_id, credential_secret)
         self.accept()
+
+    def _validate_secret_format(self, credential_secret):
+        """Reject a secret that could never sign a request.
+
+        Catching this at entry is the difference between a clear message here
+        and an unexplained authentication failure at export time.
+
+        Args:
+            credential_secret (str): The secret as typed.
+
+        Returns:
+            bool: True if the secret is decodable base64.
+        """
+        try:
+            decode_credential_secret(credential_secret)
+            return True
+        except ValueError as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Invalid Credential Secret"),
+                self.tr(
+                    "The Credential Secret cannot be used to sign a CalTopo request.\n\n"
+                    "Copy it exactly as shown on the CalTopo Team Admin page under "
+                    "Service Accounts - it is a long base64 string, not the "
+                    "Credential ID or the Team ID.\n\n"
+                    "Details: {error}"
+                ).format(error=str(e))
+            )
+            return False
 
     def on_test_clicked(self):
         """
@@ -260,6 +292,9 @@ class CalTopoCredentialDialog(TranslationMixin, QDialog):
 
         if not credential_secret:
             QMessageBox.warning(self, self.tr("Invalid Input"), self.tr("Please enter a Credential Secret."))
+            return
+
+        if not self._validate_secret_format(credential_secret):
             return
 
         # Disable test button during test

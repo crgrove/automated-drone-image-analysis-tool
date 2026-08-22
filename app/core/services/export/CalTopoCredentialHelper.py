@@ -9,13 +9,22 @@ import hashlib
 import os
 from PySide6.QtCore import QSettings
 
+from core.services.export.CalTopoAPIService import decode_credential_secret
+
 
 class CalTopoCredentialHelper:
     """Helper class for managing encrypted CalTopo API credentials."""
 
-    def __init__(self):
-        """Initialize the credential helper."""
-        self.settings = QSettings("ADIAT", "CalTopoAPI")
+    def __init__(self, settings=None):
+        """Initialize the credential helper.
+
+        Args:
+            settings: Optional QSettings backing store. Defaults to the real
+                per-user store. Tests must pass an isolated one: writing
+                fixture credentials into the shared store overwrites whatever
+                the user actually configured.
+        """
+        self.settings = settings if settings is not None else QSettings("ADIAT", "CalTopoAPI")
         self._encryption_key = self._get_encryption_key()
 
     def _get_encryption_key(self):
@@ -116,13 +125,27 @@ class CalTopoCredentialHelper:
         return team_id, credential_id, credential_secret
 
     def has_credentials(self):
-        """Check if credentials are stored.
+        """Check if a *usable* set of credentials is stored.
+
+        A secret that cannot be decoded can never produce a valid request
+        signature, so it is reported as absent. Callers gate the credential
+        prompt on this: treating an unusable secret as present locks the user
+        out of the only dialog that could correct it. Note that
+        ``_simple_decrypt`` returns "" on failure, so a corrupt stored blob
+        lands here too.
 
         Returns:
-            bool: True if credentials exist, False otherwise
+            bool: True if credentials exist and the secret is decodable.
         """
         team_id, credential_id, credential_secret = self.get_credentials()
-        return team_id is not None and credential_id is not None and credential_secret is not None
+        if not team_id or not credential_id or not credential_secret:
+            return False
+
+        try:
+            decode_credential_secret(credential_secret)
+        except ValueError:
+            return False
+        return True
 
     def clear_credentials(self):
         """Clear stored credentials."""

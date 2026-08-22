@@ -599,3 +599,116 @@ def test_refined_path_falls_back_to_homography_without_terrain(aligned_image_dat
 
     assert result is not None
     assert result.elevation_source == 'refined'
+
+
+# ---------------------------------------------------------------------------
+# Effective-AGL cross-check (guards against the geoid/ASL datum short-throw bug)
+# ---------------------------------------------------------------------------
+
+def _make_aoi_service():
+    with patch('core.services.image.AOIService.ImageService'):
+        return AOIService({'path': 'x.jpg', 'mask_path': ''})
+
+
+def test_select_effective_agl_uses_absolute_when_agrees():
+    """When the absolute and relief AGL estimates agree, the precise absolute
+    (e.g. RTK) value is used."""
+    svc = _make_aoi_service()
+    dt = MagicMock(elevation_m=306.0)
+    # |65 - 61| = 4 <= max(0.15*61, 8) = 9.15 -> use absolute
+    assert svc._select_effective_agl(65.0, 61.0, 61.0, -26.5, dt, 306.0) == 65.0
+
+
+def test_select_effective_agl_falls_back_to_relief_on_bad_geoid():
+    """A bad geoid makes the absolute estimate diverge; relief must win so the
+    AOI is not thrown systematically short."""
+    svc = _make_aoi_service()
+    dt = MagicMock(elevation_m=306.2)
+    # |41 - 61| = 20 > tol -> use relief
+    assert svc._select_effective_agl(41.0, 61.0, 61.0, -1.55, dt, 306.2) == 61.0
+
+
+def test_select_effective_agl_rejects_orthometric_asl_double_correction():
+    """The symmetric failure: an orthometric ASL double-corrected too high must
+    also fall back to relief rather than throw the AOI too far."""
+    svc = _make_aoi_service()
+    dt = MagicMock(elevation_m=306.0)
+    assert svc._select_effective_agl(90.0, 61.0, 61.0, -26.5, dt, 306.0) == 61.0
+
+
+def test_select_effective_agl_missing_estimates():
+    svc = _make_aoi_service()
+    dt = MagicMock(elevation_m=306.0)
+    assert svc._select_effective_agl(None, 61.0, 61.0, -26.5, dt, 306.0) == 61.0
+    assert svc._select_effective_agl(41.0, None, 61.0, -26.5, dt, 306.0) == 41.0
+    assert svc._select_effective_agl(None, None, 61.0, -26.5, dt, 306.0) == 61.0
+    assert svc._select_effective_agl(None, None, 0, -26.5, dt, 306.0) == 1.0
+
+
+def _terrain_mock(geoid_n, ground_elev=306.2):
+    """Flat-terrain mock: drone-ground == aoi-ground, so relief AGL == reported."""
+    ts = MagicMock()
+    ts.enabled = True
+
+    def get_elev(lat, lon, offline_only=False):
+        return MagicMock(source='terrain', elevation_m=ground_elev, resolution_m=1.0)
+
+    ts.get_elevation.side_effect = get_elev
+    ts.get_geoid_undulation.return_value = geoid_n
+    return ts
+
+
+def _image_service_mock():
+    ms = MagicMock()
+    ms.get_camera_yaw.return_value = 285.5
+    ms.get_camera_pitch.return_value = -75.0
+    ms.get_gimbal_roll.return_value = 0.0
+    ms.get_relative_altitude.return_value = 61.0
+    ms.get_asl_altitude.return_value = 345.7
+    ms.get_camera_intrinsics.return_value = {
+        'focal_length_mm': 12.3, 'sensor_width_mm': 17.30, 'sensor_height_mm': 13.00,
+    }
+    ms.img_array = np.zeros((3956, 5280, 3), dtype=np.uint8)
+    return ms
+
+
+def _run_estimate_with_terrain(geoid_n):
+    img = {'path': 'x.jpg', 'mask_path': ''}
+    aoi = {'center': (2640, 2400), 'radius': 20}
+    with patch('core.services.image.AOIService.ImageService') as MockIS, \
+            patch('helpers.MetaDataHelper.MetaDataHelper.get_exif_data_piexif', return_value={}), \
+            patch('helpers.LocationInfo.LocationInfo.get_gps',
+                  return_value={'latitude': 30.6537, 'longitude': -97.9521}), \
+            patch('core.services.image.AOIService._get_terrain_service',
+                  return_value=_terrain_mock(geoid_n)):
+        MockIS.return_value = _image_service_mock()
+        service = AOIService(img)
+        return service.estimate_aoi_gps(img, aoi, use_terrain=True)
+
+
+def test_terrain_agl_bad_geoid_falls_back_to_relief_end_to_end():
+    """Regression: even with the old broken geoid (~-1.55 m), the terrain path
+    must not shrink effective AGL to ~41 m; the cross-check keeps it near the
+    reported 61 m so the AOI cannot smear."""
+    res = _run_estimate_with_terrain(geoid_n=-1.55)
+    assert res is not None
+    assert res.elevation_source == 'terrain'
+    assert abs(res.effective_agl_m - 61.0) < 3.0
+
+
+def test_terrain_agl_good_geoid_uses_absolute_end_to_end():
+    """With a correct geoid the absolute (RTK) estimate ~66 m agrees with relief
+    and is used."""
+    res = _run_estimate_with_terrain(geoid_n=-26.5)
+    assert res is not None
+    assert res.elevation_source == 'terrain'
+    assert abs(res.effective_agl_m - 66.0) < 3.0
+
+
+def test_terrain_agl_equals_reported_on_flat_terrain():
+    """On flat terrain the effective AGL must equal the reported AGL regardless
+    of which branch is chosen."""
+    res = _run_estimate_with_terrain(geoid_n=-26.5)
+    assert res is not None
+    # reported 61, RTK-implied 66; both within a few metres of reported on flat ground
+    assert abs(res.effective_agl_m - 61.0) < 6.0

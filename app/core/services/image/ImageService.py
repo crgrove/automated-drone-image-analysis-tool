@@ -23,7 +23,7 @@ class ImageService:
     """Service to calculate various drone and image attributes based on metadata."""
 
     def __init__(self, path, mask_path=None, img_array=None, calculated_bearing=None,
-                 exif_data=None, xmp_data=None):
+                 exif_data=None, xmp_data=None, defer_load=False):
         """
         Initializes the ImageService by extracting Exif and XMP metadata.
 
@@ -38,6 +38,10 @@ class ImageService:
             xmp_data (dict, optional): Pre-read XMP data. Skips the (ExifTool) XMP read when
                                        given — used by bulk callers (e.g. the POD pass) to
                                        avoid launching one ExifTool process per image.
+            defer_load (bool, optional): When True (and no img_array is given), pixel data
+                                         is not read from disk until img_array is first
+                                         accessed. Metadata-only callers use this to avoid
+                                         decoding images whose pixels they may never need.
         """
         self.exif_data = exif_data if exif_data is not None else MetaDataHelper.get_exif_data_piexif(path)
         self.xmp_data = xmp_data if xmp_data is not None else MetaDataHelper.get_xmp_data_merged(path)
@@ -46,14 +50,31 @@ class ImageService:
         self.mask_path = mask_path
         self.calculated_bearing = calculated_bearing
 
-        # Use pre-loaded array if provided, otherwise load from disk
+        # Use pre-loaded array if provided, otherwise load from disk (now,
+        # or lazily on first img_array access when defer_load is set)
+        self._img_array = None
         if img_array is not None:
-            self.img_array = img_array
-        else:
-            img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-            if img is None:
-                raise ValueError(f"Could not load image: {self.path}")
-            self.img_array = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            self._img_array = img_array
+        elif not defer_load:
+            self._img_array = self._load_img_array()
+
+    def _load_img_array(self):
+        """Read and decode the image from disk as an RGB array."""
+        img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise ValueError(f"Could not load image: {self.path}")
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    @property
+    def img_array(self):
+        """Pixel data (RGB). Loaded lazily when defer_load was requested."""
+        if self._img_array is None:
+            self._img_array = self._load_img_array()
+        return self._img_array
+
+    @img_array.setter
+    def img_array(self, value):
+        self._img_array = value
 
     def get_relative_altitude(self, distance_unit='m'):
         """
@@ -115,6 +136,39 @@ class ImageService:
 
         return round(altitude * METERS_TO_FEET, 2) if distance_unit == 'ft' else altitude
 
+    def _dji_gimbal_unrecorded(self):
+        """Whether a DJI image carries the "gimbal telemetry not recorded" signature.
+
+        DJI Mini-series airframes (e.g. FC3682 / Mini 3) omit gimbal
+        orientation and leave GimbalPitch/Roll/Yaw all at +0.00 even for
+        straight-down captures, while flight telemetry (FlightYaw etc.) is
+        populated normally. Trusting those zeros makes a nadir frame look
+        horizontal (pitch 0) and north-facing (yaw 0), which suppresses GSD
+        and rotates AOI ground positions. This detects that case so callers
+        can fall back to nadir pitch and the flight-yaw heading.
+
+        A genuinely recorded gimbal reads nonzero on at least one axis, so
+        requiring the whole triad to be zero (or absent) keeps real
+        oblique/panned captures out of the heuristic. DJI-only.
+
+        Returns:
+            bool: True when the gimbal triad is the unrecorded all-zero signature.
+        """
+        if self.drone_make != 'DJI' or self.xmp_data is None:
+            return False
+
+        def _angle(attr):
+            raw = MetaDataHelper.get_drone_xmp_attribute(attr, self.drone_make, self.xmp_data)
+            try:
+                return float(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        pitch = _angle('Gimbal Pitch')
+        roll = _angle('Gimbal Roll')
+        yaw = _angle('Gimbal Yaw')
+        return pitch in (None, 0.0) and roll in (None, 0.0) and yaw in (None, 0.0)
+
     def get_camera_pitch(self):
         """
         Get camera pitch angle (standard photogrammetry convention).
@@ -146,6 +200,14 @@ class ImageService:
         # (-90 = nadir, 0 = horizontal, +90 = up)
         # For Autel, may need different handling (add if needed)
 
+        # DJI Mini-series images leave the gimbal angles unrecorded (all
+        # +0.00). A literal 0 pitch reads as a horizontal view, suppressing
+        # GSD and degrading AOI GPS/coverage, so report the pitch as unknown;
+        # downstream callers treat a missing pitch as nadir, which is the
+        # correct assumption for these straight-down SAR mapping captures.
+        if self._dji_gimbal_unrecorded():
+            return None
+
         return pitch
 
     def get_gimbal_roll(self):
@@ -162,6 +224,62 @@ class ImageService:
             return float(roll)
         except (TypeError, ValueError):
             return None
+
+    def get_flight_yaw(self):
+        """Retrieve the aircraft/drone flight heading from XMP metadata.
+
+        Distinct from the gimbal yaw: for WALDO imagery the stored image
+        orientation (GimbalYawDegree) and the plane's travel direction
+        (FlightYawDegree) can differ arbitrarily, and the pod-tilt roll is
+        physically anchored to the flight direction.
+
+        Returns:
+            float or None: Heading in degrees [0, 360), or None if unavailable.
+        """
+        if self.xmp_data is None:
+            return None
+        for key in ('FlightYawDegree', 'drone-dji:FlightYawDegree'):
+            value = self.xmp_data.get(key)
+            if value is not None:
+                try:
+                    return float(value) % 360.0
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def get_waldo_processor_version(self):
+        """Return the WALDO pre-pass processor version stamped on this image.
+
+        Returns:
+            int or None: Version number, or None for non-WALDO imagery.
+        """
+        if self.xmp_data is None:
+            return None
+        for key in ('waldo:ProcessorVersion', 'ProcessorVersion',
+                    'XMP-waldo:ProcessorVersion'):
+            value = self.xmp_data.get(key)
+            if value is not None:
+                try:
+                    return int(str(value))
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def get_roll_axis_azimuth(self):
+        """Compass azimuth of the axis the stamped gimbal roll rotates about.
+
+        WALDO processor version >= 6 stamps the pod-tilt roll about the FLIGHT
+        axis, decoupled from the stored image orientation. Returns None for
+        everything else, which keeps the historical behaviour (roll about the
+        gimbal-yaw axis).
+
+        Returns:
+            float or None: Axis azimuth in degrees, or None for legacy handling.
+        """
+        version = self.get_waldo_processor_version()
+        if version is None or version < 6:
+            return None
+        return self.get_flight_yaw()
 
     def get_camera_yaw(self):
         """
@@ -198,8 +316,16 @@ class ImageService:
         yaw = None
         source = None
 
-        # Prefer gimbal yaw if available (actual camera direction)
-        if self.xmp_data is not None and self.drone_make is not None:
+        # Prefer gimbal yaw if available (actual camera direction).
+        #
+        # DJI Mini-series images leave gimbal yaw at 0.00 when it was never
+        # recorded (see _dji_gimbal_unrecorded). Trusting that 0 reports the
+        # camera as facing north regardless of the aircraft's true heading,
+        # which mis-orients the compass and rotates AOI ground positions. Skip
+        # the gimbal rung in that case so the flight-yaw fallback supplies the
+        # heading — a nadir body-fixed camera shares the aircraft heading.
+        if (self.xmp_data is not None and self.drone_make is not None
+                and not self._dji_gimbal_unrecorded()):
             gimbal_yaw = MetaDataHelper.get_drone_xmp_attribute('Gimbal Yaw', self.drone_make, self.xmp_data)
             if gimbal_yaw is not None:
                 try:
@@ -533,6 +659,7 @@ class ImageService:
                 'pitch': fg.pitch_deg,
                 'yaw': fg.yaw_deg,
                 'roll': fg.roll_deg,
+                'roll_axis': self.get_roll_axis_azimuth() if fg.roll_deg else None,
                 'reported_agl': reported_agl,
                 'drone_terrain_elev_m': drone_terrain_elev_m,
                 'drone_absolute_elev_m': drone_absolute_elev_m,
@@ -585,6 +712,7 @@ class ImageService:
             ctx['cx'], ctx['cy'], ctx['img_w'], ctx['img_h'],
             ctx['focal_mm'], ctx['sensor_w_mm'], ctx['sensor_h_mm'],
             reported_agl, ctx['pitch'], ctx['yaw'], ctx['roll'],
+            roll_axis_azimuth_deg=ctx['roll_axis'],
         )
         if initial is None:
             cache[ck] = None
@@ -611,6 +739,7 @@ class ImageService:
                 ctx['cx'], ctx['cy'], ctx['img_w'], ctx['img_h'],
                 ctx['focal_mm'], ctx['sensor_w_mm'], ctx['sensor_h_mm'],
                 effective_agl, ctx['pitch'], ctx['yaw'], ctx['roll'],
+                roll_axis_azimuth_deg=ctx['roll_axis'],
             )
             if new_pos is None:
                 break

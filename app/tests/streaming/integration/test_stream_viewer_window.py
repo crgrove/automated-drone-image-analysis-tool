@@ -891,6 +891,80 @@ class TestStreamViewerWindow:
             window.close()
             QApplication.processEvents()
 
+    def test_connect_keeps_the_control_panel_where_the_user_left_it(self, qapp, qtbot):
+        """Field report: every Connect/Disconnect scrolled the controls to the bottom.
+
+        Disabling the button that was just clicked makes Qt hand focus to the
+        next widget in creation order - the Recording buttons, at the foot of
+        the panel - and a scroll area follows focus. The panel must hold still
+        and focus must land on the counterpart button.
+        """
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            window.show()
+            qtbot.waitExposed(window)
+            scroll = window.ui.splitter.widget(1)
+            # Force the overflow the field machines have; the window itself has
+            # a 600px minimum height that a resize() cannot go under.
+            scroll.setFixedHeight(200)
+            QApplication.processEvents()
+            assert scroll.verticalScrollBar().maximum() > 0
+
+            window.stream_controls.connect_button.setFocus(Qt.OtherFocusReason)
+            window.on_connection_changed(True, "test source")
+
+            assert scroll.verticalScrollBar().value() == 0
+            assert window.focusWidget() is window.stream_controls.disconnect_button
+
+            window.on_connection_changed(False, "closed")
+
+            assert scroll.verticalScrollBar().value() == 0
+            assert window.focusWidget() is window.stream_controls.connect_button
+        finally:
+            window.close()
+            QApplication.processEvents()
+
+    def test_connect_returns_to_live_view_from_the_gallery(self, qapp):
+        """A new source is there to be watched: connecting leaves the Gallery."""
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            gallery_index = window.tab_widget.indexOf(window.gallery_widget)
+            window.tab_widget.setCurrentIndex(gallery_index)
+
+            window.on_connection_changed(True, "test source")
+
+            assert window.tab_widget.currentIndex() == 0
+        finally:
+            window.close()
+            QApplication.processEvents()
+
+    def test_connect_does_not_disturb_the_live_view_tab(self, qapp):
+        """Already on Live View: nothing to switch."""
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            window.tab_widget.setCurrentIndex(0)
+
+            window.on_connection_changed(True, "test source")
+
+            assert window.tab_widget.currentIndex() == 0
+        finally:
+            window.close()
+            QApplication.processEvents()
+
+    def test_disconnect_leaves_the_gallery_open(self, qapp):
+        """Reviewing tracks after a stream ends must not be interrupted."""
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+        try:
+            gallery_index = window.tab_widget.indexOf(window.gallery_widget)
+            window.tab_widget.setCurrentIndex(gallery_index)
+
+            window.on_connection_changed(False, "closed")
+
+            assert window.tab_widget.currentIndex() == gallery_index
+        finally:
+            window.close()
+            QApplication.processEvents()
+
     def test_resolution_changing_sought_frame_keeps_focus(self, qapp):
         """A sought frame that changes resolution must retain its pending focus.
 
@@ -1049,9 +1123,12 @@ class TestStreamViewerWindow:
 
 
 def test_flight_viewer_menu_entry_hidden_when_feature_disabled(qapp):
-    """Flight Viewer is deferred to a later release: its action must not
-    appear in any menu while FeatureFlags.FLIGHT_VIEWER_ENABLED is False."""
-    window = StreamViewerWindow(algorithm_name='', theme='dark')
+    """Flight Viewer visibility is gated: its action must not appear in any
+    menu while FeatureFlags.FLIGHT_VIEWER_ENABLED is False. The flag is
+    patched explicitly so the gated-off path stays covered regardless of the
+    shipping default."""
+    with patch("helpers.FeatureFlags.FLIGHT_VIEWER_ENABLED", False):
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
     try:
         menu_texts = [
             action.text()
@@ -1060,6 +1137,26 @@ def test_flight_viewer_menu_entry_hidden_when_feature_disabled(qapp):
         ]
         assert window.action_flight_viewer.text() not in menu_texts
         # Positive control: sibling entries are still present.
+        assert window.action_image_analysis.text() in menu_texts
+    finally:
+        window.close()
+        QApplication.processEvents()
+
+
+def test_flight_viewer_menu_entry_shown_when_feature_enabled(qapp):
+    """When the flag is enabled the action appears in the primary menu
+    alongside its siblings. The flag is patched True explicitly so this
+    enabled path stays covered regardless of the (currently deferred)
+    shipping default."""
+    with patch("helpers.FeatureFlags.FLIGHT_VIEWER_ENABLED", True):
+        window = StreamViewerWindow(algorithm_name='', theme='dark')
+    try:
+        menu_texts = [
+            action.text()
+            for top in window.menuBar().actions() if top.menu()
+            for action in top.menu().actions()
+        ]
+        assert window.action_flight_viewer.text() in menu_texts
         assert window.action_image_analysis.text() in menu_texts
     finally:
         window.close()

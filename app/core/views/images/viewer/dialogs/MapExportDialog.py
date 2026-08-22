@@ -7,7 +7,7 @@ and select which data to include (drone locations, flagged AOIs, coverage area).
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QRadioButton, QButtonGroup, QGroupBox, QCheckBox
+    QRadioButton, QButtonGroup, QGroupBox, QCheckBox, QComboBox
 )
 from PySide6.QtCore import Qt
 from helpers.TranslationMixin import TranslationMixin
@@ -130,13 +130,36 @@ class MapExportDialog(TranslationMixin, QDialog):
         self.include_images.setToolTip(self.tr("Upload photos to CalTopo markers (CalTopo only)"))
         self.include_images.setEnabled(False)  # Disabled by default, enabled when CalTopo is selected
 
+        # Which photo(s) to attach to flagged AOI markers
+        aoi_photo_layout = QHBoxLayout()
+        self.aoi_photo_label = QLabel(self.tr("Photo for flagged AOIs:"))
+        self.aoi_photo_mode = QComboBox()
+        self.aoi_photo_mode.addItem(self.tr("Large Image (with zoom insets)"), 'full')
+        self.aoi_photo_mode.addItem(self.tr("AOI Thumbnail Only"), 'thumbnail')
+        self.aoi_photo_mode.addItem(self.tr("Both"), 'both')
+        self.aoi_photo_mode.setCurrentIndex(0)  # Default: large multi-zoom image
+        self.aoi_photo_mode.setToolTip(self.tr(
+            "Large Image uploads the same multi-zoom composite used in the PDF report\n"
+            "(full image with 3x and 6x insets). AOI Thumbnail uploads a zoomed crop\n"
+            "centered on the detection. Both uploads each."
+        ))
+        aoi_photo_layout.addWidget(self.aoi_photo_label)
+        aoi_photo_layout.addWidget(self.aoi_photo_mode)
+        aoi_photo_layout.addStretch()
+
         caltopo_options_layout.addWidget(self.include_images)
+        caltopo_options_layout.addLayout(aoi_photo_layout)
         self.caltopo_options_group.setLayout(caltopo_options_layout)
         layout.addWidget(self.caltopo_options_group)
 
         # Connect export type changes to enable/disable CalTopo options
         self.kml_radio.toggled.connect(self._on_export_type_changed)
         self.caltopo_radio.toggled.connect(self._on_export_type_changed)
+
+        # The AOI photo choice only matters when photos and flagged AOIs are exported
+        self.include_images.toggled.connect(self._on_aoi_photo_options_changed)
+        self.include_flagged_aois.toggled.connect(self._on_aoi_photo_options_changed)
+
         self._on_export_type_changed()  # Set initial state
 
         # Connect locations checkbox to enable/disable "Include Images without flagged AOIs"
@@ -203,6 +226,17 @@ class MapExportDialog(TranslationMixin, QDialog):
         """
         return self.include_images.isChecked()
 
+    def get_aoi_photo_mode(self):
+        """
+        Get the photo mode to use for flagged AOI markers (CalTopo only).
+
+        Returns:
+            str: 'full' for the large multi-zoom composite (same image as the PDF
+                 report), 'thumbnail' for a zoomed crop centered on the AOI, or
+                 'both' to upload each.
+        """
+        return self.aoi_photo_mode.currentData() or 'full'
+
     def should_include_images_without_flagged_aois(self):
         """
         Check if images without flagged AOIs should be included in location exports.
@@ -235,6 +269,17 @@ class MapExportDialog(TranslationMixin, QDialog):
         is_caltopo = self.caltopo_radio.isChecked()
         self.include_images.setEnabled(is_caltopo)
         self.caltopo_options_group.setEnabled(is_caltopo)
+        self._on_aoi_photo_options_changed()
+
+    def _on_aoi_photo_options_changed(self):
+        """Enable the AOI photo choice only when AOI photos will actually be uploaded."""
+        enabled = (
+            self.caltopo_radio.isChecked()
+            and self.include_images.isChecked()
+            and self.include_flagged_aois.isChecked()
+        )
+        self.aoi_photo_mode.setEnabled(enabled)
+        self.aoi_photo_label.setEnabled(enabled)
 
     def _on_locations_changed(self):
         """Handle locations checkbox changes to enable/disable related option."""

@@ -1,28 +1,83 @@
 import logging
 import pytest
 import os
+import tempfile
 from unittest.mock import patch
-from core.services.LoggerService import LoggerService, resolve_log_level  # Adjust the import according to your project structure
+from core.services import LoggerService as logger_module
+from core.services.LoggerService import (  # Adjust the import according to your project structure
+    LoggerService,
+    resolve_log_level,
+    resolve_log_path,
+)
 
 
 @pytest.fixture
 def logger_service():
-    with patch("os.makedirs"), patch("os.path.exists", return_value=False):
-        return LoggerService()
+    # No path patching: under pytest the log resolves to a throwaway temp
+    # file, so constructing the real service is safe.
+    return LoggerService()
 
 
 def test_logger_service_initialization_windows():
-    with patch("platform.system", return_value="Windows"), \
+    with patch.object(logger_module, "_running_under_pytest", return_value=False), \
+            patch("platform.system", return_value="Windows"), \
             patch("os.makedirs") as mock_makedirs, \
-            patch("os.path.exists", return_value=False), \
             patch("logging.getLogger"), \
             patch("logging.FileHandler"), \
             patch("logging.StreamHandler"):
         logger_service = LoggerService()
-        home_path = os.path.expanduser("~")
-        app_path = home_path + '/AppData/Roaming/ADIAT/'
-        mock_makedirs.assert_called_once_with(app_path)
+        expected_dir = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'ADIAT')
+        mock_makedirs.assert_called_once_with(expected_dir, exist_ok=True)
         assert logger_service.logger is not None
+
+
+# ---------------------------------------------------------------------------
+# resolve_log_path: tests must never write into the user's real log file.
+# A deliberate test failure landing in adiat_logs.txt has already been
+# mistaken for a field error while reading a crew's log.
+# ---------------------------------------------------------------------------
+
+def test_log_path_under_pytest_is_a_throwaway_file():
+    """We ARE under pytest here, so no patching needed to prove it."""
+    path = resolve_log_path()
+
+    assert path.startswith(tempfile.gettempdir())
+    assert 'adiat-test-logs' in path
+    assert os.path.isdir(os.path.dirname(path))  # created, ready to write
+
+
+def test_log_path_under_pytest_avoids_the_real_user_log():
+    real_dir = os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'ADIAT')
+    assert os.path.normcase(real_dir) not in os.path.normcase(resolve_log_path())
+
+
+@pytest.mark.parametrize('system, sys_platform', [('Windows', 'win32'), ('Darwin', 'darwin')])
+def test_log_path_outside_pytest_uses_appdata_on_supported_platforms(system, sys_platform):
+    with patch.object(logger_module, "_running_under_pytest", return_value=False), \
+            patch("platform.system", return_value=system), \
+            patch.object(logger_module.sys, "platform", sys_platform), \
+            patch("os.makedirs"):
+        path = resolve_log_path()
+
+    expected = os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'ADIAT', 'adiat_logs.txt')
+    assert path == expected
+
+
+def test_log_path_on_other_platforms_does_not_raise():
+    """Regression: neither branch matched, app_path was never assigned, and
+    building the log path raised UnboundLocalError during startup."""
+    with patch.object(logger_module, "_running_under_pytest", return_value=False), \
+            patch("platform.system", return_value="Linux"), \
+            patch.object(logger_module.sys, "platform", "linux"), \
+            patch("os.makedirs"):
+        path = resolve_log_path()
+
+    assert path == os.path.join(os.path.expanduser('~'), '.adiat', 'adiat_logs.txt')
+
+
+def test_running_under_pytest_detects_the_env_marker():
+    with patch.dict(os.environ, {'PYTEST_CURRENT_TEST': 'x'}):
+        assert logger_module._running_under_pytest() is True
 
 
 def test_warning(logger_service):

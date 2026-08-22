@@ -209,3 +209,28 @@ def test_generate_zip_file():
         service.generate_zip_file([test_file1, test_file2], zip_path)
 
         assert os.path.exists(zip_path)
+
+
+# --- report metadata formatting ---------------------------------------------
+#
+# Field report: images without camera intrinsics (every frame cut from a video)
+# rendered "AGL: Noneft" and "Estimated Average GSD: Nonecm/px", and a missing
+# gimbal yaw fell back to 0, printing "Drone Orientation: 0°" - a real-looking
+# due-north heading for an image that reports no heading at all.
+
+from core.services.export.PdfGeneratorService import PdfGeneratorService
+
+
+@pytest.mark.parametrize('value, unit, expected', [
+    (123.4, 'ft', '123.4ft'),
+    (0, '°', '0°'),           # a real zero is a reading, not an absence
+    (1.99, 'cm/px', '1.99cm/px'),
+])
+def test_report_value_keeps_real_measurements(value, unit, expected):
+    assert PdfGeneratorService._report_value(value, unit) == expected
+
+
+@pytest.mark.parametrize('unit', ['ft', 'm', '°', 'cm/px'])
+def test_report_value_says_na_when_there_is_no_measurement(unit):
+    assert PdfGeneratorService._report_value(None, unit) == 'N/A'
+    assert PdfGeneratorService._report_value('', unit) == 'N/A'

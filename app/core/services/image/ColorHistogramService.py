@@ -144,7 +144,14 @@ class ColorHistogramService:
         return visible
 
     def _extract_aoi_component_values(self, component_matrix, areas_of_interest=None):
-        """Extract component values inside AOIs."""
+        """Extract component values inside AOIs.
+
+        Prefers exact ``detected_pixels``, then the filled ``contour``
+        (persisted for AOIs of any size, unlike detected_pixels which
+        XmlService only saves for AOIs of <= 100 pixels). The enclosing
+        circle is a last resort for AOIs with no pixel-level data, such as
+        user-created AOIs.
+        """
         if component_matrix is None:
             return np.asarray([], dtype=np.float32)
 
@@ -160,6 +167,11 @@ class ColorHistogramService:
                     x, y = int(pixel[0]), int(pixel[1])
                     if 0 <= x < width and 0 <= y < height:
                         aoi_mask[y, x] = True
+                continue
+
+            contour_mask = self._rasterize_contour(aoi.get('contour'), height, width)
+            if contour_mask is not None:
+                aoi_mask |= contour_mask
                 continue
 
             center = aoi.get('center')
@@ -178,6 +190,27 @@ class ColorHistogramService:
 
         finite_mask = np.isfinite(component_matrix)
         return component_matrix[aoi_mask & finite_mask].astype(np.float32)
+
+    @staticmethod
+    def _rasterize_contour(contour, height, width):
+        """Fill an AOI contour into a boolean mask, or None if unusable.
+
+        Uses the same filled-contour rasterization AlgorithmService uses to
+        derive ``detected_pixels``, so the mask matches the detected blob
+        rather than the enclosing display circle.
+        """
+        if not contour:
+            return None
+        try:
+            points = np.asarray(contour, dtype=np.int32)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if points.ndim != 2 or points.shape[0] < 1 or points.shape[1] != 2:
+            return None
+
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.drawContours(mask, [points.reshape(-1, 1, 2)], -1, 255, thickness=-1)
+        return mask.astype(bool)
 
     @staticmethod
     def _display_suffix(color_space, component):

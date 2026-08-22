@@ -500,23 +500,11 @@ class GPSMapController(QObject):
             datetime object or None if timestamp not found
         """
         try:
-
-            if exif_data and 'Exif' in exif_data:
-                # Try to get DateTimeOriginal
-                datetime_original = exif_data['Exif'].get(piexif.ExifIFD.DateTimeOriginal)
-                if datetime_original:
-                    if isinstance(datetime_original, bytes):
-                        datetime_str = datetime_original.decode('utf-8')
-                    else:
-                        datetime_str = datetime_original
-                    return datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-
-                # Fallback to DateTime
-                datetime_tag = exif_data['Exif'].get(piexif.ExifIFD.DateTime)
-                if datetime_tag:
-                    datetime_str = datetime_tag.decode('utf-8') if isinstance(datetime_tag, bytes) else datetime_tag
-                    return datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-
+            # Tag resolution (including the Exif-vs-0th split for the DateTime
+            # fallback) lives in MetaDataHelper so this and the bearing service
+            # read the same tags. An image with no timestamp - every frame cut
+            # from a video - returns None here rather than raising.
+            return MetaDataHelper.get_exif_timestamp(exif_data)
         except Exception as e:
             self.logger.error(f"Could not extract timestamp: {str(e)}")
 
@@ -583,6 +571,30 @@ class GPSMapController(QObject):
                 LIMIT_NONE: self.tr("None"),
             }
         return self._limit_labels.get(code, self.tr("Unknown"))
+
+    def _altitude_basis_label(self):
+        """What the cached POD run used for camera elevation, or None.
+
+        The takeoff elevation is the one number that reveals a GPS-altitude
+        datum mismatch, which the pipeline cannot detect on its own (a constant
+        offset is indistinguishable from a genuine launch elevation). The
+        completion toast is transient, so it is repeated here where it stays
+        checkable against the known launch point for as long as the overlay is up.
+        """
+        cache = self._pod_cache()
+        result = cache.get_result() if (cache and cache.has_result()) else None
+        if result is None:
+            return None
+        anchor = getattr(result, 'altitude_anchor_m', None)
+        if anchor is not None:
+            if getattr(self.parent, 'distance_unit', 'ft') == 'ft':
+                elev = self.tr("{value} ft").format(value=int(round(anchor * 3.28084)))
+            else:
+                elev = self.tr("{value} m").format(value=int(round(anchor)))
+            return self.tr("Altitude basis: takeoff elevation {elev}").format(elev=elev)
+        if (getattr(result, 'altitude_source_counts', None) or {}).get('agl_nadir'):
+            return self.tr("Altitude basis: reported AGL (approximate over terrain)")
+        return None
 
     def _rgba_to_pixmap(self, rgba, transform):
         """(QPixmap, transform6) from an RGBA grid, downsampled to a display cap."""
@@ -854,6 +866,10 @@ class GPSMapController(QObject):
         lim = menu.addAction(self.tr("Limiting factor: {factor}").format(
             factor=self._limit_label(sample['limiting_factor'])))
         lim.setEnabled(False)
+        basis = self._altitude_basis_label()
+        if basis:
+            act = menu.addAction(basis)
+            act.setEnabled(False)
         frames = sample.get('frames', [])
         if frames:
             menu.addSeparator()

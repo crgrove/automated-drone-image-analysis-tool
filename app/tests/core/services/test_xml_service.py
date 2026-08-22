@@ -353,3 +353,120 @@ def test_ensure_aoi_numbers_fills_gaps_above_existing_max(tmp_path):
     # Unnumbered AOIs get unique numbers above the existing maximum.
     assert images[0]["areas_of_interest"][1]["number"] == 8
     assert images[1]["areas_of_interest"][0]["number"] == 9
+
+
+# --------------------------------------------------------------------------- #
+#  Cross-platform stored paths. A flight analyzed on a Windows ground station  #
+#  is routinely reviewed on a Mac, so get_images() must not mistake a Windows  #
+#  absolute path for a relative one and join it onto the result folder.        #
+# --------------------------------------------------------------------------- #
+
+def _xml_with_image_path(tmp_path, stored_path):
+    xml_content = (
+        '<data><settings output_dir="/o" input_dir="/i"/><images>'
+        f'<image path="{stored_path}" hidden="False">'
+        '<areas_of_interest center="(1,1)" radius="1" area="1"/>'
+        '</image></images></data>'
+    )
+    xml_path = tmp_path / "ADIAT_Data.xml"
+    xml_path.write_text(xml_content)
+    return xml_path
+
+
+def test_windows_absolute_path_is_not_joined_onto_result_folder(tmp_path):
+    """Regression: "C:\\Flight1\\a.jpg" read as relative on POSIX.
+
+    It used to be joined onto the XML's directory, yielding a path like
+    "/results/C:\\Flight1\\a.jpg" -- missing for a reason unrelated to where
+    the file is, and whose real filename could no longer be recovered by the
+    path-recovery prompt.
+    """
+    xml_path = _xml_with_image_path(tmp_path, r"C:\Flight1\DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == r"C:\Flight1\DJI_0042.JPG"
+    assert str(tmp_path) not in images[0]["path"]
+
+
+def test_unc_absolute_path_is_not_joined_onto_result_folder(tmp_path):
+    xml_path = _xml_with_image_path(tmp_path, r"\\nas\flights\DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == r"\\nas\flights\DJI_0042.JPG"
+
+
+def test_relative_stored_path_still_resolves_against_xml_dir(tmp_path):
+    """Backward compatibility: relative paths keep resolving as before."""
+    xml_path = _xml_with_image_path(tmp_path, "sub/DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == os.path.join(str(tmp_path), "sub", "DJI_0042.JPG")
+
+
+def test_relative_stored_path_is_normalized_not_left_with_parent_segments(tmp_path):
+    """Regression: the resolved path must be comparable, not merely openable.
+
+    add_image_to_xml stores the source image relative to the result folder, so
+    a real file reads back as "../../input/DJI_0065.JPG". Joining that onto the
+    XML directory produced ".../ADIAT_Results/../../input/DJI_0065.JPG", which
+    opens the correct file -- so the viewer looked healthy -- but never
+    compared equal to the ".../input/DJI_0065.JPG" that a scan of
+    settings['input_dir'] produces for the same capture. Viewer's source-image
+    list compares those two strings, so every AOI image was reported as having
+    no detections and was appended to the list a second time.
+    """
+    results_dir = tmp_path / "output" / "ADIAT_Results"
+    results_dir.mkdir(parents=True)
+    xml_path = _xml_with_image_path(results_dir, "../../input/DJI_0065.JPG")
+
+    images = XmlService(str(xml_path)).get_images()
+
+    expected = os.path.join(str(tmp_path), "input", "DJI_0065.JPG")
+    assert images[0]["path"] == expected
+    assert ".." not in images[0]["path"]
+    # The original spelling stays available for legacy cache lookups.
+    assert images[0]["xml_path"] == "../../input/DJI_0065.JPG"
+
+
+def test_posix_absolute_stored_path_is_unchanged(tmp_path):
+    """Regression: "/Volumes/SD/a.jpg" was separator-rewritten on Windows.
+
+    get_images() normalized '/' to os.sep before deciding whether the path was
+    absolute, so a Mac-authored result file reviewed on a Windows ground
+    station reported "\\Volumes\\SD\\DJI_0042.JPG" -- the mirror image of the
+    Windows-path-on-POSIX bug above. Only relative paths are stored with
+    forward slashes (see add_image_to_xml), so only relative paths get the
+    rewrite.
+    """
+    xml_path = _xml_with_image_path(tmp_path, "/Volumes/SD/DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == "/Volumes/SD/DJI_0042.JPG"
+
+
+def test_forward_slash_windows_absolute_path_is_unchanged(tmp_path):
+    """An absolute path keeps its stored separators whatever they are.
+
+    Companion to the POSIX case: the rewrite is skipped for anything absolute,
+    not just for paths that are foreign to the running platform.
+    """
+    xml_path = _xml_with_image_path(tmp_path, "C:/Flight1/DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == "C:/Flight1/DJI_0042.JPG"
+
+
+def test_relative_forward_slash_path_is_separator_normalized(tmp_path):
+    """The rewrite must still happen for relative paths, which is why it exists.
+
+    add_image_to_xml stores result-relative paths with '/' for portability, so
+    reading one back has to produce a native path.
+    """
+    xml_path = _xml_with_image_path(tmp_path, "sub/deeper/DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["path"] == os.path.join(
+        str(tmp_path), "sub", "deeper", "DJI_0042.JPG"
+    )
+    assert "/" not in images[0]["path"].replace(str(tmp_path), "")
+
+
+def test_xml_path_attribute_preserved_for_legacy_cache_lookups(tmp_path):
+    """'xml_path' must keep the raw stored string regardless of resolution."""
+    xml_path = _xml_with_image_path(tmp_path, r"C:\Flight1\DJI_0042.JPG")
+    images = XmlService(str(xml_path)).get_images()
+    assert images[0]["xml_path"] == r"C:\Flight1\DJI_0042.JPG"

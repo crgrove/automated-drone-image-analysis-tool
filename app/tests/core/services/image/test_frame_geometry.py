@@ -154,8 +154,9 @@ def synthetic_service():
 
 PROJ_CTX_KEYS = {
     'drone_lat', 'drone_lon', 'img_w', 'img_h', 'cx', 'cy', 'focal_mm',
-    'sensor_w_mm', 'sensor_h_mm', 'pitch', 'yaw', 'roll', 'reported_agl',
-    'drone_terrain_elev_m', 'drone_absolute_elev_m', 'terrain_service',
+    'sensor_w_mm', 'sensor_h_mm', 'pitch', 'yaw', 'roll', 'roll_axis',
+    'reported_agl', 'drone_terrain_elev_m', 'drone_absolute_elev_m',
+    'terrain_service',
 }
 
 

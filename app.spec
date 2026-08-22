@@ -19,6 +19,30 @@ translation_candidates = [
 ]
 translation_datas = [(path, 'translations') for path in translation_candidates if os.path.exists(path)]
 
+# Bake the commit this build is cut from into the bundle so every field
+# screenshot (window title) and field log self-identifies its code. See
+# app/helpers/BuildInfo.py for the runtime side. '+dirty' marks a build from
+# a tree with uncommitted changes - such builds are not reproducible.
+import subprocess
+build_stamp_datas = []
+try:
+    _rev = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'],
+                          cwd=spec_dir, capture_output=True, text=True, timeout=10)
+    if _rev.returncode == 0:
+        _stamp = _rev.stdout.strip()
+        _status = subprocess.run(['git', 'status', '--porcelain'],
+                                 cwd=spec_dir, capture_output=True, text=True, timeout=10)
+        if _status.returncode == 0 and _status.stdout.strip():
+            _stamp += '+dirty'
+        _stamp_path = os.path.join(spec_dir, 'build', 'build_info.txt')
+        os.makedirs(os.path.dirname(_stamp_path), exist_ok=True)
+        with open(_stamp_path, 'w', encoding='utf-8') as _f:
+            _f.write(_stamp + '\n')
+        build_stamp_datas = [(_stamp_path, '.')]
+        print(f"ADIAT build stamp: {_stamp}")
+except (OSError, subprocess.SubprocessError) as _e:
+    print(f"ADIAT build stamp unavailable (no git?): {_e}")
+
 # timezonefinder + tzdata: runtime data for the Person Size Reference GPS ->
 # timezone shadow fallback. PyInstaller misses the data files and tzdata's
 # per-zone submodules, so collect both explicitly.
@@ -29,6 +53,40 @@ tz_hiddenimports = ['tzdata'] + collect_submodules('tzdata')
 # the frozen build fails with "No module named 'rasterio.sample'" (POD/terrain).
 geo_hiddenimports = collect_submodules('rasterio') + collect_submodules('pyproj')
 geo_datas = collect_data_files('rasterio') + collect_data_files('pyproj')
+
+
+def collect_algorithm_modules():
+    """Enumerate every module under app/algorithms/ as a dotted import path.
+
+    Algorithm packages are resolved at runtime from algorithms.conf via
+    importlib, so PyInstaller cannot see them statically and every one needs a
+    hidden import. Walking the source tree keeps the frozen build in sync by
+    construction; the hand-maintained list this replaced had silently dropped
+    the streaming AIPersonDetector (wizard died with "No module named
+    'algorithms.streaming.AIPersonDetector'") while still naming a
+    MotionDetection package that no longer exists.
+    """
+    app_root = os.path.join(spec_dir, 'app')
+    modules = []
+    for dirpath, dirnames, filenames in os.walk(os.path.join(app_root, 'algorithms')):
+        dirnames[:] = [d for d in dirnames if d != '__pycache__']
+        if '__init__.py' not in filenames:
+            # Not a package (e.g. algorithms/models/, which holds .onnx only);
+            # nothing below it is importable either.
+            dirnames[:] = []
+            continue
+        package = os.path.relpath(dirpath, app_root).replace(os.sep, '.')
+        modules.append(package)
+        modules.extend(
+            '{}.{}'.format(package, name[:-3])
+            for name in filenames
+            if name.endswith('.py') and name != '__init__.py'
+        )
+    return sorted(modules)
+
+
+algorithm_hiddenimports = collect_algorithm_modules()
+print("ADIAT algorithm modules bundled: {}".format(len(algorithm_hiddenimports)))
 
 # Dev tooling / installed-but-unused deps that bloat the frozen app (~300 MB).
 unused_excludes = ['qt6_applications', 'qt6_tools', 'pyarrow', 'sklearn', 'sympy']
@@ -54,46 +112,9 @@ common_hiddenimports = [
     'pysolar.numeric',
     'pysolar.numeric_numpy',
     'pysolar.numeric_python',
-    # Image algorithm services (importlib-loaded in AnalyzeService).
-    'algorithms.images.ColorRange.services.ColorRangeService',
-    'algorithms.images.HSVColorRange.services.HSVColorRangeService',
-    'algorithms.images.MatchedFilter.services.MatchedFilterService',
-    'algorithms.images.RXAnomaly.services.RXAnomalyService',
-    'algorithms.images.MRMap.services.MRMapService',
-    'algorithms.images.ThermalRange.services.ThermalRangeService',
-    'algorithms.images.ThermalAnomaly.services.ThermalAnomalyService',
-    'algorithms.images.ThermalResidualAnomaly.services.ThermalResidualAnomalyService',
-    'algorithms.images.AIPersonDetector.services.AIPersonDetectorService',
-    # Streaming algorithms modules.
-    'algorithms.streaming',
-    'algorithms.streaming.MotionDetection',
-    'algorithms.streaming.MotionDetection.controllers',
-    'algorithms.streaming.MotionDetection.controllers.MotionDetectionController',
-    'algorithms.streaming.MotionDetection.controllers.MotionDetectionWizardController',
-    'algorithms.streaming.MotionDetection.services',
-    'algorithms.streaming.MotionDetection.services.MotionDetectionService',
-    'algorithms.streaming.MotionDetection.views',
-    'algorithms.streaming.ColorDetection',
-    'algorithms.streaming.ColorDetection.controllers',
-    'algorithms.streaming.ColorDetection.controllers.ColorDetectionController',
-    'algorithms.streaming.ColorDetection.controllers.ColorDetectionWizardController',
-    'algorithms.streaming.ColorDetection.services',
-    'algorithms.streaming.ColorDetection.services.ColorDetectionService',
-    'algorithms.streaming.ColorDetection.views',
-    'algorithms.streaming.ColorDetection.views.ColorDetectionControlWidget',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionController',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.controllers.ColorAnomalyAndMotionDetectionWizardController',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services.ColorAnomalyAndMotionDetectionOrchestrator',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services.ColorAnomalyService',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services.MotionDetectionService',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services.shared_types',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.services.utils',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.views',
-    'algorithms.streaming.ColorAnomalyAndMotionDetection.views.ColorAnomalyAndMotionDetectionControlWidget',
-] + tz_hiddenimports + geo_hiddenimports
+    # Image and streaming algorithm packages are added by
+    # collect_algorithm_modules() above - do not hand-list them here.
+] + algorithm_hiddenimports + tz_hiddenimports + geo_hiddenimports
 
 if platform.system() == 'Windows':
     a = Analysis(['app/__main__.py'],
@@ -111,10 +132,13 @@ if platform.system() == 'Windows':
                     ('app/xmp.csv', '.'),
                     ('app/colors.pkl', '.'),
                     ('colors.csv', '.'),
+                    # Bundled EGM96 geoid grid (global) for offline ellipsoidal<->orthometric
+                    # height conversion; PROJ streams it online otherwise.
+                    ('app/resources/geoid/us_nga_egm96_15.tif', 'resources/geoid'),
                     # AI Person Detector models
                     ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_640.onnx', 'algorithms/models/AIPersonDetector'),
                     ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_1024.onnx', 'algorithms/models/AIPersonDetector')
-                    ] + translation_datas + tz_datas + geo_datas,
+                    ] + translation_datas + tz_datas + geo_datas + build_stamp_datas,
                 hiddenimports=common_hiddenimports,
                 hookspath=None,
                 runtime_hooks=adiat_runtime_hooks,
@@ -134,10 +158,13 @@ elif platform.system() == 'Darwin':
                         # Color lists used by ColorListService (expects under app/)
                         ('app/colors.pkl', 'app'),
                         ('colors.csv', 'app'),
+                        # Bundled EGM96 geoid grid (global) for offline ellipsoidal<->orthometric
+                        # height conversion; PROJ streams it online otherwise.
+                        ('app/resources/geoid/us_nga_egm96_15.tif', 'resources/geoid'),
                         # AI Person Detector models
                         ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_640.onnx', 'algorithms/models/AIPersonDetector'),
                         ('app/algorithms/models/AIPersonDetector/ai_person_model_V3_1024.onnx', 'algorithms/models/AIPersonDetector')
-                        ] + translation_datas + tz_datas + geo_datas,
+                        ] + translation_datas + tz_datas + geo_datas + build_stamp_datas,
                     hiddenimports=common_hiddenimports,
                     hookspath=None,
                     runtime_hooks=adiat_runtime_hooks,

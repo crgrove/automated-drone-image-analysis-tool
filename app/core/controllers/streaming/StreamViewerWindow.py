@@ -38,6 +38,8 @@ from helpers.ThemeHelper import apply_theme
 from core.services.ConfigService import ConfigService
 from core.views.streaming.StreamViewerWindow_ui import Ui_StreamViewerWindow
 from core.services.LoggerService import LoggerService
+from helpers import BuildInfo
+from helpers.WidgetHelper import hand_off_focus, retire_widget
 from core.controllers.streaming.components import StreamCoordinator, DetectionRenderer, StreamStatistics
 from core.controllers.streaming.components.FrameProcessingWorker import FrameProcessingWorker
 from core.controllers.streaming.shared_widgets import DetectionThumbnailWidget, StreamControlWidget
@@ -101,7 +103,7 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
         self.setWindowTitle(
             self.tr(
                 "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
-            ).format(version=self.app_version)
+            ).format(version=BuildInfo.title_version(self.app_version))
         )
 
         # Setup tooltip stylesheet
@@ -862,8 +864,7 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
                     self.algorithm_widget.cleanup()
                 except Exception as e:
                     self.logger.warning(f"Algorithm cleanup failed for {self.current_algorithm_name}: {e}")
-                self.ui.algorithmControlLayout.removeWidget(self.algorithm_widget)
-                self.algorithm_widget.deleteLater()
+                retire_widget(self.algorithm_widget, self.ui.algorithmControlLayout)
                 self.algorithm_widget = None
                 self.algorithm_renders_frame = False
                 self.thumbnail_widget.clear_thumbnails()
@@ -1544,6 +1545,12 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
                 self.tr("✓ Connected: {message}").format(message=message)
             )
 
+            # A new source is there to be watched, not reviewed: the Gallery
+            # holds tracks from the session that just ended, so leave it for
+            # the Live View where the incoming frames appear.
+            if self.tab_widget.currentWidget() is self.gallery_widget:
+                self.tab_widget.setCurrentIndex(0)
+
             # Show playback controls for file streams
             if self.stream_coordinator.current_stream_type == StreamType.FILE:
                 self.playback_controls.show_for_file()
@@ -1883,15 +1890,21 @@ class StreamViewerWindow(TranslationMixin, QMainWindow):
     def _update_recording_state(self, recording: bool, path: str):
         """Update recording widget UI state."""
         if hasattr(self, 'start_recording_btn') and hasattr(self, 'stop_recording_btn'):
-            self.start_recording_btn.setEnabled(not recording)
-            self.stop_recording_btn.setEnabled(recording)
-
+            # Enable the successor, hand focus to it, then disable the button
+            # the user pressed - otherwise Qt picks the successor itself and
+            # focus leaves the recording controls.
             if recording:
+                self.stop_recording_btn.setEnabled(True)
+                hand_off_focus(self.stop_recording_btn, self.start_recording_btn)
+                self.start_recording_btn.setEnabled(False)
                 self.recording_status.setText(
                     self.tr("Status: Recording to {path}").format(path=path)
                 )
                 self.recording_status.setStyleSheet("QLabel { color: red; font-weight: bold; }")
             else:
+                self.start_recording_btn.setEnabled(True)
+                hand_off_focus(self.start_recording_btn, self.stop_recording_btn)
+                self.stop_recording_btn.setEnabled(False)
                 self.recording_status.setText(self.tr("Status: Not Recording"))
                 self.recording_status.setStyleSheet("QLabel { color: gray; }")
                 self.recording_info.setText(self.tr("Duration: --"))

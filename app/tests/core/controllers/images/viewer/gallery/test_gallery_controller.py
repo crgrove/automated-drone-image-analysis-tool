@@ -372,3 +372,162 @@ def test_start_color_calc_connects_complete_and_sets_flag(controller):
         controller._on_color_calc_complete
     )
     assert controller._color_calc_complete_connected is True
+
+
+# ---------------------------------------------------------------------------
+# on_aoi_clicked must sync the single-image AOI selection (GPS-map marker,
+# on-image overlay). Field report: selecting AOIs in the gallery never
+# showed the marker in the map window.
+# ---------------------------------------------------------------------------
+
+def test_gallery_click_syncs_aoi_controller_selection(controller):
+    parent = controller.parent
+    parent.current_image = 3  # same image: no load path needed
+    parent.aoi_controller.aoi_index_to_visible_index = {2: 1}
+    controller._zoom_to_aoi = MagicMock()
+
+    controller.on_aoi_clicked(3, 2, _aoi())
+
+    parent.aoi_controller.select_aoi.assert_called_once_with(2, 1)
+    controller._zoom_to_aoi.assert_called_once()
+
+
+def test_gallery_click_syncs_selection_with_unmapped_visible_index(controller):
+    parent = controller.parent
+    parent.current_image = 0
+    parent.aoi_controller.aoi_index_to_visible_index = {}
+    controller._zoom_to_aoi = MagicMock()
+
+    controller.on_aoi_clicked(0, 5, _aoi())
+
+    parent.aoi_controller.select_aoi.assert_called_once_with(5, -1)
+
+
+# ---------------------------------------------------------------------------
+# Event-driven zoom-after-load: a cross-image gallery click navigates via
+# parent.load_image_with_zoom and the load pipeline applies the zoom as its
+# final step. No transient viewChanged handlers, no settle-window timers
+# (field report lineage: first click landed un-zoomed).
+# ---------------------------------------------------------------------------
+
+def test_needs_load_click_zooms_via_the_load_pipeline(controller, wire_pending_zoom):
+    parent = controller.parent
+    parent.current_image = 0
+    parent.aoi_controller.aoi_index_to_visible_index = {}
+    wire_pending_zoom(parent, loaded_idx=1)  # pipeline consumes for image 1
+    controller._zoom_to_aoi = MagicMock()
+    aoi = _aoi()
+
+    controller.on_aoi_clicked(1, 0, aoi)
+
+    controller._zoom_to_aoi.assert_called_once_with(aoi)
+    assert parent._pending_view_zoom is None  # consumed, nothing armed
+
+
+def test_failed_load_leaves_no_zoom_request_armed(controller, wire_pending_zoom):
+    parent = controller.parent
+    parent.current_image = 0
+    parent.aoi_controller.aoi_index_to_visible_index = {}
+    wire_pending_zoom(parent, loaded_idx=None)  # load never consumes
+    controller._zoom_to_aoi = MagicMock()
+
+    controller.on_aoi_clicked(1, 0, _aoi())
+
+    controller._zoom_to_aoi.assert_not_called()
+    # load_image_with_zoom dropped its own unconsumed request, so a later,
+    # unrelated load can never fire a stale zoom.
+    assert parent._pending_view_zoom is None
+
+
+def test_request_for_a_different_image_is_dropped_not_applied(controller, wire_pending_zoom):
+    parent = controller.parent
+    parent.current_image = 0
+    parent.aoi_controller.aoi_index_to_visible_index = {}
+    # Pipeline ends up loading image 5, not the requested image 1 (e.g. a
+    # reentrant navigation during the load).
+    wire_pending_zoom(parent, loaded_idx=5)
+    controller._zoom_to_aoi = MagicMock()
+
+    controller.on_aoi_clicked(1, 0, _aoi())
+
+    controller._zoom_to_aoi.assert_not_called()
+    assert parent._pending_view_zoom is None  # dropped as stale, not left armed
+
+
+# ---------------------------------------------------------------------------
+# _zoom_to_aoi with the Show Overlay toggle OFF.
+#
+# Field report lineage: a user whose overlay toggle was off got no zoom from
+# any gallery AOI click, while the same build zoomed correctly for everyone
+# who left the toggle on (its default). The handler takes the new state as an
+# argument and was being called without one; the resulting TypeError was
+# swallowed by _zoom_to_aoi's own except, which sat ABOVE the zoom call.
+#
+# A bare MagicMock parent accepts any call signature, so these tests give
+# _show_overlay_change the real one - that permissiveness is what let the
+# original bug through the suite.
+# ---------------------------------------------------------------------------
+
+def _overlay_off_parent(controller, handler):
+    """Wire the controller's parent for 'overlay toggle currently off'."""
+    parent = controller.parent
+    parent.showOverlayToggle.isChecked.return_value = False
+    parent._show_overlay_change = handler
+    return parent
+
+
+def test_zoom_happens_when_overlay_toggle_is_off(controller):
+    seen = []
+
+    def _show_overlay_change(state):  # the real signature: state is required
+        seen.append(state)
+
+    parent = _overlay_off_parent(controller, _show_overlay_change)
+
+    controller._zoom_to_aoi(_aoi(center=(50, 50)))
+
+    parent.main_image.zoomToArea.assert_called_once_with((50, 50), 6)
+    # The toggle was switched on and the handler told the new state.
+    parent.showOverlayToggle.setChecked.assert_called_once_with(True)
+    assert seen == [True]
+
+
+def test_zoom_survives_a_failing_overlay_handler(controller):
+    """Overlay work is decoration; it must not be able to cancel the zoom."""
+    def _show_overlay_change(state):
+        raise RuntimeError("overlay update blew up")
+
+    parent = _overlay_off_parent(controller, _show_overlay_change)
+
+    controller._zoom_to_aoi(_aoi(center=(12, 34)))
+
+    parent.main_image.zoomToArea.assert_called_once_with((12, 34), 6)
+
+
+def test_badge_survives_a_failing_overlay_handler(controller):
+    """The AOI number badge and ruler are separate from the compass overlay.
+
+    They shared one try/except, so a failure enabling the compass overlay
+    silently cost the badge as well.
+    """
+    def _show_overlay_change(state):
+        raise RuntimeError("overlay update blew up")
+
+    parent = _overlay_off_parent(controller, _show_overlay_change)
+    aoi = _aoi(center=(9, 9))
+
+    controller._zoom_to_aoi(aoi)
+
+    parent.aoi_overlay_controller.show_for_aoi.assert_called_once_with(aoi)
+
+
+def test_overlay_handler_untouched_when_toggle_already_on(controller):
+    parent = controller.parent
+    parent.showOverlayToggle.isChecked.return_value = True
+    parent._show_overlay_change = MagicMock()
+
+    controller._zoom_to_aoi(_aoi(center=(7, 8)))
+
+    parent.main_image.zoomToArea.assert_called_once_with((7, 8), 6)
+    parent._show_overlay_change.assert_not_called()
+    parent.showOverlayToggle.setChecked.assert_not_called()

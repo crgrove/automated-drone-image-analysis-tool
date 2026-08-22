@@ -92,6 +92,14 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
         # +24 accounts for the scrollbar / viewport margin
         view.setMinimumWidth(widest + 24)
 
+        # The .ui file pins a fixed minimumWidth, chosen against whatever font
+        # and style were active when it was authored. Under a different theme
+        # or DPI the style asks for more room and the combo clips its own
+        # current text. Take the larger of the two so the closed combo is never
+        # narrower than the style says it needs to be.
+        combo.setMinimumWidth(max(combo.minimumWidth(),
+                                  combo.minimumSizeHint().width()))
+
     def _init_combo_data(self):
         """Attach stable option keys so translated labels do not affect config values."""
         for index in range(self.segmentsComboBox.count()):

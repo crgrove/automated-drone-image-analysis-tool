@@ -14,8 +14,13 @@ from .WaldoMetadataService import (
     WaldoHeadingUnavailable,
     WaldoCoverageError,
     WaldoMissingGPSError,
+    ClockCorrectionProposal,
     WALDO_NAMESPACE_URI,
     WALDO_PROCESSOR_VERSION,
+)
+from .WaldoTriggerLog import (
+    WaldoTriggerLogService,
+    TriggerPoint,
 )
 
 __all__ = [
@@ -25,6 +30,9 @@ __all__ = [
     'WaldoHeadingUnavailable',
     'WaldoCoverageError',
     'WaldoMissingGPSError',
+    'ClockCorrectionProposal',
     'WALDO_NAMESPACE_URI',
     'WALDO_PROCESSOR_VERSION',
+    'WaldoTriggerLogService',
+    'TriggerPoint',
 ]

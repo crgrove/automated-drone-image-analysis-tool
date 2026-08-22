@@ -11,9 +11,13 @@ from core.services.export.CalTopoCredentialHelper import CalTopoCredentialHelper
 
 
 @pytest.fixture
-def credential_helper():
-    """Fixture providing a CalTopoCredentialHelper instance."""
-    return CalTopoCredentialHelper()
+def credential_helper(isolated_qsettings):
+    """A credential helper backed by throwaway settings.
+
+    These tests call save_credentials(); against the default backing store
+    that overwrites the developer's real CalTopo API credentials.
+    """
+    return CalTopoCredentialHelper(settings=isolated_qsettings)
 
 
 @pytest.fixture
@@ -183,6 +187,66 @@ def test_clear_credentials(credential_helper, sample_credentials):
     assert team_id is None
     assert credential_id is None
     assert credential_secret is None
+
+
+def test_credential_storage_is_isolated_from_real_user_settings(credential_helper):
+    """Saving fixture credentials must not touch the developer's own config.
+
+    This suite calls save_credentials() with fixture values. Against the real
+    QSettings backend (HKCU\\Software\\ADIAT\\CalTopoAPI on Windows) that
+    silently overwrites the user's actual CalTopo API credentials, which then
+    fail to authenticate until they are re-entered by hand. conftest redirects
+    QSettings into a temp directory; this test guards that redirection.
+    """
+    assert credential_helper.settings.format() == QSettings.IniFormat
+    location = credential_helper.settings.fileName().replace("\\", "/")
+    assert "adiat-test-qsettings-" in location
+    assert "HKEY_CURRENT_USER" not in location
+
+    # And the real store is genuinely a different object/location.
+    real_helper = CalTopoCredentialHelper()
+    assert real_helper.settings.fileName() != credential_helper.settings.fileName()
+
+
+def test_has_credentials_false_when_secret_is_not_base64(credential_helper):
+    """A stored secret that can never sign a request counts as absent.
+
+    Reproduces the field failure: a non-base64 value in the Secret field made
+    has_credentials() report True, so the credential dialog never reappeared
+    and the only way to correct it was editing QSettings by hand.
+    """
+    credential_helper.clear_credentials()
+    credential_helper.save_credentials('ABC123', 'cred_id_123', '2GmR7xQp!wZ#4kLd')
+
+    # The value round-trips through storage unchanged...
+    _, _, stored_secret = credential_helper.get_credentials()
+    assert stored_secret == '2GmR7xQp!wZ#4kLd'
+
+    # ...but it is not usable, so the app must prompt again.
+    assert credential_helper.has_credentials() is False
+
+
+def test_has_credentials_true_for_valid_base64_secret(credential_helper):
+    """A real base64 secret is still reported as present (no regression)."""
+    import base64
+
+    credential_helper.clear_credentials()
+    secret = base64.b64encode(b'a-real-looking-hmac-key-0123456789').decode()
+    credential_helper.save_credentials('ABC123', 'cred_id_123', secret)
+
+    assert credential_helper.has_credentials() is True
+
+
+def test_has_credentials_false_when_secret_decrypts_empty(credential_helper):
+    """A corrupt stored blob decrypts to "" and must not count as present."""
+    credential_helper.clear_credentials()
+    credential_helper.settings.setValue("team_id", 'ABC123')
+    credential_helper.settings.setValue("credential_id", 'cred_id_123')
+    credential_helper.settings.setValue("credential_secret_encrypted", "not_valid_base64!!!")
+    credential_helper.settings.sync()
+
+    assert credential_helper._simple_decrypt("not_valid_base64!!!") == ""
+    assert credential_helper.has_credentials() is False
 
 
 def test_save_and_retrieve_multiple_times(credential_helper, sample_credentials):

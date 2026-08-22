@@ -34,6 +34,7 @@ from PySide6.QtCore import Qt
 from .BasePage import BasePage
 from core.services.ConfigService import ConfigService
 from core.services.SettingsService import SettingsService
+from helpers.WidgetHelper import retire_widget
 
 """****Import Algorithm Controllers (for fallback)****"""
 """****End Algorithm Import****"""
@@ -145,9 +146,7 @@ class AlgorithmParametersPage(BasePage):
         if self.algorithm_widget:
             # Remove from layout
             layout = self.dialog.algorithmParametersContainer.layout()
-            if layout:
-                layout.removeWidget(self.algorithm_widget)
-            self.algorithm_widget.deleteLater()
+            retire_widget(self.algorithm_widget, layout)
             self.algorithm_widget = None
 
         try:

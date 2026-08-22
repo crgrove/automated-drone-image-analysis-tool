@@ -8,7 +8,8 @@ from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.PhotogrammetryHelper import (
     FovHomography, validate_alignment, build_camera_matrix, recover_camera_pose,
-    camera_center_world, project_pixel_to_plane, gps_to_local_enu, local_enu_to_gps
+    camera_center_world, project_pixel_to_plane, gps_to_local_enu, local_enu_to_gps,
+    build_camera_to_ned
 )
 from core.services.image.ImageService import ImageService
 from core.services.LoggerService import LoggerService
@@ -155,6 +156,9 @@ class AOIService:
             roll = self.image_service.get_gimbal_roll() or 0.0
             if abs(roll) > 90.0:
                 roll = 0.0
+            # WALDO v6 stamps expect the roll about the flight axis; None keeps
+            # the historical yaw-axis behaviour for everything else
+            roll_axis = self.image_service.get_roll_axis_azimuth() if roll else None
 
             # Get altitude - use override or get from ImageService
             if agl_override_m and agl_override_m > 0:
@@ -198,27 +202,36 @@ class AOIService:
                 # Get geoid undulation to convert ellipsoidal to orthometric height
                 geoid_undulation = terrain_service.get_geoid_undulation(lat0, lon0)
 
-                # Convert GPS altitude (ellipsoidal) to orthometric
-                if geoid_undulation is not None:
-                    drone_orthometric = absolute_alt - geoid_undulation
+                if geoid_undulation is None:
+                    # Without a geoid we cannot safely convert the (ellipsoidal) GPS
+                    # altitude to orthometric to compare against the DEM. Treating
+                    # ellipsoidal as orthometric would inject a ~geoid-magnitude
+                    # (tens of metres) error, so skip the absolute-altitude AGL
+                    # rescue and keep the reported RelativeAltitude.
+                    if self.logger:
+                        self.logger.info(
+                            "AOIService: geoid unavailable; skipping absolute-altitude "
+                            "AGL rescue for low RelativeAltitude"
+                        )
                 else:
-                    drone_orthometric = absolute_alt
+                    # Convert GPS altitude (ellipsoidal) to orthometric
+                    drone_orthometric = absolute_alt - geoid_undulation
 
-                # Get terrain elevation at drone position
-                drone_terrain = terrain_service.get_elevation(lat0, lon0)
+                    # Get terrain elevation at drone position
+                    drone_terrain = terrain_service.get_elevation(lat0, lon0)
 
-                if drone_terrain.source == 'terrain' and drone_terrain.elevation_m is not None:
-                    # Calculate AGL from terrain
-                    terrain_based_agl = drone_orthometric - drone_terrain.elevation_m
+                    if drone_terrain.source == 'terrain' and drone_terrain.elevation_m is not None:
+                        # Calculate AGL from terrain
+                        terrain_based_agl = drone_orthometric - drone_terrain.elevation_m
 
-                    # Use terrain-based AGL if it's reasonable
-                    if terrain_based_agl > 5:
-                        reported_agl = terrain_based_agl
-                        if self.logger:
-                            self.logger.info(
-                                f"AOIService: Using terrain-based AGL ({terrain_based_agl:.1f}m) "
-                                f"instead of low RelativeAltitude"
-                            )
+                        # Use terrain-based AGL if it's reasonable
+                        if terrain_based_agl > 5:
+                            reported_agl = terrain_based_agl
+                            if self.logger:
+                                self.logger.info(
+                                    f"AOIService: Using terrain-based AGL ({terrain_based_agl:.1f}m) "
+                                    f"instead of low RelativeAltitude"
+                                )
 
             if reported_agl <= 0:
                 if self.logger:
@@ -229,7 +242,8 @@ class AOIService:
             initial_result = self._calculate_ground_position(
                 lat0, lon0, u, v, cx, cy, img_width, img_height,
                 focal_mm, sensor_w_mm, sensor_h_mm,
-                reported_agl, pitch, yaw, roll
+                reported_agl, pitch, yaw, roll,
+                roll_axis_azimuth_deg=roll_axis
             )
 
             if initial_result is None:
@@ -249,7 +263,8 @@ class AOIService:
                     reported_agl, pitch, yaw, roll,
                     terrain_service,
                     absolute_alt,
-                    geoid_undulation
+                    geoid_undulation,
+                    roll_axis_azimuth_deg=roll_axis
                 )
 
             # No terrain data - return flat terrain result
@@ -444,7 +459,8 @@ class AOIService:
         img_width: int, img_height: int,
         focal_mm: float, sensor_w_mm: float, sensor_h_mm: float,
         altitude_m: float, pitch_deg: float, yaw_deg: float,
-        roll_deg: float = 0.0
+        roll_deg: float = 0.0,
+        roll_axis_azimuth_deg: Optional[float] = None
     ) -> Optional[Tuple[float, float]]:
         """
         Calculate ground position using 3D ray-casting projection.
@@ -466,6 +482,11 @@ class AOIService:
                 Positive rotates the optical axis to the left of heading; negative
                 to the right. Used for fixed-wing rigs (WALDO ±22.5°) where the
                 pod is mounted with outward roll relative to flight direction.
+            roll_axis_azimuth_deg: Compass azimuth of the axis the roll rotates
+                about. Default None keeps the historical behaviour (the axis at
+                the yaw azimuth). WALDO processor version >= 6 stamps roll about
+                the flight axis, which can differ arbitrarily from the stored
+                image orientation.
 
         Returns:
             (lat, lon) or None
@@ -486,56 +507,15 @@ class AOIService:
         ray_cam = np.array([x_cam, y_cam, z_cam])
         ray_cam = ray_cam / np.linalg.norm(ray_cam)
 
-        # Step 2: Build rotation matrix from camera frame to NED frame
-        # Camera pitch: angle from horizontal (-90° = nadir, 0° = horizontal)
-        # For the optical axis direction in NED:
-        #   elevation angle = pitch (negative means below horizontal)
-        #   azimuth = yaw (0° = North, 90° = East)
-
-        opt_elevation = math.radians(pitch_deg)
-        opt_azimuth = math.radians(yaw_deg)
-
-        # Optical axis (camera Z) direction in NED
-        opt_axis_ned = np.array([
-            math.cos(opt_elevation) * math.cos(opt_azimuth),  # North
-            math.cos(opt_elevation) * math.sin(opt_azimuth),  # East
-            -math.sin(opt_elevation)                           # Down
-        ])
-
-        # Camera Y direction (down in image) in NED
-        # This lies in the vertical plane containing the optical axis
-        # "Up" in camera frame points toward the horizon (opposite of gravity component)
-        up_ned = np.array([
-            -math.sin(opt_elevation) * math.cos(opt_azimuth),
-            -math.sin(opt_elevation) * math.sin(opt_azimuth),
-            -math.cos(opt_elevation)
-        ])
-        cam_y_ned = -up_ned  # Camera Y = down = negative up
-
-        # Camera X direction (right in image) in NED
-        # Perpendicular to both optical axis and up direction
-        cam_x_ned = np.cross(opt_axis_ned, up_ned)
-        cam_x_ned = cam_x_ned / np.linalg.norm(cam_x_ned)
-
-        # Rotation matrix: columns are camera axes expressed in NED
-        R_cam_to_ned = np.column_stack([cam_x_ned, cam_y_ned, opt_axis_ned])
-
-        # Apply gimbal roll about the heading axis. For a fixed-wing rig with
-        # outward-rolled cameras (WALDO ±22.5°), the optical axis is tilted
-        # in the cross-track direction. We post-multiply a Rodrigues rotation
-        # about the NED heading-axis unit vector so existing pitch/yaw
-        # behaviour is preserved at roll_deg = 0.
-        if roll_deg != 0.0:
-            roll_rad = math.radians(roll_deg)
-            heading_axis = np.array([math.cos(opt_azimuth), math.sin(opt_azimuth), 0.0])
-            kx, ky, kz = heading_axis
-            K = np.array([
-                [0.0, -kz, ky],
-                [kz, 0.0, -kx],
-                [-ky, kx, 0.0],
-            ])
-            R_roll = np.eye(3) + math.sin(roll_rad) * K + (1.0 - math.cos(roll_rad)) * (K @ K)
-            R_cam_to_ned = R_roll @ R_cam_to_ned
+        # Step 2: Build rotation matrix from camera frame to NED frame.
+        # Shared with the analytic inverse in AOINeighborService.gps_to_pixel:
+        # the two are only correct as a pair, so they must not each carry
+        # their own copy of the camera model.
+        R_cam_to_ned = build_camera_to_ned(
+            pitch_deg, yaw_deg, roll_deg, roll_axis_azimuth_deg
+        )
+        if R_cam_to_ned is None:
+            return None
 
         # Step 3: Transform ray from camera to NED frame
         ray_ned = R_cam_to_ned @ ray_cam
@@ -578,6 +558,54 @@ class AOIService:
 
         return (lat, lon)
 
+    def _select_effective_agl(self, agl_abs, agl_rel, reported_agl,
+                              geoid_undulation, drone_terrain, terrain_elevation):
+        """Cross-check the two effective-AGL estimates and pick the trustworthy one.
+
+        Prefers the more-precise absolute-elevation estimate (``agl_abs``) only when
+        it agrees with the datum-robust terrain-relief estimate (``agl_rel``) within
+        tolerance. A large divergence means the absolute chain is corrupted by a bad
+        geoid or an ASL whose datum does not match the DEM -- exactly the failure that
+        otherwise throws every AOI systematically short/long -- so we fall back to the
+        relief estimate and log the divergence.
+
+        Args:
+            agl_abs: Absolute-elevation AGL estimate (m) or None.
+            agl_rel: Terrain-relief AGL estimate (m) or None.
+            reported_agl: Reported RelativeAltitude (m), last-resort fallback.
+            geoid_undulation, drone_terrain, terrain_elevation: diagnostics for logging.
+
+        Returns:
+            The selected effective AGL in meters (never None).
+        """
+        if agl_abs is None and agl_rel is None:
+            return reported_agl if reported_agl and reported_agl > 0 else 1.0
+        if agl_abs is None:
+            return agl_rel
+        if agl_rel is None:
+            return agl_abs
+
+        tol = max(0.15 * agl_rel, 8.0)
+        if abs(agl_abs - agl_rel) <= tol:
+            # Agreement: trust the precise absolute estimate.
+            return agl_abs
+
+        # Divergence: absolute chain is suspect (geoid/ASL datum). Use relief.
+        # DEBUG, not WARNING: this is evaluated per AOI, so on a real search
+        # (thousands of AOIs) a systematic datum mismatch wrote one identical
+        # line per AOI into the user's log. Packaged builds log at WARNING, so
+        # at DEBUG it stays out of field logs while remaining available via
+        # ADIAT_LOG_LEVEL=DEBUG when AOI coordinates are actually in doubt.
+        if self.logger:
+            drone_elev = drone_terrain.elevation_m if drone_terrain else None
+            self.logger.debug(
+                "AOIService: effective-AGL estimates disagree "
+                f"(absolute={agl_abs:.1f}m, relief={agl_rel:.1f}m, geoid={geoid_undulation}, "
+                f"drone_ground={drone_elev}, aoi_ground={terrain_elevation:.1f}m); "
+                "using terrain-relief estimate (datum-robust)."
+            )
+        return agl_rel
+
     def _calculate_with_terrain(
         self,
         image: dict, aoi: dict,
@@ -591,7 +619,8 @@ class AOIService:
         roll: float,
         terrain_service,
         absolute_alt: Optional[float] = None,
-        precomputed_geoid: Optional[float] = None
+        precomputed_geoid: Optional[float] = None,
+        roll_axis_azimuth_deg: Optional[float] = None
     ) -> AOIGPSResult:
         """
         Calculate AOI position using terrain elevation data with iterative refinement.
@@ -650,28 +679,38 @@ class AOIService:
             terrain_elevation = terrain_result.elevation_m
             terrain_resolution = terrain_result.resolution_m
 
-            # Calculate effective AGL
+            # Calculate effective AGL via two independent estimates and cross-check.
+            #  - agl_abs: absolute-elevation chain (drone_absolute - aoi_terrain).
+            #    Precise when the absolute-altitude datum is trustworthy (e.g. RTK),
+            #    but any error in ASL or the geoid propagates straight into it.
+            #  - agl_rel: reported AGL adjusted for terrain relief
+            #    (drone_ground - aoi_ground). Any absolute datum/geoid offset cancels
+            #    in the DEM difference, so it is robust to a bad geoid or a
+            #    non-ellipsoidal ASL.
+            agl_abs = None
             if drone_absolute_elev is not None:
-                # Best case: we have absolute elevation
-                # Effective AGL at AOI = drone_absolute - aoi_terrain
-                effective_agl = drone_absolute_elev - terrain_elevation
+                agl_abs = drone_absolute_elev - terrain_elevation
 
-                # Clamp to minimum positive value
-                effective_agl = max(1.0, effective_agl)
-            else:
-                # Fallback: use reported AGL adjusted for terrain difference
-                if drone_terrain.source == 'terrain' and drone_terrain.elevation_m is not None:
-                    terrain_diff = drone_terrain.elevation_m - terrain_elevation
-                    effective_agl = reported_agl + terrain_diff
-                    effective_agl = max(1.0, effective_agl)
-                else:
-                    effective_agl = reported_agl
+            agl_rel = None
+            if drone_terrain.source == 'terrain' and drone_terrain.elevation_m is not None:
+                agl_rel = reported_agl + (drone_terrain.elevation_m - terrain_elevation)
+            elif reported_agl and reported_agl > 0:
+                agl_rel = reported_agl
+
+            effective_agl = self._select_effective_agl(
+                agl_abs, agl_rel, reported_agl,
+                geoid_undulation, drone_terrain, terrain_elevation
+            )
+
+            # Clamp to minimum positive value
+            effective_agl = max(1.0, effective_agl)
 
             # Recalculate position with corrected AGL
             new_result = self._calculate_ground_position(
                 drone_lat, drone_lon, u, v, cx, cy, img_width, img_height,
                 focal_mm, sensor_w_mm, sensor_h_mm,
-                effective_agl, pitch, yaw, roll
+                effective_agl, pitch, yaw, roll,
+                roll_axis_azimuth_deg=roll_axis_azimuth_deg
             )
 
             if new_result is None:

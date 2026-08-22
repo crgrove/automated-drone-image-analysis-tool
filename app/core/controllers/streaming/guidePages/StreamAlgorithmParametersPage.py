@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from core.services.LoggerService import LoggerService
 
 from .BasePage import BasePage
+from helpers.WidgetHelper import retire_widget
 
 
 class StreamAlgorithmParametersPage(BasePage):
@@ -109,9 +110,7 @@ class StreamAlgorithmParametersPage(BasePage):
             # Remove from layout
             container = self.dialog.algorithmParametersContainer
             layout = container.layout()
-            if layout:
-                layout.removeWidget(self.algorithm_widget)
-            self.algorithm_widget.deleteLater()
+            retire_widget(self.algorithm_widget, layout)
             self.algorithm_widget = None
 
         try:

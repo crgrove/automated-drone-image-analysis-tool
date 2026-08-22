@@ -323,41 +323,84 @@ class HSVColorRangeService(AlgorithmService):
             coords[:, 0] = np.clip(coords[:, 0], 0, w - 1)
             coords[:, 1] = np.clip(coords[:, 1], 0, h - 1)
 
-            seed_mask = np.zeros((h, w), dtype=bool)
-            seed_mask[coords[:, 1], coords[:, 0]] = True
-
-            cluster_rect = [
-                int(coords[:, 0].min()), int(coords[:, 1].min()),
-                int(coords[:, 0].max()), int(coords[:, 1].max()),
-            ]
-            safety_cap = DetectionExpansion.compute_safety_cap(cluster_rect)
-
             seed_hues = hsv_image[coords[:, 1], coords[:, 0], 0]
             mean_hue = DetectionExpansion.circular_mean_hue(seed_hues)
             if mean_hue is None:
-                combined_mask[seed_mask] = 255
+                combined_mask[coords[:, 1], coords[:, 0]] = 255
                 continue
 
+            expanded_roi, (x0, y0) = self._expand_aoi_windowed(aoi, coords, mean_hue, hsv_image, h, w)
+
+            ys2, xs2 = np.nonzero(expanded_roi)
+            if len(xs2) == 0:
+                continue
+            aoi['detected_pixels'] = np.stack([xs2 + x0, ys2 + y0], axis=1).tolist()
+            # Hull area is translation-invariant, so the ROI mask suffices
+            aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(expanded_roi)))
+
+            roi_view = combined_mask[y0:y0 + expanded_roi.shape[0], x0:x0 + expanded_roi.shape[1]]
+            roi_view[expanded_roi] = 255
+
+        return areas_of_interest, combined_mask
+
+    def _expand_aoi_windowed(self, aoi, coords, mean_hue, hsv_image, h, w):
+        """Run one AOI's hue flood inside a bounded, growable window.
+
+        Same windowing discipline as MRMapService._expand_single_aoi: running
+        the full-frame hue mask and flood per AOI made expansion cost scale
+        with (AOIs x image area). A flood that does not touch a window border
+        with image beyond it equals the global flood exactly; if it does, the
+        window grows 4x and re-runs, degrading to the old full-frame behavior
+        in the worst case. A safety-cap overflow inside the window implies
+        overflow globally, so cap decisions are exact.
+
+        Args:
+            aoi (dict): The AOI being expanded (used for logging only).
+            coords (np.ndarray): (N, 2) clipped detected pixels as (x, y).
+            mean_hue (float): Circular mean hue of the original pixels.
+            hsv_image: Full-frame HSV image.
+            h, w (int): Full-frame dimensions.
+
+        Returns:
+            tuple: (expanded bool ROI mask, (x0, y0) window origin).
+        """
+        xmin, ymin = int(coords[:, 0].min()), int(coords[:, 1].min())
+        xmax, ymax = int(coords[:, 0].max()), int(coords[:, 1].max())
+        safety_cap = DetectionExpansion.compute_safety_cap([xmin, ymin, xmax, ymax])
+
+        margin = max(128, xmax - xmin + 1, ymax - ymin + 1)
+        while True:
+            x0, y0 = max(0, xmin - margin), max(0, ymin - margin)
+            x1, y1 = min(w, xmax + 1 + margin), min(h, ymax + 1 + margin)
+
+            seed_roi = np.zeros((y1 - y0, x1 - x0), dtype=bool)
+            seed_roi[coords[:, 1] - y0, coords[:, 0] - x0] = True
+
             hue_ok = DetectionExpansion.hue_distance_mask(
-                hsv_image, mean_hue, self.hue_expansion,
+                hsv_image[y0:y1, x0:x1], mean_hue, self.hue_expansion,
                 sat_floor=self.hue_expansion_sat_floor,
                 val_floor=self.hue_expansion_val_floor,
             )
-            expanded, cap_hit = DetectionExpansion.expand_hue_flood(seed_mask, hue_ok, safety_cap)
+            expanded, cap_hit = DetectionExpansion.expand_hue_flood(seed_roi, hue_ok, safety_cap)
             if cap_hit:
                 self.logger.warning(
                     f"HSV hue expansion cap hit for AOI at {aoi.get('center')}; keeping original selection."
                 )
-                expanded = seed_mask
+                # Seeds never touch an open border (the window wraps their
+                # bounding rect with margin), so this result is final
+                return seed_roi, (x0, y0)
 
-            ys2, xs2 = np.where(expanded)
-            if len(xs2) == 0:
-                continue
-            aoi['detected_pixels'] = np.stack([xs2, ys2], axis=1).tolist()
-            aoi['area'] = int(round(DetectionExpansion.convex_hull_area_from_mask(expanded)))
-            combined_mask[expanded] = 255
-
-        return areas_of_interest, combined_mask
+            touches_open_border = (
+                (y0 > 0 and expanded[0, :].any())
+                or (y1 < h and expanded[-1, :].any())
+                or (x0 > 0 and expanded[:, 0].any())
+                or (x1 < w and expanded[:, -1].any())
+            )
+            if not touches_open_border:
+                return expanded, (x0, y0)
+            if x0 == 0 and y0 == 0 and x1 == w and y1 == h:
+                return expanded, (x0, y0)
+            margin *= 4
 
     def _calculate_hsv_distances(self, hsv_image, target_hsv, mask):
         """

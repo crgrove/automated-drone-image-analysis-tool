@@ -115,7 +115,15 @@ This file is auto-loaded as project context. It defines normative engineering st
   - `python scripts/extract_translations.py`
   - `python scripts/extract_translations.py --compile` (or equivalent release build path)
 
-### 2.9 Mandatory New Functionality Requirements
+### 2.9 Event-Driven Sequencing (No Timers as Coordination)
+
+- Timers MUST NOT be used as a substitute for event/message-driven sequencing.
+  - Waiting a fixed delay for another operation to "settle" (an image load, a layout pass, a signal cascade) is prohibited. Code MUST consume a completion signal/event, or use an explicit request/consume handoff where the initiating side states its intent and the completing side applies it (reference pattern: `Viewer.load_image_with_zoom` consumed by `ImageLoadController._apply_pending_view_zoom`).
+  - Rationale: a fixed delay encodes an assumption about machine speed. It passes on the development machine and fails in the field (network volumes, slower hardware, macOS timing differences), and each failure invites another, longer timer.
+- State that must survive later events MUST be held where those events can respect it (e.g. a held zoom lives in the viewer's `zoomStack`; geometry/visibility handlers re-project it rather than discard it), not re-asserted by deferred checks.
+- Timers remain legitimate where the delay itself is the requirement: periodic polling of sources that emit no events, UI timeouts (toasts), and debouncing/batching of high-frequency events.
+
+### 2.10 Mandatory New Functionality Requirements
 
 - All new functionality MUST include automated test coverage.
   - At minimum, add/update targeted tests proving the new behavior and critical error paths.

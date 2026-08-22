@@ -310,6 +310,84 @@ class FovHomography:
 _SOLVEPNP_FLAG = getattr(cv2, 'SOLVEPNP_SQPNP', cv2.SOLVEPNP_ITERATIVE)
 
 
+def build_camera_to_ned(pitch_deg, yaw_deg, roll_deg=0.0,
+                        roll_axis_azimuth_deg=None):
+    """Build the camera-to-NED rotation for a gimballed camera.
+
+    Columns are the camera axes expressed in NED: [X right, Y down in image,
+    Z optical axis]. A ray in camera coordinates therefore maps to NED as
+    ``R @ ray``.
+
+    This is deliberately the single definition of the camera model. The
+    ground-position ray-cast (AOIService) and its analytic inverse
+    (AOINeighborService.gps_to_pixel) are only correct as a pair, and when
+    each built its own rotation the pair silently drifted: the forward path
+    gained gimbal-roll support and the inverse did not, which put a WALDO
+    AOI ~1500 px from where it actually appears in a neighbouring frame
+    without any error surfacing. Both now call this.
+
+    Args:
+        pitch_deg: Camera pitch. -90 = nadir, 0 = horizontal.
+        yaw_deg: Camera yaw / azimuth. 0 = North, 90 = East.
+        roll_deg: Gimbal roll about the heading axis. Positive rotates the
+            optical axis to the left of heading. Used by fixed-wing rigs
+            (WALDO mounts its cameras at +-22.5 degrees).
+        roll_axis_azimuth_deg: Compass azimuth of the axis the roll rotates
+            about. None keeps the historical behaviour (the axis at the yaw
+            azimuth); WALDO processor version >= 6 stamps roll about the
+            flight axis, which can differ arbitrarily from image orientation.
+
+    Returns:
+        np.ndarray: 3x3 rotation matrix, camera frame to NED.
+    """
+    opt_elevation = math.radians(pitch_deg)
+    opt_azimuth = math.radians(yaw_deg)
+
+    # Optical axis (camera Z) in NED.
+    opt_axis_ned = np.array([
+        math.cos(opt_elevation) * math.cos(opt_azimuth),   # North
+        math.cos(opt_elevation) * math.sin(opt_azimuth),   # East
+        -math.sin(opt_elevation),                          # Down
+    ])
+
+    # "Up" in the vertical plane containing the optical axis; camera Y (down
+    # in the image) is its negation.
+    up_ned = np.array([
+        -math.sin(opt_elevation) * math.cos(opt_azimuth),
+        -math.sin(opt_elevation) * math.sin(opt_azimuth),
+        -math.cos(opt_elevation),
+    ])
+    cam_y_ned = -up_ned
+
+    cam_x_ned = np.cross(opt_axis_ned, up_ned)
+    norm = np.linalg.norm(cam_x_ned)
+    if norm < 1e-10:
+        # Degenerate: optical axis parallel to "up". Caller decides what to do.
+        return None
+    cam_x_ned = cam_x_ned / norm
+
+    R_cam_to_ned = np.column_stack([cam_x_ned, cam_y_ned, opt_axis_ned])
+
+    # Post-multiplying a Rodrigues rotation about the NED heading-axis unit
+    # vector leaves pitch/yaw behaviour untouched at roll_deg = 0.
+    if roll_deg:
+        roll_rad = math.radians(roll_deg)
+        if roll_axis_azimuth_deg is not None:
+            axis_azimuth = math.radians(roll_axis_azimuth_deg)
+        else:
+            axis_azimuth = opt_azimuth
+        kx, ky, kz = math.cos(axis_azimuth), math.sin(axis_azimuth), 0.0
+        K = np.array([
+            [0.0, -kz, ky],
+            [kz, 0.0, -kx],
+            [-ky, kx, 0.0],
+        ])
+        R_roll = np.eye(3) + math.sin(roll_rad) * K + (1.0 - math.cos(roll_rad)) * (K @ K)
+        R_cam_to_ned = R_roll @ R_cam_to_ned
+
+    return R_cam_to_ned
+
+
 def build_camera_matrix(focal_mm, sensor_w_mm, sensor_h_mm, width, height):
     """Build a 3x3 pinhole camera intrinsic matrix from physical parameters."""
     fx = focal_mm / (sensor_w_mm / width)

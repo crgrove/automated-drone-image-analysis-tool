@@ -2,6 +2,7 @@ import sys
 import platform
 import os
 import logging
+import tempfile
 import traceback
 
 
@@ -16,6 +17,43 @@ _LEVELS = {
     'OFF': logging.CRITICAL + 10,
     'NONE': logging.CRITICAL + 10,
 }
+
+
+def _running_under_pytest():
+    """True while a pytest run is in progress.
+
+    PYTEST_CURRENT_TEST is set per-test; the sys.modules check also covers
+    collection and module import, when LoggerService instances are created.
+    Factored out so tests can pin it and exercise the real platform paths.
+    """
+    return 'PYTEST_CURRENT_TEST' in os.environ or 'pytest' in sys.modules
+
+
+def resolve_log_path():
+    """Absolute path of the log file to write.
+
+    Under pytest this is a throwaway file in the temp directory. Tests must
+    never write into the user's real adiat_logs.txt: field diagnosis depends
+    on that file recording only what the app did, and a deliberate test
+    failure ("Post-load zoom request failed: boom") landing there has
+    already been mistaken for a field error while reading a crew's log.
+    """
+    if _running_under_pytest():
+        app_path = os.path.join(tempfile.gettempdir(), 'adiat-test-logs')
+    else:
+        home_path = os.path.expanduser('~')
+        if platform.system() == 'Windows' or sys.platform == 'darwin':
+            # Deliberately the same location on both: ADIAT keeps its config
+            # and caches here too (see helpers/AppConfig).
+            app_path = os.path.join(home_path, 'AppData', 'Roaming', 'ADIAT')
+        else:
+            # Any other platform. Previously app_path was simply never
+            # assigned here and building the log path raised
+            # UnboundLocalError, taking startup down with it.
+            app_path = os.path.join(home_path, '.adiat')
+
+    os.makedirs(app_path, exist_ok=True)
+    return os.path.join(app_path, 'adiat_logs.txt')
 
 
 def resolve_log_level():
@@ -57,18 +95,7 @@ class LoggerService:
         does not exist, it is created. Sets up both file and console handlers
         with formatted output.
         """
-        if platform.system() == 'Windows':
-            home_path = os.path.expanduser("~")
-            app_path = home_path + '/AppData/Roaming/ADIAT/'
-            if not os.path.exists(app_path):
-                os.makedirs(app_path)
-        elif sys.platform == "darwin":
-            home_path = os.path.expanduser("~")
-            app_path = home_path + '/AppData/Roaming/ADIAT/'
-            if not os.path.exists(app_path):
-                os.makedirs(app_path)
-
-        log_path = app_path + 'adiat_logs.txt'
+        log_path = resolve_log_path()
         self.logger = logging.getLogger(__name__)
 
         # Only add handlers if they haven't been added yet (prevents duplicate logs

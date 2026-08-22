@@ -5,16 +5,18 @@ This controller coordinates the authentication, map selection, and export
 of flagged AOIs to CalTopo maps.
 """
 
-import json
-import base64
 import os
-import time
+from pathlib import Path
+
+import cv2
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QTimer, QThread, Signal
+from PySide6.QtCore import QThread, QEventLoop, Signal
 from core.services.export.CalTopoService import CalTopoService
 from core.services.export.CalTopoAPIService import CalTopoAPIService
 from core.services.export.CalTopoCredentialHelper import CalTopoCredentialHelper
+from core.services.export.CalTopoPublishers import CalTopoApiPublisher, CalTopoBrowserPublisher
+from core.services.export.AOIThumbnailService import AOIThumbnailService
 from core.views.images.viewer.dialogs.CalTopoAuthDialog import CalTopoAuthDialog
 from core.views.images.viewer.dialogs.CalTopoCredentialDialog import CalTopoCredentialDialog
 from core.views.images.viewer.dialogs.CalTopoAPIMapDialog import CalTopoAPIMapDialog
@@ -22,6 +24,7 @@ from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgress
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
+from core.services.image.AOICompositeService import AOICompositeService
 from core.services.image.CoverageExtentService import CoverageExtentService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
@@ -67,6 +70,9 @@ class CalTopoAccountDataThread(QThread):
                 self.progressUpdated.emit(100, 100, "Account data loaded")
                 self.finished.emit(True, account_data)
             else:
+                # Report the failure too; leaving the bar at 0% "Connecting..."
+                # made a refusal look like a stall.
+                self.progressUpdated.emit(100, 100, "CalTopo rejected the request")
                 self.finished.emit(False, {})
         except Exception as e:
             self.errorOccurred.emit(str(e))
@@ -81,7 +87,8 @@ class CalTopoDataPreparationThread(QThread):
     canceled = Signal()
 
     def __init__(self, controller, images, flagged_aois, include_flagged_aois,
-                 include_locations, include_images_without_flagged_aois, include_coverage_area, include_images):
+                 include_locations, include_images_without_flagged_aois, include_coverage_area, include_images,
+                 aoi_photo_mode='full'):
         """
         Initialize the data preparation thread.
 
@@ -94,6 +101,7 @@ class CalTopoDataPreparationThread(QThread):
             include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
+            aoi_photo_mode: Photo(s) to attach to flagged AOI markers ('full', 'thumbnail', or 'both')
         """
         super().__init__()
         self.controller = controller
@@ -104,6 +112,7 @@ class CalTopoDataPreparationThread(QThread):
         self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
+        self.aoi_photo_mode = aoi_photo_mode
         self._cancelled = False
 
     def cancel(self):
@@ -140,7 +149,8 @@ class CalTopoDataPreparationThread(QThread):
                     return
                 self.progressUpdated.emit(0, 100, "Preparing flagged AOI markers...")
                 markers.extend(self.controller._prepare_markers(
-                    self.images, self.flagged_aois, include_images=self.include_images
+                    self.images, self.flagged_aois, include_images=self.include_images,
+                    aoi_photo_mode=self.aoi_photo_mode
                 ))
 
             if self.include_locations and not self.is_cancelled():
@@ -191,27 +201,28 @@ class CalTopoDataPreparationThread(QThread):
             self.errorOccurred.emit(str(e))
 
 
-class CalTopoAPIExportThread(QThread):
-    """Thread for exporting to CalTopo via API."""
+class CalTopoExportThread(QThread):
+    """Thread that publishes markers and polygons to CalTopo.
 
-    finished = Signal(bool, int, int)  # success, success_count, total_count
+    Transport-agnostic: it drives a publisher (Team API or captured browser
+    session), so both authentication modes share one export loop.
+    """
+
+    finished = Signal(dict)  # summary produced by _summary()
     errorOccurred = Signal(str)
     progressUpdated = Signal(int, int, str)
     canceled = Signal()
 
-    def __init__(self, api_service, controller, map_id, team_id, credential_id, credential_secret,
-                 images, flagged_aois, include_flagged_aois, include_locations,
-                 include_images_without_flagged_aois, include_coverage_area, include_images):
+    def __init__(self, publisher, controller, images, flagged_aois,
+                 include_flagged_aois, include_locations,
+                 include_images_without_flagged_aois, include_coverage_area, include_images,
+                 aoi_photo_mode='full', markers=None, polygons=None):
         """
-        Initialize the CalTopo API export thread.
+        Initialize the CalTopo export thread.
 
         Args:
-            api_service: CalTopoAPIService instance
-            controller: CalTopoExportController instance (for accessing preparation methods)
-            map_id: CalTopo map ID
-            team_id: Team ID
-            credential_id: Credential ID
-            credential_secret: Credential Secret
+            publisher: Object exposing add_marker/add_polygon/upload_photo.
+            controller: CalTopoExportController instance (for preparation methods)
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois: Whether to include flagged AOIs
@@ -219,14 +230,13 @@ class CalTopoAPIExportThread(QThread):
             include_images_without_flagged_aois: Whether to include images without flagged AOIs in location export
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
+            aoi_photo_mode: Photo(s) to attach to flagged AOI markers ('full', 'thumbnail', or 'both')
+            markers: Pre-prepared markers; prepared in-thread when None.
+            polygons: Pre-prepared polygons; prepared in-thread when None.
         """
         super().__init__()
-        self.api_service = api_service
+        self.publisher = publisher
         self.controller = controller
-        self.map_id = map_id
-        self.team_id = team_id
-        self.credential_id = credential_id
-        self.credential_secret = credential_secret
         self.images = images
         self.flagged_aois = flagged_aois
         self.include_flagged_aois = include_flagged_aois
@@ -234,6 +244,9 @@ class CalTopoAPIExportThread(QThread):
         self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.include_coverage_area = include_coverage_area
         self.include_images = include_images
+        self.aoi_photo_mode = aoi_photo_mode
+        self.markers = markers
+        self.polygons = polygons
         self._cancelled = False
 
     def cancel(self):
@@ -256,136 +269,160 @@ class CalTopoAPIExportThread(QThread):
     def run(self):
         """Execute the export operation (preparation and export both happen in thread)."""
         try:
-            # Step 1: Prepare markers and polygons (all heavy work happens in thread)
-            markers = []
-            polygons = []
+            markers, polygons = self._collect()
+            if markers is None:
+                return
+            self._publish(markers, polygons)
+        except Exception as e:
+            self.errorOccurred.emit(str(e))
 
+    def _collect(self):
+        """Gather the markers and polygons to publish.
+
+        Returns:
+            tuple: (markers, polygons), or (None, None) if cancelled.
+        """
+        if self.markers is not None or self.polygons is not None:
+            # Already prepared before authentication so the user could be told
+            # there was nothing to export before being asked to log in.
+            return list(self.markers or []), list(self.polygons or [])
+
+        markers = []
+        polygons = []
+
+        if self.include_flagged_aois:
+            if self.is_cancelled():
+                self.canceled.emit()
+                return None, None
+            self.progressUpdated.emit(0, 100, "Preparing flagged AOI markers...")
+            markers.extend(self.controller._prepare_markers(
+                self.images, self.flagged_aois, include_images=self.include_images,
+                aoi_photo_mode=self.aoi_photo_mode
+            ))
+
+        if self.include_locations and not self.is_cancelled():
+            self.progressUpdated.emit(20, 100, "Preparing location markers...")
+            # Filter images for locations based on flag
+            images_for_locations = []
+            for img_idx, img in enumerate(self.images):
+                if img.get('hidden', False):
+                    continue
+                has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
+                if has_flagged_aois or self.include_images_without_flagged_aois:
+                    images_for_locations.append(img)
+            markers.extend(self.controller._prepare_location_markers(
+                images_for_locations, include_images=self.include_images
+            ))
+
+        if self.include_coverage_area and not self.is_cancelled():
+            self.progressUpdated.emit(40, 100, "Calculating coverage polygons...")
+            # Determine which images should be included for coverage
+            # Coverage should only include images that are actually being exported
+            exported_image_indices = set()
+
+            # Add images with flagged AOIs if flagged AOIs are included
             if self.include_flagged_aois:
-                if self.is_cancelled():
-                    self.canceled.emit()
-                    return
-                self.progressUpdated.emit(0, 100, "Preparing flagged AOI markers...")
-                markers.extend(self.controller._prepare_markers(
-                    self.images, self.flagged_aois, include_images=self.include_images
-                ))
+                exported_image_indices.update(self.flagged_aois.keys())
 
-            if self.include_locations and not self.is_cancelled():
-                self.progressUpdated.emit(20, 100, "Preparing location markers...")
-                # Filter images for locations based on flag
-                images_for_locations = []
+            # Add images for locations if locations are included
+            if self.include_locations:
                 for img_idx, img in enumerate(self.images):
                     if img.get('hidden', False):
                         continue
                     has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
                     if has_flagged_aois or self.include_images_without_flagged_aois:
-                        images_for_locations.append(img)
-                markers.extend(self.controller._prepare_location_markers(
-                    images_for_locations, include_images=self.include_images
-                ))
+                        exported_image_indices.add(img_idx)
 
-            if self.include_coverage_area and not self.is_cancelled():
-                self.progressUpdated.emit(40, 100, "Calculating coverage polygons...")
-                # Determine which images should be included for coverage
-                # Coverage should only include images that are actually being exported
-                exported_image_indices = set()
+            # Filter images to only those being exported
+            images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
+            polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
 
-                # Add images with flagged AOIs if flagged AOIs are included
-                if self.include_flagged_aois:
-                    exported_image_indices.update(self.flagged_aois.keys())
+        if self.is_cancelled():
+            self.canceled.emit()
+            return None, None
 
-                # Add images for locations if locations are included
-                if self.include_locations:
-                    for img_idx, img in enumerate(self.images):
-                        if img.get('hidden', False):
-                            continue
-                        has_flagged_aois = img_idx in self.flagged_aois and len(self.flagged_aois[img_idx]) > 0
-                        if has_flagged_aois or self.include_images_without_flagged_aois:
-                            exported_image_indices.add(img_idx)
+        return markers, polygons
 
-                # Filter images to only those being exported
-                images_for_coverage = [self.images[idx] for idx in exported_image_indices if idx < len(self.images)]
-                polygons.extend(self.controller._prepare_coverage_polygons(images_for_coverage))
+    def _publish(self, markers, polygons):
+        """Create every marker and polygon, then emit a summary.
 
+        Args:
+            markers (list): Marker dictionaries.
+            polygons (list): Polygon dictionaries.
+        """
+        marker_success = 0
+        polygon_success = 0
+        photos_total = 0
+        photos_uploaded = 0
+        total = len(markers) + len(polygons)
+
+        for index, marker in enumerate(markers, start=1):
             if self.is_cancelled():
                 self.canceled.emit()
                 return
 
-            # Step 2: Export markers and polygons
-            marker_success_count = 0
-            polygon_success_count = 0
-            total = len(markers) + len(polygons)
-            current = 0
+            progress = 50 + int((index / len(markers)) * 40)
+            self.progressUpdated.emit(
+                progress,
+                100,
+                f"Exporting marker {index} of {len(markers)}: {marker.get('title', 'Unknown')[:40]}..."
+            )
 
-            # Export markers
-            if markers:
-                for index, marker in enumerate(markers, start=1):
-                    if self.is_cancelled():
-                        self.canceled.emit()
-                        return
+            success, marker_id = self.publisher.add_marker(marker)
+            if not success:
+                continue
+            marker_success += 1
 
-                    # Progress: 50% + (index/total_markers * 40%) for markers
-                    progress = 50 + int((index / len(markers)) * 40)
-                    self.progressUpdated.emit(
-                        progress,
-                        100,
-                        f"Exporting marker {index} of {len(markers)}: {marker.get('title', 'Unknown')[:40]}..."
-                    )
+            if not marker_id:
+                continue
 
-                    # Export marker
-                    success, marker_id = self.api_service.add_marker_via_api(
-                        self.map_id, self.team_id, self.credential_id, self.credential_secret, marker
-                    )
+            # A marker can carry several photos (e.g. close-up plus overview);
+            # _get_marker_photos also handles fallbacks for missing files
+            for photo in self.controller._get_marker_photos(marker):
+                if self.is_cancelled():
+                    self.canceled.emit()
+                    return
 
-                    if success:
-                        marker_success_count += 1
+                photos_total += 1
+                self.progressUpdated.emit(
+                    progress,
+                    100,
+                    f"Uploading photo {photos_total}: {os.path.basename(photo['path'])}..."
+                )
+                photo_ok, _ = self.publisher.upload_photo(
+                    marker, marker_id, photo_path=photo['path'], title=photo['title']
+                )
+                if photo_ok:
+                    photos_uploaded += 1
 
-                        # Upload photo if available
-                        if marker.get('image_path') and os.path.exists(marker.get('image_path', '')):
-                            self.api_service.upload_photo_via_api(
-                                self.map_id, self.team_id, self.credential_id, self.credential_secret,
-                                marker['image_path'],
-                                marker['lat'], marker['lon'],
-                                title=marker.get('title'),
-                                description=marker.get('description', ''),
-                                marker_id=marker_id
-                            )
-
-                    current += 1
-
-            # Export polygons
-            if polygons and not self.is_cancelled():
-                for index, polygon in enumerate(polygons, start=1):
-                    if self.is_cancelled():
-                        self.canceled.emit()
-                        return
-
-                    # Progress: 90% + (index/total_polygons * 10%) for polygons
-                    progress = 90 + int((index / len(polygons)) * 10) if polygons else 90
-                    self.progressUpdated.emit(
-                        progress,
-                        100,
-                        f"Exporting polygon {index} of {len(polygons)}: {polygon.get('title', 'Unknown')[:40]}..."
-                    )
-
-                    # Export polygon
-                    success, _ = self.api_service.add_polygon_via_api(
-                        self.map_id, self.team_id, self.credential_id, self.credential_secret, polygon
-                    )
-
-                    if success:
-                        polygon_success_count += 1
-
-                    current += 1
-
+        for index, polygon in enumerate(polygons, start=1):
             if self.is_cancelled():
                 self.canceled.emit()
                 return
 
-            total_success = marker_success_count + polygon_success_count
-            self.finished.emit(total_success > 0, total_success, total)
+            progress = 90 + int((index / len(polygons)) * 10)
+            self.progressUpdated.emit(
+                progress,
+                100,
+                f"Exporting polygon {index} of {len(polygons)}: {polygon.get('title', 'Unknown')[:40]}..."
+            )
 
-        except Exception as e:
-            self.errorOccurred.emit(str(e))
+            success, _ = self.publisher.add_polygon(polygon)
+            if success:
+                polygon_success += 1
+
+        if self.is_cancelled():
+            self.canceled.emit()
+            return
+
+        objects_created = marker_success + polygon_success
+        self.finished.emit({
+            'success': objects_created > 0,
+            'objects_created': objects_created,
+            'objects_total': total,
+            'photos_uploaded': photos_uploaded,
+            'photos_total': photos_total,
+        })
 
 
 class CalTopoExportController(TranslationMixin):
@@ -406,9 +443,14 @@ class CalTopoExportController(TranslationMixin):
         """
         self.parent = parent_widget
         self.logger = logger or LoggerService()
-        self.caltopo_service = CalTopoService()  # Browser-based service
-        self.caltopo_api_service = CalTopoAPIService()  # API-based service
+        self.caltopo_service = CalTopoService(logger=self.logger)  # Browser-session HTTP client
+        self.caltopo_api_service = CalTopoAPIService(logger=self.logger)  # API-based service
         self.credential_helper = CalTopoCredentialHelper()
+        self._account_thread = None
+        # Created lazily during marker preparation; generate the per-export AOI
+        # photos (zoomed crops and multi-zoom composites) into a temp dir
+        self.aoi_thumbnail_service = None
+        self.aoi_composite_service = None
 
     def export_to_caltopo(
             self,
@@ -418,7 +460,8 @@ class CalTopoExportController(TranslationMixin):
             include_locations=False,
             include_images_without_flagged_aois=True,
             include_coverage_area=False,
-            include_images=True):
+            include_images=True,
+            aoi_photo_mode='full'):
         """
         Export data to CalTopo.
 
@@ -430,6 +473,9 @@ class CalTopoExportController(TranslationMixin):
             include_images_without_flagged_aois (bool): Include images without flagged AOIs in location export
             include_coverage_area (bool): Include coverage area as polygons
             include_images (bool): Upload photos to CalTopo markers
+            aoi_photo_mode (str): Photo(s) to attach to flagged AOI markers:
+                'full' (multi-zoom composite, as in the PDF report),
+                'thumbnail' (zoomed AOI crop), or 'both'
 
         Returns:
             bool: True if export was successful, False otherwise
@@ -491,7 +537,8 @@ class CalTopoExportController(TranslationMixin):
 
             prep_thread = CalTopoDataPreparationThread(
                 self, images, flagged_aois, include_flagged_aois,
-                include_locations, include_images_without_flagged_aois, include_coverage_area, include_images
+                include_locations, include_images_without_flagged_aois, include_coverage_area, include_images,
+                aoi_photo_mode=aoi_photo_mode
             )
             prep_thread.progressUpdated.connect(on_prep_progress)
             prep_thread.finished.connect(on_prep_finished)
@@ -500,8 +547,8 @@ class CalTopoExportController(TranslationMixin):
             prep_dialog.cancel_requested.connect(prep_thread.cancel)
 
             prep_thread.start()
-            prep_dialog.show()
-            QApplication.processEvents()
+            # exec() shows the dialog itself; pumping events first can deliver
+            # the worker's completion before the modal loop exists.
             prep_dialog.exec()
 
             prep_thread.wait()
@@ -566,18 +613,22 @@ class CalTopoExportController(TranslationMixin):
                 )
                 return False
 
-            # Step 2: Always use the embedded browser session for export
-            # This ensures we use the exact cookies/tokens CalTopo expects.
+            # Step 2: Authenticate in the embedded browser, then publish over
+            # plain HTTP with the captured session. The browser is a login
+            # surface only - it does not run the export.
             selected_map_id = None
-            export_result = {'success': False}
+            captured_cookies = None
+            captured_account_id = None
 
             auth_dialog = CalTopoAuthDialog(self.parent)
 
             def on_authenticated(payload):
-                nonlocal selected_map_id
+                nonlocal selected_map_id, captured_cookies, captured_account_id
 
                 if isinstance(payload, dict):
                     selected_map_id = payload.get('map_id') or payload.get('__map_id')
+                    captured_cookies = payload.get('cookies')
+                    captured_account_id = payload.get('account_id')
 
                 if not selected_map_id:
                     QMessageBox.warning(
@@ -591,105 +642,73 @@ class CalTopoExportController(TranslationMixin):
                     )
                     return
 
-                # Close the auth dialog first (user is done with it)
                 auth_dialog.accept()
-
-                # Use JavaScript running inside the authenticated browser session
-                # so all CalTopo cookies/tokens (including HttpOnly) are honored.
-                marker_success_count = 0
-                polygon_success_count = 0
-                cancelled = False
-
-                # Export markers if any
-                if markers:
-                    marker_success_count, cancelled = self._export_markers_via_javascript(
-                        auth_dialog.web_view,
-                        selected_map_id,
-                        markers
-                    )
-                    if cancelled:
-                        export_result['success'] = False
-                        export_result['cancelled'] = True
-                        return
-
-                # Export polygons if any
-                if coverage_polygons and not cancelled:
-                    polygon_success_count, cancelled = self._export_polygons_via_javascript(
-                        auth_dialog.web_view,
-                        selected_map_id,
-                        coverage_polygons
-                    )
-
-                total_success = marker_success_count + polygon_success_count
-                total_count = len(markers) + len(coverage_polygons)
-
-                export_result['success'] = total_success > 0
-                export_result['success_count'] = total_success
-                export_result['total_count'] = total_count
-                export_result['cancelled'] = cancelled
 
             auth_dialog.authenticated.connect(on_authenticated)
 
-            if auth_dialog.exec() != CalTopoAuthDialog.Accepted:
+            # Every bail-out below used to be a silent `return False`, so a run
+            # that stopped here left no trace at all. Say which gate closed.
+
+            # Deliberately not auth_dialog.exec(). A modal loop exits on any
+            # hide of the dialog, and embedding a QWebEngineView causes one;
+            # that silently aborted the export before the user could log in.
+            # Waiting on finished() keys the outcome to done() alone.
+            try:
+                auth_dialog.show()
+                wait_loop = QEventLoop()
+                auth_dialog.finished.connect(lambda _result: wait_loop.quit())
+                wait_loop.exec()
+                dialog_result = auth_dialog.result()
+            finally:
+                auth_dialog.deleteLater()
+
+            if dialog_result != CalTopoAuthDialog.Accepted:
+                self.logger.warning(
+                    f"CalTopo browser export cancelled: login dialog closed without "
+                    f"authenticating (result={dialog_result})."
+                )
                 return False
 
-            # If we still don't have a map ID after authentication, user cancelled
             if not selected_map_id:
-                return False
-
-            # Step 3: Show result
-            if export_result.get('success'):
-                success_count = export_result.get('success_count', 0)
-                total_count = export_result.get('total_count', len(markers) + len(coverage_polygons))
-
-                # Build description of what was exported
-                exported_items = []
-                if markers:
-                    exported_items.append(
-                        self.tr("{count} marker(s)").format(count=len(markers))
-                    )
-                if coverage_polygons:
-                    exported_items.append(
-                        self.tr("{count} polygon(s)").format(count=len(coverage_polygons))
-                    )
-
-                items_desc = self.tr(" and ").join(exported_items)
-
-                if success_count == total_count:
-                    QMessageBox.information(
-                        self.parent,
-                        self.tr("Export Successful"),
-                        self.tr(
-                            "Successfully exported all {items} to CalTopo map {map_id}.\n\n"
-                            "The items should now be visible on your map."
-                        ).format(items=items_desc, map_id=selected_map_id)
-                    )
-                else:
-                    QMessageBox.warning(
-                        self.parent,
-                        self.tr("Partial Success"),
-                        self.tr(
-                            "Exported {success} of {total} item(s) ({items}) to CalTopo map {map_id}.\n\n"
-                            "{failed} item(s) failed. Check console for details."
-                        ).format(
-                            success=success_count,
-                            total=total_count,
-                            items=items_desc,
-                            map_id=selected_map_id,
-                            failed=total_count - success_count
-                        )
-                    )
-                return True
-            else:
-                QMessageBox.critical(
+                self.logger.warning(
+                    "CalTopo browser export stopped: the login dialog was accepted but "
+                    "no map ID was captured. Navigate to a map before exporting."
+                )
+                QMessageBox.warning(
                     self.parent,
-                    self.tr("Export Failed"),
+                    self.tr("No Map Selected"),
                     self.tr(
-                        "Failed to export items to CalTopo.\n\n"
-                        "Please check the console output for error details."
+                        "No CalTopo map was selected, so there was nothing to export to.\n\n"
+                        "Open your map in the CalTopo window before clicking "
+                        "'I'm Logged In - Export Data'."
                     )
                 )
                 return False
+
+            if not captured_cookies:
+                self.logger.error(
+                    "CalTopo browser export stopped: no session cookies were captured."
+                )
+                QMessageBox.critical(
+                    self.parent,
+                    self.tr("Authentication Failed"),
+                    self.tr("No CalTopo session cookies were captured. Please log in and try again.")
+                )
+                return False
+
+            # Hand the captured session to the HTTP client used for the export.
+            self.caltopo_service.save_session(captured_cookies)
+            self.caltopo_service.set_account_id(captured_account_id)
+
+            # Step 3: Publish, reusing the same worker the API path uses.
+            return self._run_export(
+                CalTopoBrowserPublisher(self.caltopo_service, selected_map_id),
+                images, flagged_aois,
+                include_flagged_aois, include_locations,
+                include_images_without_flagged_aois, include_coverage_area, include_images,
+                aoi_photo_mode=aoi_photo_mode,
+                markers=markers, polygons=coverage_polygons
+            )
 
         except Exception as e:
             self.logger.error(f"CalTopo export error: {e}")
@@ -701,6 +720,9 @@ class CalTopoExportController(TranslationMixin):
                 ).format(error=str(e))
             )
             return False
+        finally:
+            # Generated AOI photos live in a temp dir; drop them once the export ends
+            self._cleanup_aoi_thumbnails()
 
     def _is_offline_only(self) -> bool:
         """Return whether OfflineOnly is enabled on the parent settings service."""
@@ -711,18 +733,25 @@ class CalTopoExportController(TranslationMixin):
             pass
         return False
 
-    def _prepare_markers(self, images, flagged_aois, include_images=True):
+    def _prepare_markers(self, images, flagged_aois, include_images=True, aoi_photo_mode='full'):
         """Prepare marker data from flagged AOIs.
 
         Args:
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
-            include_images (bool): Whether to include image_path for photo uploads
+            include_images (bool): Whether to include photos for upload
+            aoi_photo_mode (str): Which photo(s) to attach to each AOI marker:
+                'full' (multi-zoom composite, as in the PDF report),
+                'thumbnail' (zoomed AOI crop), or 'both'
 
         Returns:
             list: List of marker dictionaries with 'lat', 'lon', 'title', 'description'
         """
         markers = []
+
+        if include_images:
+            # The mode decides what gets generated below; record it for diagnosis
+            self.logger.info(f"CalTopo AOI photo mode: {aoi_photo_mode}")
 
         for img_idx, aoi_indices in flagged_aois.items():
             if img_idx >= len(images):
@@ -782,6 +811,12 @@ class CalTopoExportController(TranslationMixin):
 
             except Exception:
                 continue
+
+            # Composites reuse this image's already-loaded pixels; build the
+            # shared per-image context once, not per AOI
+            composite_context = None
+            if include_images and aoi_photo_mode in ('full', 'both'):
+                composite_context = self._build_composite_context(image, image_path, img_array, bearing)
 
             # Get AOI data
             aois = image.get('areas_of_interest', [])
@@ -870,11 +905,23 @@ class CalTopoExportController(TranslationMixin):
                     'description': description,
                     'rgb': marker_rgb,  # RGB tuple (R, G, B) or None
                 }
-                # Only include image_path if photos should be uploaded
+                # Only include photos if they should be uploaded
                 if include_images:
+                    # Keep the plain image path as the last-resort fallback; the
+                    # generated photo(s) for the selected mode go in 'photos'
                     marker['image_path'] = image_path
+                    photos = self._build_aoi_photos(
+                        image_path, image_name, aoi, aoi_idx, aoi_photo_mode,
+                        composite_context=composite_context
+                    )
+                    if photos:
+                        marker['photos'] = photos
 
                 markers.append(marker)
+
+            # Free the rotated-image cache for this image before moving to the next
+            if composite_context is not None and self.aoi_composite_service is not None:
+                self.aoi_composite_service.clear_cache_for(composite_context['cache_key'])
 
         return markers
 
@@ -1021,456 +1068,189 @@ class CalTopoExportController(TranslationMixin):
 
         return polygons
 
-    def _export_markers_via_javascript(self, web_view, map_id, markers):
-        """Export markers using JavaScript fetch() inside the authenticated browser.
-
-        This uses the same browser session (cookies, tokens, HttpOnly cookies, etc.)
-        that CalTopo itself is using, which is more robust than recreating it in
-        a separate Python requests.Session.
+    def _build_composite_context(self, image, image_path, img_array, bearing):
+        """Prepare the per-image inputs needed to build multi-zoom composites.
 
         Args:
-            web_view: QWebEngineView instance with authenticated CalTopo session
-            map_id (str): CalTopo map ID
-            markers (list): Marker dictionaries
+            image (dict): Image data dictionary
+            image_path (str): Path used to load img_array
+            img_array: Image array already loaded for this image (RGB)
+            bearing: Drone bearing in degrees
 
         Returns:
-            tuple: (success_count, cancelled)
+            dict: Context with 'img_array_bgr', 'bearing', 'identifier_color',
+                  and 'cache_key' keys, or None if it could not be prepared
         """
-        total = len(markers)
-        if total == 0:
-            return 0, False
-
-        # Create progress dialog similar to KML export
-        progress_dialog = ExportProgressDialog(
-            self.parent,
-            title=self.tr("Exporting to CalTopo"),
-            total_items=total
-        )
-        progress_dialog.set_title(self.tr("Exporting markers to CalTopo..."))
-        progress_dialog.set_status(
-            self.tr("Preparing to export {count} marker(s)...").format(count=total)
-        )
-
-        # Show progress dialog
-        progress_dialog.show()
-        QApplication.processEvents()
-
-        success_count = 0
-        cancelled = False
-
-        for index, marker in enumerate(markers, start=1):
-            # Check if cancelled
-            if progress_dialog.is_cancelled():
-                cancelled = True
-                break
-
-            # Update progress
-            progress_dialog.update_progress(
-                index - 1,
-                total,
-                f"Exporting marker {index} of {total}: {marker.get('title', 'Unknown')[:40]}..."
-            )
-            QApplication.processEvents()
-            # Determine marker color
-            marker_color = marker.get('marker_color')
-            if not marker_color and marker.get('rgb'):
-                try:
-                    r, g, b = marker['rgb']
-                    marker_color = f"{r:02X}{g:02X}{b:02X}"
-                except Exception:
-                    marker_color = None
-            if not marker_color:
-                marker_color = "FF0000"
-
-            # Build CalTopo-style marker properties
-            marker_properties = {
-                "title": marker.get("title", ""),
-                "description": marker.get("description", ""),
-                "marker-size": str(marker.get("marker_size", "1")),
-                "marker-symbol": marker.get("marker_symbol", "a:4"),
-                "marker-color": marker_color,
-                "marker-rotation": marker.get("marker_rotation", 0),
-            }
-
-            marker_payload = {
-                "type": "Feature",
-                "class": None,
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [marker["lon"], marker["lat"]],
-                },
-                "properties": marker_properties,
-            }
-
-            # Prepare photo data if needed
-            has_photo = marker.get('image_path') and os.path.exists(marker.get('image_path', ''))
-            base64_image_data = None
-            photo_filename = None
-
-            if has_photo:
-                try:
-                    image_path = marker['image_path']
-                    photo_filename = os.path.basename(image_path)
-                    with open(image_path, "rb") as img_file:
-                        image_bytes = img_file.read()
-                        base64_image_data = base64.b64encode(image_bytes).decode("utf-8")
-                except Exception:
-                    has_photo = False
-
-            # Create marker and optionally photo in one JavaScript call
-            base64_js = json.dumps(base64_image_data) if base64_image_data else "null"
-            photo_desc_js = json.dumps(marker.get('description', ''))
-
-            js_code = f"""
-            (async function() {{
-                // STEP 1: Create marker
-                const markerData = {json.dumps(marker_payload)};
-                const markerFormData = new URLSearchParams();
-                markerFormData.append('json', JSON.stringify(markerData));
-
-                let markerId = null;
-                try {{
-                    const markerResponse = await fetch('/api/v1/map/{map_id}/Marker', {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-                        }},
-                        credentials: 'include',
-                        body: markerFormData.toString()
-                    }});
-
-                    if (markerResponse.ok) {{
-                        const markerText = await markerResponse.text();
-                        try {{
-                            const markerData = JSON.parse(markerText);
-                            if (markerData.result && markerData.result.id) {{
-                                markerId = markerData.result.id;
-                            }}
-                        }} catch (e) {{
-                            // Ignore parse errors
-                        }}
-                    }} else {{
-                        return 'error:marker:' + markerResponse.status;
-                    }}
-                }} catch (e) {{
-                    return 'error:marker:exception:' + e.toString();
-                }}
-
-                // STEP 2: Upload photo if we have one and marker was created
-                if (markerId && {json.dumps(has_photo)}) {{
-                    try {{
-                        // Get creator ID
-                        let creatorId = 'ADIAT_User';
-                        try {{
-                            const mapResponse = await fetch('/api/v1/map/{map_id}/since/0', {{
-                                method: 'GET',
-                                credentials: 'include'
-                            }});
-                            if (mapResponse.ok) {{
-                                const mapData = await mapResponse.json();
-                                if (mapData && mapData.result && mapData.result.state && mapData.result.state.features) {{
-                                    for (let feature of mapData.result.state.features) {{
-                                        if (feature.properties && feature.properties.creator) {{
-                                            creatorId = feature.properties.creator;
-                                            break;
-                                        }}
-                                    }}
-                                }}
-                            }}
-                        }} catch (e) {{
-                            // Use fallback
-                        }}
-
-                        const mediaId = crypto.randomUUID();
-                        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                        const base64Data = {base64_js};
-
-                        // Step 2.1: Create media object
-                        const mediaMetadataPayload = {{
-                            properties: {{
-                                creator: creatorId,
-                                filename: {json.dumps(photo_filename)},
-                                exifCreatedTZ: timezone
-                            }}
-                        }};
-                        const step1FormData = new URLSearchParams();
-                        step1FormData.append('json', JSON.stringify(mediaMetadataPayload));
-                        const step1Response = await fetch(window.location.origin + '/api/v1/media/' + mediaId, {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
-                            credentials: 'include',
-                            body: step1FormData.toString()
-                        }});
-                        if (!step1Response.ok) {{
-                            return 'success:' + markerId;
-                        }}
-
-                        // Step 2.2: Upload image data
-                        const mediaDataPayload = {{ data: base64Data }};
-                        const step2FormData = new URLSearchParams();
-                        step2FormData.append('json', JSON.stringify(mediaDataPayload));
-                        const step2Response = await fetch(window.location.origin + '/api/v1/media/' + mediaId + '/data', {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
-                            credentials: 'include',
-                            body: step2FormData.toString()
-                        }});
-                        if (!step2Response.ok) {{
-                            return 'success:' + markerId;
-                        }}
-
-                        // Step 2.3: Attach media to map
-                        const mediaObjectPayload = {{
-                            type: 'Feature',
-                            geometry: {{
-                                type: 'Point',
-                                coordinates: [{marker['lon']}, {marker['lat']}]
-                            }},
-                            properties: {{
-                                parentId: 'Marker:' + markerId,
-                                backendMediaId: mediaId,
-                                created: Date.now(),
-                                title: {json.dumps(photo_filename)},
-                                heading: null,
-                                description: {photo_desc_js},
-                                'marker-symbol': 'aperture',
-                                'marker-color': '#FFFFFF',
-                                'marker-size': 1
-                            }}
-                        }};
-                        const step3FormData = new URLSearchParams();
-                        step3FormData.append('json', JSON.stringify(mediaObjectPayload));
-                        const step3Response = await fetch(window.location.origin + '/api/v1/map/{map_id}/MapMediaObject', {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }},
-                            credentials: 'include',
-                            body: step3FormData.toString()
-                        }});
-                        if (!step3Response.ok) {{
-                            return 'success:' + markerId;
-                        }}
-                    }} catch (e) {{
-                        return 'success:' + markerId;
-                    }}
-                }}
-
-                return 'success:' + markerId;
-            }})();
-            """
-
-            result_container = {"result": None}
-
-            def callback(result):
-                result_container["result"] = result
-
-            web_view.page().runJavaScript(js_code, callback)
-
-            # Wait for completion with 2 second timeout
-            max_wait_iterations = 200  # 2 seconds max (200 * 0.01)
-            for iteration in range(max_wait_iterations):
-                QApplication.processEvents()
-                if result_container["result"] is not None:
-                    break
-                time.sleep(0.01)
-
-            result = result_container["result"]
-            if result and isinstance(result, str) and "success" in result:
-                success_count += 1
-            elif result and isinstance(result, str) and "error" in result:
-                # Only log actual errors
-                self.logger.warning(f"Marker {index} export failed: {result}")
+        try:
+            # Match the PDF report: use the original image pixels when available
+            source_path = image.get('original_path', image_path) if 'original_path' in image else image_path
+            if source_path == image_path:
+                source_array = img_array
             else:
-                # Callback didn't fire, but assume success (exports are working)
-                # The JavaScript is executing, just callbacks aren't being received
-                success_count += 1
+                source_array = ImageService(source_path, image.get('mask_path', '')).img_array
 
-            # Process events after each marker to keep UI responsive
-            QApplication.processEvents()
+            # Same identifier color the PDF uses for the AOI circle
+            identifier_color = (255, 255, 0)
+            if hasattr(self.parent, 'settings') and isinstance(self.parent.settings, dict):
+                identifier_color = self.parent.settings.get('identifier_color', identifier_color)
 
-        # Final progress update
-        if not cancelled:
-            progress_dialog.update_progress(
-                total,
-                total,
-                self.tr(
-                    "Export complete: {success} of {total} marker(s) exported"
-                ).format(success=success_count, total=total)
-            )
-            QApplication.processEvents()
-            QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
-        else:
-            progress_dialog.reject()
+            return {
+                'img_array_bgr': cv2.cvtColor(source_array, cv2.COLOR_RGB2BGR),
+                'bearing': bearing,
+                'identifier_color': identifier_color,
+                'cache_key': source_path,
+            }
+        except Exception as e:
+            self.logger.error(f"Error preparing composite source for {image_path}: {e}")
+            return None
 
-        # Block until dialog closes
-        progress_dialog.exec()
-
-        return success_count, cancelled
-
-    def _export_polygons_via_javascript(self, web_view, map_id, polygons):
-        """Export polygons using JavaScript fetch() inside the authenticated browser.
-
-        This uses the same browser session (cookies, tokens, HttpOnly cookies, etc.)
-        that CalTopo itself is using.
+    def _build_composite_photo(self, image_path, image_name, aoi, aoi_idx, composite_context):
+        """Generate the multi-zoom composite photo (same layout as the PDF report) for an AOI.
 
         Args:
-            web_view: QWebEngineView instance with authenticated CalTopo session
-            map_id (str): CalTopo map ID
-            polygons (list): Polygon dictionaries with 'coordinates', 'title', 'description'
+            image_path (str): Path to the source image
+            image_name (str): Display name of the source image
+            aoi (dict): AOI dictionary
+            aoi_idx (int): Index of the AOI within the image
+            composite_context (dict): Context from _build_composite_context, or None
 
         Returns:
-            tuple: (success_count, cancelled)
+            str: Path to the generated composite image, or None if it could not be created
         """
-        total = len(polygons)
-        if total == 0:
-            return 0, False
-
-        # Create progress dialog
-        progress_dialog = ExportProgressDialog(
-            self.parent,
-            title=self.tr("Exporting to CalTopo"),
-            total_items=total
-        )
-        progress_dialog.set_title(self.tr("Exporting polygons to CalTopo..."))
-        progress_dialog.set_status(
-            self.tr("Preparing to export {count} polygon(s)...").format(count=total)
-        )
-
-        # Show progress dialog
-        progress_dialog.show()
-        QApplication.processEvents()
-
-        success_count = 0
-        cancelled = False
-
-        for index, polygon in enumerate(polygons, start=1):
-            # Check if cancelled
-            if progress_dialog.is_cancelled():
-                cancelled = True
-                break
-
-            # Update progress
-            progress_dialog.update_progress(
-                index - 1,
-                total,
-                f"Exporting polygon {index} of {total}: {polygon.get('title', 'Unknown')[:40]}..."
+        if composite_context is None:
+            self.logger.warning(
+                f"No composite source available for {image_name} - AOI {aoi_idx + 1}; "
+                "the plain image will be used instead"
             )
-            QApplication.processEvents()
+            return None
 
-            # Get coordinates - convert from (lat, lon) to (lon, lat) for GeoJSON
-            coords = polygon.get('coordinates', [])
-            if not coords:
-                continue
+        try:
+            if self.aoi_composite_service is None:
+                self.aoi_composite_service = AOICompositeService(logger=self.logger)
+            if self.aoi_thumbnail_service is None:
+                self.aoi_thumbnail_service = AOIThumbnailService(logger=self.logger)
 
-            # Ensure polygon is closed (first point = last point)
-            if coords[0] != coords[-1]:
-                coords.append(coords[0])
+            composite = self.aoi_composite_service.create_composite(
+                composite_context['img_array_bgr'],
+                aoi,
+                composite_context['bearing'],
+                composite_context['identifier_color'],
+                cache_key=composite_context['cache_key']
+            )
+            if composite is None:
+                return None
 
-            # Convert to GeoJSON format: (lon, lat) arrays
-            geojson_coords = [[lon, lat] for lat, lon in coords]
+            return self.aoi_thumbnail_service.save_composite(
+                composite,
+                output_name=f"{Path(image_path).stem}_AOI{aoi_idx + 1}_overview"
+            )
+        except Exception as e:
+            self.logger.error(f"Error generating composite for {image_name} - AOI {aoi_idx + 1}: {e}")
+            return None
 
-            # Build CalTopo Shape payload
-            shape_payload = {
-                "properties": {
-                    "title": polygon.get("title", ""),
-                    "description": polygon.get("description", ""),
-                    "folderId": None,
-                    "stroke-width": 2,
-                    "stroke-opacity": 1,
-                    "stroke": "#FF0000",
-                    "fill-opacity": 0.1,
-                    "fill": "#FF0000"
-                },
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [geojson_coords]  # Note: GeoJSON Polygon requires array of rings
-                }
-            }
+    def _build_aoi_photos(self, image_path, image_name, aoi, aoi_idx, aoi_photo_mode, composite_context=None):
+        """Build the list of photos to upload for a flagged AOI marker.
 
-            # Create JavaScript code to export polygon
-            js_code = f"""
-            (async function() {{
-                const shapeData = {json.dumps(shape_payload)};
-                const shapeFormData = new URLSearchParams();
-                shapeFormData.append('json', JSON.stringify(shapeData));
+        Args:
+            image_path (str): Path to the source image
+            image_name (str): Display name of the source image
+            aoi (dict): AOI dictionary
+            aoi_idx (int): Index of the AOI within the image
+            aoi_photo_mode (str): 'full' (multi-zoom composite, as in the PDF report),
+                'thumbnail' (zoomed AOI crop), or 'both'
+            composite_context (dict, optional): Per-image context from
+                _build_composite_context; required to build composites
 
-                try {{
-                    const shapeResponse = await fetch('/api/v1/map/{map_id}/Shape', {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-                        }},
-                        credentials: 'include',
-                        body: shapeFormData.toString()
-                    }});
+        Returns:
+            list: List of dictionaries with 'path' and 'title' keys
+        """
+        photos = []
 
-                    if (shapeResponse.ok) {{
-                        const shapeText = await shapeResponse.text();
-                        try {{
-                            const shapeResult = JSON.parse(shapeText);
-                            if (shapeResult.result && shapeResult.result.id) {{
-                                return 'success:' + shapeResult.result.id;
-                            }}
-                        }} catch (e) {{
-                            // Ignore parse errors if response is OK
-                            return 'success:unknown';
-                        }}
-                        return 'success:unknown';
-                    }} else {{
-                        return 'error:shape:' + shapeResponse.status;
-                    }}
-                }} catch (e) {{
-                    return 'error:shape:exception:' + e.toString();
-                }}
-            }})();
-            """
+        if not image_path:
+            return photos
 
-            result_container = {"result": None}
+        if aoi_photo_mode in ('thumbnail', 'both'):
+            try:
+                if self.aoi_thumbnail_service is None:
+                    self.aoi_thumbnail_service = AOIThumbnailService(logger=self.logger)
 
-            def callback(result):
-                result_container["result"] = result
+                thumbnail_path = self.aoi_thumbnail_service.generate_thumbnail(
+                    image_path,
+                    aoi,
+                    output_name=f"{Path(image_path).stem}_AOI{aoi_idx + 1}_closeup"
+                )
+                if thumbnail_path:
+                    photos.append({
+                        'path': thumbnail_path,
+                        'title': f"{image_name} - AOI {aoi_idx + 1} (close-up)"
+                    })
+                else:
+                    self.logger.warning(f"Could not generate AOI thumbnail for {image_name} - AOI {aoi_idx + 1}")
+            except Exception as e:
+                self.logger.error(f"Error generating AOI thumbnail for {image_name} - AOI {aoi_idx + 1}: {e}")
 
-            web_view.page().runJavaScript(js_code, callback)
-
-            # Wait for completion with 2 second timeout
-            max_wait_iterations = 200  # 2 seconds max (200 * 0.01)
-            for iteration in range(max_wait_iterations):
-                QApplication.processEvents()
-                if result_container["result"] is not None:
-                    break
-                time.sleep(0.01)
-
-            result = result_container["result"]
-            if result and isinstance(result, str) and "success" in result:
-                success_count += 1
-            elif result and isinstance(result, str) and "error" in result:
-                # Only log actual errors
-                self.logger.warning(f"Polygon {index} export failed: {result}")
+        if aoi_photo_mode in ('full', 'both'):
+            composite_path = self._build_composite_photo(image_path, image_name, aoi, aoi_idx, composite_context)
+            if composite_path:
+                photos.append({
+                    'path': composite_path,
+                    'title': f"{image_name} - AOI {aoi_idx + 1} (overview)"
+                })
             else:
-                # Callback didn't fire, but assume success (exports are working)
-                # The JavaScript is executing, just callbacks aren't being received
-                success_count += 1
+                # Fall back to the plain full image so the marker still gets a photo
+                photos.append({'path': image_path, 'title': image_name})
 
-            # Process events after each polygon to keep UI responsive
-            QApplication.processEvents()
+        # Last-resort fallback: never leave the marker photo-less when photos were requested
+        if not photos:
+            photos.append({'path': image_path, 'title': image_name})
 
-        # Final progress update
-        if not cancelled:
-            progress_dialog.update_progress(
-                total,
-                total,
-                self.tr(
-                    "Export complete: {success} of {total} polygon(s) exported"
-                ).format(success=success_count, total=total)
-            )
-            QApplication.processEvents()
-            QTimer.singleShot(500, progress_dialog.accept)  # Auto-close after brief delay
-        else:
-            progress_dialog.reject()
+        return photos
 
-        # Block until dialog closes
-        progress_dialog.exec()
+    def _get_marker_photos(self, marker):
+        """Return the photos that should be uploaded for a marker.
 
-        return success_count, cancelled
+        Supports markers that carry a 'photos' list as well as legacy markers that
+        only carry a single 'image_path'.
+
+        Args:
+            marker (dict): Marker dictionary
+
+        Returns:
+            list: List of dictionaries with 'path' and 'title' keys
+        """
+        photos = []
+        missing = []
+        for photo in marker.get('photos') or []:
+            path = photo.get('path')
+            if path and os.path.exists(path):
+                photos.append({'path': path, 'title': photo.get('title') or os.path.basename(path)})
+            elif path:
+                missing.append(path)
+
+        # A prepared photo that vanished before upload is a bug we need to hear about
+        for path in missing:
+            self.logger.warning(f"Prepared CalTopo photo is missing on disk, skipping: {path}")
+
+        if not photos:
+            image_path = marker.get('image_path')
+            if image_path and os.path.exists(image_path):
+                if missing:
+                    self.logger.warning(
+                        f"Marker '{marker.get('title', '')}': all prepared photos missing; "
+                        "falling back to the original image"
+                    )
+                photos.append({'path': image_path, 'title': marker.get('title') or os.path.basename(image_path)})
+
+        return photos
+
+    def _cleanup_aoi_thumbnails(self):
+        """Remove any temporary AOI photos generated for this export and free caches."""
+        if self.aoi_thumbnail_service is not None:
+            self.aoi_thumbnail_service.cleanup()
+            self.aoi_thumbnail_service = None
+        if self.aoi_composite_service is not None:
+            self.aoi_composite_service.clear_cache()
+            self.aoi_composite_service = None
 
     def logout_from_caltopo(self):
         """Log out from CalTopo by clearing session."""
@@ -1482,7 +1262,8 @@ class CalTopoExportController(TranslationMixin):
         )
 
     def export_to_caltopo_via_api(self, images, flagged_aois, include_flagged_aois=True,
-                                  include_locations=False, include_images_without_flagged_aois=True, include_coverage_area=False, include_images=True):
+                                  include_locations=False, include_images_without_flagged_aois=True, include_coverage_area=False, include_images=True,
+                                  aoi_photo_mode='full'):
         """
         Export data to CalTopo using the official Team API.
 
@@ -1497,6 +1278,9 @@ class CalTopoExportController(TranslationMixin):
             include_images_without_flagged_aois (bool): Include images without flagged AOIs in location export
             include_coverage_area (bool): Include coverage area as polygons
             include_images (bool): Upload photos to CalTopo markers
+            aoi_photo_mode (str): Photo(s) to attach to flagged AOI markers:
+                'full' (multi-zoom composite, as in the PDF report),
+                'thumbnail' (zoomed AOI crop), or 'both'
 
         Returns:
             bool: True if export was successful, False otherwise
@@ -1525,95 +1309,33 @@ class CalTopoExportController(TranslationMixin):
                 )
                 return False
 
-            # Step 1: Get or prompt for credentials (only if not stored)
-            if not self.credential_helper.has_credentials():
-                # No credentials stored, prompt for them
-                credential_dialog = CalTopoCredentialDialog(self.parent)
-                if credential_dialog.exec() != CalTopoCredentialDialog.Accepted:
-                    return False
-                credentials = credential_dialog.get_credentials()
+            # Steps 1-2: obtain credentials that actually work, then load the
+            # account. These are one loop on purpose: a stored secret that
+            # CalTopo rejects must send the user back to the credential dialog.
+            # Gating the prompt on has_credentials() alone locked users out,
+            # because the only other way to reach that dialog ("Update
+            # Credentials") lives behind a *successful* authentication.
+            account_data = None
+            credentials = None
+            while True:
+                if credentials is None:
+                    if self.credential_helper.has_credentials():
+                        credentials = self.credential_helper.get_credentials()
+                    else:
+                        credentials = self._prompt_for_credentials()
+                        if not credentials:
+                            return False
+
+                team_id, credential_id, credential_secret = credentials
+                account_success, account_data, account_error = self._fetch_account_data(
+                    team_id, credential_id, credential_secret
+                )
+                if account_success and account_data:
+                    break
+
+                credentials = self._offer_credential_retry(account_error, credentials)
                 if not credentials:
                     return False
-                team_id, credential_id, credential_secret = credentials
-                self.credential_helper.save_credentials(team_id, credential_id, credential_secret)
-            else:
-                # Use stored credentials
-                team_id, credential_id, credential_secret = self.credential_helper.get_credentials()
-
-            # Step 2: Get account data and show map selection (in background thread)
-            loading_dialog = ExportProgressDialog(
-                self.parent,
-                title=self.tr("Loading CalTopo Maps"),
-                total_items=100
-            )
-            loading_dialog.set_title(self.tr("Connecting to CalTopo..."))
-            loading_dialog.set_status(self.tr("Fetching account data and maps..."))
-
-            account_data = None
-            account_success = False
-            account_error = None
-
-            def on_account_progress(current, total, message):
-                loading_dialog.update_progress(current, total, message)
-                QApplication.processEvents()
-
-            def on_account_finished(success, data):
-                nonlocal account_data, account_success
-                account_data = data
-                account_success = success
-                loading_dialog.accept()
-
-            def on_account_error(error_message):
-                nonlocal account_error
-                account_error = error_message
-                loading_dialog.reject()
-
-            account_thread = CalTopoAccountDataThread(
-                self.caltopo_api_service, team_id, credential_id, credential_secret
-            )
-            account_thread.progressUpdated.connect(on_account_progress)
-            account_thread.finished.connect(on_account_finished)
-            account_thread.errorOccurred.connect(on_account_error)
-
-            account_thread.start()
-            loading_dialog.show()
-            QApplication.processEvents()
-            loading_dialog.exec()
-
-            account_thread.wait()
-
-            if account_error:
-                QMessageBox.critical(
-                    self.parent,
-                    self.tr("Connection Error"),
-                    self.tr(
-                        "An error occurred while connecting to CalTopo API:\n\n{error}"
-                    ).format(error=account_error)
-                )
-                return False
-
-            if not account_success or not account_data:
-                QMessageBox.critical(
-                    self.parent,
-                    self.tr("Authentication Failed"),
-                    self.tr(
-                        "Failed to authenticate with CalTopo API.\n\n"
-                        "Please check your credentials and try again."
-                    )
-                )
-                return False
-
-            # Debug: Log account data structure
-            # self.logger.info(f"Account data keys: {list(account_data.keys()) if account_data else 'None'}")
-            if account_data:
-                state = account_data.get('state', {})
-                features = state.get('features', []) if isinstance(state, dict) else []
-                # self.logger.info(f"Found {len(features)} features in account data")
-                if not features:
-                    # Try alternative structure
-                    # features_alt = account_data.get('features', [])
-                    # self.logger.info(f"Alternative structure has {len(features_alt)} features")
-                    pass
 
             # Show map selection dialog (pass credential helper and API service for update functionality)
             map_dialog = CalTopoAPIMapDialog(
@@ -1634,10 +1356,13 @@ class CalTopoExportController(TranslationMixin):
 
             # Step 3: Export markers and polygons via API in a separate thread
             # (Data preparation happens inside the thread, just like KML export)
-            return self._export_via_api_threaded(
-                map_id, map_team_id, credential_id, credential_secret,
+            return self._run_export(
+                CalTopoApiPublisher(
+                    self.caltopo_api_service, map_id, map_team_id, credential_id, credential_secret
+                ),
                 images, flagged_aois, include_flagged_aois, include_locations,
-                include_images_without_flagged_aois, include_coverage_area, include_images
+                include_images_without_flagged_aois, include_coverage_area, include_images,
+                aoi_photo_mode=aoi_photo_mode
             )
 
         except Exception as e:
@@ -1650,17 +1375,141 @@ class CalTopoExportController(TranslationMixin):
                 ).format(error=str(e))
             )
             return False
+        finally:
+            # Generated AOI photos live in a temp dir; drop them once the export ends
+            self._cleanup_aoi_thumbnails()
 
-    def _export_via_api_threaded(self, map_id, team_id, credential_id, credential_secret,
-                                 images, flagged_aois, include_flagged_aois, include_locations,
-                                 include_images_without_flagged_aois, include_coverage_area, include_images):
-        """Export markers and polygons via API in a separate thread.
+    def _prompt_for_credentials(self, existing_credentials=None):
+        """Show the credential dialog and persist whatever the user enters.
 
         Args:
-            map_id: CalTopo map ID
-            team_id: Team ID
-            credential_id: Credential ID
-            credential_secret: Credential Secret
+            existing_credentials: Optional (team_id, credential_id, secret) to
+                pre-fill, used when correcting a rejected set.
+
+        Returns:
+            tuple: (team_id, credential_id, credential_secret), or None if the
+            user cancelled.
+        """
+        credential_dialog = CalTopoCredentialDialog(
+            self.parent, existing_credentials=existing_credentials
+        )
+        if credential_dialog.exec() != CalTopoCredentialDialog.Accepted:
+            return None
+
+        credentials = credential_dialog.get_credentials()
+        if not credentials:
+            return None
+
+        team_id, credential_id, credential_secret = credentials
+        self.credential_helper.save_credentials(team_id, credential_id, credential_secret)
+        return credentials
+
+    def _fetch_account_data(self, team_id, credential_id, credential_secret):
+        """Load CalTopo account data on a worker thread behind a progress dialog.
+
+        Args:
+            team_id (str): Team ID.
+            credential_id (str): Credential ID.
+            credential_secret (str): Credential Secret.
+
+        Returns:
+            tuple: (success: bool, account_data: dict or None, error: str or None)
+        """
+        loading_dialog = ExportProgressDialog(
+            self.parent,
+            title=self.tr("Loading CalTopo Maps"),
+            total_items=100
+        )
+        loading_dialog.set_title(self.tr("Connecting to CalTopo..."))
+        loading_dialog.set_status(self.tr("Fetching account data and maps..."))
+
+        account_data = None
+        account_success = False
+        account_error = None
+
+        def on_account_progress(current, total, message):
+            loading_dialog.update_progress(current, total, message)
+
+        def on_account_finished(success, data):
+            nonlocal account_data, account_success
+            account_data = data
+            account_success = success
+            loading_dialog.accept()
+
+        def on_account_error(error_message):
+            nonlocal account_error
+            account_error = error_message
+            loading_dialog.reject()
+
+        # Held on self so the QThread cannot be garbage collected mid-run.
+        self._account_thread = CalTopoAccountDataThread(
+            self.caltopo_api_service, team_id, credential_id, credential_secret
+        )
+        self._account_thread.progressUpdated.connect(on_account_progress)
+        self._account_thread.finished.connect(on_account_finished)
+        self._account_thread.errorOccurred.connect(on_account_error)
+        # Cancel used to be a dead button: nothing was connected to it and the
+        # dialog does not close itself.
+        loading_dialog.cancel_requested.connect(loading_dialog.reject)
+
+        self._account_thread.start()
+        # No show()/processEvents() before exec(): pumping events here can
+        # deliver the worker's completion signal while the dialog is not yet in
+        # a modal loop. ExportProgressDialog.exec() also guards against that,
+        # but not creating the race is better than surviving it.
+        loading_dialog.exec()
+        self._account_thread.wait()
+
+        return account_success, account_data, account_error
+
+    def _offer_credential_retry(self, account_error, existing_credentials):
+        """Report why CalTopo refused the request and offer to fix credentials.
+
+        Args:
+            account_error (str or None): Error text from the worker, if the
+                attempt raised rather than simply failing.
+            existing_credentials: The (team_id, credential_id, secret) that was
+                just rejected, pre-filled into the retry dialog.
+
+        Returns:
+            tuple: The replacement (team_id, credential_id, credential_secret)
+            to retry with, or None if the user gave up.
+        """
+        if account_error:
+            title = self.tr("Connection Error")
+            message = self.tr(
+                "An error occurred while connecting to CalTopo API:\n\n{error}"
+            ).format(error=account_error)
+        else:
+            title = self.tr("Authentication Failed")
+            message = self.tr(
+                "CalTopo did not accept these credentials.\n\n"
+                "The reason was written to the log (adiat_logs.txt) and the console.\n\n"
+                "Would you like to re-enter your Team ID, Credential ID and "
+                "Credential Secret?"
+            )
+
+        choice = QMessageBox.question(
+            self.parent,
+            title,
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if choice != QMessageBox.Yes:
+            return None
+
+        return self._prompt_for_credentials(existing_credentials=existing_credentials)
+
+    def _run_export(self, publisher, images, flagged_aois, include_flagged_aois, include_locations,
+                    include_images_without_flagged_aois, include_coverage_area, include_images,
+                    aoi_photo_mode='full', markers=None, polygons=None):
+        """Publish to CalTopo on a worker thread behind a progress dialog.
+
+        Shared by both authentication modes: only the publisher differs.
+
+        Args:
+            publisher: CalTopoApiPublisher or CalTopoBrowserPublisher.
             images: List of image data dictionaries
             flagged_aois: Dictionary mapping image indices to sets of flagged AOI indices
             include_flagged_aois: Whether to include flagged AOIs
@@ -1668,11 +1517,13 @@ class CalTopoExportController(TranslationMixin):
             include_images_without_flagged_aois: Whether to include images without flagged AOIs
             include_coverage_area: Whether to include coverage area
             include_images: Whether to include images
+            aoi_photo_mode: Photo(s) to attach to flagged AOI markers ('full', 'thumbnail', or 'both')
+            markers: Pre-prepared markers, when the caller already built them.
+            polygons: Pre-prepared polygons, when the caller already built them.
 
         Returns:
-            bool: True if export was successful, False otherwise
+            bool: True if anything was created, False otherwise
         """
-        # Create progress dialog
         progress_dialog = ExportProgressDialog(
             self.parent,
             title=self.tr("Exporting to CalTopo"),
@@ -1681,77 +1532,41 @@ class CalTopoExportController(TranslationMixin):
         progress_dialog.set_title(self.tr("Exporting to CalTopo..."))
         progress_dialog.set_status(self.tr("Preparing data and exporting..."))
 
-        # Create export thread (preparation and export both happen in thread)
-        export_thread = CalTopoAPIExportThread(
-            self.caltopo_api_service,
+        export_thread = CalTopoExportThread(
+            publisher,
             self,  # Pass controller for accessing preparation methods
-            map_id,
-            team_id,
-            credential_id,
-            credential_secret,
             images,
             flagged_aois,
             include_flagged_aois,
             include_locations,
             include_images_without_flagged_aois,
             include_coverage_area,
-            include_images
+            include_images,
+            aoi_photo_mode=aoi_photo_mode,
+            markers=markers,
+            polygons=polygons
         )
 
         # Store result for return value
         self._export_result = False
 
-        # Connect signals
         def on_progress_updated(current, total, message):
             progress_dialog.update_progress(current, total, message)
-            QApplication.processEvents()
 
-        def on_finished(success, success_count, total_count):
+        def on_finished(summary):
             progress_dialog.accept()
-            self._export_result = success
-
-            if success:
-                if success_count == total_count:
-                    QMessageBox.information(
-                        self.parent,
-                        self.tr("Export Successful"),
-                        self.tr(
-                            "Successfully exported all {total} item(s) to CalTopo map.\n\n"
-                            "The items should now be visible on your map."
-                        ).format(total=total_count)
-                    )
-                else:
-                    QMessageBox.warning(
-                        self.parent,
-                        self.tr("Partial Success"),
-                        self.tr(
-                            "Exported {success} of {total} item(s) to CalTopo map.\n\n"
-                            "{failed} item(s) failed. Check console for details."
-                        ).format(
-                            success=success_count,
-                            total=total_count,
-                            failed=total_count - success_count
-                        )
-                    )
-            else:
-                QMessageBox.critical(
-                    self.parent,
-                    self.tr("Export Failed"),
-                    self.tr(
-                        "Failed to export items to CalTopo.\n\n"
-                        "Please check the console output for error details."
-                    )
-                )
+            self._export_result = summary.get('success', False)
+            self._report_export_summary(summary)
 
         def on_error(error_message):
             progress_dialog.reject()
             self._export_result = False
-            self.logger.error(f"CalTopo API export error: {error_message}")
+            self.logger.error(f"CalTopo export error: {error_message}")
             QMessageBox.critical(
                 self.parent,
                 self.tr("Export Error"),
                 self.tr(
-                    "An error occurred during CalTopo API export:\n\n{error}"
+                    "An error occurred during CalTopo export:\n\n{error}"
                 ).format(error=error_message)
             )
 
@@ -1763,18 +1578,60 @@ class CalTopoExportController(TranslationMixin):
         export_thread.finished.connect(on_finished)
         export_thread.errorOccurred.connect(on_error)
         export_thread.canceled.connect(on_cancelled)
-
-        # Connect cancel button
         progress_dialog.cancel_requested.connect(export_thread.cancel)
 
-        # Start the thread
         export_thread.start()
-
-        # Show progress dialog and block until it's closed
         progress_dialog.exec()
 
-        # Wait for thread to finish if it's still running
         if export_thread.isRunning():
             export_thread.wait()
 
         return self._export_result
+
+    def _report_export_summary(self, summary):
+        """Tell the user exactly what reached CalTopo, photos included.
+
+        Args:
+            summary (dict): Payload emitted by CalTopoExportThread.
+        """
+        created = summary.get('objects_created', 0)
+        total = summary.get('objects_total', 0)
+        photos_uploaded = summary.get('photos_uploaded', 0)
+        photos_total = summary.get('photos_total', 0)
+
+        if not summary.get('success'):
+            QMessageBox.critical(
+                self.parent,
+                self.tr("Export Failed"),
+                self.tr(
+                    "Nothing could be exported to CalTopo.\n\n"
+                    "The reason was written to the log (adiat_logs.txt) and the console."
+                )
+            )
+            return
+
+        photo_note = ""
+        if photos_total:
+            photo_note = "\n" + self.tr(
+                "Photos uploaded: {uploaded} of {total}."
+            ).format(uploaded=photos_uploaded, total=photos_total)
+
+        if created == total and photos_uploaded == photos_total:
+            QMessageBox.information(
+                self.parent,
+                self.tr("Export Successful"),
+                self.tr(
+                    "Successfully exported all {total} item(s) to CalTopo.\n\n"
+                    "The items should now be visible on your map."
+                ).format(total=total) + photo_note
+            )
+        else:
+            QMessageBox.warning(
+                self.parent,
+                self.tr("Partial Success"),
+                self.tr(
+                    "Exported {created} of {total} item(s) to CalTopo.{photos}\n\n"
+                    "Details for anything that failed were written to the log "
+                    "(adiat_logs.txt) and the console."
+                ).format(created=created, total=total, photos=photo_note)
+            )

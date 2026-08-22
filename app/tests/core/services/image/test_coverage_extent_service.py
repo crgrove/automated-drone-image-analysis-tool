@@ -219,3 +219,59 @@ def test_fov_polygon_falls_back_to_flat_when_terrain_unavailable():
     assert len(fake.compute_calls) == 1  # terrain was attempted
     assert len(fake.average_calls) == 1  # then fell back
     assert _span_east_m(corners) == pytest.approx(160.0, rel=0.01)
+
+
+class _WaldoFakeImageService(_FakeImageService):
+    """Fake with WALDO v6+ stamps: roll expressed about the FLIGHT axis."""
+
+    def __init__(self, roll_axis_deg, **kwargs):
+        super().__init__(**kwargs)
+        self.roll_axis_deg = roll_axis_deg
+
+    def get_roll_axis_azimuth(self):
+        return self.roll_axis_deg
+
+
+def test_fov_polygon_waldo_flight_axis_roll_lands_plane_right():
+    """WALDO cam0 v6+ stamp: heading 319.7 (NW), image-top backward
+    (yaw 139.7), roll -22.5 about the FLIGHT axis => footprint plane-RIGHT
+    of the track (NE). Interpreting the roll about the camera axis instead
+    mirrored the blue footprint to the SW - the field-reported bug."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    import math
+    heading = 319.7
+    fake = _WaldoFakeImageService(
+        roll_axis_deg=heading, yaw_deg=(heading + 180.0) % 360.0,
+        roll_deg=-22.5, flat_gsd_cm=4.0, reported_agl_m=776.0)
+    service = CoverageExtentService(use_terrain=False)
+    corners = _fov_corners_with(service, fake)
+
+    assert corners is not None and len(corners) == 4
+    # Offset direction: plane-right of 319.7 = bearing 49.7 (northeast).
+    offset_m = 776.0 * math.tan(math.radians(22.5))
+    expected_east = offset_m * math.sin(math.radians(heading + 90.0))
+    assert expected_east > 0  # sanity: NE means east-positive
+    assert _centroid_east_m(corners) == pytest.approx(expected_east, rel=0.02)
+
+
+def test_fov_polygon_legacy_camera_axis_roll_unchanged():
+    """Without a roll axis (DJI / WALDO v5 stamps) the old camera-axis
+    interpretation must be preserved: same yaw/roll numbers land the
+    footprint on the OPPOSITE side of the WALDO case above."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    import math
+    heading = 319.7
+    fake = _FakeImageService(
+        yaw_deg=(heading + 180.0) % 360.0, roll_deg=-22.5,
+        flat_gsd_cm=4.0, reported_agl_m=776.0)
+    service = CoverageExtentService(use_terrain=False)
+    corners = _fov_corners_with(service, fake)
+
+    assert corners is not None and len(corners) == 4
+    # Legacy: offset -h*tan(roll) along camera-X (yaw+90 = 229.7, SW).
+    offset_m = -776.0 * math.tan(math.radians(-22.5))
+    expected_east = offset_m * math.sin(math.radians(((heading + 180.0) % 360.0) + 90.0))
+    assert expected_east < 0  # sanity: SW means east-negative
+    assert _centroid_east_m(corners) == pytest.approx(expected_east, rel=0.02)

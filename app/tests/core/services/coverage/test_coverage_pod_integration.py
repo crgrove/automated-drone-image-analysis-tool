@@ -53,6 +53,25 @@ class _FlatTerrain:
                           datum_note="flat")
 
 
+class _FlatTerrainWithGeoid(_FlatTerrain):
+    """Flat DEM plus the point-lookup and geoid APIs a real TerrainService has.
+
+    The undulation is a fixed stub rather than the bundled EGM96 grid so the
+    assertion stays deterministic and offline.
+    """
+
+    def __init__(self, undulation=-30.0):
+        super().__init__()
+        self.undulation = undulation
+
+    def get_elevation(self, lat, lon):
+        return types.SimpleNamespace(source='terrain', elevation_m=0.0,
+                                     resolution_m=10.0)
+
+    def get_geoid_undulation(self, lat, lon):
+        return self.undulation
+
+
 class _AllNanTerrain:
     """DEM that is NaN everywhere (no usable elevation for the footprint)."""
 
@@ -128,6 +147,42 @@ def _images(testData, names):
 
 def _params():
     return PodParams(grid_res_m=3.0)
+
+
+# --- camera-elevation anchor on real metadata ---------------------------------
+
+def test_takeoff_anchor_resolves_from_real_drone_metadata(testData):
+    """The anchor's premise, checked against real EXIF/XMP rather than literals.
+
+    ``GPS_ASL - reported_AGL`` must be near-constant across a real flight for a
+    takeoff elevation to be recoverable at all. On this imagery it holds to well
+    under a metre, so the anchor resolves and every frame is corrected.
+    """
+    images = _images(testData, ['DJI_0082.JPG', 'DJI_0083.JPG', 'DJI_0084.JPG'])
+    terrain = _FlatTerrainWithGeoid(undulation=-30.0)
+
+    result = CoveragePodService(terrain=terrain, canopy=None,
+                                params=_params()).calculate(images)
+
+    assert result.image_count == 3
+    assert result.altitude_anchor_reason == 'ok'
+    # These frames report ~358.1 m ASL at ~46 m AGL, so takeoff sits at
+    # 358.1 - (-30) - 46 = 342.1 m in the DEM's orthometric datum.
+    assert result.altitude_anchor_m == pytest.approx(342.1, abs=1.0)
+    assert result.altitude_source_counts == {'anchor': 3}
+    assert result.stats['altitude_anchor']['reason'] == 'ok'
+
+
+def test_real_metadata_falls_back_when_no_geoid_is_configured(testData):
+    """The same imagery through a terrain service with no geoid: no anchor."""
+    images = _images(testData, ['DJI_0082.JPG', 'DJI_0083.JPG', 'DJI_0084.JPG'])
+
+    result = CoveragePodService(terrain=_FlatTerrain(), canopy=None,
+                                params=_params()).calculate(images)
+
+    assert result.image_count == 3
+    assert result.altitude_anchor_m is None
+    assert result.altitude_source_counts == {'agl_nadir': 3}
 
 
 # --- P1: full end-to-end with real geometry + write/read-back ------------------

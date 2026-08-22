@@ -1,4 +1,5 @@
 from PIL import Image
+from datetime import datetime
 from os import path
 import exiftool
 import piexif
@@ -15,9 +16,58 @@ from helpers.PickleHelper import PickleHelper
 _XMP_STD_HDR = b"http://ns.adobe.com/xap/1.0/\x00"
 _XMP_EXT_HDR = b"http://ns.adobe.com/xmp/extension/\x00"
 
+# ADIAT's house schema for flight telemetry. The prefix is DJI's, but the
+# fields are what ADIAT reads regardless of airframe - WaldoMetadataService
+# writes them onto Canon imagery, and get_drone_xmp_attribute resolves them
+# for any make.
+DRONE_DJI_NS = "http://www.dji.com/drone-dji/1.0/"
+
 
 class MetaDataHelper:
     """Helper class for managing EXIF, XMP, and thermal metadata of image files."""
+
+    # Capture-time tags in the order they should be trusted. DateTimeOriginal
+    # and DateTimeDigitized belong to the Exif IFD; plain DateTime (306) is an
+    # ImageIFD tag and lives in the "0th" IFD. There is no
+    # ``piexif.ExifIFD.DateTime`` - reading one raises AttributeError - so
+    # callers that hand-rolled this fallback never reached it: the GPS map
+    # logged an error per image and the bearing service dropped the image
+    # entirely. Resolving the tags in one place keeps the two in step.
+    _TIMESTAMP_TAGS = (
+        ('Exif', piexif.ExifIFD.DateTimeOriginal),
+        ('Exif', piexif.ExifIFD.DateTimeDigitized),
+        ('0th', piexif.ImageIFD.DateTime),
+    )
+    # EXIF specifies colons; some writers use dashes.
+    _TIMESTAMP_FORMATS = ('%Y:%m:%d %H:%M:%S', '%Y-%m-%d %H:%M:%S')
+
+    @staticmethod
+    def get_exif_timestamp(exif_data):
+        """Read the capture time out of a piexif dictionary.
+
+        Args:
+            exif_data (dict): Dictionary as returned by get_exif_data_piexif.
+
+        Returns:
+            datetime: The first readable capture time, or None when the image
+                carries no timestamp at all (frames extracted from video, for
+                example) or no value parses.
+        """
+        if not exif_data:
+            return None
+        for ifd_name, tag in MetaDataHelper._TIMESTAMP_TAGS:
+            value = (exif_data.get(ifd_name) or {}).get(tag)
+            if not value:
+                continue
+            if isinstance(value, bytes):
+                value = value.decode('utf-8', errors='ignore')
+            text = str(value).replace('\x00', '').strip()
+            for time_format in MetaDataHelper._TIMESTAMP_FORMATS:
+                try:
+                    return datetime.strptime(text, time_format)
+                except ValueError:
+                    continue
+        return None
 
     @staticmethod
     def _get_exif_tool_path():
@@ -185,7 +235,7 @@ class MetaDataHelper:
             et.terminate()
 
     @staticmethod
-    def add_gps_data(file_path, lat, lng, alt, rel_alt=0):
+    def add_gps_data(file_path, lat, lng, alt, rel_alt=0, timestamp=None, make=None):
         """
         Adds GPS metadata to an image.
 
@@ -195,15 +245,87 @@ class MetaDataHelper:
             lng (float): Longitude in decimal degrees.
             alt (float): Altitude in meters.
             rel_alt (float, optional): Relative altitude. Defaults to 0.
+            timestamp (datetime, optional): Capture time to stamp in the same
+                pass, so a frame that needs both is only rewritten once.
+            make (str, optional): Camera/drone make to record. Readers key the
+                XMP attribute lookup off it (see get_drone_xmp_attribute), so
+                an image carrying drone-dji fields needs one to be readable.
         """
-        img = Image.open(file_path)
-        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "Interop": {}, "1st": {}, "thumbnail": None}
-        if "exif" in img.info:
-            exif_dict = piexif.load(img.info["exif"])
-
+        exif_dict = MetaDataHelper._open_for_exif_edit(file_path)
         MetaDataHelper._set_gps_location(exif_dict, lat, lng, alt)
+        if timestamp is not None:
+            MetaDataHelper._set_capture_time(exif_dict, timestamp)
+        if make:
+            exif_dict.setdefault("0th", {})[piexif.ImageIFD.Make] = str(make).encode('ascii', 'ignore')
+        MetaDataHelper._save_exif(file_path, exif_dict)
+
+    @staticmethod
+    def add_capture_time(file_path, timestamp):
+        """
+        Stamps an image with its capture time.
+
+        For images that have no GPS to add - frames pulled from a video with no
+        flight log, for example, which otherwise carry no EXIF date at all and
+        so cannot be put in flight order downstream.
+
+        Args:
+            file_path (str): Image path.
+            timestamp (datetime): Capture time. Any tzinfo is dropped: EXIF
+                date tags are naive by definition, and the caller decides which
+                clock they represent.
+        """
+        exif_dict = MetaDataHelper._open_for_exif_edit(file_path)
+        MetaDataHelper._set_capture_time(exif_dict, timestamp)
+        MetaDataHelper._save_exif(file_path, exif_dict)
+
+    @staticmethod
+    def _open_for_exif_edit(file_path):
+        """Existing EXIF for a file whose metadata is about to change."""
+        try:
+            return piexif.load(file_path)
+        except Exception:
+            return {"0th": {}, "Exif": {}, "GPS": {}, "Interop": {}, "1st": {}, "thumbnail": None}
+
+    @staticmethod
+    def _save_exif(file_path, exif_dict):
+        """Write *exif_dict* into *file_path*, leaving the image data alone.
+
+        ``piexif.insert`` patches the JPEG's metadata segment in place and
+        copies the entropy-coded scan through untouched, so the pixels come out
+        byte-identical.
+
+        Re-saving through PIL instead decodes and re-encodes the image, and
+        with no quality argument that lands at PIL's default of 75. That is how
+        every frame cv2 wrote at quality 95 lost a generation the moment a GPS
+        fix was stamped on it: 809 KB down to 340 KB, a mean shift of 2.5
+        levels across an image an analysis then has to find people in.
+        """
         exif_bytes = piexif.dump(exif_dict)
-        img.save(file_path, "jpeg", exif=exif_bytes)
+        try:
+            piexif.insert(exif_bytes, file_path)
+        except Exception:
+            # Anything piexif cannot patch in place (a non-JPEG, a malformed
+            # segment): re-save, but at least keep the quantization tables.
+            img = Image.open(file_path)
+            img.save(file_path, "jpeg", exif=exif_bytes, quality='keep')
+
+    @staticmethod
+    def _set_capture_time(exif_dict, timestamp):
+        """
+        Writes a capture time into the EXIF date tags.
+
+        DateTimeOriginal is what readers use for capture time; DateTimeDigitized
+        and the 0th-IFD DateTime are set to match so tools that prefer either
+        one agree.
+
+        Args:
+            exif_dict (dict): Mutable EXIF dictionary.
+            timestamp (datetime): Capture time.
+        """
+        stamp = timestamp.strftime('%Y:%m:%d %H:%M:%S').encode('ascii')
+        exif_dict.setdefault("Exif", {})[piexif.ExifIFD.DateTimeOriginal] = stamp
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = stamp
+        exif_dict.setdefault("0th", {})[piexif.ImageIFD.DateTime] = stamp
 
     @staticmethod
     def _set_gps_location(exif_dict, lat, lng, alt):
@@ -661,7 +783,7 @@ class MetaDataHelper:
         # for internal use" during serialization, so dedupe first and prefer
         # human-readable prefixes for the namespaces ADIAT actually emits.
         prefix_for_uri = {
-            "http://www.dji.com/drone-dji/1.0/": "drone-dji",
+            DRONE_DJI_NS: "drone-dji",
             "http://adiat.io/ns/waldo/1.0/": "waldo",
         }
         unique_uris = []

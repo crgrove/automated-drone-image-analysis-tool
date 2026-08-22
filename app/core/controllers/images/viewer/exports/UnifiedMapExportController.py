@@ -428,6 +428,7 @@ class UnifiedMapExportController(TranslationMixin):
             include_flagged_aois = dialog.should_include_flagged_aois()
             include_coverage = dialog.should_include_coverage()
             include_images = dialog.should_include_images() if export_type == 'caltopo' else False
+            aoi_photo_mode = dialog.get_aoi_photo_mode() if export_type == 'caltopo' else 'full'
             include_pod = dialog.should_include_pod()
             show_pod_on_map = dialog.should_show_pod_on_map()
 
@@ -460,9 +461,10 @@ class UnifiedMapExportController(TranslationMixin):
                 method = method_dialog.get_selected_method()
                 if method == 'api':
                     self._export_to_caltopo_via_api(include_locations, include_images_without_flagged_aois,
-                                                    include_flagged_aois, include_coverage, include_images)
+                                                    include_flagged_aois, include_coverage, include_images, aoi_photo_mode)
                 else:  # browser
-                    self._export_to_caltopo(include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images)
+                    self._export_to_caltopo(include_locations, include_images_without_flagged_aois, include_flagged_aois,
+                                            include_coverage, include_images, aoi_photo_mode)
                 if include_pod:
                     pod_dir = QFileDialog.getExistingDirectory(
                         self.parent, self.tr("Select folder for POD coverage files"))
@@ -729,7 +731,28 @@ class UnifiedMapExportController(TranslationMixin):
             msg += " " + self.tr(
                 "(canopy data covered {pct}% of the searched area)").format(
                     pct=int(round(frac * 100)))
+
+        # Camera elevation basis. The takeoff elevation is the one number that
+        # reveals a GPS-altitude datum mismatch (which the pipeline cannot detect
+        # on its own), so it is shown for the user to check against the launch
+        # point; falling back to reported AGL skews POD wherever the ground is
+        # not at launch elevation, which is a warning.
+        anchor = getattr(result, 'altitude_anchor_m', None)
+        sources = getattr(result, 'altitude_source_counts', None) or {}
+        if anchor is not None:
+            msg += " " + self.tr("(takeoff elevation {elev})").format(
+                elev=self._format_elevation(anchor))
+        elif sources.get('agl_nadir'):
+            msg += " " + self.tr(
+                "(no takeoff elevation — POD is approximate over changing terrain)")
+            color = "#FFA726"
         return msg, color
+
+    def _format_elevation(self, elevation_m):
+        """Elevation in the viewer's distance unit, for display only."""
+        if getattr(self.parent, 'distance_unit', 'ft') == 'ft':
+            return self.tr("{value} ft").format(value=int(round(elevation_m * 3.28084)))
+        return self.tr("{value} m").format(value=int(round(elevation_m)))
 
     def _on_pod_finished(self):
         if self.pod_progress_dialog:
@@ -822,7 +845,8 @@ class UnifiedMapExportController(TranslationMixin):
             self.parent, self.tr("POD Error"),
             self.tr("POD calculation failed:\n{error}").format(error=error_message))
 
-    def _export_to_caltopo(self, include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images=True):
+    def _export_to_caltopo(self, include_locations, include_images_without_flagged_aois, include_flagged_aois,
+                           include_coverage, include_images=True, aoi_photo_mode='full'):
         """
         Export to CalTopo using browser-based authentication.
 
@@ -832,21 +856,28 @@ class UnifiedMapExportController(TranslationMixin):
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent polygons
             include_images: Whether to upload photos to CalTopo markers
+            aoi_photo_mode: Photo(s) to attach to flagged AOI markers ('full', 'thumbnail', or 'both')
         """
         try:
             # Use the existing CalTopo export controller
             caltopo_controller = CalTopoExportController(self.parent, self.logger)
 
             # Export markers and polygons based on selections
-            caltopo_controller.export_to_caltopo(
+            exported = caltopo_controller.export_to_caltopo(
                 self.parent.images,
                 self.parent.aoi_controller.flagged_aois,
                 include_flagged_aois=include_flagged_aois,
                 include_locations=include_locations,
                 include_images_without_flagged_aois=include_images_without_flagged_aois,
                 include_coverage_area=include_coverage,
-                include_images=include_images
+                include_images=include_images,
+                aoi_photo_mode=aoi_photo_mode
             )
+            # Discarding this made every failed export indistinguishable from a
+            # successful one at this level.
+            if not exported:
+                self.logger.warning("CalTopo browser export did not complete")
+            return exported
 
         except Exception as e:
             self.logger.error(f"Error exporting to CalTopo: {str(e)}")
@@ -855,8 +886,10 @@ class UnifiedMapExportController(TranslationMixin):
                 self.tr("Export Error"),
                 self.tr("Failed to export to CalTopo:\n{error}").format(error=str(e))
             )
+            return False
 
-    def _export_to_caltopo_via_api(self, include_locations, include_images_without_flagged_aois, include_flagged_aois, include_coverage, include_images=True):
+    def _export_to_caltopo_via_api(self, include_locations, include_images_without_flagged_aois, include_flagged_aois,
+                                   include_coverage, include_images=True, aoi_photo_mode='full'):
         """
         Export to CalTopo using API-based authentication.
 
@@ -866,6 +899,7 @@ class UnifiedMapExportController(TranslationMixin):
             include_flagged_aois: Whether to include flagged AOIs
             include_coverage: Whether to include coverage extent polygons
             include_images: Whether to upload photos to CalTopo markers
+            aoi_photo_mode: Photo(s) to attach to flagged AOI markers ('full', 'thumbnail', or 'both')
         """
         try:
             # Use the CalTopo export controller with API method
@@ -879,7 +913,8 @@ class UnifiedMapExportController(TranslationMixin):
                 include_locations=include_locations,
                 include_images_without_flagged_aois=include_images_without_flagged_aois,
                 include_coverage_area=include_coverage,
-                include_images=include_images
+                include_images=include_images,
+                aoi_photo_mode=aoi_photo_mode
             )
 
         except Exception as e:

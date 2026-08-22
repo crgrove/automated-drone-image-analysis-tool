@@ -201,6 +201,7 @@ class TestControllerCompletion:
     def test_cancel_stops_worker_and_thread(self, controller):
         worker = MagicMock()
         thread = MagicMock()
+        thread.isRunning.return_value = False   # already stopped
         controller._worker = worker
         controller._thread = thread
 
@@ -212,6 +213,165 @@ class TestControllerCompletion:
         assert controller._thread is None
         assert controller._worker is None
         assert controller._cancelled is True
+        assert thread not in controller._retiring
+
+    def test_cancel_mid_search_does_not_block_the_gui_thread(self, controller):
+        """Cancelling while the worker is busy must not wait() on the GUI thread.
+
+        _on_cancelled runs on the GUI thread; the worker is inside a long
+        computation and only notices the cancel flag at its next checkpoint. A
+        blocking wait() here froze the UI for the remainder of the search.
+        """
+        worker = MagicMock()
+        thread = MagicMock()
+        thread.isRunning.return_value = True    # still busy
+        controller._worker = worker
+        controller._thread = thread
+
+        controller._on_cancelled()
+
+        worker.cancel.assert_called_once()
+        thread.quit.assert_called_once()
+        thread.wait.assert_not_called()
+        # Cleared so a new search can start immediately...
+        assert controller._thread is None
+        assert controller._worker is None
+        # ...but both objects are retained until the thread reports finished.
+        # Releasing a *running* QThread makes ~QThread() qFatal() -> abort().
+        assert controller._retiring[thread] is worker
+
+    def test_retired_thread_is_released_once_finished(self, controller):
+        worker = MagicMock()
+        thread = MagicMock()
+        thread.isRunning.return_value = True
+        controller._worker = worker
+        controller._thread = thread
+        controller._cleanup_thread()
+        assert thread in controller._retiring
+
+        controller._release_thread(thread)
+
+        thread.wait.assert_called_once()
+        assert thread not in controller._retiring
+
+    def test_release_survives_deleted_cpp_object(self, controller):
+        thread = MagicMock()
+        thread.wait.side_effect = RuntimeError("already deleted")
+        controller._retiring[thread] = None
+        controller._release_thread(thread)
+        assert thread not in controller._retiring
+
+    def test_cleanup_with_no_thread_is_noop(self, controller):
+        controller._thread = None
+        controller._worker = None
+        controller._cleanup_thread()
+        assert controller._retiring == {}
+
+
+class TestProgressPumpReentrancy:
+    """QProgressDialog.setValue() pumps the event loop when the dialog is modal.
+
+    Reported crash (Shift+Z on macOS):
+        modalSession has been exited prematurely - check for a reentrant call
+        to endModalSession:
+        AttributeError: 'NoneType' object has no attribute 'setLabelText'
+
+    setValue() re-entered the event loop mid-slot, delivering the worker's
+    queued `finished`. _on_search_complete then ran nested inside _on_progress:
+    it set progress_dialog to None (so the next line raised) and opened the
+    results dialog inside the progress dialog's still-open Cocoa modal session.
+    """
+
+    def test_completion_during_setvalue_does_not_crash(self, controller, monkeypatch):
+        """The exact reported traceback: setValue() -> nested completion."""
+        shown = MagicMock()
+        monkeypatch.setattr(controller, '_show_results_dialog', shown)
+
+        results = [{'image_idx': 1, 'aoi_idx': 0, 'similarity': 88,
+                    'is_reference': False, 'aoi_data': {}}]
+        controller._ref_indices = (0, 0)
+        service = MagicMock()
+        service.build_reference_entry.return_value = {
+            'image_idx': 0, 'aoi_idx': 0, 'similarity': 100, 'is_reference': True}
+        controller._similarity_service = service
+
+        dialog = MagicMock()
+        dialog.maximum.return_value = 0
+        # setValue() pumps the event loop, which delivers `finished`.
+        dialog.setValue.side_effect = lambda _v: controller._on_search_complete(results)
+        controller.progress_dialog = dialog
+
+        controller._on_progress(1, 4)   # must not raise AttributeError
+
+        # The label update still happened on the live dialog...
+        dialog.setLabelText.assert_called_once()
+        # ...and the completion ran only after the progress update finished,
+        # so the results dialog never opened inside the progress modal session.
+        shown.assert_called_once()
+        assert controller.progress_dialog is None
+        assert controller._deferred is None
+        assert controller._in_progress_update is False
+
+    def test_error_during_setvalue_is_deferred(self, controller, monkeypatch):
+        warning = MagicMock()
+        monkeypatch.setattr(QMessageBox, 'warning', warning)
+        dialog = MagicMock()
+        dialog.maximum.return_value = 0
+        dialog.setValue.side_effect = lambda _v: controller._on_search_error("boom")
+        controller.progress_dialog = dialog
+
+        controller._on_progress(1, 4)
+
+        warning.assert_called_once()
+        assert controller._deferred is None
+
+    def test_deferred_completion_wins_over_earlier_deferral(self, controller,
+                                                            monkeypatch):
+        """Only one terminal event per search is meaningful; the last one wins."""
+        monkeypatch.setattr(controller, '_show_results_dialog', MagicMock())
+        controller._in_progress_update = True
+        controller._on_search_error("first")
+        controller._on_search_complete([])
+        assert controller._deferred[0] == controller._on_search_complete
+
+    def test_dialog_destroyed_mid_pump_is_survivable(self, controller):
+        """A RuntimeError from a deleted C++ dialog must not escape the slot."""
+        dialog = MagicMock()
+        dialog.maximum.return_value = 0
+        dialog.setValue.side_effect = RuntimeError("wrapped C/C++ object deleted")
+        controller.progress_dialog = dialog
+
+        controller._on_progress(1, 4)   # must not raise
+
+        assert controller._in_progress_update is False
+
+    def test_progress_with_no_dialog_is_safe(self, controller):
+        controller.progress_dialog = None
+        controller._on_progress(1, 4)
+
+    def test_progress_with_zero_total_is_ignored(self, controller):
+        dialog = MagicMock()
+        controller.progress_dialog = dialog
+        controller._on_progress(0, 0)
+        dialog.setValue.assert_not_called()
+
+    def test_progress_dialog_does_not_self_close(self, controller, viewer,
+                                                 monkeypatch):
+        """autoClose/autoReset would hide the dialog from inside setValue()."""
+        monkeypatch.setattr(controller, '_get_service', lambda: MagicMock())
+        monkeypatch.setattr(controller, '_cleanup_thread', lambda: None)
+        with patch.object(controller, '_start_search', wraps=controller._start_search):
+            controller._start_search(ref_image_idx=0, ref_aoi_idx=0)
+        try:
+            assert controller.progress_dialog.autoClose() is False
+            assert controller.progress_dialog.autoReset() is False
+        finally:
+            controller._cancelled = True
+            if controller._thread is not None:
+                controller._thread.quit()
+                controller._thread.wait(5000)
+            if controller.progress_dialog is not None:
+                controller.progress_dialog.close()
 
     def test_show_results_dialog_and_cleanup(self, controller):
         results = [
@@ -299,7 +459,17 @@ class TestThreadedFlows:
             controller.find_similar_for_selected(image_idx=0, aoi_idx=0)
 
         shown.assert_called_once()
-        assert shown.call_args[0][0] == [reference_entry] + results
+        displayed = shown.call_args[0][0]
+        # Compare field-by-field rather than by deep equality: the payload
+        # crosses a Signal(list) between threads, and Qt's meta-type
+        # marshalling rewrites nested tuples as lists (aoi_data['center']
+        # arrives as [200, 200], not (200, 200)).
+        assert len(displayed) == 2
+        assert displayed[0]['is_reference'] is True
+        assert displayed[0]['image_idx'] == 0
+        assert displayed[1]['image_idx'] == 1
+        assert displayed[1]['similarity'] == 88
+        assert list(displayed[1]['aoi_data']['center']) == [200, 200]
         assert controller._thread is None
         assert controller.progress_dialog is None
 

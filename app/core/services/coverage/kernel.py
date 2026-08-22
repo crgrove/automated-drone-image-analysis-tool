@@ -37,11 +37,16 @@ from core.services.coverage.contracts import (
 )
 
 
-def build_camera_rotation(pitch_deg: float, yaw_deg: float, roll_deg: float) -> np.ndarray:
+def build_camera_rotation(pitch_deg: float, yaw_deg: float, roll_deg: float,
+                          roll_axis_deg: Optional[float] = None) -> np.ndarray:
     """3x3 rotation from camera frame (X=right, Y=down, Z=optical) to NED.
 
-    Mirrors ``AOIService._calculate_ground_position`` step 2 (+ Rodrigues roll
-    about the heading axis) so this kernel and the viewer FOV stay consistent.
+    Mirrors ``AOIService._calculate_ground_position`` step 2 (+ Rodrigues
+    roll) so this kernel and the viewer FOV stay consistent. The roll
+    rotates about the camera-yaw azimuth by default; ``roll_axis_deg``
+    overrides the axis azimuth for stamps that express roll about the
+    FLIGHT axis (WALDO processor version >= 6) - using the wrong axis
+    mirrors the footprint to the opposite side of the track.
     """
     opt_elevation = math.radians(pitch_deg)
     opt_azimuth = math.radians(yaw_deg)
@@ -64,7 +69,9 @@ def build_camera_rotation(pitch_deg: float, yaw_deg: float, roll_deg: float) -> 
 
     if roll_deg != 0.0:
         roll_rad = math.radians(roll_deg)
-        heading_axis = np.array([math.cos(opt_azimuth), math.sin(opt_azimuth), 0.0])
+        axis_azimuth = (math.radians(roll_axis_deg)
+                        if roll_axis_deg is not None else opt_azimuth)
+        heading_axis = np.array([math.cos(axis_azimuth), math.sin(axis_azimuth), 0.0])
         kx, ky, kz = heading_axis
         K = np.array([
             [0.0, -kz, ky],
@@ -92,7 +99,8 @@ def project_footprint_corners(fg, params) -> List[Tuple[float, float]]:
     Used only to size the frame bbox.
     """
     hw, hh = _frustum_half_extents(fg)
-    R = build_camera_rotation(fg.pitch_deg, fg.yaw_deg, fg.roll_deg)
+    R = build_camera_rotation(fg.pitch_deg, fg.yaw_deg, fg.roll_deg,
+                              roll_axis_deg=getattr(fg, 'roll_axis_deg', None))
     corners = []
     for sx in (-hw, hw):
         for sy in (-hh, hh):
@@ -156,7 +164,8 @@ def compute_target_mask_and_gsd(dem: np.ndarray, spec: GridSpec, fg,
     dn = (ys[:, np.newaxis] - cam_y) * meters_per_unit      # (H, 1) north meters
     dd = cam_z - dem                                        # (H, W) down meters
 
-    R = build_camera_rotation(fg.pitch_deg, fg.yaw_deg, fg.roll_deg)
+    R = build_camera_rotation(fg.pitch_deg, fg.yaw_deg, fg.roll_deg,
+                              roll_axis_deg=getattr(fg, 'roll_axis_deg', None))
     Rt = R.T  # camera <- NED
     # p_cam = R^T @ [north, east, down]
     px = Rt[0, 0] * dn + Rt[0, 1] * de + Rt[0, 2] * dd

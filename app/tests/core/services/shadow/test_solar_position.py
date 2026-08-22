@@ -46,6 +46,34 @@ def test_resolve_utc_from_gps_stamps():
     assert utc == datetime(2025, 6, 15, 19, 30, 0, tzinfo=timezone.utc)
 
 
+@pytest.mark.parametrize("key", [
+    'CaptureUtcCorrected',            # per-namespace parse (bare key)
+    'waldo:CaptureUtcCorrected',      # merged parse (prefixed key)
+    'XMP-waldo:CaptureUtcCorrected',  # exiftool-style prefix
+])
+def test_resolve_utc_prefers_waldo_corrected_over_everything(key):
+    # Even authoritative GPS stamps lose to an operator-confirmed clock
+    # repair: the repair exists precisely because the camera fields lie.
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {key: '2026-07-23T13:49:37+00:00'}
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_corrected'
+    assert utc == datetime(2026, 7, 23, 13, 49, 37, tzinfo=timezone.utc)
+
+
+def test_resolve_utc_bad_corrected_value_falls_through():
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {'CaptureUtcCorrected': 'not-a-timestamp'}
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'gps'
+    assert utc == datetime(2025, 6, 15, 19, 30, 0, tzinfo=timezone.utc)
+
+
+def test_timezone_name_for_position_returns_zone_or_none():
+    name = solar_mod.timezone_name_for_position(_TX_LAT, _TX_LON)
+    assert name in ('America/Chicago', None)  # None only if tzfinder missing
+
+
 def test_resolve_utc_from_gps_with_fractional_seconds():
     # 19h, 30m, 15.5s
     exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (155, 10)))

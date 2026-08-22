@@ -6,14 +6,23 @@ prefix, builds a TerrainService configured against the user's preferred DEM
 provider, opens a modal WaldoPrePassDialog and blocks until the synthesis
 finishes (or the user cancels). After this returns, the standard ImageService
 metadata path will read the synthesised drone-dji XMP fields written to disk.
+
+Also drives the operator-confirmed camera clock correction: when the pre-pass
+audit detects the known clock-fault signature, a confirmation dialog offers a
+non-destructive corrected capture time (stamped in the waldo XMP namespace).
+The per-folder decision is remembered in settings.
 """
 
-from typing import List
+import os
+from typing import List, Optional
 
 from core.services.LoggerService import LoggerService
 from core.services.SettingsService import SettingsService
 from core.services.waldo import WaldoMetadataService
+from core.services.waldo import WaldoClockDecisions
+from core.services.waldo.WaldoClockDecisions import CLOCK_DECISIONS_SETTING
 from core.views.images.viewer.dialogs.WaldoPrePassDialog import WaldoPrePassDialog
+from core.views.images.viewer.dialogs.WaldoClockCorrectionDialog import WaldoClockCorrectionDialog
 
 
 class WaldoPrePassController:
@@ -55,8 +64,19 @@ class WaldoPrePassController:
             if not any_pending and not WaldoMetadataService.is_already_processed(path):
                 any_pending = True
 
+        # Detect the clock fault BEFORE any stamping: the pre-pass rewrites
+        # the files, which resets their mtime and destroys the file-time
+        # evidence the detection relies on.
+        detect_service = WaldoMetadataService(terrain_service=None)
+        proposal = None
+        try:
+            proposal = detect_service.propose_clock_correction(waldo_paths)
+        except Exception as e:
+            self.logger.error(f"WaldoPrePassController: clock-fault detection failed - {e}")
+
         if not any_pending:
             self.logger.info("WaldoPrePassController: all WALDO images already processed.")
+            self._offer_clock_correction(waldo_paths, proposal, service=detect_service)
             return
 
         # Build a TerrainService that respects the configured provider preference.
@@ -75,3 +95,98 @@ class WaldoPrePassController:
             "WaldoPrePassController: processed=%d already_current=%d errors=%d cancelled=%s"
             % (result.processed, result.already_current, len(result.errors), result.cancelled)
         )
+        if not result.cancelled:
+            self._offer_clock_correction(waldo_paths, proposal, service=service)
+
+    # ------------------------------------------------------------------
+    # Clock correction
+    # ------------------------------------------------------------------
+
+    def _clock_decisions(self) -> dict:
+        return WaldoClockDecisions.get_decisions(self.settings_service)
+
+    def _store_clock_decision(self, folder_key: str, decision: dict):
+        WaldoClockDecisions.store_decision(folder_key, decision, self.settings_service)
+
+    def _offer_clock_correction(self, waldo_paths: List[str], proposal,
+                                service: Optional[WaldoMetadataService] = None):
+        """Drive the confirmation dialog for a pre-computed clock proposal.
+
+        The proposal is detected by the caller BEFORE the pre-pass stamps
+        anything (stamping resets mtimes and weakens detection). A remembered
+        'declined' suppresses the offer; a remembered acceptance re-applies
+        silently (progress only) so images added to the folder later get
+        corrected without re-asking.
+
+        When no fault proposal exists but an APPLIED correction fails the
+        physical sanity check (sun below the horizon on daylight imagery),
+        an amendment prefilled from the stamped values is offered instead -
+        overriding any remembered decision, since the evidence contradicts
+        it.
+        """
+        if not waldo_paths:
+            return
+        try:
+            if service is None:
+                service = WaldoMetadataService(terrain_service=None)
+
+            amend_reason = None
+            if proposal is None:
+                amend_reason = service.stamped_correction_suspect(waldo_paths)
+                if amend_reason is None:
+                    return
+                proposal = service.propose_amendment(waldo_paths)
+                if proposal is None:
+                    return
+                proposal.evidence.insert(0, amend_reason)
+
+            folder_key = os.path.normcase(os.path.abspath(os.path.dirname(waldo_paths[0])))
+            decision = self._clock_decisions().get(folder_key)
+            if amend_reason is None and decision and decision.get('decision') == 'declined':
+                self.logger.info(
+                    "WaldoPrePassController: clock fault detected but correction "
+                    "was previously declined for this folder.")
+                return
+
+            # A failed sanity check always re-asks; never silently re-applies.
+            auto = (amend_reason is None
+                    and bool(decision and decision.get('decision') == 'accepted'))
+            if auto:
+                proposal.face_shift_h = int(decision.get('face_shift_h', proposal.face_shift_h))
+                tz_text = decision.get('tz_text')
+                if tz_text:
+                    proposal.tz_name = None
+                    proposal.fixed_offset_h = None
+                    # Reuse the dialog's parser by seeding its editable field.
+                    try:
+                        from zoneinfo import ZoneInfo
+                        ZoneInfo(tz_text)
+                        proposal.tz_name = tz_text
+                    except Exception:
+                        try:
+                            proposal.fixed_offset_h = float(tz_text)
+                        except ValueError:
+                            proposal.tz_name = None
+
+            dialog = WaldoClockCorrectionDialog(
+                self.parent, service, waldo_paths, proposal, auto_apply=auto)
+            dialog.exec()
+
+            if dialog.applied and dialog.remember_choice and not auto:
+                self._store_clock_decision(folder_key, {
+                    'decision': 'accepted',
+                    'face_shift_h': dialog.accepted_face_shift_h,
+                    'tz_text': dialog.accepted_tz_text,
+                })
+            elif dialog.declined and dialog.remember_choice:
+                self._store_clock_decision(folder_key, {'decision': 'declined'})
+
+            result = dialog.result_data
+            self.logger.info(
+                "WaldoPrePassController: clock correction corrected=%d current=%d "
+                "errors=%d declined=%s"
+                % (result.processed, result.already_current, len(result.errors),
+                   dialog.declined)
+            )
+        except Exception as e:
+            self.logger.error(f"WaldoPrePassController: clock correction failed - {e}")

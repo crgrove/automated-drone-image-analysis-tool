@@ -26,7 +26,7 @@ from helpers.PickleHelper import PickleHelper
 from core.views.images.MainWindow_ui import Ui_MainWindow
 from core.views.images.viewer.dialogs.ResultsFolderDialog import ResultsFolderDialog, ScanWorker, ScanProgressDialog
 from PySide6.QtWidgets import (QApplication, QMainWindow, QColorDialog, QFileDialog,
-                               QMessageBox, QSizePolicy, QAbstractButton, QCheckBox, QProgressDialog)
+                               QMessageBox, QSizePolicy, QAbstractButton, QCheckBox, QProgressDialog, QMenu)
 from PySide6.QtCore import QThread, Slot, QSize, Qt, QUrl
 from PySide6.QtGui import QColor, QFont, QIcon, QDesktopServices
 import qtawesome as qta
@@ -37,9 +37,12 @@ from core.views.components.GroupedComboBox import GroupedComboBox
 from core.controllers.images.ImageAnalysisGuide import ImageAnalysisGuide
 from helpers.IconHelper import IconHelper
 from helpers.FormatHelper import FormatHelper
+from helpers import BuildInfo
+from helpers.WidgetHelper import retire_widget
 from helpers.TranslationMixin import TranslationMixin
 from helpers.ThemeHelper import apply_theme
 import os
+import json
 import xml.etree.ElementTree as ET
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
@@ -71,15 +74,20 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         self.__threads = []
         self.images = None
         self.algorithmWidget = None
+        # Always defined so a failed first swap surfaces as the explicit
+        # startup check below rather than a later AttributeError at Start.
+        self.activeAlgorithm = None
         self.identifierColor = (0, 255, 0)
         self._auto_start_requested = False
         self.batchService = None
         self._batch_running = False
         self.HistogramImgWidget.setVisible(False)
+        # title_version appends the build stamp ("2.1.4 (58ef930)") so any
+        # field screenshot identifies the exact commit it was built from.
         self.setWindowTitle(
             self.tr(
                 "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
-            ).format(version=self.app_version)
+            ).format(version=BuildInfo.title_version(self.app_version))
         )
         self._load_algorithms()
 
@@ -115,6 +123,7 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         self.actionLoadFile.triggered.connect(self._open_load_file)
         if hasattr(self, "actionLoadResultsFolder"):
             self.actionLoadResultsFolder.triggered.connect(self._open_load_results_folder)
+        self._setup_recent_results_menu()
         self.actionPreferences.triggered.connect(self._open_preferences)
         self.actionVideoParser.triggered.connect(self._open_video_parser)
 
@@ -158,6 +167,17 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
 
         self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
+        # The swap tolerates a label that matches no algorithm (a group header,
+        # stale combobox text) because that is a recoverable runtime event. At
+        # startup it is not: with no algorithm loaded, Start and save-config
+        # would fail later with an AttributeError far from the real fault
+        # (an empty/corrupt algorithms.conf, or every entry filtered out for
+        # this platform). Fail here, at the fault.
+        if self.activeAlgorithm is None or self.algorithmWidget is None:
+            raise RuntimeError(
+                "No usable image algorithm: algorithms.conf produced no entry "
+                f"selectable on this platform (combobox text: "
+                f"'{self.algorithmComboBox.currentText()}')")
         # Connect to editingFinished instead of valueChanged for deferred validation
         self.minAreaSpinBox.editingFinished.connect(self._minAreaSpinBox_editingFinished)
         self.maxAreaSpinBox.editingFinished.connect(self._maxAreaSpinBox_editingFinished)
@@ -250,7 +270,9 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         """
         Replaces the standard combobox with a grouped version to allow algorithm grouping.
         """
-        self.tempAlgorithmComboBox.deleteLater()
+        # NOTE: the placeholder is retired only after a successful replace (see
+        # the end of this method) - it is still passed to replaceWidget below,
+        # and deleting it first only worked because deletion is deferred.
         self.algorithmComboBox = GroupedComboBox(self.setupWidget)
         sizePolicy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         sizePolicy.setHeightForWidth(self.algorithmComboBox.sizePolicy().hasHeightForWidth())
@@ -303,7 +325,24 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             )
         )
 
-        self.algorithmSelectorlLayout.replaceWidget(self.tempAlgorithmComboBox, self.algorithmComboBox)
+        # replaceWidget silently no-ops (returns None) when the placeholder is
+        # not in this layout. An unmanaged widget is not laid out at all: it
+        # floats at its parent's top-left, overlapping whatever is there
+        # (field screenshot: stray dropdown over the Input Folder row). Adding
+        # it to the layout directly keeps the selector usable - wrong position
+        # beats unusable - and the error names the cause in the field log.
+        replaced = self.algorithmSelectorlLayout.replaceWidget(
+            self.tempAlgorithmComboBox, self.algorithmComboBox)
+        if replaced is None:
+            self.logger.error(
+                "Algorithm combobox replacement failed: placeholder not found in "
+                "algorithmSelectorlLayout - adding the grouped selector to the end "
+                "of that layout instead (stale generated MainWindow_ui? rerun "
+                "build_res)")
+            self.algorithmSelectorlLayout.addWidget(self.algorithmComboBox)
+
+        # Retire the placeholder now that it is out of the layout.
+        retire_widget(self.tempAlgorithmComboBox)
 
     def _normalize_color(self, color):
         """
@@ -404,11 +443,24 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         """
         Loads the selected algorithm's widget and sets UI elements based on the algorithm's requirements.
         """
-        if self.algorithmWidget:
-            self.verticalLayout_2.removeWidget(self.algorithmWidget)
-            self.algorithmWidget.deleteLater()
+        selected = next(
+            (x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText()),
+            None)
+        if selected is None:
+            # A group header or stale text must not tear down the current
+            # widget (the old unguarded next() raised StopIteration here,
+            # leaving the swap half-done).
+            self.logger.error(
+                f"Algorithm swap skipped: no algorithm labelled "
+                f"'{self.algorithmComboBox.currentText()}'")
+            return
 
-        self.activeAlgorithm = next(x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText())
+        # retire_widget hides before queueing the delete; see WidgetHelper for
+        # why deleteLater alone left the outgoing panel painted under the
+        # incoming one during long synchronous loads.
+        retire_widget(self.algorithmWidget, self.verticalLayout_2)
+
+        self.activeAlgorithm = selected
         cls = globals()[self.activeAlgorithm['controller']]
         self.algorithmWidget = cls(self.activeAlgorithm, self.settings_service.get_setting('Theme'))
         self.verticalLayout_2.addWidget(self.algorithmWidget)
@@ -968,6 +1020,93 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
+    # Recently opened result XMLs, newest first, stored as a JSON list so the
+    # value survives QSettings type coercion across platforms
+    RECENT_RESULTS_SETTING = 'RecentResults'
+    RECENT_RESULTS_LIMIT = 10
+
+    def open_results_for_review(self):
+        """Entry point for the Review Results tile on the selection dialog.
+
+        Jumps straight to the results-folder scanner so a reviewer never has
+        to interact with the analysis setup screen.
+        """
+        self._open_load_results_folder()
+
+    def _setup_recent_results_menu(self):
+        """Insert the "Open Recent Results" submenu after the Load File action."""
+        try:
+            self.menuRecentResults = QMenu(self.tr("Open Recent Results"), self)
+            actions = self.menuFile.actions()
+            anchor = None
+            if self.actionLoadFile in actions:
+                idx = actions.index(self.actionLoadFile) + 1
+                anchor = actions[idx] if idx < len(actions) else None
+            if anchor is not None:
+                self.menuFile.insertMenu(anchor, self.menuRecentResults)
+            else:
+                self.menuFile.addMenu(self.menuRecentResults)
+            # Populate lazily so the list is current every time it opens
+            self.menuRecentResults.aboutToShow.connect(self._populate_recent_results_menu)
+        except Exception as e:
+            self.logger.error(f"Could not set up the recent results menu: {e}")
+
+    def _get_recent_results(self):
+        """Return the stored recent-results list (paths, newest first)."""
+        raw = self.settings_service.get_setting(self.RECENT_RESULTS_SETTING, '[]')
+        try:
+            paths = json.loads(raw) if isinstance(raw, str) else list(raw or [])
+        except (TypeError, ValueError):
+            paths = []
+        return [p for p in paths if isinstance(p, str) and p]
+
+    def _record_recent_result(self, xml_path):
+        """Remember a successfully opened result XML at the top of the list."""
+        try:
+            normalized = os.path.abspath(xml_path)
+            key = os.path.normcase(normalized)
+            recents = [
+                p for p in self._get_recent_results()
+                if os.path.normcase(os.path.abspath(p)) != key
+            ]
+            recents.insert(0, normalized)
+            del recents[self.RECENT_RESULTS_LIMIT:]
+            self.settings_service.set_setting(self.RECENT_RESULTS_SETTING, json.dumps(recents))
+        except Exception as e:
+            self.logger.error(f"Could not record recent result {xml_path}: {e}")
+
+    def _populate_recent_results_menu(self):
+        """Rebuild the recent-results submenu from settings."""
+        self.menuRecentResults.clear()
+        recents = self._get_recent_results()
+        if not recents:
+            placeholder = self.menuRecentResults.addAction(self.tr("(no results opened yet)"))
+            placeholder.setEnabled(False)
+            return
+        for path in recents:
+            # Every result file is named ADIAT_Data.xml, so the containing
+            # folder is the recognizable part
+            action = self.menuRecentResults.addAction(os.path.dirname(path) or path)
+            action.setToolTip(path)
+            action.setEnabled(os.path.exists(path))
+            action.triggered.connect(lambda checked=False, p=path: self._open_recent_result(p))
+
+    def _open_recent_result(self, path):
+        """Open a result XML from the recents menu, straight into review."""
+        try:
+            if not os.path.exists(path):
+                self._show_error(
+                    self.tr("This results file no longer exists:\n{path}").format(path=path)
+                )
+                return
+            self._process_xml_file(path)
+            # A Search Coordinator project is already opened by
+            # _process_xml_file; otherwise open the single-run Viewer.
+            if self._view_results_mode != 'coordinator':
+                self._viewResultsButton_clicked()
+        except Exception as e:
+            self.logger.error(f"Error opening recent result {path}: {e}")
+
     def _open_load_file(self):
         """
         Opens a file dialog to select a file to load.
@@ -1141,10 +1280,12 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             if self._is_search_project_xml(full_path):
                 self._set_view_results_mode('coordinator', full_path)
                 self._set_ViewResultsButton(True)
+                self._record_recent_result(full_path)
                 self._open_coordinator(full_path)
                 return
             image_count = self._get_settings_from_xml(full_path)
             self._set_view_results_mode('results')
+            self._record_recent_result(full_path)
             if image_count > 0:
                 self._set_ViewResultsButton(True)
             self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
@@ -1291,31 +1432,39 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 self.processingResolutionCombo.setCurrentText(resolution_text)
                 self.settings_service.set_setting('ProcessingResolution', resolution_text)
 
-        # Set algorithm
+        # Set algorithm.
+        #
+        # The combobox is the single source of truth: _algorithmComboBox_changed
+        # derives activeAlgorithm from it, so activeAlgorithm and algorithmWidget
+        # can never disagree. Assigning activeAlgorithm here instead would break
+        # that whenever setCurrentText does not take - the combobox holds only
+        # the labels for THIS platform (_load_algorithms filters on
+        # algorithm['platforms']) while self.algorithms holds them all, so
+        # wizard data naming e.g. a Windows-only Temperature algorithm on macOS
+        # silently no-ops on the non-editable combobox. Options would then load
+        # into the previous algorithm's widget and auto-start would run one
+        # algorithm with another's parameters.
         if wizard_data.get('algorithm'):
             algorithm_label = wizard_data['algorithm']
-            # Find the algorithm config
-            for algo in self.algorithms:
-                if algo['label'] == algorithm_label:
-                    self.activeAlgorithm = algo
-                    self.algorithmComboBox.setCurrentText(algorithm_label)
-                    # Load algorithm widget (this will trigger _algorithmComboBox_changed)
-                    self._algorithmComboBox_changed()
+            self.algorithmComboBox.setCurrentText(algorithm_label)
 
-                    # Load algorithm options if available
-                    # Wait a moment for the widget to be fully initialized
-                    if wizard_data.get('algorithm_options'):
-                        # Use QApplication.processEvents() to ensure widget is fully created
-                        QApplication.processEvents()
-                        if self.algorithmWidget:
-                            self.algorithmWidget.load_options(wizard_data['algorithm_options'])
-                    break
+            if self.algorithmComboBox.currentText() != algorithm_label:
+                # Not selectable on this platform (or an unknown label): leave
+                # the current algorithm intact rather than half-applying the
+                # wizard, and do not load its options into the wrong widget.
+                self.logger.error(
+                    f"Wizard algorithm '{algorithm_label}' is not available on this "
+                    f"platform; keeping '{self.algorithmComboBox.currentText()}'. "
+                    f"Its parameters were not applied.")
+            elif wizard_data.get('algorithm_options'):
+                # Load algorithm options if available. processEvents lets the
+                # freshly constructed widget finish initializing.
+                QApplication.processEvents()
+                if self.algorithmWidget:
+                    self.algorithmWidget.load_options(wizard_data['algorithm_options'])
 
         # Mark for auto-start if requested (will execute in showEvent after window is visible)
         self._auto_start_requested = wizard_data.get('auto_start', False)
-        if self._auto_start_requested:
-            # self.logger.info("Auto-start requested from wizard - will execute after window is shown")
-            pass
 
     def _open_image_analysis_guide(self):
         """

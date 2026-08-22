@@ -434,11 +434,42 @@ def testVideoParser(testData, qtbot):
             assert len(os.listdir(testData['Video_Output'])) > 0
 
 
-def test_flight_viewer_menu_hidden_when_feature_disabled(main_window):
-    """Flight Viewer is deferred to a later release: the File-menu action
-    must be invisible while FeatureFlags.FLIGHT_VIEWER_ENABLED is False."""
-    assert hasattr(main_window, 'actionFlightViewer')
-    assert not main_window.actionFlightViewer.isVisible()
+def test_flight_viewer_menu_hidden_when_feature_disabled(qtbot):
+    """Flight Viewer visibility is gated: the File-menu action must be
+    invisible while FeatureFlags.FLIGHT_VIEWER_ENABLED is False. A fresh
+    window is built under an explicit False patch so the gated-off path
+    stays covered regardless of the shipping default."""
+    try:
+        import qdarktheme
+        from core.controllers.images.MainWindow import MainWindow
+    except ImportError:
+        pytest.skip("MainWindow dependencies not available")
+    with patch("helpers.FeatureFlags.FLIGHT_VIEWER_ENABLED", False):
+        mw = MainWindow(qdarktheme)
+    qtbot.addWidget(mw)
+    mw.show()
+    assert hasattr(mw, 'actionFlightViewer')
+    assert not mw.actionFlightViewer.isVisible()
+
+
+def test_flight_viewer_menu_shown_when_feature_enabled(qtbot):
+    """The File-menu action must be visible while the flag is True.
+
+    Built under an explicit True patch (mirroring the disabled-path test above)
+    rather than relying on the shared main_window fixture, so both sides of the
+    gate stay covered regardless of the shipping default.
+    """
+    try:
+        import qdarktheme
+        from core.controllers.images.MainWindow import MainWindow
+    except ImportError:
+        pytest.skip("MainWindow dependencies not available")
+    with patch("helpers.FeatureFlags.FLIGHT_VIEWER_ENABLED", True):
+        mw = MainWindow(qdarktheme)
+    qtbot.addWidget(mw)
+    mw.show()
+    assert hasattr(mw, 'actionFlightViewer')
+    assert mw.actionFlightViewer.isVisible()
 
 
 # --- Search Coordinator: results button + reload routing --------------------
@@ -538,3 +569,222 @@ def test_load_single_result_not_routed_to_coordinator(main_window, tmp_path):
     open_coord.assert_not_called()
     assert main_window._view_results_mode == 'results'
     assert main_window.viewResultsButton.isEnabled()
+
+# --------------------------------------------------------------------------- #
+#  Recent results MRU: recorded on open, surfaced in the File menu             #
+# --------------------------------------------------------------------------- #
+
+
+class _FakeSettingsStore:
+    """In-memory settings so tests never write to the real registry."""
+
+    def __init__(self):
+        self.store = {}
+
+    def get_setting(self, name, default_value=None):
+        return self.store.get(name, default_value)
+
+    def set_setting(self, name, value):
+        self.store[name] = value
+
+
+def testRecentResultsRoundtripDedupeAndCap(main_window, tmp_path):
+    """Recording keeps newest first, dedupes by path, and caps the list."""
+    main_window.settings_service = _FakeSettingsStore()
+
+    paths = []
+    for i in range(12):
+        p = tmp_path / f"batch{i}" / "ADIAT_Data.xml"
+        p.parent.mkdir(parents=True)
+        p.write_text("<data/>")
+        paths.append(str(p))
+        main_window._record_recent_result(str(p))
+    # Re-opening an old one moves it back to the top instead of duplicating
+    main_window._record_recent_result(paths[5])
+
+    recents = main_window._get_recent_results()
+    assert recents[0] == os.path.abspath(paths[5])
+    assert len(recents) <= main_window.RECENT_RESULTS_LIMIT
+    assert len(set(os.path.normcase(p) for p in recents)) == len(recents)
+
+
+def testRecentResultsMenuPlaceholderWhenEmpty(main_window):
+    main_window.settings_service = _FakeSettingsStore()
+
+    main_window._populate_recent_results_menu()
+
+    actions = main_window.menuRecentResults.actions()
+    assert len(actions) == 1
+    assert not actions[0].isEnabled()
+
+
+def testRecentResultsMenuDisablesMissingFiles(main_window, tmp_path):
+    """Entries whose files vanished stay listed but cannot be clicked."""
+    import json as _json
+    main_window.settings_service = _FakeSettingsStore()
+    existing = tmp_path / "run1" / "ADIAT_Data.xml"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("<data/>")
+    gone = str(tmp_path / "gone" / "ADIAT_Data.xml")
+    main_window.settings_service.store[main_window.RECENT_RESULTS_SETTING] = _json.dumps(
+        [str(existing), gone]
+    )
+
+    main_window._populate_recent_results_menu()
+
+    actions = main_window.menuRecentResults.actions()
+    assert len(actions) == 2
+    assert actions[0].isEnabled()
+    assert not actions[1].isEnabled()
+
+
+def testProcessXmlFileRecordsRecent(main_window, tmp_path):
+    """Opening a result XML lands it at the top of the recents list."""
+    main_window.settings_service = _FakeSettingsStore()
+    xml_path = tmp_path / "ADIAT_Data.xml"
+    xml_path.write_text("<data/>")
+
+    with patch.object(main_window, '_is_search_project_xml', return_value=False), \
+            patch.object(main_window, '_get_settings_from_xml', return_value=3), \
+            patch.object(main_window, '_set_view_results_mode'), \
+            patch.object(main_window, '_set_ViewResultsButton'):
+        main_window._process_xml_file(str(xml_path))
+
+    recents = main_window._get_recent_results()
+    assert recents
+    assert os.path.normcase(recents[0]) == os.path.normcase(os.path.abspath(str(xml_path)))
+
+
+def testOpenResultsForReviewRoutesToFolderScan(main_window):
+    """The Review Results tile entry point drives the folder scanner."""
+    with patch.object(main_window, '_open_load_results_folder') as mock_open:
+        main_window.open_results_for_review()
+    mock_open.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Algorithm widget swap hygiene (field screenshot: outgoing ColorRange panel
+# stayed painted under the incoming MRMap panel while a long synchronous load
+# blocked the event loop; deleteLater alone does not hide the removed widget)
+# ---------------------------------------------------------------------------
+
+def test_algorithm_swap_hides_the_outgoing_widget(main_window):
+    outgoing = main_window.algorithmWidget
+    assert outgoing is not None
+
+    current = main_window.algorithmComboBox.currentText()
+    other = next(a['label'] for a in main_window.algorithms if a['label'] != current)
+    main_window.algorithmComboBox.setCurrentText(other)
+
+    assert main_window.algorithmWidget is not outgoing
+    # The outgoing widget must be invisible immediately - not merely queued
+    # for deletion - so a blocked event loop can never paint both panels.
+    assert outgoing.isHidden()
+
+
+def test_algorithm_swap_ignores_unknown_label(main_window):
+    """A label that matches no algorithm (group header, stale text) must not
+    tear down the current widget; the old unguarded next() raised
+    StopIteration after the removal, leaving the swap half-done."""
+    before = main_window.algorithmWidget
+    with patch.object(main_window.algorithmComboBox, 'currentText', return_value='No Such Algorithm'):
+        main_window._algorithmComboBox_changed()
+
+    assert main_window.algorithmWidget is before
+    assert not before.isHidden()
+
+
+def test_startup_leaves_algorithm_state_consistent(main_window):
+    """activeAlgorithm and algorithmWidget always agree after construction.
+
+    The swap derives activeAlgorithm from the combobox, so the two cannot
+    drift; the startup check in __init__ guarantees both are set (a corrupt
+    or fully platform-filtered algorithms.conf raises there instead of
+    failing later at Start with an AttributeError)."""
+    assert main_window.activeAlgorithm is not None
+    assert main_window.algorithmWidget is not None
+    assert main_window.activeAlgorithm['label'] == main_window.algorithmComboBox.currentText()
+
+
+def test_algorithm_combobox_is_managed_by_a_layout(main_window):
+    """The grouped selector must be laid out, not floating.
+
+    replaceWidget silently no-ops when the placeholder is missing from the
+    layout, and an unmanaged widget floats at its parent's top-left over
+    whatever is there (field screenshot: stray dropdown over the Input
+    Folder row). The fallback adds it to the layout regardless."""
+    layout = main_window.algorithmSelectorlLayout
+    assert layout.indexOf(main_window.algorithmComboBox) != -1
+
+
+# ---------------------------------------------------------------------------
+# populate_from_wizard_data: the combobox is the single source of truth for
+# activeAlgorithm, so an algorithm the wizard names but this platform cannot
+# select must not half-apply (options landing on the previous widget, or
+# auto-start running one algorithm with another's parameters).
+# ---------------------------------------------------------------------------
+
+def test_wizard_applies_an_available_algorithm(main_window):
+    current = main_window.algorithmComboBox.currentText()
+    target = next(a['label'] for a in main_window.algorithms
+                  if a['label'] != current
+                  and main_window.algorithmComboBox.findText(a['label']) != -1)
+
+    main_window.populate_from_wizard_data({'algorithm': target})
+
+    assert main_window.algorithmComboBox.currentText() == target
+    assert main_window.activeAlgorithm['label'] == target
+
+
+def test_wizard_unavailable_algorithm_does_not_half_apply(main_window):
+    """The regression: a label in self.algorithms but NOT selectable here.
+
+    self.algorithms is unfiltered while the combobox holds only labels for
+    this platform (algorithms.conf marks the Temperature algorithms
+    Windows-only), so on the other platform setCurrentText silently no-ops on
+    the non-editable combobox. Windows cannot produce that state naturally,
+    so the no-op is simulated - patching setCurrentText is exactly what an
+    absent label does.
+
+    Previously activeAlgorithm was assigned from self.algorithms BEFORE
+    setCurrentText, so it drifted to an algorithm whose widget was never
+    built: load_options wrote to the previous widget and auto-start ran one
+    algorithm with another's parameters.
+    """
+    before_label = main_window.algorithmComboBox.currentText()
+    before_widget = main_window.algorithmWidget
+    unavailable = next(a['label'] for a in main_window.algorithms
+                       if a['label'] != before_label)
+    loaded = []
+    before_widget.load_options = lambda opts: loaded.append(opts)
+
+    with patch.object(main_window.algorithmComboBox, 'setCurrentText'):
+        main_window.populate_from_wizard_data({
+            'algorithm': unavailable,
+            'algorithm_options': {'some': 'value'},
+        })
+
+    # activeAlgorithm tracked the combobox, not the wizard's request.
+    assert main_window.algorithmComboBox.currentText() == before_label
+    assert main_window.activeAlgorithm['label'] == before_label
+    assert main_window.algorithmWidget is before_widget
+    # And nothing was written into the wrong algorithm's widget.
+    assert loaded == []
+
+
+def test_wizard_options_load_into_the_selected_algorithms_widget(main_window):
+    current = main_window.algorithmComboBox.currentText()
+    target = next(a['label'] for a in main_window.algorithms
+                  if a['label'] != current
+                  and main_window.algorithmComboBox.findText(a['label']) != -1)
+
+    main_window.populate_from_wizard_data({
+        'algorithm': target,
+        'algorithm_options': {'some': 'value'},
+    })
+
+    # The widget that received the options is the one for the selected
+    # algorithm - the pairing the old manual activeAlgorithm assignment
+    # could break.
+    assert main_window.activeAlgorithm['label'] == target
+    assert main_window.algorithmWidget is not None

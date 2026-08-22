@@ -6,9 +6,10 @@ MainWindow_ui.py provides the container for image analysis algorithms.
 """
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                               QSplitter, QGroupBox, QTextEdit, QStatusBar, QLabel,
-                               QScrollArea)
+                               QSplitter, QGroupBox, QTextEdit, QStatusBar, QLabel)
 from PySide6.QtCore import QCoreApplication, Qt
+
+from core.views.components.SteadyScrollArea import SteadyScrollArea
 
 
 class Ui_StreamViewerWindow:
@@ -115,8 +116,10 @@ class Ui_StreamViewerWindow:
         
         right_layout.addStretch()
         
-        # Wrap the right control panel in a scroll area to keep all controls reachable
-        right_scroll = QScrollArea()
+        # Wrap the right control panel in a scroll area to keep all controls
+        # reachable. SteadyScrollArea (not QScrollArea) so the panel does not
+        # scroll away when a control disables itself and hands off focus.
+        right_scroll = SteadyScrollArea()
         right_scroll.setObjectName("rightScrollArea")
         right_scroll.setWidgetResizable(True)
         right_scroll.setWidget(right_panel)

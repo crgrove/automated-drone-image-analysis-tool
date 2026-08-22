@@ -702,3 +702,60 @@ def test_validate_track_logs_warning_on_non_monotonic():
     track = [_tp(30), _tp(10), _tp(20), _tp(15)]
     sorted_track = svc._validate_track(track)
     assert [p.timestamp for p in sorted_track] == sorted([p.timestamp for p in track])
+
+
+# ---------------------------------------------------------------------------
+# Auto mode with images that carry no capture time
+#
+# The DateTime fallback read piexif.ExifIFD.DateTime, an attribute that does
+# not exist. The AttributeError landed in the per-image except, so every image
+# without DateTimeOriginal was skipped - frames cut from a video carry GPS and
+# no capture time at all, so a whole result set could fail with "Need at least
+# 2 images with GPS".
+# ---------------------------------------------------------------------------
+
+def test_auto_keeps_images_that_have_gps_but_no_capture_time(service):
+    images = [{'path': f'frame_{i}.jpg', 'name': f'frame_{i}.jpg'} for i in range(3)]
+    no_date_exif = {'0th': {34853: 26}, 'Exif': {}, 'GPS': {1: b'N'}}
+    fixes = [{'latitude': 40.0 + i * 0.001, 'longitude': -75.0} for i in range(3)]
+
+    with patch('core.services.BearingCalculationService.MetaDataHelper.get_exif_data_piexif',
+               return_value=no_date_exif), \
+         patch('core.services.BearingCalculationService.LocationInfo.get_gps',
+               side_effect=fixes):
+        results = service._bearing_auto(images)
+
+    # Every frame kept, none dropped, and the timestamp-less sort did not raise.
+    assert len(results) == 3
+    assert all(img['timestamp'] is None for img in images)
+    service._logger.error.assert_not_called()
+
+
+def test_auto_sorts_by_capture_time_when_present(service):
+    """Mixing timestamped and timestamp-less images must not raise either."""
+    images = [{'path': 'b.jpg', 'name': 'b.jpg'},
+              {'path': 'a.jpg', 'name': 'a.jpg'},
+              {'path': 'c.jpg', 'name': 'c.jpg'}]
+    exifs = {
+        'b.jpg': {'Exif': {36867: b'2026:08:15 12:00:02'}},
+        'a.jpg': {'Exif': {36867: b'2026:08:15 12:00:01'}},
+        'c.jpg': {'0th': {}, 'Exif': {}},
+    }
+    fixes = {'b.jpg': {'latitude': 40.001, 'longitude': -75.0},
+             'a.jpg': {'latitude': 40.000, 'longitude': -75.0},
+             'c.jpg': {'latitude': 40.002, 'longitude': -75.0}}
+    order = []
+
+    def _exif(path):
+        order.append(path)
+        return exifs[path]
+
+    with patch('core.services.BearingCalculationService.MetaDataHelper.get_exif_data_piexif',
+               side_effect=_exif), \
+         patch('core.services.BearingCalculationService.LocationInfo.get_gps',
+               side_effect=lambda exif_data=None: fixes[order[-1]]):
+        results = service._bearing_auto(images)
+
+    assert len(results) == 3
+    assert images[0]['timestamp'].second == 2      # b.jpg parsed
+    assert images[2]['timestamp'] is None          # c.jpg has none

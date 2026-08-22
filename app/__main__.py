@@ -21,7 +21,7 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-version = '2.1.0'
+version = '2.1.4'
 
 
 def update_app_version(app_version):
@@ -272,6 +272,15 @@ def main():
             except Exception:
                 # Re-raise so our global excepthook handles exit
                 raise
+        elif choice == 'results':
+            # Review mode: open MainWindow and go straight to the results
+            # opener, so a reviewer never touches the analysis setup screen
+            try:
+                app._main_window = MainWindow(qdarktheme)
+                app._main_window.show()
+                app._main_window.open_results_for_review()
+            except Exception:
+                raise
         elif choice == 'stream':
             _launch_stream_viewer()
         elif choice == 'flight':
@@ -420,16 +429,20 @@ if __name__ == "__main__":
     # default, so any earlier log line is already at the right level.)
     LoggerService.set_level()
 
-    # Headless batch mode: "python app batch --input <parent> --output <root>"
-    # (or "ADIAT.exe batch ..." in the packaged build).
-    # Falls through to the normal GUI startup when no batch subcommand is given.
-    if len(sys.argv) > 1 and sys.argv[1] == 'batch':
+    # Headless subcommands (or "ADIAT.exe <subcommand> ..." in the packaged
+    # build). Falls through to the normal GUI startup when none is given:
+    #   python app batch --input <parent> --output <root>
+    #   python app parse-video --video <file> --output <dir>
+    if len(sys.argv) > 1 and sys.argv[1] in ('batch', 'parse-video'):
         # The packaged Windows exe is windowed (console=False): attach to the
         # calling terminal so CLI progress/errors are visible. No-op for GUI
         # launches and on macOS/Linux.
         from helpers.ConsoleHelper import attach_parent_console
         attach_parent_console()
-        from core.services.cli.BatchCLI import run_batch_cli
-        sys.exit(run_batch_cli(sys.argv[2:]))
+        if sys.argv[1] == 'batch':
+            from core.services.cli.BatchCLI import run_batch_cli
+            sys.exit(run_batch_cli(sys.argv[2:]))
+        from core.services.cli.VideoParserCLI import run_video_parser_cli
+        sys.exit(run_video_parser_cli(sys.argv[2:]))
 
     main()

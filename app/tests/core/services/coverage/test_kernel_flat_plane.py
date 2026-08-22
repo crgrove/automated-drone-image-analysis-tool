@@ -58,3 +58,39 @@ def test_rotated_yaw_preserves_area():
     a0 = int(mask0.sum()) * cell * cell
     a37 = int(mask37.sum()) * cell * cell
     assert a37 == pytest.approx(a0, rel=0.01)
+
+
+def test_footprint_flight_axis_roll_lands_plane_right():
+    """WALDO cam0 v6+ stamp (heading 319.7, image-top backward, roll -22.5
+    about the FLIGHT axis): the footprint centroid must land plane-RIGHT of
+    the track (NE quadrant). Rolling about the camera-yaw axis instead
+    mirrors it to the SW - the map-footprint bug reported from the field."""
+    import math
+    from core.services.coverage.kernel import project_footprint_corners
+    from ._kernel_helpers import make_fg, make_fg_roll_axis
+
+    class _P:
+        max_range_m = 10000.0
+
+    heading = 319.7
+    yaw = (heading + 180.0) % 360.0
+
+    fg_waldo = make_fg_roll_axis(-90.0, yaw, -22.5, heading, agl=776.0,
+                                 focal=50.0, sensor=(36.0, 24.0), size=(8688, 5792))
+    corners = project_footprint_corners(fg_waldo, _P())
+    east = sum(c[0] for c in corners) / 4.0
+    north = sum(c[1] for c in corners) / 4.0
+    # Plane-right of 319.7 = bearing 49.7: east and north both positive,
+    # and the centroid direction matches (the projective corner average
+    # sits farther out than the axis hit, so only direction is asserted).
+    assert east > 100.0 and north > 100.0
+    centroid_bearing = math.degrees(math.atan2(east, north)) % 360.0
+    assert abs(centroid_bearing - 49.7) < 5.0
+
+    # Same numbers WITHOUT the roll axis (legacy stamps): opposite side.
+    fg_legacy = make_fg(-90.0, yaw=yaw, roll=-22.5, agl=776.0,
+                        focal=50.0, sensor=(36.0, 24.0), size=(8688, 5792))
+    corners = project_footprint_corners(fg_legacy, _P())
+    east_l = sum(c[0] for c in corners) / 4.0
+    north_l = sum(c[1] for c in corners) / 4.0
+    assert east_l < -100.0 and north_l < -100.0

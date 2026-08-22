@@ -258,6 +258,27 @@ class TestColorDetectionService:
         except (ValueError, IndexError):
             pass  # Expected error
 
+    def test_bad_frame_run_is_reported_once_not_per_frame(self):
+        """A broken stream must not write one warning per frame.
+
+        The condition lasts as long as the stream is broken, so at 30 fps the
+        per-frame warning buried real faults under thousands of identical
+        lines. It reports the start of a bad run, then goes quiet until frames
+        recover - and reports again if they break a second time.
+        """
+        service = ColorDetectionService()
+        service.logger = MagicMock()
+        good = np.zeros((8, 8, 3), dtype=np.uint8)
+
+        for _ in range(50):
+            service.detect_colors(None, 0.0)
+        assert service.logger.warning.call_count == 1
+
+        service.detect_colors(good, 0.0)          # frames recover
+        for _ in range(50):
+            service.detect_colors(None, 0.0)      # and break again
+        assert service.logger.warning.call_count == 2
+
     def test_error_handling_invalid_config(self):
         """Test error handling with invalid configuration."""
         service = ColorDetectionService()

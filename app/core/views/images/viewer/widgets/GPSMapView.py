@@ -1517,6 +1517,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             roll = image_service.get_gimbal_roll() or 0.0
             if abs(roll) > 90.0:
                 roll = 0.0
+            # WALDO v6+ expresses roll about the FLIGHT axis, not the camera
+            # yaw axis - rolling about the wrong axis mirrors the footprint
+            # to the opposite side of the track (matches AOIService).
+            roll_axis = image_service.get_roll_axis_azimuth() if roll else None
 
             # Match AOIService.estimate_aoi_gps altitude determination exactly
             if custom_alt and custom_alt > 0:
@@ -1591,7 +1595,8 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     result = AOIService._calculate_ground_position(
                         image_lat, image_lon, u, v, cx, cy,
                         width, height, focal_mm, sensor_w_mm, sensor_h_mm,
-                        effective_agl, pitch, yaw, roll
+                        effective_agl, pitch, yaw, roll,
+                        roll_axis_azimuth_deg=roll_axis
                     )
                     if result is None:
                         raycast_ok = False
@@ -1614,7 +1619,8 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                                 refined = AOIService._calculate_ground_position(
                                     image_lat, image_lon, u, v, cx, cy,
                                     width, height, focal_mm, sensor_w_mm, sensor_h_mm,
-                                    pt_agl, pitch, yaw, roll
+                                    pt_agl, pitch, yaw, roll,
+                                    roll_axis_azimuth_deg=roll_axis
                                 )
                                 if refined is None:
                                     break
@@ -1642,6 +1648,7 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                         'pitch': pitch,
                         'yaw': yaw,
                         'roll': roll,
+                        'roll_axis': roll_axis,
                         'effective_agl': effective_agl,
                         'drone_absolute_elev': drone_absolute_elev,
                         'terrain_res_m': terrain_res_m,
@@ -1799,6 +1806,7 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 edge_gps = []
                 raycast_ok = True
                 roll_cached = cache.get('roll', 0.0)
+                roll_axis_cached = cache.get('roll_axis')
                 for u, v in edge_pixels:
                     result = AOIService._calculate_ground_position(
                         image_lat, image_lon, u, v,
@@ -1806,7 +1814,8 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                         imgWidth, imgHeight,
                         cache['focal_mm'], cache['sensor_w_mm'], cache['sensor_h_mm'],
                         cache['effective_agl'], cache['pitch'], cache['yaw'],
-                        roll_cached
+                        roll_cached,
+                        roll_axis_azimuth_deg=roll_axis_cached
                     )
                     if result is None:
                         raycast_ok = False
@@ -1841,7 +1850,8 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                                             imgWidth, imgHeight,
                                             cache['focal_mm'], cache['sensor_w_mm'], cache['sensor_h_mm'],
                                             pt_agl, cache['pitch'], cache['yaw'],
-                                            roll_cached
+                                            roll_cached,
+                                            roll_axis_azimuth_deg=roll_axis_cached
                                         )
                                         if refined is None:
                                             break

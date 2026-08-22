@@ -5,16 +5,18 @@ This dialog provides an in-app browser for CalTopo authentication
 using QWebEngineView with improved performance and UX.
 """
 
-import sys
 import traceback
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox, QProgressBar, QApplication
-from PySide6.QtCore import Qt, Signal, QUrl, QStandardPaths, QTimer, QEventLoop, QPoint, QSize
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox, QApplication
+from PySide6.QtCore import Qt, Signal, QUrl, QStandardPaths, QTimer, QPoint, QSize
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
 import os
 import re
 import json
+import shutil
+import sqlite3
+import tempfile
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
 
@@ -45,21 +47,16 @@ class CalTopoWebEnginePage(QWebEnginePage):
             lineNumber: Line number where message originated
             sourceID: Source file identifier
         """
-        level_names = {
-            QWebEnginePage.JavaScriptConsoleMessageLevel.InfoMessageLevel: "INFO",
-            QWebEnginePage.JavaScriptConsoleMessageLevel.WarningMessageLevel: "WARNING",
-            QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel: "ERROR"
-        }
-        level_str = level_names.get(level, "LOG")
+        # Only errors are worth recording. CalTopo's own page emits a steady
+        # stream of info/warning chatter (deprecated Google Maps APIs, resize
+        # observer notices) that buries anything useful.
+        if level != QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
+            return
 
-        # Log ALL console messages - no filtering
-        output = f"[JS {level_str}] {message}"
-        # self.logger.debug(output)
-
+        output = f"[JS ERROR] {message}"
         if sourceID and lineNumber:
-            # source_info = f"  Source: {sourceID}:{lineNumber}"
-            # self.logger.debug(source_info)
-            pass
+            output += f" ({sourceID}:{lineNumber})"
+        self.logger.warning(output)
 
         # Also call callback if provided (for UI display)
         if self.log_callback:
@@ -70,19 +67,81 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
     """
     Dialog for CalTopo authentication.
 
-    Displays CalTopo login page in an embedded browser and captures
-    session cookies upon successful login.
+    Displays the CalTopo login page in an embedded browser and captures the
+    session once the user has signed in and opened a map. This dialog is a
+    login surface only - the export itself runs over plain HTTP using the
+    captured session, not inside the page.
 
-    Improvements:
-    - Lazy-loads web view for faster initial display
-    - Proper window positioning relative to parent
-    - WindowModal to prevent parent window movement
-    - JavaScript-based cookie extraction (more reliable)
-    - Cookie store fallback for HttpOnly cookies
+    Cookies are merged from three sources in increasing order of freshness:
+    the profile's on-disk store (the only source for a restored HttpOnly
+    session), document.cookie, and the live cookieAdded stream.
     """
 
     # Signal emitted when authentication is successful
     authenticated = Signal(dict)  # Emits cookies dictionary
+
+    # One profile for the whole application run. A per-dialog profile is torn
+    # down with its dialog, taking the logged-in session with it, so a second
+    # export in the same run had to authenticate again. Holding it at class
+    # level also satisfies Qt's requirement that a profile outlive the pages
+    # using it.
+    _shared_profile = None
+
+    # cookieAdded fires once, when a cookie is set. A second export in the same
+    # run builds a new dialog, which would otherwise start with an empty view of
+    # a session captured by the first one, so this accumulates at class level
+    # alongside the profile that owns it.
+    _cookies_from_store = {}
+
+    # Name of the cookie that actually carries the CalTopo session.
+    SESSION_COOKIE_NAME = "SESSION"
+
+    # Snapshot of the persisted cookies, taken once before the profile opens.
+    #
+    # cookieAdded reports cookies as they are SET - including HttpOnly ones, so
+    # a sign-in performed in this window is captured normally. What it never
+    # reports is a cookie RESTORED from a previous run (measured: 0 of 35, and
+    # loadAllCookies() adds nothing), which is exactly the state a returning
+    # user is in. Reading the store covers that, and it has to happen here:
+    # while a profile is live Chromium holds the file with no sharing at all -
+    # copy, plain read, sqlite read-only and a full-sharing Win32 CreateFileW
+    # all fail with a sharing violation.
+    _disk_cookies = {}
+
+    @classmethod
+    def _get_shared_profile(cls):
+        """Return the application-wide CalTopo browser profile, creating it once.
+
+        Returns:
+            QWebEngineProfile: Profile with on-disk cookie persistence enabled.
+        """
+        if cls._shared_profile is None:
+            app_data = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+            profile_path = os.path.join(app_data, "CalTopoProfile")
+            # Chromium manages its own directory layout under the cache path and
+            # will try to migrate anything it finds there. Pointing it at the
+            # storage directory produces "Unable to move the cache: Access is
+            # denied", so the two get separate locations.
+            cache_path = os.path.join(app_data, "CalTopoProfileCache")
+            os.makedirs(profile_path, exist_ok=True)
+            os.makedirs(cache_path, exist_ok=True)
+
+            # Read the persisted cookies BEFORE the profile opens the store.
+            # Once it does, the file cannot be opened by anything until the
+            # profile is destroyed (see _disk_cookies).
+            cls._disk_cookies = cls._read_persisted_cookies(profile_path)
+
+            profile = QWebEngineProfile("CalTopoProfile")
+            profile.setPersistentStoragePath(profile_path)
+            profile.setCachePath(cache_path)
+            # CalTopo's login cookies are session cookies; without Force they
+            # are dropped on exit and the login never survives a restart.
+            profile.setPersistentCookiesPolicy(
+                QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
+            )
+            cls._shared_profile = profile
+
+        return cls._shared_profile
 
     def __init__(self, parent=None):
         """
@@ -105,11 +164,12 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         self.cookies_captured = False
         self.map_id = None
         self.map_url = None
+        self.account_id = None
         self.web_view = None
         self.profile = None
         self._web_view_loaded = False
         self._cookies_from_js = {}
-        self._cookies_from_store = {}
+        self._cookie_monitor_connected = False
 
         self.setup_ui()
         self._apply_translations()
@@ -118,8 +178,15 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         self.show()
         QApplication.processEvents()
 
-        # Defer web view loading to avoid blocking
-        QTimer.singleShot(100, self._lazy_load_web_view)
+        # Build the web view NOW, not on a timer. Attaching a QWebEngineView
+        # forces native-window re-creation on this dialog, and Qt delivers a
+        # Hide event when that happens. If it lands inside a modal loop,
+        # QDialog::setVisible(False) exits that loop: exec() returned Rejected
+        # a fraction of a second after being called, before the user had done
+        # anything, and the caller then abandoned the export while the login
+        # window stayed on screen.
+        self._lazy_load_web_view()
+        QApplication.processEvents()
 
     def _position_relative_to_parent(self):
         """
@@ -196,6 +263,14 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         self.cancel_button = QPushButton(self.tr("Cancel"))
         self.cancel_button.clicked.connect(self.reject)
 
+        # Buttons in a QDialog are autoDefault by default, so pressing Return
+        # while typing into the CalTopo login form fired "I'm Logged In"
+        # instead of submitting the form - which then complained that no map
+        # was selected. The page owns the Return key here, not this dialog.
+        for button in (self.manual_done_button, self.cancel_button):
+            button.setAutoDefault(False)
+            button.setDefault(False)
+
         button_layout.addStretch()
         button_layout.addWidget(self.manual_done_button)
         button_layout.addWidget(self.cancel_button)
@@ -203,6 +278,41 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+
+    def keyPressEvent(self, event):
+        """Keep Return/Enter inside the web page instead of closing the dialog.
+
+        QDialog treats Return as "activate the default button". In a dialog
+        whose whole purpose is an embedded login form, that hijacks the key the
+        user is pressing to submit their password.
+
+        Args:
+            event: The QKeyEvent being delivered.
+        """
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def done(self, result):
+        """Drop the shared cookie store connection before closing.
+
+        Args:
+            result: QDialog result code.
+        """
+        self._disconnect_cookie_monitor()
+        super().done(result)
+
+    def _disconnect_cookie_monitor(self):
+        """Detach this dialog from the shared profile's cookie store."""
+        if not self._cookie_monitor_connected:
+            return
+        self._cookie_monitor_connected = False
+        try:
+            self.profile.cookieStore().cookieAdded.disconnect(self._on_cookie_added)
+        except (RuntimeError, TypeError):
+            # Already gone; nothing to detach.
+            pass
 
     def _lazy_load_web_view(self):
         """
@@ -217,21 +327,16 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         self._web_view_loaded = True
 
         try:
-            # Create persistent profile for cookies
+            # Reuse the application-wide profile so an existing login is still
+            # in effect (see _get_shared_profile).
+            self.profile = self._get_shared_profile()
 
-            profile_path = os.path.join(
-                QStandardPaths.writableLocation(QStandardPaths.AppDataLocation),
-                "CalTopoProfile"
-            )
-            self.profile = QWebEngineProfile("CalTopoProfile")
-            self.profile.setPersistentStoragePath(profile_path)
-            self.profile.setPersistentCookiesPolicy(
-                QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
-            )
-
-            # Monitor cookies as they're added
+            # Monitor cookies as they're added. The store is shared, so this
+            # connection must be dropped when the dialog closes (see done()),
+            # otherwise every export leaves another dead receiver behind.
             cookie_store = self.profile.cookieStore()
             cookie_store.cookieAdded.connect(self._on_cookie_added)
+            self._cookie_monitor_connected = True
 
             # Create web view
             self.web_view = QWebEngineView()
@@ -281,7 +386,8 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         if 'caltopo.com' in domain or domain == '' or not domain:
             cookie_dict = self._cookie_to_dict(cookie)
             key = (cookie_dict['name'], cookie_dict['domain'], cookie_dict['path'])
-            self._cookies_from_store[key] = cookie_dict
+            # Class-level store: see SESSION_COOKIE_NAME above.
+            CalTopoAuthDialog._cookies_from_store[key] = cookie_dict
 
     def _on_load_progress(self, progress):
         """
@@ -352,7 +458,18 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         then triggers cookie extraction after a short delay to ensure
         cookies are set.
         """
+        # Re-read the address bar now. Relying solely on urlChanged means a map
+        # that was already open, or reached by a route that did not emit the
+        # signal, is never noticed - and the export then refuses with "No Map
+        # Selected" while the user is plainly looking at their map.
+        if self.web_view is not None:
+            self.on_url_changed(self.web_view.url())
+
         if not self.map_id:
+            self.logger.warning(
+                f"CalTopo login: no map ID found in the current URL "
+                f"({self.web_view.url().toString() if self.web_view else 'no web view'})"
+            )
             QMessageBox.warning(
                 self,
                 self.tr("No Map Selected"),
@@ -407,7 +524,8 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         (function() {
             var result = {
                 cookies: {},
-                isLoggedIn: false
+                isLoggedIn: false,
+                accountId: ''
             };
 
             // Get accessible cookies
@@ -422,13 +540,17 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
                 });
             }
 
-            // Check if user appears to be logged in
-            if (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.user) {
-                result.isLoggedIn = true;
-            } else if (document.querySelector('[data-user-id]') || document.querySelector('.user-menu')) {
-                result.isLoggedIn = true;
-            } else if (window.location.pathname.includes('/m/') && !window.location.pathname.includes('/login')) {
-                result.isLoggedIn = true;
+            // CalTopo exposes the signed-in account on the global `sarsoft`
+            // object. Media uploads must be attributed to that id; the
+            // properties probed here previously (__INITIAL_STATE__, .user-menu)
+            // do not exist on CalTopo, so nothing was ever learned.
+            try {
+                if (typeof sarsoft !== 'undefined' && sarsoft.account) {
+                    result.isLoggedIn = true;
+                    result.accountId = sarsoft.account.id || '';
+                }
+            } catch (e) {
+                // Leave accountId empty; the caller falls back.
             }
 
             // Trigger a request to force all cookies to be sent/loaded
@@ -450,6 +572,7 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
             try:
                 if result:
                     js_data = json.loads(result)
+                    self.account_id = js_data.get('accountId') or None
                     js_cookies = js_data.get('cookies', {})
 
                     for name, value in js_cookies.items():
@@ -477,91 +600,170 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
             except (json.JSONDecodeError, Exception):
                 pass
 
-            # Step 2: Get cookies from cookie store (includes HttpOnly)
-            self._extract_cookies_from_store()
+            # Step 2: Get cookies from cookie store (includes HttpOnly).
+            #
+            # Deferred to a fresh event-loop turn on purpose. This function is
+            # a runJavaScript reply callback, and while that stack is live the
+            # browser process runs no further tasks: cookieAdded is never
+            # delivered, loadAllCookies() reports nothing, and the fetch() this
+            # script just issued to force HttpOnly cookie processing never even
+            # reaches the network. Doing the work here made cookie capture
+            # depend on luck, and any real work done here deadlocks outright.
+            QTimer.singleShot(0, self._extract_cookies_from_store)
 
         # Execute JavaScript to get cookies
         self.web_view.page().runJavaScript(js_code, on_js_result)
 
     def _extract_cookies_from_store(self):
         """
-        Extract cookies from the cookie store (includes HttpOnly cookies).
+        Ask the cookie store to replay everything it holds, then finish.
 
-        Uses loadAllCookies() to trigger cookieAdded signals for all
-        existing cookies, then combines them with JavaScript-extracted cookies.
+        The persistent ``cookieAdded`` connection made when the view was built
+        records cookies as they arrive; ``loadAllCookies`` re-announces any that
+        predate it. Completion is a plain timer continuation rather than a
+        nested event loop: the previous version could wedge if its two timers
+        both fired before ``loop.exec()`` was reached, because each checked
+        ``loop.isRunning()`` and skipped ``quit()``.
         """
-        cookie_store = self.profile.cookieStore()
-        loop = QEventLoop()
-        cookies_loaded = False
-        new_cookies_count = 0
+        self.profile.cookieStore().loadAllCookies()
+        QTimer.singleShot(1500, self._finish_cookie_capture)
 
-        def on_cookie_added_during_load(cookie):
-            """Called when loadAllCookies triggers cookieAdded for existing cookies."""
-            nonlocal new_cookies_count
-            domain = cookie.domain()
+    # Chromium timestamps are microseconds since 1601-01-01.
+    _CHROMIUM_EPOCH_OFFSET_SECONDS = 11644473600
 
-            # Track all caltopo.com cookies (including .caltopo.com with leading dot)
-            if 'caltopo.com' in domain or domain == '' or not domain:
-                cookie_dict = self._cookie_to_dict(cookie)
-                key = (cookie_dict['name'], cookie_dict['domain'], cookie_dict['path'])
-                if key not in self._cookies_from_store:
-                    self._cookies_from_store[key] = cookie_dict
-                    new_cookies_count += 1
+    def _cookies_from_disk(self):
+        """Return the snapshot of persisted cookies taken before the profile opened.
 
-        def finish_loading():
-            """Finish loading cookies."""
-            nonlocal cookies_loaded
-            cookies_loaded = True
-            if loop.isRunning():
-                loop.quit()
+        Returns:
+            dict: {(name, domain, path): cookie_dict} for caltopo.com cookies.
+        """
+        return dict(type(self)._disk_cookies)
 
-        # Connect to cookieAdded to capture cookies when loadAllCookies triggers them
-        cookie_store.cookieAdded.connect(on_cookie_added_during_load)
+    @classmethod
+    def _read_persisted_cookies(cls, storage_path):
+        """Read CalTopo cookies out of a profile's on-disk cookie store.
 
-        # Use loadAllCookies to trigger cookieAdded for all existing cookies
-        cookie_store.loadAllCookies()
+        This is the equivalent of Android's CookieManager.getCookie(url), which
+        the reference implementation relies on. Qt has no getter:
+        QWebEngineCookieStore announces cookies only as they are *set*, and
+        loadAllCookies() delivers nothing for cookies restored from disk
+        (measured: 0 of 35 on a real profile). CalTopo's SESSION cookie is also
+        HttpOnly, so document.cookie cannot see it - which left a returning,
+        already-logged-in user holding nothing but analytics cookies.
 
-        # Also try to access cookies by making a request that will cause them to be processed
-        # The JavaScript fetch request should trigger cookie processing
-        # Wait a bit for the fetch request and cookie processing
-        QTimer.singleShot(1500, finish_loading)
+        MUST be called before a QWebEngineProfile opens this directory: while
+        one is live the file cannot be opened by any means.
 
-        # Also set a timeout
-        timeout_timer = QTimer()
-        timeout_timer.setSingleShot(True)
-        timeout_timer.timeout.connect(finish_loading)
-        timeout_timer.start(3000)
+        QtWebEngine writes cookie values in plaintext, so no decryption is
+        needed; any encrypted row is skipped rather than guessed at.
 
-        # Process events and wait
-        QApplication.processEvents()
-        loop.exec()
-        timeout_timer.stop()
+        Args:
+            storage_path (str): The profile's persistent storage directory.
 
-        # Disconnect the temporary handler
+        Returns:
+            dict: {(name, domain, path): cookie_dict} for caltopo.com cookies.
+        """
+        logger = LoggerService()
+        cookies = {}
+        if not storage_path:
+            return cookies
+
+        source = os.path.join(storage_path, "Cookies")
+        if not os.path.exists(source):
+            logger.warning(f"CalTopo login: no cookie store at {source}")
+            return cookies
+
+        # Work on a copy: SQLite would otherwise create journal files inside
+        # the live profile directory.
+        temp_dir = tempfile.mkdtemp(prefix="adiat-caltopo-cookies-")
         try:
-            cookie_store.cookieAdded.disconnect(on_cookie_added_during_load)
-        except Exception:
-            pass
+            copy_path = os.path.join(temp_dir, "Cookies")
+            shutil.copy2(source, copy_path)
 
-        # Combine cookies from both sources (store takes precedence for duplicates)
+            connection = sqlite3.connect(copy_path)
+            try:
+                rows = connection.execute(
+                    "SELECT host_key, name, value, encrypted_value, path, "
+                    "is_secure, is_httponly, expires_utc FROM cookies"
+                ).fetchall()
+            finally:
+                connection.close()
+
+            skipped_encrypted = 0
+            for host_key, name, value, encrypted_value, path, secure, httponly, expires in rows:
+                if 'caltopo.com' not in (host_key or ''):
+                    continue
+                if not value and encrypted_value:
+                    skipped_encrypted += 1
+                    continue
+
+                domain_has_dot = (host_key or '').startswith('.')
+                domain = host_key[1:] if domain_has_dot else host_key
+
+                expires_seconds = None
+                if expires:
+                    expires_seconds = int(expires / 1_000_000) - cls._CHROMIUM_EPOCH_OFFSET_SECONDS
+
+                cookies[(name, domain, path or '/')] = {
+                    'name': name,
+                    'value': value,
+                    'domain': domain,
+                    'path': path or '/',
+                    'secure': bool(secure),
+                    'expires': expires_seconds,
+                    'rest': {'HttpOnly': bool(httponly)},
+                    'version': 0,
+                    'port': None,
+                    'port_specified': False,
+                    'domain_initial_dot': domain_has_dot,
+                    'domain_specified': bool(domain),
+                    'path_specified': True,
+                    'discard': expires_seconds is None,
+                    'comment': None,
+                    'comment_url': None,
+                }
+
+            if skipped_encrypted:
+                logger.warning(
+                    f"CalTopo login: skipped {skipped_encrypted} encrypted cookie value(s)"
+                )
+        except (OSError, sqlite3.Error) as e:
+            logger.warning(f"CalTopo login: could not read the cookie store: {e}")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        return cookies
+
+    def _finish_cookie_capture(self):
+        """Combine the captured cookies and hand them to the caller."""
+        # Disk first (the only source for a restored HttpOnly session), then
+        # the live sources, which are fresher and so take precedence.
+        disk_cookies = self._cookies_from_disk()
+
         all_cookies = {}
+        all_cookies.update(disk_cookies)
         all_cookies.update(self._cookies_from_js)
-        all_cookies.update(self._cookies_from_store)  # Store cookies override JS cookies
+        all_cookies.update(self._cookies_from_store)
 
         cookie_list = list(all_cookies.values())
 
-        # Validate we got cookies
-        if not cookie_list:
+        # Require the actual session cookie. Any other cookie makes the list
+        # non-empty while authenticating as nobody, which previously sailed
+        # through this gate and produced a run of silent 401s.
+        if not any(cookie['name'] == self.SESSION_COOKIE_NAME for cookie in cookie_list):
+            self.logger.warning(
+                f"CalTopo login: no '{self.SESSION_COOKIE_NAME}' cookie was captured, so the "
+                f"session is not usable. Got {sorted(c['name'] for c in cookie_list)} "
+                f"({len(disk_cookies)} from disk, {len(self._cookies_from_store)} from the "
+                f"store, {len(self._cookies_from_js)} from JS)."
+            )
             QMessageBox.warning(
                 self,
                 self.tr("Authentication Failed"),
                 self.tr(
-                    "Could not capture session cookies. Please ensure you are logged in to CalTopo.\n\n"
-                    "Try:\n"
-                    "1. Make sure you're logged in\n"
-                    "2. Navigate to a map\n"
-                    "3. Wait a few seconds for cookies to be set\n"
-                    "4. Click 'I'm Logged In' again"
+                    "Could not read your CalTopo session.\n\n"
+                    "Make sure you are signed in to CalTopo in this window and have "
+                    "opened your map, then click 'I'm Logged In - Export Data' again."
                 )
             )
             self._reset_button()
@@ -571,11 +773,21 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         payload = {
             'cookies': cookie_list,
             'map_id': self.map_id,
-            'map_url': self.map_url
+            'map_url': self.map_url,
+            'account_id': self.account_id
         }
 
+        # The receiver decides whether the payload is usable and accepts the
+        # dialog itself. Accepting unconditionally closed the dialog even when
+        # the payload was rejected (no map selected), and exec() then returned
+        # Accepted, so the caller bailed out with no explanation at all.
         self.authenticated.emit(payload)
-        self.accept()
+        if self.result() != QDialog.Accepted:
+            self.logger.warning(
+                "CalTopo login: the session was captured but the caller did not accept it "
+                "(usually no map ID). The dialog stays open so you can navigate to a map."
+            )
+            self._reset_button()
 
     def _reset_button(self):
         """
@@ -584,7 +796,7 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         Re-enables the manual done button and restores its original text.
         """
         self.manual_done_button.setEnabled(True)
-        self.manual_done_button.setText("I'm Logged In - Export Data")
+        self.manual_done_button.setText(self.tr("I'm Logged In - Export Data"))
 
     def get_map_id(self):
         """Get the extracted map ID.

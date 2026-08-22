@@ -11,6 +11,7 @@ from core.services.thermal.ThermalParserService import ThermalParserService
 from core.services.image.ImageService import ImageService
 from core.services.XmlService import XmlService
 from core.services.LoggerService import LoggerService
+from helpers import BuildInfo
 from core.controllers.images.viewer.GPSMapController import GPSMapController
 from core.controllers.images.viewer.TeamPlanningController import TeamPlanningController
 from core.controllers.images.viewer.status.StatusController import StatusController
@@ -53,6 +54,7 @@ from core.views.images.viewer.widgets.ScaleBarWidget import ScaleBarWidget
 from core.views.images.viewer.dialogs.ImageAdjustmentDialog import ImageAdjustmentDialog
 from core.controllers.images.viewer.status.StatusDict import StatusDict
 from helpers.IconHelper import IconHelper
+from helpers.PathHelper import path_match_key
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.views.images.viewer.ui.Viewer_ui import Ui_Viewer
 from core.views.components.Toggle import Toggle
@@ -130,7 +132,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         self.setWindowTitle(
             self.tr(
                 "Automated Drone Image Analysis Tool v{version} - Sponsored by TEXSAR"
-            ).format(version=self.app_version)
+            ).format(version=BuildInfo.title_version(self.app_version))
         )
         self._add_Toggles()
         # self._adjust_ui_sizing()
@@ -312,6 +314,14 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
 
         # Gallery loading overlay (will be created when needed)
         self.gallery_loading_overlay = None
+
+        # A zoom requested by the navigation that triggered the next image
+        # load (gallery AOI click, neighbor tracking). Applied by
+        # ImageLoadController as the pipeline's final step - after the load's
+        # own zoom reset and grid review's framing - so nothing later in the
+        # load can stomp it. Single slot, newest request wins, consumed (or
+        # cancelled by the requester) within the synchronous load call.
+        self._pending_view_zoom = None
 
         # ---- load everything ----
         self._loading_dialog.set_status(self.tr("Loading first image..."))
@@ -588,15 +598,35 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         self._sync_aoi_header_width()
 
     def _sync_aoi_header_width(self):
-        """Sync aoiHeaderWidget width with the AOI splitter panel."""
+        """Sync aoiHeaderWidget width with the AOI splitter panel.
+
+        Also keep the image pane at least as wide as the toolbar's minimum. The
+        toolbar (``mainHeaderWidget``) and the AOI header (``aoiHeaderWidget``,
+        pinned to the AOI-pane width) share one header row above the splitter.
+        If the image pane were allowed narrower than the toolbar, that header
+        row would be wider than the splitter, so pinning the AOI header pushes
+        the window's minimum width past its current width -- and because the
+        minimum is re-read on every resize, the window grows without bound (a
+        runaway that eventually forces the window far off-screen). Flooring the
+        image pane at the toolbar minimum keeps the header row and the splitter
+        the same width, which stops the loop.
+        """
         try:
-            if hasattr(self, 'image_gallery_splitter') and self.image_gallery_splitter:
-                sizes = self.image_gallery_splitter.sizes()
-                if len(sizes) == 2:
-                    self.aoiHeaderWidget.setFixedWidth(sizes[1])
-                    if hasattr(self, '_header_layout'):
-                        self._header_layout.setSpacing(
-                            self.image_gallery_splitter.handleWidth())
+            splitter = getattr(self, 'image_gallery_splitter', None)
+            if not splitter:
+                return
+            # Floor the image pane at the toolbar's minimum width (idempotent:
+            # only assigned when it actually changes, so it never re-triggers a
+            # layout pass on its own).
+            if hasattr(self, 'mainHeaderWidget') and hasattr(self, 'imageWidget'):
+                toolbar_min = self.mainHeaderWidget.minimumSizeHint().width()
+                if toolbar_min and self.imageWidget.minimumWidth() != toolbar_min:
+                    self.imageWidget.setMinimumWidth(toolbar_min)
+            sizes = splitter.sizes()
+            if len(sizes) == 2:
+                self.aoiHeaderWidget.setFixedWidth(sizes[1])
+                if hasattr(self, '_header_layout'):
+                    self._header_layout.setSpacing(splitter.handleWidth())
         except Exception:
             pass
 
@@ -811,18 +841,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             # The splitterMoved signal is emitted after sizes are set, so widget should be resized
             self.main_image.updateGeometry()
 
-            # Reset zoom to fit the image to the new viewport dimensions
-            if self.main_image.hasImage():
-                # Check if widget has valid size before resetting
-                if self.main_image.width() > 0 and self.main_image.height() > 0:
-                    # Clear zoom stack and fit image to viewport
-                    self.main_image.clearZoom()
-                    scene_rect = self.main_image._safe_scene_rect()
-                    if scene_rect and not scene_rect.isEmpty():
-                        self.main_image.fitInView(scene_rect, self.main_image.aspectRatioMode)
-                        self.main_image._emit_zoom_if_changed()
-            else:
-                self.main_image.updateViewer()
+            # A splitter drag is a geometry event: re-project the view onto
+            # the new pane size. reprojectView owns the policy (held zoom
+            # re-applied, un-zoomed view re-fit, never a discard).
+            self.main_image.reprojectView()
 
             # Reposition the overlay after image resize
             if hasattr(self, 'overlay'):
@@ -849,11 +871,12 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # Handle main image resizing (original functionality)
         if self.main_image is not None and not self.main_image._is_destroyed:
             if event.oldSize() != event.size():
-                # Ensure image is properly resized to fit the new dimensions
-                if self.main_image.hasImage():
-                    self.main_image.resetZoom()
-                else:
-                    self.main_image.updateViewer()
+                # A window resize is a geometry event: reprojectView owns
+                # the policy (held zoom re-applied, un-zoomed view re-fit).
+                # Unconditional resetZoom here used to discard the gallery's
+                # AOI zoom whenever a late resize settled after the click -
+                # the wipe the old settle-window timers existed to repair.
+                self.main_image.reprojectView()
 
     def keyPressEvent(self, e):
         """Handles key press events for navigation, hiding images, and adjustments.
@@ -876,6 +899,14 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # Space/arrows/X/Esc (and S toggles it from anywhere). It returns
         # False for everything else so all bindings below are unaffected.
         if hasattr(self, 'grid_review_controller') and self.grid_review_controller.handle_key(e):
+            return
+
+        # Held keys must not launch repeated background searches. Auto-repeat
+        # fires this handler many times per second, and the AOI tracking (Z),
+        # similarity (Shift+Z) and align (A) shortcuts each start a worker
+        # thread and a modal progress dialog. Navigation and toggles below are
+        # cheap and idempotent, so only the expensive shortcuts are filtered.
+        if e.isAutoRepeat() and e.key() in (Qt.Key_Z, Qt.Key_A, Qt.Key_E, Qt.Key_W, Qt.Key_M):
             return
 
         if e.key() == Qt.Key_Right:
@@ -1049,11 +1080,35 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         time). When that folder is missing or unreachable, falls back to the
         AOI subset so the viewer still loads cleanly on relocated projects.
 
-        Each entry: {'path', 'name', 'has_aoi'}.
+        Entries for captures that produced an AOI ARE the viewer's own image
+        dicts, with 'name' and 'has_aoi' added -- not copies. Anything that
+        needs the full camera model off a source entry ('bearing',
+        'fov_alignment', 'mask_path', 'width'/'height') therefore gets it, and
+        a runtime change to one list is visible in the other: the Align Image
+        tool writes 'fov_alignment' onto the viewer's dict, and a copy taken
+        here would have gone stale the moment the user aligned an image.
+
+        Captures with no detections have no viewer dict, so they keep the
+        minimal {'path', 'name', 'has_aoi'} shape.
         """
         IMAGE_EXTS = ('.jpg', '.jpeg', '.tif', '.tiff', '.png', '.dng')
-        aoi_paths = {img['path'] for img in self.images if img.get('path')}
+        # Keyed, not raw strings: the XML stores paths relative to the result
+        # folder, so a viewer path and the scan's path for one capture differ
+        # in spelling (and in case) while naming the same file.
+        aoi_by_key = {
+            path_match_key(img['path']): img
+            for img in self.images if img.get('path')
+        }
         input_dir = (self.settings or {}).get('input_dir', '') or ''
+
+        def aoi_subset_only():
+            """Fall back to the AOI images, keeping the same entry contract."""
+            subset = []
+            for img in aoi_by_key.values():
+                img['name'] = os.path.basename(img['path'])
+                img['has_aoi'] = True
+                subset.append(img)
+            return subset
 
         if not input_dir or not os.path.isdir(input_dir):
             if input_dir:
@@ -1061,39 +1116,44 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
                     f"Source folder unreachable ({input_dir}); map and coverage "
                     f"will use AOI subset only."
                 )
-            return [
-                {'path': img['path'], 'name': os.path.basename(img['path']), 'has_aoi': True}
-                for img in self.images if img.get('path')
-            ]
+            return aoi_subset_only()
 
         source_images = []
         try:
             entries = sorted(os.listdir(input_dir))
         except OSError as e:
             self.logger.warning(f"Cannot list source folder {input_dir}: {e}")
-            return [
-                {'path': img['path'], 'name': os.path.basename(img['path']), 'has_aoi': True}
-                for img in self.images if img.get('path')
-            ]
+            return aoi_subset_only()
 
+        matched_keys = set()
         for name in entries:
             if not name.lower().endswith(IMAGE_EXTS):
                 continue
             full_path = os.path.join(input_dir, name)
             if not os.path.isfile(full_path):
                 continue
-            source_images.append({
-                'path': full_path,
-                'name': name,
-                'has_aoi': full_path in aoi_paths,
-            })
+            key = path_match_key(full_path)
+            viewer_image = aoi_by_key.get(key)
+            if viewer_image is not None:
+                # Same object as self.images[i]: see the docstring.
+                matched_keys.add(key)
+                viewer_image['name'] = name
+                viewer_image['has_aoi'] = True
+                source_images.append(viewer_image)
+            else:
+                source_images.append({
+                    'path': full_path,
+                    'name': name,
+                    'has_aoi': False,
+                })
 
         # Append AOI images that aren't in the source folder (relocated/renamed).
-        source_paths = {entry['path'] for entry in source_images}
-        for img in self.images:
-            p = img.get('path')
-            if p and p not in source_paths:
-                source_images.append({'path': p, 'name': os.path.basename(p), 'has_aoi': True})
+        for key, img in aoi_by_key.items():
+            if key in matched_keys:
+                continue
+            img['name'] = os.path.basename(img['path'])
+            img['has_aoi'] = True
+            source_images.append(img)
 
         return source_images
 
@@ -1364,6 +1424,56 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         """Loads the image at the current index along with areas of interest and GPS data."""
         # Delegate to ImageLoadController
         self.image_load_controller.load_image()
+
+    def load_image_with_zoom(self, image_idx, apply_zoom):
+        """Navigate to *image_idx* and end the load with *apply_zoom*.
+
+        Event-driven replacement for the transient viewChanged handlers and
+        settle-window timers that used to chase the load's zoom reset: the
+        navigation states its framing intent up front, and the load pipeline
+        applies it as its own final step (ImageLoadController's
+        _apply_pending_view_zoom, which consumes take_pending_view_zoom).
+
+        The single entry point is deliberate: request, load, and cleanup are
+        one operation, so no call site can forget the cleanup and leave a
+        stale request armed after a failed or early-returning load.
+
+        Args:
+            image_idx: Viewer index to navigate to; the pipeline drops the
+                request if a different image ends up loading.
+            apply_zoom: Zero-argument callable performing the zoom (and any
+                companion UI work, e.g. the AOI overlay badge).
+        """
+        self.current_image = image_idx
+        self._pending_view_zoom = (image_idx, apply_zoom)
+        try:
+            self._load_image()
+        finally:
+            # A successful load consumed the request already; dropping any
+            # leftover covers failed and early-returning loads, so a stale
+            # request can never fire on a later, unrelated load.
+            self._pending_view_zoom = None
+
+    def take_pending_view_zoom(self, image_idx):
+        """Consume and return the pending zoom callable for *image_idx*.
+
+        Any pending request is cleared regardless of match: a request for a
+        different image is stale by definition once another image loads.
+
+        Returns:
+            callable or None
+        """
+        pending = self._pending_view_zoom
+        self._pending_view_zoom = None
+        if pending is None:
+            return None
+        requested_idx, apply_zoom = pending
+        if requested_idx != image_idx:
+            # A reentrant navigation changed the image mid-load: the click's
+            # intent is stale, so it is dropped rather than applied to
+            # whatever happens to be loaded now.
+            return None
+        return apply_zoom
 
     def _previousImageButton_clicked(self):
         """Navigates to the previous image in the list, skipping hidden images if applicable."""

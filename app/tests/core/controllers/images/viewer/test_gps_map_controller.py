@@ -136,3 +136,55 @@ def test_closing_dialog_cancels_pending_fov_redraw():
     dialog.update_zoom_fov.reset_mock()
     controller._flush_zoom_fov()
     dialog.update_zoom_fov.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# EXIF capture time
+#
+# The DateTime fallback read piexif.ExifIFD.DateTime, which does not exist, so
+# opening the GPS Map View on images without DateTimeOriginal logged an
+# AttributeError traceback per image and returned no timestamp at all.
+# ---------------------------------------------------------------------------
+
+import piexif
+from datetime import datetime
+
+from core.services.LoggerService import LoggerService  # noqa: F401  (import parity)
+
+
+class _TimestampHost:
+    """Bare stand-in: get_image_timestamp_from_exif only needs a logger."""
+
+    def __init__(self):
+        self.logger = MagicMock()
+
+
+def _read_timestamp(exif):
+    from core.controllers.images.viewer.GPSMapController import GPSMapController
+    host = _TimestampHost()
+    return GPSMapController.get_image_timestamp_from_exif(host, exif), host.logger
+
+
+def test_timestamp_read_from_date_time_original():
+    stamp, logger = _read_timestamp(
+        {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026:08:15 12:09:26'}})
+
+    assert stamp == datetime(2026, 8, 15, 12, 9, 26)
+    logger.error.assert_not_called()
+
+
+def test_timestamp_falls_back_to_zeroth_ifd_date_time():
+    """The fallback the AttributeError used to swallow."""
+    stamp, logger = _read_timestamp(
+        {'0th': {piexif.ImageIFD.DateTime: b'2026:08:15 12:09:26'}, 'Exif': {}})
+
+    assert stamp == datetime(2026, 8, 15, 12, 9, 26)
+    logger.error.assert_not_called()
+
+
+def test_timestamp_absent_is_quiet():
+    """Video frames carry GPS and no capture time; that is not an error."""
+    stamp, logger = _read_timestamp({'0th': {}, 'Exif': {}, 'GPS': {1: b'N'}})
+
+    assert stamp is None
+    logger.error.assert_not_called()

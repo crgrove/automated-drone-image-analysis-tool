@@ -507,3 +507,176 @@ def test_get_rows_cols_from_segments(algorithm_service):
     assert rows * cols == 4
     rows9, cols9 = algorithm_service._get_rows_cols_from_segments(9)
     assert rows9 * cols9 == 9
+
+# ============================================================================
+# Equivalence regression: ROI-local rasterization vs the full-frame reference
+# ============================================================================
+
+
+def _reference_identify_areas_of_interest(service, shape, contours):
+    """The pre-optimization implementation, kept as the correctness oracle.
+
+    identify_areas_of_interest was rewritten to rasterize each contour into a
+    bounding-rect-local mask instead of a full-frame one (a ~200x speedup on
+    48MP images). This reference reproduces the original full-frame algorithm
+    so the outputs can be compared structure-for-structure.
+    """
+    if len(contours) == 0:
+        return None, None
+    height, width = int(shape[0]), int(shape[1])
+    areas_of_interest = []
+    temp_mask = np.zeros((height, width), dtype=np.uint8)
+    base_contour_count = 0
+    original_pixels_mask = np.zeros((height, width), dtype=np.uint8)
+
+    for cnt in contours:
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+        contour_area = cv2.countNonZero(mask)
+        if contour_area >= service.min_area and (service.max_area == 0 or contour_area <= service.max_area):
+            (x, y), radius = cv2.minEnclosingCircle(cnt)
+            center = (int(x), int(y))
+            radius = int(radius) + service.aoi_radius
+            base_contour_count += 1
+            cv2.circle(temp_mask, center, radius, 255, -1)
+            original_pixels_mask = cv2.bitwise_or(original_pixels_mask, mask)
+            if not service.combine_aois:
+                contour_points = cnt.reshape(-1, 2).tolist()
+                detected_pixels = np.argwhere(mask > 0)
+                detected_pixels_list = detected_pixels[:, [1, 0]].tolist() if len(detected_pixels) > 0 else []
+                areas_of_interest.append({
+                    'center': center,
+                    'radius': radius,
+                    'area': len(detected_pixels_list),
+                    'contour': contour_points,
+                    'detected_pixels': detected_pixels_list
+                })
+
+    if service.combine_aois:
+        while True:
+            new_contours, _ = cv2.findContours(temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            for cnt in new_contours:
+                (x, y), radius = cv2.minEnclosingCircle(cnt)
+                cv2.circle(temp_mask, (int(x), int(y)), int(radius), 255, -1)
+            if len(new_contours) == len(contours):
+                contours = new_contours
+                break
+            contours = new_contours
+        for cnt in contours:
+            mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.drawContours(mask, [cnt], -1, 255, thickness=-1)
+            (x, y), radius = cv2.minEnclosingCircle(cnt)
+            contour_points = cnt.reshape(-1, 2).tolist()
+            aoi_pixels_mask = cv2.bitwise_and(original_pixels_mask, mask)
+            aoi_pixels = np.argwhere(aoi_pixels_mask > 0)
+            aoi_pixels_list = aoi_pixels[:, [1, 0]].tolist() if len(aoi_pixels) > 0 else []
+            areas_of_interest.append({
+                'center': (int(x), int(y)),
+                'radius': int(radius),
+                'area': len(aoi_pixels_list),
+                'contour': contour_points,
+                'detected_pixels': aoi_pixels_list
+            })
+
+    areas_of_interest.sort(key=lambda item: (item['center'][1], item['center'][0]))
+    return areas_of_interest, base_contour_count
+
+
+def _blob_scene(width=800, height=600, seed=3):
+    """Synthetic mask with touching, separate, tiny, and edge-hugging blobs."""
+    rng = np.random.default_rng(seed)
+    mask = np.zeros((height, width), dtype=np.uint8)
+    for _ in range(25):
+        x = int(rng.integers(0, width))
+        y = int(rng.integers(0, height))
+        r = int(rng.integers(2, 24))
+        cv2.circle(mask, (x, y), r, 255, -1)
+    # Blobs overlapping the frame edge exercise the ROI clamping
+    cv2.circle(mask, (0, height // 2), 15, 255, -1)
+    cv2.circle(mask, (width - 1, 10), 9, 255, -1)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    return contours
+
+
+@pytest.mark.parametrize('combine', [False, True])
+def test_identify_areas_of_interest_matches_reference(combine):
+    """The ROI-local implementation must reproduce the reference exactly."""
+    service = MockAlgorithmService(
+        name='Equiv', identifier_color=(255, 0, 0), min_area=10, max_area=0,
+        aoi_radius=8, combine_aois=combine, options={}
+    )
+    shape = (600, 800, 3)
+    contours = _blob_scene()
+
+    actual_aois, actual_count = service.identify_areas_of_interest(shape, contours)
+    expected_aois, expected_count = _reference_identify_areas_of_interest(service, shape, contours)
+
+    assert actual_count == expected_count
+    assert len(actual_aois) == len(expected_aois)
+    for got, want in zip(actual_aois, expected_aois):
+        assert got['center'] == want['center']
+        assert got['radius'] == want['radius']
+        assert got['area'] == want['area']
+        assert got['contour'] == want['contour']
+        assert sorted(got['detected_pixels']) == sorted(want['detected_pixels'])
+
+
+def test_representative_color_circle_path_matches_loop():
+    """Vectorized circle sampling must average the same pixel set as the loop."""
+    service = MockAlgorithmService(
+        name='Color', identifier_color=(255, 0, 0), min_area=1, max_area=0,
+        aoi_radius=0, combine_aois=False, options={}
+    )
+    rng = np.random.default_rng(11)
+    img = rng.integers(0, 255, (120, 160, 3), dtype=np.uint8)
+    aoi = {'center': (80, 60), 'radius': 12}
+
+    result = service._calculate_aoi_representative_color(img, aoi)
+
+    # Reference: the original per-pixel loop
+    colors = []
+    cx, cy, radius = 80, 60, 12
+    for y in range(max(0, cy - radius), min(120, cy + radius + 1)):
+        for x in range(max(0, cx - radius), min(160, cx + radius + 1)):
+            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                colors.append(img[y, x])
+    avg = np.mean(colors, axis=0).astype(int)
+
+    assert result is not None
+    assert result['avg_rgb'] == (int(avg[0]), int(avg[1]), int(avg[2]))
+
+
+def test_representative_color_detected_pixels_path_matches_loop():
+    """Vectorized detected-pixels sampling must match, including out-of-bounds skips."""
+    service = MockAlgorithmService(
+        name='Color', identifier_color=(255, 0, 0), min_area=1, max_area=0,
+        aoi_radius=0, combine_aois=False, options={}
+    )
+    rng = np.random.default_rng(12)
+    img = rng.integers(0, 255, (60, 80, 3), dtype=np.uint8)
+    pixels = [[5, 5], [10, 12], [79, 59], [80, 60], [-1, 3], [30, 100]]  # last three out of bounds
+    aoi = {'center': (10, 10), 'radius': 5, 'detected_pixels': pixels}
+
+    result = service._calculate_aoi_representative_color(img, aoi)
+
+    valid = [img[5, 5], img[12, 10], img[59, 79]]
+    avg = np.mean(valid, axis=0).astype(int)
+
+    assert result is not None
+    assert result['avg_rgb'] == (int(avg[0]), int(avg[1]), int(avg[2]))
+
+
+def test_representative_color_ragged_detected_pixels_falls_back():
+    """Malformed detected_pixels entries are skipped, not fatal."""
+    service = MockAlgorithmService(
+        name='Color', identifier_color=(255, 0, 0), min_area=1, max_area=0,
+        aoi_radius=0, combine_aois=False, options={}
+    )
+    img = np.full((20, 20, 3), 100, dtype=np.uint8)
+    aoi = {'center': (10, 10), 'radius': 3,
+           'detected_pixels': [[5, 5], [7], 'bad', [8, 8]]}
+
+    result = service._calculate_aoi_representative_color(img, aoi)
+
+    assert result is not None
+    assert result['avg_rgb'] == (100, 100, 100)

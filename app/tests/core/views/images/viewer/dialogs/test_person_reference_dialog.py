@@ -131,3 +131,93 @@ def test_persists_on_change(app, qtbot, isolated_settings):
     assert reread.get_bool_setting(SETTING_SHOW_STANDING) is False
     assert reread.get_bool_setting(SETTING_SHOW_SHADOWS) is False
     assert reread.get_setting(SETTING_SIZE_KEY) == 'small_child'
+
+
+# ---------------------------------------------------------------------------
+# Auto-zoom to a sub-visible reference person (high-altitude imagery)
+# ---------------------------------------------------------------------------
+
+import numpy as np
+from types import SimpleNamespace
+
+from core.views.images.viewer.dialogs.PersonReferenceDialog import (
+    MIN_LEGIBLE_SCREEN_PX,
+)
+
+
+class _StubViewer:
+    """Viewer stand-in: identity scene->screen mapping, records zooms."""
+
+    def __init__(self):
+        self.scene = MagicMock()
+        self.zoom_calls = []
+
+    def mapFromScene(self, rect):
+        result = MagicMock()
+        result.boundingRect.return_value = QtCore.QRect(
+            0, 0, int(rect.width()), int(rect.height()))
+        return result
+
+    def zoomToRect(self, rect):
+        self.zoom_calls.append(QtCore.QRectF(rect))
+
+
+def _camera_image_service(agl_m):
+    """Image service stub yielding a real CameraModel at the given AGL."""
+    return SimpleNamespace(
+        get_camera_intrinsics=lambda: {
+            'focal_length_mm': 50.0,
+            'sensor_width_mm': 36.0,
+            'sensor_height_mm': 24.0,
+        },
+        get_relative_altitude=lambda unit: agl_m,
+        get_camera_pitch=lambda: -90.0,
+        get_camera_yaw=lambda: 0.0,
+        img_array=np.zeros((579, 869, 3), dtype=np.uint8),
+    )
+
+
+def _make_projected_dialog(qtbot, agl_m):
+    viewer = _StubViewer()
+    dialog = PersonReferenceDialog(
+        None, viewer, _camera_image_service(agl_m), 'does-not-exist.jpg', 'ft')
+    qtbot.addWidget(dialog)
+    return dialog, viewer
+
+
+def test_auto_zooms_when_person_is_sub_visible(app, qtbot, isolated_settings):
+    """High-altitude imagery (WALDO-style): the ~1px person gets framed."""
+    dialog, viewer = _make_projected_dialog(qtbot, agl_m=1500.0)
+
+    assert dialog.camera is not None
+    assert len(viewer.zoom_calls) == 1
+    target = viewer.zoom_calls[0]
+    # The zoom target frames the silhouette bounds
+    bounds = dialog._reference_bounds_scene()
+    assert bounds is not None
+    assert target.contains(bounds.center())
+    assert target.width() >= 80.0
+
+
+def test_no_auto_zoom_when_person_is_legible(app, qtbot, isolated_settings):
+    """Drone-altitude imagery: the person is tens of pixels tall; no zoom."""
+    dialog, viewer = _make_projected_dialog(qtbot, agl_m=40.0)
+
+    assert dialog.camera is not None
+    bounds = dialog._reference_bounds_scene()
+    assert bounds is not None
+    assert max(bounds.width(), bounds.height()) >= MIN_LEGIBLE_SCREEN_PX
+    assert viewer.zoom_calls == []
+
+
+def test_auto_zoom_failure_is_non_fatal(app, qtbot, isolated_settings):
+    """A viewer without zoom support must not break the overlay."""
+    viewer = _StubViewer()
+    del viewer.zoom_calls
+    viewer.zoomToRect = None  # not callable -> raises inside the guard
+
+    dialog = PersonReferenceDialog(
+        None, viewer, _camera_image_service(1500.0), 'does-not-exist.jpg', 'ft')
+    qtbot.addWidget(dialog)
+
+    assert dialog.camera is not None  # dialog still built the overlay

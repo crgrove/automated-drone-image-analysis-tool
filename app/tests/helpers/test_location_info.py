@@ -7,8 +7,11 @@ from app.helpers.LocationInfo import LocationInfo
 
 
 @pytest.fixture
-def example_image_path():
-    return "app/tests/data/rgb/input/DJI_0082.JPG"
+def example_image_path(testData):
+    """Absolute path, via the shared testData fixture - a hardcoded
+    "app/tests/data/..." relative string only resolves when pytest runs from
+    the repo root."""
+    return testData['EXIF_Input_Path']
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ import hmac
 import time
 import json
 from unittest.mock import patch, MagicMock, mock_open
-from core.services.export.CalTopoAPIService import CalTopoAPIService
+from core.services.export.CalTopoAPIService import CalTopoAPIService, decode_credential_secret
 
 
 @pytest.fixture
@@ -397,3 +397,180 @@ def test_api_request_delete(mock_delete, caltopo_api_service, sample_credentials
 
     assert success is True
     mock_delete.assert_called_once()
+
+
+# --- decode_credential_secret -------------------------------------------------
+
+
+def test_decode_credential_secret_standard_base64():
+    """A standard base64 secret decodes to the original key bytes."""
+    key = b'a-real-looking-hmac-key-0123456789'
+    assert decode_credential_secret(base64.b64encode(key).decode()) == key
+
+
+def test_decode_credential_secret_urlsafe_alphabet():
+    """Secrets copied in the URL-safe alphabet still decode."""
+    key = bytes(range(250, 256)) + b'padding-bytes'
+    urlsafe = base64.urlsafe_b64encode(key).decode()
+
+    assert '-' in urlsafe or '_' in urlsafe  # guard: fixture exercises the fallback
+    assert decode_credential_secret(urlsafe) == key
+
+
+def test_decode_credential_secret_restores_missing_padding():
+    """A secret whose trailing '=' was lost in copying still decodes."""
+    key = b'12345'
+    encoded = base64.b64encode(key).decode()
+
+    assert encoded.endswith('=')  # guard: fixture actually has padding to drop
+    assert decode_credential_secret(encoded.rstrip('=')) == key
+
+
+def test_decode_credential_secret_surrounding_whitespace():
+    """Whitespace from a sloppy copy/paste is tolerated."""
+    key = b'whitespace-tolerant-key'
+    encoded = base64.b64encode(key).decode()
+
+    assert decode_credential_secret(f"  {encoded}\n") == key
+
+
+@pytest.mark.parametrize("bad_secret", ["", "   ", None])
+def test_decode_credential_secret_rejects_empty(bad_secret):
+    """An empty secret is reported as empty, not as bad base64."""
+    with pytest.raises(ValueError, match="empty"):
+        decode_credential_secret(bad_secret)
+
+
+def test_decode_credential_secret_rejects_non_base64():
+    """The real-world failure: a short non-base64 value pasted as the secret."""
+    with pytest.raises(ValueError, match="not valid base64"):
+        decode_credential_secret("2GmR7xQp!wZ#4kLd")
+
+
+def test_decode_credential_secret_does_not_silently_discard():
+    """Characters outside the alphabet must fail, not be dropped.
+
+    ``base64.b64decode`` without validate=True discards them, which turns a
+    wrong-field paste into a plausible but useless HMAC key.
+    """
+    assert base64.b64decode("AAAA!!!!") == b'\x00\x00\x00'  # documents the trap
+
+    with pytest.raises(ValueError, match="not valid base64"):
+        decode_credential_secret("AAAA!!!!")
+
+
+# --- failure logging ----------------------------------------------------------
+
+
+@patch('core.services.export.CalTopoAPIService.requests.get')
+def test_api_request_logs_http_failure(mock_get, sample_credentials):
+    """A non-2xx response logs the status and body instead of failing silently."""
+    logger = MagicMock()
+    service = CalTopoAPIService(logger=logger)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.text = "Unauthorized: bad signature"
+    mock_get.return_value = mock_response
+
+    success, result = service._api_request(
+        "GET",
+        "/api/v1/acct/ABC123/since/0",
+        sample_credentials['credential_id'],
+        sample_credentials['credential_secret']
+    )
+
+    assert success is False
+    logger.error.assert_called_once()
+    logged = logger.error.call_args[0][0]
+    assert "401" in logged
+    assert "/api/v1/acct/ABC123/since/0" in logged
+    assert "Unauthorized: bad signature" in logged
+
+
+@patch('core.services.export.CalTopoAPIService.requests.get')
+def test_api_request_undecodable_secret_never_hits_network(mock_get, sample_credentials):
+    """An unusable secret fails before any request, and says so."""
+    logger = MagicMock()
+    service = CalTopoAPIService(logger=logger)
+
+    success, result = service._api_request(
+        "GET",
+        "/api/v1/acct/ABC123/since/0",
+        sample_credentials['credential_id'],
+        "2GmR7xQp!wZ#4kLd"
+    )
+
+    assert success is False
+    assert result is None
+    mock_get.assert_not_called()
+    logged = logger.error.call_args[0][0]
+    assert "not sent" in logged
+    assert "not valid base64" in logged
+
+
+@patch('core.services.export.CalTopoAPIService.requests.get')
+def test_api_request_logs_network_exception(mock_get, sample_credentials):
+    """Transport failures are logged with their type."""
+    import requests as requests_module
+
+    logger = MagicMock()
+    service = CalTopoAPIService(logger=logger)
+    mock_get.side_effect = requests_module.ConnectionError("name resolution failed")
+
+    success, result = service._api_request(
+        "GET",
+        "/api/v1/acct/ABC123/since/0",
+        sample_credentials['credential_id'],
+        sample_credentials['credential_secret']
+    )
+
+    assert success is False
+    logged = logger.error.call_args[0][0]
+    assert "ConnectionError" in logged
+    assert "name resolution failed" in logged
+
+
+@patch('core.services.export.CalTopoAPIService.requests.get')
+def test_api_request_never_logs_the_signed_url(mock_get, sample_credentials):
+    """The request URL carries the credential id and signature; keep it out of logs."""
+    logger = MagicMock()
+    service = CalTopoAPIService(logger=logger)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.text = "server error"
+    mock_get.return_value = mock_response
+
+    service._api_request(
+        "GET",
+        "/api/v1/acct/ABC123/since/0",
+        sample_credentials['credential_id'],
+        sample_credentials['credential_secret']
+    )
+
+    logged = logger.error.call_args[0][0]
+    assert "signature=" not in logged
+    assert sample_credentials['credential_id'] not in logged
+
+
+@patch('core.services.export.CalTopoAPIService.requests.get')
+def test_get_account_data_rejects_non_dict_result(mock_get, sample_credentials):
+    """A list payload is refused rather than raising on item assignment."""
+    logger = MagicMock()
+    service = CalTopoAPIService(logger=logger)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"result": ["unexpected", "shape"]}
+    mock_get.return_value = mock_response
+
+    success, account_data = service.get_account_data(
+        sample_credentials['team_id'],
+        sample_credentials['credential_id'],
+        sample_credentials['credential_secret']
+    )
+
+    assert success is False
+    assert account_data is None
+    logger.error.assert_called_once()

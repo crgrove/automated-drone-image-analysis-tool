@@ -50,6 +50,13 @@ class ExportProgressDialog(TranslationMixin, QDialog):
 
         self.total_items = total_items
         self.cancelled = False
+        # Set by done() so a completion that lands *before* exec() starts is
+        # not lost. Worker threads deliver their finished/error signals through
+        # the event loop, and callers routinely pump events (show() +
+        # processEvents()) before calling exec(); a fast failure can therefore
+        # accept/reject this dialog while it is not in an event loop, which
+        # left exec() re-showing a dialog nothing would ever close again.
+        self._completed_result = None
 
         # Layout
         layout = QVBoxLayout()
@@ -92,9 +99,34 @@ class ExportProgressDialog(TranslationMixin, QDialog):
     def showEvent(self, event):
         """Override showEvent to ensure dialog appears and receives focus on macOS."""
         super().showEvent(event)
+        # A fresh showing starts a fresh operation, so forget any earlier
+        # outcome; otherwise a reused instance could never be displayed again
+        # (exec() would return the previous result immediately).
+        self._completed_result = None
         # On macOS, modal dialogs sometimes need explicit activation to appear
         self.activateWindow()
         self.raise_()
+
+    def done(self, result):
+        """Record the outcome, then close as usual.
+
+        Args:
+            result: QDialog result code (Accepted/Rejected).
+        """
+        self._completed_result = result
+        super().done(result)
+
+    def exec(self):
+        """Run the modal loop, unless the operation already finished.
+
+        Returns:
+            int: The QDialog result code.
+        """
+        if self._completed_result is not None:
+            # Already accepted/rejected before we got here; re-showing would
+            # strand the user in a dialog whose worker is long gone.
+            return self._completed_result
+        return super().exec()
 
     def on_cancel_clicked(self):
         """Handle cancel button click."""

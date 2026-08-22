@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>600</width>
+    <width>770</width>
     <height>290</height>
    </rect>
   </property>
@@ -34,7 +34,7 @@
    </item>
    <item>
     <widget class="QWidget" name="selectionWidget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0">
+     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0">
       <item>
        <widget class="QWidget" name="imageWidget" native="true">
         <property name="sizePolicy">
@@ -98,6 +98,89 @@
          </item>
          <item>
           <spacer name="verticalSpacer_bottom">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Expanding</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="resultsWidget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_5">
+         <item>
+          <spacer name="verticalSpacer_top_4">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Expanding</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item alignment="Qt::AlignHCenter">
+          <widget class="QToolButton" name="resultsButton">
+           <property name="minimumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>12</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Open a completed analysis for review: scan a folder for results or reopen a recent one.</string>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QToolButton { border: 3px solid palette(mid); border-radius: 8px; }</string>
+           </property>
+           <property name="text">
+            <string>Review Results</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>100</width>
+             <height>100</height>
+            </size>
+           </property>
+           <property name="toolButtonStyle">
+            <enum>Qt::ToolButtonTextUnderIcon</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer_bottom_4">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
            </property>

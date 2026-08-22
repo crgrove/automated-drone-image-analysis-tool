@@ -509,27 +509,12 @@ class BearingCalculationService(QObject):
                     img['lat'] = gps_data.get('latitude')
                     img['lon'] = gps_data.get('longitude')
 
-                    # Get timestamp
-                    timestamp = None
-                    if exif_data and 'Exif' in exif_data:
-                        datetime_original = exif_data['Exif'].get(piexif.ExifIFD.DateTimeOriginal)
-                        if datetime_original:
-                            datetime_str = datetime_original.decode('utf-8') if isinstance(datetime_original, bytes) else datetime_original
-                            try:
-                                timestamp = datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-                            except ValueError:
-                                pass
-
-                        if not timestamp:
-                            datetime_tag = exif_data['Exif'].get(piexif.ExifIFD.DateTime)
-                            if datetime_tag:
-                                datetime_str = datetime_tag.decode('utf-8') if isinstance(datetime_tag, bytes) else datetime_tag
-                                try:
-                                    timestamp = datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
-                                except ValueError:
-                                    pass
-
-                    img['timestamp'] = timestamp
+                    # Get timestamp. A missing or unreadable one is not fatal:
+                    # the image still has GPS and belongs in the calculation.
+                    # (Reading the DateTime fallback off ExifIFD used to raise
+                    # AttributeError here, and the except below then dropped
+                    # every image that lacked DateTimeOriginal.)
+                    img['timestamp'] = MetaDataHelper.get_exif_timestamp(exif_data)
 
                 except Exception as e:
                     self._logger.error(f"Error extracting data from {img['path']}: {e}")
@@ -545,8 +530,12 @@ class BearingCalculationService(QObject):
         if len(imgs_with_gps) < 2:
             raise ValueError("Need at least 2 images with GPS for auto-calculation")
 
-        # Sort by timestamp
-        imgs_with_gps.sort(key=lambda x: x.get('timestamp', datetime.min))
+        # Sort by timestamp. The default only applies to a missing key, so a
+        # present-but-None timestamp has to be coalesced too: images with GPS
+        # and no capture time (every frame cut from a video) used to be dropped
+        # before reaching this line, and comparing None against None - or
+        # against a real datetime - raises TypeError.
+        imgs_with_gps.sort(key=lambda x: x.get('timestamp') or datetime.min)
 
         N = len(imgs_with_gps)
         results = {}

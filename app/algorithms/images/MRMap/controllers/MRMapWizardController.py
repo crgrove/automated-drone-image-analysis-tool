@@ -101,16 +101,19 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
         options = dict()
         complex_scene, aggr_index, aggr_label, aggr_value = self._read_ui_state()
 
-        # Map to threshold and other params based on aggressiveness
-        # Index 0 (Very Conservative) = low threshold, Index 4 (Very Aggressive) = high threshold
+        # Map to threshold and other params based on aggressiveness.
+        # The service flags a pixel when its bin count is *below* the threshold
+        # (MRMapService.process_image), so a higher threshold yields more
+        # detections: Index 0 (Very Conservative) = low threshold,
+        # Index 4 (Very Aggressive) = high threshold.
         threshold_map = {
-            0: 200,  # Very Conservative
-            1: 150,  # Conservative
+            0: 10,   # Very Conservative
+            1: 50,   # Conservative
             2: 100,  # Moderate
-            3: 50,  # Aggressive
-            4: 10   # Very Aggressive
+            3: 150,  # Aggressive
+            4: 200   # Very Aggressive
         }
-        threshold = threshold_map.get(aggr_index, 50)
+        threshold = threshold_map.get(aggr_index, 100)
 
         # Set default segments and window (can be adjusted based on complexity)
         segments = 4 if complex_scene else 1
@@ -163,15 +166,17 @@ class MRMapWizardController(QWidget, Ui_MRMapWizard, AlgorithmController):
             if isinstance(aggr_index, int):
                 self.aggressivenessSlider.setValue(max(0, min(4, aggr_index)))
         elif 'threshold' in options:
-            # Reverse map threshold to index
+            # Reverse map threshold to index. Cut points are the midpoints
+            # between adjacent threshold_map values in get_options, so every
+            # preset survives a save/reload round-trip.
             threshold = int(options['threshold'])
-            if threshold <= 25:
+            if threshold <= 30:
                 index = 0  # Very Conservative
-            elif threshold <= 45:
+            elif threshold <= 75:
                 index = 1  # Conservative
-            elif threshold <= 55:
+            elif threshold <= 125:
                 index = 2  # Moderate
-            elif threshold <= 70:
+            elif threshold <= 175:
                 index = 3  # Aggressive
             else:
                 index = 4  # Very Aggressive

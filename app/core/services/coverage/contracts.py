@@ -108,6 +108,17 @@ class CoverageResult:
     # FrameIndex id back to an image without assuming any particular ordering
     # of the caller's own image list. Each entry: {'path', 'name'}.
     frame_sources: Optional[List[dict]] = None
+    # Processed-frame counts by camera-elevation source: 'anchor' (mission
+    # takeoff elevation + reported AGL, correct across relief), 'agl_nadir'
+    # (fallback DEM(nadir) + reported AGL, correct only where the ground under
+    # the drone is at takeoff elevation), 'agl_override' (explicit user or
+    # flight-log AGL). None when the calculation produced no frames.
+    altitude_source_counts: Optional[dict] = None
+    # Mission takeoff elevation in the DEM's datum, or None when none could be
+    # validated (``altitude_anchor_reason`` says why - see
+    # ``CoveragePodService._resolve_altitude_anchor``).
+    altitude_anchor_m: Optional[float] = None
+    altitude_anchor_reason: Optional[str] = None
     _transformer: object = field(default=None, repr=False, compare=False)
 
     def sample(self, lat: float, lon: float) -> Optional[dict]:

@@ -85,7 +85,14 @@ class AOISimilarityController(TranslationMixin, QObject):
         self._worker = None
         self._thread = None
         self._cancelled = False
+        # Threads still winding down, kept alive until Qt reports them
+        # stopped. See _cleanup_thread for why this must not be skipped.
+        self._retiring = {}
         self.progress_dialog = None
+        # Reentrancy state: QProgressDialog.setValue() pumps the event loop, so
+        # terminal handlers can arrive while _on_progress is mid-body.
+        self._in_progress_update = False
+        self._deferred = None
 
         # Results dialog and the entries backing it (row 0 = reference)
         self._results_dialog = None
@@ -169,6 +176,12 @@ class AOISimilarityController(TranslationMixin, QObject):
         self.progress_dialog.setWindowTitle(self.tr("Find Similar AOIs"))
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
+        # Own the dialog's lifetime explicitly. With autoClose/autoReset on,
+        # reaching the maximum makes QProgressDialog reset and hide itself from
+        # inside setValue(), which is another way the dialog disappears while
+        # _on_progress is still using it.
+        self.progress_dialog.setAutoClose(False)
+        self.progress_dialog.setAutoReset(False)
         self.progress_dialog.setValue(0)
 
         # Create worker and thread
@@ -191,17 +204,67 @@ class AOISimilarityController(TranslationMixin, QObject):
         self._thread.start()
 
     def _on_progress(self, done, total):
-        """Handle progress updates from the worker."""
-        if self.progress_dialog and total > 0:
-            if self.progress_dialog.maximum() != total:
-                self.progress_dialog.setRange(0, total)
-            self.progress_dialog.setValue(done)
-            self.progress_dialog.setLabelText(
+        """Handle progress updates from the worker.
+
+        QProgressDialog.setValue() calls QApplication.processEvents() whenever
+        the dialog is modal, so the event loop is re-entered *inside this slot*.
+        That pump delivers the worker's queued `finished` signal, so
+        _on_search_complete used to run nested here: it set progress_dialog to
+        None underneath us (the next line then raised AttributeError on None)
+        and opened the results dialog inside the progress dialog's still-open
+        Cocoa modal session, which macOS reports as "modalSession has been
+        exited prematurely - check for a reentrant call to endModalSession".
+
+        Hence the local reference, the re-checks around the pumping call, and
+        the completion deferral in _defer_while_pumping.
+        """
+        dialog = self.progress_dialog
+        if dialog is None or total <= 0:
+            return
+
+        self._in_progress_update = True
+        try:
+            if dialog.maximum() != total:
+                dialog.setRange(0, total)
+            dialog.setValue(done)          # may re-enter the event loop
+            if self.progress_dialog is not dialog:
+                return                     # torn down while we were pumping
+            dialog.setLabelText(
                 self.tr("Analyzing AOI {done} of {total}...").format(done=done, total=total)
             )
+        except RuntimeError:
+            return  # dialog's C++ object was destroyed during the nested loop
+        finally:
+            self._in_progress_update = False
+            self._flush_deferred()
+
+    def _flush_deferred(self):
+        """Run a completion/error handler that arrived during a progress pump."""
+        deferred = self._deferred
+        self._deferred = None
+        if deferred is None:
+            return
+        handler, payload = deferred
+        handler(payload)
+
+    def _defer_while_pumping(self, handler, payload):
+        """True if *handler* was deferred because a progress update is active.
+
+        Terminal handlers must never run nested inside _on_progress: they close
+        the progress dialog that _on_progress is still using, and they open
+        another dialog inside its modal session. Deferring to the end of the
+        progress update keeps the teardown ordered.
+        """
+        if not self._in_progress_update:
+            return False
+        # Last one wins: only one terminal event can be meaningful per search.
+        self._deferred = (handler, payload)
+        return True
 
     def _on_search_complete(self, results):
         """Handle search completion."""
+        if self._defer_while_pumping(self._on_search_complete, results):
+            return
         try:
             self._cleanup_thread()
             self._close_progress_dialog()
@@ -234,6 +297,8 @@ class AOISimilarityController(TranslationMixin, QObject):
 
     def _on_search_error(self, error_msg):
         """Handle search error."""
+        if self._defer_while_pumping(self._on_search_error, error_msg):
+            return
         try:
             self._cleanup_thread()
             self._close_progress_dialog()
@@ -257,8 +322,6 @@ class AOISimilarityController(TranslationMixin, QObject):
     def _on_cancelled(self):
         """Handle cancellation from the progress dialog."""
         self._cancelled = True
-        if self._worker:
-            self._worker.cancel()
         self._cleanup_thread()
 
     def _close_progress_dialog(self):
@@ -277,12 +340,53 @@ class AOISimilarityController(TranslationMixin, QObject):
             self.progress_dialog = None
 
     def _cleanup_thread(self):
-        """Clean up the worker thread."""
-        if self._thread:
-            self._thread.quit()
-            self._thread.wait()
-            self._thread = None
+        """Release the worker thread without ever destroying a running one.
+
+        Two hazards make the obvious teardown wrong:
+
+        * ``~QThread()`` calls ``qFatal()`` -- an immediate ``abort()`` that
+          takes the whole application down with no Python traceback -- if the
+          thread is still running. Dropping the last Python reference to a live
+          QThread is therefore a hard crash, not an exception.
+        * Destroying the worker while its ``run()`` is still executing on that
+          thread is a use-after-free on the C++ object.
+
+        Blocking on ``wait()`` here is not the answer either: this runs on the
+        GUI thread, and when the user cancels mid-search the worker is inside a
+        long computation, so ``wait()`` froze the UI for the rest of the search.
+
+        Instead both objects are moved to ``self._retiring``, which holds them
+        alive while the thread unwinds, and are released from the thread's own
+        ``finished`` signal. ``self._thread`` is cleared immediately so a new
+        search can start right away.
+        """
+        thread, worker = self._thread, self._worker
+        self._thread = None
         self._worker = None
+        if thread is None:
+            return
+
+        if worker is not None:
+            worker.cancel()
+
+        # Hold both alive until Qt reports the thread stopped.
+        self._retiring[thread] = worker
+        thread.finished.connect(lambda t=thread: self._release_thread(t))
+        thread.requestInterruption()
+        thread.quit()
+        if not thread.isRunning():
+            # Already stopped, so `finished` will not fire again.
+            self._release_thread(thread)
+
+    def _release_thread(self, thread):
+        """Drop the retained references once *thread* has actually stopped."""
+        try:
+            # Returns promptly: `finished` is emitted from the thread's own
+            # unwind, so this only covers the last instructions of that unwind.
+            thread.wait(5000)
+        except RuntimeError:
+            pass  # C++ object already gone
+        self._retiring.pop(thread, None)
 
     def _show_results_dialog(self, display_results):
         """

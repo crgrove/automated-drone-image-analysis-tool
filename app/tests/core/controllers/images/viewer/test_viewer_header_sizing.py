@@ -10,6 +10,8 @@ The tests drive the *real* generated UI so the assertions track the actual
 header the user sees.
 """
 
+from types import SimpleNamespace
+
 from PySide6.QtWidgets import QMainWindow, QSizePolicy
 
 from core.controllers.images.viewer.Viewer import Viewer
@@ -180,3 +182,67 @@ def test_narrow_header_truncates_only_the_file_name(qtbot):
     assert ui.fileNameLabel.width() < name_natural
     # ...while the index label keeps its full text.
     assert ui.indexLabel.width() >= index_natural
+
+
+class _FakeSplitter:
+    """Minimal stand-in for the image/AOI QSplitter used by the header sync."""
+
+    def __init__(self, sizes):
+        self._sizes = sizes
+
+    def sizes(self):
+        return list(self._sizes)
+
+    def handleWidth(self):
+        return 4
+
+
+def test_header_sync_floors_image_pane_at_toolbar_minimum(qtbot):
+    """The image pane's minimum width must be floored at the toolbar minimum.
+
+    Regression (runaway): the toolbar and the AOI header share one header row
+    above the splitter, and the AOI header is pinned to the AOI-pane width. If
+    the image pane is allowed narrower than the toolbar, the header row is wider
+    than the splitter, so pinning the AOI header pushes the window minimum past
+    its current width. Because that minimum is re-read on every resize, the
+    window grows without bound. Flooring the image pane at the toolbar minimum
+    keeps the header row and the splitter the same width, breaking the loop.
+    """
+    win, ui = _build_header(qtbot)
+    obj = SimpleNamespace(
+        image_gallery_splitter=_FakeSplitter([800, 600]),
+        aoiHeaderWidget=ui.aoiHeaderWidget,
+        mainHeaderWidget=ui.mainHeaderWidget,
+        imageWidget=ui.imageWidget,
+    )
+
+    Viewer._sync_aoi_header_width(obj)
+
+    toolbar_min = ui.mainHeaderWidget.minimumSizeHint().width()
+    # Image pane floored at the toolbar minimum (this is what stops the runaway).
+    assert ui.imageWidget.minimumWidth() == toolbar_min
+    # The AOI header still tracks the AOI-pane width for alignment.
+    assert ui.aoiHeaderWidget.maximumWidth() == 600
+    assert ui.aoiHeaderWidget.minimumWidth() == 600
+
+
+def test_header_sync_image_pane_floor_is_idempotent(qtbot):
+    """Re-running the sync must not keep re-assigning the image-pane minimum.
+
+    The floor is only assigned when it actually changes, so repeated calls (one
+    per resize) cannot themselves trigger fresh layout passes -- the property
+    that keeps the fix from re-introducing a feedback loop.
+    """
+    win, ui = _build_header(qtbot)
+    obj = SimpleNamespace(
+        image_gallery_splitter=_FakeSplitter([800, 600]),
+        aoiHeaderWidget=ui.aoiHeaderWidget,
+        mainHeaderWidget=ui.mainHeaderWidget,
+        imageWidget=ui.imageWidget,
+    )
+
+    Viewer._sync_aoi_header_width(obj)
+    floored = ui.imageWidget.minimumWidth()
+    # A second identical sync leaves the minimum unchanged.
+    Viewer._sync_aoi_header_width(obj)
+    assert ui.imageWidget.minimumWidth() == floored
