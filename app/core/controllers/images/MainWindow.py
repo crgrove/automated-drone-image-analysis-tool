@@ -660,8 +660,10 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             self.settings_service.set_setting('MaxProcesses', self.maxProcessesSpinBox.value())
             self.settings_service.set_setting('ProcessingResolution', self.processingResolutionCombo.currentText())
 
-            max_aois = self.settings_service.get_setting('MaxAOIs')
-            aoi_radius = self.settings_service.get_setting('AOIRadius')
+            # QSettings on Linux returns numeric preferences as strings (e.g. after
+            # migration); coerce before passing to AnalyzeService.
+            max_aois = int(self.settings_service.get_setting('MaxAOIs', 100))
+            aoi_radius = int(self.settings_service.get_setting('AOIRadius', 15))
 
             # Get processing resolution percentage from combo box
             resolution_text = self.processingResolutionCombo.currentText()

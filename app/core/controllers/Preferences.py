@@ -254,9 +254,10 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
         if index >= 0:
             self.languageComboBox.setCurrentIndex(index)
 
-        self.maxAOIsSpinBox.setValue(self.parent.settings_service.get_setting('MaxAOIs'))
+        # Same QSettings string return on Linux as MainWindow._startButton_clicked.
+        self.maxAOIsSpinBox.setValue(int(self.parent.settings_service.get_setting('MaxAOIs', 100)))
         self.themeComboBox.setCurrentText(self.parent.settings_service.get_setting('Theme'))
-        self.AOIRadiusSpinBox.setValue(self.parent.settings_service.get_setting('AOIRadius'))
+        self.AOIRadiusSpinBox.setValue(int(self.parent.settings_service.get_setting('AOIRadius', 15)))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         # Load distance unit with default of 'Feet' if not set
