@@ -11,6 +11,7 @@ side changes without the other.
 """
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -46,7 +47,9 @@ def test_cache_key_matches_production_formula(audit_script):
         ('img.png', {'center': (1234.5, 67.25), 'radius': 50}),
     ]
     for filename, aoi in cases:
-        expected = service.get_cache_key(f"C:\\anywhere\\{filename}", aoi)
+        # get_cache_key takes a path and strips the directory itself via os.path.basename; the script takes a bare
+        # filename. The prefix exercises that strip, and must be native: a "C:\..." literal survives whole on POSIX.
+        expected = service.get_cache_key(os.path.join("anywhere", filename), aoi)
         actual = audit_script.cache_key(filename, aoi['center'], aoi['radius'])
         assert actual == expected, f"key drift for {filename} {aoi}"
 

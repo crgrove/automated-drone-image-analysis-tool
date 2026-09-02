@@ -395,10 +395,13 @@ class TestRecordingFolderDialog:
         monkeypatch.setenv("HOME", str(tmp_path))
         controller = _make_controller()
         try:
-            resolved = controller._resolve_start_dir("Z:/not/attached/recordings")
+            # "Z:/..." is a missing drive only on Windows; a path under a regular file is unreachable everywhere.
+            blocker = tmp_path / "card_reader"
+            blocker.write_text("")
+            resolved = controller._resolve_start_dir(str(blocker / "recordings"))
 
             assert os.path.isdir(resolved)
-            assert "not" not in resolved
+            assert "card_reader" not in resolved
         finally:
             controller.tear_down()
 

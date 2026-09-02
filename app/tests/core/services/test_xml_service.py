@@ -509,7 +509,9 @@ def test_relative_forward_slash_path_is_separator_normalized(tmp_path):
     assert images[0]["path"] == os.path.join(
         str(tmp_path), "sub", "deeper", "DJI_0042.JPG"
     )
-    assert "/" not in images[0]["path"].replace(str(tmp_path), "")
+    # On POSIX the native separator IS "/", so only Windows can assert its absence.
+    if os.sep != "/":
+        assert "/" not in images[0]["path"].replace(str(tmp_path), "")
 
 
 def test_xml_path_attribute_preserved_for_legacy_cache_lookups(tmp_path):
