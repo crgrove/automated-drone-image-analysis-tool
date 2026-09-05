@@ -71,38 +71,26 @@ class ThermalRangeService(AlgorithmService):
                 for aoi in areas_of_interest:
                     detected_pixels = aoi.get('detected_pixels', [])
 
-                    if len(detected_pixels) > 0:
-                        # Extract temperatures for all detected pixels (in thermal coordinate space)
-                        temps = []
-                        for pixel in detected_pixels:
-                            x_orig, y_orig = int(pixel[0]), int(pixel[1])
+                    # Transform to processing resolution if needed
+                    xs, ys = self._extract_valid_coordinates(
+                        detected_pixels, temperature_c.shape, apply_scale_factor=True
+                    )
 
-                            # Transform to processing resolution if needed
-                            if self.scale_factor != 1.0:
-                                x = int(x_orig * self.scale_factor)
-                                y = int(y_orig * self.scale_factor)
-                            else:
-                                x, y = x_orig, y_orig
-
-                            # Bounds check and extract temperature
-                            if 0 <= y < temperature_c.shape[0] and 0 <= x < temperature_c.shape[1]:
-                                temps.append(temperature_c[y, x])
-
-                        if len(temps) > 0:
-                            # Calculate mean temperature across all detected pixels
-                            temp_value = float(np.mean(temps))
-                            aoi['temperature'] = temp_value
-                            temps_extracted += 1
-                            # Debug: Log first few temperatures
-                            if temps_extracted <= 3:
-                                # self.logger.debug(
-                                #     f"AOI at {aoi['center']}: avg temperature="
-                                #     f"{temp_value:.2f}°C (from {len(temps)} pixels)"
-                                # )
-                                pass
-                        else:
-                            aoi['temperature'] = None
-                            self.logger.warning(f"AOI at {aoi['center']}: all detected pixels out of bounds")
+                    if xs is not None:
+                        # Calculate mean temperature across all detected pixels
+                        temp_value = float(np.mean(temperature_c[ys, xs]))
+                        aoi['temperature'] = temp_value
+                        temps_extracted += 1
+                        # Debug: Log first few temperatures
+                        if temps_extracted <= 3:
+                            # self.logger.debug(
+                            #     f"AOI at {aoi['center']}: avg temperature="
+                            #     f"{temp_value:.2f}°C (from {len(xs)} pixels)"
+                            # )
+                            pass
+                    elif len(detected_pixels) > 0:
+                        aoi['temperature'] = None
+                        self.logger.warning(f"AOI at {aoi['center']}: all detected pixels out of bounds")
                     else:
                         # Fallback: no detected pixels (shouldn't happen in normal flow)
                         aoi['temperature'] = None

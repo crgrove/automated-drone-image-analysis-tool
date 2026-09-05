@@ -148,44 +148,24 @@ class RXAnomalyService(AlgorithmService):
         # Add confidence to each AOI
         for aoi in areas_of_interest:
             detected_pixels = aoi.get('detected_pixels', [])
-            if len(detected_pixels) > 0:
-                # Extract RX values for this AOI's pixels
-                # NOTE: detected_pixels are in ORIGINAL resolution, but rx_values are in PROCESSING resolution
-                # Need to transform coordinates back to processing resolution for lookup
-                aoi_rx_values = []
-                for pixel in detected_pixels:
-                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
+            # NOTE: detected_pixels are in ORIGINAL resolution, but rx_values are in PROCESSING resolution
+            # Need to transform coordinates back to processing resolution for lookup
+            xs, ys = self._extract_valid_coordinates(detected_pixels, rx_values.shape, apply_scale_factor=True)
 
-                    # Transform back to processing resolution
-                    if self.scale_factor != 1.0:
-                        x = int(x_orig * self.scale_factor)
-                        y = int(y_orig * self.scale_factor)
-                    else:
-                        x, y = x_orig, y_orig
+            if xs is not None:
+                # Calculate mean RX value for this AOI
+                mean_rx = np.mean(rx_values[ys, xs])
 
-                    if 0 <= y < rx_values.shape[0] and 0 <= x < rx_values.shape[1]:
-                        aoi_rx_values.append(rx_values[y, x])
+                # Normalize to 0-100 scale (higher RX value = higher anomaly confidence)
+                normalized_score = ((mean_rx - min_rx_value) / rx_range) * 100.0
 
-                if len(aoi_rx_values) > 0:
-                    # Calculate mean RX value for this AOI
-                    mean_rx = np.mean(aoi_rx_values)
-
-                    # Normalize to 0-100 scale (higher RX value = higher anomaly confidence)
-                    normalized_score = ((mean_rx - min_rx_value) / rx_range) * 100.0
-
-                    # Add confidence fields to AOI
-                    aoi['confidence'] = round(normalized_score, 1)
-                    aoi['score_type'] = 'anomaly'
-                    aoi['raw_score'] = round(float(mean_rx), 3)
-                    aoi['score_method'] = 'mean'
-                else:
-                    # No valid pixels, set low confidence
-                    aoi['confidence'] = 0.0
-                    aoi['score_type'] = 'anomaly'
-                    aoi['raw_score'] = 0.0
-                    aoi['score_method'] = 'mean'
+                # Add confidence fields to AOI
+                aoi['confidence'] = round(normalized_score, 1)
+                aoi['score_type'] = 'anomaly'
+                aoi['raw_score'] = round(float(mean_rx), 3)
+                aoi['score_method'] = 'mean'
             else:
-                # No detected pixels, set low confidence
+                # No detected pixels, or none fell within bounds: set low confidence
                 aoi['confidence'] = 0.0
                 aoi['score_type'] = 'anomaly'
                 aoi['raw_score'] = 0.0

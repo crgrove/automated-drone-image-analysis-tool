@@ -161,12 +161,12 @@ class ColorHistogramService:
         for aoi in areas_of_interest or []:
             pixels = aoi.get('detected_pixels') or []
             if pixels:
-                for pixel in pixels:
-                    if not isinstance(pixel, (list, tuple)) or len(pixel) < 2:
-                        continue
-                    x, y = int(pixel[0]), int(pixel[1])
-                    if 0 <= x < width and 0 <= y < height:
-                        aoi_mask[y, x] = True
+                valid_pixels = [p for p in pixels if isinstance(p, (list, tuple)) and len(p) >= 2]
+                if valid_pixels:
+                    coords = np.asarray(valid_pixels, dtype=np.int64)[:, :2]
+                    xs, ys = coords[:, 0], coords[:, 1]
+                    in_bounds = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+                    aoi_mask[ys[in_bounds], xs[in_bounds]] = True
                 continue
 
             contour_mask = self._rasterize_contour(aoi.get('contour'), height, width)
@@ -180,10 +180,12 @@ class ColorHistogramService:
                 continue
 
             cx, cy = int(center[0]), int(center[1])
-            for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
-                for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
-                    if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                        aoi_mask[y, x] = True
+            y_min, y_max = max(0, cy - radius), min(height, cy + radius + 1)
+            x_min, x_max = max(0, cx - radius), min(width, cx + radius + 1)
+            if y_max > y_min and x_max > x_min:
+                ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
+                in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
+                aoi_mask[y_min:y_max, x_min:x_max] |= in_circle
 
         if not np.any(aoi_mask):
             return np.asarray([], dtype=np.float32)

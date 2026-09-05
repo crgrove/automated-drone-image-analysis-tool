@@ -90,16 +90,21 @@ class ImageHighlightService:
         # Convert highlight color to numpy array
         highlight_color_array = np.array(highlight_color, dtype=np.uint8)
 
-        for aoi in areas_of_interest or []:
-            if "detected_pixels" in aoi and aoi["detected_pixels"]:
-                for pixel in aoi["detected_pixels"]:
-                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                        x, y = int(pixel[0]), int(pixel[1])
-                        # Check bounds
-                        if 0 <= y < highlighted_image.shape[0] and 0 <= x < highlighted_image.shape[1]:
-                            # Convert from BGR to RGB for display if needed
-                            if len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3:
-                                highlighted_image[y, x] = highlight_color_array
+        if not (len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3):
+            return highlighted_image
+
+        height, width = highlighted_image.shape[:2]
+        all_pixels = [
+            p
+            for aoi in (areas_of_interest or [])
+            for p in (aoi.get("detected_pixels") or [])
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+        if all_pixels:
+            coords = np.asarray(all_pixels, dtype=np.int64)[:, :2]
+            xs, ys = coords[:, 0], coords[:, 1]
+            in_bounds = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+            highlighted_image[ys[in_bounds], xs[in_bounds]] = highlight_color_array
 
         return highlighted_image
 

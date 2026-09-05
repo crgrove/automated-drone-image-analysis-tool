@@ -579,37 +579,24 @@ class MRMapService(AlgorithmService):
         # Add confidence to each AOI
         for aoi in areas_of_interest:
             detected_pixels = aoi.get('detected_pixels', [])
-            if len(detected_pixels) > 0:
-                # Extract bin counts for this AOI's pixels
-                # NOTE: detected_pixels are in PROCESSING resolution (same as bin_counts)
-                # No transformation needed - coordinates are already at processing resolution
-                aoi_bin_counts = []
-                for pixel in detected_pixels:
-                    x, y = int(pixel[0]), int(pixel[1])
+            # NOTE: detected_pixels are in PROCESSING resolution (same as bin_counts)
+            # No transformation needed - coordinates are already at processing resolution
+            xs, ys = self._extract_valid_coordinates(detected_pixels, bin_counts.shape)
 
-                    if 0 <= y < bin_counts.shape[0] and 0 <= x < bin_counts.shape[1]:
-                        aoi_bin_counts.append(bin_counts[y, x])
+            if xs is not None:
+                # Calculate mean bin count for this AOI
+                mean_bin_count = np.mean(bin_counts[ys, xs])
 
-                if len(aoi_bin_counts) > 0:
-                    # Calculate mean bin count for this AOI
-                    mean_bin_count = np.mean(aoi_bin_counts)
+                # Normalize to 0-100 scale (INVERTED: lower bin count = rarer = higher confidence)
+                normalized_score = ((max_bin_count - mean_bin_count) / bin_range) * 100.0
 
-                    # Normalize to 0-100 scale (INVERTED: lower bin count = rarer = higher confidence)
-                    normalized_score = ((max_bin_count - mean_bin_count) / bin_range) * 100.0
-
-                    # Add confidence fields to AOI
-                    aoi['confidence'] = round(normalized_score, 1)
-                    aoi['score_type'] = 'rarity'
-                    aoi['raw_score'] = round(float(mean_bin_count), 3)
-                    aoi['score_method'] = 'mean'
-                else:
-                    # No valid pixels, set low confidence
-                    aoi['confidence'] = 0.0
-                    aoi['score_type'] = 'rarity'
-                    aoi['raw_score'] = 0.0
-                    aoi['score_method'] = 'mean'
+                # Add confidence fields to AOI
+                aoi['confidence'] = round(normalized_score, 1)
+                aoi['score_type'] = 'rarity'
+                aoi['raw_score'] = round(float(mean_bin_count), 3)
+                aoi['score_method'] = 'mean'
             else:
-                # No detected pixels, set low confidence
+                # No detected pixels, or none fell within bounds: set low confidence
                 aoi['confidence'] = 0.0
                 aoi['score_type'] = 'rarity'
                 aoi['raw_score'] = 0.0
