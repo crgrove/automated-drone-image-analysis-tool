@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import platform
 import sys
 import os
 from pathlib import Path
@@ -213,8 +214,10 @@ class AIPersonDetectorService(AlgorithmService):
     def _create_onnx_session(self):
         """Create an ONNX Runtime inference session.
 
-        Tries to use DmlExecutionProvider (DirectML) first; falls back to
-        CPUExecutionProvider if DirectML fails or if cpu_only is True.
+        Tries a hardware-accelerated provider first -- DmlExecutionProvider
+        (DirectML, any DirectX12 GPU) on Windows/Linux, CoreMLExecutionProvider
+        (Neural Engine/GPU) on macOS -- and falls back to CPUExecutionProvider
+        if that fails or if cpu_only is True.
 
         Returns:
             Loaded ONNX model session (onnxruntime.InferenceSession).
@@ -227,8 +230,6 @@ class AIPersonDetectorService(AlgorithmService):
         so.enable_profiling = False
         so.intra_op_num_threads = 1
 
-        providers_cuda_first = ["DmlExecutionProvider", "CPUExecutionProvider"]
-
         providers_cpu_only = ["CPUExecutionProvider"]
         if self.cpu_only:
             return ort.InferenceSession(
@@ -236,14 +237,21 @@ class AIPersonDetectorService(AlgorithmService):
                 sess_options=so,
                 providers=providers_cpu_only
             )
+
+        if platform.system() == 'Darwin':
+            accelerated_provider = "CoreMLExecutionProvider"
+        else:
+            accelerated_provider = "DmlExecutionProvider"
+        providers_accelerated = [accelerated_provider, "CPUExecutionProvider"]
+
         try:
             return ort.InferenceSession(
                 self.model_path,
                 sess_options=so,
-                providers=providers_cuda_first
+                providers=providers_accelerated
             )
         except Exception as e:
-            self.logger.warning(f"DmlExecutionProvider failed: {e}")
+            self.logger.warning(f"{accelerated_provider} failed: {e}")
             try:
                 return ort.InferenceSession(
                     self.model_path,
