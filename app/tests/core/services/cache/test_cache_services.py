@@ -43,6 +43,10 @@ def test_thumbnail_cache_service_initialization(thumbnail_cache_service):
 
 def test_get_cache_key(thumbnail_cache_service, sample_aoi):
     """Test cache key generation."""
+    # TODO: ThumbnailCacheService.get_cache_key builds the key from os.path.basename(image_path), which
+    # on POSIX does not split a Windows-authored XML path - hashing the whole path may defeat its documented
+    # portability intent. Same formula is in Color/TemperatureCacheService; the fix is cross_platform_basename.
+    # Check reachability first: Viewer's validate_and_fix_paths relinks paths before thumbnails run.
     key = thumbnail_cache_service.get_cache_key('test_image.jpg', sample_aoi)
 
     assert isinstance(key, str)

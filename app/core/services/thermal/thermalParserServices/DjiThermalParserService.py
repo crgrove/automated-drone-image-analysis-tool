@@ -302,18 +302,20 @@ class DjiThermalParserService:
             if architecture == "32bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_iirp.so',
+                        # Note that these paths have been corrected and exist; however, the SDK throws strange
+                        # errors (-16) that will need to be investigated if thermal is eventually enabled on Linux
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libdirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_dirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]
             elif architecture == "64bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_iirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libdirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_dirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]

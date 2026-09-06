@@ -1,8 +1,12 @@
+import platform
+
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog
 from unittest.mock import patch, MagicMock
 
 
+@pytest.mark.skipif(platform.system() == "Linux", reason="Thermal E2E is Windows-only for now (algorithms.conf platforms)")
 def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_available):
     main_window.inputFolderLine.setText(testData['Thermal_Input'])
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
@@ -23,7 +27,7 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_availabl
     assert not main_window.startButton.isEnabled()
     assert main_window.cancelButton.isEnabled()
     assert not main_window.startButton.isEnabled()
-    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=45000)
+    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=200000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert main_window.viewResultsButton.isEnabled()

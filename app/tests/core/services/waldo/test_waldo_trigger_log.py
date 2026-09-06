@@ -1,5 +1,6 @@
 """Unit tests for WaldoTriggerLogService and its WaldoMetadataService hookup."""
 
+import os
 from datetime import datetime, timedelta
 
 import pytest
@@ -114,7 +115,9 @@ def test_parse_unreadable_path_returns_empty(tmp_path):
 @pytest.mark.parametrize("image,expected", [
     ("0_000_12_035.jpg", "000_12_035"),
     ("1_000_00_002.JPG", "000_00_002"),
-    (r"E:\somewhere\1_000_04_019.jpg", "000_04_019"),
+    # image_trigger_name strips a leading directory with os.path.basename, and this case covers that;
+    # it must be native, since an "E:\..." literal survives whole on POSIX and would never match.
+    (os.path.join("somewhere", "1_000_04_019.jpg"), "000_04_019"),
     ("DJI_0001.JPG", None),
     ("2_000_00_000.jpg", None),
 ])

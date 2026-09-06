@@ -1,5 +1,7 @@
 """Tests for core.views.components.SteadyScrollArea."""
 
+import platform
+
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
@@ -29,6 +31,12 @@ def _tall_panel(scroll, qtbot):
     filler = QWidget(panel)
     filler.setMinimumHeight(1500)
     bottom = QPushButton("Start Recording", panel)
+    # Required on macOS: its native style leaves QPushButton TabFocus-only unless Full Keyboard
+    # Access is on, and these tests need focus handoff. The setFocusPolicy calls are what matter;
+    # the Darwin test merely skips them where they are already a no-op (Windows and Fusion).
+    if platform.system() == "Darwin":
+        for button in (top, bottom):
+            button.setFocusPolicy(Qt.StrongFocus)
     layout.addWidget(top)
     layout.addWidget(filler)
     layout.addWidget(bottom)

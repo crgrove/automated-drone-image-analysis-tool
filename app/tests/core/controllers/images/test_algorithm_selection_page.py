@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from core.controllers.images.guidePages.AlgorithmSelectionPage import AlgorithmSelectionPage
 
@@ -41,7 +41,10 @@ def _create_page():
     settings_service = MagicMock()
     dialog = _DummyDialog()
     page = AlgorithmSelectionPage(wizard_data, settings_service, dialog)
-    page.setup_ui()
+    # The thermal branch is Windows-only: on Darwin _reset_algorithm_selection
+    # pre-answers "not thermal", so these tests would walk the RGB tree.
+    with patch("core.controllers.images.guidePages.AlgorithmSelectionPage.platform.system", return_value="Windows"):
+        page.setup_ui()
     return page, wizard_data, dialog
 
 
