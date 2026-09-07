@@ -118,15 +118,17 @@ class ThermalHistogramService:
             return mask
 
         max_y, max_x = mask.shape
-        for aoi in areas_of_interest:
-            for pixel in aoi.get('detected_pixels', []) or []:
-                if not isinstance(pixel, (list, tuple)) or len(pixel) < 2:
-                    continue
-
-                x = int(pixel[0])
-                y = int(pixel[1])
-                if 0 <= x < max_x and 0 <= y < max_y:
-                    mask[y, x] = True
+        all_pixels = [
+            p
+            for aoi in areas_of_interest
+            for p in (aoi.get('detected_pixels', []) or [])
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+        if all_pixels:
+            coords = np.asarray(all_pixels, dtype=np.int64)[:, :2]
+            xs, ys = coords[:, 0], coords[:, 1]
+            in_bounds = (xs >= 0) & (xs < max_x) & (ys >= 0) & (ys < max_y)
+            mask[ys[in_bounds], xs[in_bounds]] = True
 
         return mask
 

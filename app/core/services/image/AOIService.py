@@ -890,19 +890,25 @@ class AOIService:
 
             # If we have detected pixels, use those
             if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                for pixel in aoi['detected_pixels']:
-                    if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                        px, py = int(pixel[0]), int(pixel[1])
-                        if 0 <= py < height and 0 <= px < width:
-                            colors.append(img_array[py, px])
+                valid_pixels = [
+                    p for p in aoi['detected_pixels']
+                    if isinstance(p, (list, tuple)) and len(p) >= 2
+                ]
+                if valid_pixels:
+                    coords = np.asarray(valid_pixels, dtype=np.int64)[:, :2]
+                    px_arr, py_arr = coords[:, 0], coords[:, 1]
+                    in_bounds = (px_arr >= 0) & (px_arr < width) & (py_arr >= 0) & (py_arr < height)
+                    colors = img_array[py_arr[in_bounds], px_arr[in_bounds]]
             # Otherwise sample within the circle
             else:
-                for y in range(max(0, cy - radius), min(height, cy + radius + 1)):
-                    for x in range(max(0, cx - radius), min(width, cx + radius + 1)):
-                        if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
-                            colors.append(img_array[y, x])
+                y_min, y_max = max(0, cy - radius), min(height, cy + radius + 1)
+                x_min, x_max = max(0, cx - radius), min(width, cx + radius + 1)
+                if y_max > y_min and x_max > x_min:
+                    ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
+                    in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
+                    colors = img_array[y_min:y_max, x_min:x_max][in_circle]
 
-            if not colors:
+            if len(colors) == 0:
                 return None
 
             # Calculate average RGB

@@ -165,37 +165,24 @@ class MatchedFilterService(AlgorithmService):
         # Add confidence to each AOI
         for aoi in areas_of_interest:
             detected_pixels = aoi.get('detected_pixels', [])
-            if len(detected_pixels) > 0:
-                # Extract filter scores for this AOI's pixels
-                # NOTE: detected_pixels are in PROCESSING resolution (same as filter_scores)
-                # No transformation needed - coordinates are already at processing resolution
-                aoi_scores = []
-                for pixel in detected_pixels:
-                    x, y = int(pixel[0]), int(pixel[1])
+            # NOTE: detected_pixels are in PROCESSING resolution (same as filter_scores)
+            # No transformation needed - coordinates are already at processing resolution
+            xs, ys = self._extract_valid_coordinates(detected_pixels, filter_scores.shape)
 
-                    if 0 <= y < filter_scores.shape[0] and 0 <= x < filter_scores.shape[1]:
-                        aoi_scores.append(filter_scores[y, x])
+            if xs is not None:
+                # Calculate mean filter score for this AOI
+                mean_score = np.mean(filter_scores[ys, xs])
 
-                if len(aoi_scores) > 0:
-                    # Calculate mean filter score for this AOI
-                    mean_score = np.mean(aoi_scores)
+                # Normalize to 0-100 scale (higher score = better match = higher confidence)
+                normalized_score = ((mean_score - min_score) / score_range) * 100.0
 
-                    # Normalize to 0-100 scale (higher score = better match = higher confidence)
-                    normalized_score = ((mean_score - min_score) / score_range) * 100.0
-
-                    # Add confidence fields to AOI
-                    aoi['confidence'] = round(normalized_score, 1)
-                    aoi['score_type'] = 'match'
-                    aoi['raw_score'] = round(float(mean_score), 3)
-                    aoi['score_method'] = 'mean'
-                else:
-                    # No valid pixels, set low confidence
-                    aoi['confidence'] = 0.0
-                    aoi['score_type'] = 'match'
-                    aoi['raw_score'] = 0.0
-                    aoi['score_method'] = 'mean'
+                # Add confidence fields to AOI
+                aoi['confidence'] = round(normalized_score, 1)
+                aoi['score_type'] = 'match'
+                aoi['raw_score'] = round(float(mean_score), 3)
+                aoi['score_method'] = 'mean'
             else:
-                # No detected pixels, set low confidence
+                # No detected pixels, or none fell within bounds: set low confidence
                 aoi['confidence'] = 0.0
                 aoi['score_type'] = 'match'
                 aoi['raw_score'] = 0.0

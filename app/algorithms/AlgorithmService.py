@@ -87,6 +87,43 @@ class AlgorithmService:
         inverse_scale = 1.0 / self.scale_factor
         return (contour * inverse_scale).astype(np.int32)
 
+    def _extract_valid_coordinates(self, detected_pixels, shape, apply_scale_factor=False):
+        """
+        Convert an AOI's detected_pixels list to in-bounds coordinate arrays.
+
+        Replaces the common "loop over detected_pixels, transform, bounds-check,
+        append" pattern with vectorized numpy indexing.
+
+        Args:
+            detected_pixels: List of (x, y) pixel tuples.
+            shape: Shape of the array these coordinates will index into (height, width, ...).
+            apply_scale_factor: If True, scale coordinates by self.scale_factor before
+                bounds-checking (for detected_pixels stored at original resolution when
+                the target array is at processing resolution).
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray] or Tuple[None, None]: (xs, ys) int arrays of
+            valid, in-bounds coordinates, or (None, None) if there are none.
+        """
+        if detected_pixels is None or len(detected_pixels) == 0:
+            return None, None
+
+        coords = np.asarray(detected_pixels, dtype=np.int64)
+        if coords.ndim != 2 or coords.shape[1] < 2:
+            return None, None
+
+        xs, ys = coords[:, 0], coords[:, 1]
+        if apply_scale_factor and self.scale_factor != 1.0:
+            xs = (xs.astype(np.float64) * self.scale_factor).astype(np.int64)
+            ys = (ys.astype(np.float64) * self.scale_factor).astype(np.int64)
+
+        max_h, max_w = shape[0], shape[1]
+        in_bounds = (xs >= 0) & (xs < max_w) & (ys >= 0) & (ys < max_h)
+        if not np.any(in_bounds):
+            return None, None
+
+        return xs[in_bounds], ys[in_bounds]
+
     def process_image(self, img, full_path, input_dir, output_dir):
         """
         Processes a single image file using the algorithm.
@@ -332,49 +369,46 @@ class AlgorithmService:
                 continue
 
             # Calculate average hue of detected pixels
-            hue_values = []
-            for px, py in detected_pixels:
-                # Ensure pixel coordinates are within image bounds
-                if 0 <= py < hsv_img.shape[0] and 0 <= px < hsv_img.shape[1]:
-                    hue_values.append(hsv_img[py, px, 0])  # H channel
-
-            if len(hue_values) == 0:
+            px_arr, py_arr = self._extract_valid_coordinates(detected_pixels, hsv_img.shape)
+            if px_arr is None:
                 continue
 
-            avg_hue = int(np.mean(hue_values))
+            avg_hue = int(np.mean(hsv_img[py_arr, px_arr, 0]))
 
             # Calculate hue range with wraparound handling
             hue_min = avg_hue - hue_range
             hue_max = avg_hue + hue_range
 
-            # Create circular ROI mask for this AOI
+            # Restrict to this AOI's circular ROI, working only within its
+            # local bounding box rather than scanning a full-image-sized mask
+            # (the latter turned a per-AOI cost into an O(image size) one).
             center = aoi['center']
             radius = aoi['radius']
-            roi_mask = np.zeros(mask.shape[:2], dtype=np.uint8)
-            cv2.circle(roi_mask, center, radius, 255, -1)
+            cx, cy = center
+            img_h, img_w = hsv_img.shape[:2]
+            y_min, y_max = max(0, cy - radius), min(img_h, cy + radius + 1)
+            x_min, x_max = max(0, cx - radius), min(img_w, cx + radius + 1)
+            if y_max <= y_min or x_max <= x_min:
+                continue
 
-            # Get all pixels within the circular ROI
-            roi_y, roi_x = np.where(roi_mask == 255)
+            ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
+            in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
+            roi_hue = hsv_img[y_min:y_max, x_min:x_max, 0]
 
-            # Check each pixel in ROI for hue match
-            for py, px in zip(roi_y, roi_x):
-                pixel_hue = hsv_img[py, px, 0]
+            # Handle hue wraparound (hue is circular: 0-179 in OpenCV)
+            if hue_min < 0:
+                # Wraparound at lower bound (e.g., hue=5, range=10 -> -5 to 15)
+                # Matches if hue >= (180 + hue_min) OR hue <= hue_max
+                hue_match = (roi_hue >= (180 + hue_min)) | (roi_hue <= hue_max)
+            elif hue_max >= 180:
+                # Wraparound at upper bound (e.g., hue=175, range=10 -> 165 to 185)
+                # Matches if hue >= hue_min OR hue <= (hue_max - 180)
+                hue_match = (roi_hue >= hue_min) | (roi_hue <= (hue_max - 180))
+            else:
+                # No wraparound - simple range check
+                hue_match = (roi_hue >= hue_min) & (roi_hue <= hue_max)
 
-                # Handle hue wraparound (hue is circular: 0-179 in OpenCV)
-                if hue_min < 0:
-                    # Wraparound at lower bound (e.g., hue=5, range=10 -> -5 to 15)
-                    # Matches if hue >= (180 + hue_min) OR hue <= hue_max
-                    if pixel_hue >= (180 + hue_min) or pixel_hue <= hue_max:
-                        expanded_mask[py, px] = 255
-                elif hue_max >= 180:
-                    # Wraparound at upper bound (e.g., hue=175, range=10 -> 165 to 185)
-                    # Matches if hue >= hue_min OR hue <= (hue_max - 180)
-                    if pixel_hue >= hue_min or pixel_hue <= (hue_max - 180):
-                        expanded_mask[py, px] = 255
-                else:
-                    # No wraparound - simple range check
-                    if hue_min <= pixel_hue <= hue_max:
-                        expanded_mask[py, px] = 255
+            expanded_mask[y_min:y_max, x_min:x_max][in_circle & hue_match] = 255
 
         return expanded_mask
 

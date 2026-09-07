@@ -466,44 +466,24 @@ class HSVColorRangeService(AlgorithmService):
         # Add confidence to each AOI
         for aoi in areas_of_interest:
             detected_pixels = aoi.get('detected_pixels', [])
-            if len(detected_pixels) > 0:
-                # Extract distances for this AOI's pixels
-                # NOTE: detected_pixels are in ORIGINAL resolution, but hsv_distances are in PROCESSING resolution
-                # Need to transform coordinates back to processing resolution for lookup
-                aoi_distances = []
-                for pixel in detected_pixels:
-                    x_orig, y_orig = int(pixel[0]), int(pixel[1])
+            # NOTE: detected_pixels are in ORIGINAL resolution, but hsv_distances are in PROCESSING resolution
+            # Need to transform coordinates back to processing resolution for lookup
+            xs, ys = self._extract_valid_coordinates(detected_pixels, hsv_distances.shape, apply_scale_factor=True)
 
-                    # Transform back to processing resolution
-                    if self.scale_factor != 1.0:
-                        x = int(x_orig * self.scale_factor)
-                        y = int(y_orig * self.scale_factor)
-                    else:
-                        x, y = x_orig, y_orig
+            if xs is not None:
+                # Calculate mean distance for this AOI
+                mean_distance = np.mean(hsv_distances[ys, xs])
 
-                    if 0 <= y < hsv_distances.shape[0] and 0 <= x < hsv_distances.shape[1]:
-                        aoi_distances.append(hsv_distances[y, x])
+                # Normalize to 0-100 scale (INVERTED: lower distance = better match = higher confidence)
+                normalized_score = ((max_distance - mean_distance) / distance_range) * 100.0
 
-                if len(aoi_distances) > 0:
-                    # Calculate mean distance for this AOI
-                    mean_distance = np.mean(aoi_distances)
-
-                    # Normalize to 0-100 scale (INVERTED: lower distance = better match = higher confidence)
-                    normalized_score = ((max_distance - mean_distance) / distance_range) * 100.0
-
-                    # Add confidence fields to AOI
-                    aoi['confidence'] = round(normalized_score, 1)
-                    aoi['score_type'] = 'color_distance'
-                    aoi['raw_score'] = round(float(mean_distance), 3)
-                    aoi['score_method'] = 'mean'
-                else:
-                    # No valid pixels, set low confidence
-                    aoi['confidence'] = 0.0
-                    aoi['score_type'] = 'color_distance'
-                    aoi['raw_score'] = 0.0
-                    aoi['score_method'] = 'mean'
+                # Add confidence fields to AOI
+                aoi['confidence'] = round(normalized_score, 1)
+                aoi['score_type'] = 'color_distance'
+                aoi['raw_score'] = round(float(mean_distance), 3)
+                aoi['score_method'] = 'mean'
             else:
-                # No detected pixels, set low confidence
+                # No detected pixels, or none fell within bounds: set low confidence
                 aoi['confidence'] = 0.0
                 aoi['score_type'] = 'color_distance'
                 aoi['raw_score'] = 0.0
