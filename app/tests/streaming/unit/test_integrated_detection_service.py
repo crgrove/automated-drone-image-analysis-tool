@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from PySide6.QtCore import QObject
 import time
 
@@ -428,6 +428,29 @@ class TestOrchestratorPureHelpers:
     def test_cleanup_does_not_raise(self):
         svc = ColorAnomalyAndMotionDetectionOrchestrator()
         svc.cleanup()
+
+    def test_reset_reaches_both_sub_services(self):
+        """A lifecycle hook that only half the pipeline hears is worse than
+        none: the untouched half carries the previous video's state forward
+        while the code reads as if it had been cleared."""
+        svc = ColorAnomalyAndMotionDetectionOrchestrator()
+        svc.motion_service.reset = MagicMock()
+        svc.color_service.reset = MagicMock()
+
+        svc.reset()
+
+        svc.motion_service.reset.assert_called_once()
+        svc.color_service.reset.assert_called_once()
+
+    def test_cleanup_reaches_both_sub_services(self):
+        svc = ColorAnomalyAndMotionDetectionOrchestrator()
+        svc.motion_service.cleanup = MagicMock()
+        svc.color_service.cleanup = MagicMock()
+
+        svc.cleanup()
+
+        svc.motion_service.cleanup.assert_called_once()
+        svc.color_service.cleanup.assert_called_once()
 
     def test_get_metrics_returns_object(self):
         svc = ColorAnomalyAndMotionDetectionOrchestrator()

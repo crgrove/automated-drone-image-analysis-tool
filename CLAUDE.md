@@ -96,6 +96,15 @@ This file is auto-loaded as project context. It defines normative engineering st
 - Controllers/widgets SHOULD use generated `Ui_*` classes for production UIs rather than building equivalent layouts purely in code, unless there is a documented exception.
 - Build environments used for UI regeneration MUST have `pyside6-uic` and `pyside6-rcc` available.
 
+**The documented exceptions.** Two categories of widget have no declarative form, and requiring a `.ui` for them would produce a file that describes nothing. A class in either category MUST carry a `# 2.6 exception:` comment naming which, so the exemption is a decision someone made rather than an omission nobody noticed:
+
+1. **Widgets instantiated N times at runtime from a controller** — repeated row and list-item widgets (`ColorRowWidget`, `HSVColorRowWidget`, `MatchedFilterRowWizardWidget`, `RecentColorWidget`, …). Qt Designer has no concept of "build this once per colour the operator adds".
+2. **Custom-painted primitives** — classes that implement `paintEvent` and mouse handling instead of composing child widgets (`HueRingSelector`, `RangeSlider`, `Toggle`, `ColorWheelWidget`, `HSVRangePickerWidget`, `ClickableColorSwatch`, `OverlayWidget`, …). Their appearance is code by nature.
+
+Everything else that builds layout in Python is a violation awaiting conversion, not an exception. The dialogs under [app/core/views/images/viewer/dialogs/](app/core/views/images/viewer/dialogs/), the shared tabs under [app/core/views/streaming/components/](app/core/views/streaming/components/), the streaming algorithm control widgets, and `CoordinatorWindow` are the known backlog; convert by operator exposure when touching one for another reason.
+
+**Hand-maintained `*_ui.py`.** A `*_ui.py` with no `.ui` beside it is not a generated file, so the first rule above does not protect it — but it is also not exempt from § 2.8. Until it is converted it MUST implement `retranslateUi` and set its visible strings there, and it MUST spell `QCoreApplication.translate(...)` out at every call site: `pyside6-lupdate` matches that call syntactically, so binding it to a local alias runs correctly and extracts **nothing**, leaving the strings with no catalog entry in any language while the file reads as fully internationalized. `scripts/extract_translations.py` distinguishes the two kinds by the presence of a `.ui`; `app/tests/helpers/test_ui_module_hygiene.py` enforces both rules.
+
 ### 2.7 Naming and File Hygiene
 
 - File/module names MUST be intentional and correctly spelled.

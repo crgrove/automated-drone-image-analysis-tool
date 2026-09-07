@@ -87,6 +87,35 @@ def test_caltopo_auth_dialog_initialization(app):
     assert dialog.cancel_button.isDefault() is False
 
 
+def test_caltopo_confirm_button_waits_for_the_page_not_a_clock(app):
+    """The confirm button is enabled by loadFinished, the signal the dialog
+    already connects - not after a fixed second.
+
+    A slow link let the old 1 s timer expire before the page existed, so the
+    operator could confirm an authentication that had not happened; a fast
+    one made them wait for nothing.
+    """
+    dialog = CalTopoAuthDialog(None)
+    assert dialog.manual_done_button.isEnabled() is False
+
+    dialog._on_load_finished(True)
+
+    assert dialog.manual_done_button.isEnabled() is True
+
+
+def test_caltopo_confirm_button_is_enabled_even_when_the_page_fails(app, monkeypatch):
+    """A failed load still needs a way out of the dialog; the warning says
+    what happened."""
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, 'warning',
+                        staticmethod(lambda *args, **kwargs: None))
+
+    dialog = CalTopoAuthDialog(None)
+    dialog._on_load_finished(False)
+
+    assert dialog.manual_done_button.isEnabled() is True
+
+
 def test_caltopo_auth_dialog_swallows_return_key(app):
     """Return must not reach QDialog's default-button handling."""
     dialog = CalTopoAuthDialog(None)

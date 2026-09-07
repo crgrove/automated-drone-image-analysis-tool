@@ -252,22 +252,22 @@ class TestRecordedDatumBeatsInference:
     def test_recorded_msl_overrides_a_low_track(self):
         first = parse_dji_srt(LOW, altitude_datum=DATUM_MSL)[0]
         assert first.altitude_msl_m == pytest.approx(9.8)
-        assert first.altitude_agl_m is None
+        assert first.altitude_ato_m is None
 
     def test_recorded_relative_overrides_a_high_track(self):
         first = parse_dji_srt(HIGH, altitude_datum=DATUM_RELATIVE)[0]
-        assert first.altitude_agl_m == pytest.approx(1622.8)
+        assert first.altitude_ato_m == pytest.approx(1622.8)
         assert first.altitude_msl_m is None
 
     def test_unrecorded_falls_back_to_inference(self):
-        assert parse_dji_srt(LOW)[0].altitude_agl_m == pytest.approx(9.8)
+        assert parse_dji_srt(LOW)[0].altitude_ato_m == pytest.approx(9.8)
         assert parse_dji_srt(HIGH)[0].altitude_msl_m == pytest.approx(1622.8)
 
     def test_explicit_defers_to_inference(self):
         """'Both' says the aircraft states its datums; it says nothing about
         a legacy key, so it must not force one."""
         assert parse_dji_srt(LOW, altitude_datum=DATUM_EXPLICIT)[0] \
-            .altitude_agl_m == pytest.approx(9.8)
+            .altitude_ato_m == pytest.approx(9.8)
 
 
 class TestFilenameSuffix:
@@ -355,8 +355,13 @@ class TestShippedDictionary:
     regression here means the reference data was lost or overwritten.
     """
 
+    # staticmethod, not an instance method: pytest 10 removes class-scoped
+    # fixtures defined as instance methods, and this body never touched
+    # self. scope="class" stays, so video.csv is still parsed once for the
+    # whole class rather than once per test.
     @pytest.fixture(scope="class")
-    def table(self):
+    @staticmethod
+    def table():
         path = os.path.join(os.path.dirname(__file__),
                             "..", "..", "..", "..", "video.csv")
         return pd.read_csv(os.path.abspath(path), comment="#")

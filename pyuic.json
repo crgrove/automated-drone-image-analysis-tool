@@ -117,14 +117,6 @@
       "app/algorithms/images/ThermalRange/views"
     ],
     [
-      "resources/views/components/*.ui",
-      "app/core/views/components/"
-    ],
-    [
-      "resources/views/algorithms/MotionDetectionWizard.ui",
-      "app/algorithms/streaming/MotionDetection/views"
-    ],
-    [
       "resources/views/algorithms/ColorDetectionWizard.ui",
       "app/algorithms/streaming/ColorDetection/views"
     ],

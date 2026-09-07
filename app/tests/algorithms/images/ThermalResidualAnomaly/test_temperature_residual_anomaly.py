@@ -12,7 +12,8 @@ def testTemperatureResidualAnomalyE2E(main_window, testData, qtbot, thermal_sdk_
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
     assert main_window.algorithmWidget is not None
 
-    main_window.algorithmComboBox.setCurrentText('Temperature Residual Anomaly')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ThermalResidualAnomaly'))
     main_window.minAreaSpinBox.setValue(10)
     main_window.maxAreaSpinBox.setValue(0)
     assert main_window.algorithmWidget is not None

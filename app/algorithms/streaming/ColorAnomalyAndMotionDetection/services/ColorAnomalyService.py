@@ -36,6 +36,32 @@ class ColorAnomalyService(QObject):
         with self.config_lock:
             pass  # Configuration is read-only for this service
 
+    def reset(self):
+        """Reset per-session state.
+
+        Detection is stateless per frame: the histogram, the rare-bin mask
+        and the contours are all rebuilt inside :meth:`detect`. The only
+        thing that outlives a frame is the morphology kernel cache, and
+        that is shaped by the config rather than by the footage, so there
+        is nothing here that could carry one video's content into the next.
+        Present because the streaming lifecycle contract requires both
+        hooks (CLAUDE.md 2.2.1), and a documented no-op is the honest
+        implementation of "nothing to do".
+        """
+        with self.config_lock:
+            pass
+
+    def cleanup(self):
+        """Release cached cv2 resources on stream shutdown or switch.
+
+        The service stays usable afterwards - :meth:`_get_morph_kernel`
+        repopulates lazily - which it must, because StreamViewerWindow
+        calls cleanup() mid-session when the operator switches video and
+        keeps the same widget.
+        """
+        with self.config_lock:
+            self._morph_kernel_cache.clear()
+
     def _get_morph_kernel(self, size: int) -> np.ndarray:
         """Get cached morphology kernel."""
         if size not in self._morph_kernel_cache:

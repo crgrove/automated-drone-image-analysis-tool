@@ -418,6 +418,23 @@ def test_add_capture_time_sets_all_three_date_tags(tmp_path):
     assert exif['0th'][piexif.ImageIFD.DateTime] == stamp
 
 
+def test_add_gps_data_without_an_altitude_writes_no_altitude_tags(tmp_path):
+    """EXIF GPSAltitude is an absolute height. A caller holding only a
+    takeoff-relative or terrain-relative figure has nothing to put there, and
+    writing it anyway makes the frame claim a sea-level altitude it never had.
+    """
+    import piexif
+
+    image = _tiny_jpeg(tmp_path)
+    MetaDataHelper.add_gps_data(image, 39.4835, 73.5852, None)
+
+    gps = piexif.load(image)["GPS"]
+    assert piexif.GPSIFD.GPSLatitude in gps
+    assert piexif.GPSIFD.GPSLongitude in gps
+    assert piexif.GPSIFD.GPSAltitude not in gps
+    assert piexif.GPSIFD.GPSAltitudeRef not in gps
+
+
 def test_add_gps_data_can_stamp_time_in_the_same_pass(tmp_path):
     """A frame needing both is only rewritten once."""
     image = _tiny_jpeg(tmp_path)

@@ -128,7 +128,8 @@ class ImageLoadController(TranslationMixin):
             # Update overlay
             self._update_overlay(image_service)
 
-            # Refresh tools that depend on GSD (e.g. person size reference)
+            # Refresh tools that depend on GSD (e.g. person size reference).
+            # Stays here: later pipeline steps read current_gsd_service.
             if hasattr(self.parent, '_update_person_overlay_button_enabled'):
                 self.parent._update_person_overlay_button_enabled()
 
@@ -145,6 +146,13 @@ class ImageLoadController(TranslationMixin):
             # for the transient viewChanged handlers and settle-window
             # timers that used to chase the zoom reset above.
             self._apply_pending_view_zoom()
+
+            # The person overlay anchors on the view centre, so it rebuilds
+            # after the zoom above rather than before it. Event-driven
+            # replacement for the dialog's own 300 ms "let the navigation
+            # land" wait.
+            if hasattr(self.parent, '_refresh_person_reference_dialog'):
+                self.parent._refresh_person_reference_dialog()
 
         except Exception as e:
             self._handle_load_error(e, image)

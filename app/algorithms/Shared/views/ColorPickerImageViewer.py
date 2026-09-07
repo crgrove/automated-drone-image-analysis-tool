@@ -158,7 +158,8 @@ class ColorPickerImageViewer(TranslationMixin, QWidget):
                 self,
                 self.tr("Select Image"),
                 initial_dir,
-                "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
+                self.tr("Image Files (*.png *.jpg *.jpeg *.bmp *.tif "
+                        "*.tiff);;All Files (*)")
             )
 
         if not filepath:

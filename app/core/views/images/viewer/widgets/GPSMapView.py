@@ -1767,8 +1767,19 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 terrain_text = FormatHelper.format_elevation(
                     terrain_elevation, unit, places=0)
                 agl_text = FormatHelper.format_elevation(effective_agl, unit)
-                tooltip += f"\n{self.tr('Terrain')}: {terrain_text} ASL"
-                tooltip += f"\n{self.tr('Effective AGL')}: {agl_text}"
+                # Plane names from FormatHelper: format_elevation returns
+                # a bare value and unit on purpose, so the plane belongs at
+                # the call site - and ADIAT's name for sea level is MSL,
+                # never ASL (CLAUDE.md 2.11).
+                msl = FormatHelper.altitude_reference_abbreviation(
+                    FormatHelper.ALTITUDE_REFERENCE_MSL)
+                # Honest: this branch is reachable only when
+                # terrain_elevation resolved, and effective_agl is then the
+                # DEM difference computed above - a genuine terrain AGL.
+                agl = FormatHelper.altitude_reference_abbreviation(
+                    FormatHelper.ALTITUDE_REFERENCE_TERRAIN)
+                tooltip += f"\n{self.tr('Terrain')}: {terrain_text} {msl}"
+                tooltip += f"\n{self.tr('Effective')} {agl}: {agl_text}"
             if has_raycast:
                 tooltip += "\nProjection: Raycast"
 

@@ -146,7 +146,7 @@ class TestDatumLookupIsLazy:
 
         track = read_srt_track(srt, source="test", datum_provider=provider)
         # Inference ran: 9.8 m is below the ceiling, so relative.
-        assert track.points[0].altitude_agl_m == pytest.approx(9.8)
+        assert track.points[0].altitude_ato_m == pytest.approx(9.8)
 
     def test_an_explicit_datum_short_circuits_the_provider(self, workspace):
         tmp, _video = workspace

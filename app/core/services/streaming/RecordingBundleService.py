@@ -51,6 +51,9 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import cv2
+import numpy as np
+
 from core.services.LoggerService import LoggerService
 from core.services.streaming.RecordingSessionService import (
     DETECTIONS_LOG,
@@ -797,3 +800,159 @@ __all__ = [
     "write_results_xml",
     "write_telemetry_csv",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Mission Gallery export
+#
+# The Flight Viewer's gallery can be written out as an ordinary image-mode
+# results folder (plan §15 M3), which is the same job write_results_xml does
+# for a recorded bundle - one detection per image entry, one AOI each. It
+# lived in MissionGalleryController until CLAUDE.md 2.1 caught it: building an
+# XML tree, writing JPEG bytes and cv2-encoding a placeholder are not UI
+# orchestration.
+# ---------------------------------------------------------------------------
+
+def write_gallery_export(out_dir: str, rows: Sequence[dict]) -> str:
+    """Write a Mission Gallery export into ``out_dir``.
+
+    Thumbnails plus an ``ADIAT_Data.xml`` shaped like an ordinary
+    image-mode results file, so the operator can re-open the folder from
+    the Image Analysis window with no new code on the receiving side.
+
+    Lives here rather than in the gallery controller because it is file
+    I/O and XML construction (CLAUDE.md 2.1), and because this module
+    already writes the same shape for a recorded bundle - see
+    :func:`write_results_xml`, whose docstring has always said it
+    "mirrors the Mission Gallery export".
+
+    Args:
+        out_dir: Directory to create and write into.
+        rows: Detection snapshots, already filtered by the caller.
+
+    Returns:
+        str: Path of the XML file that was written.
+    """
+    # Import lazily so the gallery module doesn't pull in XmlService
+    # (and its dependencies) at import time.
+    from core.services.XmlService import XmlService
+
+    os.makedirs(out_dir, exist_ok=True)
+    xml = XmlService()
+    xml.xml_path = os.path.join(out_dir, RESULTS_XML)
+
+    # Settings block — fields are required by the image-mode loader
+    # even though they're meaningless for a Flight Viewer export.
+    settings = {
+        "output_dir": out_dir,
+        "input_dir": out_dir,
+        "num_processes": 1,
+        "identifier_color": (0, 255, 0),
+        "aoi_radius": 20,
+        "min_area": 1,
+        "max_area": 0,
+        "hist_ref_path": "",
+        "kmeans_clusters": 0,
+        "algorithm": "FlightViewer",
+        "thermal": "False",
+        "options": {
+            "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "source": "ADIAT Flight Viewer",
+        },
+    }
+    # XmlService.add_settings_to_xml is the dedicated path for writing
+    # settings into the new tree.
+    xml.add_settings_to_xml(**settings)
+
+    # One ``image`` per detection. The image's areas_of_interest
+    # captures the bbox (in fractional coords) and the GPS location
+    # so the standard viewer can re-render the pin + AOI overlay.
+    for idx, detection in enumerate(rows):
+        thumb_path = write_gallery_thumb(out_dir, idx, detection)
+        img_record = {
+            "path": thumb_path,
+            "width": 0,
+            "height": 0,
+            "aois": [build_gallery_aoi(detection)],
+        }
+        xml.add_image_to_xml(img_record)
+
+    xml.save_xml_file(xml.xml_path)
+    return xml.xml_path
+
+
+def write_gallery_thumb(out_dir: str, idx: int, detection: dict) -> str:
+    """Write the detection's thumbnail (or a placeholder) and return its path."""
+    thumb_bytes = detection.get("thumb_bytes")
+    filename = f"detection_{idx:04d}.jpg"
+    thumb_path = os.path.join(out_dir, filename)
+    if isinstance(thumb_bytes, (bytes, bytearray)) and thumb_bytes:
+        with open(thumb_path, "wb") as fp:
+            fp.write(thumb_bytes)
+    else:
+        # No thumbnail in the snapshot — encode a tiny 1x1 black JPEG
+        # so the XML loader doesn't choke on a missing file.
+        placeholder = np.zeros((1, 1, 3), dtype=np.uint8)
+        ok, buf = cv2.imencode(".jpg", placeholder)
+        if ok:
+            with open(thumb_path, "wb") as fp:
+                fp.write(buf.tobytes())
+        else:
+            # Last-resort: write the minimal SOI+EOI marker pair. Not a
+            # valid renderable JPEG but enough to satisfy "file exists".
+            with open(thumb_path, "wb") as fp:
+                fp.write(b"\xff\xd8\xff\xd9")
+    return thumb_path
+
+
+def build_gallery_aoi(detection: dict) -> dict:
+    """Compose a single areas_of_interest entry for ``detection``.
+
+    Kept separate from :func:`build_aoi`: that one takes pixel ``bbox``
+    plus a ``thumbnail_origin``, this one fractional ``bbox_norm``
+    against a synthetic reference frame. Merging them would need a
+    caller to say which convention it is using, which is the bug.
+    """
+    bbox = detection.get("bbox_norm") or []
+    # Default to a small AOI in the center of a synthetic 256x256 frame
+    # so the image-mode viewer can render a pin even when bbox is missing.
+    if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+        try:
+            # Translate normalized bbox into a center+radius pair.
+            # `bbox_norm` is [x_min, y_min, w, h] in 0..1 coords; we
+            # synthesize against a 256x256 reference so the AOI lands
+            # somewhere recognisable in the exported placeholder JPEG.
+            w_ref, h_ref = 256, 256
+            cx = int((float(bbox[0]) + float(bbox[2]) / 2.0) * w_ref)
+            cy = int((float(bbox[1]) + float(bbox[3]) / 2.0) * h_ref)
+            radius = max(8, int(min(bbox[2], bbox[3]) * min(w_ref, h_ref) / 2.0))
+            area = int(float(bbox[2]) * float(bbox[3]) * w_ref * h_ref)
+        except (TypeError, ValueError):
+            cx, cy, radius, area = 128, 128, 20, 100
+    else:
+        cx, cy, radius, area = 128, 128, 20, 100
+
+    aoi = {
+        "center": (cx, cy),
+        "radius": radius,
+        "area": area,
+    }
+    confidence = detection.get("confidence")
+    if isinstance(confidence, (int, float)):
+        aoi["confidence"] = float(confidence)
+        aoi["score_type"] = "confidence"
+        aoi["raw_score"] = float(confidence)
+        aoi["score_method"] = "FlightViewer"
+
+    loc = detection.get("location")
+    if isinstance(loc, dict):
+        lat = loc.get("lat")
+        lon = loc.get("lon")
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            comment = f"GPS: {lat:.6f}, {lon:.6f}"
+            cls = detection.get("class_name") or detection.get("detector_id") or ""
+            if cls:
+                comment = f"{cls} @ {comment}"
+            aoi["user_comment"] = comment
+
+    return aoi

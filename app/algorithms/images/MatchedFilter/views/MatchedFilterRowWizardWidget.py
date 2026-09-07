@@ -61,6 +61,9 @@ class ClickableColorSwatch(TranslationMixin, QFrame):
 
 class MatchedFilterRowWizardWidget(TranslationMixin, QWidget):
     """Simplified widget representing a matched filter configuration for wizard."""
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per target colour the operator adds, which is not
+    # something a .ui can describe.
 
     delete_requested = Signal(QWidget)
     changed = Signal()
@@ -73,6 +76,24 @@ class MatchedFilterRowWizardWidget(TranslationMixin, QWidget):
         ("Broad", 0.3),
         ("Very Broad", 0.1)
     ]
+
+    def _preset_label(self, key):
+        """Localized display name for an aggressiveness preset.
+
+        The English keys remain the identity: selection, persistence and the
+        threshold lookup all go through the preset's *index*, never its
+        text. Spelled out as literals rather than ``self.tr(key)`` because
+        ``pyside6-lupdate`` extracts only literal arguments - a variable
+        inside ``tr()`` compiles fine, extracts nothing, and returns English
+        in every locale.
+        """
+        return {
+            "Very Strict": self.tr("Very Strict"),
+            "Strict": self.tr("Strict"),
+            "Moderate": self.tr("Moderate"),
+            "Broad": self.tr("Broad"),
+            "Very Broad": self.tr("Very Broad"),
+        }.get(key, key)
 
     def __init__(self, parent=None, color=None, aggressiveness_index=2):
         """
@@ -142,7 +163,7 @@ class MatchedFilterRowWizardWidget(TranslationMixin, QWidget):
         rowLayout.addWidget(self.colorSwatch)
 
         # Aggressiveness label (multi-line, vertically centered)
-        aggr_label = QLabel("Match\nAggressiveness:", self.rowFrame)
+        aggr_label = QLabel(self.tr("Match\nAggressiveness:"), self.rowFrame)
         # Force 11pt font
         _lbl_font = QFont(self.font())
         _lbl_font.setPointSize(11)
@@ -157,7 +178,7 @@ class MatchedFilterRowWizardWidget(TranslationMixin, QWidget):
         combo_font.setPointSize(11)
         self.aggressivenessCombo.setFont(combo_font)
         for label, _ in self.AGGRESSIVENESS_PRESETS:
-            self.aggressivenessCombo.addItem(label)
+            self.aggressivenessCombo.addItem(self._preset_label(label))
         self.aggressivenessCombo.setCurrentIndex(self.aggressiveness_index)
         self.aggressivenessCombo.currentIndexChanged.connect(self._on_aggressiveness_changed)
         self.aggressivenessCombo.setMinimumWidth(180)

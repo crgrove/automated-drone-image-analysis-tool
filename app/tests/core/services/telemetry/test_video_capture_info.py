@@ -120,7 +120,7 @@ class TestDetectCaptureInfo:
         track = TelemetryTrack.from_dji_samples([
             DjiSrtSample(start_seconds=float(i), end_seconds=float(i) + 0.03,
                          latitude=30.0, longitude=-97.0,
-                         altitude_msl_m=200.0, altitude_agl_m=alt)
+                         altitude_msl_m=200.0, altitude_ato_m=alt)
             for i, alt in enumerate(altitudes)
         ])
         return TelemetryResolution(track=track, source="embedded", detail="")
@@ -134,9 +134,54 @@ class TestDetectCaptureInfo:
 
         assert info.make == "DJI"
         assert info.model == "Matrice 4T"
-        assert info.altitude_agl_m == pytest.approx(89.0)
+        assert info.altitude_ato_m == pytest.approx(89.0)
         assert info.altitude_samples == 3
         assert info.has_device and info.has_altitude
+
+    def test_ato_is_reported_as_takeoff_relative(self, drones):
+        """The wizard field means height above the ground being flown over,
+        and ATO only approximates it. The reference travels with the number
+        so the operator is not told it is something it is not."""
+        from helpers.FormatHelper import FormatHelper
+
+        device = patch(f"{SERVICE}.get_video_device_tags", return_value={})
+        telemetry = patch(f"{SERVICE}.load_telemetry_for_video",
+                          return_value=self._telemetry([88.0, 89.0, 90.0]))
+        with device, telemetry:
+            info = detect_capture_info("v.mp4", drones_df=drones)
+
+        assert info.altitude_m == pytest.approx(89.0)
+        assert info.altitude_reference == FormatHelper.ALTITUDE_REFERENCE_TAKEOFF
+        assert info.altitude_agl_terrain_m is None
+
+    def test_a_log_with_its_own_agl_wins_and_says_so(self, drones):
+        """A flight log that resolved a terrain AGL answers the wizard's
+        question exactly, so it is preferred over the ATO column and reported
+        as terrain-referenced."""
+        from core.services.telemetry.FlightLogCsvParser import FlightLogSample
+        from core.services.telemetry.TelemetrySourceResolver import TelemetryResolution
+        from core.services.telemetry.TelemetryTrack import TelemetryTrack
+        from helpers.FormatHelper import FormatHelper
+
+        track = TelemetryTrack.from_samples([
+            FlightLogSample(start_seconds=float(i), end_seconds=float(i),
+                            latitude=30.0, longitude=-97.0,
+                            altitude_ato_m=120.0,
+                            altitude_agl_terrain_m=agl)
+            for i, agl in enumerate([94.0, 95.0, 96.0])
+        ])
+        device = patch(f"{SERVICE}.get_video_device_tags", return_value={})
+        telemetry = patch(f"{SERVICE}.load_telemetry_for_video",
+                          return_value=TelemetryResolution(
+                              track=track, source="sidecar", detail=""))
+        with device, telemetry:
+            info = detect_capture_info("v.mp4", drones_df=drones)
+
+        assert info.altitude_agl_terrain_m == pytest.approx(95.0)
+        assert info.altitude_m == pytest.approx(95.0)
+        assert info.altitude_reference == FormatHelper.ALTITUDE_REFERENCE_TERRAIN
+        # The ATO column is not silently folded into the same median.
+        assert info.altitude_ato_m is None
 
     def test_uses_the_median_altitude(self, drones):
         """Takeoff/landing legs must not drag the representative altitude."""
@@ -144,7 +189,7 @@ class TestDetectCaptureInfo:
                 patch(f"{SERVICE}.load_telemetry_for_video",
                       return_value=self._telemetry([0.0, 1.0, 90.0, 91.0, 92.0])):
             info = detect_capture_info("v.mp4", drones_df=drones)
-        assert info.altitude_agl_m == pytest.approx(91.0)
+        assert info.altitude_ato_m == pytest.approx(91.0)
         # Ground fixes are excluded outright, not merely outvoted.
         assert info.altitude_samples == 3
 
@@ -160,7 +205,7 @@ class TestDetectCaptureInfo:
                       return_value=self._telemetry(ground + flying)):
             info = detect_capture_info("v.mp4", drones_df=drones)
 
-        assert info.altitude_agl_m == pytest.approx(76.9)
+        assert info.altitude_ato_m == pytest.approx(76.9)
         assert info.altitude_samples == 42
 
     def test_a_clip_that_never_left_the_ground_detects_nothing(self, drones):
@@ -224,7 +269,7 @@ class TestDetectCaptureInfo:
             track=TelemetryTrack.from_dji_samples([
                 DjiSrtSample(start_seconds=0.0, end_seconds=0.03,
                              latitude=30.0, longitude=-97.0,
-                             altitude_msl_m=207.0, altitude_agl_m=None),
+                             altitude_msl_m=207.0, altitude_ato_m=None),
             ]),
             source="explicit-file", detail="",
         )
@@ -248,7 +293,7 @@ class TestDetectCaptureInfo:
                 "v.mp4", drones_df=drones, metadata_path="C:/logs/flight.csv")
 
         assert loader.call_args[0][1] == "C:/logs/flight.csv"
-        assert info.altitude_agl_m == pytest.approx(75.0)
+        assert info.altitude_ato_m == pytest.approx(75.0)
 
     def test_no_metadata_file_still_probes_the_video(self, drones):
         with patch(f"{SERVICE}.get_video_device_tags", return_value={}), \

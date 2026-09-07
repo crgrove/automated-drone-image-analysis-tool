@@ -1207,7 +1207,15 @@ class FlightTileController(QObject):
         we emit ``tileClosed``).
         """
         if self._service is not None:
-            self._service.cleanup()
+            # Guarded like the other two teardown sites: this one runs in a
+            # Qt slot, so a raise here would escape as an unhandled
+            # exception and cost the operator the reconnect they asked for.
+            try:
+                self._service.cleanup()
+            except Exception:  # pragma: no cover - defensive
+                self.logger.warning(
+                    "FlightTileController: cleanup raised during reconnect"
+                )
             self._service = None
         if self._pairing_code is None:
             return

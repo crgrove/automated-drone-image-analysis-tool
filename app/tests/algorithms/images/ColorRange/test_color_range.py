@@ -6,7 +6,8 @@ def testColorRangeE2E(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
     assert main_window.algorithmWidget is not None
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget

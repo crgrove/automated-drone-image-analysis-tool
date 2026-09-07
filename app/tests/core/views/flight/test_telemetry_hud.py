@@ -66,6 +66,21 @@ class TestThreeReferences:
         hud.apply_envelope(envelope(agl=47.0, source=AGL_SOURCE_TERRAIN))
         assert hud.altLabel.text() == "ALT AGL 47 / ATO 52 / MSL 312 m"
 
+    def test_the_plane_labels_come_from_formathelper(self, hud, monkeypatch):
+        """The rendered text is identical either way, so this is the only
+        assertion that can tell a helper-sourced label from a literal - and
+        without it the next edit can quietly hardcode them back."""
+        monkeypatch.setattr(
+            "helpers.FormatHelper.FormatHelper.altitude_reference_abbreviation",
+            staticmethod(lambda reference: f"X-{reference}"),
+        )
+        hud.apply_envelope(envelope(agl=47.0, source=AGL_SOURCE_TERRAIN))
+
+        text = hud.altLabel.text()
+        assert "X-terrain 47" in text
+        assert "X-takeoff 52" in text
+        assert "X-msl 312" in text
+
     def test_feet_converts_every_slot(self, imperial_hud):
         imperial_hud.apply_envelope(envelope(agl=47.0, source=AGL_SOURCE_TERRAIN))
         # 47 m = 154 ft, 52 m = 171 ft, 312 m = 1024 ft.

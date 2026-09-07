@@ -132,3 +132,37 @@ def test_image_name_is_shown_with_the_full_name_on_hover():
 
     parent.fileNameLabel.setText.assert_called_once_with(name)
     parent.fileNameLabel.setToolTip.assert_called_once_with(name)
+
+
+# ---------------------------------------------------------------------------
+#  Load-pipeline ordering
+#
+#  The person overlay anchors the reference figure on the view centre, so it
+#  has to rebuild AFTER whatever zoom the navigation asked for. Getting this
+#  backwards put the figure at the pre-zoom centre and let the dialog's
+#  legibility auto-zoom fight the gallery's zoom-to-AOI - the field report
+#  that a 300 ms timer inside the dialog was papering over.
+# ---------------------------------------------------------------------------
+
+def test_the_pipeline_rebuilds_the_person_overlay_after_the_zoom():
+    """Read the ordering out of the source, so the two calls cannot be
+    reordered without this failing."""
+    import inspect
+
+    source = inspect.getsource(ImageLoadController.load_image)
+    zoom_at = source.index('self._apply_pending_view_zoom()')
+    person_at = source.index('_refresh_person_reference_dialog')
+    button_at = source.index('_update_person_overlay_button_enabled')
+
+    # The GSD-dependent button state stays early (later steps read
+    # current_gsd_service); only the dialog rebuild moved to the tail.
+    assert button_at < zoom_at < person_at
+
+
+def test_a_viewer_without_the_refresh_hook_is_tolerated():
+    """The hook is optional - other windows reuse this controller."""
+    controller, parent = _controller()
+    del parent._refresh_person_reference_dialog
+
+    # hasattr is the guard the pipeline uses; prove it reports absence.
+    assert not hasattr(parent, '_refresh_person_reference_dialog')

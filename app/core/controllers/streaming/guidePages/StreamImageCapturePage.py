@@ -9,6 +9,7 @@ from core.services.GSDService import GSDService
 from core.services.LoggerService import LoggerService
 from core.services.streaming.RTMPStreamService import SOURCE_TYPE_FILE
 from core.services.telemetry.VideoCaptureInfoService import detect_capture_info
+from helpers.FormatHelper import FormatHelper
 
 
 class StreamImageCapturePage(BasePage):
@@ -108,7 +109,8 @@ class StreamImageCapturePage(BasePage):
         if info.has_device:
             self._select_detected_drone(info.make, info.model)
         if info.has_altitude:
-            self._apply_detected_altitude(info.altitude_agl_m)
+            self._apply_detected_altitude(
+                info.altitude_m, info.altitude_reference)
 
     def _select_detected_drone(self, make: str, model: str) -> None:
         """Select the combo entry matching a detected make/model."""
@@ -127,17 +129,27 @@ class StreamImageCapturePage(BasePage):
                 )
                 return
 
-    def _apply_detected_altitude(self, altitude_m: float) -> None:
+    def _apply_detected_altitude(self, altitude_m: float,
+                                 reference: str = None) -> None:
         """Set the altitude control from a detected altitude.
 
-        The detected value is the log's takeoff-relative reading (SRT
-        ``rel_alt`` — ATO), while the field asks for height above the
+        Usually the detected value is the log's takeoff-relative reading
+        (SRT ``rel_alt`` — ATO), while the field asks for height above the
         ground being flown over, which is what GSD depends on. The two
-        agree over flat terrain and diverge with relief, so this is a
+        agree over flat terrain and diverge with relief, so that is a
         starting point the operator is told to check rather than an
         answer; the field's hint says so. Left as an autofill on purpose:
         it is right often enough to be worth offering, and correcting the
         number here would need a DEM lookup per frame.
+
+        A log that resolved its own terrain AGL answers the field exactly,
+        and ``reference`` says which of the two arrived so the log line
+        does not claim a plane the number was not measured from.
+
+        Args:
+            altitude_m: The detected altitude, in metres.
+            reference: One of ``FormatHelper.ALTITUDE_REFERENCE_*``.
+                Defaults to takeoff-relative, the historical assumption.
         """
         unit = self.wizard_data.get('altitude_unit', 'ft')
         value = altitude_m if unit == 'm' else altitude_m * 3.28084
@@ -151,8 +163,11 @@ class StreamImageCapturePage(BasePage):
         slider.setValue(value)
         self.dialog.altitudeSpinBox.setValue(value)
         self.wizard_data['altitude'] = value
+        plane = FormatHelper.altitude_reference_abbreviation(
+            reference or FormatHelper.ALTITUDE_REFERENCE_TAKEOFF
+        )
         self.logger.info(
-            f"Auto-set altitude to {value} {unit} from video telemetry"
+            f"Auto-set altitude to {value} {unit} {plane} from video telemetry"
         )
 
     @staticmethod

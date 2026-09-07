@@ -24,14 +24,19 @@ class RXAnomalyController(QWidget, Ui_RXAnomaly, AlgorithmController):
         self.fixComboBoxForMacOS(self.segmentsComboBox)
         self.sensitivitySlider.valueChanged.connect(self.update_sensitivity)
 
+    # The values behind the segments combo, in the order the items
+    # appear in the .ui file.
+    SEGMENT_VALUES = (1, 2, 4, 6, 9, 16, 25, 36)
+
     def _init_segments_combo_data(self):
         """Attach stable numeric values so translated labels do not affect config values."""
-        for index in range(self.segmentsComboBox.count()):
-            text = self.segmentsComboBox.itemText(index)
-            try:
-                self.segmentsComboBox.setItemData(index, int(text))
-            except ValueError:
-                continue
+        # Positional, not parsed from the label. int(itemText(...)) leaves
+        # the data None for any label a translator writes differently
+        # (a digit-grouped "1 000" is enough), and get_options' then
+        # int(currentData()) raises TypeError rather than failing clearly.
+        for index in range(min(self.segmentsComboBox.count(),
+                               len(self.SEGMENT_VALUES))):
+            self.segmentsComboBox.setItemData(index, self.SEGMENT_VALUES[index])
 
     def get_options(self):
         """

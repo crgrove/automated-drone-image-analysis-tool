@@ -1,4 +1,10 @@
-"""Unit tests for the Mission Gallery export path (plan §15 M3)."""
+"""Unit tests for the Mission Gallery export path (plan §15 M3).
+
+The writing itself lives in RecordingBundleService - it is file I/O and XML
+construction, not UI orchestration - so these drive the service functions
+directly. The controller's part is now the directory prompt and the result
+message, covered separately.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +19,10 @@ from PySide6.QtWidgets import QApplication
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from core.controllers.flight import MissionGalleryController  # noqa: E402
+from core.services.streaming.RecordingBundleService import (  # noqa: E402
+    build_gallery_aoi,
+    write_gallery_export,
+)
 from core.views.flight.MissionGalleryDock import MissionGalleryDock  # noqa: E402
 
 
@@ -20,6 +30,15 @@ from core.views.flight.MissionGalleryDock import MissionGalleryDock  # noqa: E40
 def qapp():
     app = QApplication.instance() or QApplication([])
     yield app
+
+
+def _controller_module():
+    """The MissionGalleryController *module*, not the class the package
+    re-exports under the same dotted name."""
+    import importlib
+
+    return importlib.import_module(
+        "core.controllers.flight.MissionGalleryController")
 
 
 def _detection(track_key: str, *, lat: float, lon: float, thumb=b"\xff\xd8\xff\xe0fakejpeg"):
@@ -43,7 +62,7 @@ def test_export_writes_xml_and_thumbnails(qapp, tmp_path) -> None:
     controller.add_detection("ABC234", _detection("t1", lat=30.1, lon=-97.5))
     controller.add_detection("ABC234", _detection("t2", lat=30.2, lon=-97.6))
 
-    xml_path = controller._write_export(str(tmp_path), controller.detections)
+    xml_path = write_gallery_export(str(tmp_path), controller.detections)
 
     # XML file exists at the expected location.
     assert os.path.exists(xml_path)
@@ -83,7 +102,7 @@ def test_export_handles_thumb_less_detections(qapp, tmp_path) -> None:
     detection = _detection("t1", lat=30.1, lon=-97.5, thumb=None)
     controller.add_detection("ABC234", detection)
 
-    controller._write_export(str(tmp_path), controller.detections)
+    write_gallery_export(str(tmp_path), controller.detections)
 
     # Placeholder JPEG written and non-empty (1x1 baseline JPEG, ~125 bytes).
     placeholder = os.path.join(tmp_path, "detection_0000.jpg")
@@ -96,7 +115,7 @@ def test_export_handles_thumb_less_detections(qapp, tmp_path) -> None:
 
 
 def test_build_aoi_falls_back_when_bbox_missing(qapp) -> None:
-    aoi = MissionGalleryController._build_aoi({"class_name": "person", "confidence": 0.7})
+    aoi = build_gallery_aoi({"class_name": "person", "confidence": 0.7})
     assert aoi["center"] == (128, 128)
     assert aoi["radius"] >= 8
     assert aoi["confidence"] == 0.7
@@ -108,7 +127,62 @@ def test_build_aoi_includes_user_comment_with_gps(qapp) -> None:
         "confidence": 0.8,
         "location": {"lat": 30.1234, "lon": -97.5678},
     }
-    aoi = MissionGalleryController._build_aoi(detection)
+    aoi = build_gallery_aoi(detection)
     assert "30.1234" in aoi["user_comment"]
     assert "-97.5678" in aoi["user_comment"]
     assert "person" in aoi["user_comment"]
+
+
+def test_the_controller_delegates_the_writing(qapp, tmp_path, monkeypatch) -> None:
+    """What the controller keeps is the prompt and the result message.
+
+    Asserting the delegation rather than the file contents is the point: the
+    XML shape is the service's contract and is covered above, and a
+    controller that reimplements it is the thing CLAUDE.md 2.1 rules out.
+    """
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    dock = MissionGalleryDock()
+    controller = MissionGalleryController(dock)
+    dock.register_feed("ABC234", "Tile-ABC234")
+    controller.add_detection("ABC234", _detection("t1", lat=30.1, lon=-97.5))
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: str(tmp_path)))
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: shown.append(a)))
+
+    calls = []
+    # The package re-exports the class under the module's own name, so patch
+    # the module object rather than a dotted string.
+    monkeypatch.setattr(
+        _controller_module(), "write_gallery_export",
+        lambda out_dir, rows: calls.append((out_dir, list(rows))) or "written.xml")
+
+    controller._on_export_clicked()
+
+    assert len(calls) == 1
+    out_dir, rows = calls[0]
+    assert out_dir == str(tmp_path)
+    assert len(rows) == 1
+    assert shown, "the operator is told where the export went"
+
+
+def test_a_cancelled_directory_prompt_writes_nothing(qapp, monkeypatch) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    dock = MissionGalleryDock()
+    controller = MissionGalleryController(dock)
+    dock.register_feed("ABC234", "Tile-ABC234")
+    controller.add_detection("ABC234", _detection("t1", lat=30.1, lon=-97.5))
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: ""))
+    calls = []
+    monkeypatch.setattr(_controller_module(), "write_gallery_export",
+                        lambda *a, **k: calls.append(a))
+
+    controller._on_export_clicked()
+
+    assert calls == []

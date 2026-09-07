@@ -33,7 +33,7 @@ def test_image():
 
 def test_thermal_range_service_initialization(thermal_range_service):
     """Test ThermalRangeService initialization."""
-    assert thermal_range_service.name == 'MatchedFilter'  # Note: inherits from base
+    assert thermal_range_service.name == 'ThermalRange'
     assert thermal_range_service.is_thermal is True
     assert thermal_range_service.min_temp == 20.0
     assert thermal_range_service.max_temp == 30.0

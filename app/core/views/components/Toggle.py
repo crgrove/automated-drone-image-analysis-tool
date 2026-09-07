@@ -37,6 +37,9 @@ from PySide6.QtGui import QColor, QBrush, QPaintEvent, QPen, QPainter
 
 
 class Toggle(QCheckBox):
+    # 2.6 exception: custom-painted primitive - it implements
+    # paintEvent and mouse handling rather than composing child
+    # widgets, so its appearance is code by nature.
 
     _transparent_pen = QPen(Qt.transparent)
     _light_grey_pen = QPen(Qt.lightGray)

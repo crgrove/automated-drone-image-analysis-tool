@@ -61,6 +61,9 @@ class ClickableColorSwatch(TranslationMixin, QFrame):
 
 class MatchedFilterRowWidget(TranslationMixin, QWidget):
     """Widget representing a single matched filter color configuration."""
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per target colour the operator adds, which is not
+    # something a .ui can describe.
 
     # Signal emitted when this row should be deleted
     delete_requested = Signal(QWidget)
@@ -110,7 +113,7 @@ class MatchedFilterRowWidget(TranslationMixin, QWidget):
         threshold_layout = QHBoxLayout()
         threshold_layout.setSpacing(6)
 
-        threshold_label = QLabel("Threshold:", self)
+        threshold_label = QLabel(self.tr("Threshold:"), self)
         threshold_label.setFont(self.font())
         threshold_layout.addWidget(threshold_label)
 

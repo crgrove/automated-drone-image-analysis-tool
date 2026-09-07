@@ -67,7 +67,7 @@ def test_both_altitudes_are_recovered(resolution):
     """``[rel_alt: X abs_alt: Y]`` used to collapse to altitude 0."""
     first = resolution.track.points[0]
     assert first.altitude_msl_m == pytest.approx(207.027, abs=1e-3)
-    assert first.altitude_agl_m == pytest.approx(14.885, abs=1e-3)
+    assert first.altitude_ato_m == pytest.approx(14.885, abs=1e-3)
 
 
 def test_track_spans_the_clip(resolution):
@@ -113,5 +113,5 @@ def test_detects_the_flight_altitude():
     info = detect_capture_info(SAMPLE_VIDEO)
     assert info.has_altitude
     # The aircraft hovers at ~14.9 m for this 30 s clip.
-    assert info.altitude_agl_m == pytest.approx(14.9, abs=0.2)
+    assert info.altitude_ato_m == pytest.approx(14.9, abs=0.2)
     assert info.altitude_samples == 890

@@ -161,7 +161,7 @@ class AlgorithmSelectionPage(BasePage):
         elif state['thermal'] and state['temperature_range'] is None:
             state['temperature_range'] = answer
             if answer:  # Yes - temperature range
-                self.selected_algorithm = "Temperature Range"
+                self.selected_algorithm = "ThermalRange"
                 self._show_algorithm_result()
             else:  # No - temperature anomaly
                 self.dialog.labelCurrentQuestion.setText(
@@ -171,15 +171,15 @@ class AlgorithmSelectionPage(BasePage):
         elif state['thermal'] and state['temperature_range'] is False and state['local_residual_anomaly'] is None:
             state['local_residual_anomaly'] = answer
             if answer:  # Yes - local residual anomaly detector
-                self.selected_algorithm = "Temperature Residual Anomaly"
+                self.selected_algorithm = "ThermalResidualAnomaly"
             else:  # No - standard anomaly detector
-                self.selected_algorithm = "Temperature Anomaly"
+                self.selected_algorithm = "ThermalAnomaly"
             self._show_algorithm_result()
 
         elif not state['thermal'] and state['person_only'] is None:
             state['person_only'] = answer
             if answer:  # Yes - person only
-                self.selected_algorithm = "AI Person Detector"
+                self.selected_algorithm = "AIPersonDetector"
                 self._show_algorithm_result()
             else:  # No - not person only
                 self.dialog.labelCurrentQuestion.setText(self.tr("Are you trying to find a specific color?"))
@@ -200,15 +200,15 @@ class AlgorithmSelectionPage(BasePage):
                     self.tr("Do your images include shadows or areas with uneven lighting?")
                 )
             else:  # No - matched filter
-                self.selected_algorithm = "Matched Filter"
+                self.selected_algorithm = "MatchedFilter"
                 self._show_algorithm_result()
 
         elif state['direct_color_control'] and state['consistent_lighting'] is None:
             state['consistent_lighting'] = answer
-            if answer:  # Yes - RGB
-                self.selected_algorithm = "Color Range (HSV)"
-            else:  # No - HSV
-                self.selected_algorithm = "Color Range (RGB)"
+            if answer:  # Yes, uneven lighting - HSV handles it
+                self.selected_algorithm = "HSVColorRange"
+            else:  # No - plain RGB ranges are enough
+                self.selected_algorithm = "ColorRange"
             self._show_algorithm_result()
 
         elif not state['specific_color'] and state['complex_background'] is None:
@@ -216,14 +216,41 @@ class AlgorithmSelectionPage(BasePage):
             if answer:  # Yes - complex
                 self.selected_algorithm = "MRMap"
             else:  # No - simple
-                self.selected_algorithm = "RX Anomaly"
+                self.selected_algorithm = "RXAnomaly"
             self._show_algorithm_result()
+
+    def _display_name_map(self):
+        """Stable algorithm key -> operator-facing name.
+
+        The keys are the identity the wizard hands to MainWindow and are
+        never shown; these strings are only ever read. Spelled out as
+        literals so ``pyside6-lupdate`` can extract them - interpolating a
+        key, or ``algorithms.conf``'s own ``label``, into a translated
+        sentence rendered "Algoritmo seleccionado: Temperature Range" in
+        every locale, because neither is visible to extraction.
+        """
+        return {
+            "ColorRange": self.tr("Color Range (RGB)"),
+            "HSVColorRange": self.tr("Color Range (HSV)"),
+            "MatchedFilter": self.tr("Matched Filter"),
+            "RXAnomaly": self.tr("RX Anomaly"),
+            "MRMap": self.tr("MRMap"),
+            "ThermalRange": self.tr("Temperature Range"),
+            "ThermalAnomaly": self.tr("Temperature Anomaly"),
+            "ThermalResidualAnomaly": self.tr("Temperature Residual Anomaly"),
+            "AIPersonDetector": self.tr("AI Person Detector"),
+        }
+
+    def _algorithm_display_name(self, name):
+        """Operator-facing name for a key, or the key when it has none."""
+        return self._display_name_map().get(name, name)
 
     def _show_algorithm_result(self):
         """Display the selected algorithm result."""
         if self.selected_algorithm:
             self.dialog.labelAlgorithmResult.setText(
-                self.tr("Selected Algorithm: {algorithm}").format(algorithm=self.selected_algorithm)
+                self.tr("Selected Algorithm: {algorithm}").format(
+                    algorithm=self._algorithm_display_name(self.selected_algorithm))
             )
             self.dialog.labelAlgorithmResult.setVisible(True)
             self.dialog.buttonYes.setVisible(False)

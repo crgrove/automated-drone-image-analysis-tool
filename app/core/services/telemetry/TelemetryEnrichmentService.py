@@ -144,6 +144,14 @@ PUBLISHER_AGL_SOURCE_KEY = "aircraft_altitude_agl_source"
 AGL_SOURCE_TERRAIN = "terrain"        # this service's own DEM inference
 AGL_SOURCE_REPORTED = "reported"      # ATO only; no AGL exists
 AGL_SOURCE_FLIGHT = "flight"          # ADIAT Flight's AGL, source unnamed
+# A recorded flight log whose own column was terrain-referenced - a
+# Skydio-style ``Altitude (m AGL)``. The aircraft resolved it from its own
+# sensors, so it outranks a DEM difference here for the same reason ADIAT
+# Flight's does. Emitted by
+# :meth:`~core.services.telemetry.TelemetryTrack.TelemetryPoint.to_envelope`,
+# which spells the literal out rather than importing it (this module
+# imports that one).
+AGL_SOURCE_FLIGHT_LOG = "flight_log"
 # ADIAT Flight's four source names, sent in ``UPPER_SNAKE`` on
 # :data:`PUBLISHER_AGL_SOURCE_KEY`. Flight resolves AGL through
 # ultrasonic -> laser -> differential DEM -> takeoff reference and names
@@ -165,6 +173,7 @@ AGL_SOURCE_TAKEOFF_REFERENCE = "takeoff_reference"
 # not, so it is worth a lookup.
 TRUSTED_AGL_SOURCES = frozenset({
     AGL_SOURCE_FLIGHT,
+    AGL_SOURCE_FLIGHT_LOG,
     AGL_SOURCE_LASER,
     AGL_SOURCE_ULTRASONIC,
     AGL_SOURCE_TERRAIN_DEM,

@@ -52,6 +52,29 @@ def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
     return 2.0 * _EARTH_RADIUS_M * math.asin(min(1.0, math.sqrt(a)))
 
 
+def _vertical_delta(previous, sample) -> Optional[float]:
+    """Altitude change between two fixes, measured in a single plane.
+
+    Tries the three references in order of how well each describes the
+    aircraft rather than the ground beneath it, and requires *both* fixes
+    to carry the one it settles on. Differencing MSL on one cue against
+    ATO on the next would report the takeoff elevation as a climb — a
+    couple of hundred metres in one frame interval — so a pair that has
+    no plane in common yields no vertical speed at all.
+
+    A terrain AGL is the weakest of the three and is only reached when
+    neither other exists: over rising ground it reads the terrain's slope
+    as a descent.
+    """
+    for attribute in ("altitude_msl_m", "altitude_ato_m",
+                      "altitude_agl_terrain_m"):
+        start = getattr(previous, attribute, None)
+        end = getattr(sample, attribute, None)
+        if start is not None and end is not None:
+            return end - start
+    return None
+
+
 @dataclass
 class TelemetryPoint:
     """A single resolved fix, enriched with derived motion."""
@@ -60,7 +83,9 @@ class TelemetryPoint:
     latitude: Optional[float]
     longitude: Optional[float]
     altitude_msl_m: Optional[float]
-    altitude_agl_m: Optional[float]
+    # Above the takeoff point. DJI's ``rel_alt`` and a flight log's
+    # relative-altitude column both land here; neither is an AGL.
+    altitude_ato_m: Optional[float]
     yaw_deg: Optional[float]
     horizontal_speed_ms: Optional[float]
     vertical_speed_ms: Optional[float]
@@ -69,25 +94,48 @@ class TelemetryPoint:
     # path stamps as EXIF capture time; time_seconds is only an offset
     # into the video and cannot date a frame on its own.
     captured_at: Optional[datetime] = None
+    # Above the terrain beneath the aircraft, where the source resolved
+    # one itself. DJI never does; a flight log with an ``Altitude (m AGL)``
+    # column does. None means "no AGL exists yet", which is what leaves
+    # TelemetryEnrichmentService free to derive one from the DEM.
+    altitude_agl_terrain_m: Optional[float] = None
+    # Provenance of :attr:`altitude_agl_terrain_m` only, never of the ATO
+    # figure beside it. None lets :meth:`to_envelope` pick the default.
+    agl_source: Optional[str] = None
 
     def to_envelope(self) -> Dict[str, object]:
         """Render in the shape ``TelemetryHud.apply_envelope`` expects.
 
         ``aircraft_altitude_agl_m`` is ATO — above the takeoff point —
         because that is what SRT ``rel_alt`` and a flight log's relative
-        altitude are. No terrain-referenced AGL exists here, so the
-        ``aircraft_altitude_agl_terrain_m`` key is deliberately left
-        absent for :class:`~core.services.telemetry.\
-TelemetryEnrichmentService.TelemetryEnrichmentService` to fill in, and
-        ``agl_source`` starts as ``reported`` — meaning "ATO only, no AGL
-        resolved yet", which enrichment flips to ``terrain`` once it has
-        a DEM sample. The ATO value itself is never rewritten.
+        altitude are. The wire name is kept for compatibility with
+        recorded bundles and shipped ADIAT Flight builds; it has always
+        carried ATO.
+
+        ``aircraft_altitude_agl_terrain_m`` is emitted **only** when the
+        source resolved a genuine terrain-referenced AGL of its own — a
+        flight log with an ``Altitude (m AGL)`` column. DJI's SRT never
+        does, so for it the key stays absent and
+        :class:`~core.services.telemetry.TelemetryEnrichmentService.\
+TelemetryEnrichmentService` is free to derive one from the DEM.
+
+        ``agl_source`` is the provenance of that terrain AGL and of
+        nothing else. ``reported`` is the historical value meaning "ATO
+        only, no AGL resolved"; ``flight_log`` says the log itself
+        supplied the AGL, which is why enrichment leaves it alone — the
+        value is already terrain-referenced, and differencing it against
+        a DEM a second time is exactly the error the split guards. Both
+        literals must match
+        :mod:`~core.services.telemetry.TelemetryEnrichmentService`'s
+        ``AGL_SOURCE_REPORTED`` / ``AGL_SOURCE_FLIGHT_LOG``; they are
+        spelled out here because that module imports this one, so the
+        import cannot run the other way.
         """
-        return {
+        envelope: Dict[str, object] = {
             "aircraft_latitude": self.latitude,
             "aircraft_longitude": self.longitude,
             "aircraft_altitude_msl_m": self.altitude_msl_m,
-            "aircraft_altitude_agl_m": self.altitude_agl_m,
+            "aircraft_altitude_agl_m": self.altitude_ato_m,
             # Gimbal yaw, surfaced as heading — the only bearing DJI's SRT
             # carries. See DjiSrtParser's note.
             "aircraft_yaw_deg": self.yaw_deg,
@@ -95,8 +143,14 @@ TelemetryEnrichmentService.TelemetryEnrichmentService` to fill in, and
             "vertical_speed_ms": self.vertical_speed_ms,
             "captured_at_ms": int(self.time_seconds * 1000),
             "video_time_seconds": self.time_seconds,
-            "agl_source": "reported" if self.altitude_agl_m is not None else None,
+            "agl_source": None,
         }
+        if self.altitude_agl_terrain_m is not None:
+            envelope["aircraft_altitude_agl_terrain_m"] = self.altitude_agl_terrain_m
+            envelope["agl_source"] = self.agl_source or "flight_log"
+        elif self.altitude_ato_m is not None:
+            envelope["agl_source"] = "reported"
+        return envelope
 
 
 class TelemetryTrack:
@@ -129,8 +183,8 @@ class TelemetryTrack:
         """Build a track from time-ordered samples, deriving speeds.
 
         Accepts anything exposing ``has_position``, ``start_seconds``,
-        ``latitude``/``longitude``, ``altitude_msl_m``/``altitude_agl_m``
-        and ``yaw_deg`` — DJI SRT cues
+        ``latitude``/``longitude``, ``altitude_msl_m``/``altitude_ato_m``
+        and ``yaw_deg``, optionally ``altitude_agl_terrain_m`` — DJI SRT cues
         (:class:`~core.services.telemetry.DjiSrtParser.DjiSrtSample`) and
         CSV flight-log rows
         (:class:`~core.services.telemetry.FlightLogCsvParser.\
@@ -180,25 +234,23 @@ FlightLogSample`) both qualify, so every source gets identical speed
                         previous.latitude, previous.longitude,
                         sample.latitude, sample.longitude,
                     ) / dt
-                    prev_alt = (
-                        previous.altitude_msl_m
-                        if previous.altitude_msl_m is not None
-                        else previous.altitude_agl_m
-                    )
-                    curr_alt = (
-                        sample.altitude_msl_m
-                        if sample.altitude_msl_m is not None
-                        else sample.altitude_agl_m
-                    )
-                    if prev_alt is not None and curr_alt is not None:
-                        vertical = (curr_alt - prev_alt) / dt
+                    climb = _vertical_delta(previous, sample)
+                    if climb is not None:
+                        vertical = climb / dt
 
             points.append(TelemetryPoint(
                 time_seconds=sample.start_seconds,
                 latitude=sample.latitude,
                 longitude=sample.longitude,
                 altitude_msl_m=sample.altitude_msl_m,
-                altitude_agl_m=sample.altitude_agl_m,
+                altitude_ato_m=sample.altitude_ato_m,
+                # getattr, not attribute access: DjiSrtSample has no
+                # terrain AGL at all (DJI never reports one), and adding a
+                # permanently-None field to it would invite the two
+                # references back into one slot.
+                altitude_agl_terrain_m=getattr(
+                    sample, "altitude_agl_terrain_m", None),
+                agl_source=getattr(sample, "agl_source", None),
                 yaw_deg=sample.yaw_deg,
                 horizontal_speed_ms=horizontal,
                 vertical_speed_ms=vertical,

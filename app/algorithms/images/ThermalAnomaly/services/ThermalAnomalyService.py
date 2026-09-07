@@ -33,7 +33,7 @@ class ThermalAnomalyService(AlgorithmService):
             options: Additional algorithm-specific options, including 'threshold' and 'type'.
         """
         self.logger = LoggerService()
-        super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
+        super().__init__('ThermalAnomaly', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.threshold = options['threshold']
         self.segments = options['segments']
         self.direction = options['type']

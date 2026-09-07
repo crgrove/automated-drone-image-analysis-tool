@@ -33,7 +33,8 @@ def _open_viewer_with_sample_data(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
 
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     algorithmWidget = main_window.algorithmWidget
 
     if hasattr(algorithmWidget, 'add_color_row'):
@@ -86,7 +87,8 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert main_window.algorithmWidget is not None
 
     # Select Color Range algorithm and configure it
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     assert main_window.algorithmWidget is not None
 
     # Configure algorithm - use new wizard-based API
@@ -190,7 +192,8 @@ def testNormalizeHistogram(main_window, testData, qtbot):
     main_window.outputFolderLine.setText(testData['RGB_Output'])
 
     # Select Color Range algorithm
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     assert main_window.algorithmWidget is not None
 
     # Configure algorithm - use new wizard-based API
@@ -242,7 +245,8 @@ def testKmlCollection(main_window, testData, qtbot):
     main_window.outputFolderLine.setText(testData['RGB_Output'])
 
     # Select Color Range algorithm
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     algorithmWidget = main_window.algorithmWidget
     if hasattr(algorithmWidget, 'add_color_row'):
         # Add a color using the new API with ±75 range for each channel
@@ -302,7 +306,8 @@ def testPdfGenerator(main_window, testData, qtbot):
     main_window.outputFolderLine.setText(testData['RGB_Output'])
 
     # Select Color Range algorithm
-    main_window.algorithmComboBox.setCurrentText('Color Range (RGB)')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ColorRange'))
     algorithmWidget = main_window.algorithmWidget
     if hasattr(algorithmWidget, 'add_color_row'):
         # Add a color using the new API with ±75 range for each channel
@@ -672,9 +677,12 @@ def test_algorithm_swap_hides_the_outgoing_widget(main_window):
     outgoing = main_window.algorithmWidget
     assert outgoing is not None
 
-    current = main_window.algorithmComboBox.currentText()
-    other = next(a['label'] for a in main_window.algorithms if a['label'] != current)
-    main_window.algorithmComboBox.setCurrentText(other)
+    current = main_window.algorithmComboBox.currentData()
+    other = next(a['name'] for a in main_window.algorithms
+                 if a['name'] != current
+                 and main_window.algorithmComboBox.findData(a['name']) != -1)
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData(other))
 
     assert main_window.algorithmWidget is not outgoing
     # The outgoing widget must be invisible immediately - not merely queued
@@ -682,16 +690,47 @@ def test_algorithm_swap_hides_the_outgoing_widget(main_window):
     assert outgoing.isHidden()
 
 
-def test_algorithm_swap_ignores_unknown_label(main_window):
-    """A label that matches no algorithm (group header, stale text) must not
-    tear down the current widget; the old unguarded next() raised
-    StopIteration after the removal, leaving the swap half-done."""
+def test_algorithm_swap_ignores_an_unknown_selection(main_window):
+    """A selection that matches no algorithm must not tear down the current
+    widget; the old unguarded next() raised StopIteration after the removal,
+    leaving the swap half-done."""
     before = main_window.algorithmWidget
-    with patch.object(main_window.algorithmComboBox, 'currentText', return_value='No Such Algorithm'):
+    with patch.object(main_window.algorithmComboBox, 'currentData',
+                      return_value='NoSuchAlgorithm'):
         main_window._algorithmComboBox_changed()
 
     assert main_window.algorithmWidget is before
     assert not before.isHidden()
+
+
+def test_a_group_header_carries_no_algorithm_and_is_survived(main_window):
+    """Group headers are non-selectable but carry no item data, so the swap
+    has to tolerate a None identity rather than assume every selection is an
+    algorithm."""
+    before = main_window.algorithmWidget
+    with patch.object(main_window.algorithmComboBox, 'currentData',
+                      return_value=None):
+        main_window._algorithmComboBox_changed()
+
+    assert main_window.algorithmWidget is before
+    assert not before.isHidden()
+
+
+def test_the_combobox_carries_stable_names_not_display_text(main_window):
+    """The identity behind each entry is the algorithms.conf name, so the
+    label is free to be translated. Routing on display text is what made a
+    translated combo select nothing at all."""
+    combo = main_window.algorithmComboBox
+    names = {a['name'] for a in main_window.algorithms}
+    found = [combo.itemData(i) for i in range(combo.count())
+             if combo.itemData(i) is not None]
+
+    assert found, "no combobox entry carries an identity"
+    assert set(found) <= names
+    # Every selectable entry has one - a header is the only dataless row.
+    for index in range(combo.count()):
+        if combo.model().item(index).flags():
+            assert combo.itemData(index) is not None
 
 
 def test_startup_leaves_algorithm_state_consistent(main_window):
@@ -703,7 +742,7 @@ def test_startup_leaves_algorithm_state_consistent(main_window):
     failing later at Start with an AttributeError)."""
     assert main_window.activeAlgorithm is not None
     assert main_window.algorithmWidget is not None
-    assert main_window.activeAlgorithm['label'] == main_window.algorithmComboBox.currentText()
+    assert main_window.activeAlgorithm['name'] == main_window.algorithmComboBox.currentData()
 
 
 def test_algorithm_combobox_is_managed_by_a_layout(main_window):
@@ -725,58 +764,72 @@ def test_algorithm_combobox_is_managed_by_a_layout(main_window):
 # ---------------------------------------------------------------------------
 
 def test_wizard_applies_an_available_algorithm(main_window):
-    current = main_window.algorithmComboBox.currentText()
-    target = next(a['label'] for a in main_window.algorithms
-                  if a['label'] != current
-                  and main_window.algorithmComboBox.findText(a['label']) != -1)
+    current = main_window.algorithmComboBox.currentData()
+    target = next(a['name'] for a in main_window.algorithms
+                  if a['name'] != current
+                  and main_window.algorithmComboBox.findData(a['name']) != -1)
 
     main_window.populate_from_wizard_data({'algorithm': target})
 
-    assert main_window.algorithmComboBox.currentText() == target
-    assert main_window.activeAlgorithm['label'] == target
+    assert main_window.algorithmComboBox.currentData() == target
+    assert main_window.activeAlgorithm['name'] == target
 
 
 def test_wizard_unavailable_algorithm_does_not_half_apply(main_window):
-    """The regression: a label in self.algorithms but NOT selectable here.
+    """The regression: an algorithm in self.algorithms but NOT selectable here.
 
-    self.algorithms is unfiltered while the combobox holds only labels for
-    this platform (algorithms.conf marks the Temperature algorithms
-    Windows-only), so on the other platform setCurrentText silently no-ops on
-    the non-editable combobox. Windows cannot produce that state naturally,
-    so the no-op is simulated - patching setCurrentText is exactly what an
-    absent label does.
+    self.algorithms is unfiltered while the combobox holds only the entries
+    for this platform (algorithms.conf marks the Temperature algorithms
+    Windows-only), so on the other platform the wizard's choice cannot be
+    selected. Windows cannot produce that state naturally, so the absence is
+    simulated by making findData report "no such entry" - which is exactly
+    what a platform-filtered algorithm looks like.
 
-    Previously activeAlgorithm was assigned from self.algorithms BEFORE
-    setCurrentText, so it drifted to an algorithm whose widget was never
-    built: load_options wrote to the previous widget and auto-start ran one
+    Previously activeAlgorithm was assigned from self.algorithms BEFORE the
+    selection, so it drifted to an algorithm whose widget was never built:
+    load_options wrote to the previous widget and auto-start ran one
     algorithm with another's parameters.
     """
-    before_label = main_window.algorithmComboBox.currentText()
+    before_name = main_window.activeAlgorithm['name']
     before_widget = main_window.algorithmWidget
-    unavailable = next(a['label'] for a in main_window.algorithms
-                       if a['label'] != before_label)
+    unavailable = next(a['name'] for a in main_window.algorithms
+                       if a['name'] != before_name)
     loaded = []
     before_widget.load_options = lambda opts: loaded.append(opts)
 
-    with patch.object(main_window.algorithmComboBox, 'setCurrentText'):
+    with patch.object(main_window.algorithmComboBox, 'findData',
+                      return_value=-1):
         main_window.populate_from_wizard_data({
             'algorithm': unavailable,
             'algorithm_options': {'some': 'value'},
         })
 
     # activeAlgorithm tracked the combobox, not the wizard's request.
-    assert main_window.algorithmComboBox.currentText() == before_label
-    assert main_window.activeAlgorithm['label'] == before_label
+    assert main_window.activeAlgorithm['name'] == before_name
     assert main_window.algorithmWidget is before_widget
     # And nothing was written into the wrong algorithm's widget.
     assert loaded == []
 
 
+def test_the_wizard_can_still_hand_over_a_display_label(main_window):
+    """The wizard stores stable names now, but a payload built before that
+    switch - or by an external caller - carries the label. Dropping the
+    fallback would silently ignore it and run the previous algorithm."""
+    current = main_window.activeAlgorithm['name']
+    target = next(a for a in main_window.algorithms
+                  if a['name'] != current
+                  and main_window.algorithmComboBox.findData(a['name']) != -1)
+
+    main_window.populate_from_wizard_data({'algorithm': target['label']})
+
+    assert main_window.activeAlgorithm['name'] == target['name']
+
+
 def test_wizard_options_load_into_the_selected_algorithms_widget(main_window):
-    current = main_window.algorithmComboBox.currentText()
-    target = next(a['label'] for a in main_window.algorithms
-                  if a['label'] != current
-                  and main_window.algorithmComboBox.findText(a['label']) != -1)
+    current = main_window.algorithmComboBox.currentData()
+    target = next(a['name'] for a in main_window.algorithms
+                  if a['name'] != current
+                  and main_window.algorithmComboBox.findData(a['name']) != -1)
 
     main_window.populate_from_wizard_data({
         'algorithm': target,
@@ -786,5 +839,5 @@ def test_wizard_options_load_into_the_selected_algorithms_widget(main_window):
     # The widget that received the options is the one for the selected
     # algorithm - the pairing the old manual activeAlgorithm assignment
     # could break.
-    assert main_window.activeAlgorithm['label'] == target
+    assert main_window.activeAlgorithm['name'] == target
     assert main_window.algorithmWidget is not None

@@ -5,7 +5,8 @@ def testRXAnomalyE2E(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])
     assert main_window.algorithmWidget is not None
-    main_window.algorithmComboBox.setCurrentText('RX Anomaly')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('RXAnomaly'))
     assert main_window.algorithmWidget is not None
     assert main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget

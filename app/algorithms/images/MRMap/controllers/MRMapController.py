@@ -100,17 +100,32 @@ class MRMapController(QWidget, Ui_MRMap, AlgorithmController):
         combo.setMinimumWidth(max(combo.minimumWidth(),
                                   combo.minimumSizeHint().width()))
 
+    # The option values behind the two combos, in the order the items appear
+    # in MRMap.ui. Held here rather than read back off the widget so a
+    # translated label can never become a config value: the .ui strings go
+    # through QCoreApplication.translate, and MRMapService compares the
+    # colorspace against the literals 'HSV' and 'LAB', so a locale that
+    # rendered "LAB" differently would have silently fallen through to the
+    # RGB branch.
+    SEGMENT_VALUES = (1, 2, 4, 6, 9, 16, 25, 36)
+    COLORSPACE_KEYS = ('LAB', 'RGB', 'HSV')
+
     def _init_combo_data(self):
         """Attach stable option keys so translated labels do not affect config values."""
-        for index in range(self.segmentsComboBox.count()):
-            text = self.segmentsComboBox.itemText(index)
-            try:
-                self.segmentsComboBox.setItemData(index, int(text))
-            except ValueError:
-                continue
+        self._attach_item_data(self.segmentsComboBox, self.SEGMENT_VALUES)
+        self._attach_item_data(self.colorspaceComboBox, self.COLORSPACE_KEYS)
 
-        for index in range(self.colorspaceComboBox.count()):
-            self.colorspaceComboBox.setItemData(index, self.colorspaceComboBox.itemText(index))
+    @staticmethod
+    def _attach_item_data(combo, values):
+        """Pair each combo item with its stable value, positionally.
+
+        Stops at whichever runs out first, so a combo the .ui gains an item
+        for keeps working (the new item simply has no data, which
+        ``get_options`` will report loudly) instead of raising on a
+        length mismatch.
+        """
+        for index in range(min(combo.count(), len(values))):
+            combo.setItemData(index, values[index])
 
     def get_options(self):
         """

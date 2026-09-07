@@ -28,7 +28,7 @@ class ThermalRangeService(AlgorithmService):
             options: Additional algorithm-specific options, including 'minTemp' and 'maxTemp'.
         """
         self.logger = LoggerService()
-        super().__init__('MatchedFilter', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
+        super().__init__('ThermalRange', identifier, min_area, max_area, aoi_radius, combine_aois, options, True)
         self.min_temp = options['minTemp']
         self.max_temp = options['maxTemp']
 

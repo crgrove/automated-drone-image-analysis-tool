@@ -19,10 +19,24 @@ start on the ramp minutes before recording. So a video with no
 Column naming is not standardised across vendors, so columns are matched
 against an alias table on a normalized form of the header
 (``"GPS Altitude (ft MSL)"`` → ``"gps altitude ft msl"``) rather than by
-exact string equality. Altitudes are converted to metres, and MSL and ATO
-(above the takeoff point) are kept apart — the same distinction DJI's
-``abs_alt`` / ``rel_alt`` pair
-carries, and the one the HUD and DEM correction depend on.
+exact string equality. Altitudes are converted to metres and kept in
+**three separate fields**, because vendors export three different
+quantities under headings that look alike:
+
+* ``altitude_msl_m`` — above mean sea level (``GPS Altitude (ft MSL)``).
+* ``altitude_ato_m`` — above the **takeoff point** (``Relative
+  Altitude (m)``, ``Height Above Takeoff (m)``). DJI's ``rel_alt``.
+* ``altitude_agl_terrain_m`` — above the **terrain beneath the
+  aircraft** (``Altitude (m AGL)``, ``AGL Altitude (m)``). Skydio and
+  similar aircraft resolve this from their own sensors.
+
+ATO and AGL used to share one field, which meant a log whose heading said
+``Altitude (m AGL)`` — a real terrain-referenced height — arrived
+downstream labelled ATO, was differenced against the DEM a second time by
+:class:`~core.services.telemetry.TelemetryEnrichmentService.TelemetryEnrichmentService`, and was stamped into
+``drone-dji:RelativeAltitude`` as a takeoff-relative figure. The error is
+zero over flat ground and grows with relief, so it only ever showed up in
+the field. Keeping the three apart is the rule in CLAUDE.md § 2.11.
 """
 
 from __future__ import annotations
@@ -91,30 +105,46 @@ _alias("altitude_msl", "ft", "GPS Altitude (ft MSL)", "Altitude (ft MSL)",
        "MSL Altitude (ft)")
 _alias("altitude_msl", "m", "GPS Altitude (m MSL)", "Altitude (m MSL)",
        "MSL Altitude (m)", "altitude_msl_m")
+# Above the takeoff point. DJI's ``rel_alt`` under other vendors' names:
+# the value does not change when the terrain beneath the aircraft rises.
+_alias("altitude_ato", "ft", "Relative Altitude (ft)",
+       "Height Above Takeoff (ft)", "altitude_ato_ft")
+_alias("altitude_ato", "m", "Relative Altitude (m)",
+       "Height Above Takeoff (m)", "altitude_ato_m")
+# Above the terrain beneath the aircraft. A heading that says "AGL" means
+# this, and must never be folded in with the ATO group above - see the
+# module docstring.
 _alias("altitude_agl", "ft", "Altitude (ft AGL)", "AGL Altitude (ft)",
-       "Relative Altitude (ft)", "Height Above Takeoff (ft)")
+       "Height Above Ground (ft)")
 _alias("altitude_agl", "m", "Altitude (m AGL)", "AGL Altitude (m)",
-       "Relative Altitude (m)", "Height Above Takeoff (m)", "altitude_agl_m")
+       "Height Above Ground (m)", "altitude_agl_m")
 _alias("yaw", "deg", "Heading", "Heading (deg)", "Yaw", "Yaw (deg)",
        "Compass Heading", "Gimbal Yaw")
 
 
 @dataclass
 class FlightLogColumns:
-    """Which CSV column supplies each telemetry field, and in what unit."""
+    """Which CSV column supplies each telemetry field, and in what unit.
+
+    Three altitude slots, never interchangeable: ``altitude_msl`` is above
+    sea level, ``altitude_ato`` above the takeoff point, ``altitude_agl``
+    above the terrain beneath the aircraft. A log may carry any subset.
+    """
 
     time: str
     latitude: str
     longitude: str
     altitude_msl: Optional[str] = None
     altitude_msl_unit: str = "m"
+    altitude_ato: Optional[str] = None
+    altitude_ato_unit: str = "m"
     altitude_agl: Optional[str] = None
     altitude_agl_unit: str = "m"
     yaw: Optional[str] = None
 
     @property
     def has_altitude(self) -> bool:
-        return bool(self.altitude_msl or self.altitude_agl)
+        return bool(self.altitude_msl or self.altitude_ato or self.altitude_agl)
 
 
 @dataclass
@@ -131,7 +161,14 @@ class FlightLogSample:
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude_msl_m: Optional[float] = None
-    altitude_agl_m: Optional[float] = None
+    # Above the takeoff point. Named to match
+    # :class:`~core.services.telemetry.DjiSrtParser.DjiSrtSample`, so
+    # :meth:`TelemetryTrack.from_samples` reads both structurally.
+    altitude_ato_m: Optional[float] = None
+    # Above the terrain beneath the aircraft, where the log resolved one.
+    # Almost always None: only aircraft with their own terrain reference
+    # export it.
+    altitude_agl_terrain_m: Optional[float] = None
     yaw_deg: Optional[float] = None
 
     @property
@@ -147,11 +184,18 @@ class FlightLogRows:
 
     * ``utc_time`` — timezone-aware UTC ``datetime``
     * ``latitude`` / ``longitude`` — degrees
-    * ``altitude_m`` — MSL where the log has it, otherwise AGL, in metres
-      (kept under this name because
-      :class:`~core.services.VideoParserService.VideoParserService` has
-      written EXIF from it since the Skydio path was added)
-    * ``altitude_msl_m`` / ``altitude_agl_m`` — separated, either may be None
+    * ``altitude_m`` — the **absolute** altitude, in metres, or None.
+      This is the EXIF-facing value
+      :class:`~core.services.VideoParserService.VideoParserService` writes
+      into ``GPSAltitude``, and EXIF's is an absolute height, so only MSL
+      can fill it. It used to fall back to the relative reading, which put
+      a height-above-takeoff figure in a sea-level field and made
+      ``median(GPSAltitude - ATO)`` — the barometric datum test in
+      :mod:`~core.services.image.AltitudeAnchorService` — collapse to a
+      perfectly coherent zero.
+    * ``altitude_msl_m`` / ``altitude_ato_m`` /
+      ``altitude_agl_terrain_m`` — the three references, kept apart; any
+      may be None
     * ``yaw_deg`` — degrees, or None
     """
 
@@ -190,12 +234,14 @@ def match_columns(columns: Sequence[str]) -> Tuple[Optional[FlightLogColumns], L
         )
         if key not in found
     ]
-    if "altitude_msl" not in found and "altitude_agl" not in found:
+    if not any(key in found for key in
+               ("altitude_msl", "altitude_ato", "altitude_agl")):
         missing.append(CANONICAL_COLUMNS[3])
     if missing:
         return None, missing
 
     msl = found.get("altitude_msl")
+    ato = found.get("altitude_ato")
     agl = found.get("altitude_agl")
     yaw = found.get("yaw")
     return FlightLogColumns(
@@ -204,6 +250,8 @@ def match_columns(columns: Sequence[str]) -> Tuple[Optional[FlightLogColumns], L
         longitude=found["longitude"][0],
         altitude_msl=msl[0] if msl else None,
         altitude_msl_unit=msl[1] if msl else "m",
+        altitude_ato=ato[0] if ato else None,
+        altitude_ato_unit=ato[1] if ato else "m",
         altitude_agl=agl[0] if agl else None,
         altitude_agl_unit=agl[1] if agl else "m",
         yaw=yaw[0] if yaw else None,
@@ -237,6 +285,7 @@ def read_flight_log_rows(csv_path) -> FlightLogRows:
     latitudes = pd.to_numeric(frame[columns.latitude], errors="coerce")
     longitudes = pd.to_numeric(frame[columns.longitude], errors="coerce")
     msl = _numeric_metres(frame, columns.altitude_msl, columns.altitude_msl_unit)
+    ato = _numeric_metres(frame, columns.altitude_ato, columns.altitude_ato_unit)
     agl = _numeric_metres(frame, columns.altitude_agl, columns.altitude_agl_unit)
     yaw = pd.to_numeric(frame[columns.yaw], errors="coerce") if columns.yaw else None
 
@@ -249,6 +298,7 @@ def read_flight_log_rows(csv_path) -> FlightLogRows:
             continue
 
         altitude_msl = _value_or_none(msl, index)
+        altitude_ato = _value_or_none(ato, index)
         altitude_agl = _value_or_none(agl, index)
         rows.append({
             # warn=False: sub-microsecond precision is irrelevant here, and
@@ -257,11 +307,13 @@ def read_flight_log_rows(csv_path) -> FlightLogRows:
             "utc_time": stamp.to_pydatetime(warn=False),
             "latitude": float(latitude),
             "longitude": float(longitude),
-            # MSL is what EXIF wants; AGL is the honest fallback when the
-            # log only records height above the takeoff point.
-            "altitude_m": altitude_msl if altitude_msl is not None else altitude_agl,
+            # EXIF's GPSAltitude is an absolute height, so only MSL can
+            # fill it. A relative reading here would be read back as a
+            # sea-level figure by everything downstream.
+            "altitude_m": altitude_msl,
             "altitude_msl_m": altitude_msl,
-            "altitude_agl_m": altitude_agl,
+            "altitude_ato_m": altitude_ato,
+            "altitude_agl_terrain_m": altitude_agl,
             "yaw_deg": _value_or_none(yaw, index),
         })
 
@@ -319,7 +371,8 @@ def build_track_from_rows(
             latitude=row.get("latitude"),
             longitude=row.get("longitude"),
             altitude_msl_m=row.get("altitude_msl_m"),
-            altitude_agl_m=row.get("altitude_agl_m"),
+            altitude_ato_m=row.get("altitude_ato_m"),
+            altitude_agl_terrain_m=row.get("altitude_agl_terrain_m"),
             yaw_deg=row.get("yaw_deg"),
         ))
 

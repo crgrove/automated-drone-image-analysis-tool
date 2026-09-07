@@ -77,7 +77,7 @@ class WingtraDataDialog(TranslationMixin, QDialog):
             terrain_text = self.tr(
                 "<b>AGL computed from terrain:</b> {agl_count} of {matched_count} images<br>"
                 "<br>"
-                "Per-image AGL is derived from the CSV altitude (ASL) minus "
+                "Per-image AGL is derived from the CSV altitude (MSL) minus "
                 "terrain elevation at each GPS location. GSD will be calculated "
                 "automatically using the camera sensor data and focal length."
             ).format(

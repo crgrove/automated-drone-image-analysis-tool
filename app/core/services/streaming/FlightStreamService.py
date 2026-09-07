@@ -123,7 +123,14 @@ StreamViewerWindow` keys its original-frame cache by that value. An RTP
         timestamp: float,
         frame_number: int,
     ) -> None:
-        """Throttle to the FPS cap, then emit with a perf_counter stamp."""
+        """Throttle to the FPS cap, then emit with a perf_counter stamp.
+
+        The cadence cap composes with — it does not replace — the base
+        class's backpressure gate, which is why this delegates upward
+        instead of emitting directly. A cap bounds how fast frames arrive;
+        only the gate bounds how many can be outstanding, and a consumer
+        slower than the cap still grows the queue without one.
+        """
         now = time.perf_counter()
         limit = self._fps_limit
         if limit is not None and limit > 0:
@@ -132,7 +139,7 @@ StreamViewerWindow` keys its original-frame cache by that value. An RTP
                 self._dropped_frames += 1
                 return
         self._last_emit_time = now
-        self.frameReady.emit(frame, now, frame_number)
+        super()._emit_frame_ready(frame, now, frame_number)
 
     def reset(self) -> None:
         """Lifecycle hook (CLAUDE.md §2.2.1) — also clear throttle state."""

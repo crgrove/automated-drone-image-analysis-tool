@@ -28,6 +28,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QWidget
 
 from core.services.SettingsService import SettingsService
+from helpers.FormatHelper import FormatHelper
 from core.services.telemetry.TelemetryEnrichmentService import (
     AGL_SOURCE_FLIGHT,
     AGL_SOURCE_LASER,
@@ -56,6 +57,11 @@ UNVERIFIED_AGL_MARKER = "*"
 # Sources that genuinely measured height above terrain. Anything else
 # beside an AGL value earns the marker above.
 _TERRAIN_REFERENCED_SOURCES = TRUSTED_AGL_SOURCES | {AGL_SOURCE_TERRAIN}
+
+
+def _abbrev(reference) -> str:
+    """Short plane label, from the one helper that owns the vocabulary."""
+    return FormatHelper.altitude_reference_abbreviation(reference)
 
 
 def _is_terrain_referenced(agl_source) -> bool:
@@ -268,7 +274,17 @@ class TelemetryHud(TranslationMixin, QWidget, Ui_TelemetryHud):
         else:
             parts = [self._fmt_num(value, 0) for value in values]
             unit = "m"
-        text = self.tr("ALT AGL {agl} / ATO {ato} / MSL {msl} {unit}").format(
+        # The three plane names come from FormatHelper so a value's
+        # reference travels with it (CLAUDE.md 2.11) and one place decides
+        # how each plane is spelled. They are injected as .format()
+        # parameters rather than returned as the whole sentence, because
+        # FormatHelper returns untranslated English by design - the
+        # sentence has to stay inside tr() to reach the catalog.
+        text = self.tr("ALT {agl_label} {agl} / {ato_label} {ato} "
+                       "/ {msl_label} {msl} {unit}").format(
+            agl_label=_abbrev(FormatHelper.ALTITUDE_REFERENCE_TERRAIN),
+            ato_label=_abbrev(FormatHelper.ALTITUDE_REFERENCE_TAKEOFF),
+            msl_label=_abbrev(FormatHelper.ALTITUDE_REFERENCE_MSL),
             agl=parts[0], ato=parts[1], msl=parts[2], unit=unit,
         )
         # An "AGL" nothing referenced to terrain is really an ATO reading.

@@ -45,6 +45,7 @@ from core.services.telemetry.FlightLogCsvParser import (
     read_flight_log_track,
 )
 from core.services.telemetry.TelemetryEnrichmentService import (
+    AGL_SOURCE_FLIGHT_LOG,
     AGL_SOURCE_REPORTED,
     AGL_SOURCE_TERRAIN,
     TelemetryEnrichmentService,
@@ -67,6 +68,7 @@ from core.services.telemetry.TelemetryTrack import (
 )
 
 __all__ = [
+    "AGL_SOURCE_FLIGHT_LOG",
     "AGL_SOURCE_REPORTED",
     "AGL_SOURCE_TERRAIN",
     "CANONICAL_COLUMNS",

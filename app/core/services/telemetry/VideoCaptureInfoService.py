@@ -31,6 +31,7 @@ from typing import Optional
 
 from core.services.LoggerService import LoggerService
 from core.services.telemetry.TelemetrySourceResolver import load_telemetry_for_video
+from helpers.FormatHelper import FormatHelper
 from helpers.VideoFileHelper import get_video_device_tags
 
 # Container tags that may name the capturing device, best first.
@@ -50,7 +51,13 @@ class VideoCaptureInfo:
     make: Optional[str] = None
     model: Optional[str] = None
     device_text: Optional[str] = None      # raw tag the model came from
-    altitude_agl_m: Optional[float] = None
+    # Above the takeoff point - DJI's ``rel_alt`` and a flight log's
+    # relative-altitude column. Kept apart from the terrain AGL below
+    # because the two are equal only over flat ground.
+    altitude_ato_m: Optional[float] = None
+    # Above the terrain beneath the aircraft, where the log resolved one
+    # itself. Rare: DJI never does.
+    altitude_agl_terrain_m: Optional[float] = None
     altitude_samples: int = 0
 
     @property
@@ -59,7 +66,29 @@ class VideoCaptureInfo:
 
     @property
     def has_altitude(self) -> bool:
-        return self.altitude_agl_m is not None
+        return (self.altitude_agl_terrain_m is not None
+                or self.altitude_ato_m is not None)
+
+    @property
+    def altitude_m(self) -> Optional[float]:
+        """The altitude to prefill the wizard with, best reference first.
+
+        The wizard asks for height above the ground being flown over, so a
+        terrain AGL answers it exactly and ATO only approximates it. Read
+        :attr:`altitude_reference` to find out which came back — the
+        difference is what the operator needs to know before accepting the
+        number.
+        """
+        if self.altitude_agl_terrain_m is not None:
+            return self.altitude_agl_terrain_m
+        return self.altitude_ato_m
+
+    @property
+    def altitude_reference(self) -> str:
+        """Which plane :attr:`altitude_m` is measured from."""
+        if self.altitude_agl_terrain_m is not None:
+            return FormatHelper.ALTITUDE_REFERENCE_TERRAIN
+        return FormatHelper.ALTITUDE_REFERENCE_TAKEOFF
 
 
 def read_device_text(video_path, logger=None) -> Optional[str]:
@@ -143,11 +172,13 @@ def detect_capture_info(
         logger: Optional logger.
         metadata_path: Optional operator-selected ``.SRT`` / ``.csv``
             metadata file, used instead of the video's own telemetry.
-            Altitude detection needs **AGL** specifically — height above
-            takeoff, which is what GSD is computed from — so a log carrying
-            only MSL yields no altitude. That is deliberate: AGL is not
+            Altitude detection needs a **height above the ground**, which
+            is what GSD is computed from, so a log carrying only MSL
+            yields no altitude. That is deliberate: neither ATO nor AGL is
             derivable from MSL without terrain data, and a wrong altitude
-            squares into the detection-area filter.
+            squares into the detection-area filter. A log's own terrain
+            AGL is preferred where it has one; otherwise ATO stands in,
+            and :attr:`VideoCaptureInfo.altitude_reference` says which.
 
     Returns:
         A :class:`VideoCaptureInfo`; every field is optional, so callers
@@ -176,11 +207,20 @@ def detect_capture_info(
             video_path, metadata_path, logger=logger
         )
         if resolution.found:
+            # One reference for the whole clip. Mixing a terrain AGL from
+            # some fixes with ATO from others would produce a median that
+            # describes neither plane.
+            attribute = (
+                "altitude_agl_terrain_m"
+                if any(point.altitude_agl_terrain_m is not None
+                       for point in resolution.track.points)
+                else "altitude_ato_m"
+            )
             airborne = [
-                point.altitude_agl_m
+                getattr(point, attribute)
                 for point in resolution.track.points
-                if point.altitude_agl_m is not None
-                and point.altitude_agl_m >= _AIRBORNE_FLOOR_M
+                if getattr(point, attribute) is not None
+                and getattr(point, attribute) >= _AIRBORNE_FLOOR_M
             ]
             if airborne:
                 # Median of the *airborne* fixes. Median alone is not enough:
@@ -191,7 +231,7 @@ def detect_capture_info(
                 # gives 76.9 m, the altitude the footage was actually shot
                 # at. Median rather than mean still guards against the odd
                 # bad fix and the climb/descent legs.
-                info.altitude_agl_m = float(statistics.median(airborne))
+                setattr(info, attribute, float(statistics.median(airborne)))
                 info.altitude_samples = len(airborne)
     except Exception as e:  # noqa: BLE001 - detection is advisory
         logger.debug(f"Altitude detection failed for {video_path}: {e}")

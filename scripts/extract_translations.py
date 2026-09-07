@@ -21,6 +21,36 @@ from pathlib import Path
 LANGUAGES = ["en", "it", "es", "nl"]
 
 
+def _is_translatable_source(path: Path, ui_files) -> bool:
+    """Should ``path`` be handed to lupdate?
+
+    ``*_rc.py`` never carries visible text, and a **generated** ``*_ui.py``
+    only duplicates strings lupdate already reads from the ``.ui`` itself -
+    including it would put every one of those strings in the catalog twice,
+    under two locations, which is why they were excluded wholesale.
+
+    A **hand-maintained** ``*_ui.py`` - one with no ``.ui`` beside it in
+    ``resources/views`` - is a different thing entirely: it is the only
+    place its strings exist. Excluding those meant the main streaming
+    window's own title, "Stream Controls", "Algorithm Controls" and
+    "Video Stream" had no catalog entry at all and shipped in English in
+    every locale, while the file looked compliant because it does
+    implement ``retranslateUi`` and does set its strings there.
+
+    Test files ending in ``_ui.py`` are UI *tests*, not UI modules, and
+    stay excluded so the count above stays meaningful.
+    """
+    if path.name.endswith("_rc.py"):
+        return False
+    if not path.name.endswith("_ui.py"):
+        return True
+    if "tests" in path.parts:
+        return False
+    # Generated iff a .ui of the same stem exists.
+    stem = path.name[:-len("_ui.py")]
+    return not any(ui.stem == stem for ui in ui_files)
+
+
 def extract(project_root: Path, translations_dir: Path):
     """Extract translatable strings from source files.
 
@@ -35,7 +65,7 @@ def extract(project_root: Path, translations_dir: Path):
     # Collect all source files
     ui_files = list((project_root / "resources" / "views").rglob("*.ui"))
     py_files = [f for f in (project_root / "app").rglob("*.py")
-                if not f.name.endswith(("_ui.py", "_rc.py"))]
+                if _is_translatable_source(f, ui_files)]
 
     print(f"Sources: {len(ui_files)} .ui files, {len(py_files)} .py files")
 

@@ -110,6 +110,9 @@ class ClickableColorSwatch(TranslationMixin, QFrame):
 
 class HSVColorRowWizardWidget(TranslationMixin, QWidget):
     """Simplified widget representing an HSV color range configuration for wizard."""
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per colour the operator adds, which is not
+    # something a .ui can describe.
 
     delete_requested = Signal(QWidget)
     changed = Signal()
@@ -127,6 +130,25 @@ class HSVColorRowWizardWidget(TranslationMixin, QWidget):
         ("Wide", (20, 100, 100)),
         ("Very Wide", (35, 125, 125))
     ]
+
+    def _preset_label(self, key):
+        """Localized display name for a tolerance preset.
+
+        The English keys remain the identity: selection, persistence and the
+        value lookup all go through the preset's *index*, never its text.
+        Spelled out as literals rather than ``self.tr(key)`` because
+        ``pyside6-lupdate`` extracts only literal arguments - a variable
+        inside ``tr()`` compiles fine, extracts nothing, and returns English
+        in every locale, which is how these five went untranslated while
+        looking translated.
+        """
+        return {
+            "Very Narrow": self.tr("Very Narrow"),
+            "Narrow": self.tr("Narrow"),
+            "Moderate": self.tr("Moderate"),
+            "Wide": self.tr("Wide"),
+            "Very Wide": self.tr("Very Wide"),
+        }.get(key, key)
 
     def __init__(self, parent=None, color=None, tolerance_index=2, from_hsv_picker=False, row_width=None):
         """
@@ -223,7 +245,7 @@ class HSVColorRowWizardWidget(TranslationMixin, QWidget):
         combo_font.setPointSize(11)
         self.toleranceCombo.setFont(combo_font)
         for label, _ in self.TOLERANCE_PRESETS:
-            self.toleranceCombo.addItem(self.tr(label))
+            self.toleranceCombo.addItem(self._preset_label(label))
         self.toleranceCombo.setCurrentIndex(self.tolerance_index)
         self.toleranceCombo.currentIndexChanged.connect(self._on_tolerance_changed)
         self.toleranceCombo.setMinimumWidth(150)

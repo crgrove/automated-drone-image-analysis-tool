@@ -1,39 +1,32 @@
-"""
-AlertService.py - Real-time alert system for color detection
+"""AlertService.py - deciding when a detection is worth alerting on.
 
-Provides audio and visual alerts for detected objects with configurable
-thresholds and cooldown periods to prevent alert spam.
+Applies the operator's thresholds - minimum confidence, minimum area,
+cooldown, and an optional "must persist across N consecutive frames" rule -
+and emits ``alertTriggered`` when they are met.
+
+**Sounding the alert is not this class's job.** It used to be: it opened an
+audio device, created a ``QSystemTrayIcon``, and put up a ``QMessageBox``,
+all from ``app/core/services/`` where CLAUDE.md 2.1 reserves the layer for
+business logic. The presentation moved to
+:class:`~core.views.components.AlertPresenter.AlertPresenter`, which
+subscribes to the signals below; this module is now Qt-free apart from
+``QObject``/``Signal`` themselves.
+
+Detections are duck-typed on purpose (``bbox``, ``area``, ``confidence``).
+The concrete class lives in ``algorithms.streaming.ColorDetection``, and
+importing it from here made ``core.services`` depend on an algorithm package
+- the circular-import hazard CLAUDE.md 2.2.1 warns about.
 """
 
-# Set environment variable to avoid numpy._core issues - MUST be first
 from core.services.LoggerService import LoggerService
-from algorithms.streaming.ColorDetection.services import Detection
-from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWidgets import QSystemTrayIcon, QMessageBox, QApplication
-from PySide6.QtCore import QObject, QTimer, Signal, Qt, QMetaObject
+from PySide6.QtCore import QObject, Signal
 from enum import Enum
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import List, Dict, Any, Optional
 from helpers.TranslationMixin import TranslationMixin
 import threading
 import time
-import os
-import importlib
-
-# QSound is optional - may not be available in all PySide6 builds
-QSound = None
-try:
-    from PySide6.QtMultimedia import QSound
-except ImportError:
-    # QSound not available - audio alerts will use system sounds only
-    pass
-
-winsound = None
-try:
-    winsound = importlib.import_module("winsound")
-except ImportError:
-    winsound = None
-os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
 class AlertType(Enum):
@@ -216,99 +209,16 @@ class AlertManager(TranslationMixin, QObject):
         self._last_detection_time = 0
         self._alert_processing_enabled = True  # Emergency disable flag
 
-        # Audio system
-        self._audio_system = self._init_audio_system()
-
-        # System tray (for notifications) - optional feature
-        self._system_tray = None
-        try:
-            self._init_system_tray()
-        except Exception as e:
-            self.logger.warning(f"System tray initialization failed, notifications disabled: {e}")
-            self._system_tray = None
+        # No audio device and no system tray here. Deciding that an alert
+        # is warranted is this class's job; sounding it is
+        # AlertPresenter's, which subscribes to alertTriggered - see the
+        # module docstring.
 
         # Detection tracking for persistence
         self._detection_buffer = []
         self._buffer_lock = threading.Lock()
 
         # self.logger.info("Alert manager initialized")
-
-    def _init_audio_system(self) -> Optional[Any]:
-        """Initialize audio system for alerts.
-
-        Returns:
-            QSound instance if custom audio file is configured and QSound is available, None otherwise.
-        """
-        try:
-            if QSound is None:
-                # QSound not available - will use system sounds
-                return None
-            if self.config.audio_file and os.path.exists(self.config.audio_file):
-                return QSound(self.config.audio_file)
-            else:
-                # Use default system sound or built-in beep
-                return None
-        except Exception as e:
-            self.logger.error(f"Error initializing audio system: {e}")
-            return None
-
-    def _init_system_tray(self):
-        """Initialize system tray for notifications.
-
-        Sets up system tray icon for displaying notifications. Handles
-        platform-specific differences and fallbacks gracefully.
-        """
-        try:
-            # Check if system tray is supported on this platform
-            if not QSystemTrayIcon.isSystemTrayAvailable():
-                self.logger.warning("System tray not available on this platform")
-                self._system_tray = None
-                return
-
-            # Create basic system tray icon
-            self._system_tray = QSystemTrayIcon()
-
-            app = QApplication.instance()
-            if app:
-                try:
-                    style = app.style()
-                    icon = style.standardIcon(style.SP_ComputerIcon)
-                    self._system_tray.setIcon(icon)
-                except Exception as e:
-                    self.logger.warning(f"Failed to set system tray icon from style: {e}")
-                    # Create a simple fallback icon
-                    pixmap = QPixmap(16, 16)
-                    pixmap.fill(Qt.blue)
-                    icon = QIcon(pixmap)
-                    self._system_tray.setIcon(icon)
-            else:
-                # Fallback: create a simple default icon
-                pixmap = QPixmap(16, 16)
-                pixmap.fill(Qt.gray)
-                icon = QIcon(pixmap)
-                self._system_tray.setIcon(icon)
-
-            # Set tooltip
-            try:
-                self._system_tray.setToolTip(
-                    self.tr("ADIAT - Color Detection Alerts")
-                )
-            except Exception as e:
-                self.logger.warning(f"Failed to set system tray tooltip: {e}")
-
-            # Show the tray icon (this can sometimes fail)
-            try:
-                self._system_tray.show()
-                # Verify it's actually visible
-                if not self._system_tray.isVisible():
-                    self.logger.warning("System tray icon not visible after show()")
-            except Exception as e:
-                self.logger.warning(f"Failed to show system tray icon: {e}")
-                self._system_tray = None
-
-        except Exception as e:
-            self.logger.error(f"Error initializing system tray: {e}")
-            self._system_tray = None
 
     def update_config(self, config: AlertConfig):
         """Update alert configuration.
@@ -317,15 +227,12 @@ class AlertManager(TranslationMixin, QObject):
             config: New alert configuration to apply.
         """
         self.config = config
-
-        # Reinitialize audio if needed
-        if config.audio_file != getattr(self.config, 'audio_file', None):
-            self._audio_system = self._init_audio_system()
-
+        # alertConfigChanged is how the presenter learns to re-open its
+        # audio device; this class no longer owns one.
         self.alertConfigChanged.emit(self._get_config_dict())
         # self.logger.info("Alert configuration updated")
 
-    def process_detections(self, detections: List[Detection], timestamp: float):
+    def process_detections(self, detections: List[Any], timestamp: float):
         """Process detections and trigger alerts if conditions are met.
 
         Filters detections by thresholds, checks persistence requirements,
@@ -361,7 +268,7 @@ class AlertManager(TranslationMixin, QObject):
             # Auto-disable alerts if they're causing problems
             self.disable_alert_processing()
 
-    def _filter_detections(self, detections: List[Detection]) -> List[Detection]:
+    def _filter_detections(self, detections: List[Any]) -> List[Any]:
         """Filter detections based on alert thresholds.
 
         Args:
@@ -386,7 +293,7 @@ class AlertManager(TranslationMixin, QObject):
         # Limit number of detections
         return valid_detections[:self.config.max_detections_per_alert]
 
-    def _should_trigger_persistent_alert(self, detections: List[Detection], timestamp: float) -> bool:
+    def _should_trigger_persistent_alert(self, detections: List[Any], timestamp: float) -> bool:
         """Check if persistent alert should be triggered.
 
         Args:
@@ -414,7 +321,7 @@ class AlertManager(TranslationMixin, QObject):
         # Check cooldown
         return self._check_cooldown()
 
-    def _should_trigger_immediate_alert(self, detections: List[Detection], timestamp: float) -> bool:
+    def _should_trigger_immediate_alert(self, detections: List[Any], timestamp: float) -> bool:
         """Check if immediate alert should be triggered.
 
         Args:
@@ -437,7 +344,7 @@ class AlertManager(TranslationMixin, QObject):
 
         return (current_time - last_alert_time) >= (self.config.cooldown_ms / 1000.0)
 
-    def _trigger_alert_safe(self, detections: List[Detection], timestamp: float):
+    def _trigger_alert_safe(self, detections: List[Any], timestamp: float):
         """Trigger alert with timeout protection to prevent hanging.
 
         Uses a background thread to trigger alerts, preventing blocking of
@@ -464,7 +371,7 @@ class AlertManager(TranslationMixin, QObject):
         except Exception as e:
             self.logger.error(f"Error in safe alert trigger: {e}")
 
-    def _trigger_alert(self, detections: List[Detection], timestamp: float):
+    def _trigger_alert(self, detections: List[Any], timestamp: float):
         """Trigger alert for detections.
 
         Plays audio and/or visual alerts, records in history, and emits signals.
@@ -484,14 +391,6 @@ class AlertManager(TranslationMixin, QObject):
                 'alert_type': self.config.alert_type.value
             }
 
-            # Trigger audio alert
-            if self.config.alert_type in [AlertType.AUDIO_ONLY, AlertType.BOTH]:
-                self._play_audio_alert()
-
-            # Trigger visual alert
-            if self.config.alert_type in [AlertType.VISUAL_ONLY, AlertType.BOTH]:
-                self._show_visual_alert(alert_info, detections)
-
             # Record in history
             self.history.add_alert(len(detections))
 
@@ -510,143 +409,6 @@ class AlertManager(TranslationMixin, QObject):
 
         except Exception as e:
             self.logger.error(f"Error triggering alert: {e}")
-
-    def _play_audio_alert(self):
-        """Play audio alert.
-
-        Attempts to play custom sound file or system sound based on configuration.
-        Handles errors gracefully to prevent blocking.
-        """
-        try:
-            if self._audio_system:
-                # Play custom sound file with timeout protection
-                try:
-                    self._audio_system.play()
-                except Exception as e:
-                    self.logger.warning(f"Custom audio playback failed: {e}")
-            elif self.config.use_system_sound and winsound is not None:
-                # Play system beep/sound with timeout protection
-                try:
-                    # Use non-blocking system sound
-                    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                except Exception as e:
-                    self.logger.warning(f"System sound failed: {e}")
-            elif self.config.use_system_sound:
-                # Fallback for non-Windows systems
-                try:
-                    # Terminal bell - note: logger won't produce sound, but log for debugging
-                    # self.logger.debug("Alert: Terminal bell (system sound fallback)")
-                    pass
-                except Exception:
-                    pass  # Even this can sometimes fail
-        except Exception as e:
-            self.logger.error(f"Error playing audio alert: {e}")
-
-    def _show_visual_alert(self, alert_info: Dict[str, Any], detections: List[Detection]):
-        """Show visual alert.
-
-        Displays system tray notifications and/or popup windows based on
-        configuration.
-
-        Args:
-            alert_info: Dictionary containing alert metadata.
-            detections: List of detections that triggered the alert.
-        """
-        try:
-            # Create alert message
-            message = self._create_alert_message(alert_info, detections)
-
-            # System tray notification with timeout protection
-            if self.config.show_system_notification and self._system_tray:
-                try:
-                    # Check if system tray is available and visible
-                    if self._system_tray.isVisible() and QSystemTrayIcon.isSystemTrayAvailable():
-                        # Use a timer to avoid blocking the main thread
-
-                        def show_notification():
-                            try:
-                                self._system_tray.showMessage(
-                                    self.tr("ADIAT - Color Detection Alert"),
-                                    message,
-                                    QSystemTrayIcon.Information,
-                                    3000  # Reduced timeout
-                                )
-                            except Exception as e:
-                                self.logger.warning(f"System tray notification failed: {e}")
-
-                        QTimer.singleShot(0, show_notification)
-                    else:
-                        self.logger.warning("System tray not available for notifications")
-                except Exception as e:
-                    self.logger.warning(f"System tray notification error: {e}")
-
-            # Popup window
-            if self.config.show_popup_window:
-                # This should be called from the main thread
-                try:
-                    QMetaObject.invokeMethod(
-                        self,
-                        "_show_popup_message",
-                        Qt.QueuedConnection,
-                        message
-                    )
-                except Exception as e:
-                    self.logger.warning(f"Popup window invocation failed: {e}")
-
-        except Exception as e:
-            self.logger.error(f"Error showing visual alert: {e}")
-
-    def _create_alert_message(self, alert_info: Dict[str, Any], detections: List[Detection]) -> str:
-        """Create formatted alert message.
-
-        Args:
-            alert_info: Dictionary containing alert metadata.
-            detections: List of detections that triggered the alert.
-
-        Returns:
-            Formatted alert message string.
-        """
-        message = self.tr(
-            "Detected {count} object(s)\n"
-            "Average confidence: {avg_confidence:.2f}\n"
-            "Total area: {area:.0f} pixels\n"
-        ).format(
-            count=alert_info['detection_count'],
-            avg_confidence=alert_info['avg_confidence'],
-            area=alert_info['total_area']
-        )
-
-        if len(detections) <= 3:  # Show details for small number of detections
-            message += self.tr("\nDetails:\n")
-            for i, detection in enumerate(detections, 1):
-                x, y, w, h = detection.bbox
-                message += self.tr(
-                    "  #{index}: ({x},{y}) {w}x{h} conf:{confidence:.2f}\n"
-                ).format(
-                    index=i,
-                    x=x,
-                    y=y,
-                    w=w,
-                    h=h,
-                    confidence=detection.confidence
-                )
-
-        return message.strip()
-
-    def _show_popup_message(self, message: str):
-        """Show popup message (must be called from main thread).
-
-        Args:
-            message: Message text to display in popup.
-        """
-        try:
-            msg_box = QMessageBox()
-            msg_box.setWindowTitle(self.tr("ADIAT - Detection Alert"))
-            msg_box.setText(message)
-            msg_box.setIcon(QMessageBox.Information)
-            msg_box.exec()
-        except Exception as e:
-            self.logger.error(f"Error showing popup: {e}")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get alert statistics.
@@ -697,13 +459,13 @@ class AlertManager(TranslationMixin, QObject):
         """
         try:
             # Create dummy detection for testing
-            dummy_detection = Detection(
+            dummy_detection = SimpleNamespace(
                 bbox=(100, 100, 50, 50),
                 centroid=(125, 125),
                 area=2500,
                 confidence=0.9,
                 timestamp=time.time(),
-                contour=None
+                contour=None,
             )
 
             # Use safe trigger to prevent hanging

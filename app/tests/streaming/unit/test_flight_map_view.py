@@ -273,8 +273,13 @@ class TestVendoredLeaflet:
         assert "unpkg.com/leaflet" not in page
 
     def test_falls_back_to_the_cdn_when_vendored_files_are_missing(self):
-        """A checkout or build without the vendor dir must still work."""
-        from core.views.components import FlightMapView as module
+        """A checkout or build without the vendor dir must still work.
+
+        Patched on the service, not on the widget: the loader moved there so
+        the offline-map exporter could use it without importing a Qt widget,
+        and the widget only re-exports the name.
+        """
+        from core.services.export import LeafletAssetService as module
 
         module.load_leaflet_assets.cache_clear()
         try:
@@ -287,7 +292,7 @@ class TestVendoredLeaflet:
 
     def test_script_close_tags_are_escaped(self):
         """A literal </script> in the payload would close the tag early."""
-        from core.views.components import FlightMapView as module
+        from core.services.export import LeafletAssetService as module
 
         module.load_leaflet_assets.cache_clear()
         try:
@@ -318,7 +323,9 @@ class TestVendoredLeaflet:
         """A partial vendor dir must not corrupt the stylesheet."""
         import tempfile
         from pathlib import Path
-        from core.views.components.FlightMapView import _inline_css_images
+        from core.services.export.LeafletAssetService import (
+            _inline_css_images,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             css = ".a{background-image:url(images/nope.png)}"

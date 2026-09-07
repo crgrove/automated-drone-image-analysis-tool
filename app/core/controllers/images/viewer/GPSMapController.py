@@ -1052,10 +1052,15 @@ class GPSMapController(QObject):
 
                 # Found a matching image — center the viewer
                 if idx != current_idx:
-                    self.parent.current_image = idx
-                    self.parent._load_image()
-                    # Defer centering until image is loaded
-                    QTimer.singleShot(150, lambda px=(u, v): self._center_viewer_on_pixel(px))
+                    # State the framing intent with the navigation and let
+                    # the load pipeline apply it as its own last step, after
+                    # its zoom reset. The 150 ms this replaces was waiting
+                    # for that reset to stop stomping the centre - a guess
+                    # about how long loading a frame takes, which held on a
+                    # local SSD and not on the network shares a SAR team
+                    # actually works from.
+                    self.parent.load_image_with_zoom(
+                        idx, lambda px=(u, v): self._center_viewer_on_pixel(px))
                 else:
                     self._center_viewer_on_pixel((u, v))
                 return

@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import tempfile
 import os
+from unittest.mock import MagicMock
 from algorithms.images.MRMap.services.MRMapService import MRMapService, Histogram, _percent_to_u8
 from algorithms import DetectionExpansion
 from algorithms.AlgorithmService import AnalysisResult
@@ -301,6 +302,22 @@ def test_process_image_returns_error_on_exception(mrmap_service):
     result = mrmap_service.process_image(None, "/fake/path.jpg", "/in", "/out")
     assert isinstance(result, AnalysisResult)
     assert result.error_message is not None
+
+
+def test_process_image_logs_which_file_and_algorithm_failed(mrmap_service):
+    """A bare str(e) in the results XML says a frame failed but not which
+    frame or which algorithm, which is unusable on a folder of thousands.
+    """
+    mrmap_service.logger = MagicMock()
+
+    result = mrmap_service.process_image(None, "/fake/path.jpg", "/in", "/out")
+
+    assert result.error_message is not None
+    assert mrmap_service.logger.error.called
+    logged = " ".join(
+        str(call.args[0]) for call in mrmap_service.logger.error.call_args_list)
+    assert "/fake/path.jpg" in logged
+    assert "MRMap" in logged
 
 
 # ---------------------------------------------------------------------------

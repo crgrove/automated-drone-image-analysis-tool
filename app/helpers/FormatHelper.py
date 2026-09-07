@@ -52,6 +52,15 @@ class FormatHelper:
     ALTITUDE_REFERENCE_TAKEOFF = 'takeoff'
     ALTITUDE_REFERENCE_TERRAIN = 'terrain'
     ALTITUDE_REFERENCE_MANUAL = 'manual'
+    # The third plane. Absent until a display surface needed to label a
+    # sea-level value, and its absence was itself a hazard: the label
+    # functions below fall back to ATO for anything they do not recognise,
+    # so a caller asking for an MSL label silently got 'ATO' - the exact
+    # collision the vocabulary exists to prevent. Never returned by
+    # ``ImageService.get_altitude_reference``, which classifies what an
+    # image's RelativeAltitude tag means; this token is for surfaces that
+    # know statically which plane they are labelling.
+    ALTITUDE_REFERENCE_MSL = 'msl'
 
     # Explains the pair wherever both are shown. One string, so the status
     # bar, the HUD and any future surface teach the same distinction - and
@@ -164,9 +173,14 @@ class FormatHelper:
                 an unmarked ``drone-dji:RelativeAltitude`` is.
 
         Returns:
-            str: ``'AGL'`` or ``'ATO'``, for tight UI where a phrase will
-            not fit.
+            str: ``'AGL'``, ``'ATO'`` or ``'MSL'``, for tight UI where a
+            phrase will not fit.
         """
+        # MSL first: the fall-through below answers 'ATO', so a sea-level
+        # value reaching it would be labelled with the wrong plane rather
+        # than with no plane.
+        if reference == FormatHelper.ALTITUDE_REFERENCE_MSL:
+            return 'MSL'
         if reference in (FormatHelper.ALTITUDE_REFERENCE_TERRAIN,
                          FormatHelper.ALTITUDE_REFERENCE_MANUAL):
             return 'AGL'
@@ -188,6 +202,8 @@ class FormatHelper:
         Returns:
             str: e.g. ``'ATO (above the takeoff point)'``.
         """
+        if reference == FormatHelper.ALTITUDE_REFERENCE_MSL:
+            return 'MSL (above mean sea level)'
         if reference == FormatHelper.ALTITUDE_REFERENCE_TERRAIN:
             return 'AGL (above the terrain)'
         if reference == FormatHelper.ALTITUDE_REFERENCE_MANUAL:

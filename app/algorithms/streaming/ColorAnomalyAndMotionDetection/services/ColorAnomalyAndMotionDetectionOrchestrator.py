@@ -1083,7 +1083,10 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         self.metrics = PerformanceMetrics()
         self._fps_counter = 0
         self._fps_start_time = time.time()
+        # Both sub-services, not just one: an added hook that nothing calls
+        # satisfies the contract on paper and does nothing in the app.
         self.motion_service.reset()
+        self.color_service.reset()
         # self.logger.info("Performance metrics reset")
 
     def reset_for_new_video(self):
@@ -1100,8 +1103,11 @@ class ColorAnomalyAndMotionDetectionOrchestrator(QObject):
         # Clear last detections (for frame skipping persistence)
         self._last_detections = []
 
-        # Reset motion service including background models
-        self.motion_service.reset_background_models()
+        # Reset both sub-services. motion_service.cleanup() calls
+        # reset_background_models() itself and additionally drops the
+        # morphology kernel cache.
+        self.motion_service.cleanup()
+        self.color_service.cleanup()
 
         # Reset performance metrics
         self.metrics = PerformanceMetrics()

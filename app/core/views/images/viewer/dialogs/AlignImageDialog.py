@@ -203,6 +203,7 @@ class AlignImageDialog(TranslationMixin, QDialog):
         """Briefly surface a map tile loading error."""
         self.status_label.setText(message)
         self.status_label.setVisible(True)
+        # 2.9: toast timeout - the delay IS the requirement.
         QTimer.singleShot(6000, lambda: self.status_label.setVisible(False))
 
     def accept(self):

@@ -25,7 +25,7 @@ import html
 import json
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from core.views.components.FlightMapView import (
+from core.services.export.LeafletAssetService import (
     AIRCRAFT_COLOR,
     DEFAULT_PIN_COLOR,
     DETECTOR_PALETTE,

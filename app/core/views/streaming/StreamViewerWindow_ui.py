@@ -154,12 +154,18 @@ class Ui_StreamViewerWindow:
     
     def retranslateUi(self, StreamViewerWindow):
         """Set UI text/translations."""
-        _translate = QCoreApplication.translate
-        StreamViewerWindow.setWindowTitle(_translate("StreamViewerWindow", "ADIAT - Real-Time Stream Detection"))
-        self.videoLabel.setText(_translate("StreamViewerWindow", "Video Stream"))
-        self.streamControlGroup.setTitle(_translate("StreamViewerWindow", "Stream Controls"))
-        self.mapGroup.setTitle(_translate("StreamViewerWindow", "Map"))
-        self.algorithmControlGroup.setTitle(_translate("StreamViewerWindow", "Algorithm Controls"))
-        self.recordingGroup.setTitle(_translate("StreamViewerWindow", "Recording"))
-        self.infoPanel.setPlaceholderText(_translate("StreamViewerWindow", "Stream information and logs will appear here..."))
+        # QCoreApplication.translate spelled out at every call site, not
+        # bound to a local alias. pyside6-lupdate matches the call
+        # syntactically, so an alias makes every string here invisible to
+        # extraction - which is how this window's own title and its four
+        # group headings ended up with no catalog entry in any language
+        # while the file looked correct. Generated *_ui.py files write it
+        # out in full for the same reason; match them.
+        StreamViewerWindow.setWindowTitle(QCoreApplication.translate("StreamViewerWindow", "ADIAT - Real-Time Stream Detection"))
+        self.videoLabel.setText(QCoreApplication.translate("StreamViewerWindow", "Video Stream"))
+        self.streamControlGroup.setTitle(QCoreApplication.translate("StreamViewerWindow", "Stream Controls"))
+        self.mapGroup.setTitle(QCoreApplication.translate("StreamViewerWindow", "Map"))
+        self.algorithmControlGroup.setTitle(QCoreApplication.translate("StreamViewerWindow", "Algorithm Controls"))
+        self.recordingGroup.setTitle(QCoreApplication.translate("StreamViewerWindow", "Recording"))
+        self.infoPanel.setPlaceholderText(QCoreApplication.translate("StreamViewerWindow", "Stream information and logs will appear here..."))
 

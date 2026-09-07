@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from core.services.LoggerService import LoggerService
 from core.services.streaming.signaling import (
@@ -59,6 +59,13 @@ DEFAULT_PEER_APPROVAL_TIMEOUT_SECONDS = 30.0
 # Label of the DataChannel the desktop opens to ask the publisher for a
 # full snapshot of currently-promoted tracks (plan §15 M3 / §6).
 SNAPSHOT_REQUEST_CHANNEL = "detections.snapshot_request"
+
+# Backpressure escape hatch. If the GUI thread has not acknowledged the
+# in-flight frame within this long, the gate re-opens anyway. Without it a
+# lost acknowledgement (a consumer disconnected mid-delivery, an event loop
+# that stopped and restarted) would freeze the feed permanently rather than
+# degrade it. One second is far longer than any legitimate render.
+FRAME_ACK_TIMEOUT_SECONDS = 1.0
 
 
 def _require_aiortc():
@@ -120,6 +127,14 @@ class WebRTCStreamService(QThread):
 
     # M3: snapshot request channel (per plan §15)
     snapshotRequested = Signal()
+
+    # Internal backpressure acknowledgement. Emitted from the decode thread
+    # immediately after ``frameReady``; because both cross into the GUI
+    # thread as queued events on the same queue, Qt delivers this one only
+    # after every ``frameReady`` slot for that frame has run. That ordering
+    # is what makes it an acknowledgement rather than a guess — see
+    # :meth:`_emit_frame_ready`.
+    _frameDelivered = Signal()
 
     def __init__(
         self,
@@ -202,6 +217,17 @@ class WebRTCStreamService(QThread):
         # ICE-restart within the same session.
         self._allow_next_fingerprint_change: bool = False
 
+        # --- frame backpressure (see _emit_frame_ready) -----------------
+        # Written on the decode thread, cleared on the GUI thread. A plain
+        # bool is enough: the only transitions are set-before-emit by the
+        # single producer and clear-on-ack by the single consumer, so there
+        # is no read-modify-write to lose.
+        self._frame_in_flight = False
+        self._frame_in_flight_since = 0.0
+        self._backpressure_drops = 0
+        self._backpressure_warned = False
+        self._frameDelivered.connect(self._on_frame_delivered)
+
     # ------------------------------------------------------------------
     # public API (called from Qt thread)
     # ------------------------------------------------------------------
@@ -214,8 +240,10 @@ class WebRTCStreamService(QThread):
     def confirm_sas(self, accept: bool) -> None:
         """Accept or reject the rendered SAS phrase.
 
-        Bridges across the Qt/asyncio boundary by scheduling ``_sas_event_set``
-        on the loop. Safe to call before the loop is ready.
+        Bridges across the Qt/asyncio boundary by scheduling
+        ``_sas_confirmation.set`` on the loop. Safe to call before the loop
+        is ready and after it has gone: ``_sas_accepted`` is set first, and
+        :meth:`run` polls it.
         """
         self._sas_accepted = bool(accept)
 
@@ -223,12 +251,11 @@ class WebRTCStreamService(QThread):
             self._sas_confirmation.set()
 
         loop = self._loop
-        if loop is not None and loop.is_running():
-            loop.call_soon_threadsafe(_resolve)
-        else:
-            # Loop not ready yet — defer; run() polls _sas_accepted after it
-            # creates the event, so this code path is only hit on a race.
-            pass
+        if loop is None:
+            # Loop not ready yet — run() polls _sas_accepted after it
+            # creates the event.
+            return
+        self._post_to_loop(loop, _resolve)
 
     def request_disconnect(self) -> None:
         """Schedule a graceful shutdown that ends the publish session.
@@ -247,6 +274,36 @@ class WebRTCStreamService(QThread):
         self._explicit_disconnect = True
         self._schedule_stop()
 
+    def _post_to_loop(self, loop, callback) -> bool:
+        """Queue ``callback`` on the loop thread, tolerating a closed loop.
+
+        The loop belongs to this QThread: :meth:`run` creates it, runs it
+        and closes it. Every other thread — the Qt main thread, always —
+        can only post into it, and there is no way for a poster to *check*
+        that the loop is alive and then post while it still is. ``run()``
+        can reach ``loop.close()`` in the gap between the two, however
+        narrow the gap is made, because only the owning thread knows.
+
+        ``is_running()`` is therefore not a guard, and was never one: it
+        turned an unavoidable race into an unhandled ``RuntimeError:
+        Event loop is closed`` raised in the caller's thread — on the Qt
+        main thread, inside a slot, for a tile the operator had just
+        closed. asyncio's own ``RuntimeError`` is the thread-safe signal
+        for "too late", so that is what gets handled.
+
+        Returns:
+            bool: True if the callback was queued. False means the loop
+            had already closed, which is not a failure: ``run()``'s
+            ``finally`` has already completed teardown by then.
+        """
+        try:
+            loop.call_soon_threadsafe(callback)
+        except RuntimeError:
+            # Only RuntimeError. Anything else from call_soon_threadsafe is
+            # a real bug and must surface.
+            return False
+        return True
+
     def _schedule_stop(self) -> None:
         """Signal the asyncio loop to stop and trigger ``_tear_down``.
 
@@ -254,11 +311,16 @@ class WebRTCStreamService(QThread):
         ``_explicit_disconnect``; this helper just stops the loop.
         """
         loop = self._loop
-        if loop is None or not loop.is_running():
-            self._stop.set()
+        # Set the event here rather than from a queued callback: it is a
+        # threading.Event, so the caller can set it directly, and doing so
+        # makes the stop independent of whether the loop is still alive to
+        # run a callback at all. One post follows, not two — with two, the
+        # first could land and the second not, leaving the stop flagged and
+        # teardown never scheduled.
+        self._stop.set()
+        if loop is None:
             return
-        loop.call_soon_threadsafe(self._stop.set)
-        loop.call_soon_threadsafe(self._begin_tear_down)
+        self._post_to_loop(loop, self._begin_tear_down)
 
     def _begin_tear_down(self) -> None:
         """Start teardown on the loop thread, at most once.
@@ -300,6 +362,14 @@ class WebRTCStreamService(QThread):
         self._resume_session_id = None
         self._resume_last_seq = 0
         self._allow_next_fingerprint_change = False
+        # Re-open the backpressure gate. A reconnect that inherited a set
+        # in-flight flag (the previous session torn down between emit and
+        # acknowledgement) would drop every frame until the stale-ack
+        # timeout fired.
+        self._frame_in_flight = False
+        self._frame_in_flight_since = 0.0
+        self._backpressure_drops = 0
+        self._backpressure_warned = False
 
     def cleanup(self, *, wait: bool = False) -> None:
         """Lifecycle hook (CLAUDE.md §2.2.1) — stop loop, release resources.
@@ -683,15 +753,85 @@ class WebRTCStreamService(QThread):
         timestamp: float,
         frame_number: int,
     ) -> None:
-        """Emit a decoded frame through an overridable boundary.
+        """Emit a decoded frame, dropping it if the GUI thread is behind.
 
         Mirrors :meth:`RTMPStreamService._emit_frame_ready` so subclasses
         can throttle or re-stamp frames without reimplementing
         :meth:`_consume_video`. ``timestamp`` is the track's presentation
         time — subclasses feeding ADIAT's latency stats re-stamp it with
         ``time.perf_counter()``.
+
+        **This is a backpressure gate, and it has to be.** ``frameReady``
+        is emitted from the decode thread to slots living on the GUI
+        thread, so every emission posts a queued event holding a reference
+        to a full-resolution BGR ndarray — ~6.2 MB at 1080p, and the
+        Flight Viewer connects *two* such slots per tile (render and
+        recording). Qt's event queue is unbounded. Emitting unconditionally
+        means that the moment the GUI thread cannot keep up with the
+        aggregate arrival rate across open tiles, the backlog grows
+        monotonically at up to ~190 MB/s per feed: memory climbs, the
+        machine pages, the UI stops responding, and the process dies on an
+        allocation failure inside Qt's C++ event delivery — with no Python
+        traceback to show for it.
+
+        A frames-per-second cap cannot fix that. A cap bounds the arrival
+        rate but says nothing about the service rate, so any consumer
+        slower than the cap still accumulates without bound. What bounds
+        the queue is refusing to emit a second frame while the first is
+        still outstanding, which is what this does: at most one frame is
+        ever in flight, so the backlog is O(1) by construction.
+
+        Dropping is the correct outcome for live video. The operator cannot
+        perceive a skipped frame; they can very much perceive unbounded
+        latency, and they lose the flight entirely to an OOM.
         """
+        if self._frame_in_flight:
+            now = time.monotonic()
+            if now - self._frame_in_flight_since < FRAME_ACK_TIMEOUT_SECONDS:
+                self._backpressure_drops += 1
+                if not self._backpressure_warned:
+                    # Once per session, not per frame: this says the GUI
+                    # thread is the bottleneck, which is exactly what a
+                    # field log needs to make a lock-up diagnosable.
+                    self._backpressure_warned = True
+                    self.logger.warning(
+                        "WebRTCStreamService: GUI thread behind the video "
+                        f"feed for code={self._pairing_code}; dropping frames "
+                        "to bound the event queue"
+                    )
+                return
+            # Acknowledgement lost — re-open rather than freeze the feed.
+            self.logger.warning(
+                "WebRTCStreamService: frame acknowledgement overdue after "
+                f"{FRAME_ACK_TIMEOUT_SECONDS}s for code={self._pairing_code}; "
+                "resuming delivery"
+            )
+
+        self._frame_in_flight = True
+        self._frame_in_flight_since = time.monotonic()
         self.frameReady.emit(frame, timestamp, frame_number)
+        # Ordering, not timing, is what makes this an acknowledgement: both
+        # emissions cross into the GUI thread as queued events on one queue,
+        # and Qt delivers same-priority events FIFO. When the decode thread
+        # IS the GUI thread (synchronous tests, an in-process harness) both
+        # connections are direct and the gate opens again before this method
+        # returns, so nothing is dropped.
+        self._frameDelivered.emit()
+
+    @Slot()
+    def _on_frame_delivered(self) -> None:
+        """GUI-thread acknowledgement that the last frame has been consumed."""
+        self._frame_in_flight = False
+
+    @property
+    def backpressure_drops(self) -> int:
+        """Frames decoded but never emitted because the GUI thread was behind.
+
+        Distinct from :attr:`FlightFeedStreamService.dropped_frames`, which
+        counts deliberate cadence limiting. A non-zero value here means the
+        consumer could not keep up.
+        """
+        return self._backpressure_drops
 
     async def _consume_video(self, track) -> None:
         """Pump frames from an aiortc track into Qt's frameReady signal."""

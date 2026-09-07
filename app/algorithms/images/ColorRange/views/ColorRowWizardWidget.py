@@ -124,6 +124,9 @@ class ColorRowWizardWidget(TranslationMixin, QWidget):
         TOLERANCE_PRESETS: List of (label, rgb_range_value) tuples for
             tolerance presets.
     """
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per colour the operator adds, which is not
+    # something a .ui can describe.
 
     delete_requested = Signal(QWidget)
     changed = Signal()
@@ -136,6 +139,25 @@ class ColorRowWizardWidget(TranslationMixin, QWidget):
         ("Wide", 75),
         ("Very Wide", 100)
     ]
+
+    def _preset_label(self, key):
+        """Localized display name for a tolerance preset.
+
+        The English keys remain the identity: selection, persistence and the
+        value lookup all go through the preset's *index*, never its text.
+        Spelled out as literals rather than ``self.tr(key)`` because
+        ``pyside6-lupdate`` extracts only literal arguments - a variable
+        inside ``tr()`` compiles fine, extracts nothing, and returns English
+        in every locale, which is how these five went untranslated while
+        looking translated.
+        """
+        return {
+            "Very Narrow": self.tr("Very Narrow"),
+            "Narrow": self.tr("Narrow"),
+            "Moderate": self.tr("Moderate"),
+            "Wide": self.tr("Wide"),
+            "Very Wide": self.tr("Very Wide"),
+        }.get(key, key)
 
     def __init__(self, parent=None, color=None, tolerance_index=2):
         """Initialize a color row wizard widget.
@@ -210,7 +232,7 @@ class ColorRowWizardWidget(TranslationMixin, QWidget):
         rowLayout.addWidget(self.colorSwatch)
 
         # Tolerance label
-        tolerance_label = QLabel("Match\nTolerance:", self.rowFrame)
+        tolerance_label = QLabel(self.tr("Match\nTolerance:"), self.rowFrame)
         # Force 11pt font
         _lbl_font = QFont(self.font())
         _lbl_font.setPointSize(11)
@@ -225,7 +247,7 @@ class ColorRowWizardWidget(TranslationMixin, QWidget):
         combo_font.setPointSize(11)
         self.toleranceCombo.setFont(combo_font)
         for label, _ in self.TOLERANCE_PRESETS:
-            self.toleranceCombo.addItem(label)
+            self.toleranceCombo.addItem(self._preset_label(label))
         self.toleranceCombo.setCurrentIndex(self.tolerance_index)
         self.toleranceCombo.currentIndexChanged.connect(self._on_tolerance_changed)
         self.toleranceCombo.setMinimumWidth(150)

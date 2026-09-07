@@ -80,7 +80,33 @@ class TestAltitudeReferenceLabels:
             FormatHelper.ALTITUDE_REFERENCE_MANUAL
         ) == 'AGL (operator-entered)'
 
-    @pytest.mark.parametrize("junk", [None, '', 'AGL', 'nonsense', 0])
+    def test_sea_level_is_abbreviated_msl(self):
+        """The third plane. Before it had a token of its own, a caller
+        asking for a sea-level label fell through to the ATO default and
+        got 'ATO' - the label collision this vocabulary exists to stop."""
+        assert FormatHelper.altitude_reference_abbreviation(
+            FormatHelper.ALTITUDE_REFERENCE_MSL) == 'MSL'
+
+    def test_sea_level_phrase_names_the_plane(self):
+        assert FormatHelper.altitude_reference_phrase(
+            FormatHelper.ALTITUDE_REFERENCE_MSL
+        ) == 'MSL (above mean sea level)'
+
+    def test_the_three_planes_never_share_a_label(self):
+        """CLAUDE.md 2.11: ATO, AGL and MSL must not share a label."""
+        references = (FormatHelper.ALTITUDE_REFERENCE_TAKEOFF,
+                      FormatHelper.ALTITUDE_REFERENCE_TERRAIN,
+                      FormatHelper.ALTITUDE_REFERENCE_MSL)
+        abbreviations = [FormatHelper.altitude_reference_abbreviation(r)
+                         for r in references]
+        phrases = [FormatHelper.altitude_reference_phrase(r)
+                   for r in references]
+        assert abbreviations == ['ATO', 'AGL', 'MSL']
+        assert len(set(abbreviations)) == 3
+        assert len(set(phrases)) == 3
+
+    @pytest.mark.parametrize("junk", [None, '', 'AGL', 'nonsense', 0,
+                                      'MSL', 'sea_level', 'asl'])
     def test_unknown_references_fall_back_to_takeoff(self, junk):
         """An unmarked RelativeAltitude is takeoff-relative; assume the least.
 

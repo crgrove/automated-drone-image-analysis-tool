@@ -108,10 +108,12 @@ class DjiSrtSample:
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude_msl_m: Optional[float] = None   # abs_alt — above mean sea level
-    # ``rel_alt``: above the takeoff point (ATO). The field name predates
-    # the three-reference vocabulary and matches the wire key
-    # ``aircraft_altitude_agl_m``, which has always carried ATO.
-    altitude_agl_m: Optional[float] = None
+    # ``rel_alt``: above the takeoff point (ATO). The value does not change
+    # when the terrain beneath the aircraft rises, so it is never an AGL.
+    # It reaches the HUD on the wire key ``aircraft_altitude_agl_m``, whose
+    # name is kept for compatibility and has always carried ATO; nothing
+    # inside ADIAT calls this quantity "agl" (CLAUDE.md § 2.11).
+    altitude_ato_m: Optional[float] = None
     yaw_deg: Optional[float] = None          # gimbal yaw; see module note below
     frame_index: Optional[int] = None
     # The aircraft's own wall clock for this cue, in drone local time.
@@ -246,9 +248,9 @@ def _parse_entry(block: str) -> Optional[DjiSrtSample]:
     # :func:`_resolve_legacy_altitude` decides once it can see the whole
     # track.
     altitude_msl = _to_float(fields.get("abs_alt"))
-    altitude_agl = _to_float(fields.get("rel_alt"))
+    altitude_ato = _to_float(fields.get("rel_alt"))
     datum_unknown = False
-    if altitude_msl is None and altitude_agl is None:
+    if altitude_msl is None and altitude_ato is None:
         altitude_msl = _to_float(fields.get("altitude"))
         datum_unknown = altitude_msl is not None
 
@@ -258,7 +260,7 @@ def _parse_entry(block: str) -> Optional[DjiSrtSample]:
         latitude=_to_float(fields.get("latitude")),
         longitude=longitude,
         altitude_msl_m=altitude_msl,
-        altitude_agl_m=altitude_agl,
+        altitude_ato_m=altitude_ato,
         # NB: ``gb_yaw`` is the *gimbal* yaw, not the airframe heading. It
         # is the only bearing DJI's SRT carries, so consumers surface it as
         # heading with that caveat.
@@ -285,8 +287,8 @@ def _resolve_legacy_altitude(
     applies to legacy files.
 
     Filing a relative altitude as MSL is not cosmetic: the HUD labels it
-    "MSL" and leaves AGL blank, the wizard's altitude auto-detection reads
-    AGL only and so finds nothing, and
+    "MSL" and leaves ATO blank, the wizard's altitude auto-detection reads
+    ATO only and so finds nothing, and
     :class:`~core.services.telemetry.TelemetryEnrichmentService.\
 TelemetryEnrichmentService` needs a reported AGL to anchor its DEM
     correction — without one there is no terrain correction at all.
@@ -319,7 +321,7 @@ VideoProfileService`). When given it is authoritative. When None — an
             return
 
     for sample in ambiguous:
-        sample.altitude_agl_m = sample.altitude_msl_m
+        sample.altitude_ato_m = sample.altitude_msl_m
         sample.altitude_msl_m = None
 
 

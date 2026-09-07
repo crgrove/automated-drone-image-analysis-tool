@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton, QListWidget, QListWidgetItem, QInputDialog,
     QWidget, QFrame, QMessageBox, QToolButton, QSizePolicy,
 )
-from PySide6.QtCore import Qt, Signal, QSize, QTimer
+from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QKeySequence, QShortcut, QColor, QIcon, QPixmap, QPainter
 
 from core.views.images.viewer.widgets.TeamPlanningMapView import TeamPlanningMapView
@@ -352,4 +352,8 @@ class TeamPlanningDialog(TranslationMixin, QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
-        QTimer.singleShot(100, self.map_view.fit_all_points)
+        # The show event IS the event; the 100 ms this replaces was waiting
+        # for the layout pass that sizes map_view. The map view now holds an
+        # unservable fit and completes it from its own show/resize handler,
+        # the same shape GPSMapDialog uses.
+        self.map_view.fit_all_points()

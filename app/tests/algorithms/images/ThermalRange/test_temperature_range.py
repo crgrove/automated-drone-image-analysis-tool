@@ -11,7 +11,8 @@ def testTemperatureRangeE2E(main_window, testData, qtbot, thermal_sdk_available)
     main_window.inputFolderLine.setText(testData['Thermal_Input'])
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
     assert main_window.algorithmWidget is not None
-    main_window.algorithmComboBox.setCurrentText('Temperature Range')
+    main_window.algorithmComboBox.setCurrentIndex(
+        main_window.algorithmComboBox.findData('ThermalRange'))
     assert main_window.algorithmWidget is not None
     assert not main_window.AdvancedFeaturesWidget.isVisible()
     algorithmWidget = main_window.algorithmWidget

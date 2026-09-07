@@ -1,13 +1,4 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
-from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
-from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyController import ThermalResidualAnomalyController
-from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
-from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
-from algorithms.images.MRMap.controllers.MRMapController import MRMapController
-from algorithms.images.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
-from algorithms.images.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
-from algorithms.images.ColorRange.controllers.ColorRangeController import ColorRangeController
 from core.services.ConfigService import ConfigService
 from core.services.XmlService import XmlService
 from core.services.SettingsService import SettingsService
@@ -47,8 +38,13 @@ import xml.etree.ElementTree as ET
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-"""****Import Algorithm Controllers****"""
-"""****End Algorithm Import****"""
+# Algorithm controllers are NOT imported here. They are resolved from
+# algorithms.conf at selection time by
+# ConfigService.resolve_image_algorithm_class, so adding an algorithm is a
+# config change rather than a config change plus an import plus a globals()
+# lookup. PyInstaller still bundles them: app.spec's
+# collect_algorithm_modules walks app/algorithms/ and hidden-imports every
+# module, which test_packaging_spec.py asserts.
 
 
 class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
@@ -165,7 +161,9 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         if hasattr(self, 'actionYouTube_Channel'):
             self.actionYouTube_Channel.triggered.connect(self._open_youtube_channel)
 
-        self.algorithmComboBox.currentTextChanged.connect(self._algorithmComboBox_changed)
+        # currentIndexChanged, not currentTextChanged: the identity now
+        # lives in the item's data, and the text is free to be translated.
+        self.algorithmComboBox.currentIndexChanged.connect(self._algorithmComboBox_changed)
         self._algorithmComboBox_changed()
         # The swap tolerates a label that matches no algorithm (a group header,
         # stale combobox text) because that is a recoverable runtime event. At
@@ -259,7 +257,11 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             if system in algorithm['platforms']:
                 if algorithm['type'] not in algorithm_list:
                     algorithm_list[algorithm['type']] = []
-                algorithm_list[algorithm['type']].append(algorithm['label'])
+                # (display text, stable identity). The name is what the
+                # swap, the results XML and the wizard handoff all key on;
+                # the label is only ever read by the operator.
+                algorithm_list[algorithm['type']].append(
+                    (algorithm['label'], algorithm['name']))
 
         self._replace_algorithmComboBox()
         for key, algos in algorithm_list.items():
@@ -439,20 +441,27 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             if os.name == 'nt':
                 self.histogramLine.setText(filename.replace('/', '\\'))
 
-    def _algorithmComboBox_changed(self):
+    def _algorithmComboBox_changed(self, *_):
         """
         Loads the selected algorithm's widget and sets UI elements based on the algorithm's requirements.
+
+        Keyed on the item's data - the algorithms.conf ``name`` - not on its
+        display text. A group header carries no data, and a translated label
+        would match no algorithm at all.
+
+        Accepts and ignores the index ``currentIndexChanged`` passes, because
+        __init__ also calls this bare to load the startup algorithm.
         """
+        selected_name = self.algorithmComboBox.currentData()
         selected = next(
-            (x for x in self.algorithms if x['label'] == self.algorithmComboBox.currentText()),
-            None)
+            (x for x in self.algorithms if x['name'] == selected_name), None)
         if selected is None:
-            # A group header or stale text must not tear down the current
-            # widget (the old unguarded next() raised StopIteration here,
-            # leaving the swap half-done).
+            # A group header (no data) or a stale selection must not tear
+            # down the current widget (the old unguarded next() raised
+            # StopIteration here, leaving the swap half-done).
             self.logger.error(
-                f"Algorithm swap skipped: no algorithm labelled "
-                f"'{self.algorithmComboBox.currentText()}'")
+                f"Algorithm swap skipped: no algorithm named "
+                f"'{selected_name}'")
             return
 
         # retire_widget hides before queueing the delete; see WidgetHelper for
@@ -461,7 +470,8 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         retire_widget(self.algorithmWidget, self.verticalLayout_2)
 
         self.activeAlgorithm = selected
-        cls = globals()[self.activeAlgorithm['controller']]
+        cls = ConfigService.resolve_image_algorithm_class(
+            self.activeAlgorithm, 'controller')
         self.algorithmWidget = cls(self.activeAlgorithm, self.settings_service.get_setting('Theme'))
         self.verticalLayout_2.addWidget(self.algorithmWidget)
         self.AdvancedFeaturesWidget.setVisible(not self.algorithmWidget.is_thermal)
@@ -1393,9 +1403,29 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 self.histogramCheckbox.setChecked(True)
                 self.histogramLine.setText(settings['hist_ref_path'])
         if 'algorithm' in settings:
-            self.activeAlgorithm = next(x for x in self.algorithms if x['name'] == settings['algorithm'])
-            self.algorithmComboBox.setCurrentText(self.activeAlgorithm['label'])
-            self.algorithmWidget.load_options(settings['options'])
+            # Select through the combobox and let _algorithmComboBox_changed
+            # derive activeAlgorithm from it, for the same reason the wizard
+            # handoff below does: assigning it here drifts activeAlgorithm
+            # away from the widget that was actually built.
+            #
+            # findData rather than an unguarded next(): a results file can
+            # name something this combobox has no entry for - "FlightViewer"
+            # (MissionGalleryController), a streaming algorithm name
+            # (RecordingBundleService), or an algorithm filtered out on this
+            # platform. That used to raise StopIteration into the caller's
+            # broad except, silently abandoning the rest of the restore
+            # including the thermal flag below.
+            requested = settings['algorithm']
+            index = self.algorithmComboBox.findData(requested)
+            if index == -1:
+                self.logger.error(
+                    f"Results file names algorithm '{requested}', which is not "
+                    f"selectable here; keeping "
+                    f"'{self.activeAlgorithm['name'] if self.activeAlgorithm else None}'. "
+                    f"Its options were not applied.")
+            else:
+                self.algorithmComboBox.setCurrentIndex(index)
+                self.algorithmWidget.load_options(settings['options'])
         if 'thermal' in settings:
             self.algorithmWidget.is_thermal = (settings['thermal'] == 'True')
         return image_count
@@ -1477,31 +1507,49 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         # The combobox is the single source of truth: _algorithmComboBox_changed
         # derives activeAlgorithm from it, so activeAlgorithm and algorithmWidget
         # can never disagree. Assigning activeAlgorithm here instead would break
-        # that whenever setCurrentText does not take - the combobox holds only
-        # the labels for THIS platform (_load_algorithms filters on
+        # that whenever the selection does not take - the combobox holds only
+        # the entries for THIS platform (_load_algorithms filters on
         # algorithm['platforms']) while self.algorithms holds them all, so
         # wizard data naming e.g. a Windows-only Temperature algorithm on macOS
-        # silently no-ops on the non-editable combobox. Options would then load
-        # into the previous algorithm's widget and auto-start would run one
-        # algorithm with another's parameters.
+        # cannot be selected. Options would then load into the previous
+        # algorithm's widget and auto-start would run one algorithm with
+        # another's parameters.
+        #
+        # findData == -1 says so explicitly. The old check compared display
+        # text before and after setCurrentText and inferred the failure from
+        # a silent no-op on a non-editable combobox - true, but only while
+        # the identity and the display text were the same string.
         if wizard_data.get('algorithm'):
-            algorithm_label = wizard_data['algorithm']
-            self.algorithmComboBox.setCurrentText(algorithm_label)
+            requested = wizard_data['algorithm']
+            # Name or label: the wizard stores names now, but a payload
+            # built before that switch - or by an external caller - carries
+            # a label. Same dual match BatchCLI._resolve_algorithm makes.
+            match = next(
+                (a for a in self.algorithms
+                 if requested in (a.get('name'), a.get('label'))), None)
+            index = (self.algorithmComboBox.findData(match['name'])
+                     if match else -1)
 
-            if self.algorithmComboBox.currentText() != algorithm_label:
-                # Not selectable on this platform (or an unknown label): leave
+            if index == -1:
+                # Not selectable on this platform (or an unknown name): leave
                 # the current algorithm intact rather than half-applying the
                 # wizard, and do not load its options into the wrong widget.
                 self.logger.error(
-                    f"Wizard algorithm '{algorithm_label}' is not available on this "
-                    f"platform; keeping '{self.algorithmComboBox.currentText()}'. "
+                    f"Wizard algorithm '{requested}' is not available on this "
+                    f"platform; keeping "
+                    f"'{self.activeAlgorithm['name'] if self.activeAlgorithm else None}'. "
                     f"Its parameters were not applied.")
-            elif wizard_data.get('algorithm_options'):
-                # Load algorithm options if available. processEvents lets the
-                # freshly constructed widget finish initializing.
-                QApplication.processEvents()
-                if self.algorithmWidget:
-                    self.algorithmWidget.load_options(wizard_data['algorithm_options'])
+            else:
+                # Select first, unconditionally: the wizard chose this
+                # algorithm whether or not it also carries options for it.
+                self.algorithmComboBox.setCurrentIndex(index)
+                if wizard_data.get('algorithm_options'):
+                    # processEvents lets the freshly constructed widget
+                    # finish initializing before options land in it.
+                    QApplication.processEvents()
+                    if self.algorithmWidget:
+                        self.algorithmWidget.load_options(
+                            wizard_data['algorithm_options'])
 
         # Mark for auto-start if requested (will execute in showEvent after window is visible)
         self._auto_start_requested = wizard_data.get('auto_start', False)

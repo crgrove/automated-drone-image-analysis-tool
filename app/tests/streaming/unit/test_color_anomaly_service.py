@@ -208,3 +208,33 @@ def test_expand_detection_by_hue_returns_detection(service):
     # Should return a Detection (possibly with expanded area)
     assert isinstance(expanded, Detection)
     assert expanded.bbox is not None
+
+
+# ---------------------------------------------------------------------------
+# lifecycle hooks (CLAUDE.md 2.2.1)
+# ---------------------------------------------------------------------------
+
+def test_reset_leaves_the_service_usable(service, base_config):
+    """Detection is stateless per frame, so reset has nothing to clear - but
+    it must exist and must not break the next frame."""
+    service.reset()
+    frame = np.random.randint(0, 255, (60, 60, 3), dtype=np.uint8)
+    assert isinstance(service.detect(frame, base_config), list)
+
+
+def test_cleanup_clears_the_morph_kernel_cache(service):
+    service._get_morph_kernel(5)
+    assert service._morph_kernel_cache
+    service.cleanup()
+    assert service._morph_kernel_cache == {}
+
+
+def test_the_service_survives_a_mid_session_cleanup(service, base_config):
+    """StreamViewerWindow calls cleanup() when the operator switches video
+    and keeps the same widget, so an inert service would silently stop
+    detecting on the new source."""
+    service._get_morph_kernel(3)
+    service.cleanup()
+    frame = np.random.randint(0, 255, (60, 60, 3), dtype=np.uint8)
+    assert isinstance(service.detect(frame, base_config), list)
+    assert service._get_morph_kernel(3) is not None

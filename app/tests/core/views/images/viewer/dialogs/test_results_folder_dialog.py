@@ -17,9 +17,8 @@ import pytest
 import sys
 from unittest.mock import patch, MagicMock
 
-# Mock qtawesome before importing modules that depend on it
-sys.modules['qtawesome'] = MagicMock()
-
+# qtawesome is a real dependency; the sys.modules stub that used to sit
+# here leaked into every later import. The scoped patch below is enough.
 
 # Mock IconHelper to avoid qtawesome dependency
 with patch('helpers.IconHelper.IconHelper') as MockIconHelper:

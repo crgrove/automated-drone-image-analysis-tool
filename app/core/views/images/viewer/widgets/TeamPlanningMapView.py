@@ -59,6 +59,9 @@ class TeamPlanningMapView(TranslationMixin, QGraphicsView):
         self.current_zoom = 15
         self.zoom_scale = 1.0
         self._min_zoom_scale = 0.0  # set after first fit
+        # A fit requested before layout sized the viewport, held until
+        # showEvent/resizeEvent can honour it. See _request_fit_all_points.
+        self._fit_pending = False
 
         self._aoi_data: list[dict] = []
         self._markers: list[QGraphicsEllipseItem] = []
@@ -161,7 +164,13 @@ class TeamPlanningMapView(TranslationMixin, QGraphicsView):
 
         self._draw_aoi_markers()
         self._load_visible_tiles()
-        QTimer.singleShot(50, self.fit_all_points)
+        # A rebuild driven by set_aoi_data can precede the widget's first
+        # layout pass, and fitInView against a 0x0 viewport does not merely
+        # look wrong: the fit seeds _min_zoom_scale once and only once, so a
+        # degenerate transform permanently poisons the zoom-out floor. Hold
+        # the request; the layout event that gives the viewport a real size
+        # completes it.
+        self._request_fit_all_points()
 
     MIN_TILE_ZOOM = 7
 
@@ -339,8 +348,37 @@ class TeamPlanningMapView(TranslationMixin, QGraphicsView):
             marker.setPen(QPen(pen_color, pen_width))
 
     # -------------------------------------------------- fit helpers
+    def _viewport_is_sized(self) -> bool:
+        """True once layout has given the viewport real dimensions."""
+        viewport = self.viewport()
+        return (viewport is not None
+                and viewport.width() > 0 and viewport.height() > 0)
+
+    def _request_fit_all_points(self):
+        """Fit now, or on the layout event that makes fitting possible.
+
+        The request/consume handoff CLAUDE.md 2.9 asks for, in place of a
+        fixed delay guessing when layout happened: the initiating side states
+        the intent, and ``showEvent``/``resizeEvent`` - the events that
+        actually size the viewport - apply it.
+        """
+        if self._viewport_is_sized():
+            self.fit_all_points()
+        else:
+            self._fit_pending = True
+
+    def _consume_pending_fit(self):
+        """Apply a held fit request, if the viewport can serve it now."""
+        if self._fit_pending and self._viewport_is_sized():
+            self._fit_pending = False
+            self.fit_all_points()
+
     def fit_all_points(self):
         if not self._aoi_data:
+            return
+        if not self._viewport_is_sized():
+            # Re-arm rather than fit into nothing; a layout event finishes it.
+            self._fit_pending = True
             return
         pts = [self._lat_lon_to_scene(a['latitude'], a['longitude']) for a in self._aoi_data]
         xs = [p.x() for p in pts]
@@ -376,8 +414,13 @@ class TeamPlanningMapView(TranslationMixin, QGraphicsView):
         super().scrollContentsBy(dx, dy)
         self._tile_timer.start(100)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._consume_pending_fit()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._consume_pending_fit()
         self._tile_timer.start(100)
 
     def set_tile_source(self, source: str):

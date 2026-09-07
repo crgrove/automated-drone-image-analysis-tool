@@ -464,12 +464,13 @@ class GalleryController:
                     imgWidth = image.get('width')
                     imgHeight = image.get('height')
                     if imgWidth and imgHeight:
-                        mask = self.parent.aoi_controller._get_scaled_mask(imgWidth, imgHeight)
-                        if mask is not None:
-                            cx, cy = aoi.get('center', (0, 0))
-                            cx = max(0, min(int(cx), imgWidth - 1))
-                            cy = max(0, min(int(cy), imgHeight - 1))
-                            in_mask = mask[int(cy), int(cx)] > 0
+                        # Shares the AOI controller's mask service, so one
+                        # mask is read and scaled once for both filter loops.
+                        # None means unusable - do not filter, rather than
+                        # hide every AOI.
+                        in_mask = self.parent.aoi_controller._mask_service.contains(
+                            aoi.get('center', (0, 0)), imgWidth, imgHeight)
+                        if in_mask is not None:
                             if self.filter_mask_mode == 'include' and not in_mask:
                                 continue
                             if self.filter_mask_mode == 'exclude' and in_mask:

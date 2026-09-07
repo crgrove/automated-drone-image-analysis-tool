@@ -24,7 +24,17 @@ class GroupedComboBox(QComboBox):
 
         Args:
             groupName: The name of the group (displayed as header).
-            items: List of item strings to add under the group header.
+            items: The items to add under the header. Each may be a plain
+                string, or a ``(label, data)`` pair - the label is what the
+                operator reads and the data is the caller's stable
+                identifier, retrievable through the ordinary
+                ``itemData`` / ``currentData`` / ``findData`` API.
+
+                The pair form exists so a caller never has to read an
+                identity back out of display text. Without it this widget
+                offered no data role at all, which is why the algorithm
+                combo routed on ``currentText()`` - and a translated label
+                would then have matched nothing.
         """
         # Add the group name as a non-selectable item
         groupItem = QStandardItem('---' + groupName + '---')
@@ -36,5 +46,15 @@ class GroupedComboBox(QComboBox):
 
         # Add the items under the group
         for item in items:
-            childItem = QStandardItem(item)
+            if isinstance(item, (tuple, list)):
+                label, data = item
+            else:
+                label, data = item, None
+            childItem = QStandardItem(label)
+            if data is not None:
+                # Qt.UserRole specifically: itemData/currentData/findData
+                # all default to it, and QStandardItem.setData without a
+                # role writes EditRole instead, which those readers do not
+                # see.
+                childItem.setData(data, Qt.UserRole)
             self.model().appendRow(childItem)

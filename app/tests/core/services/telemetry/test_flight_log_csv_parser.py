@@ -60,14 +60,48 @@ class TestColumnMatching:
         assert missing == []
         assert columns.altitude_msl_unit == "m"
 
-    def test_accepts_an_agl_only_log(self):
+    def test_accepts_an_ato_only_log(self):
         """Height above takeoff is a usable altitude even without MSL."""
         columns, missing = match_columns(
             ["Timestamp", "Latitude", "Longitude", "Relative Altitude (m)"]
         )
         assert missing == []
         assert columns.altitude_msl is None
-        assert columns.altitude_agl == "Relative Altitude (m)"
+        assert columns.altitude_ato == "Relative Altitude (m)"
+        # ...and it is emphatically not filed as an AGL.
+        assert columns.altitude_agl is None
+
+    def test_accepts_a_terrain_agl_only_log(self):
+        """A heading that says AGL means above the terrain, not the ramp."""
+        columns, missing = match_columns(
+            ["Timestamp", "Latitude", "Longitude", "Altitude (m AGL)"]
+        )
+        assert missing == []
+        assert columns.altitude_agl == "Altitude (m AGL)"
+        assert columns.altitude_ato is None
+        assert columns.altitude_msl is None
+
+    def test_ato_and_agl_columns_land_in_separate_slots(self):
+        """The two are equal only over flat ground, so a log carrying both
+        must keep both. Folding them together is what made a Skydio log's
+        terrain AGL arrive downstream labelled ATO."""
+        columns, missing = match_columns([
+            "Timestamp", "Latitude", "Longitude",
+            "Relative Altitude (m)", "Altitude (m AGL)",
+            "GPS Altitude (m MSL)",
+        ])
+        assert missing == []
+        assert columns.altitude_ato == "Relative Altitude (m)"
+        assert columns.altitude_agl == "Altitude (m AGL)"
+        assert columns.altitude_msl == "GPS Altitude (m MSL)"
+
+    def test_height_above_takeoff_is_ato_whatever_the_unit(self):
+        columns, _missing = match_columns([
+            "Timestamp", "Latitude", "Longitude", "Height Above Takeoff (ft)",
+        ])
+        assert columns.altitude_ato == "Height Above Takeoff (ft)"
+        assert columns.altitude_ato_unit == "ft"
+        assert columns.altitude_agl is None
 
     def test_names_the_missing_fields(self):
         columns, missing = match_columns(["Datetime (UTC)", "Latitude"])
@@ -116,15 +150,49 @@ class TestReadRows:
         rows = read_flight_log_rows(_write(tmp_path, shuffled)).rows
         assert [row["latitude"] for row in rows] == [30.1, 30.2, 30.3]
 
-    def test_agl_only_log_falls_back_for_exif(self, tmp_path):
+    def test_an_ato_only_log_leaves_the_exif_altitude_empty(self, tmp_path):
+        """EXIF's GPSAltitude is absolute; a height above the takeoff point
+        is not one. Substituting it wrote a frame claiming the aircraft flew
+        42 m above sea level, and made the barometric datum test in
+        AltitudeAnchorService - median(GPSAltitude - ATO) - collapse to a
+        perfectly consistent zero."""
         text = (
             "Timestamp,Latitude,Longitude,Relative Altitude (m)\n"
             "2026-07-25T14:38:26Z,30.1,-97.1,42.0\n"
         )
         row = read_flight_log_rows(_write(tmp_path, text)).rows[0]
         assert row["altitude_msl_m"] is None
-        assert row["altitude_agl_m"] == pytest.approx(42.0)
-        assert row["altitude_m"] == pytest.approx(42.0)
+        assert row["altitude_ato_m"] == pytest.approx(42.0)
+        assert row["altitude_agl_terrain_m"] is None
+        assert row["altitude_m"] is None
+
+    def test_a_terrain_agl_log_is_not_read_as_ato(self, tmp_path):
+        """The high-severity case: "Altitude (m AGL)" is a genuine
+        terrain-referenced height. Filed as ATO it was differenced against
+        the DEM a second time and stamped into RelativeAltitude as a
+        takeoff-relative figure."""
+        text = (
+            "Timestamp,Latitude,Longitude,Altitude (m AGL)\n"
+            "2026-07-25T14:38:26Z,30.1,-97.1,42.0\n"
+        )
+        row = read_flight_log_rows(_write(tmp_path, text)).rows[0]
+        assert row["altitude_agl_terrain_m"] == pytest.approx(42.0)
+        assert row["altitude_ato_m"] is None
+        assert row["altitude_msl_m"] is None
+        assert row["altitude_m"] is None
+
+    def test_all_three_references_survive_together(self, tmp_path):
+        text = (
+            "Timestamp,Latitude,Longitude,GPS Altitude (m MSL),"
+            "Relative Altitude (m),Altitude (m AGL)\n"
+            "2026-07-25T14:38:26Z,30.1,-97.1,310.0,120.0,95.0\n"
+        )
+        row = read_flight_log_rows(_write(tmp_path, text)).rows[0]
+        assert row["altitude_msl_m"] == pytest.approx(310.0)
+        assert row["altitude_ato_m"] == pytest.approx(120.0)
+        assert row["altitude_agl_terrain_m"] == pytest.approx(95.0)
+        # Only the absolute one is EXIF-facing.
+        assert row["altitude_m"] == pytest.approx(310.0)
 
     def test_unparseable_rows_are_skipped_not_fatal(self, tmp_path):
         """One bad line must not cost the operator the rest of the flight."""
@@ -245,7 +313,7 @@ def _rows(count=3, step=1.0, start=VIDEO_START, offset=0.0):
             "longitude": -97.0 - index * 0.001,
             "altitude_m": 200.0 + index,
             "altitude_msl_m": 200.0 + index,
-            "altitude_agl_m": 15.0 + index,
+            "altitude_ato_m": 15.0 + index,
             "yaw_deg": 90.0,
         }
         for index in range(count)

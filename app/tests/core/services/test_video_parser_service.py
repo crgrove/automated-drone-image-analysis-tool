@@ -96,7 +96,7 @@ class TestTelemetryResolution:
             DjiSrtSample(
                 start_seconds=float(i), end_seconds=float(i) + 0.03,
                 latitude=30.0 + i, longitude=-97.0 - i,
-                altitude_msl_m=200.0 + i, altitude_agl_m=15.0,
+                altitude_msl_m=200.0 + i, altitude_ato_m=15.0,
             )
             for i in range(count)
         ])
@@ -280,6 +280,49 @@ class TestCsvFlightLog:
             assert entry['latitude'] == pytest.approx(30.648730)
             # Feet in the log, metres in the entry.
             assert entry['altitude_m'] == pytest.approx(679.2 * 0.3048)
+
+    def test_a_relative_only_log_yields_no_absolute_altitude(self):
+        """The entry shape's 'altitude_m' feeds EXIF GPSAltitude, which is an
+        absolute height. A log with only a relative column has none, and the
+        relative reading is not a stand-in for one."""
+        text = (
+            "Datetime (UTC),Latitude,Longitude,Relative Altitude (m)\n"
+            "2026-07-25T14:38:26Z,30.1,-97.1,42.0\n"
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = self._write(tmpdir, text)
+            service = self._service(tmpdir, csv_path)
+            start = datetime(2026, 7, 25, 14, 38, 26, tzinfo=timezone.utc)
+
+            with patch('core.services.VideoParserService.get_video_creation_time',
+                       return_value=start):
+                _video_start, entries = service._parse_csv_flight_log(
+                    csv_path, 'v.mp4')
+
+            entry = entries[0]
+            assert entry['altitude_m'] is None
+            assert entry['altitude_ato_m'] == pytest.approx(42.0)
+            assert entry['altitude_agl_terrain_m'] is None
+
+    def test_a_terrain_agl_log_keeps_its_own_reference(self):
+        """'Altitude (m AGL)' is above the terrain, not above the ramp."""
+        text = (
+            "Datetime (UTC),Latitude,Longitude,Altitude (m AGL)\n"
+            "2026-07-25T14:38:26Z,30.1,-97.1,42.0\n"
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = self._write(tmpdir, text)
+            service = self._service(tmpdir, csv_path)
+            start = datetime(2026, 7, 25, 14, 38, 26, tzinfo=timezone.utc)
+
+            with patch('core.services.VideoParserService.get_video_creation_time',
+                       return_value=start):
+                _video_start, entries = service._parse_csv_flight_log(
+                    csv_path, 'v.mp4')
+
+            entry = entries[0]
+            assert entry['altitude_agl_terrain_m'] == pytest.approx(42.0)
+            assert entry['altitude_ato_m'] is None
 
     def test_entries_feed_the_closest_match_lookup(self):
         """The delegated rows must still be sortable/searchable by time."""
@@ -601,6 +644,75 @@ def test_frames_without_a_reported_agl_claim_no_make(video_parser_service):
 
     helper.add_xmp_fields.assert_not_called()
     assert helper.add_gps_data.call_args.kwargs['make'] is None
+
+
+# --- which altitude goes in which tag --------------------------------------
+#
+# drone-dji:RelativeAltitude carries either a height above the takeoff point
+# or a genuine terrain-referenced AGL, and AltitudeType is what records which.
+# AbsoluteAltitude and EXIF GPSAltitude are sea-level tags, and used to be
+# filled from the relative reading whenever the aircraft reported no abs_alt -
+# a frame then claimed to have been shot 15 m above sea level.
+
+REL_ONLY_PAYLOAD = (
+    '<font size="28">[latitude: 39.483487] [longitude: 73.585195] '
+    '[rel_alt: 15.500] </font>'
+)
+
+
+def test_no_absolute_altitude_means_no_absolute_tags(video_parser_service):
+    """The height above takeoff still lands; nothing is invented for MSL."""
+    entry = _srt_entry(REL_ONLY_PAYLOAD).replace(
+        '00:00:00,000 --> 00:00:01,000', '00:00:00,000 --> 00:00:10,000')
+
+    helper, _messages = _drive_process_video(video_parser_service, srt_text=entry)
+
+    _path, fields = helper.add_xmp_fields.call_args.args
+    written = {tag: value for _ns, tag, value in fields}
+    assert written['RelativeAltitude'] == '+15.5000'
+    assert 'AbsoluteAltitude' not in written
+    # EXIF GPSAltitude is absolute too, so the position is written alone.
+    assert helper.add_gps_data.call_args.args[3] is None
+    # The frame still carries drone-dji fields, so it still needs a make.
+    assert helper.add_gps_data.call_args.kwargs['make'] == 'DJI'
+
+
+def test_an_unmarked_relative_altitude_stays_takeoff_relative():
+    """No AltitudeType tag means ATO - what every DJI frame is."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        service = VideoParserService(1, 'v.mp4', '', tmpdir, 1.0)
+        with patch('core.services.VideoParserService.MetaDataHelper') as helper:
+            service._stamp_relative_altitude('f.jpg', 15.5, 4563.5)
+        _path, fields = helper.add_xmp_fields.call_args.args
+        written = {tag: value for _ns, tag, value in fields}
+        assert set(written) == {'RelativeAltitude', 'AbsoluteAltitude'}
+        assert written['AbsoluteAltitude'] == '+4563.5000'
+
+
+def test_a_terrain_referenced_height_is_marked_as_terrain():
+    """A log that resolved its own AGL puts a different quantity in the same
+    tag. Unmarked, ImageService.get_altitude_reference reads it back as ATO
+    and the operator is shown the wrong plane."""
+    from helpers.MetaDataHelper import XMP_ALTITUDE_TYPE_TERRAIN
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        service = VideoParserService(1, 'v.mp4', '', tmpdir, 1.0)
+        with patch('core.services.VideoParserService.MetaDataHelper') as helper:
+            service._stamp_relative_altitude(
+                'f.jpg', 95.0, None, terrain_referenced=True)
+        _path, fields = helper.add_xmp_fields.call_args.args
+        written = {tag: value for _ns, tag, value in fields}
+        assert written['AltitudeType'] == XMP_ALTITUDE_TYPE_TERRAIN
+        assert written['RelativeAltitude'] == '+95.0000'
+        assert 'AbsoluteAltitude' not in written
+
+
+def test_a_terrain_agl_outranks_ato_for_the_stamped_height():
+    """Clearance and image scale depend on height above the ground, so where
+    the source resolved both, the terrain figure is the one stamped."""
+    assert VideoParserService._height_above_ground(120.0, 95.0) == (95.0, True)
+    assert VideoParserService._height_above_ground(120.0, None) == (120.0, False)
+    assert VideoParserService._height_above_ground(None, None) == (None, False)
 
 
 def test_a_failed_xmp_write_does_not_lose_the_frame(video_parser_service):

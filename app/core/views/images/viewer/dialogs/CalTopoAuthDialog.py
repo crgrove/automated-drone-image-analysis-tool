@@ -358,8 +358,11 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
             # Load CalTopo
             self.web_view.setUrl(QUrl("https://caltopo.com/map.html"))
 
-            # Enable button once web view is ready
-            QTimer.singleShot(1000, lambda: self.manual_done_button.setEnabled(True))
+            # The button is enabled from _on_load_finished, the signal
+            # connected nine lines above - not after a fixed second. A slow
+            # link made the old delay expire before the page existed, which
+            # let the operator confirm an authentication that had not
+            # happened; a fast one made them wait for nothing.
 
         except Exception as e:
             self.logger.error(f"ERROR: Failed to initialize web view: {e}")
@@ -403,11 +406,16 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         """
         Handle web view load completion.
 
+        This is the readiness event the manual-confirmation button waits on.
+
         Args:
             success: True if page loaded successfully, False otherwise.
 
         Shows a warning message if the page failed to load.
         """
+        # Enabled either way: a failed load still needs a way out of the
+        # dialog, and the warning below says what happened.
+        self.manual_done_button.setEnabled(True)
         if not success:
             QMessageBox.warning(
                 self,
@@ -493,9 +501,14 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         self.manual_done_button.setText(self.tr("Starting export..."))
         QApplication.processEvents()
 
-        # Wait a moment to ensure cookies are set, then extract
-        # This is important because cookies might be set asynchronously
-        QTimer.singleShot(1000, self.extract_all_cookies)
+        # Extract straight away. The 1 s this replaces was hedging against
+        # cookies "being set asynchronously", but the operator reaches this
+        # button after logging in, the cookieAdded connection made when the
+        # view was built has been recording them the whole time, and
+        # _extract_cookies_from_store below re-announces anything that
+        # predates it and waits for that properly. The second was paid on
+        # every export and bought nothing.
+        self.extract_all_cookies()
 
     def extract_all_cookies(self):
         """
@@ -624,8 +637,17 @@ class CalTopoAuthDialog(TranslationMixin, QDialog):
         nested event loop: the previous version could wedge if its two timers
         both fired before ``loop.exec()`` was reached, because each checked
         ``loop.isRunning()`` and skipped ``quit()``.
+
+        The timer is one of CLAUDE.md 2.9's legitimate cases, not a settle
+        wait (# 2.9: no completion signal exists for loadAllCookies): the only
+        thing Qt makes observable is the stream of ``cookieAdded``
+        emissions, and there is no event that says "that was the last one".
+        There is nothing here to consume instead.
         """
         self.profile.cookieStore().loadAllCookies()
+        # 2.9: loadAllCookies has no completion signal - the only observable
+        # is the stream of cookieAdded emissions, with nothing saying which
+        # was the last. There is no event here to consume instead.
         QTimer.singleShot(1500, self._finish_cookie_capture)
 
     # Chromium timestamps are microseconds since 1601-01-01.

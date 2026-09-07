@@ -36,8 +36,15 @@ class ThermalResidualAnomalyWizardController(QWidget, Ui_ThermalResidualAnomalyW
             self.tr('Aggressive'),
             self.tr('Very \nAggressive'),
         ]
-        labels = self.config.get('aggressiveness_labels', default_labels)
-        labels = [self.tr(label) for label in labels]
+        # Only configured labels go through tr(): the defaults above are
+        # already translated literals, and translating a translation is
+        # how a catalog entry whose value is another source string turns
+        # into the wrong string in a third locale.
+        override = self.config.get('aggressiveness_labels')
+        labels = (
+            [self.tr(label) for label in override]  # i18n-dynamic: from config
+            if override else default_labels
+        )
         labels = [
             label.replace('Very\n', 'Very \n') if '\n' in label and 'Very \n' not in label else label
             for label in labels

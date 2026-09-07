@@ -9,9 +9,9 @@ from PySide6.QtWidgets import QApplication
 
 from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
 
-# Mock dependencies before importing
-sys.modules['qtawesome'] = MagicMock()
-sys.modules['helpers.IconHelper'] = MagicMock()
+# NOTE: the sys.modules stubs for qtawesome / helpers.IconHelper that used
+# to sit here were process-global and never restored - see the note in
+# test_streaming_wizard.py. Both packages are real dependencies.
 
 
 class TestWizardThresholdMapping:

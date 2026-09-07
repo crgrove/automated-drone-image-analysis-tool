@@ -17,7 +17,11 @@ from core.services.telemetry import (
     parse_wall_clock,
     read_flight_log_rows,
 )
-from helpers.MetaDataHelper import MetaDataHelper, DRONE_DJI_NS
+from helpers.MetaDataHelper import (
+    MetaDataHelper,
+    DRONE_DJI_NS,
+    XMP_ALTITUDE_TYPE_TERRAIN,
+)
 from helpers.VideoFileHelper import detect_thumbnail_track, get_video_creation_time, remux_to_main_track, is_ffmpeg_available, _FFMPEG_USER_MSG
 
 
@@ -181,7 +185,10 @@ class VideoParserService(QObject):
 
                 gps = None
                 capture_time = None
-                relative_altitude = None
+                # The height the frame is stamped with, and the plane it is
+                # measured from. Never merged: see _stamp_relative_altitude.
+                height_above_ground = None
+                height_is_terrain = False
 
                 if telemetry_track is not None:
                     # Use the capture position actually reached, not the
@@ -192,14 +199,16 @@ class VideoParserService(QObject):
                         # The cue's own wall clock where the SRT carried one;
                         # otherwise the video-start fallback below dates it.
                         capture_time = point.captured_at
-                        relative_altitude = point.altitude_agl_m
+                        height_above_ground, height_is_terrain = (
+                            self._height_above_ground(point.altitude_ato_m,
+                                                      point.altitude_agl_terrain_m)
+                        )
                         if point.latitude is not None and point.longitude is not None:
-                            # EXIF altitude is MSL; fall back to the takeoff-relative
-                            # figure only when the aircraft reported no absolute value.
-                            altitude = point.altitude_msl_m
-                            if altitude is None:
-                                altitude = point.altitude_agl_m
-                            gps = (point.latitude, point.longitude, altitude or 0)
+                            # EXIF GPSAltitude is an *absolute* height, so
+                            # only MSL can fill it. None leaves the tag off
+                            # the frame; see _stamp_relative_altitude.
+                            gps = (point.latitude, point.longitude,
+                                   point.altitude_msl_m)
                 elif metadata_format == 'csv':
                     frame_utc = video_start_utc + timedelta(seconds=time_marker)
                     entry = self._find_closest_csv_entry(csv_entries, frame_utc)
@@ -209,12 +218,16 @@ class VideoParserService(QObject):
                     # geotag.
                     if (entry and entry['latitude'] is not None
                             and entry['longitude'] is not None):
-                        # A log row can carry a position but a blank altitude
-                        # cell; EXIF needs a number, so fall back to 0 rather
-                        # than writing None.
-                        altitude = entry.get('altitude_m')
+                        # 'altitude_m' is MSL or nothing - a log row can
+                        # carry a position and a blank altitude cell, and
+                        # the relative columns are not absolute heights.
                         gps = (entry['latitude'], entry['longitude'],
-                               altitude if altitude is not None else 0)
+                               entry.get('altitude_m'))
+                        height_above_ground, height_is_terrain = (
+                            self._height_above_ground(
+                                entry.get('altitude_ato_m'),
+                                entry.get('altitude_agl_terrain_m'))
+                        )
 
                 if capture_time is None and video_start is not None:
                     capture_time = video_start + timedelta(seconds=time_marker)
@@ -224,9 +237,11 @@ class VideoParserService(QObject):
                     MetaDataHelper.add_gps_data(
                         output_file, gps[0], gps[1], gps[2],
                         timestamp=capture_time,
-                        make=DRONE_MAKE_DJI if relative_altitude is not None else None
+                        make=DRONE_MAKE_DJI if height_above_ground is not None else None
                     )
-                    self._stamp_relative_altitude(output_file, relative_altitude, gps[2])
+                    self._stamp_relative_altitude(
+                        output_file, height_above_ground, gps[2],
+                        terrain_referenced=height_is_terrain)
                 elif capture_time is not None:
                     MetaDataHelper.add_capture_time(output_file, capture_time)
 
@@ -327,9 +342,10 @@ class VideoParserService(QObject):
             epoch = datetime(1900, 1, 1)
             srt_list = []
             for sample in parse_dji_srt(srt_data):
+                # 'altitude' is the absolute one. It used to fall back to
+                # rel_alt, which put a takeoff-relative figure under a
+                # sea-level name.
                 altitude = sample.altitude_msl_m
-                if altitude is None:
-                    altitude = sample.altitude_agl_m
                 srt_list.append({
                     "start": epoch + timedelta(seconds=sample.start_seconds),
                     "end": epoch + timedelta(seconds=sample.end_seconds),
@@ -341,35 +357,76 @@ class VideoParserService(QObject):
                     "longitude": sample.longitude,
                     "altitude": altitude if altitude is not None else 0,
                     # Height above the takeoff point, when the file has it.
-                    "relative_altitude": sample.altitude_agl_m,
+                    "relative_altitude": sample.altitude_ato_m,
                 })
             return srt_list
         except Exception as e:
             self.sig_msg.emit(f"Error parsing SRT file: {str(e)}")
             return None
 
-    def _stamp_relative_altitude(self, output_file, relative_alt_m, absolute_alt_m):
-        """Record height above takeoff on a frame, the way ADIAT reads it.
+    @staticmethod
+    def _height_above_ground(ato_m, agl_terrain_m):
+        """Pick the height to stamp, and say which plane it is.
 
-        ADIAT reads AGL from ``drone-dji:RelativeAltitude`` - the drone-dji
-        namespace is its house schema for flight telemetry, not a claim about
-        the airframe (WaldoMetadataService writes the same fields onto Canon
-        imagery). EXIF has no relative-altitude tag, so without this the height
-        parsed out of the SRT has nowhere to live and every AGL-based
-        calculation downstream falls back or fails.
+        A terrain AGL wins where the source resolved one: it is the number
+        clearance and image scale actually depend on, and ADIAT can record
+        which of the two it got. ATO stands in otherwise, which is every
+        DJI video.
+
+        Returns:
+            tuple: ``(height_m, terrain_referenced)``. ``height_m`` is None
+            when the source reported neither.
+        """
+        if agl_terrain_m is not None:
+            return agl_terrain_m, True
+        return ato_m, False
+
+    def _stamp_relative_altitude(self, output_file, relative_alt_m,
+                                 absolute_alt_m, terrain_referenced=False):
+        """Record a frame's height above the ground, the way ADIAT reads it.
+
+        ADIAT reads height above ground from ``drone-dji:RelativeAltitude``
+        - the drone-dji namespace is its house schema for flight telemetry,
+        not a claim about the airframe (WaldoMetadataService writes the same
+        fields onto Canon imagery). EXIF has no relative-altitude tag, so
+        without this the height parsed out of the SRT has nowhere to live
+        and every AGL-based calculation downstream falls back or fails.
+
+        That tag carries **either** of two quantities, so which one must be
+        recorded alongside it. ``drone-dji:AltitudeType`` = ``terrain``
+        marks a genuine terrain-referenced AGL, and its absence means
+        takeoff-relative - the same contract
+        :class:`~core.services.waldo.WaldoMetadataService.WaldoMetadataService` writes and
+        :meth:`~core.services.image.ImageService.ImageService.get_altitude_reference` reads back.
+
+        ``AbsoluteAltitude`` is written **only** when a sea-level figure
+        actually exists. Writing the relative reading there instead - which
+        this did whenever the aircraft reported no ``abs_alt`` - claims the
+        aircraft flew at 15 m above sea level, and makes
+        ``median(GPSAltitude - ATO)``, the barometric datum test in
+        :class:`~core.services.image.AltitudeAnchorService.AltitudeAnchorService`, collapse to a flawlessly consistent zero. A missing
+        tag is read as missing; a wrong one is read as data.
 
         Args:
             output_file: The extracted frame.
-            relative_alt_m: Height above the takeoff point, in metres.
-            absolute_alt_m: Height above sea level, in metres.
+            relative_alt_m: Height above the ground, in metres.
+            absolute_alt_m: Height above sea level in metres, or None when
+                the source reported no absolute altitude.
+            terrain_referenced: True when ``relative_alt_m`` is measured
+                from the terrain beneath the aircraft rather than from the
+                takeoff point.
         """
         if relative_alt_m is None:
             return
+        fields = [(DRONE_DJI_NS, "RelativeAltitude", f"{relative_alt_m:+.4f}")]
+        if terrain_referenced:
+            fields.append(
+                (DRONE_DJI_NS, "AltitudeType", XMP_ALTITUDE_TYPE_TERRAIN))
+        if absolute_alt_m is not None:
+            fields.append(
+                (DRONE_DJI_NS, "AbsoluteAltitude", f"{absolute_alt_m:+.4f}"))
         try:
-            MetaDataHelper.add_xmp_fields(output_file, [
-                (DRONE_DJI_NS, "RelativeAltitude", f"{relative_alt_m:+.4f}"),
-                (DRONE_DJI_NS, "AbsoluteAltitude", f"{absolute_alt_m:+.4f}"),
-            ])
+            MetaDataHelper.add_xmp_fields(output_file, fields)
         except Exception as e:
             # A frame with no XMP is still a usable frame; do not lose it.
             self.logger.warning(f"Could not write altitude XMP to {output_file}: {e}")

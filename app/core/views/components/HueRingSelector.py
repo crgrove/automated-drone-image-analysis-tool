@@ -23,6 +23,9 @@ from PySide6.QtWidgets import QWidget
 
 class HueRingSelector(QWidget):
     """Hue ring selector with range visualization."""
+    # 2.6 exception: custom-painted primitive - it implements
+    # paintEvent and mouse handling rather than composing child
+    # widgets, so its appearance is code by nature.
 
     valueChanged = Signal(float, float, float)  # h, h_minus, h_plus
 

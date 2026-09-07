@@ -442,6 +442,58 @@ class TestCleanShutdown:
         assert svc._teardown_task is None
         svc.cleanup()
 
+    # -- closing across a loop that has already gone -------------------
+    #
+    # run()'s finally closes the loop before it clears self._loop, and a
+    # UI-thread close can land in between. No check on the caller's side
+    # can exclude that: only the owning thread knows the loop is closing.
+    # The old is_running() test turned the race into an unhandled
+    # RuntimeError on the Qt main thread, inside a slot, for a tile the
+    # operator had just closed.
+
+    def test_a_close_arriving_after_the_loop_closed_does_not_raise(self, qapp) -> None:
+        svc = self._service()
+        loop = asyncio.new_event_loop()
+        loop.close()
+        svc._loop = loop            # what run() leaves behind for a beat
+
+        svc._schedule_stop()        # must not raise "Event loop is closed"
+
+        # The stop still registers: it is a threading.Event set by the
+        # caller, not something queued onto the loop that just died.
+        assert svc._stop.is_set() is True
+        assert svc._teardown_task is None
+        svc.cleanup()
+
+    def test_confirm_sas_after_the_loop_closed_does_not_raise(self, qapp) -> None:
+        """No production caller today, but it carried the same defect - and
+        an unused copy of a pattern is where the pattern comes back from."""
+        svc = self._service()
+        loop = asyncio.new_event_loop()
+        loop.close()
+        svc._loop = loop
+
+        svc.confirm_sas(True)       # must not raise
+
+        assert svc._sas_accepted is True
+        svc.cleanup()
+
+    def test_a_close_on_a_live_loop_still_queues_teardown(self, qapp) -> None:
+        """The tolerance must not have cost the ordinary path its post."""
+        svc = self._service()
+        loop = asyncio.new_event_loop()
+        posted = []
+        loop.call_soon_threadsafe = lambda cb, *a: posted.append(cb)
+        svc._loop = loop
+        try:
+            svc._schedule_stop()
+        finally:
+            loop.close()
+
+        assert posted == [svc._begin_tear_down]
+        assert svc._stop.is_set() is True
+        svc.cleanup()
+
     # -- the empty "Video track error:" --------------------------------
 
     def test_a_track_ending_during_shutdown_is_not_an_error(self, qapp) -> None:

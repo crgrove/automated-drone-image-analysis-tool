@@ -335,13 +335,17 @@ def test_calculate_aoi_average_info_falls_back_to_live_color(controller):
 # ---------------------------------------------------------------------------
 
 def test_invalidate_mask_cache_clears_all(controller):
-    controller._mask_image_raw = "fake"
-    controller._mask_cache = {(100, 100): np.zeros((100, 100))}
-    controller._mask_cache_path = "/path"
+    """The controller delegates to MaskFilterService; the cache it clears is
+    the service's."""
+    service = controller._mask_service
+    service._path = "/path"
+    service._raw = "fake"
+    service._scaled = {(100, 100): np.zeros((100, 100))}
+
     controller._invalidate_mask_cache()
-    assert controller._mask_image_raw is None
-    assert controller._mask_cache == {}
-    assert controller._mask_cache_path is None
+
+    assert service._raw is None
+    assert service._scaled == {}
 
 
 # ---------------------------------------------------------------------------

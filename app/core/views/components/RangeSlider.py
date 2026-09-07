@@ -12,6 +12,9 @@ from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QPalette, QFont, QText
 
 class RangeSlider(QWidget):
     """Custom range slider widget with two handles and 7 snap-to points."""
+    # 2.6 exception: custom-painted primitive - it implements
+    # paintEvent and mouse handling rather than composing child
+    # widgets, so its appearance is code by nature.
 
     # Signal emitted when the range values change
     rangeChanged = Signal(int, int)  # min_value, max_value

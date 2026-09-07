@@ -5,24 +5,6 @@ This page dynamically loads and displays the algorithm-specific parameter widget
 based on the algorithm selected in the previous page.
 """
 
-from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyWizardController import ThermalAnomalyWizardController
-from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyWizardController import ThermalResidualAnomalyWizardController
-from algorithms.images.ThermalRange.controllers.ThermalRangeWizardController import ThermalRangeWizardController
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeWizardController import HSVColorRangeWizardController
-from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorWizardController import AIPersonDetectorWizardController
-from algorithms.images.MRMap.controllers.MRMapWizardController import MRMapWizardController
-from algorithms.images.MatchedFilter.controllers.MatchedFilterWizardController import MatchedFilterWizardController
-from algorithms.images.RXAnomaly.controllers.RXAnomalyWizardController import RXAnomalyWizardController
-from algorithms.images.ColorRange.controllers.ColorRangeWizardController import ColorRangeWizardController
-from algorithms.images.ThermalAnomaly.controllers.ThermalAnomalyController import ThermalAnomalyController
-from algorithms.images.ThermalResidualAnomaly.controllers.ThermalResidualAnomalyController import ThermalResidualAnomalyController
-from algorithms.images.ThermalRange.controllers.ThermalRangeController import ThermalRangeController
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeController import HSVColorRangeController
-from algorithms.images.AIPersonDetector.controllers.AIPersonDetectorController import AIPersonDetectorController
-from algorithms.images.MRMap.controllers.MRMapController import MRMapController
-from algorithms.images.MatchedFilter.controllers.MatchedFilterController import MatchedFilterController
-from algorithms.images.RXAnomaly.controllers.RXAnomalyController import RXAnomalyController
-from algorithms.images.ColorRange.controllers.ColorRangeController import ColorRangeController
 from core.services.LoggerService import LoggerService
 import os
 import sys
@@ -36,11 +18,10 @@ from core.services.ConfigService import ConfigService
 from core.services.SettingsService import SettingsService
 from helpers.WidgetHelper import retire_widget
 
-"""****Import Algorithm Controllers (for fallback)****"""
-"""****End Algorithm Import****"""
-
-"""****Import Wizard Controllers****"""
-"""****End Wizard Controller Import****"""
+# Algorithm and wizard controllers are NOT imported here. They are resolved
+# from algorithms.conf by ConfigService.resolve_image_algorithm_class, so a
+# new algorithm needs a config entry and nothing else - the eighteen imports
+# that used to sit here existed only to populate globals() for a lookup.
 
 
 class AlgorithmParametersPage(BasePage):
@@ -106,15 +87,22 @@ class AlgorithmParametersPage(BasePage):
     def on_enter(self):
         """Called when entering the page."""
         # Get the selected algorithm from wizard_data
-        selected_algorithm_label = self.wizard_data.get('algorithm')
-        if not selected_algorithm_label:
+        selected_algorithm = self.wizard_data.get('algorithm')
+        if not selected_algorithm:
             return
 
-        # Find the algorithm config
+        # Find the algorithm config. The name is the identity; the label is
+        # accepted too, for wizard data built before the switch to stable
+        # names (the same dual match BatchCLI._resolve_algorithm makes).
+        # Matching on the label alone meant a translated selection page
+        # would find no algorithm at all.
         self.active_algorithm = None
         system = platform.system()
         for algo in self.algorithms:
-            if system in algo['platforms'] and algo['label'] == selected_algorithm_label:
+            # The platform filter stays: without it a Windows-only thermal
+            # algorithm becomes loadable on macOS.
+            if system in algo['platforms'] and selected_algorithm in (
+                    algo.get('name'), algo.get('label')):
                 self.active_algorithm = algo
                 break
 
@@ -152,7 +140,6 @@ class AlgorithmParametersPage(BasePage):
         try:
             # Try to use wizard controller first, fall back to regular controller
             wizard_controller_name = self.active_algorithm.get('wizard_controller')
-            controller_class_name = self.active_algorithm['controller']
 
             theme = self.settings_service.get_setting('Theme', 'Dark')
 
@@ -160,6 +147,11 @@ class AlgorithmParametersPage(BasePage):
             try:
                 page_title_widget = getattr(self.dialog, 'labelPage5Title_AlgorithmParameters', None)
                 if page_title_widget is not None:
+                    # A config value cannot be extracted for translation,
+                    # so the label passes through untranslated inside a
+                    # translated sentence. Noted rather than wrapped in
+                    # tr(): tr() over a runtime string is a no-op that
+                    # reads as compliance.
                     algo_label = self.active_algorithm.get('label', 'Algorithm')
                     page_title_widget.setText(
                         self.tr("{algorithm} Algorithm Settings").format(algorithm=algo_label)
@@ -168,31 +160,30 @@ class AlgorithmParametersPage(BasePage):
                 # Best-effort only; ignore if not available
                 pass
 
-            # Debug logging
             logger = LoggerService()
-            # logger.info(
-            #     f"Algorithm: {self.active_algorithm.get('name')}, "
-            #     f"Wizard Controller: {wizard_controller_name}, "
-            #     f"Regular Controller: {controller_class_name}"
-            # )
 
-            # Prefer wizard controller if available
+            # Prefer the wizard controller; fall back to the algorithm's
+            # ordinary controller. Both are imported by dotted path from
+            # the config, so the set of available algorithms is what
+            # algorithms.conf says it is.
             cls = None
-            if wizard_controller_name and wizard_controller_name in globals():
-                cls = globals()[wizard_controller_name]
-                # logger.info(f"Using wizard controller: {cls}")
-
-            # Fall back to regular controller if wizard controller not available
+            if wizard_controller_name:
+                try:
+                    cls = ConfigService.resolve_image_algorithm_class(
+                        self.active_algorithm, 'wizard_controller')
+                except Exception as exc:
+                    # A missing wizard controller is recoverable - the
+                    # ordinary controller renders the same options - but it
+                    # must be said, or the fallback looks deliberate.
+                    logger.error(
+                        f"Wizard controller unavailable for "
+                        f"{current_algorithm_name}: {exc}")
             if cls is None:
-                if controller_class_name in globals():
-                    cls = globals()[controller_class_name]
-                    # logger.info(f"Using regular controller: {cls}")
-                else:
-                    raise ValueError(f"Controller class '{controller_class_name}' not found in globals()")
-
-            # Verify the class is callable
-            if not callable(cls):
-                raise ValueError(f"Class '{cls}' is not callable")
+                # No try/except: with neither controller resolvable there is
+                # nothing to show, and the handler below renders the error
+                # to the operator.
+                cls = ConfigService.resolve_image_algorithm_class(
+                    self.active_algorithm, 'controller')
 
             # logger.info(f"Instantiating controller: {cls} with config: {self.active_algorithm}, theme: {theme}")
             # Create the algorithm widget

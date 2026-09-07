@@ -144,6 +144,9 @@ class ClickableColorSwatch(TranslationMixin, QFrame):
 
 class HSVColorRowWidget(TranslationMixin, QWidget):
     """Widget representing a single HSV color range configuration."""
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per colour the operator adds, which is not
+    # something a .ui can describe.
 
     # Signal emitted when this row should be deleted
     delete_requested = Signal(QWidget)
@@ -236,7 +239,7 @@ class HSVColorRowWidget(TranslationMixin, QWidget):
         sv_validator = QIntValidator(0, 100, self)
 
         # Hue Min/Max
-        h_label = QLabel("H (°):", self)
+        h_label = QLabel(self.tr("H (°):"), self)
         h_label.setFont(self.font())
         range_layout.addWidget(h_label)
 
@@ -266,7 +269,7 @@ class HSVColorRowWidget(TranslationMixin, QWidget):
         range_layout.addSpacing(8)
 
         # Saturation Min/Max (display as percentages)
-        s_label = QLabel("S (%):", self)
+        s_label = QLabel(self.tr("S (%):"), self)
         s_label.setFont(self.font())
         range_layout.addWidget(s_label)
 
@@ -294,7 +297,7 @@ class HSVColorRowWidget(TranslationMixin, QWidget):
         range_layout.addSpacing(8)
 
         # Value Min/Max (display as percentages)
-        v_label = QLabel("V (%):", self)
+        v_label = QLabel(self.tr("V (%):"), self)
         v_label.setFont(self.font())
         range_layout.addWidget(v_label)
 

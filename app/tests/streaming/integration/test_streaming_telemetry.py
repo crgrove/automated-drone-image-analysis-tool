@@ -33,7 +33,7 @@ def _track(count=6):
             latitude=30.0 + i * 0.001,
             longitude=-97.0 - i * 0.001,
             altitude_msl_m=200.0 + i,
-            altitude_agl_m=15.0 + i,
+            altitude_ato_m=15.0 + i,
             yaw_deg=45.0,
         )
         for i in range(count)

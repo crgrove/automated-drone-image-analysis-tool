@@ -117,7 +117,7 @@ class TestEmbeddedVariant:
         """``abs_alt`` is MSL, ``rel_alt`` is above the takeoff point."""
         first = parse_dji_srt(EMBEDDED_SRT)[0]
         assert first.altitude_msl_m == pytest.approx(207.027)
-        assert first.altitude_agl_m == pytest.approx(14.885)
+        assert first.altitude_ato_m == pytest.approx(14.885)
 
     def test_extracts_times_and_frame_index(self):
         samples = parse_dji_srt(EMBEDDED_SRT)
@@ -165,8 +165,8 @@ class TestClassicVariant:
         )
         samples = parse_dji_srt(relative)
         assert len(samples) == 2
-        assert samples[0].altitude_agl_m == pytest.approx(-4.6)
-        assert samples[1].altitude_agl_m == pytest.approx(77.1)
+        assert samples[0].altitude_ato_m == pytest.approx(-4.6)
+        assert samples[1].altitude_ato_m == pytest.approx(77.1)
         # No absolute datum is knowable, so MSL must stay unset rather than
         # be filled with a number that is 320 m wrong.
         assert all(s.altitude_msl_m is None for s in samples)
@@ -182,7 +182,7 @@ class TestClassicVariant:
             '[rel_alt: -0.100 abs_alt: 194.900]\n'
         )
         first = parse_dji_srt(modern)[0]
-        assert first.altitude_agl_m == pytest.approx(-0.1)
+        assert first.altitude_ato_m == pytest.approx(-0.1)
         assert first.altitude_msl_m == pytest.approx(194.9)
         assert first.altitude_datum_unknown is False
 
@@ -197,7 +197,7 @@ class TestClassicVariant:
         )
         first = parse_dji_srt(high)[0]
         assert first.altitude_msl_m == pytest.approx(1622.8)
-        assert first.altitude_agl_m is None
+        assert first.altitude_ato_m is None
 
     def test_the_whole_track_decides_not_one_cue(self):
         """A track that climbs from near zero is relative throughout, even
@@ -211,13 +211,13 @@ class TestClassicVariant:
             for i in range(4)
         )
         samples = parse_dji_srt(climbing)
-        assert [s.altitude_agl_m for s in samples] == [0.0, 40.0, 80.0, 120.0]
+        assert [s.altitude_ato_m for s in samples] == [0.0, 40.0, 80.0, 120.0]
         assert all(s.altitude_msl_m is None for s in samples)
 
     def test_legacy_altitude_key_maps_to_msl(self):
         first = parse_dji_srt(CLASSIC_SRT)[0]
         assert first.altitude_msl_m == pytest.approx(210.5)
-        assert first.altitude_agl_m is None
+        assert first.altitude_ato_m is None
 
     def test_frame_index_from_comma_form(self):
         assert parse_dji_srt(CLASSIC_SRT)[0].frame_index == 1

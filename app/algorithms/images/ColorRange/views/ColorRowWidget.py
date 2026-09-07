@@ -97,6 +97,9 @@ class ClickableColorSwatch(TranslationMixin, QFrame):
 
 class ColorRowWidget(TranslationMixin, QWidget):
     """Widget representing a single color range configuration."""
+    # 2.6 exception: instantiated N times at runtime - the controller
+    # builds one of these per colour the operator adds, which is not
+    # something a .ui can describe.
 
     # Signal emitted when this row should be deleted
     delete_requested = Signal(QWidget)
@@ -179,7 +182,7 @@ class ColorRowWidget(TranslationMixin, QWidget):
         validator = QIntValidator(0, 255, self)
 
         # Red Min/Max
-        r_label = QLabel("R:", self)
+        r_label = QLabel(self.tr("R:"), self)
         r_label.setFont(self.font())
         range_layout.addWidget(r_label)
 
@@ -209,7 +212,7 @@ class ColorRowWidget(TranslationMixin, QWidget):
         range_layout.addSpacing(8)
 
         # Green Min/Max
-        g_label = QLabel("G:", self)
+        g_label = QLabel(self.tr("G:"), self)
         g_label.setFont(self.font())
         range_layout.addWidget(g_label)
 
@@ -239,7 +242,7 @@ class ColorRowWidget(TranslationMixin, QWidget):
         range_layout.addSpacing(8)
 
         # Blue Min/Max
-        b_label = QLabel("B:", self)
+        b_label = QLabel(self.tr("B:"), self)
         b_label.setFont(self.font())
         range_layout.addWidget(b_label)
 

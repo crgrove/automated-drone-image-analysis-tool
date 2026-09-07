@@ -564,7 +564,7 @@ class TestReplaySrt:
         assert track is not None and len(track) == 4
         point = track.point_at(1.2)
         assert point.latitude == pytest.approx(30.251, abs=1e-6)
-        assert point.altitude_agl_m == pytest.approx(40.0)   # ATO from the fix
+        assert point.altitude_ato_m == pytest.approx(40.0)   # ATO from the fix
         assert point.altitude_msl_m == pytest.approx(320.0)
         assert point.yaw_deg == pytest.approx(91.5)
 

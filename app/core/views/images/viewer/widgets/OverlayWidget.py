@@ -21,6 +21,9 @@ class OverlayWidget(QWidget):
     - North arrow/compass showing drone orientation
     - Scale bar showing real-world measurements
     """
+    # 2.6 exception: custom-painted primitive - it implements
+    # paintEvent and mouse handling rather than composing child
+    # widgets, so its appearance is code by nature.
 
     def __init__(self, main_image_widget, scale_bar_widget, theme, logger=None):
         """

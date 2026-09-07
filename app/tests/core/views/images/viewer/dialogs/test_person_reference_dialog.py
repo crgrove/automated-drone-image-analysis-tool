@@ -490,20 +490,22 @@ def test_anchor_unmoved_without_a_selected_aoi(app, qtbot, isolated_settings):
 # Image-change rebuilds defer so navigation (gallery zoom-to-AOI) wins
 # ---------------------------------------------------------------------------
 
-def test_image_change_rebuild_is_deferred(app, qtbot, isolated_settings):
-    """update_for_image queues the rebuild instead of running it inline."""
+def test_image_change_rebuilds_immediately(app, qtbot, isolated_settings):
+    """The rebuild runs inline, because the caller already arrived at the
+    right moment.
+
+    This used to be deferred 300 ms so an in-flight navigation could land
+    first. The Viewer now calls in as the load pipeline's final step - after
+    the zoom the navigation requested - so there is nothing left to wait
+    for, and waiting a fixed 300 ms was only ever right on some machines.
+    """
     dialog, _viewer = _make_projected_dialog(qtbot, agl_m=40.0)
     assert dialog.anchor_item is not None
 
     dialog.update_for_image(_camera_image_service(40.0), 'other-image.jpg')
 
-    assert dialog._pending_image is not None    # queued, not applied
-    assert dialog.anchor_item is None           # old overlay cleared
-    assert dialog._image_change_timer.isActive()
-
-    dialog._apply_pending_image()
-    assert dialog._pending_image is None
-    assert dialog.anchor_item is not None       # rebuilt after the beat
+    assert dialog._pending_image is None        # consumed, not queued
+    assert dialog.anchor_item is not None       # rebuilt for the new image
     assert dialog.image_path == 'other-image.jpg'
 
 
@@ -522,13 +524,17 @@ def test_image_change_never_auto_zooms(app, qtbot, isolated_settings):
 
 
 def test_pending_image_change_dropped_on_close(app, qtbot, isolated_settings):
-    """A queued rebuild must not fire into a closed dialog."""
+    """A rebuild must not run into a closed dialog.
+
+    It would re-add overlay items nothing would ever remove. The request is
+    still held between the two halves, so closing has to clear it - and a
+    stray apply afterwards has to be a no-op.
+    """
     dialog, _viewer = _make_projected_dialog(qtbot, agl_m=40.0)
-    dialog.update_for_image(_camera_image_service(40.0), 'other-image.jpg')
+    dialog._pending_image = (_camera_image_service(40.0), 'other-image.jpg', None)
 
     dialog.close()
 
-    assert not dialog._image_change_timer.isActive()
     assert dialog._pending_image is None
     dialog._apply_pending_image()  # stray fire is a no-op
     assert dialog.anchor_item is None

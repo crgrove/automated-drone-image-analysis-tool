@@ -432,3 +432,15 @@ class MotionDetectionService(QObject):
         # Reinitialize with default config to ensure they're ready for use
         default_config = ColorAnomalyAndMotionDetectionConfig()
         self._init_background_subtractors(default_config)
+
+    def cleanup(self):
+        """Release all per-session state and cached cv2 resources.
+
+        A superset of :meth:`reset_background_models`: it also drops the
+        morphology kernel cache. The subtractors are re-created there, so
+        the service is ready for the next video rather than left inert -
+        the lifecycle calls cleanup() on a video switch, not only at
+        shutdown.
+        """
+        self.reset_background_models()
+        self._morph_kernel_cache.clear()

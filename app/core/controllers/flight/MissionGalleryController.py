@@ -16,6 +16,9 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from core.services.LoggerService import LoggerService
+from core.services.streaming.RecordingBundleService import (
+    write_gallery_export,
+)
 from core.views.flight.MissionGalleryDock import MissionGalleryDock
 
 
@@ -250,7 +253,7 @@ class MissionGalleryController(QObject):
         parent_widget = self._dock
         out_dir = QFileDialog.getExistingDirectory(
             parent_widget,
-            "Choose export directory",
+            self.tr("Choose export directory"),
         )
         if not out_dir:
             return
@@ -259,21 +262,22 @@ class MissionGalleryController(QObject):
         if not rows:
             QMessageBox.information(
                 parent_widget,
-                "Export",
-                "No detections match the current filters.",
+                self.tr("Export"),
+                self.tr("No detections match the current filters."),
             )
             return
 
         try:
-            xml_path = self._write_export(out_dir, rows)
+            xml_path = write_gallery_export(out_dir, rows)
         except Exception as exc:  # noqa: BLE001 - surface to user
             self.logger.error(
                 f"Mission Gallery export failed: {exc}"
             )
             QMessageBox.critical(
                 parent_widget,
-                "Export failed",
-                f"Could not write the export:\n{exc}",
+                self.tr("Export failed"),
+                self.tr("Could not write the export:\n{error}").format(
+                    error=exc),
             )
             return
 
@@ -282,136 +286,10 @@ class MissionGalleryController(QObject):
         )
         QMessageBox.information(
             parent_widget,
-            "Export complete",
-            (
-                f"Wrote {len(rows)} detections to:\n{xml_path}\n\n"
+            self.tr("Export complete"),
+            self.tr(
+                "Wrote {count} detections to:\n{path}\n\n"
                 "Open this file from the Image Analysis window via "
                 "Menu → Load Results File."
-            ),
+            ).format(count=len(rows), path=xml_path),
         )
-
-    def _write_export(self, out_dir: str, rows: list[dict]) -> str:
-        """Write thumbnails + ``ADIAT_Data.xml`` into ``out_dir``.
-
-        Returns the path of the XML file that was written.
-        """
-        # Import lazily so the gallery module doesn't pull in XmlService
-        # (and its dependencies) at import time.
-        from core.services.XmlService import XmlService
-
-        os.makedirs(out_dir, exist_ok=True)
-        xml = XmlService()
-        xml.xml_path = os.path.join(out_dir, "ADIAT_Data.xml")
-
-        # Settings block — fields are required by the image-mode loader
-        # even though they're meaningless for a Flight Viewer export.
-        settings = {
-            "output_dir": out_dir,
-            "input_dir": out_dir,
-            "num_processes": 1,
-            "identifier_color": (0, 255, 0),
-            "aoi_radius": 20,
-            "min_area": 1,
-            "max_area": 0,
-            "hist_ref_path": "",
-            "kmeans_clusters": 0,
-            "algorithm": "FlightViewer",
-            "thermal": "False",
-            "options": {
-                "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "source": "ADIAT Flight Viewer",
-            },
-        }
-        # XmlService.add_settings_to_xml is the dedicated path for writing
-        # settings into the new tree.
-        xml.add_settings_to_xml(**settings)
-
-        # One ``image`` per detection. The image's areas_of_interest
-        # captures the bbox (in fractional coords) and the GPS location
-        # so the standard viewer can re-render the pin + AOI overlay.
-        for idx, detection in enumerate(rows):
-            thumb_path = self._write_thumb(out_dir, idx, detection)
-            img_record = {
-                "path": thumb_path,
-                "width": 0,
-                "height": 0,
-                "aois": [self._build_aoi(detection)],
-            }
-            xml.add_image_to_xml(img_record)
-
-        xml.save_xml_file(xml.xml_path)
-        return xml.xml_path
-
-    @staticmethod
-    def _write_thumb(out_dir: str, idx: int, detection: dict) -> str:
-        """Write the detection's thumbnail (or a placeholder) and return its path."""
-        thumb_bytes = detection.get("thumb_bytes")
-        filename = f"detection_{idx:04d}.jpg"
-        thumb_path = os.path.join(out_dir, filename)
-        if isinstance(thumb_bytes, (bytes, bytearray)) and thumb_bytes:
-            with open(thumb_path, "wb") as fp:
-                fp.write(thumb_bytes)
-        else:
-            # No thumbnail in the snapshot — encode a tiny 1x1 black JPEG
-            # so the XML loader doesn't choke on a missing file. cv2 is
-            # already a hard dependency of the streaming stack.
-            import cv2
-            import numpy as np
-            placeholder = np.zeros((1, 1, 3), dtype=np.uint8)
-            ok, buf = cv2.imencode(".jpg", placeholder)
-            if ok:
-                with open(thumb_path, "wb") as fp:
-                    fp.write(buf.tobytes())
-            else:
-                # Last-resort: write the minimal SOI+EOI marker pair. Not a
-                # valid renderable JPEG but enough to satisfy "file exists".
-                with open(thumb_path, "wb") as fp:
-                    fp.write(b"\xff\xd8\xff\xd9")
-        return thumb_path
-
-    @staticmethod
-    def _build_aoi(detection: dict) -> dict:
-        """Compose a single areas_of_interest entry for ``detection``."""
-        bbox = detection.get("bbox_norm") or []
-        # Default to a small AOI in the center of a synthetic 256x256 frame
-        # so the image-mode viewer can render a pin even when bbox is missing.
-        if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
-            try:
-                # Translate normalized bbox into a center+radius pair.
-                # `bbox_norm` is [x_min, y_min, w, h] in 0..1 coords; we
-                # synthesize against a 256x256 reference so the AOI lands
-                # somewhere recognisable in the exported placeholder JPEG.
-                w_ref, h_ref = 256, 256
-                cx = int((float(bbox[0]) + float(bbox[2]) / 2.0) * w_ref)
-                cy = int((float(bbox[1]) + float(bbox[3]) / 2.0) * h_ref)
-                radius = max(8, int(min(bbox[2], bbox[3]) * min(w_ref, h_ref) / 2.0))
-                area = int(float(bbox[2]) * float(bbox[3]) * w_ref * h_ref)
-            except (TypeError, ValueError):
-                cx, cy, radius, area = 128, 128, 20, 100
-        else:
-            cx, cy, radius, area = 128, 128, 20, 100
-
-        aoi = {
-            "center": (cx, cy),
-            "radius": radius,
-            "area": area,
-        }
-        confidence = detection.get("confidence")
-        if isinstance(confidence, (int, float)):
-            aoi["confidence"] = float(confidence)
-            aoi["score_type"] = "confidence"
-            aoi["raw_score"] = float(confidence)
-            aoi["score_method"] = "FlightViewer"
-
-        loc = detection.get("location")
-        if isinstance(loc, dict):
-            lat = loc.get("lat")
-            lon = loc.get("lon")
-            if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-                comment = f"GPS: {lat:.6f}, {lon:.6f}"
-                cls = detection.get("class_name") or detection.get("detector_id") or ""
-                if cls:
-                    comment = f"{cls} @ {comment}"
-                aoi["user_comment"] = comment
-
-        return aoi

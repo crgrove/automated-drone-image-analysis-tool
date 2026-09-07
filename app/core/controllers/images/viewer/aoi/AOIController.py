@@ -22,6 +22,7 @@ from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
 
 from core.services.LoggerService import LoggerService
+from core.services.image.MaskFilterService import MaskFilterService
 from core.services.image.AOIService import AOIService
 from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
 from helpers.FormatHelper import FormatHelper
@@ -70,10 +71,10 @@ class AOIController(TranslationMixin):
         self.filter_mask_path = None  # File path to mask image
         self.filter_mask_mode = 'include'  # 'include' or 'exclude'
 
-        # Mask cache for image mask filter
-        self._mask_image_raw = None  # Raw grayscale mask (loaded once from file)
-        self._mask_cache = {}  # {(width, height): binary_mask_ndarray}
-        self._mask_cache_path = None  # Path of currently cached mask file
+        # Reading, scaling and sampling the operator's filter mask is
+        # image work, not UI orchestration; the controller keeps only the
+        # filter's view state (path and mode) above.
+        self._mask_service = MaskFilterService(self.logger)
 
         # Index mapping from original AOI index to visible container index
         # This is rebuilt when thumbnails are loaded (after sorting and filtering)
@@ -1344,12 +1345,11 @@ class AOIController(TranslationMixin):
                     imgWidth = image.get('width')
                     imgHeight = image.get('height')
                     if imgWidth and imgHeight:
-                        mask = self._get_scaled_mask(imgWidth, imgHeight)
-                        if mask is not None:
-                            cx, cy = aoi.get('center', (0, 0))
-                            cx = max(0, min(int(cx), imgWidth - 1))
-                            cy = max(0, min(int(cy), imgHeight - 1))
-                            in_mask = mask[int(cy), int(cx)] > 0
+                        # None means the mask is unusable - do not filter,
+                        # rather than hide every AOI.
+                        in_mask = self._mask_service.contains(
+                            aoi.get('center', (0, 0)), imgWidth, imgHeight)
+                        if in_mask is not None:
                             if self.filter_mask_mode == 'include' and not in_mask:
                                 continue
                             if self.filter_mask_mode == 'exclude' and in_mask:
@@ -1361,46 +1361,16 @@ class AOIController(TranslationMixin):
         return filtered
 
     def _get_scaled_mask(self, width, height):
-        """Get binary mask scaled to the specified dimensions, using cache.
+        """Binary mask at these dimensions, or None.
 
-        Args:
-            width: Target width
-            height: Target height
-
-        Returns:
-            Binary numpy array (height, width) where 255=white, 0=black, or None
+        Delegates to :class:`~core.services.image.MaskFilterService.MaskFilterService`. Kept as a method because the gallery's own filter loop
+        samples the same mask through this controller.
         """
-        if self.filter_mask_path is None:
-            return None
-
-        # Reload if path changed
-        if self._mask_cache_path != self.filter_mask_path:
-            self._mask_image_raw = cv2.imread(self.filter_mask_path, cv2.IMREAD_GRAYSCALE)
-            self._mask_cache = {}
-            self._mask_cache_path = self.filter_mask_path
-            if self._mask_image_raw is None:
-                self.logger.warning(f"Could not load mask image: {self.filter_mask_path}")
-                return None
-
-        if self._mask_image_raw is None:
-            return None
-
-        # Check cache
-        key = (width, height)
-        if key in self._mask_cache:
-            return self._mask_cache[key]
-
-        # Resize and threshold
-        scaled = cv2.resize(self._mask_image_raw, (width, height), interpolation=cv2.INTER_LINEAR)
-        _, binary = cv2.threshold(scaled, 127, 255, cv2.THRESH_BINARY)
-        self._mask_cache[key] = binary
-        return binary
+        return self._mask_service.get_scaled_mask(width, height)
 
     def _invalidate_mask_cache(self):
-        """Clear the mask image cache."""
-        self._mask_image_raw = None
-        self._mask_cache = {}
-        self._mask_cache_path = None
+        """Drop the loaded mask and every scaled copy of it."""
+        self._mask_service.invalidate()
 
     def set_sort_method(self, method, color_hue=None):
         """Set the sort method for AOIs.
@@ -1449,8 +1419,9 @@ class AOIController(TranslationMixin):
         self.filter_heatmap_mode = filters.get('heatmap_mode', 'off')
         self.filter_heatmap_threshold = filters.get('heatmap_threshold', 75)
         new_mask_path = filters.get('mask_filter_path')
-        if new_mask_path != self.filter_mask_path:
-            self._invalidate_mask_cache()
+        # set_mask_path is a no-op when unchanged, so the scaling cache
+        # survives a filter pass that did not touch the mask.
+        self._mask_service.set_mask_path(new_mask_path)
         self.filter_mask_path = new_mask_path
         self.filter_mask_mode = filters.get('mask_filter_mode', 'include')
 

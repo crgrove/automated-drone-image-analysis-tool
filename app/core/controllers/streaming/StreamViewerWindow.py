@@ -2500,9 +2500,16 @@ finalize_bundle`).
             # Switch to Live View tab
             self.tab_widget.setCurrentIndex(0)
 
-            # The 50 ms delay stays BEFORE the seek (to let pause settle). The
-            # zoom is applied later, only once the sought frame is displayed.
-            QTimer.singleShot(50, lambda g=generation: self._seek_to_track_frame(track, g))
+            # No delay before the seek: play_pause() flips _is_playing
+            # synchronously under the same _playback_lock that seek_to_frame
+            # and the capture loop take, and _awaiting_seek_frame lets the
+            # sought frame be decoded while paused. There was never anything
+            # to settle - and RTMPStreamService already documents the hazard
+            # of a frame interval longer than the delay was.
+            #
+            # The zoom still lands event-driven, on seekCompleted for this
+            # seek's request id.
+            self._seek_to_track_frame(track, generation)
         else:
             # Live stream - cannot seek, show info dialog
             QMessageBox.information(
@@ -2549,6 +2556,9 @@ finalize_bundle`).
             self._pending_focus_seek_id = stream_mgr.last_seek_id if hasattr(stream_mgr, "last_seek_id") else 0
             self._pending_focus_positions = {int(resolved), int(resolved) + 1}
             self._pending_focus_generation = generation
+            # 2.9: bounded give-up guard, not a settle wait. The real
+            # completion event is seekCompleted, correlated by request id and
+            # consumed above; this only fires if the seek never ends.
             QTimer.singleShot(
                 self._FOCUS_TIMEOUT_MS,
                 lambda g=generation: self._on_focus_timeout(g),

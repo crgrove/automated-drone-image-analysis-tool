@@ -10,7 +10,8 @@ PATH = [(30.0, -97.0), (30.01, -97.01), (30.02, -97.02)]
 def _kml_text(service, tmp_path, name="flight.kml"):
     target = os.path.join(str(tmp_path), name)
     service.save_kml(target)
-    return open(target, encoding="utf-8").read()
+    with open(target, encoding="utf-8") as handle:
+        return handle.read()
 
 
 class TestAddFlightPath:

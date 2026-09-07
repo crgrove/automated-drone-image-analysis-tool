@@ -2160,14 +2160,30 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.personOverlayButton.setToolTip(
                 self.tr("Person Size Reference is unavailable: no GSD for this image")
             )
-        # If the dialog is open, rebuild it for the current image.
-        if self.person_reference_dialog is not None and self.person_reference_dialog.isVisible():
-            image_service, image_path = self._current_person_reference_inputs()
-            if image_service is not None and image_path:
-                self.person_reference_dialog.update_for_image(
-                    image_service, image_path,
-                    agl_override_m=self._person_reference_agl_override(),
-                )
+
+    def _refresh_person_reference_dialog(self):
+        """Rebuild the open person overlay for the image now displayed.
+
+        Called as the load pipeline's final step, after the pending view
+        zoom, because the person is anchored on the view centre: run before
+        the zoom and it lands at the pre-zoom centre and the legibility
+        auto-zoom fights the navigation's own framing.
+
+        This is the event the dialog used to wait 300 ms for. The wait was
+        written when the zoom arrived through a transient ``viewChanged``
+        handler with no completion signal; ``load_image_with_zoom`` replaced
+        that with an explicit request/consume handoff, so the ordering can
+        now simply be correct.
+        """
+        dialog = self.person_reference_dialog
+        if dialog is None or not dialog.isVisible():
+            return
+        image_service, image_path = self._current_person_reference_inputs()
+        if image_service is not None and image_path:
+            dialog.update_for_image(
+                image_service, image_path,
+                agl_override_m=self._person_reference_agl_override(),
+            )
 
     def _current_person_reference_inputs(self):
         """Return (ImageService, image_path) for the current image, or (None, None)."""

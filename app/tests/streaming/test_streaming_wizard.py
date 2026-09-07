@@ -30,10 +30,13 @@ from unittest.mock import Mock, MagicMock, patch, call
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt
 
-# Mock dependencies before importing
-# Mock qtawesome and other optional dependencies
-sys.modules['qtawesome'] = MagicMock()
-sys.modules['helpers.IconHelper'] = MagicMock()
+# NOTE: this file used to stub sys.modules['qtawesome'] and
+# sys.modules['helpers.IconHelper'] with bare MagicMocks. Both are real,
+# pinned dependencies (requirements.txt), so the stubs bought nothing -
+# and because sys.modules is process-global and was never restored, every
+# module imported after this file was collected got the mock. Any of them
+# calling setIcon(IconHelper.create_icon(...)) then died on a MagicMock,
+# in a completely unrelated test, hundreds of tests later.
 
 
 @pytest.fixture
@@ -670,7 +673,7 @@ class TestCaptureAutoDetection:
         from core.services.telemetry.VideoCaptureInfoService import VideoCaptureInfo
         return VideoCaptureInfo(
             make=make, model=model, device_text="DJI M4TD",
-            altitude_agl_m=agl, altitude_samples=100,
+            altitude_ato_m=agl, altitude_samples=100,
         )
 
     def test_altitude_is_prefilled_from_telemetry(self, qapp):

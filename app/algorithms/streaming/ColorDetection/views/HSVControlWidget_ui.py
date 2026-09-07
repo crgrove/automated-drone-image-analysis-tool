@@ -68,13 +68,19 @@ class Ui_HSVControlWidget(object):
 
     def retranslateUi(self, HSVControlWidget):
         """Translate UI strings."""
-        _translate = QtCore.QCoreApplication.translate
-        HSVControlWidget.setWindowTitle(_translate("HSVControlWidget", "HSVControlWidget"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_color), _translate("HSVControlWidget", "Color Selection"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_detection), _translate("HSVControlWidget", "Detection"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_processing), _translate("HSVControlWidget", "Processing"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_motion), _translate("HSVControlWidget", "Motion Detection"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_fusion), _translate("HSVControlWidget", "Fusion & Temporal"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_fpr), _translate("HSVControlWidget", "False Pos. Reduction"))
-        self.tabs.setTabText(self.tabs.indexOf(self.tab_rendering), _translate("HSVControlWidget", "Rendering"))
+        # QCoreApplication.translate spelled out at every call site, not
+        # bound to a local alias. pyside6-lupdate matches the call
+        # syntactically, so an alias makes every string here invisible to
+        # extraction - which is how this window's own title and its four
+        # group headings ended up with no catalog entry in any language
+        # while the file looked correct. Generated *_ui.py files write it
+        # out in full for the same reason; match them.
+        HSVControlWidget.setWindowTitle(QtCore.QCoreApplication.translate("HSVControlWidget", "HSVControlWidget"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_color), QtCore.QCoreApplication.translate("HSVControlWidget", "Color Selection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_detection), QtCore.QCoreApplication.translate("HSVControlWidget", "Detection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_processing), QtCore.QCoreApplication.translate("HSVControlWidget", "Processing"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_motion), QtCore.QCoreApplication.translate("HSVControlWidget", "Motion Detection"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_fusion), QtCore.QCoreApplication.translate("HSVControlWidget", "Fusion & Temporal"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_fpr), QtCore.QCoreApplication.translate("HSVControlWidget", "False Pos. Reduction"))
+        self.tabs.setTabText(self.tabs.indexOf(self.tab_rendering), QtCore.QCoreApplication.translate("HSVControlWidget", "Rendering"))
 

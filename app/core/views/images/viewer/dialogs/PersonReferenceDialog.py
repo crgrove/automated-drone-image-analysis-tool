@@ -293,13 +293,12 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.pose_items = {}   # 'standing'|'recumbent'|'sitting' -> QGraphicsPathItem
         self.shadow_item = None
 
-        # Image-change rebuilds are deferred so in-flight navigation (e.g.
-        # a gallery AOI click that loads the image and then zooms to the
-        # AOI) lands before the person is placed - see update_for_image.
+        # Holds the inputs between update_for_image and the rebuild, so
+        # closeEvent can drop a request that arrived as the dialog went away
+        # (a rebuild into a closed dialog re-adds overlay items nothing
+        # would ever remove). It used to be a 300 ms deferral; the Viewer
+        # now calls in at the right moment - see update_for_image.
         self._pending_image = None
-        self._image_change_timer = QTimer(self)
-        self._image_change_timer.setSingleShot(True)
-        self._image_change_timer.timeout.connect(self._apply_pending_image)
 
         self._setup_ui()
         self._connect_signals()
@@ -713,21 +712,27 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
     def update_for_image(self, image_service, image_path, agl_override_m=None):
         """Rebuild the camera/sun for a newly selected image (called by Viewer).
 
-        The rebuild is deferred one beat: an image change is often part of a
-        larger navigation - a gallery AOI click loads the image and then
-        zooms to the AOI through a transient viewChanged handler. Rebuilding
-        immediately would anchor the person at the pre-zoom view centre and
-        the legibility auto-zoom would stomp the AOI zoom (field report).
-        Waiting lets the navigation land; the person is then placed at the
-        final view centre (the AOI, for gallery clicks).
+        Rebuilt immediately, because the caller has already arrived at the
+        right moment: ``Viewer._refresh_person_reference_dialog`` runs as the
+        load pipeline's final step, after any zoom the navigation requested.
+        The person is therefore placed at the final view centre - the AOI,
+        for a gallery click.
+
+        This used to wait 300 ms instead. The wait dated from when the zoom
+        arrived through a transient ``viewChanged`` handler that offered
+        nothing to wait on; rebuilding before it landed anchored the person
+        at the pre-zoom centre and the legibility auto-zoom stomped the AOI
+        zoom (field report). ``load_image_with_zoom`` turned that into an
+        explicit handoff, so the ordering is now simply correct - and a
+        delay that was long enough on one machine never was on another.
         """
         self._reset_trace_state()
         self._clear_items()
         self._pending_image = (image_service, image_path, agl_override_m)
-        self._image_change_timer.start(300)
+        self._apply_pending_image()
 
     def _apply_pending_image(self):
-        """Deferred tail of update_for_image.
+        """Tail of update_for_image; a no-op once the request is dropped.
 
         The legibility auto-zoom is never run here: it exists so the tool
         does not look inert on FIRST open, but once the dialog is up an
@@ -1514,7 +1519,6 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
     def closeEvent(self, event):
         # A pending image-change rebuild must not fire into a closed dialog
         # (it would re-add overlay items that nothing would ever remove).
-        self._image_change_timer.stop()
         self._pending_image = None
         self._reset_trace_state()
         self._clear_items()

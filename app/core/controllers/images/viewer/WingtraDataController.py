@@ -1,63 +1,41 @@
-"""
-WingtraDataController - Handles Wingtra CSV data loading and session management.
+"""WingtraDataController - the operator's side of loading a Wingtra CSV.
 
-Manages CSV parsing, image matching, per-image AGL computation via terrain
-elevation, and provides override values for orientation and GSD calculations.
+Prompts for the file, reports what matched, and writes the result into the
+viewer's image dicts so every downstream consumer (R-key rotation, the GPS
+map, KML export, coverage extent) picks it up through the ordinary
+``image['bearing']`` path.
+
+The reading, matching and altitude work lives in
+:mod:`core.services.image.WingtraDataService` - it is parsing and I/O, not UI
+orchestration (CLAUDE.md 2.1) - and this class keeps the accessors
+``ImageService`` calls into.
 """
 
-import csv
 import os
-from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from core.services.LoggerService import LoggerService
-from core.services.terrain.TerrainService import TerrainService
+from core.services.image.WingtraDataService import (
+    METERS_TO_FEET,
+    WingtraImageData,
+    compute_agl,
+    kappa_to_bearing,
+    match_image_names,
+    parse_wingtra_csv,
+    summarize_errors,
+)
 from core.views.images.viewer.dialogs.WingtraDataDialog import WingtraDataDialog
+from helpers.TranslationMixin import TranslationMixin
+
+# Example names shown when nothing matched; enough to spot a naming
+# mismatch, few enough to stay readable in a message box.
+_EXAMPLE_NAMES = 3
 
 
-METERS_TO_FEET = 3.28084
-
-
-@dataclass
-class WingtraImageData:
-    """Wingtra orientation and position data for a single image."""
-    image_name: str
-    latitude: float
-    longitude: float
-    altitude_asl: float  # meters (above sea level, from CSV)
-    omega: float         # roll (degrees)
-    phi: float           # pitch (degrees)
-    kappa: float         # yaw (degrees)
-    accuracy_h: float
-    accuracy_v: float
-    altitude_agl: Optional[float] = field(default=None)  # meters (computed)
-
-
-class WingtraDataController:
+class WingtraDataController(TranslationMixin):
     """Controller for managing Wingtra CSV data overrides."""
-
-    REQUIRED_COLUMNS = [
-        'image', 'latitude', 'longitude', 'altitude',
-        'omega', 'phi', 'kappa'
-    ]
-
-    # Alternate column name mappings (case-insensitive, supports partial matches)
-    # Wingtra format: "# image name", "latitude [decimal degrees]", etc.
-    COLUMN_ALIASES = {
-        'image': ['# image name', 'image name', 'image', 'image_name', 'filename', 'name', 'file'],
-        'latitude': ['latitude [decimal degrees]', 'latitude', 'lat'],
-        'longitude': ['longitude [decimal degrees]', 'longitude', 'lon', 'long'],
-        'altitude': ['altitude [meter]', 'altitude [meters]', 'altitude', 'altitude_asl', 'alt', 'elevation'],
-        'omega': ['omega [degrees]', 'omega [degree]', 'omega', 'roll'],
-        'phi': ['phi [degrees]', 'phi [degree]', 'phi', 'pitch'],
-        'kappa': ['kappa [degrees]', 'kappa [degree]', 'kappa', 'yaw', 'heading'],
-        'accuracy_h': ['accuracy horizontal [meter]', 'accuracy horizontal [meters]',
-                       'accuracy_h', 'accuracy_horizontal', 'h_accuracy', 'horizontal_accuracy'],
-        'accuracy_v': ['accuracy vertical [meter]', 'accuracy vertical [meters]',
-                       'accuracy_v', 'accuracy_vertical', 'v_accuracy', 'vertical_accuracy']
-    }
 
     def __init__(self, parent_viewer):
         """Initialize the Wingtra data controller."""
@@ -68,49 +46,6 @@ class WingtraDataController:
         self.image_data: Dict[str, WingtraImageData] = {}
         self.csv_path: Optional[str] = None
         self.is_active: bool = False  # True when Wingtra data is loaded
-        self._terrain_service: Optional[TerrainService] = None
-
-    def _get_terrain_service(self) -> Optional[TerrainService]:
-        """Lazily initialize terrain service."""
-        if self._terrain_service is None:
-            try:
-                self._terrain_service = TerrainService()
-            except Exception as e:
-                self.logger.warning(f"Could not initialize terrain service: {e}")
-        return self._terrain_service
-
-    def _compute_agl_for_images(self, image_data: Dict[str, WingtraImageData]) -> int:
-        """Compute per-image AGL using terrain elevation lookup.
-
-        For each image, AGL = ASL altitude (from CSV) - ground elevation.
-        Uses the geoid to convert between ellipsoidal (GPS/CSV) and
-        orthometric (terrain) heights when available.
-
-        Args:
-            image_data: Dict of image name -> WingtraImageData
-
-        Returns:
-            Number of images where AGL was computed successfully.
-        """
-        terrain = self._get_terrain_service()
-        if terrain is None:
-            return 0
-
-        computed = 0
-        for data in image_data.values():
-            result = terrain.get_elevation(data.latitude, data.longitude)
-            if result.source == 'terrain' and result.elevation_m is not None:
-                # CSV altitude is typically ellipsoidal (WGS84).
-                # Terrain elevation is orthometric (EGM96).
-                # Convert CSV altitude to orthometric for a proper AGL.
-                asl_orthometric = data.altitude_asl
-                if result.geoid_undulation_m is not None:
-                    asl_orthometric = data.altitude_asl - result.geoid_undulation_m
-
-                data.altitude_agl = max(1.0, asl_orthometric - result.elevation_m)
-                computed += 1
-
-        return computed
 
     def _get_distance_unit(self) -> str:
         """Get user's preferred distance unit."""
@@ -119,6 +54,11 @@ class WingtraDataController:
             if unit in ('Meters', 'm'):
                 return 'm'
         return 'ft'
+
+    def _result_image_names(self) -> List[str]:
+        """Filenames of the loaded results, for matching against the CSV."""
+        return [img.get('name', '') for img in self.parent.images
+                if img.get('name')]
 
     def prompt_and_load_csv(self):
         """Show file dialog and load Wingtra CSV data."""
@@ -131,9 +71,9 @@ class WingtraDataController:
 
         file_path, _ = QFileDialog.getOpenFileName(
             self.parent,
-            "Select Wingtra CSV File",
+            self.tr("Select Wingtra CSV File"),
             initial_dir,
-            "CSV files (*.csv);;All files (*.*)"
+            self.tr("CSV files (*.csv);;All files (*.*)")
         )
 
         if not file_path:
@@ -143,8 +83,7 @@ class WingtraDataController:
         if hasattr(self.parent, 'settings_service'):
             self.parent.settings_service.set_setting('LastWingtraFolder', os.path.dirname(file_path))
 
-        # Parse and validate CSV
-        parsed_data, errors = self._parse_csv(file_path)
+        parsed_data, errors = parse_wingtra_csv(file_path)
 
         if errors:
             self._show_parse_errors(errors)
@@ -153,20 +92,20 @@ class WingtraDataController:
         if not parsed_data:
             QMessageBox.warning(
                 self.parent,
-                "Empty CSV",
-                "The CSV file contains no valid data rows."
+                self.tr("Empty CSV"),
+                self.tr("The CSV file contains no valid data rows.")
             )
             return
 
-        # Match to current result images
-        matched, unmatched_csv, unmatched_images = self._match_images(parsed_data)
+        matched, unmatched_csv, unmatched_images = match_image_names(
+            parsed_data, self._result_image_names())
 
         if not matched:
             self._show_no_matches_error(unmatched_csv, unmatched_images)
             return
 
-        # Compute per-image AGL from terrain elevation
-        agl_count = self._compute_agl_for_images(matched)
+        # Per-image AGL from terrain elevation, geoid-corrected.
+        agl_count = compute_agl(matched, logger=self.logger)
 
         # Show match summary dialog
         dialog = WingtraDataDialog(
@@ -191,173 +130,54 @@ class WingtraDataController:
 
         # Show success toast
         if hasattr(self.parent, 'status_controller'):
-            msg = f"Wingtra data loaded: {len(matched)} images matched"
             if agl_count > 0:
-                msg += f", {agl_count} AGL computed"
+                msg = self.tr(
+                    "Wingtra data loaded: {matched} images matched, "
+                    "{agl} AGL computed"
+                ).format(matched=len(matched), agl=agl_count)
+            else:
+                msg = self.tr(
+                    "Wingtra data loaded: {matched} images matched"
+                ).format(matched=len(matched))
             self.parent.status_controller.show_toast(msg, 3000, color="#00C853")
 
         # Reload current image to apply overrides
         if hasattr(self.parent, 'image_load_controller'):
             self.parent.image_load_controller.load_image()
 
-    def _parse_csv(self, file_path: str) -> Tuple[Dict[str, WingtraImageData], List[str]]:
-        """
-        Parse Wingtra CSV file.
-
-        Returns:
-            tuple: (parsed_data dict keyed by filename, error_list)
-        """
-        parsed_data = {}
-        errors = []
-
-        try:
-            with open(file_path, 'r', newline='', encoding='utf-8-sig') as f:
-                reader = csv.DictReader(f)
-
-                # Validate columns exist
-                if not reader.fieldnames:
-                    errors.append("CSV file has no header row")
-                    return {}, errors
-
-                # Map actual column names to expected names
-                column_map = self._build_column_map(reader.fieldnames)
-
-                missing = [col for col in self.REQUIRED_COLUMNS if col not in column_map]
-                if missing:
-                    errors.append(f"Missing required columns: {', '.join(missing)}")
-                    return {}, errors
-
-                # Parse rows
-                for row_num, row in enumerate(reader, start=2):
-                    try:
-                        image_name = row[column_map['image']].strip()
-                        if not image_name:
-                            continue
-
-                        # Get accuracy values (optional)
-                        accuracy_h = 0.0
-                        accuracy_v = 0.0
-                        if 'accuracy_h' in column_map:
-                            try:
-                                accuracy_h = float(row[column_map['accuracy_h']])
-                            except (ValueError, KeyError):
-                                pass
-                        if 'accuracy_v' in column_map:
-                            try:
-                                accuracy_v = float(row[column_map['accuracy_v']])
-                            except (ValueError, KeyError):
-                                pass
-
-                        data = WingtraImageData(
-                            image_name=image_name,
-                            latitude=float(row[column_map['latitude']]),
-                            longitude=float(row[column_map['longitude']]),
-                            altitude_asl=float(row[column_map['altitude']]),
-                            omega=float(row[column_map['omega']]),
-                            phi=float(row[column_map['phi']]),
-                            kappa=float(row[column_map['kappa']]),
-                            accuracy_h=accuracy_h,
-                            accuracy_v=accuracy_v
-                        )
-                        parsed_data[image_name] = data
-
-                    except (ValueError, KeyError) as e:
-                        errors.append(f"Row {row_num}: {str(e)}")
-
-        except FileNotFoundError:
-            errors.append(f"File not found: {file_path}")
-        except Exception as e:
-            errors.append(f"Error reading CSV: {str(e)}")
-
-        return parsed_data, errors
-
-    def _build_column_map(self, fieldnames: List[str]) -> Dict[str, str]:
-        """Build mapping from expected column names to actual CSV headers."""
-        column_map = {}
-        lower_fields = {f.lower().strip(): f for f in fieldnames}
-
-        for expected, aliases in self.COLUMN_ALIASES.items():
-            for alias in aliases:
-                if alias.lower() in lower_fields:
-                    column_map[expected] = lower_fields[alias.lower()]
-                    break
-
-        return column_map
-
-    def _match_images(self, parsed_data: Dict[str, WingtraImageData]) -> Tuple[Dict[str, WingtraImageData], List[str], List[str]]:
-        """
-        Match CSV image names to result images.
-
-        Returns:
-            tuple: (matched_dict keyed by result image name, unmatched_csv_names, unmatched_image_names)
-        """
-        matched = {}
-
-        # Get result image names
-        result_names = set()
-        result_name_map = {}  # lowercase -> original name
-        for img in self.parent.images:
-            name = img.get('name', '')
-            if name:
-                result_names.add(name)
-                result_name_map[name.lower()] = name
-
-        # Match CSV entries to result images
-        matched_csv_names = set()
-        for csv_name, data in parsed_data.items():
-            # Try exact match first
-            if csv_name in result_names:
-                matched[csv_name] = data
-                matched_csv_names.add(csv_name)
-            else:
-                # Try case-insensitive match
-                csv_lower = csv_name.lower()
-                if csv_lower in result_name_map:
-                    result_name = result_name_map[csv_lower]
-                    matched[result_name] = data
-                    matched_csv_names.add(csv_name)
-
-        # Find unmatched
-        unmatched_csv = [name for name in parsed_data.keys() if name not in matched_csv_names]
-        matched_result_names = set(matched.keys())
-        unmatched_images = [name for name in result_names if name not in matched_result_names]
-
-        return matched, unmatched_csv, unmatched_images
-
     def _show_parse_errors(self, errors: List[str]):
         """Show CSV parsing errors to user."""
-        error_text = "\n".join(errors[:10])
-        if len(errors) > 10:
-            error_text += f"\n... and {len(errors) - 10} more errors"
-
         QMessageBox.critical(
             self.parent,
-            "CSV Parse Error",
-            f"Failed to parse Wingtra CSV:\n\n{error_text}"
+            self.tr("CSV Parse Error"),
+            self.tr("Failed to parse Wingtra CSV:\n\n{errors}").format(
+                errors=summarize_errors(errors))
         )
 
     def _show_no_matches_error(self, unmatched_csv: List[str], unmatched_images: List[str]):
         """Show error when no images match."""
         # Show a few example names to help debugging
-        csv_examples = unmatched_csv[:3] if unmatched_csv else []
-        img_examples = list(unmatched_images)[:3] if unmatched_images else []
+        csv_examples = list(unmatched_csv)[:_EXAMPLE_NAMES]
+        img_examples = list(unmatched_images)[:_EXAMPLE_NAMES]
 
-        msg = (
-            f"No images in the CSV match the current results.\n\n"
-            f"CSV images: {len(unmatched_csv)}\n"
-            f"Result images: {len(unmatched_images)}\n\n"
-        )
+        msg = self.tr(
+            "No images in the CSV match the current results.\n\n"
+            "CSV images: {csv_count}\n"
+            "Result images: {image_count}\n\n"
+        ).format(csv_count=len(unmatched_csv), image_count=len(unmatched_images))
 
         if csv_examples:
-            msg += f"CSV examples: {', '.join(csv_examples)}\n"
+            msg += self.tr("CSV examples: {names}\n").format(
+                names=', '.join(csv_examples))
         if img_examples:
-            msg += f"Result examples: {', '.join(img_examples)}\n"
+            msg += self.tr("Result examples: {names}\n").format(
+                names=', '.join(img_examples))
 
-        msg += "\nEnsure image filenames in the CSV match exactly."
+        msg += self.tr("\nEnsure image filenames in the CSV match exactly.")
 
         QMessageBox.warning(
             self.parent,
-            "No Matching Images",
+            self.tr("No Matching Images"),
             msg
         )
 
@@ -375,9 +195,7 @@ class WingtraDataController:
             if data is None:
                 continue
 
-            # Convert kappa (CCW, photogrammetric) to bearing (CW, geographic)
-            bearing = (-data.kappa) % 360
-            image['bearing'] = bearing
+            image['bearing'] = kappa_to_bearing(data.kappa)
 
             if data.altitude_agl is not None:
                 image['wingtra_agl_ft'] = data.altitude_agl * METERS_TO_FEET
@@ -406,8 +224,7 @@ class WingtraDataController:
         """Get camera yaw as geographic bearing (CW from North)."""
         data = self.get_wingtra_data(image_name)
         if data:
-            # Convert kappa (CCW, photogrammetric) to bearing (CW, geographic)
-            return (-data.kappa) % 360
+            return kappa_to_bearing(data.kappa)
         return None
 
     def get_camera_pitch(self, image_name: str) -> Optional[float]:

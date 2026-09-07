@@ -413,6 +413,35 @@ class PdfGeneratorService:
                 total_aois += len(img.get('areas_of_interest', []))
         return total_aois
 
+    def _altitude_metadata(self, readings):
+        """The altitude run of an image's metadata line, planes spelled out.
+
+        The phrase, not the abbreviation: CLAUDE.md 2.11 puts PDF alongside
+        KML and CalTopo among the surfaces that name the plane in full,
+        because a printed report is read away from the app by someone with
+        no tooltip to hover and no reason to know what "ATO" means. The DEM
+        AGL is worded exactly as ``FormatHelper.altitude_lines`` words it
+        for the other two exports, so three exports of one mission read
+        alike.
+
+        Args:
+            readings (AltitudeReadings): The planes that apply to this
+                image, as ``ImageService`` resolved them.
+
+        Returns:
+            str: Pipe-terminated fragment, ready to concatenate.
+        """
+        unit = self.viewer.distance_unit
+        text = ""
+        # AGL leads, for the same reason the other exports lead with it: a
+        # report is read by someone who cannot see the launch point.
+        if readings.has_terrain_agl:
+            terrain_agl_str = self._report_value(readings.terrain_agl, unit)
+            text += f"AGL (above the terrain, from DEM): {terrain_agl_str} | "
+        label = FormatHelper.altitude_reference_phrase(readings.reference)
+        text += f"{label}: {self._report_value(readings.value, unit)} | "
+        return text
+
     @staticmethod
     def _report_value(value, unit):
         """Format a metadata value for the report, or "N/A" when there isn't one.
@@ -506,12 +535,6 @@ class PdfGeneratorService:
                 self.viewer.distance_unit,
                 use_terrain=getattr(self.viewer, 'use_terrain_elevation', True),
                 offline_only=False)
-            altitude_label = FormatHelper.altitude_reference_abbreviation(
-                readings.reference)
-            agl_str = self._report_value(readings.value, self.viewer.distance_unit)
-            terrain_agl_str = (
-                self._report_value(readings.terrain_agl, self.viewer.distance_unit)
-                if readings.has_terrain_agl else None)
             orientation_str = self._report_value(image_service.get_camera_yaw(), "°")
             gsd_str = self._report_value(image_service.get_average_gsd(), "cm/px")
 
@@ -520,12 +543,7 @@ class PdfGeneratorService:
 
             # Add metadata as separate paragraph
             metadata_text = f"GPS Coordinates: {position_str} (camera's position, not ground location) | "
-            # AGL first, for the same reason the exports lead with it: a
-            # printed report is read by someone who cannot see the launch
-            # point.
-            if terrain_agl_str is not None:
-                metadata_text += f"AGL: {terrain_agl_str} | "
-            metadata_text += f"{altitude_label}: {agl_str} | "
+            metadata_text += self._altitude_metadata(readings)
             metadata_text += f"Drone Orientation: {orientation_str} | Estimated Average GSD: {gsd_str}"
             self.story.append(Paragraph(metadata_text, self.styles['Normal']))
             self.story.append(Spacer(1, 10))

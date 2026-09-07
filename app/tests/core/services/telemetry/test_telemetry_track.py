@@ -18,7 +18,7 @@ def _sample(t, lat=30.0, lon=-97.0, msl=200.0, agl=15.0, yaw=90.0, captured_at=N
         latitude=lat,
         longitude=lon,
         altitude_msl_m=msl,
-        altitude_agl_m=agl,
+        altitude_ato_m=agl,
         yaw_deg=yaw,
         captured_at=captured_at,
     )
@@ -103,6 +103,59 @@ class TestEnvelope:
         assert env["video_time_seconds"] == pytest.approx(3.5)
         assert env["captured_at_ms"] == 3500
 
+    def test_a_dji_cue_claims_no_terrain_agl(self):
+        """DJI reports height above the takeoff point and nothing else. The
+        terrain key must stay absent so TelemetryEnrichmentService is free
+        to derive one - and so the HUD marks the ATO figure as not
+        terrain-referenced."""
+        env = TelemetryTrack.from_dji_samples([_sample(0.0)]).sample_at(0.0)
+        assert "aircraft_altitude_agl_terrain_m" not in env
+        assert env["aircraft_altitude_agl_m"] == pytest.approx(15.0)
+
+    def test_a_log_that_resolved_agl_reports_it_on_the_terrain_key(self):
+        """A flight log with an "Altitude (m AGL)" column supplies a real
+        terrain-referenced height. It must not arrive on the ATO key, where
+        enrichment would difference it against the DEM a second time."""
+        from core.services.telemetry.FlightLogCsvParser import FlightLogSample
+
+        track = TelemetryTrack.from_samples([FlightLogSample(
+            start_seconds=0.0, end_seconds=0.0,
+            latitude=30.0, longitude=-97.0,
+            altitude_msl_m=310.0, altitude_ato_m=120.0,
+            altitude_agl_terrain_m=95.0,
+        )])
+        env = track.sample_at(0.0)
+        assert env["aircraft_altitude_agl_terrain_m"] == pytest.approx(95.0)
+        assert env["aircraft_altitude_agl_m"] == pytest.approx(120.0)
+        assert env["aircraft_altitude_msl_m"] == pytest.approx(310.0)
+
+    def test_a_resolved_agl_names_the_flight_log_as_its_source(self):
+        """The provenance is what stops enrichment overwriting it, and what
+        stops the HUD marking it as unreferenced."""
+        from core.services.telemetry.FlightLogCsvParser import FlightLogSample
+        from core.services.telemetry.TelemetryEnrichmentService import (
+            AGL_SOURCE_FLIGHT_LOG,
+            AGL_SOURCE_REPORTED,
+            TRUSTED_AGL_SOURCES,
+            has_publisher_agl,
+        )
+
+        track = TelemetryTrack.from_samples([FlightLogSample(
+            start_seconds=0.0, end_seconds=0.0,
+            latitude=30.0, longitude=-97.0,
+            altitude_ato_m=120.0, altitude_agl_terrain_m=95.0,
+        )])
+        env = track.sample_at(0.0)
+        # The literal in TelemetryTrack must stay in step with the constant;
+        # the module cannot import it (the dependency runs the other way).
+        assert env["agl_source"] == AGL_SOURCE_FLIGHT_LOG
+        assert AGL_SOURCE_FLIGHT_LOG in TRUSTED_AGL_SOURCES
+        assert has_publisher_agl(env) is True
+        # And the ATO-only case keeps the historical value.
+        ato_only = TelemetryTrack.from_dji_samples([_sample(0.0)]).sample_at(0.0)
+        assert ato_only["agl_source"] == AGL_SOURCE_REPORTED
+        assert has_publisher_agl(ato_only) is False
+
 
 class TestDerivedMotion:
     def test_first_sample_has_no_speed(self):
@@ -137,9 +190,32 @@ class TestDerivedMotion:
         ])
         assert track.points[1].horizontal_speed_ms is None
 
-    def test_falls_back_to_agl_when_msl_absent(self):
+    def test_falls_back_to_ato_when_msl_absent(self):
         track = TelemetryTrack.from_dji_samples([
             _sample(0.0, msl=None, agl=10.0), _sample(2.0, msl=None, agl=20.0),
+        ])
+        assert track.points[1].vertical_speed_ms == pytest.approx(5.0)
+
+    def test_a_pair_with_no_plane_in_common_yields_no_vertical_speed(self):
+        """Differencing one fix's MSL against the next fix's ATO reports the
+        takeoff elevation as a climb - hundreds of metres in one frame
+        interval. No shared plane means no answer."""
+        track = TelemetryTrack.from_dji_samples([
+            _sample(0.0, msl=200.0, agl=None),
+            _sample(2.0, msl=None, agl=15.0),
+        ])
+        assert track.points[1].vertical_speed_ms is None
+
+    def test_a_terrain_agl_is_the_last_resort_plane(self):
+        from core.services.telemetry.FlightLogCsvParser import FlightLogSample
+
+        track = TelemetryTrack.from_samples([
+            FlightLogSample(start_seconds=0.0, end_seconds=0.0,
+                            latitude=30.0, longitude=-97.0,
+                            altitude_agl_terrain_m=40.0),
+            FlightLogSample(start_seconds=2.0, end_seconds=2.0,
+                            latitude=30.0, longitude=-97.0,
+                            altitude_agl_terrain_m=50.0),
         ])
         assert track.points[1].vertical_speed_ms == pytest.approx(5.0)
 
@@ -209,7 +285,7 @@ class TestWallClock:
             latitude = 30.0
             longitude = -97.0
             altitude_msl_m = 200.0
-            altitude_agl_m = None
+            altitude_ato_m = None
             yaw_deg = None
 
         track = TelemetryTrack.from_samples([_Row()])

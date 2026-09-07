@@ -222,6 +222,29 @@ def test_reset_background_models_reinitializes(service):
     assert service._prev_gray is None
 
 
+def test_cleanup_clears_state_and_the_kernel_cache(service):
+    """cleanup() supersets reset_background_models() by also dropping the
+    cached cv2 structuring elements."""
+    service._prev_gray = _frame()
+    service._detection_masks = [1, 2, 3]
+    service._get_morph_kernel(5)
+    assert service._morph_kernel_cache
+
+    service.cleanup()
+
+    assert service._prev_gray is None
+    assert service._detection_masks == []
+    assert service._morph_kernel_cache == {}
+
+
+def test_cleanup_leaves_the_subtractors_ready_for_the_next_video(service):
+    """The lifecycle calls cleanup() on a video switch, not only at
+    shutdown, so an inert service would stop detecting on the new source."""
+    service.cleanup()
+    assert service._bg_subtractor_mog2 is not None
+    assert service._bg_subtractor_knn is not None
+
+
 # ---------------------------------------------------------------------------
 # _extract_motion_blobs_connected_components
 # ---------------------------------------------------------------------------

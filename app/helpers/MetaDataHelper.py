@@ -251,7 +251,13 @@ class MetaDataHelper:
             file_path (str): Image path.
             lat (float): Latitude in decimal degrees.
             lng (float): Longitude in decimal degrees.
-            alt (float): Altitude in meters.
+            alt (float): Altitude above sea level in meters, or None to
+                leave the altitude tags off the image entirely. EXIF's
+                GPSAltitude is an absolute height, so a caller holding only
+                a takeoff-relative or terrain-relative figure has nothing
+                to put here and must pass None - a relative value written
+                into this tag reads back as a sea-level altitude, and every
+                consumer downstream believes it.
             rel_alt (float, optional): Relative altitude. Defaults to 0.
             timestamp (datetime, optional): Capture time to stamp in the same
                 pass, so a frame that needs both is only rewritten once.
@@ -344,7 +350,8 @@ class MetaDataHelper:
             exif_dict (dict): Mutable EXIF dictionary.
             lat (float): Latitude.
             lng (float): Longitude.
-            alt (float): Altitude.
+            alt (float): Altitude above sea level, or None to write the
+                position without altitude tags.
         """
         def to_deg(value, ref):
             if value < 0:
@@ -361,14 +368,19 @@ class MetaDataHelper:
         lat_deg, lat_ref = to_deg(lat, ["N", "S"])
         lng_deg, lng_ref = to_deg(lng, ["E", "W"])
 
-        exif_dict["GPS"] = {
+        gps = {
             piexif.GPSIFD.GPSLatitudeRef: lat_ref,
             piexif.GPSIFD.GPSLatitude: lat_deg,
             piexif.GPSIFD.GPSLongitudeRef: lng_ref,
             piexif.GPSIFD.GPSLongitude: lng_deg,
-            piexif.GPSIFD.GPSAltitudeRef: 0 if alt >= 0 else 1,
-            piexif.GPSIFD.GPSAltitude: (abs(int(alt * 100)), 100),
         }
+        # An absent tag is read as absent. A tag holding the wrong plane's
+        # figure is read as data, so a caller with no absolute altitude
+        # writes the position alone.
+        if alt is not None:
+            gps[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
+            gps[piexif.GPSIFD.GPSAltitude] = (abs(int(alt * 100)), 100)
+        exif_dict["GPS"] = gps
 
     @staticmethod
     def get_xmp_data_merged(file_path: str) -> dict:

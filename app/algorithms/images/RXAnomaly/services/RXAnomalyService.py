@@ -111,7 +111,12 @@ class RXAnomalyService(AlgorithmService):
             return AnalysisResult(full_path, mask_path, output_dir, areas_of_interest, base_contour_count)
 
         except Exception as e:
-            # print(traceback.format_exc())
+            # LoggerService.error appends sys.exc_info()'s traceback itself
+            # when called from inside an except block, so naming the
+            # algorithm and the file here is the whole of CLAUDE.md 2.4:
+            # a bare str(e) in the results XML says a frame failed but not
+            # which frame or which algorithm.
+            self.logger.error(f"RXAnomaly failed for {full_path}: {e}")
             return AnalysisResult(full_path, error_message=str(e))
 
     def get_threshold(self, sensitivity):
