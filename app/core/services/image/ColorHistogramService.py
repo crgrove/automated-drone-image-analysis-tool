@@ -5,6 +5,8 @@ ColorHistogramService - Histogram and mask utilities for color imagery.
 import cv2
 import numpy as np
 
+from helpers.AOIPixelHelper import circle_box, in_bounds_coordinates
+
 
 class ColorHistogramService:
     """Business logic for color histogram visualization across multiple color spaces."""
@@ -161,12 +163,9 @@ class ColorHistogramService:
         for aoi in areas_of_interest or []:
             pixels = aoi.get('detected_pixels') or []
             if pixels:
-                valid_pixels = [p for p in pixels if isinstance(p, (list, tuple)) and len(p) >= 2]
-                if valid_pixels:
-                    coords = np.asarray(valid_pixels, dtype=np.int64)[:, :2]
-                    xs, ys = coords[:, 0], coords[:, 1]
-                    in_bounds = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
-                    aoi_mask[ys[in_bounds], xs[in_bounds]] = True
+                xs, ys = in_bounds_coordinates(pixels, aoi_mask.shape)
+                if xs is not None:
+                    aoi_mask[ys, xs] = True
                 continue
 
             contour_mask = self._rasterize_contour(aoi.get('contour'), height, width)
@@ -179,13 +178,9 @@ class ColorHistogramService:
             if not center or radius <= 0:
                 continue
 
-            cx, cy = int(center[0]), int(center[1])
-            y_min, y_max = max(0, cy - radius), min(height, cy + radius + 1)
-            x_min, x_max = max(0, cx - radius), min(width, cx + radius + 1)
-            if y_max > y_min and x_max > x_min:
-                ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
-                in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
-                aoi_mask[y_min:y_max, x_min:x_max] |= in_circle
+            box = circle_box(center, radius, aoi_mask.shape)
+            if box is not None:
+                aoi_mask[box.y_slice, box.x_slice] |= box.inside
 
         if not np.any(aoi_mask):
             return np.asarray([], dtype=np.float32)

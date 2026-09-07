@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import platform
 import sys
 import os
 from pathlib import Path
@@ -214,10 +213,19 @@ class AIPersonDetectorService(AlgorithmService):
     def _create_onnx_session(self):
         """Create an ONNX Runtime inference session.
 
-        Tries a hardware-accelerated provider first -- DmlExecutionProvider
-        (DirectML, any DirectX12 GPU) on Windows/Linux, CoreMLExecutionProvider
-        (Neural Engine/GPU) on macOS -- and falls back to CPUExecutionProvider
-        if that fails or if cpu_only is True.
+        Requests a hardware-accelerated provider first -- CoreMLExecutionProvider
+        (Neural Engine/GPU) on macOS, DmlExecutionProvider (DirectML, any
+        DirectX12 GPU) on Windows -- and falls back to CPUExecutionProvider if
+        that fails or if cpu_only is True. Neither accelerator exists on Linux,
+        which reaches CPU by the same route as an accelerator-less Windows box.
+
+        Whichever provider the session ends up on is logged, because ONNX
+        Runtime does not raise when a requested provider is unavailable: it
+        emits a Python warning and silently builds a CPU session. Without the
+        log line there is no way to tell an accelerated run from a CPU one
+        after the fact, and the difference is not only speed -- CoreML routes
+        to the Neural Engine at fp16, so detections near the confidence
+        threshold can differ from a CPU run of the same image.
 
         Returns:
             Loaded ONNX model session (onnxruntime.InferenceSession).
@@ -232,32 +240,67 @@ class AIPersonDetectorService(AlgorithmService):
 
         providers_cpu_only = ["CPUExecutionProvider"]
         if self.cpu_only:
-            return ort.InferenceSession(
-                self.model_path,
-                sess_options=so,
-                providers=providers_cpu_only
+            return self._log_session_providers(
+                ort.InferenceSession(
+                    self.model_path,
+                    sess_options=so,
+                    providers=providers_cpu_only
+                ),
+                requested=providers_cpu_only
             )
 
-        if platform.system() == 'Darwin':
-            accelerated_provider = "CoreMLExecutionProvider"
-        else:
-            accelerated_provider = "DmlExecutionProvider"
+        accelerated_provider = self.accelerated_provider_name()
         providers_accelerated = [accelerated_provider, "CPUExecutionProvider"]
 
         try:
-            return ort.InferenceSession(
-                self.model_path,
-                sess_options=so,
-                providers=providers_accelerated
+            return self._log_session_providers(
+                ort.InferenceSession(
+                    self.model_path,
+                    sess_options=so,
+                    providers=providers_accelerated
+                ),
+                requested=providers_accelerated
             )
         except Exception as e:
             self.logger.warning(f"{accelerated_provider} failed: {e}")
             try:
-                return ort.InferenceSession(
-                    self.model_path,
-                    sess_options=so,
-                    providers=providers_cpu_only
+                return self._log_session_providers(
+                    ort.InferenceSession(
+                        self.model_path,
+                        sess_options=so,
+                        providers=providers_cpu_only
+                    ),
+                    requested=providers_cpu_only
                 )
             except Exception as cpu_e:
                 self.logger.error(f"Failed to load model even with CPUExecutionProvider: {cpu_e}")
                 raise RuntimeError("ONNX model could not be loaded with any provider.")
+
+    @staticmethod
+    def accelerated_provider_name():
+        """Name of the hardware-accelerated ONNX provider for this platform.
+
+        Shared with the controller so the GPU status label and the session
+        cannot disagree about which accelerator ADIAT would even try.
+        """
+        if sys.platform == 'darwin':
+            return "CoreMLExecutionProvider"
+        return "DmlExecutionProvider"
+
+    def _log_session_providers(self, session, requested):
+        """Record which providers the session actually got, and flag a downgrade."""
+        try:
+            active = session.get_providers()
+        except Exception:  # pragma: no cover - a session with no provider list
+            return session
+
+        wanted = [p for p in requested if p != "CPUExecutionProvider"]
+        if wanted and not any(p in active for p in wanted):
+            self.logger.warning(
+                f"AI Person Detector: {wanted[0]} was requested but is not available "
+                f"(ONNX Runtime offers {ort.get_available_providers()}); "
+                f"running on {active}. Detection is unaccelerated but unchanged."
+            )
+        else:
+            self.logger.info(f"AI Person Detector: inference providers {active}")
+        return session

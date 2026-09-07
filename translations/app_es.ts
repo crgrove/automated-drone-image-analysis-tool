@@ -125,12 +125,12 @@ La aceleración por GPU mejora significativamente la velocidad de procesamiento 
 <context>
     <name>AIPersonDetectorController</name>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="82"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="102"/>
         <source>GPU Not Available</source>
         <translation>GPU no disponible</translation>
     </message>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="88"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="97"/>
         <source>GPU Available</source>
         <translation>GPU disponible</translation>
     </message>

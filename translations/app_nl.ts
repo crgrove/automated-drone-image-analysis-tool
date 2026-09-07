@@ -125,12 +125,12 @@ GPU-versnelling verbetert de verwerkingssnelheid van AI-modellen aanzienlijk.</t
 <context>
     <name>AIPersonDetectorController</name>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="82"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="102"/>
         <source>GPU Not Available</source>
         <translation>GPU niet beschikbaar</translation>
     </message>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="88"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="97"/>
         <source>GPU Available</source>
         <translation>GPU beschikbaar</translation>
     </message>

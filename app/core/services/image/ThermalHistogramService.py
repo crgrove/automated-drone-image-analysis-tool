@@ -7,6 +7,8 @@ and generates boolean masks used to filter or highlight pixels in the viewer.
 
 import numpy as np
 
+from helpers.AOIPixelHelper import in_bounds_coordinates
+
 
 class ThermalHistogramService:
     """Business logic for thermal histogram visualization."""
@@ -117,18 +119,14 @@ class ThermalHistogramService:
         if not areas_of_interest:
             return mask
 
-        max_y, max_x = mask.shape
         all_pixels = [
             p
             for aoi in areas_of_interest
             for p in (aoi.get('detected_pixels', []) or [])
-            if isinstance(p, (list, tuple)) and len(p) >= 2
         ]
-        if all_pixels:
-            coords = np.asarray(all_pixels, dtype=np.int64)[:, :2]
-            xs, ys = coords[:, 0], coords[:, 1]
-            in_bounds = (xs >= 0) & (xs < max_x) & (ys >= 0) & (ys < max_y)
-            mask[ys[in_bounds], xs[in_bounds]] = True
+        xs, ys = in_bounds_coordinates(all_pixels, mask.shape)
+        if xs is not None:
+            mask[ys, xs] = True
 
         return mask
 

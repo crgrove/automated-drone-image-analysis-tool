@@ -125,12 +125,12 @@ GPU acceleration significantly improves processing speed for AI models.</transla
 <context>
     <name>AIPersonDetectorController</name>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="82"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="102"/>
         <source>GPU Not Available</source>
         <translation>GPU Not Available</translation>
     </message>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="88"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="97"/>
         <source>GPU Available</source>
         <translation>GPU Available</translation>
     </message>

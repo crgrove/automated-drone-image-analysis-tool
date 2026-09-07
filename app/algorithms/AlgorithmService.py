@@ -10,6 +10,7 @@ import tifffile
 from pathlib import Path
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+from helpers.AOIPixelHelper import circle_box, in_bounds_coordinates, sample_aoi_pixels
 from helpers.MetaDataHelper import MetaDataHelper
 
 from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
@@ -91,8 +92,10 @@ class AlgorithmService:
         """
         Convert an AOI's detected_pixels list to in-bounds coordinate arrays.
 
-        Replaces the common "loop over detected_pixels, transform, bounds-check,
-        append" pattern with vectorized numpy indexing.
+        Thin wrapper over :func:`helpers.AOIPixelHelper.in_bounds_coordinates`
+        that supplies this service's scale factor. The shared helper is the one
+        implementation of this operation; see its module docstring for why
+        ragged input must not raise.
 
         Args:
             detected_pixels: List of (x, y) pixel tuples.
@@ -105,24 +108,8 @@ class AlgorithmService:
             Tuple[np.ndarray, np.ndarray] or Tuple[None, None]: (xs, ys) int arrays of
             valid, in-bounds coordinates, or (None, None) if there are none.
         """
-        if detected_pixels is None or len(detected_pixels) == 0:
-            return None, None
-
-        coords = np.asarray(detected_pixels, dtype=np.int64)
-        if coords.ndim != 2 or coords.shape[1] < 2:
-            return None, None
-
-        xs, ys = coords[:, 0], coords[:, 1]
-        if apply_scale_factor and self.scale_factor != 1.0:
-            xs = (xs.astype(np.float64) * self.scale_factor).astype(np.int64)
-            ys = (ys.astype(np.float64) * self.scale_factor).astype(np.int64)
-
-        max_h, max_w = shape[0], shape[1]
-        in_bounds = (xs >= 0) & (xs < max_w) & (ys >= 0) & (ys < max_h)
-        if not np.any(in_bounds):
-            return None, None
-
-        return xs[in_bounds], ys[in_bounds]
+        scale = self.scale_factor if apply_scale_factor else 1.0
+        return in_bounds_coordinates(detected_pixels, shape, scale_factor=scale)
 
     def process_image(self, img, full_path, input_dir, output_dir):
         """
@@ -382,18 +369,11 @@ class AlgorithmService:
             # Restrict to this AOI's circular ROI, working only within its
             # local bounding box rather than scanning a full-image-sized mask
             # (the latter turned a per-AOI cost into an O(image size) one).
-            center = aoi['center']
-            radius = aoi['radius']
-            cx, cy = center
-            img_h, img_w = hsv_img.shape[:2]
-            y_min, y_max = max(0, cy - radius), min(img_h, cy + radius + 1)
-            x_min, x_max = max(0, cx - radius), min(img_w, cx + radius + 1)
-            if y_max <= y_min or x_max <= x_min:
+            box = circle_box(aoi['center'], aoi['radius'], hsv_img.shape)
+            if box is None:
                 continue
 
-            ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
-            in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
-            roi_hue = hsv_img[y_min:y_max, x_min:x_max, 0]
+            roi_hue = hsv_img[box.y_slice, box.x_slice, 0]
 
             # Handle hue wraparound (hue is circular: 0-179 in OpenCV)
             if hue_min < 0:
@@ -408,7 +388,7 @@ class AlgorithmService:
                 # No wraparound - simple range check
                 hue_match = (roi_hue >= hue_min) & (roi_hue <= hue_max)
 
-            expanded_mask[y_min:y_max, x_min:x_max][in_circle & hue_match] = 255
+            expanded_mask[box.y_slice, box.x_slice][box.inside & hue_match] = 255
 
         return expanded_mask
 
@@ -532,47 +512,12 @@ class AlgorithmService:
         import colorsys
 
         try:
-            height, width = img_rgb.shape[:2]
-
-            center = aoi.get('center', [0, 0])
-            radius = aoi.get('radius', 0)
-            cx, cy = int(center[0]), int(center[1])
-
-            # Collect RGB values within the AOI (vectorized: the previous
-            # per-pixel Python loops were a measurable cost per AOI on 48MP
-            # frames, multiplied by every AOI of every image in a batch)
-
-            # If we have detected pixels, use those
-            if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                try:
-                    pts = np.asarray(aoi['detected_pixels'], dtype=np.int64)
-                    if pts.ndim != 2 or pts.shape[1] < 2:
-                        raise ValueError('unexpected detected_pixels shape')
-                    xs, ys = pts[:, 0], pts[:, 1]
-                    valid = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
-                    colors = img_rgb[ys[valid], xs[valid]]
-                except (ValueError, TypeError):
-                    # Ragged/malformed entries: fall back to the tolerant
-                    # per-pixel path that skips bad entries instead of failing
-                    fallback = []
-                    for pixel in aoi['detected_pixels']:
-                        if isinstance(pixel, (list, tuple)) and len(pixel) >= 2:
-                            px, py = int(pixel[0]), int(pixel[1])
-                            if 0 <= py < height and 0 <= px < width:
-                                fallback.append(img_rgb[py, px])
-                    colors = np.asarray(fallback)
-            # Otherwise sample within the circle
-            else:
-                y_min = max(0, cy - radius)
-                y_max = min(height, cy + radius + 1)
-                x_min = max(0, cx - radius)
-                x_max = min(width, cx + radius + 1)
-
-                ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
-                in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
-                colors = img_rgb[y_min:y_max, x_min:x_max][in_circle]
-
-            if len(colors) == 0:
+            # Collect RGB values within the AOI. Both paths are vectorized in
+            # AOIPixelHelper: the per-pixel Python loops they replaced were a
+            # measurable cost per AOI on 48MP frames, multiplied by every AOI
+            # of every image in a batch.
+            colors = sample_aoi_pixels(img_rgb, aoi)
+            if colors is None or len(colors) == 0:
                 return None
 
             # Calculate average RGB

@@ -4,6 +4,7 @@ import colorsys
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
 from pathlib import Path
+from helpers.AOIPixelHelper import sample_aoi_pixels
 from helpers.MetaDataHelper import MetaDataHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.PhotogrammetryHelper import (
@@ -879,36 +880,13 @@ class AOIService:
         """
         try:
             img_array = self.image_service.img_array
-            height, width = img_array.shape[:2]
 
-            center = aoi.get('center', [0, 0])
-            radius = aoi.get('radius', 0)
-            cx, cy = center
+            # Detected pixels if the AOI has them, otherwise everything inside
+            # its circle. Shared with AlgorithmService's in-memory equivalent
+            # so the two cannot drift apart on bounds or malformed input.
+            colors = sample_aoi_pixels(img_array, aoi)
 
-            # Collect RGB values within the AOI
-            colors = []
-
-            # If we have detected pixels, use those
-            if 'detected_pixels' in aoi and aoi['detected_pixels']:
-                valid_pixels = [
-                    p for p in aoi['detected_pixels']
-                    if isinstance(p, (list, tuple)) and len(p) >= 2
-                ]
-                if valid_pixels:
-                    coords = np.asarray(valid_pixels, dtype=np.int64)[:, :2]
-                    px_arr, py_arr = coords[:, 0], coords[:, 1]
-                    in_bounds = (px_arr >= 0) & (px_arr < width) & (py_arr >= 0) & (py_arr < height)
-                    colors = img_array[py_arr[in_bounds], px_arr[in_bounds]]
-            # Otherwise sample within the circle
-            else:
-                y_min, y_max = max(0, cy - radius), min(height, cy + radius + 1)
-                x_min, x_max = max(0, cx - radius), min(width, cx + radius + 1)
-                if y_max > y_min and x_max > x_min:
-                    ys, xs = np.ogrid[y_min:y_max, x_min:x_max]
-                    in_circle = (xs - cx) ** 2 + (ys - cy) ** 2 <= radius ** 2
-                    colors = img_array[y_min:y_max, x_min:x_max][in_circle]
-
-            if len(colors) == 0:
+            if colors is None or len(colors) == 0:
                 return None
 
             # Calculate average RGB

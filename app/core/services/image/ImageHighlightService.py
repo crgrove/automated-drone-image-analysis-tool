@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 import tifffile
 
+from helpers.AOIPixelHelper import in_bounds_coordinates
+
 
 class ImageHighlightService:
     """
@@ -93,18 +95,14 @@ class ImageHighlightService:
         if not (len(highlighted_image.shape) == 3 and highlighted_image.shape[2] == 3):
             return highlighted_image
 
-        height, width = highlighted_image.shape[:2]
         all_pixels = [
             p
             for aoi in (areas_of_interest or [])
             for p in (aoi.get("detected_pixels") or [])
-            if isinstance(p, (list, tuple)) and len(p) >= 2
         ]
-        if all_pixels:
-            coords = np.asarray(all_pixels, dtype=np.int64)[:, :2]
-            xs, ys = coords[:, 0], coords[:, 1]
-            in_bounds = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
-            highlighted_image[ys[in_bounds], xs[in_bounds]] = highlight_color_array
+        xs, ys = in_bounds_coordinates(all_pixels, highlighted_image.shape)
+        if xs is not None:
+            highlighted_image[ys, xs] = highlight_color_array
 
         return highlighted_image
 
