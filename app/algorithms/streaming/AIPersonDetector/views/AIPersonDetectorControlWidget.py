@@ -77,7 +77,7 @@ class AIPersonDetectorControlWidget(TranslationMixin, QWidget):
 
         model_group = QGroupBox(self.tr("Model"))
         model_layout = QVBoxLayout(model_group)
-        self.cpu_only_checkbox = QCheckBox(self.tr("Force CPU (disable DirectML)"))
+        self.cpu_only_checkbox = QCheckBox(self.tr("Force CPU (disable hardware acceleration)"))
         self.high_res_checkbox = QCheckBox(self.tr("Use 1024 model (higher quality, slower)"))
         model_layout.addWidget(self.cpu_only_checkbox)
         model_layout.addWidget(self.high_res_checkbox)
