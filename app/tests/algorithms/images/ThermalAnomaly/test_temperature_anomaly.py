@@ -2,7 +2,7 @@ import platform
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QDialog
 from unittest.mock import patch, MagicMock
 
 
@@ -20,54 +20,41 @@ def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_availabl
     algorithmWidget = main_window.algorithmWidget
     algorithmWidget.anomalySpinBox.setValue(6)
     algorithmWidget.anomalyTypeComboBox.setCurrentText('Above Mean')
-    # colorMapComboBox doesn't exist in ThermalAnomalyController - color map is handled elsewhere
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
+
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
     assert not main_window.startButton.isEnabled()
     assert main_window.cancelButton.isEnabled()
-    assert not main_window.startButton.isEnabled()
-    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=200000)
-    assert main_window.startButton.isEnabled()
+    # A generous budget for the slow Windows VM; Start re-enables when the run finishes.
+    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=200000)
     assert not main_window.cancelButton.isEnabled()
-    assert main_window.viewResultsButton.isEnabled()
-    # Patch BearingRecoveryDialog to automatically skip (returns Rejected = Skip)
-    # This prevents the modal dialog from blocking test execution
-    # Create a mock dialog that returns Rejected when exec() is called (Skip action)
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
+
     mock_dialog = MagicMock()
     mock_dialog.exec.return_value = QDialog.DialogCode.Rejected
     mock_dialog.get_results.return_value = None
 
-    # Patch where the dialog is instantiated in BearingRecoveryController
     with patch('core.controllers.images.viewer.bearing.BearingRecoveryController.BearingRecoveryDialog', return_value=mock_dialog):
         qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
-
-        # Wait for viewer to initialize (dialog.exec() is mocked, so it won't block)
         qtbot.waitUntil(lambda: main_window.viewer is not None, timeout=5000)
 
     assert main_window.viewer is not None
     viewer = main_window.viewer
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert len(viewer.images) > 0
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
+    # No status bar assert (the RGB E2Es keep one): the thermal fixtures carry
+    # no GPS, altitude or gimbal yaw, so their status bar is legitimately empty.
+
+    start_index = viewer.current_image
     qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert viewer.current_image == (start_index + 1) % len(viewer.images)
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
+
     qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert viewer.current_image == start_index
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
