@@ -48,17 +48,16 @@ def testTemperatureResidualAnomalyE2E(main_window, testData, qtbot, thermal_sdk_
     assert len(viewer.images) > 0
     assert viewer.main_image.hasImage()
     assert viewer.aoiListWidget.count() > 0
-    assert viewer.statusBar.text() != ""
+    # No status bar assert (the RGB E2Es keep one): the thermal fixtures carry
+    # no GPS, altitude or gimbal yaw, so their status bar is legitimately empty.
 
     start_index = viewer.current_image
     qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
     assert viewer.current_image == (start_index + 1) % len(viewer.images)
     assert viewer.main_image.hasImage()
     assert viewer.aoiListWidget.count() > 0
-    assert viewer.statusBar.text() != ""
 
     qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
     assert viewer.current_image == start_index
     assert viewer.main_image.hasImage()
     assert viewer.aoiListWidget.count() > 0
-    assert viewer.statusBar.text() != ""
