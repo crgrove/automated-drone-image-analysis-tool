@@ -130,7 +130,7 @@ class CoverageResult:
             from pyproj import Transformer
             self._transformer = Transformer.from_crs("EPSG:4326", self.crs, always_xy=True)
         x, y = self._transformer.transform(lon, lat)
-        col, row = (~self.transform) * (x, y)
+        col, row = (~self.transform) @ (x, y)
         r, c = int(row), int(col)
         if not (0 <= r < self.pod.shape[0] and 0 <= c < self.pod.shape[1]):
             return None
