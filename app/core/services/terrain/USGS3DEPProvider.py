@@ -324,7 +324,7 @@ class USGS3DEPProvider(ElevationProvider):
         """Bilinear sample of the first band at projected coordinate (x, y)."""
         from rasterio.windows import Window
         # Convert projected (x, y) to fractional (row, col)
-        col_f, row_f = ~ds.transform * (x, y)
+        col_f, row_f = ~ds.transform @ (x, y)
         col_i = int(col_f)
         row_i = int(row_f)
         fx = col_f - col_i

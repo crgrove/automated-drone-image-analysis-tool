@@ -1,4 +1,3 @@
-from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 
 
@@ -17,41 +16,32 @@ def testAIPersonDetectorE2E(main_window, testData, qtbot):
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
-    qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
-    qtbot.wait(100)  # Small wait for UI to update
 
+    qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
     assert not main_window.startButton.isEnabled()
     assert main_window.cancelButton.isEnabled()
-
-    # ONNX inference on CPU can exceed 20s; Start re-enables when the run finishes,
-    # while View Results stays off unless at least one image had AOIs.
-    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
-    assert main_window.startButton.isEnabled()
+    # A generous budget for the slow Windows VM; Start re-enables when the run finishes.
+    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=200000)
     assert not main_window.cancelButton.isEnabled()
-    if main_window.viewResultsButton.isEnabled():
-        qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
-        assert main_window.viewer is not None
-        viewer = main_window.viewer
-        assert viewer.fileNameLabel.text() is not None
-        assert viewer.images is not None
-        assert len(viewer.images) != 0
-        assert viewer.main_image is not None
-        assert viewer.aoiListWidget is not None
-        assert viewer.aoiListWidget.count() != 0
-        assert viewer.statusBar.text() != ""
-        qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
-        assert viewer.fileNameLabel.text() is not None
-        assert viewer.images is not None
-        assert len(viewer.images) != 0
-        assert viewer.main_image is not None
-        assert viewer.aoiListWidget is not None
-        assert viewer.aoiListWidget.count() != 0
-        assert viewer.statusBar.text() != ""
-        qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
-        assert viewer.fileNameLabel.text() is not None
-        assert viewer.images is not None
-        assert len(viewer.images) != 0
-        assert viewer.main_image is not None
-        assert viewer.aoiListWidget is not None
-        assert viewer.aoiListWidget.count() != 0
-        assert viewer.statusBar.text() != ""
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
+
+    qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
+    assert main_window.viewer is not None
+    viewer = main_window.viewer
+    assert len(viewer.images) > 0
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
+    assert viewer.statusBar.text() != ""
+
+    start_index = viewer.current_image
+    qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
+    assert viewer.current_image == (start_index + 1) % len(viewer.images)
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
+    assert viewer.statusBar.text() != ""
+
+    qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
+    assert viewer.current_image == start_index
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
+    assert viewer.statusBar.text() != ""

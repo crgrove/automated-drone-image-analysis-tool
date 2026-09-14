@@ -14,7 +14,6 @@ def testMatchedFilterE2E(main_window, testData, qtbot):
     # Use new wizard-based API
     if hasattr(algorithmWidget, 'add_color_row'):
         color = QColor(0, 170, 255)
-        # Use default threshold of 0.3 (more reasonable than 0.07)
         algorithmWidget.add_color_row(color, threshold=0.3)
     else:
         # Legacy fallback
@@ -24,40 +23,32 @@ def testMatchedFilterE2E(main_window, testData, qtbot):
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
     assert not main_window.viewResultsButton.isEnabled()
+
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
     assert not main_window.startButton.isEnabled()
     assert main_window.cancelButton.isEnabled()
-    assert not main_window.startButton.isEnabled()
-    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
-    assert main_window.startButton.isEnabled()
+    # A generous budget for the slow Windows VM; Start re-enables when the run finishes.
+    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=200000)
     assert not main_window.cancelButton.isEnabled()
-    assert main_window.viewResultsButton.isEnabled()
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
+
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
     assert main_window.viewer is not None
     viewer = main_window.viewer
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert len(viewer.images) > 0
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
     assert viewer.statusBar.text() != ""
+
+    start_index = viewer.current_image
     qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert viewer.current_image == (start_index + 1) % len(viewer.images)
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
     assert viewer.statusBar.text() != ""
+
     qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-    assert viewer.main_image is not None
-    assert viewer.aoiListWidget is not None
-    assert viewer.aoiListWidget.count() != 0
-    assert viewer.aoiListWidget.count() != 0
+    assert viewer.current_image == start_index
+    assert viewer.main_image.hasImage()
+    assert viewer.aoiListWidget.count() > 0
     assert viewer.statusBar.text() != ""

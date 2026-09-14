@@ -254,7 +254,7 @@ def read_window(ds, spec: GridSpec, nodata=None, pad_px: int = 4):
         if raw.size == 0:
             return None, None
         # Scale the window transform so the decimated array stays registered.
-        transform = ds.window_transform(win) * Affine.scale(
+        transform = ds.window_transform(win) @ Affine.scale(
             win.width / out_w, win.height / out_h)
         return raw, transform
 

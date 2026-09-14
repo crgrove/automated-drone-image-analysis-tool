@@ -57,11 +57,10 @@ def _open_viewer_with_sample_data(main_window, testData, qtbot):
             algorithmWidget.update_colors()
 
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
-    qtbot.wait(100)
-    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
-
-    if not main_window.viewResultsButton.isEnabled():
-        pytest.skip("No AOIs found - viewer cannot be opened without results")
+    qtbot.waitUntil(lambda: not main_window.startButton.isEnabled(), timeout=5000)
+    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=200000)
+    assert not main_window.cancelButton.isEnabled()
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
     assert main_window.viewer is not None
@@ -118,34 +117,22 @@ def testBasicEndToEnd(main_window, testData, qtbot):
 
     # Start processing
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
-    assert not main_window.startButton.isEnabled()
+    qtbot.waitUntil(lambda: not main_window.startButton.isEnabled(), timeout=5000)
     assert main_window.cancelButton.isEnabled()
-
-    # Wait for processing to complete
-    qtbot.waitUntil(lambda: main_window.viewResultsButton.isEnabled(), timeout=20000)
-    assert main_window.startButton.isEnabled()
+    qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
     assert not main_window.cancelButton.isEnabled()
-    assert main_window.viewResultsButton.isEnabled()
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
     # Open viewer
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
     assert main_window.viewer is not None
     viewer = main_window.viewer
-
-    # Verify viewer has loaded data
-    assert viewer.fileNameLabel is not None
-    assert viewer.fileNameLabel.text() is not None
-    assert viewer.images is not None
-    assert len(viewer.images) != 0
-
-    # Test navigation
-    if hasattr(viewer, 'nextImageButton'):
-        qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
-        assert viewer.fileNameLabel.text() is not None
-
-    if hasattr(viewer, 'previousImageButton'):
-        qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
-        assert viewer.fileNameLabel.text() is not None
+    assert viewer.images and len(viewer.images) > 0
+    assert viewer.aoiListWidget.count() > 0
+    qtbot.mouseClick(viewer.nextImageButton, Qt.MouseButton.LeftButton)
+    assert viewer.aoiListWidget.count() > 0
+    qtbot.mouseClick(viewer.previousImageButton, Qt.MouseButton.LeftButton)
+    assert viewer.aoiListWidget.count() > 0
 
 
 def test_viewer_toolbar_buttons(main_window, testData, qtbot):
@@ -229,13 +216,11 @@ def testNormalizeHistogram(main_window, testData, qtbot):
             main_window.histogramLine.setText(histogram_path)
 
         qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
-        qtbot.wait(100)  # Small wait for UI to update
-
-        # Wait for processing to complete (increased timeout to 60 seconds)
-        # Processing is complete when start button is enabled again (regardless of whether AOIs were found)
+        qtbot.waitUntil(lambda: not main_window.startButton.isEnabled(), timeout=5000)
         qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
         assert main_window.startButton.isEnabled()
         assert not main_window.cancelButton.isEnabled()
+        assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
 
 def testKmlCollection(main_window, testData, qtbot):
@@ -266,17 +251,11 @@ def testKmlCollection(main_window, testData, qtbot):
 
     # Run the analysis and wait for results
     qtbot.mouseClick(main_window.startButton, Qt.MouseButton.LeftButton)
-    qtbot.wait(100)  # Small wait for UI to update
-
-    # Wait for processing to complete (increased timeout to 60 seconds)
-    # Processing is complete when start button is enabled again (regardless of whether AOIs were found)
+    qtbot.waitUntil(lambda: not main_window.startButton.isEnabled(), timeout=5000)
     qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
-
-    # Only proceed if AOIs were found (viewResultsButton is enabled)
-    if not main_window.viewResultsButton.isEnabled():
-        pytest.skip("No AOIs found - cannot test KML export without results")
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
     qtbot.mouseClick(main_window.viewResultsButton, Qt.MouseButton.LeftButton)
     assert main_window.viewer is not None
@@ -327,17 +306,11 @@ def testPdfGenerator(main_window, testData, qtbot):
 
     # Ensure Viewer is initialized and ready
     qtbot.mouseClick(main_window.startButton, Qt.LeftButton)
-    qtbot.wait(100)  # Small wait for UI to update
-
-    # Wait for processing to complete (increased timeout to 60 seconds)
-    # Processing is complete when start button is enabled again (regardless of whether AOIs were found)
+    qtbot.waitUntil(lambda: not main_window.startButton.isEnabled(), timeout=5000)
     qtbot.waitUntil(lambda: main_window.startButton.isEnabled(), timeout=60000)
     assert main_window.startButton.isEnabled()
     assert not main_window.cancelButton.isEnabled()
-
-    # Only proceed if AOIs were found (viewResultsButton is enabled)
-    if not main_window.viewResultsButton.isEnabled():
-        pytest.skip("No AOIs found - cannot test PDF generation without results")
+    assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
     qtbot.mouseClick(main_window.viewResultsButton, Qt.LeftButton)
 
