@@ -2,7 +2,7 @@ PySide6==6.10.2
 opencv-python
 numpy
 qimage2ndarray
-scipy==1.15.3
+scipy==1.16.3
 spectral
 piexif
 simplekml
