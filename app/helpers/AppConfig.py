@@ -13,6 +13,13 @@ Layout (current keys; more may be added later):
     [signaling]
     base_url = "https://signal.adiat.app"
 
+    [webrtc]
+    # ICE servers for Flight Viewer peer connections. Omit the key to
+    # accept ADIAT's default STUN server; set it to [] for host
+    # candidates only (LAN-only, no third-party contact). See
+    # core.services.streaming.ice_config.
+    ice_servers = ["stun:stun.cloudflare.com:3478"]
+
 Location:
 
 * Windows / macOS — ``~/AppData/Roaming/ADIAT/config.toml`` (matches the

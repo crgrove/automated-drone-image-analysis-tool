@@ -22,6 +22,7 @@ from PySide6.QtCore import QObject, QSettings, Signal
 
 from core.controllers.flight.DetectionThumbCropper import DetectionThumbCropper
 from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
 from core.services.streaming.DetectionFeedService import DetectionFeedService
 from core.services.streaming.FlightSessionStore import FlightSessionStore
 from core.services.streaming.RecordingLibrary import RecordingLibrary
@@ -107,11 +108,15 @@ class FlightTileController(QObject):
         signaling: SignalingChannel,
         session_store: Optional[FlightSessionStore] = None,
         resume_session_id: Optional[str] = None,
+        settings_service: Optional[SettingsService] = None,
         parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.logger = LoggerService()
         self._signaling = signaling
+        # Read at connect time rather than cached here, so toggling the
+        # preference takes effect without restarting the viewer.
+        self._settings_service = settings_service or SettingsService()
         # Per-session persistence (plan §20). Each tile writes its
         # detections to the shared store; on a re-launch the same
         # ``session_id`` triggers a resume handshake + backfill.
@@ -210,7 +215,34 @@ class FlightTileController(QObject):
     # pairing dialog signal handlers
     # ------------------------------------------------------------------
 
+    def _is_offline_only(self) -> bool:
+        """Return whether Offline Only mode is enabled."""
+        try:
+            return self._settings_service.get_bool_setting("OfflineOnly", False)
+        except Exception:  # pragma: no cover - defensive
+            return False
+
     def _on_code_submitted(self, code: str) -> None:
+        # Offline Only promises the app "skips any network calls". Pairing
+        # is three calls to signal.adiat.app plus ICE to the publisher, so
+        # it is refused rather than left to fail as a timeout the operator
+        # would read as a bad code. Refusing here — before the service is
+        # constructed — also keeps the WebRTC thread from ever starting.
+        # The message names the setting because that is the one thing a
+        # connection failure cannot tell the operator by itself.
+        if self._is_offline_only():
+            self.logger.info(
+                "FlightTileController: pairing refused - Offline Only mode is enabled"
+            )
+            if self._dialog is not None:
+                self._dialog.show_code_error(
+                    self.tr(
+                        "Offline Only mode is enabled, so ADIAT cannot connect "
+                        "to a drone. Turn it off in Preferences to pair."
+                    )
+                )
+            return
+
         self._pairing_code = code
         if self._dialog is not None:
             self._dialog.show_negotiating(

@@ -125,12 +125,12 @@ L&apos;accelerazione GPU migliora significativamente la velocità di elaborazion
 <context>
     <name>AIPersonDetectorController</name>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="102"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="103"/>
         <source>GPU Not Available</source>
         <translation>GPU non disponibile</translation>
     </message>
     <message>
-        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="97"/>
+        <location filename="../app/algorithms/images/AIPersonDetector/controllers/AIPersonDetectorController.py" line="98"/>
         <source>GPU Available</source>
         <translation>GPU disponibile</translation>
     </message>
@@ -4973,7 +4973,12 @@ non valida</translation>
 <context>
     <name>FlightMapView</name>
     <message>
-        <location filename="../app/core/views/components/FlightMapView.py" line="468"/>
+        <location filename="../app/core/views/components/FlightMapView.py" line="471"/>
+        <source>Offline Only mode — basemap tiles not loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/components/FlightMapView.py" line="526"/>
         <source>QtWebEngine not available — install PySide6-Addons for the interactive map. Showing list view instead.</source>
         <translation type="unfinished">QtWebEngine non disponibile — installa PySide6-Addons per la mappa interattiva. Verrà mostrata la vista elenco.</translation>
     </message>
@@ -5213,22 +5218,22 @@ non valida</translation>
 <context>
     <name>FlightTileController</name>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="219"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="251"/>
         <source>Looking up code {code} and connecting to the drone.</source>
         <translation>Ricerca del codice {code} e connessione al drone.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="293"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="325"/>
         <source>Name this device</source>
         <translation>Assegna un nome a questo dispositivo</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="297"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="329"/>
         <source>Give this publisher a name so you can recognise it next time (e.g. &apos;Operator A&apos;s M4E&apos;).</source>
         <translation>Dai un nome a questo emittente per riconoscerlo la prossima volta (ad es. &apos;M4E operatore A&apos;).</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="318"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="350"/>
         <source>Device &apos;{label}&apos; presented a different DTLS fingerprint than the last time you paired with it. This could mean the controller was reset, a different controller is using the label, or somebody is impersonating it.
 
 Reject if you weren&apos;t expecting this.</source>
@@ -5237,57 +5242,62 @@ Reject if you weren&apos;t expecting this.</source>
 Rifiuta se non te lo aspettavi.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="483"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="515"/>
         <source>Pairing ended before video could start. Ask the operator to generate a new code and try again.</source>
         <translation>L&apos;abbinamento è terminato prima dell&apos;avvio del video. Chiedi all&apos;operatore di generare un nuovo codice e riprova.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1007"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1039"/>
         <source>Waiting for video before recording can start</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1017"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1049"/>
         <source>Choose recording folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1109"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1141"/>
         <source>REC ● {filename}</source>
         <translation type="unfinished">REC ● {filename}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1124"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1156"/>
         <source>Recording saved</source>
         <translation type="unfinished">Registrazione salvata</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1157"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1189"/>
         <source>No finished recording to replay yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1180"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1212"/>
         <source>Could not open replay: {error}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1187"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="1219"/>
         <source>Recording error: {message}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="321"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="353"/>
         <source>Fingerprint mismatch — &apos;{label}&apos;</source>
         <translation>Impronta non corrispondente — &apos;{label}&apos;</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="332"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="243"/>
+        <source>Offline Only mode is enabled, so ADIAT cannot connect to a drone. Turn it off in Preferences to pair.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="364"/>
         <source>Fingerprint changed on {ts}; previous identity was overwritten after operator review.</source>
         <translation>Impronta modificata il {ts}; l&apos;identità precedente è stata sovrascritta dopo la verifica dell&apos;operatore.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/flight/FlightTileController.py" line="425"/>
+        <location filename="../app/core/controllers/flight/FlightTileController.py" line="457"/>
         <source>This drone already has {current} viewers connected (maximum {limit}). Ask one to disconnect, or try again later.</source>
         <translation>Questo drone ha già {current} visualizzatori connessi (massimo {limit}). Chiedi a uno di disconnettersi oppure riprova più tardi.</translation>
     </message>
@@ -15893,94 +15903,94 @@ I prodotti GeoTIFF POD sono stati comunque scritti accanto all&apos;esportazione
 <context>
     <name>UpscaleDialog</name>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="187"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="367"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="193"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="373"/>
         <source>Upscaled View - {level}x</source>
         <translation>Vista Upscalata - {level}x</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="229"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="235"/>
         <source>Upscale Method:</source>
         <translation>Metodo di Upscale:</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="233"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="239"/>
         <source>Auto (Recommended)</source>
         <translation>Automatico (Consigliato)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="234"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="240"/>
         <source>Fast (Lanczos)</source>
         <translation>Veloce (Lanczos)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="236"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="242"/>
         <source>Balanced (OpenCV EDSR)</source>
         <translation>Bilanciato (OpenCV EDSR)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="264"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="270"/>
         <source>Upres Again</source>
         <translation>Aumenta Risoluzione di Nuovo</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="267"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="273"/>
         <source>Upscale the currently visible portion by {factor}x</source>
         <translation>Effettua l&apos;upscale della porzione visibile corrente di {factor}x</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="271"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="277"/>
         <source>Quit</source>
         <translation>Esci</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="274"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="280"/>
         <source>Close this upscale window</source>
         <translation>Chiudi questa finestra di upscale</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="306"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="312"/>
         <source>Resolution: {width} × {height} pixels | Original: {orig_w} × {orig_h} pixels | Upscale: {level}x | Use mouse wheel to zoom, right-click to pan</source>
         <translation>Risoluzione: {width} × {height} pixel | Originale: {orig_w} × {orig_h} pixel | Upscale: {level}x | Usa la rotella del mouse per lo zoom, tasto destro per spostare</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="375"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="387"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="467"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="532"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="564"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="381"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="393"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="473"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="538"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="570"/>
         <source>Upscale Error</source>
         <translation>Errore di Upscale</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="376"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="382"/>
         <source>Error during initial upscale: {error}</source>
         <translation>Errore durante l&apos;upscale iniziale: {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="389"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="395"/>
         <source>Unable to extract visible image portion.</source>
         <translation>Impossibile estrarre la porzione visibile dell&apos;immagine.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="397"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="403"/>
         <source>Maximum Upscale Reached</source>
         <translation>Upscale Massimo Raggiunto</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="401"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="407"/>
         <source>Maximum upscale level of {level}x has been reached.
 Further upscaling is not allowed to prevent memory issues.</source>
         <translation>È stato raggiunto il livello massimo di upscale di {level}x.
 Ulteriori upscaling non sono consentiti per prevenire problemi di memoria.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="413"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="419"/>
         <source>Image Too Large</source>
         <translation>Immagine Troppo Grande</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="418"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="424"/>
         <source>Upscaling would result in an image of {width}×{height} pixels.
 Maximum allowed dimension is {max_dim} pixels.
 
@@ -15991,27 +16001,27 @@ La dimensione massima consentita è {max_dim} pixel.
 Prova a ingrandire una zona più piccola prima di effettuare l&apos;upscale.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="426"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="432"/>
         <source>Image Too Small</source>
         <translation>Immagine Troppo Piccola</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="430"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="436"/>
         <source>Visible portion is too small ({width}×{height} pixels).
 Please zoom in to a larger area before upscaling.</source>
         <translation>La porzione visibile è troppo piccola ({width}×{height} pixel).
 Per favore ingrandisci un&apos;area più grande prima di effettuare l&apos;upscale.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="468"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="565"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="474"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="571"/>
         <source>An error occurred during upscaling:
 {error}</source>
         <translation>Si è verificato un errore durante l&apos;upscale:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="490"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="496"/>
         <source>Upscaling image with AI enhancement...
 From {width}×{height} to {new_width}×{new_height} pixels
 This may take a few seconds.</source>
@@ -16020,39 +16030,51 @@ Da {width}×{height} a {new_width}×{new_height} pixel
 Potrebbe richiedere alcuni secondi.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="499"/>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="760"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="505"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="777"/>
         <source>Cancel</source>
         <translation>Annulla</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="504"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="510"/>
         <source>Upscaling (OpenCV EDSR)</source>
         <translation>Upscale (OpenCV EDSR)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="533"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="539"/>
         <source>Failed to start upscaling:
 {error}</source>
         <translation>Impossibile avviare l&apos;upscale:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="603"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="609"/>
         <source>Method Not Available</source>
         <translation>Metodo Non Disponibile</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="607"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="613"/>
         <source>Real-ESRGAN is not yet implemented.
 Falling back to Lanczos interpolation.</source>
         <translation>Real-ESRGAN non è ancora implementato.
 Si torna all&apos;interpolazione Lanczos.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="759"/>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="776"/>
         <source>Downloading {model_name} model...</source>
         <translation>Download del modello {model_name}...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="823"/>
+        <source>AI Upscaling Unavailable Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/UpscaleDialog.py" line="830"/>
+        <source>The AI upscaling model has not been downloaded yet, and Offline Only mode is enabled.
+
+Using Lanczos interpolation instead. Turn off Offline Only mode in Preferences to download the model.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

@@ -106,11 +106,21 @@ def load_leaflet_assets() -> tuple:
     return (_inline_css_images(css, directory), js)
 
 
-def build_leaflet_head() -> str:
+def build_leaflet_head(offline_only: bool = False) -> str:
     """Build the ``<head>`` fragment that supplies Leaflet.
 
     Prefers the vendored copy; falls back to the CDN so a checkout or
     build that is missing ``resources/vendor/leaflet`` still works.
+
+    Args:
+        offline_only: When True the CDN fallback is suppressed, because
+            Offline Only mode promises no network calls. The vendored
+            copy is unaffected - it is local data - so the only case
+            this changes is a build with no vendored Leaflet, where the
+            page's own "Leaflet did not load" fallback takes over.
+            Pass True only for pages ADIAT renders itself; an *exported*
+            page is opened later on someone else's machine, where the
+            CDN reference is the only thing that makes it work at all.
     """
     css, js = load_leaflet_assets()
     if css and js:
@@ -119,6 +129,11 @@ def build_leaflet_head() -> str:
         # concatenated into markup.
         safe_js = js.replace("</script>", "<\\/script>")
         return f"<style>\n{css}\n</style>\n<script>\n{safe_js}\n</script>"
+    if offline_only:
+        return (
+            "<!-- Leaflet omitted: vendored copy missing and Offline Only "
+            "mode forbids the CDN fallback. -->"
+        )
     return (
         f'<link rel="stylesheet" href="{_LEAFLET_CDN_BASE}/leaflet.css" />\n'
         f'<script src="{_LEAFLET_CDN_BASE}/leaflet.js" crossorigin="anonymous">'

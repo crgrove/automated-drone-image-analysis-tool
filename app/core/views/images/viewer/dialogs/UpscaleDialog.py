@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
 from helpers.TranslationMixin import TranslationMixin
 
 qimage2ndarray = None
@@ -171,6 +172,11 @@ class UpscaleDialog(TranslationMixin, QDialog):
         """
         super().__init__(parent)
         self.logger = LoggerService()
+        self.settings_service = SettingsService()
+        # One notice per dialog: the EDSR fallback to Lanczos is silent
+        # and repeats on every upscale step, so without this the operator
+        # either never learns why quality dropped or is told on every click.
+        self._offline_notice_shown = False
 
         self.upscale_factor = upscale_factor
         self.current_level = current_level
@@ -746,9 +752,20 @@ class UpscaleDialog(TranslationMixin, QDialog):
         model_info = self.MODELS[model_name]
         model_path = self._get_models_dir() / f"{model_name}.pb"
 
-        # Already downloaded
+        # Already downloaded — a cached model is local data, so it stays
+        # usable in Offline Only mode. Only the fetch is withheld.
         if model_path.exists():
             return model_path
+
+        # Offline Only promises the app "skips any network calls". Callers
+        # already degrade to Lanczos when this returns None, so refusing
+        # costs quality, not the feature.
+        if self._is_offline_only():
+            self.logger.info(
+                f"Skipping {model_name} model download - Offline Only mode is enabled"
+            )
+            self._notify_offline_once()
+            return None
 
         # Download model
         try:
@@ -788,6 +805,29 @@ class UpscaleDialog(TranslationMixin, QDialog):
             if model_path.exists():
                 model_path.unlink()  # Remove partial download
             return None
+
+    def _is_offline_only(self):
+        """Return whether Offline Only mode is enabled."""
+        try:
+            return self.settings_service.get_bool_setting('OfflineOnly', False)
+        except Exception:
+            return False
+
+    def _notify_offline_once(self):
+        """Tell the operator, once, why AI upscaling is unavailable."""
+        if self._offline_notice_shown:
+            return
+        self._offline_notice_shown = True
+        QMessageBox.information(
+            self,
+            self.tr("AI Upscaling Unavailable Offline"),
+            self.tr(
+                "The AI upscaling model has not been downloaded yet, and "
+                "Offline Only mode is enabled.\n\n"
+                "Using Lanczos interpolation instead. Turn off Offline Only "
+                "mode in Preferences to download the model."
+            )
+        )
 
     def _load_sr_model(self, scale):
         """

@@ -30,6 +30,7 @@ import numpy as np
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from core.services.LoggerService import LoggerService
+from core.services.streaming.ice_config import build_ice_servers
 from core.services.streaming.signaling import (
     CodeAlreadyAnswered,
     CodeNotFound,
@@ -558,7 +559,11 @@ class WebRTCStreamService(QThread):
         Worker Durable Object stays alive across brief reconnects and
         within-grace-window retries.
         """
-        from aiortc import RTCPeerConnection, RTCSessionDescription  # type: ignore
+        from aiortc import (  # type: ignore
+            RTCConfiguration,
+            RTCPeerConnection,
+            RTCSessionDescription,
+        )
 
         resume_mode = self._resume_session_id is not None
 
@@ -588,7 +593,15 @@ class WebRTCStreamService(QThread):
                     f"offer fetch timed out for code {self._pairing_code}"
                 ) from exc
 
-        pc = RTCPeerConnection()
+        # ICE servers are configured explicitly, never left to aiortc's
+        # default. Omitting `configuration` makes aiortc substitute
+        # `getDefaultIceServers()` — Google's public STUN server —
+        # so a bare `RTCPeerConnection()` silently contacts a third
+        # party that nothing in ADIAT chose. `build_ice_servers()`
+        # names the default and lets an operator change or empty it.
+        pc = RTCPeerConnection(
+            configuration=RTCConfiguration(iceServers=build_ice_servers())
+        )
         self._pc = pc
 
         @pc.on("iceconnectionstatechange")

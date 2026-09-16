@@ -63,6 +63,49 @@ from core.services.export.LeafletAssetService import (
 _MAX_PENDING_JS = 500
 
 
+# The basemap half of the page, substituted into ``LEAFLET_HTML`` at
+# ``__ADIAT_BASEMAP_JS__``. It is spliced in rather than guarded by a
+# runtime ``if`` so that an Offline Only page provably contains no tile
+# URL at all: "the code is absent" is a guarantee a reader can check by
+# looking, where "the code is present but a flag skips it" is one they
+# have to trace. Three swappable basemaps exposed via Leaflet's layer
+# control; Esri's World_Imagery and Reference/Boundaries layers require
+# no API key, and OSM is the road default.
+BASEMAP_JS = """    var roadLayer = L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        { maxZoom: 19, attribution: '© OpenStreetMap' });
+    var satelliteLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/' +
+        'MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Tiles © Esri' });
+    var labelsOverlay = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/' +
+        'World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Labels © Esri' });
+    var hybridLayer = L.layerGroup([satelliteLayer, labelsOverlay]);
+
+    roadLayer.addTo(map);
+    L.control.layers(
+        { 'Road': roadLayer, 'Satellite': satelliteLayer, 'Hybrid': hybridLayer },
+        {},
+        { position: 'topright', collapsed: true }
+    ).addTo(map);
+"""
+
+# What replaces it in Offline Only mode. Leaflet still renders markers,
+# the aircraft and the track over an empty canvas, so the operator keeps
+# the geometry and loses only the imagery under it - worth saying out
+# loud on the map, because a blank basemap otherwise reads as a bug.
+OFFLINE_BASEMAP_JS = """    var note = L.control({ position: 'bottomleft' });
+    note.onAdd = function() {
+        var div = L.DomUtil.create('div', 'adiat-offline-note');
+        div.innerHTML = __ADIAT_OFFLINE_NOTICE__;
+        return div;
+    };
+    note.addTo(map);
+"""
+
+
 LEAFLET_HTML = """\
 <!DOCTYPE html>
 <html>
@@ -89,6 +132,14 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #1e1e1e; }
     font-family: -apple-system, "Segoe UI", sans-serif;
     padding: 16px;
     line-height: 1.4;
+}
+.adiat-offline-note {
+    color: #d6d6d6;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    font-size: 11px;
+    background: rgba(30,30,30,0.75);
+    border-radius: 3px;
+    padding: 3px 7px;
 }
 </style>
 </head>
@@ -151,28 +202,7 @@ function __adiatInitLeaflet() {
     }
     var map = L.map('map', { worldCopyJump: true }).setView([30.0, -97.0], 4);
 
-    // Three swappable basemaps exposed via Leaflet's layer control. Esri's
-    // World_Imagery and Reference/Boundaries layers require no API key;
-    // OSM is the road default.
-    var roadLayer = L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        { maxZoom: 19, attribution: '© OpenStreetMap' });
-    var satelliteLayer = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/' +
-        'MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, attribution: 'Tiles © Esri' });
-    var labelsOverlay = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/' +
-        'World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, attribution: 'Labels © Esri' });
-    var hybridLayer = L.layerGroup([satelliteLayer, labelsOverlay]);
-
-    roadLayer.addTo(map);
-    L.control.layers(
-        { 'Road': roadLayer, 'Satellite': satelliteLayer, 'Hybrid': hybridLayer },
-        {},
-        { position: 'topright', collapsed: true }
-    ).addTo(map);
+__ADIAT_BASEMAP_JS__
 
     var markers = {};
     var bounds = null;
@@ -422,7 +452,25 @@ class FlightMapView(TranslationMixin, QWidget):
             </script>
             """
 
-        html = LEAFLET_HTML.replace("__ADIAT_LEAFLET_HEAD__", build_leaflet_head())
+        # Offline Only governs both halves of the page's network use: the
+        # CDN fallback for the Leaflet library itself, and the basemap
+        # tile layers. Read at construction because the page is built
+        # once; reopening the viewer picks up a changed preference.
+        offline_only = self._is_offline_only()
+        html = LEAFLET_HTML.replace(
+            "__ADIAT_LEAFLET_HEAD__", build_leaflet_head(offline_only=offline_only)
+        )
+        basemap_js = BASEMAP_JS
+        if offline_only:
+            # json.dumps produces a correctly-escaped JS string literal, so
+            # a translation containing an apostrophe cannot break the page.
+            basemap_js = OFFLINE_BASEMAP_JS.replace(
+                "__ADIAT_OFFLINE_NOTICE__",
+                json.dumps(
+                    self.tr("Offline Only mode — basemap tiles not loaded")
+                ),
+            )
+        html = html.replace("__ADIAT_BASEMAP_JS__", basemap_js)
         html = html.replace("</body>", bridge_setup_js + "</body>")
         self._view.setHtml(html, baseUrl=QUrl("https://signal.adiat.app/map/"))
         self._layout.addWidget(self._view)
@@ -431,6 +479,16 @@ class FlightMapView(TranslationMixin, QWidget):
         self._pending_js: List[str] = []
         self._loaded = False
         self._view.loadFinished.connect(self._on_loaded)
+
+    @staticmethod
+    def _is_offline_only() -> bool:
+        """Return whether Offline Only mode is enabled."""
+        try:
+            from core.services.SettingsService import SettingsService
+
+            return SettingsService().get_bool_setting("OfflineOnly", False)
+        except Exception:  # pragma: no cover - defensive
+            return False
 
     def _on_loaded(self, ok: bool) -> None:
         self._loaded = bool(ok)

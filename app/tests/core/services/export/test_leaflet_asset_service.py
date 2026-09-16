@@ -13,6 +13,7 @@ many. It resolved correctly by coincidence of depth, not by design.
 
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 from core.services.export import LeafletAssetService
 from core.services.export.LeafletAssetService import (
@@ -112,3 +113,61 @@ def test_asset_loading_is_cached():
     avoiding."""
     assert load_leaflet_assets() is load_leaflet_assets()
     assert os.path.exists(LeafletAssetService.__file__)
+
+
+def test_the_cdn_fallback_is_suppressed_in_offline_only_mode():
+    """Offline Only promises no network calls; the unpkg fallback is one.
+
+    Only reachable when the vendored copy is missing, so this patches it
+    away — otherwise the vendored branch returns first and the assertion
+    would pass without exercising anything.
+    """
+    LeafletAssetService.load_leaflet_assets.cache_clear()
+    try:
+        with patch.object(
+            LeafletAssetService, "load_leaflet_assets", return_value=(None, None)
+        ):
+            head = LeafletAssetService.build_leaflet_head(offline_only=True)
+    finally:
+        LeafletAssetService.load_leaflet_assets.cache_clear()
+
+    assert "unpkg.com" not in head
+    assert "<script src=" not in head
+
+
+def test_the_cdn_fallback_still_applies_when_not_offline():
+    """A checkout missing resources/vendor/leaflet must still produce a
+    working map when the operator has not asked for offline."""
+    LeafletAssetService.load_leaflet_assets.cache_clear()
+    try:
+        with patch.object(
+            LeafletAssetService, "load_leaflet_assets", return_value=(None, None)
+        ):
+            head = LeafletAssetService.build_leaflet_head(offline_only=False)
+    finally:
+        LeafletAssetService.load_leaflet_assets.cache_clear()
+
+    assert "unpkg.com" in head
+
+
+def test_the_vendored_copy_is_used_offline_too():
+    """Vendored Leaflet is local data, not a network call — Offline Only
+    must not degrade the map when the library is already on disk."""
+    head = build_leaflet_head(offline_only=True)
+
+    assert "<style>" in head and "<script>" in head
+    assert "unpkg.com" not in head
+
+
+def test_offline_only_defaults_to_false():
+    """Existing callers (the bundle exporter) pass no argument and must
+    keep the CDN fallback: an exported page is opened later on someone
+    else's machine, where that reference is all it has."""
+    LeafletAssetService.load_leaflet_assets.cache_clear()
+    try:
+        with patch.object(
+            LeafletAssetService, "load_leaflet_assets", return_value=(None, None)
+        ):
+            assert "unpkg.com" in build_leaflet_head()
+    finally:
+        LeafletAssetService.load_leaflet_assets.cache_clear()
