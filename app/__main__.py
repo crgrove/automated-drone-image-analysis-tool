@@ -21,7 +21,7 @@ import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
 
 
-version = '2.2.0 Alpha 4'
+version = '2.2.0 Alpha 5'
 
 
 def update_app_version(app_version):
