@@ -21,6 +21,12 @@ from core.controllers.images.viewer.TeamPlanningController import TeamPlanningCo
 from core.controllers.images.viewer.status.StatusController import StatusController
 from core.controllers.images.viewer.CoordinateController import CoordinateController
 from core.controllers.images.viewer.ImageContextMenuController import ImageContextMenuController
+from core.services.AOIInteractionLogService import (
+    AOIInteractionLogService,
+    LOG_FILENAME as AOI_LOG_FILENAME,
+    REASON_MODE_TOGGLE,
+    REASON_WINDOW_UNFOCUSED,
+)
 from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
 from core.controllers.images.viewer.path.PathValidationController import PathValidationController
 from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
@@ -171,6 +177,15 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # Settings parsed early so the WALDO pre-pass and source-folder enumeration
         # can both see settings['input_dir'] (the original capture folder).
         self.settings, _ = self.xml_service.get_settings()
+
+        # Per-run review-activity log (sidecar JSONL beside the results XML).
+        # AOI numbers are guaranteed by ensure_aoi_numbers above.
+        review_meta = self.xml_service.get_review_metadata()
+        self.interaction_log = AOIInteractionLogService(
+            os.path.join(os.path.dirname(xml_path), AOI_LOG_FILENAME))
+        self.interaction_log.start_session(
+            review_id=(review_meta or {}).get('review_id'),
+            reviewer_name=self.settings_service.get_setting('ReviewerName', None))
 
         self._loading_dialog.set_status(
             self.tr("Checking image dimensions ({n} images)...").format(n=len(self.images))
@@ -414,8 +429,21 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             if hasattr(self, 'overlay'):
                 self.overlay._place_overlay()
 
+    def changeEvent(self, event):
+        """Window deactivation ends the current AOI dwell interval.
+
+        Time spent with the viewer in the background is not review time; the
+        interval ends here rather than pausing (no resume bookkeeping).
+        """
+        if (event.type() == QEvent.ActivationChange and not self.isActiveWindow()
+                and hasattr(self, 'interaction_log')):
+            self.interaction_log.end_current_interval(REASON_WINDOW_UNFOCUSED)
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
+        if hasattr(self, 'interaction_log'):
+            self.interaction_log.end_session()
         for thread, loader in self._threads:
             if thread.isRunning():
                 thread.requestInterruption()  # Optional: politely request interruption
@@ -704,6 +732,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
 
     def _on_gallery_mode_clicked(self):
         """Handle Gallery Mode button click - update styling and toggle gallery mode."""
+        # A mode switch ends the current dwell interval; the next selection
+        # is recorded under the new mode.
+        if hasattr(self, 'interaction_log'):
+            self.interaction_log.end_current_interval(REASON_MODE_TOGGLE)
         # Gallery and grid review are mutually exclusive single-surface modes
         if hasattr(self, 'grid_review_controller'):
             self.grid_review_controller.deactivate()

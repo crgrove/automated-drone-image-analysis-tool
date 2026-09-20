@@ -10,6 +10,7 @@ import qimage2ndarray
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QMessageBox, QApplication
 
+from core.services.AOIInteractionLogService import REASON_IMAGE_CHANGE
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.ImageHighlightService import ImageHighlightService
@@ -54,6 +55,12 @@ class ImageLoadController(TranslationMixin):
                 self.parent.magnifying_glass_enabled = self.parent.magnifying_glass.is_enabled()
                 if hasattr(self.parent, 'ui_style_controller'):
                     self.parent.ui_style_controller.update_magnify_button_style()
+
+            # Leaving an image ends the dwell interval of any selected AOI;
+            # a selection on the new image starts its own interval.
+            interaction_log = getattr(self.parent, 'interaction_log', None)
+            if interaction_log is not None:
+                interaction_log.end_current_interval(REASON_IMAGE_CHANGE)
 
             image = self.parent.images[self.parent.current_image]
 
