@@ -18,6 +18,14 @@ from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMous
 WEB_MERCATOR_ORIGIN_SHIFT = 20037508.342789244
 # z-value for the POD overlay: above basemap tiles (-100), below flight path (5).
 POD_OVERLAY_Z = -50
+# z-values for the transparent tile overlays: above basemap tiles (-100),
+# below the POD raster (-50). Order = draw order (later names on top).
+OVERLAY_LAYER_Z = {
+    'roads': -95,
+    'mvum': -94,
+    'trails': -93,
+    'usfs_trails': -92,
+}
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService, _get_terrain_service
@@ -73,6 +81,12 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         # Map tiles storage - keep tiles from all zoom levels
         self.tile_items = {}  # Dictionary of (x, y, zoom): QGraphicsPixmapItem
         self.all_tile_items = {}  # Cache all tiles ever loaded
+
+        # Transparent overlay layers (roads / MVUM / trails), one loader per
+        # enabled overlay so each keeps its own source and error throttling.
+        self.active_overlays = []          # overlay names, draw order
+        self.overlay_loaders = {}          # name -> MapTileLoader
+        self.overlay_tile_items = {}       # name -> {(x, y, zoom): item}
         self.current_zoom = 15  # Default zoom level
 
         # GPS data storage
@@ -146,6 +160,72 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         self.offline_only = bool(offline_only)
         if hasattr(self, "tile_loader"):
             self.tile_loader.set_offline_only(self.offline_only)
+        for loader in getattr(self, "overlay_loaders", {}).values():
+            loader.set_offline_only(self.offline_only)
+
+    def set_overlays(self, names):
+        """Enable exactly the named transparent overlays (roads/MVUM/trails).
+
+        Args:
+            names (list): Overlay names from MapTileLoader.OVERLAY_SOURCES,
+                in any order; unknown names are ignored. Disabling an overlay
+                removes its tiles; enabling one starts loading immediately
+                (cached tiles only in Offline Only mode).
+        """
+        wanted = [n for n in names if n in OVERLAY_LAYER_Z]
+
+        # Remove tiles of overlays being switched off
+        for name in list(self.active_overlays):
+            if name not in wanted:
+                self._remove_overlay_tiles(name)
+
+        # Create loaders for newly enabled overlays
+        for name in wanted:
+            if name not in self.overlay_loaders:
+                loader = MapTileLoader(offline_only=self.offline_only)
+                loader.set_tile_source(name)
+                # Bind the overlay name so one handler serves every layer
+                loader.tile_loaded.connect(
+                    lambda x, y, z, pixmap, overlay=name:
+                    self._on_overlay_tile_loaded(overlay, x, y, z, pixmap))
+                # Overlay errors surface through the base loader's channel
+                loader.tile_error.connect(self.tile_loader.tile_error)
+                self.overlay_loaders[name] = loader
+
+        self.active_overlays = wanted
+        if wanted:
+            self.load_visible_tiles()
+
+    def _remove_overlay_tiles(self, name):
+        """Drop one overlay's tile items from the scene."""
+        for item in list(self.overlay_tile_items.get(name, {}).values()):
+            try:
+                if item.scene() == self.scene:
+                    self.scene.removeItem(item)
+            except RuntimeError:
+                pass
+        self.overlay_tile_items[name] = {}
+
+    def _on_overlay_tile_loaded(self, name, x_tile, y_tile, zoom, pixmap):
+        """Place a loaded overlay tile above the base tiles."""
+        if name not in self.active_overlays:
+            return
+        cache_key = (x_tile, y_tile, zoom, name)
+        if cache_key not in self.all_tile_items:
+            self.all_tile_items[cache_key] = pixmap
+
+        items = self.overlay_tile_items.setdefault(name, {})
+        key = (x_tile, y_tile, zoom)
+        if zoom != self.current_zoom or key in items:
+            return
+
+        lat, lon = self.tile_loader.tile_to_lat_lon(x_tile, y_tile, zoom)
+        scene_pos = self.lat_lon_to_scene(lat, lon)
+        tile_item = QGraphicsPixmapItem(pixmap)
+        tile_item.setPos(scene_pos)
+        tile_item.setZValue(OVERLAY_LAYER_Z[name])
+        self.scene.addItem(tile_item)
+        items[key] = tile_item
 
     def eventFilter(self, obj, event):
         """Filter events from the viewport to manage compass overlay."""
@@ -530,6 +610,9 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         self.aoi_marker = None
         self.fov_box = None
         self.tile_items = {}
+        # scene.clear() dropped the overlay tile items too; the visible-tiles
+        # sweep repopulates enabled overlays from cache/network.
+        self.overlay_tile_items = {}
 
         if not self.gps_data:
             return
@@ -636,6 +719,24 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     else:
                         # Load from network/disk
                         self.tile_loader.load_tile(x, y, self.current_zoom)
+
+        # Overlay layers sweep the same tile range at their own z-levels
+        for name in self.active_overlays:
+            loader = self.overlay_loaders.get(name)
+            if loader is None:
+                continue
+            items = self.overlay_tile_items.setdefault(name, {})
+            for x in range(min_tile_x, max_tile_x + 1):
+                for y in range(min_tile_y, max_tile_y + 1):
+                    key = (x, y, self.current_zoom)
+                    if key in items:
+                        continue
+                    cache_key = (x, y, self.current_zoom, name)
+                    if cache_key in self.all_tile_items:
+                        self._on_overlay_tile_loaded(
+                            name, x, y, self.current_zoom, self.all_tile_items[cache_key])
+                    else:
+                        loader.load_tile(x, y, self.current_zoom)
 
     def on_tile_loaded(self, x_tile, y_tile, zoom, pixmap):
         """
@@ -1097,6 +1198,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 except RuntimeError:
                     pass
         self.tile_items = {}
+
+        # Overlay tiles are zoom-specific too - drop and let the sweep reload
+        for name in list(self.overlay_tile_items):
+            self._remove_overlay_tiles(name)
 
         # Update scene rect
         world_size = 256 * (2 ** self.current_zoom)
