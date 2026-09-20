@@ -1,5 +1,6 @@
 # Set environment variable to avoid numpy._core issues - MUST be first
 import traceback
+from helpers.GeoDataEnvHelper import sanitize_geo_data_env
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from multiprocessing import freeze_support
@@ -19,6 +20,13 @@ from os import path
 import sys
 import os
 os.environ['NUMPY_EXPERIMENTAL_DTYPE_API'] = '0'
+
+# Clear PROJ/GDAL data env vars left by other GIS installs (VTP, old QGIS)
+# that point at data our rasterio/pyproj wheels cannot read - a PROJ4-era
+# PROJ_LIB otherwise breaks every DEM CRS lookup ("Cannot find proj.db").
+# Runs before any rasterio/pyproj use (both import lazily in this codebase);
+# logged in the __main__ block below once logging policy is applied.
+_removed_geo_env_vars = sanitize_geo_data_env()
 
 
 version = '2.2.0 Alpha 4'
@@ -437,6 +445,14 @@ if __name__ == "__main__":
     # LoggerService.resolve_log_level. (LoggerService also applies this by
     # default, so any earlier log line is already at the right level.)
     LoggerService.set_level()
+
+    # Report any PROJ/GDAL variables the sanitizer cleared at import time
+    # (deferred to here so the message respects the logging policy above).
+    for _var, _path in _removed_geo_env_vars:
+        LoggerService().warning(
+            f"Ignoring {_var}={_path}: no usable PROJ/GDAL data there "
+            f"(likely another GIS install); using the bundled data instead."
+        )
 
     # Headless subcommands (or "ADIAT.exe <subcommand> ..." in the packaged
     # build). Falls through to the normal GUI startup when none is given:
