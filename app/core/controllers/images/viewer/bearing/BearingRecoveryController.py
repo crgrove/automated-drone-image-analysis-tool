@@ -6,6 +6,8 @@ through the BearingRecoveryDialog.
 """
 
 from core.services.LoggerService import LoggerService
+from core.services.RecoverySessionService import RecoverySession
+from core.services.TrackDiscoveryService import TrackDiscoveryService, TRACK_EXTENSIONS
 from core.services.image.ImageService import ImageService
 from core.views.images.viewer.dialogs.BearingRecoveryDialog import BearingRecoveryDialog
 from PySide6.QtWidgets import QDialog
@@ -97,8 +99,13 @@ class BearingRecoveryController:
             if loading_dialog is not None:
                 loading_dialog.hide()
 
+            # A results-folder scan session may already hold the flight's
+            # track log; offer it so the user is not sent hunting for it.
+            suggested_track = self._discover_session_track(images_missing_bearings)
+
             # Show bearing recovery dialog
-            dialog = BearingRecoveryDialog(self.parent, images_missing_bearings)
+            dialog = BearingRecoveryDialog(self.parent, images_missing_bearings,
+                                           suggested_track=suggested_track)
             try:
                 result = dialog.exec()
             finally:
@@ -123,3 +130,23 @@ class BearingRecoveryController:
             pass
 
         return 0
+
+    def _discover_session_track(self, images_missing_bearings):
+        """Best track-log candidate from the results-scan session, or None.
+
+        Only position-validated files are offered (TrackDiscoveryService);
+        outside a scan session this is a no-op and the dialog behaves as
+        before.
+        """
+        session = getattr(self.parent, 'recovery_session', None)
+        if not isinstance(session, RecoverySession):
+            return None
+        try:
+            candidates = session.find_files_by_extension(TRACK_EXTENSIONS)
+            if not candidates:
+                return None
+            image_paths = [img['path'] for img in images_missing_bearings]
+            return TrackDiscoveryService().discover_track(image_paths, candidates)
+        except Exception as e:
+            self.logger.warning(f"Session track discovery failed: {e}")
+            return None
