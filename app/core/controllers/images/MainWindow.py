@@ -1259,7 +1259,8 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 self,
                 results,
                 theme,
-                self._open_viewer_from_path
+                self._open_viewer_from_path,
+                load_settings_callback=self._load_settings_from_path
             )
             dialog.exec()
 
@@ -1325,6 +1326,24 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             )
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _load_settings_from_path(self, xml_path):
+        """
+        Load a scanned run's settings into the main window.
+        Called from ResultsFolderDialog's Settings column.
+
+        Args:
+            xml_path: Full path to the ADIAT_DATA.XML file
+        """
+        try:
+            # Same flow as File > Open: hydrates every settings field,
+            # records the file in recents, and enables View Results.
+            self._process_xml_file(xml_path)
+        except Exception as e:
+            self.logger.error(f"Error loading settings from {xml_path}: {e}")
+            self._show_error(
+                self.tr("Failed to load settings: {error}").format(error=str(e))
+            )
 
     def _process_xml_file(self, full_path):
         """

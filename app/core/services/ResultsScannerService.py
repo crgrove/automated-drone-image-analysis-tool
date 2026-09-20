@@ -1,7 +1,7 @@
 """ResultsScannerService - Service for scanning folders for ADIAT results."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Callable
 
 from core.services.XmlService import XmlService
@@ -21,6 +21,7 @@ class ResultsScanResult:
     missing_images: int              # Count of images that cannot be found
     first_image_path: Optional[str]  # Path to first available image (for GPS)
     gps_coordinates: Optional[Tuple[float, float]]  # (lat, lon) or None
+    settings: dict = field(default_factory=dict)  # Run settings from XmlService.get_settings()
 
 
 class ResultsScannerService:
@@ -144,7 +145,8 @@ class ResultsScannerService:
                 aoi_count=aoi_count,
                 missing_images=missing_images,
                 first_image_path=first_available_image,
-                gps_coordinates=gps_coords
+                gps_coordinates=gps_coords,
+                settings=settings
             )
 
         except Exception as e:
