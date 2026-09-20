@@ -20,6 +20,7 @@ from core.controllers.images.viewer.GPSMapController import GPSMapController
 from core.controllers.images.viewer.TeamPlanningController import TeamPlanningController
 from core.controllers.images.viewer.status.StatusController import StatusController
 from core.controllers.images.viewer.CoordinateController import CoordinateController
+from core.controllers.images.viewer.ImageContextMenuController import ImageContextMenuController
 from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
 from core.controllers.images.viewer.path.PathValidationController import PathValidationController
 from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
@@ -999,6 +1000,12 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
             # Enter AOI creation mode with 'C' key (no modifier)
             self._enter_aoi_creation_mode()
+        if e.key() == Qt.Key_C and e.modifiers() == Qt.ShiftModifier:
+            # Shift+C: show GPS coordinates of the pixel under the cursor
+            if self.last_mouse_pos.x() >= 0 and self.last_mouse_pos.y() >= 0:
+                self.coordinate_controller.show_cursor_coordinates(
+                    self.last_mouse_pos.x(), self.last_mouse_pos.y()
+                )
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self.coordinate_controller.show_north_oriented_image()
@@ -1402,6 +1409,16 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.gps_map_open = False
             self.rotate_image_open = False
 
+    def apply_control_scheme(self):
+        """Re-read the ViewerControlScheme setting and apply it to the viewer.
+
+        Pushed by the Preferences dialog when the user changes the scheme
+        while this viewer is open, so the swap takes effect immediately.
+        """
+        if getattr(self, 'main_image', None) is not None:
+            self.main_image.set_control_scheme(
+                self.settings_service.get_setting('ViewerControlScheme', 'classic'))
+
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:
@@ -1422,6 +1439,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.main_image.aspectRatioMode = Qt.KeepAspectRatio
             self.main_image.canZoom = True
             self.main_image.canPan = True
+            self.main_image.set_control_scheme(
+                self.settings_service.get_setting('ViewerControlScheme', 'classic'))
 
             # Replace the QHBoxLayout with a QSplitter for draggable divider
             self._setup_splitter_layout()
@@ -1440,6 +1459,11 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
 
             # Selected-AOI on-image decoration (number badge + real-world ruler)
             self.aoi_overlay_controller = AOIOverlayController(self)
+
+            # Right-click (without drag) context menu, both control schemes
+            self.image_context_menu_controller = ImageContextMenuController(self)
+            self.main_image.contextMenuRequested.connect(
+                self.image_context_menu_controller.show_menu)
 
             # Connect signals
             self.main_image.zoomChanged.connect(self._update_scale_bar)

@@ -90,6 +90,14 @@ class AOIController(TranslationMixin):
         # Initialize sort combo box
         self._initialize_sort_combo()
 
+    def get_aoi_service(self):
+        """Public access to the cached per-image AOIService.
+
+        Other controllers (cursor-coordinates lookup) reuse the cache instead
+        of re-decoding the current image's metadata.
+        """
+        return self._get_aoi_service()
+
     def _get_aoi_service(self):
         """
         Get or create a cached AOIService for the current image.
