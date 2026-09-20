@@ -95,7 +95,8 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
 
     def __init__(self, parent, results: List[ResultsScanResult], theme: str,
                  open_viewer_callback: Callable[[str], None],
-                 load_settings_callback: Optional[Callable[[str], None]] = None):
+                 load_settings_callback: Optional[Callable[[str], None]] = None,
+                 export_combined_callback: Optional[Callable[[List[ResultsScanResult]], None]] = None):
         """
         Initialize the results folder dialog.
 
@@ -106,12 +107,15 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
             open_viewer_callback: Function to call when opening Results Viewer
             load_settings_callback: Function to call to load a run's settings
                 into the main window; the Settings column is disabled when None
+            export_combined_callback: Function to call with the scan results to
+                build one collated PDF report; the button is hidden when None
         """
         super().__init__(parent)
         self.results = results
         self.theme = theme
         self.open_viewer_callback = open_viewer_callback
         self.load_settings_callback = load_settings_callback
+        self.export_combined_callback = export_combined_callback
         self.logger = LoggerService()
 
         self.setupUi()
@@ -178,6 +182,17 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
 
         # Button row
         button_layout = QHBoxLayout()
+
+        # Collate every scanned run into one PDF report. The dialog stays
+        # open (the export's own progress dialog sits on top).
+        self.export_pdf_button = None
+        if self.export_combined_callback is not None:
+            self.export_pdf_button = QPushButton(self.tr("Export Combined PDF"))
+            self.export_pdf_button.setEnabled(bool(self.results))
+            self.export_pdf_button.clicked.connect(
+                lambda: self.export_combined_callback(self.results))
+            button_layout.addWidget(self.export_pdf_button)
+
         button_layout.addStretch()
 
         self.close_button = QPushButton(self.tr("Close"))

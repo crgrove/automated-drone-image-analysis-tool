@@ -1260,7 +1260,8 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 results,
                 theme,
                 self._open_viewer_from_path,
-                load_settings_callback=self._load_settings_from_path
+                load_settings_callback=self._load_settings_from_path,
+                export_combined_callback=self._export_combined_pdf
             )
             dialog.exec()
 
@@ -1326,6 +1327,28 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             )
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _export_combined_pdf(self, results):
+        """
+        Collate the scanned results into one PDF report.
+        Called from ResultsFolderDialog's Export Combined PDF button.
+
+        Args:
+            results: List of ResultsScanResult from the folder scan
+        """
+        try:
+            from core.controllers.images.exports.CombinedPdfExportController import (
+                CombinedPdfExportController,
+            )
+            controller = CombinedPdfExportController(self, self.logger)
+            controller.export_combined_pdf(
+                results,
+                recovery_session=getattr(self, '_recovery_session', None))
+        except Exception as e:
+            self.logger.error(f"Error starting combined PDF export: {e}")
+            self._show_error(
+                self.tr("Failed to export combined PDF: {error}").format(error=str(e))
+            )
 
     def _load_settings_from_path(self, xml_path):
         """

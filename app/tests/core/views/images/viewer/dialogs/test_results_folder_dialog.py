@@ -748,3 +748,37 @@ class TestIntegration:
         # Check selection
         selected_rows = dialog.table.selectedItems()
         assert len(selected_rows) > 0
+
+
+# ============================================================================
+# Test Export Combined PDF button
+# ============================================================================
+
+class TestExportCombinedButton:
+    """The scan dialog offers one-click collation of every scanned run."""
+
+    def test_button_absent_without_callback(self, app, sample_results, mock_callback):
+        dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
+        assert dialog.export_pdf_button is None
+
+    def test_button_invokes_callback_with_results_and_stays_open(
+            self, app, sample_results, mock_callback):
+        export_callback = MagicMock()
+        dialog = ResultsFolderDialog(
+            None, sample_results, 'Dark', mock_callback,
+            export_combined_callback=export_callback)
+
+        accepted = []
+        original_accept = dialog.accept
+        dialog.accept = lambda: accepted.append(True) or original_accept()
+
+        dialog.export_pdf_button.click()
+
+        export_callback.assert_called_once_with(sample_results)
+        assert accepted == [], "the scan dialog stays open during the export"
+
+    def test_button_disabled_with_no_results(self, app, mock_callback):
+        dialog = ResultsFolderDialog(
+            None, [], 'Dark', mock_callback,
+            export_combined_callback=MagicMock())
+        assert not dialog.export_pdf_button.isEnabled()
