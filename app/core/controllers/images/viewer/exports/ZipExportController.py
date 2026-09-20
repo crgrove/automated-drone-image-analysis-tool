@@ -43,11 +43,16 @@ class ZipExportThread(QThread):
 
     def run(self):
         staging_root = tempfile.mkdtemp(prefix="adiat_zip_")
-        total = len(self.images)
+        total = len(self.images) or 1
         current = 0
         try:
             # Export step-by-step to update progress
-            if self.export_mode == 'native':
+            if self.export_mode == 'results_only':
+                # Just the XML + detection masks: the emailable transfer.
+                self.progressUpdated.emit(0, total, "Collecting results files...")
+                self.controller._export_results_only(staging_root)
+                current = total
+            elif self.export_mode == 'native':
                 # Native export: copy images preserving structure; update XML
                 self.controller._export_native_prepare(self.images, staging_root)
                 for img in self.images:
@@ -121,7 +126,7 @@ class ZipExportController(TranslationMixin):
             if options_dialog.exec() != QDialog.Accepted:
                 return False
 
-            export_mode = options_dialog.get_export_mode()  # 'native' or 'augmented'
+            export_mode = options_dialog.get_export_mode()  # 'native' | 'augmented' | 'results_only'
             include_no_flagged = options_dialog.should_include_images_without_flagged_aois()
 
             # Open file dialog for ZIP export
@@ -135,36 +140,41 @@ class ZipExportController(TranslationMixin):
             if not file_name:  # User cancelled
                 return False
 
-            # Filter visible images and track original indices
-            visible_images = []
-            visible_indices = []
-            for idx, img in enumerate(images):
-                if not img.get('hidden', False):
-                    visible_images.append(img)
-                    visible_indices.append(idx)
+            if export_mode == 'results_only':
+                # The complete results file travels regardless of visibility
+                # or flags; no per-image staging happens.
+                visible_images = []
+            else:
+                # Filter visible images and track original indices
+                visible_images = []
+                visible_indices = []
+                for idx, img in enumerate(images):
+                    if not img.get('hidden', False):
+                        visible_images.append(img)
+                        visible_indices.append(idx)
 
-            # Filter by flagged AOIs if checkbox is unchecked
-            if not include_no_flagged:
-                # Get flagged AOIs from AOI controller
-                flagged_aois = {}
-                if hasattr(self.parent, 'aoi_controller') and hasattr(self.parent.aoi_controller, 'flagged_aois'):
-                    flagged_aois = self.parent.aoi_controller.flagged_aois
+                # Filter by flagged AOIs if checkbox is unchecked
+                if not include_no_flagged:
+                    # Get flagged AOIs from AOI controller
+                    flagged_aois = {}
+                    if hasattr(self.parent, 'aoi_controller') and hasattr(self.parent.aoi_controller, 'flagged_aois'):
+                        flagged_aois = self.parent.aoi_controller.flagged_aois
 
-                # Only include images that have at least one flagged AOI
-                filtered_images = []
-                for img, orig_idx in zip(visible_images, visible_indices):
-                    # Check if this image index (from original images list) has any flagged AOIs
-                    if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
-                        filtered_images.append(img)
+                    # Only include images that have at least one flagged AOI
+                    filtered_images = []
+                    for img, orig_idx in zip(visible_images, visible_indices):
+                        # Check if this image index (from original images list) has any flagged AOIs
+                        if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
+                            filtered_images.append(img)
 
-                visible_images = filtered_images
+                    visible_images = filtered_images
 
-            if not visible_images:
-                self._show_toast(self.tr("No images to export"), 3000, color="#F44336")
-                return False
+                if not visible_images:
+                    self._show_toast(self.tr("No images to export"), 3000, color="#F44336")
+                    return False
 
             # Create and show progress dialog
-            total_items = len(visible_images)
+            total_items = len(visible_images) or 1
             self.progress_dialog = ExportProgressDialog(
                 self.parent,
                 title="Generating ZIP Export",
@@ -308,6 +318,44 @@ class ZipExportController(TranslationMixin):
             # No XML service available; just copy if exists
             if xml_path and os.path.exists(xml_path):
                 shutil.copy2(xml_path, xml_dst_path)
+
+    def _export_results_only(self, staging_root):
+        """Stage just the results: the XML and the detection masks it references.
+
+        The small emailable transfer (KB-MB instead of the full imagery). The
+        recipient opens the XML wherever they unzip it; the source images are
+        relinked to their own copy through the missing-image recovery flow.
+        The XML is copied verbatim - its recorded image paths stay honest,
+        and the whole run travels (hidden images and unflagged AOIs included).
+        """
+        xml_path = getattr(self.parent, 'xml_path', None)
+        if not xml_path or not os.path.exists(xml_path):
+            raise FileNotFoundError("No results XML to export")
+        xml_service = getattr(self.parent, 'xml_service', None)
+        if xml_service is None:
+            xml_service = XmlService(xml_path)
+
+        results_root = os.path.join(staging_root, "ADIAT_Results")
+        os.makedirs(results_root, exist_ok=True)
+        shutil.copy2(xml_path, os.path.join(results_root, os.path.basename(xml_path)))
+
+        mask_src_dir = os.path.dirname(xml_path)
+        copied = set()
+        for img in xml_service.get_images():
+            mask_path = img.get('mask_path', '')
+            if not mask_path or not os.path.exists(mask_path):
+                continue
+            try:
+                rel = os.path.relpath(mask_path, mask_src_dir)
+            except ValueError:
+                rel = os.path.basename(mask_path)
+            key = os.path.normcase(rel)
+            if key in copied:
+                continue
+            copied.add(key)
+            dst = os.path.join(results_root, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(mask_path, dst)
 
     def _export_augmented_one(self, img, staging_root):
         """Render and write a single augmented image preserving metadata."""

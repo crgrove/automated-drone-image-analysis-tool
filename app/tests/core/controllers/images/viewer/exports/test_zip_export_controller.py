@@ -277,3 +277,65 @@ def test_show_toast_no_handler_doesnt_crash():
     parent = MagicMock(spec=[])
     controller = ZipExportController(parent)
     controller._show_toast("hi")  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# Results-only export mode (XML + masks, no images)
+# ---------------------------------------------------------------------------
+def test_thread_results_only_calls_the_results_stager():
+    controller = MagicMock()
+    thread = ZipExportThread(controller, [], "results_only", "/out.zip")
+    successes = []
+    thread.success.connect(lambda: successes.append(True))
+
+    with patch("core.controllers.images.viewer.exports.ZipExportController.ZipBundleService"):
+        thread.run()
+
+    assert successes == [True]
+    controller._export_results_only.assert_called_once()
+    controller._export_native_prepare.assert_not_called()
+    controller._export_augmented_one.assert_not_called()
+
+
+def test_export_results_only_stages_xml_and_masks(tmp_path):
+    # A real results layout: XML beside two mask TIFFs, one referenced twice.
+    results_dir = tmp_path / "ADIAT_Results"
+    results_dir.mkdir()
+    xml_path = results_dir / "ADIAT_Data.xml"
+    xml_path.write_text("<data/>")
+    (results_dir / "a_mask.tif").write_text("mask-a")
+    (results_dir / "b_mask.tif").write_text("mask-b")
+
+    parent = _parent()
+    parent.xml_path = str(xml_path)
+    xml_service = MagicMock()
+    xml_service.get_images.return_value = [
+        {"mask_path": str(results_dir / "a_mask.tif")},
+        {"mask_path": str(results_dir / "a_mask.tif")},   # duplicate reference
+        {"mask_path": str(results_dir / "b_mask.tif")},
+        {"mask_path": str(results_dir / "gone_mask.tif")},  # missing on disk
+        {"mask_path": ""},
+    ]
+    parent.xml_service = xml_service
+    controller = ZipExportController(parent)
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    controller._export_results_only(str(staging))
+
+    staged = staging / "ADIAT_Results"
+    assert (staged / "ADIAT_Data.xml").read_text() == "<data/>"
+    assert (staged / "a_mask.tif").read_text() == "mask-a"
+    assert (staged / "b_mask.tif").read_text() == "mask-b"
+    assert not (staged / "gone_mask.tif").exists()
+    # Nothing else travels: no images/ tree
+    assert not (staging / "images").exists()
+
+
+def test_export_results_only_without_xml_raises(tmp_path):
+    parent = _parent()
+    parent.xml_path = str(tmp_path / "missing.xml")
+    controller = ZipExportController(parent)
+
+    with pytest.raises(FileNotFoundError):
+        controller._export_results_only(str(tmp_path))
