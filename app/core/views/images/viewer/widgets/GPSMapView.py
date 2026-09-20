@@ -692,6 +692,13 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             self.path_item.setZValue(5)
             self.scene.addItem(self.path_item)
 
+        # Count coincident markers so tooltips can say a point is stacked
+        # (WALDO pairs share one position; only the chooser reaches them all).
+        position_counts = {}
+        for data in self.gps_data:
+            key = (round(data['latitude'], 6), round(data['longitude'], 6))
+            position_counts[key] = position_counts.get(key, 0) + 1
+
         # Draw GPS points
         for i, (data, scene_point) in enumerate(zip(self.gps_data, points)):
             # Determine point appearance
@@ -741,6 +748,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 if has_flagged:
                     tooltip += "🚩 Has flagged AOIs\n"
                 tooltip += f"AOIs: {aoi_count}\nLat: {data['latitude']:.6f}\nLon: {data['longitude']:.6f}"
+                stacked = position_counts.get(
+                    (round(data['latitude'], 6), round(data['longitude'], 6)), 1)
+                if stacked > 1:
+                    tooltip += self.tr("\n{count} images at this location").format(count=stacked)
                 point_item.setToolTip(tooltip)
 
             self.scene.addItem(point_item)
@@ -1192,17 +1203,17 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     event.accept()
                     return
 
-            # Check point click
-            click_tolerance = 10
-            for item in self.point_items:
-                item_view_pos = self.mapFromScene(item.pos())
-                dx = event.pos().x() - item_view_pos.x()
-                dy = event.pos().y() - item_view_pos.y()
-                if math.sqrt(dx * dx + dy * dy) <= click_tolerance:
-                    image_index = item.data(0)
-                    if image_index is not None:
-                        self.point_clicked.emit(image_index)
-                        return
+            # Check point click. All markers within tolerance are collected,
+            # not just the first: WALDO pairs are two captures at the same
+            # instant and position, so one map point can stand for several
+            # images and first-hit-wins made the later ones unreachable.
+            hits = self._hit_test_points(event.pos())
+            if len(hits) == 1:
+                self.point_clicked.emit(hits[0]['index'])
+                return
+            if len(hits) > 1:
+                self._show_point_chooser(hits, event.globalPos())
+                return
 
         super().mousePressEvent(event)
 
@@ -1247,16 +1258,61 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             self.aoi_marker.setPos(self.lat_lon_to_scene(
                 self.aoi_data['latitude'], self.aoi_data['longitude']))
 
-    def show_aoi_popup(self, global_pos):
-        """
-        Show a popup with AOI data and copy button.
+    def _hit_test_points(self, view_pos, tolerance=10):
+        """All clickable image markers within *tolerance* px of a view position.
 
         Args:
-            global_pos: Global position for the popup
-        """
-        if not self.aoi_data:
-            return
+            view_pos: Position in view (widget) coordinates.
+            tolerance (int): Hit radius in view pixels.
 
+        Returns:
+            list: gps_data dicts for the hits, nearest first; coincident
+            markers keep their gps_data (timestamp) order. Source-only dots
+            (index None) are not click targets and are excluded.
+        """
+        hits = []
+        for order, (data, item) in enumerate(zip(self.gps_data, self.point_items)):
+            if item.data(0) is None:
+                continue
+            item_view_pos = self.mapFromScene(item.pos())
+            dx = view_pos.x() - item_view_pos.x()
+            dy = view_pos.y() - item_view_pos.y()
+            distance = math.sqrt(dx * dx + dy * dy)
+            if distance <= tolerance:
+                hits.append((distance, order, data))
+        hits.sort(key=lambda hit: (hit[0], hit[1]))
+        return [data for _, _, data in hits]
+
+    def _show_point_chooser(self, entries, global_pos):
+        """Let the user pick which of several stacked images to open.
+
+        Args:
+            entries (list): gps_data dicts for the markers under the click.
+            global_pos: Global position for the menu.
+        """
+        menu = self._create_popup_menu()
+        for data in entries:
+            parts = [data['name']]
+            timestamp = data.get('timestamp')
+            if timestamp:
+                parts.append(timestamp.strftime('%H:%M:%S'))
+            parts.append(self.tr("{count} AOIs").format(count=data.get('aoi_count', 0)))
+            label = " — ".join(parts)
+            if data.get('has_flagged'):
+                label = "🚩 " + label
+            if data.get('hidden'):
+                label += self.tr(" (hidden)")
+            action = menu.addAction(label)
+            # Default argument captures this entry's viewer index; the emit
+            # follows the exact single-click path so dialog/controller
+            # handling stays unchanged.
+            action.triggered.connect(
+                lambda checked=False, idx=data['index']: self.point_clicked.emit(idx)
+            )
+        menu.exec(global_pos)
+
+    def _create_popup_menu(self):
+        """Styled QMenu shared by the AOI popup and the stacked-point chooser."""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -1274,6 +1330,19 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 background-color: #505050;
             }
         """)
+        return menu
+
+    def show_aoi_popup(self, global_pos):
+        """
+        Show a popup with AOI data and copy button.
+
+        Args:
+            global_pos: Global position for the popup
+        """
+        if not self.aoi_data:
+            return
+
+        menu = self._create_popup_menu()
 
         copy_action = menu.addAction(self.tr("Copy Data"))
         copy_action.triggered.connect(self.copy_aoi_data)
