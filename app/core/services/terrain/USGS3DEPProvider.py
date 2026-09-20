@@ -43,8 +43,28 @@ class USGS3DEPProvider(ElevationProvider):
         self._strtree = None
         self._strtree_geoms = []  # parallel list of shapely boxes
         self._open_datasets: "OrderedDict[str, object]" = OrderedDict()
+        # A broken PROJ/GDAL setup fails identically for EVERY sample, and a
+        # flight samples thousands of points - warn once, not per point.
+        self._reproject_warned = False
+        # Reason a sample failed INSIDE the manifest's coverage (unopenable
+        # tile, broken PROJ, read error) - as opposed to a point simply lying
+        # outside the downloaded tiles, which is routine and returns None
+        # with no reason. TerrainService reads this to tell the operator
+        # their 1 m data is configured but not answering.
+        self._in_coverage_failure = None
 
         self._load_manifest()
+
+    def take_in_coverage_failure(self):
+        """Return-and-clear the reason the last sample failed inside coverage.
+
+        Returns:
+            str | None: None when the last None result was a plain coverage
+            gap (or nodata), which needs no operator attention.
+        """
+        reason = self._in_coverage_failure
+        self._in_coverage_failure = None
+        return reason
 
     def _load_manifest(self):
         """Parse the manifest CSV and build a spatial bounding-box index."""
@@ -279,15 +299,19 @@ class USGS3DEPProvider(ElevationProvider):
         """Sample orthometric elevation (NAVD88) at lat/lon. Returns None if out of coverage or nodata."""
         tile = self.lookup_tile(lat, lon)
         if tile is None:
+            # Plain coverage gap: the point lies outside the downloaded
+            # tiles. Routine, needs no operator attention.
             return None
 
         ds = self._get_dataset(tile['full_path'])
         if ds is None:
+            self._in_coverage_failure = f"cannot open {tile['filename']}"
             return None
 
         try:
             from rasterio.warp import transform as rio_transform
         except ImportError:
+            self._in_coverage_failure = "rasterio unavailable"
             return None
 
         try:
@@ -295,15 +319,23 @@ class USGS3DEPProvider(ElevationProvider):
             x, y = xs[0], ys[0]
             row, col = ds.index(x, y)
         except Exception as e:
-            self.logger.warning(f"USGS3DEPProvider: reproject/index failed at ({lat},{lon}): {e}")
+            self._in_coverage_failure = f"reproject failed: {e}"
+            if not self._reproject_warned:
+                self._reproject_warned = True
+                self.logger.warning(
+                    f"USGS3DEPProvider: reproject/index failed at ({lat},{lon}): {e} "
+                    f"(further reproject failures suppressed for this session)")
             return None
 
         if row < 0 or col < 0 or row >= ds.height or col >= ds.width:
+            # Manifest bbox slightly overhangs the raster - a boundary
+            # effect, treated like a coverage gap.
             return None
 
         try:
             value = self._sample_bilinear(ds, x, y)
         except Exception as e:
+            self._in_coverage_failure = f"read failed on {tile['filename']}: {e}"
             self.logger.warning(f"USGS3DEPProvider: sample failed at ({lat},{lon}): {e}")
             return None
 

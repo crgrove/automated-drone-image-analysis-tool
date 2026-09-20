@@ -99,3 +99,31 @@ def test_covers_none_outside_all_tiles(fake_manifest):
 def test_covers_none_with_unloaded_manifest(tmp_path):
     provider = USGS3DEPProvider(str(tmp_path / "missing.csv"), str(tmp_path))
     assert provider.covers((-120.12, 38.46, -120.02, 38.64)) == 'none'
+
+
+# ---------------------------------------------------------------------------
+# In-coverage failure detection (feeds the operator degradation notice)
+# ---------------------------------------------------------------------------
+
+def test_unreadable_tile_inside_coverage_flags_failure(fake_manifest):
+    manifest, tiles_dir = fake_manifest
+    provider = USGS3DEPProvider(str(manifest), str(tiles_dir))
+
+    # Inside the manifest bbox, but the GeoTIFF does not exist on disk:
+    # the provider is configured yet cannot answer.
+    assert provider.sample_elevation(38.50, -120.07) is None
+
+    reason = provider.take_in_coverage_failure()
+    assert reason is not None
+    assert "USGS_1M_10_x75y427_CA.tif" in reason
+    # Return-and-clear semantics
+    assert provider.take_in_coverage_failure() is None
+
+
+def test_coverage_gap_flags_no_failure(fake_manifest):
+    manifest, tiles_dir = fake_manifest
+    provider = USGS3DEPProvider(str(manifest), str(tiles_dir))
+
+    # Outside every manifest bbox: routine, silent.
+    assert provider.sample_elevation(40.0, -120.07) is None
+    assert provider.take_in_coverage_failure() is None

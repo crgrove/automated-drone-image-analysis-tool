@@ -161,8 +161,45 @@ class ImageLoadController(TranslationMixin):
             if hasattr(self.parent, '_refresh_person_reference_dialog'):
                 self.parent._refresh_person_reference_dialog()
 
+            # Surface a pending terrain degradation notice (once per session).
+            # Terrain sampling happens in services and worker threads that
+            # cannot own UI; image load is the steady checkpoint every review
+            # session passes through.
+            self._surface_terrain_degradation()
+
         except Exception as e:
             self._handle_load_error(e, image)
+
+    def _surface_terrain_degradation(self):
+        """Toast the once-per-session local-DEM degradation notice, if any.
+
+        A coverage gap never raises this - only the local DEM failing INSIDE
+        its coverage (bad paths, moved tiles, broken PROJ), where the
+        operator believes they are working at 1 m and silently is not.
+        """
+        try:
+            from core.services.terrain.TerrainService import TerrainService
+            notice = TerrainService.take_degradation_notice()
+        except Exception:
+            return
+        if not notice:
+            return
+        status = getattr(self.parent, 'status_controller', None)
+        if status is None:
+            return
+        provider = notice.get('provider') or self.tr("Local terrain data")
+        if notice.get('degraded_to') == 'flat':
+            message = self.tr(
+                "{provider} is not answering and no fallback terrain is "
+                "available — some calculations assume flat terrain. Check "
+                "the terrain settings in Preferences."
+            ).format(provider=provider)
+        else:
+            message = self.tr(
+                "{provider} is not answering — using ~30 m global terrain "
+                "data instead. Check the terrain settings in Preferences."
+            ).format(provider=provider)
+        status.show_toast(message, 10000, color="#FF9800")
 
     def reload_image_preserving_view(self):
         """
