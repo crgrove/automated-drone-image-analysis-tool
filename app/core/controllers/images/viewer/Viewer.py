@@ -98,7 +98,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
     and interaction logic for navigating and analyzing drone images.
     """
 
-    def __init__(self, xml_path, position_format, temperature_unit, distance_unit, show_hidden, theme):
+    def __init__(self, xml_path, position_format, temperature_unit, distance_unit, show_hidden, theme,
+                 recovery_session=None):
         """Initializes the ADIAT Image Viewer.
 
         Args:
@@ -108,6 +109,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             distance_unit (str): The unit in which distance values will be displayed.
             show_hidden (bool): Whether or not to show hidden images by default.
             theme (str): The current active theme.
+            recovery_session (RecoverySession): Session-scoped folder candidates
+                from a results-folder scan, consumed by PathValidationController
+                to relink missing images without re-prompting. None outside a
+                scan (behavior unchanged).
         """
         super().__init__()
         self.settings_service = SettingsService()
@@ -150,6 +155,9 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         self._loading_dialog.set_status(self.tr("Reading result file..."))
 
         self.xml_path = xml_path
+        # Read by PathValidationController via self.parent during the
+        # validate/relink pass below.
+        self.recovery_session = recovery_session
         self.xml_service = XmlService(xml_path)
         self.images = self.xml_service.get_images()
         # Backfill persistent run-wide AOI numbers on legacy result files so

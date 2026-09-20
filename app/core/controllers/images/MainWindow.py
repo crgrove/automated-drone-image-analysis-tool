@@ -6,6 +6,7 @@ from core.services.AnalyzeService import AnalyzeService
 from core.services.BatchAnalyzeService import BatchAnalyzeService
 from core.services.LoggerService import LoggerService
 from core.services.ResultsScannerService import ResultsScannerService
+from core.services.RecoverySessionService import RecoverySession
 from core.controllers.UpdateController import UpdateController
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
 from helpers import FeatureFlags
@@ -1195,6 +1196,14 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             # Save the selected folder for next time
             self.settings_service.set_setting('LastResultsFolder', folder)
 
+            # Reuse the recovery session (and its cached folder indexes) when
+            # the user re-scans the same root; a new root starts fresh. Every
+            # viewer opened from this scan gets the session so missing images
+            # resolve from the scanned tree without prompting.
+            existing_session = getattr(self, '_recovery_session', None)
+            if existing_session is None or not existing_session.matches_root(folder):
+                self._recovery_session = RecoverySession(folder)
+
             # Show progress dialog
             self._scan_progress = ScanProgressDialog(self)
             self._scan_progress.show()
@@ -1304,7 +1313,8 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 temperature_unit,
                 distance_unit,
                 False,  # show_hidden
-                theme
+                theme,
+                recovery_session=getattr(self, '_recovery_session', None)
             )
             self.viewer.show()
 

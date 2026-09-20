@@ -72,6 +72,23 @@ def is_absolute_any_platform(path):
     return False
 
 
+def is_filesystem_root(path):
+    """True for drive/filesystem roots, which are too big to index.
+
+    Recovery code walks candidate folders recursively; pointing that walk at
+    ``C:\\`` or ``/`` would index the whole machine, so roots are excluded
+    everywhere a folder is remembered or tried.
+
+    Args:
+        path (str): A local folder path.
+
+    Returns:
+        bool: True when *path* names a filesystem root.
+    """
+    normalized = os.path.abspath(path)
+    return os.path.dirname(normalized) == normalized
+
+
 def canonical_path(path):
     """Return *path* with redundant separators and ``..`` segments collapsed.
 
