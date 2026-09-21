@@ -325,37 +325,102 @@ class ZipExportController(TranslationMixin):
         The small emailable transfer (KB-MB instead of the full imagery). The
         recipient opens the XML wherever they unzip it; the source images are
         relinked to their own copy through the missing-image recovery flow.
-        The XML is copied verbatim - its recorded image paths stay honest,
-        and the whole run travels (hidden images and unflagged AOIs included).
+        The whole run travels (hidden images and unflagged AOIs included).
+
+        Masks that live inside the results folder keep their relative layout.
+        A mask relinked to somewhere OUTSIDE it (path recovery legitimately
+        persists such absolute paths) is copied to a collision-safe spot under
+        ``external_masks/`` INSIDE the staging tree, and the STAGED XML's
+        reference is rewritten to that portable location - naively resolving
+        ``../..`` references used to write the copy outside staging and ship a
+        bundle whose masks were silently absent. The original XML on disk is
+        never modified; missing masks are disclosed in MISSING_MASKS.txt
+        rather than silently dropped.
         """
+        import hashlib
+
         xml_path = getattr(self.parent, 'xml_path', None)
         if not xml_path or not os.path.exists(xml_path):
             raise FileNotFoundError("No results XML to export")
-        xml_service = getattr(self.parent, 'xml_service', None)
-        if xml_service is None:
-            xml_service = XmlService(xml_path)
+        # A fresh parse: the staged tree gets its mask references rewritten,
+        # and that mutation must never touch the viewer's live XML service.
+        xml_service = XmlService(xml_path)
 
-        results_root = os.path.join(staging_root, "ADIAT_Results")
+        results_root = os.path.realpath(os.path.join(staging_root, "ADIAT_Results"))
         os.makedirs(results_root, exist_ok=True)
-        shutil.copy2(xml_path, os.path.join(results_root, os.path.basename(xml_path)))
+        xml_dst_path = os.path.join(results_root, os.path.basename(xml_path))
 
-        mask_src_dir = os.path.dirname(xml_path)
-        copied = set()
-        for img in xml_service.get_images():
-            mask_path = img.get('mask_path', '')
-            if not mask_path or not os.path.exists(mask_path):
-                continue
+        xml_dir = os.path.dirname(os.path.abspath(xml_path))
+        rel_by_source = {}   # realpath(source mask) -> archive-relative path
+        used_rels = set()
+        missing = []
+
+        def _archive_rel(src):
+            """Collision-safe archive location for one mask source file."""
             try:
-                rel = os.path.relpath(mask_path, mask_src_dir)
+                rel = os.path.relpath(src, xml_dir)
             except ValueError:
-                rel = os.path.basename(mask_path)
-            key = os.path.normcase(rel)
-            if key in copied:
+                rel = None                      # other drive on Windows
+            if rel is not None and (os.path.isabs(rel) or rel.split(os.sep)[0] == '..'):
+                rel = None                      # outside the results folder
+            if rel is None:
+                rel = os.path.join('external_masks', os.path.basename(src))
+            rel = rel.replace('\\', '/')
+            if rel.lower() in used_rels:
+                digest = hashlib.sha1(
+                    os.path.normcase(src).encode('utf-8')).hexdigest()[:8]
+                rel = f"external_masks/{digest}_{os.path.basename(src)}"
+            # Containment is enforced, never assumed: a destination that
+            # resolves outside the staging tree falls back to a flat name.
+            dst = os.path.normcase(os.path.realpath(os.path.join(results_root, rel)))
+            if not dst.startswith(os.path.normcase(results_root) + os.sep):
+                digest = hashlib.sha1(
+                    os.path.normcase(src).encode('utf-8')).hexdigest()[:8]
+                rel = f"external_masks/{digest}_{os.path.basename(src)}"
+            return rel
+
+        root = xml_service.xml.getroot()
+        images_xml = root.find('images')
+        for image_xml in (images_xml if images_xml is not None else []):
+            mask_attr = image_xml.get('mask_path', '')
+            if not mask_attr:
                 continue
-            copied.add(key)
-            dst = os.path.join(results_root, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(mask_path, dst)
+            # Mirror XmlService.get_images: relative names resolve beside the XML.
+            src = mask_attr
+            if not os.path.isabs(src):
+                src = os.path.join(xml_dir, src)
+            src = os.path.normpath(src)
+            if not os.path.exists(src):
+                if mask_attr not in missing:
+                    missing.append(mask_attr)
+                continue
+            src_key = os.path.normcase(os.path.realpath(src))
+            rel = rel_by_source.get(src_key)
+            if rel is None:
+                rel = _archive_rel(src)
+                rel_by_source[src_key] = rel
+                used_rels.add(rel.lower())
+                dst = os.path.join(results_root, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+            if mask_attr.replace('\\', '/') != rel:
+                image_xml.set('mask_path', rel)
+
+        try:
+            xml_service.save_xml_file(xml_dst_path)
+        except Exception:
+            # The un-rewritten original still beats an absent XML.
+            shutil.copy2(xml_path, xml_dst_path)
+
+        if missing:
+            self.logger.warning(
+                f"Results-only export: {len(missing)} referenced mask(s) were "
+                f"not found and are absent from the bundle: {missing}")
+            with open(os.path.join(results_root, "MISSING_MASKS.txt"), 'w',
+                      encoding='utf-8') as fh:
+                fh.write("The following mask references in the results XML "
+                         "could not be found when this bundle was exported:\n")
+                fh.write("\n".join(missing) + "\n")
 
     def _export_augmented_one(self, img, staging_root):
         """Render and write a single augmented image preserving metadata."""

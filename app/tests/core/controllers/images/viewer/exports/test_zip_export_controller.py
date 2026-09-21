@@ -297,26 +297,34 @@ def test_thread_results_only_calls_the_results_stager():
     controller._export_augmented_one.assert_not_called()
 
 
+def _results_xml(images):
+    """A minimal real results XML: (path, mask_path_attr) per image."""
+    blocks = []
+    for path, mask in images:
+        mask_attr = ' mask_path="' + mask + '"' if mask else ''
+        blocks.append('<image path="' + path + '"' + mask_attr + ' hidden="False"/>')
+    return ('<data><settings input_dir="in" output_dir="out" algorithm="X">'
+            '<options/></settings><images>' + "".join(blocks) + '</images></data>')
+
+
 def test_export_results_only_stages_xml_and_masks(tmp_path):
     # A real results layout: XML beside two mask TIFFs, one referenced twice.
     results_dir = tmp_path / "ADIAT_Results"
     results_dir.mkdir()
-    xml_path = results_dir / "ADIAT_Data.xml"
-    xml_path.write_text("<data/>")
     (results_dir / "a_mask.tif").write_text("mask-a")
     (results_dir / "b_mask.tif").write_text("mask-b")
+    xml_path = results_dir / "ADIAT_Data.xml"
+    xml_path.write_text(_results_xml([
+        ("C:/orig/1.jpg", "a_mask.tif"),
+        ("C:/orig/2.jpg", "a_mask.tif"),      # duplicate reference
+        ("C:/orig/3.jpg", "b_mask.tif"),
+        ("C:/orig/4.jpg", "gone_mask.tif"),   # missing on disk
+        ("C:/orig/5.jpg", ""),
+    ]))
 
     parent = _parent()
     parent.xml_path = str(xml_path)
-    xml_service = MagicMock()
-    xml_service.get_images.return_value = [
-        {"mask_path": str(results_dir / "a_mask.tif")},
-        {"mask_path": str(results_dir / "a_mask.tif")},   # duplicate reference
-        {"mask_path": str(results_dir / "b_mask.tif")},
-        {"mask_path": str(results_dir / "gone_mask.tif")},  # missing on disk
-        {"mask_path": ""},
-    ]
-    parent.xml_service = xml_service
+    parent.xml_service = None
     controller = ZipExportController(parent)
 
     staging = tmp_path / "staging"
@@ -324,12 +332,20 @@ def test_export_results_only_stages_xml_and_masks(tmp_path):
     controller._export_results_only(str(staging))
 
     staged = staging / "ADIAT_Results"
-    assert (staged / "ADIAT_Data.xml").read_text() == "<data/>"
     assert (staged / "a_mask.tif").read_text() == "mask-a"
     assert (staged / "b_mask.tif").read_text() == "mask-b"
     assert not (staged / "gone_mask.tif").exists()
-    # Nothing else travels: no images/ tree
+    # In-tree references keep their relative names in the staged XML; the
+    # missing mask is disclosed instead of silently dropped.
+    from core.services.XmlService import XmlService
+    staged_imgs = XmlService(str(staged / "ADIAT_Data.xml")).get_images()
+    masks = [img['xml'].get('mask_path') for img in staged_imgs]
+    assert masks[:3] == ["a_mask.tif", "a_mask.tif", "b_mask.tif"]
+    missing_note = (staged / "MISSING_MASKS.txt").read_text()
+    assert "gone_mask.tif" in missing_note
+    # Nothing else travels: no images/ tree, original XML untouched.
     assert not (staging / "images").exists()
+    assert 'mask_path="a_mask.tif"' in xml_path.read_text()
 
 
 def test_export_results_only_without_xml_raises(tmp_path):
@@ -339,3 +355,118 @@ def test_export_results_only_without_xml_raises(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         controller._export_results_only(str(tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# PR #149 review regression (B5): external masks must travel INSIDE the
+# archive and never write outside staging.
+# ---------------------------------------------------------------------------
+
+def _tree_files(root):
+    out = []
+    for base, _dirs, files in os.walk(root):
+        for name in files:
+            out.append(os.path.join(base, name))
+    return out
+
+
+def test_b5_external_masks_travel_inside_the_archive(tmp_path):
+    """An XML relinked to masks OUTSIDE its results folder (path recovery
+    legitimately persists such absolute paths) must still produce a complete,
+    self-contained bundle: masks staged under the archive, references
+    rewritten, and nothing written outside the staging tree."""
+    import zipfile
+
+    source = tmp_path / "source"
+    results_dir = source / "review" / "ADIAT_Results"
+    results_dir.mkdir(parents=True)
+    shared = source / "shared_masks"
+    shared.mkdir()
+    (shared / "a.tif").write_text("external-a")
+    other = source / "other_masks"
+    other.mkdir()
+    (other / "a.tif").write_text("external-a2")     # same basename, elsewhere
+    (results_dir / "local.tif").write_text("local")
+
+    xml_path = results_dir / "ADIAT_Data.xml"
+    xml_path.write_text(_results_xml([
+        ("C:/orig/1.jpg", str(shared / "a.tif").replace("\\", "/")),
+        ("C:/orig/2.jpg", str(other / "a.tif").replace("\\", "/")),
+        ("C:/orig/3.jpg", "local.tif"),
+    ]))
+    original_xml_text = xml_path.read_text()
+
+    parent = _parent()
+    parent.xml_path = str(xml_path)
+    controller = ZipExportController(parent)
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    before_outside = set(_tree_files(source))
+    controller._export_results_only(str(staging))
+
+    # Nothing was written outside the staging tree, and the original XML
+    # is byte-identical.
+    assert set(_tree_files(source)) == before_outside
+    assert xml_path.read_text() == original_xml_text
+
+    # Zip the staging tree, extract elsewhere, and resolve every staged
+    # mask reference against the extracted XML's location.
+    zip_path = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for f in _tree_files(staging):
+            zf.write(f, os.path.relpath(f, staging))
+    extract = tmp_path / "extracted"
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(extract)
+
+    from core.services.XmlService import XmlService
+    staged_xml = extract / "ADIAT_Results" / "ADIAT_Data.xml"
+    contents = set()
+    for img in XmlService(str(staged_xml)).get_images():
+        mask = img.get('mask_path', '')
+        assert mask, "every reference survived"
+        assert os.path.exists(mask), f"unresolvable staged mask: {mask}"
+        resolved = os.path.realpath(mask)
+        assert resolved.startswith(
+            os.path.realpath(str(extract)) + os.sep), "mask escaped the bundle"
+        with open(mask, encoding="utf-8") as fh:
+            contents.add(fh.read())
+    # Both same-basename externals AND the local mask arrived intact.
+    assert contents == {"external-a", "external-a2", "local"}
+    assert not (extract / "ADIAT_Results" / "MISSING_MASKS.txt").exists()
+
+
+def test_b5_other_drive_mask_is_contained(tmp_path, monkeypatch):
+    """A mask on another Windows drive (relpath raises ValueError) lands under
+    external_masks/ instead of escaping the staging tree."""
+    results_dir = tmp_path / "ADIAT_Results"
+    results_dir.mkdir()
+    mask = tmp_path / "z_drive_mask.tif"
+    mask.write_text("z-drive")
+    xml_path = results_dir / "ADIAT_Data.xml"
+    xml_path.write_text(_results_xml([
+        ("C:/orig/1.jpg", str(mask).replace("\\", "/"))]))
+
+    real_relpath = os.path.relpath
+
+    def cross_drive_relpath(path, start=os.curdir):
+        if os.path.normcase(str(mask)) in os.path.normcase(str(path)):
+            raise ValueError("path is on mount 'Z:', start on mount 'C:'")
+        return real_relpath(path, start)
+
+    parent = _parent()
+    parent.xml_path = str(xml_path)
+    controller = ZipExportController(parent)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    monkeypatch.setattr(
+        "core.controllers.images.viewer.exports.ZipExportController.os.path.relpath",
+        cross_drive_relpath)
+    controller._export_results_only(str(staging))
+
+    staged = staging / "ADIAT_Results"
+    assert (staged / "external_masks" / "z_drive_mask.tif").read_text() == "z-drive"
+    from core.services.XmlService import XmlService
+    imgs = XmlService(str(staged / "ADIAT_Data.xml")).get_images()
+    assert imgs[0]['xml'].get('mask_path') == "external_masks/z_drive_mask.tif"
