@@ -87,6 +87,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         self.active_overlays = []          # overlay names, draw order
         self.overlay_loaders = {}          # name -> MapTileLoader
         self.overlay_tile_items = {}       # name -> {(x, y, zoom): item}
+        # Overlay tiles whose FETCH failed (offline/network): remembered so the
+        # visible-tile sweep does not hammer a down server, never cached as
+        # imagery, and cleared when the layer is toggled so recovery retries.
+        self.overlay_failed_tiles = {}     # name -> {(x, y, zoom)}
         self.current_zoom = 15  # Default zoom level
 
         # GPS data storage
@@ -188,6 +192,9 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 loader.tile_loaded.connect(
                     lambda x, y, z, pixmap, overlay=name:
                     self._on_overlay_tile_loaded(overlay, x, y, z, pixmap))
+                loader.tile_placeholder.connect(
+                    lambda x, y, z, pixmap, overlay=name:
+                    self._on_overlay_tile_placeholder(overlay, x, y, z))
                 # Overlay errors surface through the base loader's channel
                 loader.tile_error.connect(self.tile_loader.tile_error)
                 self.overlay_loaders[name] = loader
@@ -197,7 +204,12 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             self.load_visible_tiles()
 
     def _remove_overlay_tiles(self, name):
-        """Drop one overlay's tile items from the scene."""
+        """Drop one overlay's tile items from the scene.
+
+        Also forgets the layer's failed fetches: toggling an overlay is the
+        user's retry gesture, so misses recorded while offline or during a
+        server outage are re-requested when the layer comes back on.
+        """
         for item in list(self.overlay_tile_items.get(name, {}).values()):
             try:
                 if item.scene() == self.scene:
@@ -205,11 +217,28 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             except RuntimeError:
                 pass
         self.overlay_tile_items[name] = {}
+        self.overlay_failed_tiles[name] = set()
+
+    def _on_overlay_tile_placeholder(self, name, x_tile, y_tile, zoom):
+        """Record an overlay tile whose fetch failed (offline/network).
+
+        Failure placeholders are transparent, so nothing needs drawing — the
+        key is remembered only to stop the visible-tile sweep re-requesting it
+        every pan while conditions are unchanged. It is NEVER stored in the
+        imagery cache, so a later success (after a layer toggle, or a retry at
+        this zoom) replaces the blank with real data.
+        """
+        if name not in self.active_overlays:
+            return
+        self.overlay_failed_tiles.setdefault(name, set()).add(
+            (x_tile, y_tile, zoom))
 
     def _on_overlay_tile_loaded(self, name, x_tile, y_tile, zoom, pixmap):
         """Place a loaded overlay tile above the base tiles."""
         if name not in self.active_overlays:
             return
+        # A real result clears any remembered failure for this tile.
+        self.overlay_failed_tiles.get(name, set()).discard((x_tile, y_tile, zoom))
         cache_key = (x_tile, y_tile, zoom, name)
         if cache_key not in self.all_tile_items:
             self.all_tile_items[cache_key] = pixmap
@@ -726,10 +755,13 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             if loader is None:
                 continue
             items = self.overlay_tile_items.setdefault(name, {})
+            failed = self.overlay_failed_tiles.setdefault(name, set())
             for x in range(min_tile_x, max_tile_x + 1):
                 for y in range(min_tile_y, max_tile_y + 1):
                     key = (x, y, self.current_zoom)
-                    if key in items:
+                    if key in items or key in failed:
+                        # Known failures are not re-hammered every pan; a
+                        # layer toggle clears them (_remove_overlay_tiles).
                         continue
                     cache_key = (x, y, self.current_zoom, name)
                     if cache_key in self.all_tile_items:

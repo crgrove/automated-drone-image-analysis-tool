@@ -77,6 +77,11 @@ class MapTileLoader(QObject):
 
     # Signal emitted when a tile is loaded
     tile_loaded = Signal(int, int, int, QPixmap)  # x, y, zoom, pixmap
+    # An overlay tile that is transparent because the FETCH failed (offline or
+    # network error), not because the layer is legitimately empty there. Kept
+    # distinct from tile_loaded so consumers never cache a failure as imagery
+    # and can retry once conditions change.
+    tile_placeholder = Signal(int, int, int, QPixmap)  # x, y, zoom, pixmap
 
     # Signal emitted when there's an error loading tiles
     tile_error = Signal(str)  # error message
@@ -285,7 +290,9 @@ class MapTileLoader(QObject):
         # transparent instead - a gray square would blot out the base map.
         if self.offline_only:
             if overlay:
-                self.tile_loaded.emit(x_tile, y_tile, zoom, self._transparent_tile())
+                # A failure placeholder, NOT imagery: emitted on its own
+                # channel so it is never cached as a successful (empty) tile.
+                self.tile_placeholder.emit(x_tile, y_tile, zoom, self._transparent_tile())
                 return
             if self._emit_fallback_tile(x_tile, y_tile, zoom):
                 return
@@ -390,9 +397,10 @@ class MapTileLoader(QObject):
             self._handle_tile_error(error_code, error_string, http_status)
 
             if self.is_overlay(self.tile_source):
-                # A failed overlay tile goes transparent: the base map stays
-                # readable and the layer simply thins out until retried.
-                self.tile_loaded.emit(x_tile, y_tile, zoom, self._transparent_tile())
+                # A failed overlay tile goes transparent so the base map stays
+                # readable - but on the placeholder channel, so the miss is
+                # retryable instead of cached as a successful empty tile.
+                self.tile_placeholder.emit(x_tile, y_tile, zoom, self._transparent_tile())
             elif not self._emit_fallback_tile(x_tile, y_tile, zoom):
                 # Prefer an upscaled ancestor crop over a blank gray tile so
                 # the user keeps context of where they are in the imagery.

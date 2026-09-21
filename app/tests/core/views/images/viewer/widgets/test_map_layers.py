@@ -89,17 +89,23 @@ def test_max_zoom_per_source(tmp_path, source, expected):
 # Overlay failure semantics: transparent, never gray, no ancestor fallback
 # ---------------------------------------------------------------------------
 
-def test_offline_uncached_overlay_emits_transparent_tile(app, tmp_path):
+def test_offline_uncached_overlay_emits_transparent_placeholder(app, tmp_path):
+    """An offline overlay miss is a transparent PLACEHOLDER, not imagery: it
+    arrives on its own channel so consumers never cache the failure as a
+    legitimate empty tile (the bug that left overlays blank after
+    connectivity returned)."""
     loader = _loader(tmp_path, 'trails', offline=True)
-    tiles, errors = [], []
+    tiles, placeholders, errors = [], [], []
     loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append(pm))
+    loader.tile_placeholder.connect(lambda x, y, z, pm: placeholders.append(pm))
     loader.tile_error.connect(errors.append)
 
     loader.load_tile(5, 6, 10)
 
-    assert len(tiles) == 1
+    assert tiles == [], "a failed fetch must never masquerade as a loaded tile"
+    assert len(placeholders) == 1
     assert errors == [], "a missing overlay tile is not an error condition"
-    image = tiles[0].toImage()
+    image = placeholders[0].toImage()
     assert image.pixelColor(128, 128).alpha() == 0
 
 
@@ -214,3 +220,101 @@ def test_set_offline_mode_fans_out_to_overlay_loaders(app):
     view.set_offline_mode(True)
     assert view.tile_loader.offline_only is True
     assert view.overlay_loaders['trails'].offline_only is True
+
+
+# ---------------------------------------------------------------------------
+# PR #149 review regression (B6): overlay fetch failures must be retryable,
+# never cached as imagery.
+# ---------------------------------------------------------------------------
+
+def test_b6_failed_overlay_tile_is_not_cached_as_imagery(app):
+    view = GPSMapView()
+    view.current_zoom = 12
+    view.set_overlays(['trails'])
+
+    view._on_overlay_tile_placeholder('trails', 1, 2, 12)
+
+    assert (1, 2, 12, 'trails') not in view.all_tile_items
+    assert (1, 2, 12) not in view.overlay_tile_items.get('trails', {})
+    assert (1, 2, 12) in view.overlay_failed_tiles['trails']
+
+
+def test_b6_layer_toggle_clears_failures_and_refetches(app):
+    """Offline miss -> online -> layer toggle must cause a real fetch: the
+    toggle forgets the failure, and the next visible sweep asks the loader."""
+    view = GPSMapView()
+    view.current_zoom = 12
+    view.set_overlays(['trails'])
+    view._on_overlay_tile_placeholder('trails', 1, 2, 12)
+
+    view.set_overlays([])                 # toggle off
+    view.set_overlays(['trails'])         # toggle back on
+    assert view.overlay_failed_tiles['trails'] == set()
+
+    requests = []
+    view.overlay_loaders['trails'].load_tile = (
+        lambda x, y, z: requests.append((x, y, z)))
+    view.overlay_tile_items['trails'] = {}
+    # Sweep the exact tile through the overlay loop.
+    view.overlay_failed_tiles.setdefault('trails', set())
+    for name in view.active_overlays:
+        loader = view.overlay_loaders.get(name)
+        items = view.overlay_tile_items.setdefault(name, {})
+        failed = view.overlay_failed_tiles.setdefault(name, set())
+        key = (1, 2, 12)
+        if key not in items and key not in failed and \
+                (1, 2, 12, name) not in view.all_tile_items:
+            loader.load_tile(1, 2, 12)
+    assert (1, 2, 12) in requests
+
+
+def test_b6_success_after_failure_replaces_the_blank(app):
+    """HTTP failure followed by success: the later real tile renders and the
+    failure record is cleared."""
+    view = GPSMapView()
+    view.current_zoom = 12
+    view.set_overlays(['trails'])
+    view._on_overlay_tile_placeholder('trails', 1, 2, 12)
+    assert (1, 2, 12) in view.overlay_failed_tiles['trails']
+
+    view._on_overlay_tile_loaded('trails', 1, 2, 12, _tile())
+
+    assert (1, 2, 12) not in view.overlay_failed_tiles['trails']
+    assert (1, 2, 12) in view.overlay_tile_items['trails']
+    assert (1, 2, 12, 'trails') in view.all_tile_items
+
+
+def test_b6_genuinely_empty_successful_tile_stays_cached(app):
+    """A transparent tile delivered as a SUCCESS (the server really has no
+    trail there) is legitimate imagery and remains cached."""
+    view = GPSMapView()
+    view.current_zoom = 12
+    view.set_overlays(['trails'])
+    transparent = QPixmap(256, 256)
+    transparent.fill(Qt.transparent)
+
+    view._on_overlay_tile_loaded('trails', 1, 2, 12, transparent)
+
+    assert (1, 2, 12, 'trails') in view.all_tile_items
+    assert view.overlay_failed_tiles.get('trails', set()) == set()
+
+
+def test_b6_online_error_emits_placeholder_channel(app, tmp_path):
+    """The download-error path emits on tile_placeholder, not tile_loaded, so
+    consumers cannot mistake the failure for a served tile."""
+    from unittest.mock import MagicMock
+    from PySide6.QtNetwork import QNetworkReply
+
+    loader = _loader(tmp_path, 'trails', offline=False)
+    tiles, placeholders = [], []
+    loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append((x, y, z)))
+    loader.tile_placeholder.connect(lambda x, y, z, pm: placeholders.append((x, y, z)))
+
+    reply = MagicMock()
+    reply.error.return_value = QNetworkReply.NetworkError.ConnectionRefusedError
+    reply.errorString.return_value = "refused"
+    reply.attribute.return_value = None
+    loader.on_tile_downloaded(reply, 5, 6, 10)
+
+    assert placeholders == [(5, 6, 10)]
+    assert tiles == []
