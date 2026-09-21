@@ -10,8 +10,8 @@ from core.services.export.ReviewMergeService import ReviewMergeService
 
 
 def _aoi_xml(center, number=None, flagged=False, comment=None,
-             user_created=False, user_pos=None):
-    attrs = [f'center="{center}"', 'radius="5"', 'area="20.0"',
+             user_created=False, user_pos=None, radius=5):
+    attrs = [f'center="{center}"', f'radius="{radius}"', 'area="20.0"',
              f'flagged="{flagged}"']
     if number is not None:
         attrs.append(f'number="{number}"')
@@ -25,7 +25,7 @@ def _aoi_xml(center, number=None, flagged=False, comment=None,
 
 
 def _write_copy(tmp_path, reviewer, images, input_dir="D:/missions/Batch1",
-                reviewer_name=None):
+                reviewer_name=None, aoi_radius=15, options_xml="<options/>"):
     """One reviewer's XML copy in its own folder (as the workflow produces).
 
     Args:
@@ -44,9 +44,10 @@ def _write_copy(tmp_path, reviewer, images, input_dir="D:/missions/Batch1",
     xml = (
         f'<data>{review_meta}'
         f'<settings input_dir="{input_dir}" output_dir="out" '
-        'identifier_color="(255, 0, 255)" aoi_radius="15" algorithm="HSVColorRange" '
+        f'identifier_color="(255, 0, 255)" aoi_radius="{aoi_radius}" '
+        'algorithm="HSVColorRange" '
         'thermal="False" num_processes="1" min_area="10" max_area="" '
-        'hist_ref_path="" kmeans_clusters=""><options/></settings>'
+        f'hist_ref_path="" kmeans_clusters="">{options_xml}</settings>'
         f'<images>{image_blocks}</images>'
         '</data>'
     )
@@ -298,3 +299,174 @@ def test_load_contexts_end_to_end_merges_copies(tmp_path):
     assert merged_ctx.run_name == "Batch1"
     assert merged_ctx.total_aoi_count == 1, "the shared AOI appears once"
     assert contexts[1].review_count == 1
+
+
+# ---------------------------------------------------------------------------
+# PR #149 review regressions (B1-B4): merges must never lose or conflate
+# findings. Each test reproduces a defect from the 2026-09-21 review.
+# ---------------------------------------------------------------------------
+
+def test_b1_independent_reviewer_additions_both_survive(tmp_path):
+    """B1: two reviewers each add their FIRST manual AOI (both numbered 2,
+    numbering being local to each copy) at widely separated positions. All
+    three findings survive with comments attached to the right geometry."""
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Alice", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1),
+            _aoi_xml("(100, 100)", number=2, flagged=True, user_created=True,
+                     comment="tarp near creek"),
+        ])]),
+        ("R2", "Bob", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1),
+            _aoi_xml("(500, 500)", number=2, flagged=True, user_created=True,
+                     comment="boot print"),
+        ])]),
+    ])
+    assert len(aois) == 3
+    by_center = {tuple(a['center']): a for a in aois}
+    assert set(by_center) == {(10, 10), (100, 100), (500, 500)}
+    assert by_center[(100, 100)]['user_comment'] == "Alice: tarp near creek"
+    assert "Added by Alice." in by_center[(100, 100)]['review_note']
+    assert by_center[(500, 500)]['user_comment'] == "Bob: boot print"
+    assert "Added by Bob." in by_center[(500, 500)]['review_note']
+
+
+def test_b1_shared_manual_aoi_copies_still_merge_once(tmp_path):
+    """A manual AOI added BEFORE the copies were made exists identically in
+    both; the fix must not blindly duplicate it."""
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Alice", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1),
+            _aoi_xml("(200, 200)", number=2, user_created=True, flagged=True),
+        ])]),
+        ("R2", "Bob", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1),
+            _aoi_xml("(200, 200)", number=2, user_created=True),
+        ])]),
+    ])
+    assert len(aois) == 2
+    shared = [a for a in aois if tuple(a['center']) == (200, 200)]
+    assert len(shared) == 1
+    assert "Flagged by 1 of 2" in shared[0]['review_note']
+
+
+def test_b2_nearby_numbered_detections_stay_distinct(tmp_path):
+    """B2: machine AOIs 1 and 2 sit 8 px apart. Different valid numbers are
+    different detections; the proximity fallback must not collapse them -
+    in either reviewer's AOI ordering."""
+    for order in ([1, 2], [2, 1]):
+        aoi_pair = {
+            1: _aoi_xml("(100, 100)", number=1, flagged=True),
+            2: _aoi_xml("(108, 108)", number=2),
+        }
+        aois_r1 = [aoi_pair[n] for n in order]
+        aois_r2 = [aoi_pair[n] for n in reversed(order)]
+        _, aois = _merged_single_image(tmp_path / f"order{order[0]}", [
+            ("R1", "Alice", [("C:/o/a.jpg", "False", aois_r1)]),
+            ("R2", "Bob", [("C:/o/a.jpg", "False", aois_r2)]),
+        ])
+        assert len(aois) == 2, f"order {order} collapsed nearby detections"
+        centers = sorted(tuple(a['center']) for a in aois)
+        assert centers == [(100, 100), (108, 108)]
+        flagged = [a for a in aois if a['flagged']]
+        assert len(flagged) == 1 and tuple(flagged[0]['center']) == (100, 100)
+
+
+def test_b2_close_legacy_detections_without_numbers_stay_distinct(tmp_path):
+    """Two numberless detections 8 px apart within ONE review are two
+    detections: matching is one-to-one per reviewer copy. Across copies the
+    legacy center rule still pairs them one-for-one."""
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Alice", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(100, 100)", flagged=True),
+            _aoi_xml("(108, 108)"),
+        ])]),
+        ("R2", "Bob", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(100, 100)"),
+            _aoi_xml("(108, 108)", flagged=True),
+        ])]),
+    ])
+    assert len(aois) == 2
+    for aoi in aois:
+        assert aoi['flagged'] is True
+        assert "Flagged by 1 of 2" in aoi['review_note']
+
+
+def test_b3_same_named_images_in_different_flights_both_survive(tmp_path):
+    """B3: a recursive analysis holds FlightA/a.jpg and FlightB/a.jpg; the
+    reviewer copies live under different machine roots. Both images and their
+    AOIs must appear, with distinguishing labels carried on the images."""
+    copy1 = _write_copy(tmp_path, "R1", [
+        ("C:/alice/batch/FlightA/a.jpg", "False",
+         [_aoi_xml("(10, 10)", number=1, flagged=True)]),
+        ("C:/alice/batch/FlightB/a.jpg", "False",
+         [_aoi_xml("(50, 50)", number=2)]),
+    ], reviewer_name="Alice")
+    copy2 = _write_copy(tmp_path, "R2", [
+        ("D:/bob/stuff/FlightA/a.jpg", "False",
+         [_aoi_xml("(10, 10)", number=1)]),
+        ("D:/bob/stuff/FlightB/a.jpg", "False",
+         [_aoi_xml("(50, 50)", number=2, flagged=True)]),
+    ], reviewer_name="Bob")
+
+    service, groups = _load_group(tmp_path, [copy1, copy2])
+    assert len(groups) == 1, "relocated copies must still group as one run"
+    merged = service.merge_group(groups[0])
+
+    assert len(merged.images) == 2
+    keys = sorted(img['merge_key'] for img in merged.images)
+    assert keys == ["flighta/a.jpg", "flightb/a.jpg"]
+    for img in merged.images:
+        assert len(img['areas_of_interest']) == 1
+    flagged_keys = sorted(img['merge_key'] for img in merged.images
+                          if img['areas_of_interest'][0]['flagged'])
+    assert flagged_keys == ["flighta/a.jpg", "flightb/a.jpg"]
+
+
+def test_b4_different_options_are_not_reviewer_copies(tmp_path):
+    """B4: two runs over the same images whose centers coincide but whose
+    analysis options differ are DIFFERENT runs, never grouped."""
+    run1 = _write_copy(tmp_path, "RunA",
+                       [("C:/o/a.jpg", "False", [_aoi_xml("(10, 10)")])],
+                       aoi_radius=5)
+    run2 = _write_copy(tmp_path, "RunB",
+                       [("C:/o/a.jpg", "False", [_aoi_xml("(10, 10)")])],
+                       aoi_radius=50)
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_different_detection_geometry_is_not_a_copy(tmp_path):
+    """Same centers, different detection radii: different payloads."""
+    run1 = _write_copy(tmp_path, "RunA",
+                       [("C:/o/a.jpg", "False",
+                         [_aoi_xml("(10, 10)", radius=5)])])
+    run2 = _write_copy(tmp_path, "RunB",
+                       [("C:/o/a.jpg", "False",
+                         [_aoi_xml("(10, 10)", radius=50)])])
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_different_algorithm_options_split_runs(tmp_path):
+    run1 = _write_copy(
+        tmp_path, "RunA", [("C:/o/a.jpg", "False", [_aoi_xml("(10, 10)")])],
+        options_xml='<options><option name="sensitivity" value="3"/></options>')
+    run2 = _write_copy(
+        tmp_path, "RunB", [("C:/o/a.jpg", "False", [_aoi_xml("(10, 10)")])],
+        options_xml='<options><option name="sensitivity" value="9"/></options>')
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_true_copies_group_despite_backfilled_numbers_and_paths(tmp_path):
+    """True reviewer copies must STILL group: one copy was opened in a viewer
+    (numbers backfilled) and relinked to its own machine root; the detection
+    payload is what matters."""
+    original = _write_copy(tmp_path, "R1", [
+        ("D:/missions/Batch1/FlightA/a.jpg", "False", [_aoi_xml("(10, 10)")])])
+    opened = _write_copy(tmp_path, "R2", [
+        ("E:/copies/Batch1/FlightA/a.jpg", "False",
+         [_aoi_xml("(10, 10)", number=1, flagged=True)])])
+    _, groups = _load_group(tmp_path, [original, opened])
+    assert [len(g) for g in groups] == [2]

@@ -126,7 +126,10 @@ class RunReportContext:
                 unavailable += 1
                 continue
             img = dict(img)
-            img['name'] = cross_platform_basename(path)
+            # The merge key carries the distinguishing flight/subfolder for
+            # runs holding same-named images in different folders; a plain
+            # basename key renders as before.
+            img['name'] = img.get('merge_key') or cross_platform_basename(path)
             aois = img.get('areas_of_interest', [])
             reviewed = [aoi for aoi in aois
                         if aoi.get('flagged', False) or aoi.get('user_comment')]

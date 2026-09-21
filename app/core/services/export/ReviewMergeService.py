@@ -27,7 +27,6 @@ import os
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
 from helpers.LocationInfo import LocationInfo
-from helpers.PathHelper import cross_platform_basename
 
 # Two AOIs in copies of the same run are the same detection when their
 # centers agree within this many pixels (the Search Coordinator's rule),
@@ -132,12 +131,17 @@ class ReviewMergeService:
         run_name = self._merged_run_name(group)
 
         if len(group) == 1:
+            images = [dict(img) for img in first.images]
+            # Same labeling rule as the merged path: a run holding same-named
+            # images in different flight folders shows the distinguishing tail.
+            for key, img in zip(self._relative_image_keys(first.images), images):
+                img['merge_key'] = key
             return MergedRun(
                 run_name=run_name,
                 xml_path=first.xml_path,
                 xml_service=first.xml_service,
                 settings=first.settings,
-                images=[dict(img) for img in first.images],
+                images=images,
                 reviewer_names=reviewer_names,
             )
 
@@ -159,17 +163,22 @@ class ReviewMergeService:
         """AOI-by-AOI merge across every record of one run."""
         review_count = len(group)
 
-        # Union of image basenames, first-seen order
+        # Union of image identities, first-seen order. The identity is the
+        # path tail below each record's own common root, NOT the basename:
+        # a recursive analysis legitimately holds FlightA/a.jpg beside
+        # FlightB/a.jpg, and keying on the name alone silently dropped one.
+        # The tail travels between reviewer machines (their roots differ,
+        # their flight subfolders do not).
         image_keys = []
         per_record_images = []
         for record in group:
-            by_name = {}
-            for img in record.images:
-                key = cross_platform_basename(img.get('path', '')).lower()
-                by_name[key] = img
+            by_key = {}
+            for key, img in zip(self._relative_image_keys(record.images),
+                                record.images):
+                by_key[key] = img
                 if key not in image_keys:
                     image_keys.append(key)
-            per_record_images.append(by_name)
+            per_record_images.append(by_key)
 
         merged_images = []
         for image_key in image_keys:
@@ -180,35 +189,106 @@ class ReviewMergeService:
             # Visible if ANY reviewer kept it visible (flag-positive bias)
             base['hidden'] = all(img.get('hidden', False) for _, img in copies)
             base['areas_of_interest'] = self._merge_aois(copies, review_count)
+            # Carry the distinguishing subfolder into report labels; a plain
+            # basename stays a basename.
+            base['merge_key'] = image_key
             merged_images.append(base)
         return merged_images
 
+    @staticmethod
+    def _relative_image_keys(images):
+        """Per-image identity: the path tail below the images' common root.
+
+        Distinguishes same-named files in different flight subfolders and
+        survives relocation to another machine (only the shared root differs
+        between reviewer copies, and it is stripped per record). Separators
+        and case are normalized so Windows- and POSIX-authored copies agree.
+        """
+        parts_per_image = []
+        for img in images:
+            path = (img.get('path') or '').replace('\\', '/').lower()
+            parts_per_image.append([p for p in path.split('/') if p])
+        if not parts_per_image:
+            return []
+        prefix = 0
+        while True:
+            # Never consume a basename, and stop at the first divergence.
+            if any(len(parts) <= prefix + 1 for parts in parts_per_image):
+                break
+            if len({parts[prefix] for parts in parts_per_image}) != 1:
+                break
+            prefix += 1
+        return ['/'.join(parts[prefix:]) for parts in parts_per_image]
+
     def _merge_aois(self, copies, review_count):
-        """Merge one image's AOIs across its reviewer copies."""
+        """Merge one image's AOIs across its reviewer copies.
+
+        Identity rules (each guards a way findings were being lost):
+
+        * Matching is one-to-one per reviewer copy: two AOIs from the same
+          copy can never share a slot, so nearby detections in one review
+          cannot collapse into each other.
+        * Reviewer-created AOIs never match by number - each copy numbers its
+          own additions locally, so two reviewers' independent finds routinely
+          share a number. They match only an identical copied payload (a
+          shared manual AOI added before the copies were made has the same
+          center in every copy).
+        * Machine detections with run-wide numbers match by number alone;
+          two DIFFERENT valid numbers are two different detections, however
+          close their centers. The center-proximity rule survives only for
+          pairings where at least one side predates AOI numbers, and picks
+          the nearest eligible slot.
+        """
         merged = []  # list of accumulator dicts
 
-        def find_slot(aoi):
-            number = aoi.get('number')
-            for slot in merged:
-                if number is not None and slot['aoi'].get('number') == number:
-                    return slot
-            center = aoi.get('center', (0, 0))
-            for slot in merged:
-                existing = slot['aoi'].get('center', (0, 0))
-                if (abs(existing[0] - center[0]) <= CENTER_MATCH_PX
-                        and abs(existing[1] - center[1]) <= CENTER_MATCH_PX):
-                    return slot
-            return None
+        def find_slot(aoi, copy_idx):
+            def eligible(slot):
+                return copy_idx not in slot['copies']
 
-        for reviewer, img in copies:
+            user_created = aoi.get('user_created', False)
+            center = tuple(aoi.get('center', (0, 0)))
+            if user_created:
+                for slot in merged:
+                    if (slot['aoi'].get('user_created', False) and eligible(slot)
+                            and tuple(slot['aoi'].get('center', (0, 0))) == center):
+                        return slot
+                return None
+
+            number = aoi.get('number')
+            if number is not None:
+                for slot in merged:
+                    if (not slot['aoi'].get('user_created', False)
+                            and slot['aoi'].get('number') == number
+                            and eligible(slot)):
+                        return slot
+
+            best = None
+            best_dist = None
+            for slot in merged:
+                slot_aoi = slot['aoi']
+                if slot_aoi.get('user_created', False) or not eligible(slot):
+                    continue
+                if number is not None and slot_aoi.get('number') is not None:
+                    continue   # both numbered: number equality already decided
+                existing = slot_aoi.get('center', (0, 0))
+                dx = abs(existing[0] - center[0])
+                dy = abs(existing[1] - center[1])
+                if dx <= CENTER_MATCH_PX and dy <= CENTER_MATCH_PX:
+                    dist = dx * dx + dy * dy
+                    if best is None or dist < best_dist:
+                        best, best_dist = slot, dist
+            return best
+
+        for copy_idx, (reviewer, img) in enumerate(copies):
             for aoi in img.get('areas_of_interest', []):
-                slot = find_slot(aoi)
+                slot = find_slot(aoi, copy_idx)
                 if slot is None:
                     slot = {'aoi': dict(aoi), 'flagged_by': [], 'comments': [],
-                            'moved': [], 'created_by': None}
+                            'moved': [], 'created_by': None, 'copies': set()}
                     if aoi.get('user_created', False):
                         slot['created_by'] = reviewer
                     merged.append(slot)
+                slot['copies'].add(copy_idx)
                 if aoi.get('flagged', False) and reviewer not in slot['flagged_by']:
                     slot['flagged_by'].append(reviewer)
                 comment = (aoi.get('user_comment') or '').strip()
@@ -280,20 +360,41 @@ class ReviewMergeService:
                 distinct.append((reviewer, lat, lon))
         return distinct
 
+    # Settings fields that are machine/path-bound and legitimately differ
+    # between true copies (path recovery may localize them); everything else
+    # in the settings IS the analysis identity.
+    _FINGERPRINT_EXCLUDED_SETTINGS = {'input_dir', 'output_dir', 'hist_ref_path'}
+
     def _fingerprint(self, record):
-        """Hash of the run's detection payload (review fields excluded)."""
-        parts = [str(record.settings.get('algorithm', ''))]
-        images = sorted(
-            record.images,
-            key=lambda img: cross_platform_basename(img.get('path', '')).lower())
-        for img in images:
-            centers = sorted(
-                str(aoi.get('center'))
+        """Hash of the run's immutable analysis identity (review fields excluded).
+
+        Covers the full analysis settings (minus machine-specific paths), the
+        relative image identities, and each machine detection's payload
+        (center, radius, area) - not just centers. Two runs over the same
+        images with different options or detection geometry are different
+        runs, never "reviewer copies"; genuinely ambiguous runs stay separate.
+        AOI numbers are excluded: they are backfilled by viewers, so one
+        opened and one never-opened copy of the same run must still group.
+        """
+        settings = record.settings or {}
+        setting_parts = []
+        for key in sorted(settings):
+            if key in self._FINGERPRINT_EXCLUDED_SETTINGS:
+                continue
+            value = settings[key]
+            if isinstance(value, dict):
+                value = sorted(value.items())
+            setting_parts.append(f"{key}={value!r}")
+        parts = ["settings:" + ";".join(setting_parts)]
+
+        keyed = sorted(zip(self._relative_image_keys(record.images), record.images),
+                       key=lambda pair: pair[0])
+        for image_key, img in keyed:
+            detections = sorted(
+                f"{aoi.get('center')}|{aoi.get('radius')}|{aoi.get('area')}"
                 for aoi in img.get('areas_of_interest', [])
                 if not aoi.get('user_created', False))
-            parts.append(
-                cross_platform_basename(img.get('path', '')).lower()
-                + '|' + ';'.join(centers))
+            parts.append(image_key + '|' + ';'.join(detections))
         return hashlib.sha1('\n'.join(parts).encode('utf-8')).hexdigest()
 
     @staticmethod
