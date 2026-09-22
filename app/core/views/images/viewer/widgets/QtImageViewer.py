@@ -67,6 +67,8 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
     zoomChanged = Signal(float)     # **every** zoom change
     mousePositionOnImageChanged = Signal(QPoint)
     roiSelected = Signal(int)
+    # Right-click without drag (both schemes): scene pos, global pos.
+    contextMenuRequested = Signal(QPointF, QPoint)
 
     # ------------------------------ init --------------------------------- #
     def __init__(self, window, parent=None, center=None, thumbnail=False):
@@ -111,6 +113,14 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
         self.zoomOutButton = None
         self.panButton = Qt.RightButton
         self.wheelZoomFactor = 1.25
+
+        # Control scheme: 'classic' (left-drag = box zoom, right-drag = pan)
+        # or 'standard' (left-drag = pan, Shift+left-drag = box zoom, plain
+        # right-click = context menu). See set_control_scheme().
+        self._control_scheme = 'classic'
+        self._zoomStartButton = None    # button that began the active region zoom
+        self._panStartPixel = QPoint()  # where the active pan press landed
+        self._rmbPressPixel = None      # standard scheme: pending right press
 
         self.canZoom = True
         self.canPan = True
@@ -845,6 +855,61 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
         """Restore normal left-click behaviour (region zoom)."""
         self._point_capture_active = False
 
+    def set_control_scheme(self, scheme):
+        """Apply the 'classic' or 'standard' mouse control scheme.
+
+        classic  - left-drag = box zoom, right-drag = pan (ADIAT default)
+        standard - left-drag = pan, Shift+left-drag = box zoom, plain
+                   right-click = context menu (conventional image viewers)
+
+        Thumbnail viewers keep their fixed click behaviour regardless.
+        """
+        if self.thumbnail:
+            return
+        if scheme == 'standard':
+            self._control_scheme = 'standard'
+            self.regionZoomButton = None
+            self.panButton = Qt.LeftButton
+        else:
+            self._control_scheme = 'classic'
+            self.regionZoomButton = Qt.LeftButton
+            self.panButton = Qt.RightButton
+
+    def _begin_region_zoom(self, ev):
+        """Start a rubber-band zoom from this press."""
+        self._pixelPosition = ev.position().toPoint()
+        self.setDragMode(QGraphicsView.RubberBandDrag)
+        super().mousePressEvent(ev)
+        self._isZooming = True
+        self._zoomStartButton = ev.button()
+        ev.accept()
+
+    def _finish_region_zoom(self, ev):
+        """Complete the rubber-band zoom on release; tiny drags are clicks."""
+        super().mouseReleaseEvent(ev)
+        self._isZooming = False
+        self._zoomStartButton = None
+        scene_rect = self._safe_scene_rect()
+        if not scene_rect:
+            return
+        zoomRect = self.scene.selectionArea().boundingRect().intersected(scene_rect)
+        self.scene.setSelectionArea(QPainterPath())
+        self.setDragMode(QGraphicsView.NoDrag)
+
+        # tiny rubber‑band → treat as click
+        if max(abs(ev.position().x() - self._pixelPosition.x()),
+               abs(ev.position().y() - self._pixelPosition.y())) <= 3:
+            pass
+        else:
+            validated_rect = self._validate_zoom_rect(zoomRect)
+            if validated_rect and validated_rect != scene_rect:
+                self.zoomStack.append(validated_rect)
+                self._cleanup_zoom_stack()
+                self.updateViewer()
+                if not self._is_destroyed:
+                    self._safe_emit_view_changed()
+        ev.accept()
+
     def mousePressEvent(self, ev):
         if self._is_destroyed:
             return
@@ -878,6 +943,15 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
             ev.accept()
             return
 
+        # ------------- standard-scheme box zoom (Shift + left-drag)
+        # Must precede the modifier early-out below, which consumes every
+        # modifier press.
+        if (self._control_scheme == 'standard' and ev.button() == Qt.LeftButton
+                and ev.modifiers() == Qt.ShiftModifier and self.canZoom
+                and not self.thumbnail):
+            self._begin_region_zoom(ev)
+            return
+
         dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
         if ev.modifiers() & dummyMods:
             super().mousePressEvent(ev)
@@ -888,6 +962,7 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
         # Takes precedence over region-zoom so hold-Space turns the left button
         # into a pan, then release Space to resume region-zoom.
         if (self._space_held and ev.button() == Qt.LeftButton and self.canPan):
+            self._panStartPixel = ev.position().toPoint()
             self._panLastPixel = ev.position().toPoint()
             self.setDragMode(QGraphicsView.NoDrag)
             if not self.thumbnail:
@@ -898,11 +973,7 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
 
         # ------------- region zoom start
         if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
-            self._pixelPosition = ev.position().toPoint()
-            self.setDragMode(QGraphicsView.RubberBandDrag)
-            super().mousePressEvent(ev)
-            self._isZooming = True
-            ev.accept()
+            self._begin_region_zoom(ev)
             return
 
         # ------------- zoom‑out click
@@ -920,11 +991,30 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
         # NOT use ScrollHandDrag: it pans by moving the scrollbars, which are
         # disabled (see __init__) to avoid the fitInView/scrollbar lock-up.
         if (self.panButton and ev.button() == self.panButton and self.canPan):
+            # Standard scheme pans with the LEFT button, which is also how
+            # movable scene items (person-tool handles) are dragged. A press
+            # on such an item belongs to the item, not to the pan.
+            if self._control_scheme == 'standard':
+                item = self.itemAt(ev.position().toPoint())
+                if item is not None and (item.flags() & QGraphicsItem.ItemIsMovable):
+                    super().mousePressEvent(ev)
+                    return
+            self._panStartPixel = ev.position().toPoint()
             self._panLastPixel = ev.position().toPoint()
             self.setDragMode(QGraphicsView.NoDrag)
             if not self.thumbnail:
                 self.viewport().setCursor(Qt.ClosedHandCursor)
             self._isPanning = True
+            ev.accept()
+            return
+
+        # ------------- standard-scheme right press: menu on no-drag release
+        if (self._control_scheme == 'standard' and ev.button() == Qt.RightButton
+                and not self.thumbnail):
+            self._rmbPressPixel = ev.position().toPoint()
+            scenePos = self.mapToScene(ev.position().toPoint())
+            if not self._is_destroyed:
+                self.rightMouseButtonPressed.emit(scenePos.x(), scenePos.y())
             ev.accept()
             return
 
@@ -984,17 +1074,12 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
             ev.accept()
             return
 
-        dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-        if ev.modifiers() & dummyMods:
-            super().mouseReleaseEvent(ev)
-            ev.accept()
-            return
-
-        # ---- finish panning (right-button drag OR spacebar + left-drag)
-        # Must run before the region-zoom finish: a spacebar pan releases the
-        # LEFT button, which would otherwise be mistaken for a region-zoom end.
-        # The view was translated incrementally during mouseMoveEvent, so
-        # there is nothing to reconcile -- just restore cursor and clear state.
+        # ---- finish panning (pan-button drag OR spacebar + left-drag)
+        # Runs before the region-zoom finish (a spacebar pan releases the LEFT
+        # button, which would otherwise be mistaken for a region-zoom end) and
+        # before the modifier early-out (a modifier pressed mid-drag must not
+        # leave the pan state stale). The view was translated incrementally in
+        # mouseMoveEvent, so there is nothing to reconcile.
         if self._isPanning:
             self.setDragMode(QGraphicsView.NoDrag)
             if self.thumbnail:
@@ -1007,32 +1092,53 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
             if not self._is_destroyed:
                 self._safe_emit_view_changed()
             self._isPanning = False
+
+            # A press-release that never really moved is a click, not a pan.
+            moved = max(abs(ev.position().x() - self._panStartPixel.x()),
+                        abs(ev.position().y() - self._panStartPixel.y()))
+            if moved <= 3 and not self._space_held and not self._is_destroyed:
+                scenePos = self.mapToScene(ev.position().toPoint())
+                if ev.button() == Qt.RightButton:
+                    # Classic scheme: right button pans, so a stationary
+                    # right click asks for the context menu instead.
+                    self.contextMenuRequested.emit(
+                        scenePos, ev.globalPosition().toPoint())
+                elif (ev.button() == Qt.LeftButton
+                        and self._control_scheme == 'standard'):
+                    # Keep click-driven consumers working now that the left
+                    # button doubles as the pan button.
+                    self.leftMouseButtonPressed.emit(scenePos.x(), scenePos.y(), self)
+                    self.leftMouseButtonReleased.emit(scenePos.x(), scenePos.y())
             ev.accept()
             return
 
-        # ---- finish region zoom
-        if (self.regionZoomButton and ev.button() == self.regionZoomButton and self.canZoom):
-            super().mouseReleaseEvent(ev)
-            scene_rect = self._safe_scene_rect()
-            if not scene_rect:
-                return
-            zoomRect = self.scene.selectionArea().boundingRect().intersected(scene_rect)
-            self.scene.setSelectionArea(QPainterPath())
-            self.setDragMode(QGraphicsView.NoDrag)
+        # ---- finish region zoom. Keyed on the recorded start button (not
+        # regionZoomButton) so the standard scheme's Shift+left zoom finishes,
+        # and checked before the modifier early-out so it still finishes while
+        # Shift is held.
+        if self._isZooming and ev.button() == self._zoomStartButton and self.canZoom:
+            self._finish_region_zoom(ev)
+            return
 
-            # tiny rubber‑band → treat as click
-            if max(abs(ev.position().x() - self._pixelPosition.x()),
-                   abs(ev.position().y() - self._pixelPosition.y())) <= 3:
-                pass
-            else:
-                validated_rect = self._validate_zoom_rect(zoomRect)
-                if validated_rect and validated_rect != scene_rect:
-                    self.zoomStack.append(validated_rect)
-                    self._cleanup_zoom_stack()
-                    self.updateViewer()
-                    if not self._is_destroyed:
-                        self._safe_emit_view_changed()
-            self._isZooming = False
+        # ---- standard-scheme right release: no-drag = context menu
+        if (self._control_scheme == 'standard' and ev.button() == Qt.RightButton
+                and self._rmbPressPixel is not None):
+            press_pixel = self._rmbPressPixel
+            self._rmbPressPixel = None
+            scenePos = self.mapToScene(ev.position().toPoint())
+            if not self._is_destroyed:
+                moved = max(abs(ev.position().x() - press_pixel.x()),
+                            abs(ev.position().y() - press_pixel.y()))
+                if moved <= 3:
+                    self.contextMenuRequested.emit(
+                        scenePos, ev.globalPosition().toPoint())
+                self.rightMouseButtonReleased.emit(scenePos.x(), scenePos.y())
+            ev.accept()
+            return
+
+        dummyMods = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
+        if ev.modifiers() & dummyMods:
+            super().mouseReleaseEvent(ev)
             ev.accept()
             return
 
@@ -1048,6 +1154,14 @@ class QtImageViewer(TranslationMixin, QGraphicsView):
                 self.rightMouseButtonReleased.emit(scenePos.x(), scenePos.y())
 
         super().mouseReleaseEvent(ev)
+
+    # ----------------------- contextMenuEvent --------------------------- #
+    def contextMenuEvent(self, ev):
+        # The context menu is driven exclusively by the no-drag release logic
+        # above (contextMenuRequested). Windows synthesizes a context-menu
+        # event after every right release - including after a right-drag pan -
+        # which would double-fire or fire after a pan. Swallow it.
+        ev.accept()
 
     # ----------------------- mouseDoubleClickEvent ---------------------- #
     def mouseDoubleClickEvent(self, ev):

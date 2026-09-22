@@ -704,3 +704,44 @@ def test_thumbnail_click_with_odd_name_only_zooms(controller):
 
     controller.select_aoi.assert_not_called()
     controller.parent.main_image.zoomToArea.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Review-activity log hook: select_aoi is the single convergence point
+# ---------------------------------------------------------------------------
+
+def test_select_aoi_records_selection_with_number_and_mode(controller):
+    controller.parent.images = [{"areas_of_interest": [_aoi()]}]
+    controller.parent.images[0]["areas_of_interest"][0]["number"] = 42
+    controller.parent.current_image = 0
+    controller.parent.gallery_mode = False
+    log = MagicMock()
+    controller.parent.interaction_log = log
+
+    controller.select_aoi(0, 0)
+
+    log.record_selection.assert_called_once_with(42, 'single')
+
+
+def test_select_aoi_records_gallery_mode(controller):
+    controller.parent.images = [{"areas_of_interest": [_aoi()]}]
+    controller.parent.images[0]["areas_of_interest"][0]["number"] = 7
+    controller.parent.current_image = 0
+    controller.parent.gallery_mode = True
+    log = MagicMock()
+    controller.parent.interaction_log = log
+
+    controller.select_aoi(0, 0)
+
+    assert log.record_selection.call_args.args == (7, 'gallery')
+
+
+def test_deselect_ends_the_open_interval(controller):
+    controller.parent.images = [{"areas_of_interest": [_aoi()]}]
+    log = MagicMock()
+    controller.parent.interaction_log = log
+
+    controller.select_aoi(-1, -1)
+
+    log.record_selection.assert_not_called()
+    log.end_current_interval.assert_called_once()

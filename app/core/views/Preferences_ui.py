@@ -134,6 +134,25 @@ class Ui_Preferences(object):
 
         self.verticalLayout_2.addWidget(self.positionFormatWidget)
 
+        self.controlSchemeWidget = QWidget(self.mainWidget)
+        self.controlSchemeWidget.setObjectName(u"controlSchemeWidget")
+        self.horizontalLayoutControlScheme = QHBoxLayout(self.controlSchemeWidget)
+        self.horizontalLayoutControlScheme.setObjectName(u"horizontalLayoutControlScheme")
+        self.controlSchemeLabel = QLabel(self.controlSchemeWidget)
+        self.controlSchemeLabel.setObjectName(u"controlSchemeLabel")
+        self.controlSchemeLabel.setFont(font)
+
+        self.horizontalLayoutControlScheme.addWidget(self.controlSchemeLabel)
+
+        self.controlSchemeComboBox = QComboBox(self.controlSchemeWidget)
+        self.controlSchemeComboBox.setObjectName(u"controlSchemeComboBox")
+        self.controlSchemeComboBox.setFont(font)
+
+        self.horizontalLayoutControlScheme.addWidget(self.controlSchemeComboBox)
+
+
+        self.verticalLayout_2.addWidget(self.controlSchemeWidget)
+
         self.TemperatureWidget = QWidget(self.mainWidget)
         self.TemperatureWidget.setObjectName(u"TemperatureWidget")
         self.horizontalLayout_5 = QHBoxLayout(self.TemperatureWidget)
@@ -398,6 +417,15 @@ class Ui_Preferences(object):
 "\u2022 Lat/Long - Degrees, Minutes, Seconds: 34\u00b0 7' 24.4416\" N, 118\u00b0 59' 15.5424\" W (traditional navigation)\n"
 "\u2022 UTM: Universal Transverse Mercator grid system with zone, easting, northing (military, surveying)\n"
 "This setting affects coordinate display in the viewer, exports, and overlays.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.controlSchemeLabel.setToolTip(QCoreApplication.translate("Preferences", u"Mouse controls for the results-viewer image display.", None))
+#endif // QT_CONFIG(tooltip)
+        self.controlSchemeLabel.setText(QCoreApplication.translate("Preferences", u"Image Viewer Controls:", None))
+#if QT_CONFIG(tooltip)
+        self.controlSchemeComboBox.setToolTip(QCoreApplication.translate("Preferences", u"ADIAT classic: left-drag draws a zoom box, right-drag pans.\n"
+"Standard: left-drag pans, Shift+left-drag draws a zoom box, right-click opens a menu.\n"
+"The mouse wheel zooms and middle-click toggles the magnifier in both schemes.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.temperatureLabel.setToolTip(QCoreApplication.translate("Preferences", u"Unit for displaying temperature measurements from thermal imagery.\n"

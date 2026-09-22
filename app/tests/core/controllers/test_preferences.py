@@ -189,3 +189,22 @@ def test_canopy_warning_flags_missing_files(preferences, tmp_path):
     preferences._refresh_canopy_visibility()
     assert not preferences.canopyPathsWarningLabel.isHidden()
     assert "no longer exist" in preferences.canopyPathsWarningLabel.text()
+
+
+# ---------------------------------------------------------------------------
+# Image viewer control scheme
+# ---------------------------------------------------------------------------
+
+def test_control_scheme_combo_uses_stable_ids(preferences):
+    combo = preferences.controlSchemeComboBox
+    assert [combo.itemData(i) for i in range(combo.count())] == ['classic', 'standard']
+    assert combo.currentData() == 'classic'
+
+
+def test_control_scheme_change_persists_and_pushes_live(preferences):
+    combo = preferences.controlSchemeComboBox
+    combo.setCurrentIndex(combo.findData('standard'))
+
+    preferences.parent.settings_service.set_setting.assert_any_call(
+        'ViewerControlScheme', 'standard')
+    preferences.parent.viewer.apply_control_scheme.assert_called()

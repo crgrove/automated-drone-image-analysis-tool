@@ -625,6 +625,12 @@ class PdfGeneratorService:
                 if user_comment:
                     metadata_lines.append(f"<b>Comment:</b> {user_comment}")
 
+                # Multi-reviewer note (set by the combined report's merge;
+                # never present on single-run data or in the results XML)
+                review_note = aoi.get('review_note', '')
+                if review_note:
+                    metadata_lines.append(f"<b>Review:</b> {review_note}")
+
                 # Add metadata as paragraph
                 if metadata_lines:
                     metadata_text = "<br/>".join(metadata_lines)

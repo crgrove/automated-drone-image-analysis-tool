@@ -91,6 +91,31 @@ RECUMBENT_THICKNESS_FRACTION = 0.12
 # and is projected instead.
 NADIR_PITCH_TOLERANCE_DEG = 15.0
 
+# The rotation handle orbits the anchor at this multiple of the person's
+# height, so it clears the silhouette at any size while staying close by.
+ROTATION_HANDLE_DISTANCE_FACTOR = 1.3
+
+
+def person_rotation_from_ground_vector(d_north, d_east, offset_deg=0.0):
+    """Compass heading (degrees) of a ground vector, wrapped to [0, 360).
+
+    Sibling of the ruler's ``ruler_angle_from_drag`` but computed on the
+    GROUND PLANE rather than in screen space: person rotation is a compass
+    heading (local +y maps to North at rotation 0), and screen angles drift
+    from ground headings by the camera yaw on oblique shots.
+
+    Args:
+        d_north (float): Northward component, metres.
+        d_east (float): Eastward component, metres.
+        offset_deg (float): Grab offset subtracted so the person does not
+            jump to the cursor at drag start.
+
+    Returns:
+        float: Heading in [0, 360).
+    """
+    return (math.degrees(math.atan2(d_east, d_north)) - offset_deg) % 360.0
+
+
 # Gap (image px) between the reference person's anchor and the edge of the
 # selected AOI: an anchor landing on the AOI is shifted aside by the AOI's
 # radius plus this clearance, so the overlay never covers the detection it
@@ -235,6 +260,51 @@ class _AnchorHandle(QGraphicsEllipseItem):
         return super().itemChange(change, value)
 
 
+class _RotationHandle(QGraphicsEllipseItem):
+    """Draggable marker that rotates the person about the anchor.
+
+    Dragging computes a ground-plane heading from the anchor's foot point to
+    the cursor's ground point, so the rotation stays exact on oblique cameras
+    (a screen-space angle would drift by the camera yaw). The dialog re-seats
+    the handle on its orbit after every render; while the user drags, the
+    ItemPositionChange return value is what keeps it glued to the orbit.
+    """
+
+    def __init__(self, dialog, radius=7):
+        super().__init__(-radius, -radius, 2 * radius, 2 * radius)
+        self._dialog = dialog
+        self.setZValue(1004)
+        self.setBrush(QBrush(QColor(90, 200, 255, 220)))
+        self.setPen(QPen(QColor(20, 60, 90), 2))
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
+        self._grab_offset_deg = 0.0
+
+    def mousePressEvent(self, event):
+        # Capture where on the orbit the user grabbed, so the rotation
+        # follows the drag instead of snapping the handle under the cursor.
+        dialog = self._dialog
+        if dialog is not None:
+            heading = dialog._heading_at_scene_pos(self.pos())
+            if heading is not None:
+                self._grab_offset_deg = (heading - dialog.rotation_deg) % 360.0
+            else:
+                self._grab_offset_deg = 0.0
+        super().mousePressEvent(event)
+
+    def itemChange(self, change, value):
+        if (change == QGraphicsItem.ItemPositionChange
+                and self._dialog is not None
+                and not self._dialog._updating_rotation_handle):
+            constrained = self._dialog._on_rotation_handle_dragged(
+                value, self._grab_offset_deg)
+            if constrained is not None:
+                return constrained
+        return super().itemChange(change, value)
+
+
 class PersonReferenceDialog(TranslationMixin, QDialog):
     """Dialog for placing perspective-projected person silhouettes on the image."""
 
@@ -292,6 +362,9 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.anchor_item = None
         self.pose_items = {}   # 'standing'|'recumbent'|'sitting' -> QGraphicsPathItem
         self.shadow_item = None
+        self.rotation_handle_item = None
+        # Guards the seat-the-handle setPos against re-entering the drag path.
+        self._updating_rotation_handle = False
 
         # Holds the inputs between update_for_image and the rebuild, so
         # closeEvent can drop a request that arrived as the dialog went away
@@ -835,6 +908,10 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
         self.anchor_item.setPos(self._default_anchor_scene())
         scene.addItem(self.anchor_item)
 
+        self.rotation_handle_item = _RotationHandle(self)
+        self.rotation_handle_item.setToolTip(self.tr("Drag to rotate the person"))
+        scene.addItem(self.rotation_handle_item)
+
         # Shadow sits below the silhouettes; silhouettes below the handle.
         self.shadow_item = QGraphicsPathItem()
         self.shadow_item.setZValue(1000)
@@ -859,7 +936,7 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
                 except Exception:
                     pass
         self.pose_items.clear()
-        for attr in ('shadow_item', 'anchor_item'):
+        for attr in ('shadow_item', 'anchor_item', 'rotation_handle_item'):
             item = getattr(self, attr, None)
             if item is not None and scene is not None:
                 try:
@@ -1104,6 +1181,106 @@ class PersonReferenceDialog(TranslationMixin, QDialog):
             rec_item.setVisible(path is not None)
 
         self._render_shadows(height_cm, height_m, foot)
+        self._position_rotation_handle()
+
+    # ---------------- rotation handle ----------------
+    def _heading_at_scene_pos(self, scene_pos):
+        """Ground heading (deg from North) from the anchor's foot to a pixel.
+
+        Args:
+            scene_pos (QPointF): Scene (image pixel) position.
+
+        Returns:
+            float | None: Heading in [0, 360), or None when either point
+            cannot be cast to the ground (no camera, above-horizon ray).
+        """
+        if self.camera is None:
+            return None
+        foot = self._foot_ned()
+        if foot is None:
+            return None
+        target = None
+        if self._terrain_active():
+            target = self._terrain_foot_ned(scene_pos.x(), scene_pos.y())
+        if target is None:
+            target = self.camera.pixel_to_ground(scene_pos.x(), scene_pos.y())
+        if target is None:
+            return None
+        d_north = target[0] - foot[0]
+        d_east = target[1] - foot[1]
+        if abs(d_north) < 1e-9 and abs(d_east) < 1e-9:
+            return None
+        return person_rotation_from_ground_vector(d_north, d_east)
+
+    def _rotation_handle_orbit_pos(self):
+        """Scene position of the rotation handle on its orbit, or None.
+
+        The handle rides at ROTATION_HANDLE_DISTANCE_FACTOR x person height
+        along the current heading, projected through the same camera path as
+        the silhouettes, so it tracks anchor moves, zoom and obliquity.
+        """
+        if self.camera is None or self.anchor_item is None:
+            return None
+        foot = self._foot_ned()
+        if foot is None:
+            return None
+        distance_m = ROTATION_HANDLE_DISTANCE_FACTOR * (self._selected_height_cm() / 100.0)
+        points = self._orient([(0.0, distance_m, 0.0)])
+        pixels = self._project_person_local(points, foot)
+        if not pixels:
+            return None
+        return QPointF(float(pixels[0][0]), float(pixels[0][1]))
+
+    def _position_rotation_handle(self):
+        """Seat the rotation handle on its orbit; hide it when unprojectable.
+
+        During a drag the ItemPositionChange return value seats the handle,
+        so the guarded setPos here is skipped (it would re-enter the drag).
+        """
+        handle = self.rotation_handle_item
+        if handle is None:
+            return
+        pos = self._rotation_handle_orbit_pos()
+        if pos is None:
+            handle.setVisible(False)
+            return
+        handle.setVisible(True)
+        if not self._updating_rotation_handle:
+            self._updating_rotation_handle = True
+            try:
+                handle.setPos(pos)
+            finally:
+                self._updating_rotation_handle = False
+
+    def _on_rotation_handle_dragged(self, proposed_scene_pos, grab_offset_deg):
+        """Constrain a handle drag: update the rotation, return the orbit pos.
+
+        Args:
+            proposed_scene_pos (QPointF): Where the drag wants to move the
+                handle (unconstrained).
+            grab_offset_deg (float): Offset captured at drag start.
+
+        Returns:
+            QPointF | None: The position the handle must take (on its orbit),
+            or None to leave the move unconstrained (no camera/foot).
+        """
+        heading = self._heading_at_scene_pos(proposed_scene_pos)
+        if heading is None:
+            # Keep the previous rotation for unresolvable cursor positions
+            # (e.g. an above-horizon ray on an oblique shot).
+            return self._rotation_handle_orbit_pos()
+        new_rotation = int(round(heading - grab_offset_deg)) % 360
+        if new_rotation != self.rotation_deg:
+            self.rotation_deg = new_rotation
+            self.rotation_spin.blockSignals(True)
+            self.rotation_spin.setValue(new_rotation)
+            self.rotation_spin.blockSignals(False)
+            self._updating_rotation_handle = True
+            try:
+                self._render_all()
+            finally:
+                self._updating_rotation_handle = False
+        return self._rotation_handle_orbit_pos()
 
     def _render_shadows(self, height_cm, height_m, foot):
         """Re-project the shadow of every enabled pose into one shadow shape."""

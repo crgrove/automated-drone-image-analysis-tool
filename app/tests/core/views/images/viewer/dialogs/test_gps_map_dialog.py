@@ -271,3 +271,97 @@ def test_pod_calculate_button_enabled_even_offline(dialog):
     """POD computes from local data (images + registered tiles), so the button
     stays enabled in Offline Only mode (the `dialog` fixture is offline)."""
     assert dialog.pod_calc_btn.isEnabled()
+
+
+# ---------------------------------------------------------------------------
+# Layers menu: base selection + overlay toggles, persisted via 'MapLayers'
+# ---------------------------------------------------------------------------
+
+import json
+from unittest.mock import MagicMock
+
+import core.views.images.viewer.dialogs.GPSMapDialog as dialog_module
+
+
+class _FakeSettings:
+    def __init__(self):
+        self.store = {}
+
+    def get_setting(self, name, default=None):
+        return self.store.get(name, default)
+
+    def set_setting(self, name, value):
+        self.store[name] = value
+
+
+def _layers_dialog(monkeypatch, saved=None):
+    fake = _FakeSettings()
+    if saved is not None:
+        fake.store['MapLayers'] = saved
+    monkeypatch.setattr(dialog_module, 'SettingsService', lambda: fake)
+    dlg = GPSMapDialog(None, [], None, offline_only=True)
+    dlg._fake_settings = fake
+    return dlg
+
+
+def test_layers_menu_uses_stable_keys(app, monkeypatch):
+    dlg = _layers_dialog(monkeypatch)
+    assert list(dlg.base_actions) == ['map', 'satellite', 'topo']
+    assert list(dlg.overlay_actions) == ['roads', 'mvum', 'trails', 'usfs_trails']
+    assert dlg.base_actions['map'].isChecked()
+    assert not any(a.isChecked() for a in dlg.overlay_actions.values())
+    dlg.close()
+
+
+def test_selecting_base_layer_switches_source_and_persists(app, monkeypatch):
+    dlg = _layers_dialog(monkeypatch)
+    dlg.map_view.set_tile_source = MagicMock()
+
+    dlg.base_actions['topo'].trigger()
+
+    dlg.map_view.set_tile_source.assert_called_once_with('topo')
+    prefs = json.loads(dlg._fake_settings.store['MapLayers'])
+    assert prefs['base'] == 'topo'
+    dlg.close()
+
+
+def test_toggling_overlays_updates_map_and_persists(app, monkeypatch):
+    dlg = _layers_dialog(monkeypatch)
+    dlg.map_view.set_overlays = MagicMock()
+
+    dlg.overlay_actions['mvum'].setChecked(True)
+    dlg.overlay_actions['trails'].setChecked(True)
+    dlg.overlay_actions['trails'].setChecked(False)
+
+    assert dlg.map_view.set_overlays.call_args.args[0] == ['mvum']
+    prefs = json.loads(dlg._fake_settings.store['MapLayers'])
+    assert prefs['overlays'] == ['mvum']
+    dlg.close()
+
+
+def test_saved_layers_restore_on_open(app, monkeypatch):
+    saved = json.dumps({'base': 'satellite', 'overlays': ['trails']})
+    dlg = _layers_dialog(monkeypatch, saved=saved)
+
+    assert dlg.base_actions['satellite'].isChecked()
+    assert dlg.overlay_actions['trails'].isChecked()
+    assert dlg.map_view.tile_loader.tile_source == 'satellite'
+    assert dlg.map_view.active_overlays == ['trails']
+    dlg.close()
+
+
+def test_junk_layer_prefs_fall_back_to_defaults(app, monkeypatch):
+    dlg = _layers_dialog(monkeypatch, saved='{not json')
+
+    assert dlg.base_actions['map'].isChecked()
+    assert dlg.map_view.active_overlays == []
+    dlg.close()
+
+
+def test_unknown_saved_names_are_ignored(app, monkeypatch):
+    saved = json.dumps({'base': 'mars', 'overlays': ['trails', 'unicorns']})
+    dlg = _layers_dialog(monkeypatch, saved=saved)
+
+    assert dlg.base_actions['map'].isChecked()
+    assert dlg.map_view.active_overlays == ['trails']
+    dlg.close()

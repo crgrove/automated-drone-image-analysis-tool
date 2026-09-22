@@ -82,16 +82,21 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
     - Skip recovery
     """
 
-    def __init__(self, parent=None, images: List[Dict[str, Any]] = None):
+    def __init__(self, parent=None, images: List[Dict[str, Any]] = None,
+                 suggested_track: Optional[str] = None):
         """
         Initialize the bearing recovery dialog.
 
         Args:
             parent: Parent widget.
             images: List of image dictionaries missing bearing information.
+            suggested_track: A position-validated track file discovered in the
+                results-scan folder tree; offered as a one-click option above
+                the manual file browse.
         """
         super().__init__(parent)
         self.images = images or []
+        self.suggested_track = suggested_track
         self.results: Optional[Dict[str, BearingResult]] = None
         self.service = BearingCalculationService()
         self.worker: Optional[BearingCalculationWorker] = None
@@ -145,6 +150,18 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
         # Mode selection buttons
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)
+
+        # Discovered track button - a validated candidate found in the
+        # results-scan tree; saves the user from browsing for the file.
+        self.found_track_button = None
+        if self.suggested_track:
+            found_name = Path(self.suggested_track).name
+            self.found_track_button = QPushButton(
+                self.tr("✅ Use Found Track File ({name})").format(name=found_name))
+            self.found_track_button.setToolTip(self.suggested_track)
+            self.found_track_button.setMinimumHeight(50)
+            self.found_track_button.clicked.connect(self._on_use_found_track)
+            button_layout.addWidget(self.found_track_button)
 
         # Track file button
         self.track_button = QPushButton(self.tr("📁 Load Track File (KML/GPX/CSV)"))
@@ -264,6 +281,10 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
         if file_path:
             self._start_calculation('track', track_file=file_path)
 
+    def _on_use_found_track(self):
+        """Run the track calculation with the discovered track file."""
+        self._start_calculation('track', track_file=self.suggested_track)
+
     def _on_auto_calculate(self):
         """
         Handle auto-calculate button click.
@@ -283,6 +304,8 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
             track_file: Optional path to track file for track-based calculation.
         """
         # Hide mode selection, show progress
+        if self.found_track_button is not None:
+            self.found_track_button.setEnabled(False)
         self.track_button.setEnabled(False)
         self.auto_button.setEnabled(False)
         self.skip_button.setEnabled(False)
@@ -377,6 +400,8 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
         self._logger.error(f"Bearing calculation failed: {error_msg}")
 
         # Reset UI
+        if self.found_track_button is not None:
+            self.found_track_button.setEnabled(True)
         self.track_button.setEnabled(True)
         self.auto_button.setEnabled(True)
         self.skip_button.setEnabled(True)
@@ -402,6 +427,8 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
         # self._logger.info("Bearing calculation cancelled by user")
 
         # Reset UI
+        if self.found_track_button is not None:
+            self.found_track_button.setEnabled(True)
         self.track_button.setEnabled(True)
         self.auto_button.setEnabled(True)
         self.skip_button.setEnabled(True)

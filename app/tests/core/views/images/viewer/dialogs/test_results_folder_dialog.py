@@ -259,7 +259,7 @@ class TestResultsFolderDialogUI:
         """Test table has correct number of columns."""
         dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
 
-        assert dialog.table.columnCount() == 7
+        assert dialog.table.columnCount() == 8
 
     def test_table_row_count(self, app, sample_results, mock_callback):
         """Test table has correct number of rows."""
@@ -271,7 +271,7 @@ class TestResultsFolderDialogUI:
         """Test table has correct headers."""
         dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
 
-        expected_headers = ["Folder", "Algorithm", "Images", "Missing", "AOIs", "Map", "View"]
+        expected_headers = ["Folder", "Algorithm", "Images", "Missing", "AOIs", "Settings", "Map", "View"]
         for i, expected in enumerate(expected_headers):
             actual = dialog.table.horizontalHeaderItem(i).text()
             assert actual == expected
@@ -496,6 +496,118 @@ class TestButtonInteractions:
 
 
 # ============================================================================
+# Test Settings Column
+# ============================================================================
+
+class TestSettingsColumn:
+    """Tests for the Settings column: tooltip summary + load-into-main-window."""
+
+    @staticmethod
+    def _result_with_settings():
+        return ResultsScanResult(
+            xml_path='/path/to/Flight1/ADIAT_Results/ADIAT_DATA.XML',
+            folder_name='Flight1',
+            algorithm='HSVColorRange',
+            image_count=10,
+            aoi_count=25,
+            missing_images=0,
+            first_image_path='/path/to/Flight1/image1.jpg',
+            gps_coordinates=(37.7749, -122.4194),
+            settings={
+                'algorithm': 'HSVColorRange',
+                'thermal': 'False',
+                'input_dir': '/data/flight1',
+                'output_dir': '/data/flight1/output',
+                'identifier_color': (255, 0, 255),
+                'min_area': 10,
+                'max_area': 0,
+                'aoi_radius': 15,
+                'options': {'sensitivity': '5', 'hsv_configs': '[{"h": 1}]'},
+            }
+        )
+
+    @staticmethod
+    def _settings_button(dialog, row=0):
+        container = dialog.table.cellWidget(row, ResultsFolderDialog.COL_SETTINGS)
+        return container.layout().itemAt(0).widget()
+
+    def test_settings_cell_widget_exists(self, app, sample_results, mock_callback):
+        dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
+        for row in range(len(sample_results)):
+            assert dialog.table.cellWidget(row, ResultsFolderDialog.COL_SETTINGS) is not None
+
+    def test_button_enabled_with_settings_and_callback(self, app, mock_callback):
+        load_callback = MagicMock()
+        dialog = ResultsFolderDialog(
+            None, [self._result_with_settings()], 'Dark', mock_callback,
+            load_settings_callback=load_callback)
+        assert self._settings_button(dialog).isEnabled()
+
+    def test_button_disabled_without_callback(self, app, mock_callback):
+        dialog = ResultsFolderDialog(
+            None, [self._result_with_settings()], 'Dark', mock_callback)
+        assert not self._settings_button(dialog).isEnabled()
+
+    def test_button_disabled_with_empty_settings(self, app, sample_results, mock_callback):
+        load_callback = MagicMock()
+        dialog = ResultsFolderDialog(
+            None, sample_results, 'Dark', mock_callback,
+            load_settings_callback=load_callback)
+        button = self._settings_button(dialog)
+        assert not button.isEnabled()
+        assert "No settings recorded" in button.toolTip()
+
+    def test_tooltip_summarizes_settings(self, app, mock_callback):
+        load_callback = MagicMock()
+        dialog = ResultsFolderDialog(
+            None, [self._result_with_settings()], 'Dark', mock_callback,
+            load_settings_callback=load_callback)
+        tooltip = self._settings_button(dialog).toolTip()
+        assert "Algorithm: HSVColorRange" in tooltip
+        assert "Min area: 10" in tooltip
+        assert "sensitivity: 5" in tooltip
+        # max_area of 0 means no limit and is omitted
+        assert "Max area" not in tooltip
+        # thermal is 'False' so no Thermal line
+        assert "Thermal" not in tooltip
+
+    def test_click_loads_settings_and_closes(self, app, mock_callback):
+        load_callback = MagicMock()
+        result = self._result_with_settings()
+        dialog = ResultsFolderDialog(
+            None, [result], 'Dark', mock_callback,
+            load_settings_callback=load_callback)
+
+        accept_called = []
+        original_accept = dialog.accept
+        dialog.accept = lambda: accept_called.append(True) or original_accept()
+
+        self._settings_button(dialog).click()
+
+        load_callback.assert_called_once_with(result.xml_path)
+        mock_callback.assert_not_called()
+        assert len(accept_called) == 1
+
+    def test_tooltip_truncates_many_options(self, app, mock_callback):
+        load_callback = MagicMock()
+        result = self._result_with_settings()
+        result.settings['options'] = {f'opt_{i:02d}': str(i) for i in range(20)}
+        dialog = ResultsFolderDialog(
+            None, [result], 'Dark', mock_callback,
+            load_settings_callback=load_callback)
+        tooltip = self._settings_button(dialog).toolTip()
+        assert "... and 5 more" in tooltip
+
+    def test_tooltip_truncates_long_option_values(self, app, mock_callback):
+        dialog = ResultsFolderDialog(None, [], 'Dark', mock_callback)
+        text = dialog._format_settings_tooltip(
+            {'algorithm': 'X', 'options': {'big': 'v' * 200}})
+        line = [ln for ln in text.split('\n') if 'big' in ln][0]
+        assert len(line) < 80
+        assert line.endswith('...')
+
+
+# ============================================================================
 # Test Theme Handling
 # ============================================================================
 
@@ -636,3 +748,37 @@ class TestIntegration:
         # Check selection
         selected_rows = dialog.table.selectedItems()
         assert len(selected_rows) > 0
+
+
+# ============================================================================
+# Test Export Combined PDF button
+# ============================================================================
+
+class TestExportCombinedButton:
+    """The scan dialog offers one-click collation of every scanned run."""
+
+    def test_button_absent_without_callback(self, app, sample_results, mock_callback):
+        dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
+        assert dialog.export_pdf_button is None
+
+    def test_button_invokes_callback_with_results_and_stays_open(
+            self, app, sample_results, mock_callback):
+        export_callback = MagicMock()
+        dialog = ResultsFolderDialog(
+            None, sample_results, 'Dark', mock_callback,
+            export_combined_callback=export_callback)
+
+        accepted = []
+        original_accept = dialog.accept
+        dialog.accept = lambda: accepted.append(True) or original_accept()
+
+        dialog.export_pdf_button.click()
+
+        export_callback.assert_called_once_with(sample_results)
+        assert accepted == [], "the scan dialog stays open during the export"
+
+    def test_button_disabled_with_no_results(self, app, mock_callback):
+        dialog = ResultsFolderDialog(
+            None, [], 'Dark', mock_callback,
+            export_combined_callback=MagicMock())
+        assert not dialog.export_pdf_button.isEnabled()

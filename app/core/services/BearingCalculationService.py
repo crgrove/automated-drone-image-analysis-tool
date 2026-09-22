@@ -102,20 +102,7 @@ class BearingCalculationService(QObject):
 
         try:
             # Parse track file
-            file_ext = Path(track_file_path).suffix.lower()
-            # self._logger.info(f"Parsing track file: {track_file_path} ({file_ext})")
-
-            if file_ext == '.kml':
-                track_points = self._parse_kml(track_file_path)
-                source_type = 'kml'
-            elif file_ext == '.gpx':
-                track_points = self._parse_gpx(track_file_path)
-                source_type = 'gpx'
-            elif file_ext == '.csv':
-                track_points = self._parse_csv(track_file_path)
-                source_type = 'csv'
-            else:
-                raise ValueError(f"Unsupported track file format: {file_ext}")
+            track_points, source_type = self.parse_track_file(track_file_path)
 
             if not track_points:
                 raise ValueError("Track file contains no valid trackpoints")
@@ -162,6 +149,31 @@ class BearingCalculationService(QObject):
         except Exception as e:
             self._logger.error(f"Error auto-calculating bearings: {str(e)}")
             self.calculation_error.emit(str(e))
+
+    def parse_track_file(self, track_file_path: str):
+        """Parse a KML/GPX/CSV track file into TrackPoints.
+
+        Shared by the bearing calculation itself and by track-file discovery
+        (TrackDiscoveryService), so both accept exactly the same formats.
+
+        Args:
+            track_file_path: Path to the track file.
+
+        Returns:
+            tuple: (track_points, source_type) where source_type is
+            'kml' / 'gpx' / 'csv'.
+
+        Raises:
+            ValueError: Unsupported extension; parser errors propagate.
+        """
+        file_ext = Path(track_file_path).suffix.lower()
+        if file_ext == '.kml':
+            return self._parse_kml(track_file_path), 'kml'
+        elif file_ext == '.gpx':
+            return self._parse_gpx(track_file_path), 'gpx'
+        elif file_ext == '.csv':
+            return self._parse_csv(track_file_path), 'csv'
+        raise ValueError(f"Unsupported track file format: {file_ext}")
 
     def _parse_kml(self, file_path: str) -> List[TrackPoint]:
         """Parse KML file to extract trackpoints."""

@@ -181,3 +181,67 @@ def test_dialog_accepted_with_empty_results(controller):
 
     assert result == 0
     xml_service.set_multiple_bearings.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Session track discovery: a track log found in the results-scan tree is
+# offered to the dialog so the user is not sent browsing for it.
+# ---------------------------------------------------------------------------
+
+_MODULE = "core.controllers.images.viewer.bearing.BearingRecoveryController"
+
+
+def test_session_track_suggestion_reaches_dialog(controller, tmp_path):
+    from core.services.RecoverySessionService import RecoverySession
+    session = RecoverySession(str(tmp_path))
+    (tmp_path / "tracklog.gpx").write_text("x")
+    controller.parent.recovery_session = session
+
+    images = [{"path": "img1.jpg", "bearing": None}]
+    with patch(f"{_MODULE}.ImageService") as MockService, \
+            patch(f"{_MODULE}.BearingRecoveryDialog") as MockDialog, \
+            patch(f"{_MODULE}.TrackDiscoveryService") as MockDiscovery:
+        MockService.return_value.get_camera_yaw.return_value = None
+        MockDialog.return_value.exec.return_value = QDialog.Rejected
+        MockDiscovery.return_value.discover_track.return_value = str(tmp_path / "tracklog.gpx")
+
+        controller.check_and_recover_bearings(images, MagicMock(), "/x.xml")
+
+    assert MockDialog.call_args.kwargs["suggested_track"] == str(tmp_path / "tracklog.gpx")
+    candidate_arg = MockDiscovery.return_value.discover_track.call_args.args[1]
+    assert str(tmp_path / "tracklog.gpx") in candidate_arg
+
+
+def test_no_session_means_no_suggestion_and_no_discovery(controller):
+    # The MagicMock parent's auto-attribute is not a real RecoverySession
+    images = [{"path": "img1.jpg", "bearing": None}]
+    with patch(f"{_MODULE}.ImageService") as MockService, \
+            patch(f"{_MODULE}.BearingRecoveryDialog") as MockDialog, \
+            patch(f"{_MODULE}.TrackDiscoveryService") as MockDiscovery:
+        MockService.return_value.get_camera_yaw.return_value = None
+        MockDialog.return_value.exec.return_value = QDialog.Rejected
+
+        controller.check_and_recover_bearings(images, MagicMock(), "/x.xml")
+
+    assert MockDialog.call_args.kwargs["suggested_track"] is None
+    MockDiscovery.assert_not_called()
+
+
+def test_discovery_failure_degrades_to_no_suggestion(controller, tmp_path):
+    from core.services.RecoverySessionService import RecoverySession
+    session = RecoverySession(str(tmp_path))
+    (tmp_path / "tracklog.gpx").write_text("x")
+    controller.parent.recovery_session = session
+
+    images = [{"path": "img1.jpg", "bearing": None}]
+    with patch(f"{_MODULE}.ImageService") as MockService, \
+            patch(f"{_MODULE}.BearingRecoveryDialog") as MockDialog, \
+            patch(f"{_MODULE}.TrackDiscoveryService") as MockDiscovery:
+        MockService.return_value.get_camera_yaw.return_value = None
+        MockDialog.return_value.exec.return_value = QDialog.Rejected
+        MockDiscovery.return_value.discover_track.side_effect = RuntimeError("boom")
+
+        result = controller.check_and_recover_bearings(images, MagicMock(), "/x.xml")
+
+    assert result == 0
+    assert MockDialog.call_args.kwargs["suggested_track"] is None

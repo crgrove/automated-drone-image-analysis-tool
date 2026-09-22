@@ -21,6 +21,7 @@ from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
 
+from core.services.AOIInteractionLogService import REASON_DESELECT
 from core.services.LoggerService import LoggerService
 from core.services.image.MaskFilterService import MaskFilterService
 from core.services.image.AOIService import AOIService
@@ -89,6 +90,14 @@ class AOIController(TranslationMixin):
 
         # Initialize sort combo box
         self._initialize_sort_combo()
+
+    def get_aoi_service(self):
+        """Public access to the cached per-image AOIService.
+
+        Other controllers (cursor-coordinates lookup) reuse the cache instead
+        of re-decoding the current image's metadata.
+        """
+        return self._get_aoi_service()
 
     def _get_aoi_service(self):
         """
@@ -309,6 +318,19 @@ class AOIController(TranslationMixin):
         """
         # Set new selection (business logic)
         self.selected_aoi_index = aoi_index
+
+        # Review-activity log: every selection path (sidebar click, gallery
+        # click, Shift+F, jump-to-number, arrow keys) converges on this
+        # method, so this single hook counts each view exactly once.
+        interaction_log = getattr(self.parent, 'interaction_log', None)
+        if interaction_log is not None:
+            if aoi_index >= 0:
+                selected = self.get_selected_aoi()
+                aoi_number = selected[0].get('number') if selected else None
+                mode = 'gallery' if getattr(self.parent, 'gallery_mode', False) else 'single'
+                interaction_log.record_selection(aoi_number, mode)
+            else:
+                interaction_log.end_current_interval(REASON_DESELECT)
 
         # Delegate UI updates to UI component
         if self.ui_component:

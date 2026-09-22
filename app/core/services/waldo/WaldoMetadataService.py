@@ -239,8 +239,17 @@ class ClockCorrectionProposal:
 class WaldoMetadataService:
     """Pure-logic service: detection, heading derivation, XMP synthesis."""
 
-    def __init__(self, terrain_service=None):
+    def __init__(self, terrain_service=None, extra_trigger_kml_paths=None):
+        """
+        Args:
+            terrain_service: TerrainService for DEM-based AGL synthesis, or None.
+            extra_trigger_kml_paths: Additional candidate ``*.kml`` paths for
+                trigger-log discovery (e.g. found under a results-folder scan
+                tree). Safe to over-supply: discovery validates candidates by
+                trigger-name + GPS-position match before trusting any of them.
+        """
         self.terrain_service = terrain_service
+        self.extra_trigger_kml_paths = list(extra_trigger_kml_paths or [])
         self.logger = LoggerService()
 
     # ------------------------------------------------------------------
@@ -1550,7 +1559,8 @@ class WaldoMetadataService:
         """
         try:
             trigger_service = WaldoTriggerLogService()
-            found = trigger_service.discover(records)
+            found = trigger_service.discover(
+                records, extra_candidates=self.extra_trigger_kml_paths)
             if found is None:
                 return
             kml_path, triggers = found

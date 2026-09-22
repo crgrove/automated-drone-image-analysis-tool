@@ -25,7 +25,9 @@ class ZipExportDialog(TranslationMixin, QDialog):
             self.tr(
                 "Choose what to export:\n\n"
                 "- Native: Original images, TIFF masks, and XML (paths made portable).\n"
-                "- Augmented: What you see in the viewer (AOIs/POIs), keeps EXIF/XMP."
+                "- Augmented: What you see in the viewer (AOIs/POIs), keeps EXIF/XMP.\n"
+                "- Results only: Just the XML and detection masks — small enough to "
+                "email. The recipient relinks to their own copy of the images."
             )
         )
         instructions.setWordWrap(True)
@@ -33,15 +35,23 @@ class ZipExportDialog(TranslationMixin, QDialog):
 
         self.native_radio = QRadioButton(self.tr("Export Native data (original files + XML)"))
         self.augmented_radio = QRadioButton(self.tr("Export Augmented images (viewer overlays + metadata)"))
+        self.results_only_radio = QRadioButton(self.tr("Export Results only (XML + masks, no images)"))
 
         self.native_radio.setChecked(True)
 
         button_group = QButtonGroup(self)
         button_group.addButton(self.native_radio)
         button_group.addButton(self.augmented_radio)
+        button_group.addButton(self.results_only_radio)
 
         layout.addWidget(self.native_radio)
         layout.addWidget(self.augmented_radio)
+        layout.addWidget(self.results_only_radio)
+
+        # Results-only always carries the complete results file, so the
+        # flagged-AOI image filter below does not apply to it.
+        self.results_only_radio.toggled.connect(
+            lambda checked: self.include_no_flagged_checkbox.setEnabled(not checked))
 
         # Add spacing before checkbox
         layout.addSpacing(10)
@@ -69,6 +79,8 @@ class ZipExportDialog(TranslationMixin, QDialog):
         self.setLayout(layout)
 
     def get_export_mode(self):
+        if self.results_only_radio.isChecked():
+            return 'results_only'
         return 'augmented' if self.augmented_radio.isChecked() else 'native'
 
     def should_include_images_without_flagged_aois(self):

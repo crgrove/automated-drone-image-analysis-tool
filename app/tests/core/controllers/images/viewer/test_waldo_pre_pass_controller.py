@@ -283,3 +283,30 @@ def test_flight_log_missing_remembered_file_falls_back_to_discovery(monkeypatch,
     # The remembered file is gone: not auto mode, discovery candidates offered.
     assert dlg.auto_apply is False
     assert dlg.candidate_logs == [str(fresh)]
+
+
+# ---------------------------------------------------------------------------
+# Session KML candidates for trigger-log discovery
+# ---------------------------------------------------------------------------
+
+def test_session_kml_candidates_from_real_session(monkeypatch, tmp_path):
+    from core.services.RecoverySessionService import RecoverySession
+
+    controller = _make_controller(monkeypatch)
+    deep = tmp_path / "flight"
+    deep.mkdir()
+    kml = deep / "Mission_Triggers.kml"
+    kml.write_text("x")
+
+    class _Parent:
+        pass
+
+    controller.parent = _Parent()
+    controller.parent.recovery_session = RecoverySession(str(tmp_path))
+
+    assert controller._session_kml_candidates() == [str(kml)]
+
+
+def test_session_kml_candidates_without_session_is_empty(monkeypatch):
+    controller = _make_controller(monkeypatch)  # parent is None
+    assert controller._session_kml_candidates() == []

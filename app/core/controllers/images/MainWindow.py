@@ -6,6 +6,7 @@ from core.services.AnalyzeService import AnalyzeService
 from core.services.BatchAnalyzeService import BatchAnalyzeService
 from core.services.LoggerService import LoggerService
 from core.services.ResultsScannerService import ResultsScannerService
+from core.services.RecoverySessionService import RecoverySession
 from core.controllers.UpdateController import UpdateController
 from core.controllers.coordinator.CoordinatorWindow import CoordinatorWindow
 from helpers import FeatureFlags
@@ -1195,6 +1196,14 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             # Save the selected folder for next time
             self.settings_service.set_setting('LastResultsFolder', folder)
 
+            # Reuse the recovery session (and its cached folder indexes) when
+            # the user re-scans the same root; a new root starts fresh. Every
+            # viewer opened from this scan gets the session so missing images
+            # resolve from the scanned tree without prompting.
+            existing_session = getattr(self, '_recovery_session', None)
+            if existing_session is None or not existing_session.matches_root(folder):
+                self._recovery_session = RecoverySession(folder)
+
             # Show progress dialog
             self._scan_progress = ScanProgressDialog(self)
             self._scan_progress.show()
@@ -1250,7 +1259,9 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 self,
                 results,
                 theme,
-                self._open_viewer_from_path
+                self._open_viewer_from_path,
+                load_settings_callback=self._load_settings_from_path,
+                export_combined_callback=self._export_combined_pdf
             )
             dialog.exec()
 
@@ -1304,7 +1315,8 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 temperature_unit,
                 distance_unit,
                 False,  # show_hidden
-                theme
+                theme,
+                recovery_session=getattr(self, '_recovery_session', None)
             )
             self.viewer.show()
 
@@ -1315,6 +1327,46 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             )
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _export_combined_pdf(self, results):
+        """
+        Collate the scanned results into one PDF report.
+        Called from ResultsFolderDialog's Export Combined PDF button.
+
+        Args:
+            results: List of ResultsScanResult from the folder scan
+        """
+        try:
+            from core.controllers.images.exports.CombinedPdfExportController import (
+                CombinedPdfExportController,
+            )
+            controller = CombinedPdfExportController(self, self.logger)
+            controller.export_combined_pdf(
+                results,
+                recovery_session=getattr(self, '_recovery_session', None))
+        except Exception as e:
+            self.logger.error(f"Error starting combined PDF export: {e}")
+            self._show_error(
+                self.tr("Failed to export combined PDF: {error}").format(error=str(e))
+            )
+
+    def _load_settings_from_path(self, xml_path):
+        """
+        Load a scanned run's settings into the main window.
+        Called from ResultsFolderDialog's Settings column.
+
+        Args:
+            xml_path: Full path to the ADIAT_DATA.XML file
+        """
+        try:
+            # Same flow as File > Open: hydrates every settings field,
+            # records the file in recents, and enables View Results.
+            self._process_xml_file(xml_path)
+        except Exception as e:
+            self.logger.error(f"Error loading settings from {xml_path}: {e}")
+            self._show_error(
+                self.tr("Failed to load settings: {error}").format(error=str(e))
+            )
 
     def _process_xml_file(self, full_path):
         """
