@@ -369,12 +369,15 @@ class ReviewMergeService:
         """Hash of the run's immutable analysis identity (review fields excluded).
 
         Covers the full analysis settings (minus machine-specific paths), the
-        relative image identities, and each machine detection's payload
-        (center, radius, area) - not just centers. Two runs over the same
-        images with different options or detection geometry are different
-        runs, never "reviewer copies"; genuinely ambiguous runs stay separate.
-        AOI numbers are excluded: they are backfilled by viewers, so one
-        opened and one never-opened copy of the same run must still group.
+        relative image identities, and each machine detection's payload -
+        center, radius, area, AND the detection shape (contour and detected
+        pixels). Two runs over the same images with different options or
+        detection geometry/shape are different runs, never "reviewer copies";
+        genuinely ambiguous runs stay separate. The shape fields are written
+        once at analysis time and only ever edited in place afterwards, so
+        every copy of one analysis carries them identically. AOI numbers are
+        excluded: they are backfilled by viewers, so one opened and one
+        never-opened copy of the same run must still group.
         """
         settings = record.settings or {}
         setting_parts = []
@@ -392,6 +395,7 @@ class ReviewMergeService:
         for image_key, img in keyed:
             detections = sorted(
                 f"{aoi.get('center')}|{aoi.get('radius')}|{aoi.get('area')}"
+                f"|{aoi.get('contour')}|{aoi.get('detected_pixels')}"
                 for aoi in img.get('areas_of_interest', [])
                 if not aoi.get('user_created', False))
             parts.append(image_key + '|' + ';'.join(detections))

@@ -10,9 +10,14 @@ from core.services.export.ReviewMergeService import ReviewMergeService
 
 
 def _aoi_xml(center, number=None, flagged=False, comment=None,
-             user_created=False, user_pos=None, radius=5):
+             user_created=False, user_pos=None, radius=5,
+             contour=None, detected_pixels=None):
     attrs = [f'center="{center}"', f'radius="{radius}"', 'area="20.0"',
              f'flagged="{flagged}"']
+    if contour is not None:
+        attrs.append(f'contour="{contour}"')
+    if detected_pixels is not None:
+        attrs.append(f'detected_pixels="{detected_pixels}"')
     if number is not None:
         attrs.append(f'number="{number}"')
     if comment:
@@ -470,3 +475,66 @@ def test_b4_true_copies_group_despite_backfilled_numbers_and_paths(tmp_path):
          [_aoi_xml("(10, 10)", number=1, flagged=True)])])
     _, groups = _load_group(tmp_path, [original, opened])
     assert [len(g) for g in groups] == [2]
+
+
+# ---------------------------------------------------------------------------
+# B4 follow-up (review round 2): the detection SHAPE is analysis identity too.
+# Identical names/settings/centers/radii/areas with different contours or
+# detected pixels are different analyses, never reviewer copies.
+# ---------------------------------------------------------------------------
+
+def test_b4_different_contours_split_runs(tmp_path):
+    run1 = _write_copy(tmp_path, "RunA", [
+        ("C:/o/a.jpg", "False",
+         [_aoi_xml("(10, 10)", contour="[(5, 5), (15, 5), (15, 15)]")])])
+    run2 = _write_copy(tmp_path, "RunB", [
+        ("C:/o/a.jpg", "False",
+         [_aoi_xml("(10, 10)", contour="[(5, 5), (10, 18), (15, 5)]")])])
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_different_detected_pixels_split_runs(tmp_path):
+    run1 = _write_copy(tmp_path, "RunA", [
+        ("C:/o/a.jpg", "False",
+         [_aoi_xml("(10, 10)", detected_pixels="[(9, 9), (10, 10)]")])])
+    run2 = _write_copy(tmp_path, "RunB", [
+        ("C:/o/a.jpg", "False",
+         [_aoi_xml("(10, 10)", detected_pixels="[(11, 11), (10, 10)]")])])
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_shape_present_vs_absent_splits_runs(tmp_path):
+    """An algorithm that emits contours vs one that does not: different runs."""
+    run1 = _write_copy(tmp_path, "RunA", [
+        ("C:/o/a.jpg", "False",
+         [_aoi_xml("(10, 10)", contour="[(5, 5), (15, 5), (15, 15)]")])])
+    run2 = _write_copy(tmp_path, "RunB", [
+        ("C:/o/a.jpg", "False", [_aoi_xml("(10, 10)")])])
+    _, groups = _load_group(tmp_path, [run1, run2])
+    assert [len(g) for g in groups] == [1, 1]
+
+
+def test_b4_copies_with_identical_shapes_still_group(tmp_path):
+    """Genuine reviewer copies carry the analysis-time shape verbatim (shape
+    fields are only ever edited in place after analysis), so copies still
+    group - including an opened copy with backfilled numbers, review edits,
+    and a relocated machine root."""
+    contour = "[(5, 5), (15, 5), (15, 15), (5, 15)]"
+    pixels = "[(9, 9), (10, 10), (11, 11)]"
+    pristine = _write_copy(tmp_path, "R1", [
+        ("D:/missions/Batch1/a.jpg", "False",
+         [_aoi_xml("(10, 10)", contour=contour, detected_pixels=pixels)])],
+        reviewer_name="Alice")
+    opened = _write_copy(tmp_path, "R2", [
+        ("E:/copies/Batch1/a.jpg", "False",
+         [_aoi_xml("(10, 10)", number=1, flagged=True, comment="check this",
+                   contour=contour, detected_pixels=pixels)])],
+        reviewer_name="Bob")
+    service, groups = _load_group(tmp_path, [pristine, opened])
+    assert [len(g) for g in groups] == [2]
+    merged = service.merge_group(groups[0])
+    aois = merged.images[0]['areas_of_interest']
+    assert len(aois) == 1
+    assert aois[0]['flagged'] is True
