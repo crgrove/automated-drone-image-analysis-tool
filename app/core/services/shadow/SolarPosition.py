@@ -60,7 +60,11 @@ def resolve_capture_utc(
            GPS-true time by fitting the image GPS positions against an
            aircraft track log (WaldoMetadataService.apply_flight_log_attitude).
            Seconds-accurate, so it outranks the operator-confirmed hour/zone
-           repair below (which it was computed on top of).
+           repair below (which it was computed on top of) - but only while
+           ``refined - corrected`` still equals its stamped ClockOffsetSeconds.
+           A clock amendment applied AFTER the fit (on a machine that may not
+           hold the log to re-fit) orphans the refinement; the amended
+           corrected time then wins until a fresh fit restamps it.
         0. XMP waldo:CaptureUtcCorrected — an operator-confirmed repair of a
            known-faulty camera clock (see WaldoMetadataService clock
            correction). When present it outranks everything: the EXIF fields
@@ -99,17 +103,28 @@ def resolve_capture_utc(
         SolarTimeUnresolvable: no resolvable timestamp present.
     """
     if xmp_data:
-        # Key shape depends on the XMP reader: bare when parsed per-namespace,
-        # prefixed when merged across namespaces.
-        for tag, source in (('CaptureUtcRefined', 'waldo_refined'),
-                            ('CaptureUtcCorrected', 'waldo_corrected')):
+        def waldo_value(tag):
+            # Key shape depends on the XMP reader: bare when parsed
+            # per-namespace, prefixed when merged across namespaces.
             for key in (tag, f'waldo:{tag}', f'XMP-waldo:{tag}'):
                 value = xmp_data.get(key)
                 if value:
-                    try:
-                        return _from_iso8601(value), source
-                    except ValueError:
-                        break
+                    return value
+            return None
+
+        refined = waldo_value('CaptureUtcRefined')
+        corrected = waldo_value('CaptureUtcCorrected')
+        if refined and _refined_matches_correction(
+                refined, corrected, waldo_value('ClockOffsetSeconds')):
+            try:
+                return _from_iso8601(refined), 'waldo_refined'
+            except ValueError:
+                pass
+        if corrected:
+            try:
+                return _from_iso8601(corrected), 'waldo_corrected'
+            except ValueError:
+                pass
 
     gps = exif_data.get('GPS') or {}
     gps_date = gps.get(piexif.GPSIFD.GPSDateStamp)
@@ -157,6 +172,32 @@ def resolve_capture_utc(
         "GPSTimeStamp, DateTimeOriginal+OffsetTimeOriginal, or an XMP "
         "CreateDate/ModifyDate with timezone offset."
     )
+
+
+def _refined_matches_correction(refined, corrected, offset_seconds):
+    """True when a CaptureUtcRefined stamp was computed on the CURRENT clock.
+
+    The flight-log stage stamps CaptureUtcRefined together with
+    ClockOffsetSeconds, both computed on top of whatever CaptureUtcCorrected
+    was stamped at fit time, so ``refined - corrected == offset`` (to the
+    whole-second rounding of the refined stamp). A LATER clock amendment
+    rewrites CaptureUtcCorrected on a machine that may not hold the flight
+    log to re-fit, which breaks that arithmetic: the refinement then belongs
+    to a clock that no longer exists and must not outrank the operator's
+    correction. Amendments are hour/zone-scale (>= 15 minutes), far beyond
+    the 2 s stamp-rounding tolerance.
+
+    A missing corrected stamp means no amendment ever happened (amendments
+    always write one); a missing offset predates the offset stamp. Both keep
+    the refined stamp authoritative, as documented in the priority list.
+    """
+    if not corrected or offset_seconds is None:
+        return True
+    try:
+        gap = (_from_iso8601(refined) - _from_iso8601(corrected)).total_seconds()
+        return abs(gap - float(offset_seconds)) <= 2.0
+    except (ValueError, TypeError):
+        return False
 
 
 def _from_gps(gps_date, gps_time) -> datetime:
