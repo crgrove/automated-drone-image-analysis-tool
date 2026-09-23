@@ -43,6 +43,16 @@ def invalidate_attitude_caches(viewer):
         return
     if hasattr(viewer, 'current_image_service'):
         viewer.current_image_service = None
+    # The AOI controller caches its own per-image AOIService (keyed only by
+    # image index, which a restamp does not change); cursor-coordinate lookups
+    # resolve through it, so a stale one shares GPS positions from the old
+    # pose until the user changes images.
+    aoi_controller = getattr(viewer, 'aoi_controller', None)
+    if aoi_controller is not None:
+        try:
+            aoi_controller.invalidate_aoi_service_cache()
+        except Exception:
+            pass
     pod_cache = getattr(viewer, 'pod_result_cache', None)
     if pod_cache is not None:
         try:

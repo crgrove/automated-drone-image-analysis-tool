@@ -99,6 +99,18 @@ class AOIController(TranslationMixin):
         """
         return self._get_aoi_service()
 
+    def invalidate_aoi_service_cache(self):
+        """Drop the cached AOIService so the next access rebuilds it.
+
+        Needed when the current image's pose metadata changes on disk without
+        the image index changing (a flight-log attach or clock amendment
+        restamps the XMP mid-session): the cached service still carries the
+        old pose, and _get_aoi_service returns it for as long as the index
+        matches - cursor GPS coordinates would be shared from the stale pose.
+        """
+        self._cached_aoi_service = None
+        self._cached_image_index = None
+
     def _get_aoi_service(self):
         """
         Get or create a cached AOIService for the current image.
