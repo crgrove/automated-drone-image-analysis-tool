@@ -298,7 +298,7 @@ def test_calculate_auto_requires_two_gps_images(service):
 
 
 def test_calculate_auto_straight_line_emits_complete(service):
-    # Three images moving due north â€” should produce bearings near 0Â°
+    # Three images moving due north — should produce bearings near 0°
     base = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     images = [
         {"path": f"img{i}.jpg", "lat": 40.0 + 0.001 * i, "lon": -75.0, "timestamp": base + timedelta(seconds=i * 5)}
@@ -344,7 +344,7 @@ def test_calculate_turn_threshold_default_for_few_points(service):
 
 
 def test_calculate_turn_threshold_clamped_range(service):
-    # Straight line â€” perpendicular distances are zero, threshold clamps to 5.0
+    # Straight line — perpendicular distances are zero, threshold clamps to 5.0
     images = [{"lat": 40.0 + 0.0001 * i, "lon": -75.0} for i in range(20)]
     result = service._calculate_turn_threshold(images)
     assert 5.0 <= result <= 30.0
@@ -563,9 +563,9 @@ def test_calculate_auto_long_straight_path():
     svc.calculate_auto(images=images)
 
     assert len(received) == 1
-    # All bearings should be close to 0Â° (north)
+    # All bearings should be close to 0° (north)
     for br in received[0].values():
-        # Close to 0Â° or 360Â° (which is also north)
+        # Close to 0° or 360° (which is also north)
         assert br.bearing_deg < 30 or br.bearing_deg > 330
 
 
@@ -855,6 +855,91 @@ def test_populate_capture_times_keeps_existing_timestamps(service):
 
     read.assert_not_called()
     assert stamped['timestamp'] == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# KML parsing against the installed fastkml (second review, finding 3): the
+# 0.x method-call API raised TypeError under fastkml 1.x, blocking every KML
+# recovery and silently dropping KML candidates from track discovery.
+# ---------------------------------------------------------------------------
+
+_KML_POINTS = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark><name>p1</name>
+      <TimeStamp><when>2024-01-01T12:00:00Z</when></TimeStamp>
+      <Point><coordinates>-75.000,40.000,100</coordinates></Point>
+    </Placemark>
+    <Placemark><name>p2</name>
+      <TimeStamp><when>2024-01-01T12:00:10Z</when></TimeStamp>
+      <Point><coordinates>-75.001,40.001,101</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+_KML_GX_TRACK = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <Placemark><name>trk</name>
+      <gx:Track>
+        <when>2024-01-01T12:00:00Z</when>
+        <gx:coord>-75.000 40.000 100</gx:coord>
+        <when>2024-01-01T12:00:10Z</when>
+        <gx:coord>-75.001 40.001 101</gx:coord>
+      </gx:Track>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+
+def _write_kml(tmp_path, content, name='track.kml'):
+    path = tmp_path / name
+    path.write_text(content, encoding='utf-8')
+    return str(path)
+
+
+def test_parse_kml_timestamped_point_placemarks(service, tmp_path):
+    points, source = service.parse_track_file(_write_kml(tmp_path, _KML_POINTS))
+
+    assert source == 'kml'
+    assert len(points) == 2
+    points.sort(key=lambda p: p.timestamp)
+    assert points[0].timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[0].lon == pytest.approx(-75.0)
+    assert points[1].timestamp == datetime(2024, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
+    assert points[1].lat == pytest.approx(40.001)
+
+
+def test_parse_kml_gx_track(service, tmp_path):
+    points, source = service.parse_track_file(_write_kml(tmp_path, _KML_GX_TRACK))
+
+    assert source == 'kml'
+    assert len(points) == 2
+    points.sort(key=lambda p: p.timestamp)
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[0].lon == pytest.approx(-75.0)
+    assert points[0].alt == pytest.approx(100.0)
+    assert points[1].timestamp == datetime(2024, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
+
+
+def test_calculate_from_track_kml_end_to_end(service, tmp_path):
+    """The reviewer's failing case: a valid timestamped KML must drive a
+    successful calculation, not TypeError inside the parser."""
+    kml_path = _write_kml(tmp_path, _KML_POINTS)
+    images = [{'path': 'img1.jpg', 'lat': None, 'lon': None,
+               'timestamp': datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)}]
+    results, errors = [], []
+    service.calculation_complete.connect(lambda r: results.append(r))
+    service.calculation_error.connect(errors.append)
+
+    service.calculate_from_track(images=images, track_file_path=kml_path)
+
+    assert errors == []
+    assert len(results) == 1 and 'img1.jpg' in results[0]
 
 
 def test_populate_capture_times_bare_datetime_original_falls_back(service, tmp_path):
