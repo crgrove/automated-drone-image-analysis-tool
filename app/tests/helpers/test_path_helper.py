@@ -75,6 +75,45 @@ def test_identities_never_consume_a_basename():
     assert identities[cross_platform_path_key('/data/only.jpg')] == 'only.jpg'
 
 
+def test_partial_relocation_never_collides_with_a_rooted_identity():
+    """One flight folder relinked elsewhere while the rest stayed put: the
+    moved group's over-stripped tail landed on the rooted image's identity,
+    and the moved image was served the rooted image's cached thumbnail. The
+    colliding fallback identity is dropped (full-path namespace, cache miss)
+    while the rooted image keeps its identity."""
+    identities = build_image_cache_identities(
+        ['C:/Mission/DJI_0001.JPG', 'D:/Moved/FlightB/DJI_0001.JPG'],
+        input_root='C:/Mission')
+
+    assert identities[cross_platform_path_key('C:/Mission/DJI_0001.JPG')] == 'dji_0001.jpg'
+    assert cross_platform_path_key('D:/Moved/FlightB/DJI_0001.JPG') not in identities
+
+
+def test_relocated_identities_survive_when_they_do_not_collide():
+    """The same partial relocation with distinct filenames keeps everyone."""
+    identities = build_image_cache_identities(
+        ['C:/Mission/DJI_0001.JPG', 'D:/Moved/FlightB/DJI_0002.JPG'],
+        input_root='C:/Mission')
+
+    assert identities[cross_platform_path_key('C:/Mission/DJI_0001.JPG')] == 'dji_0001.jpg'
+    assert identities[cross_platform_path_key('D:/Moved/FlightB/DJI_0002.JPG')] == 'dji_0002.jpg'
+
+
+def test_moved_whole_group_drops_only_the_colliding_member():
+    """A moved multi-image folder over-strips to bare basenames; only the one
+    that lands on a rooted identity is dropped, the rest keep working keys
+    within their own (still unique) fallback identities."""
+    identities = build_image_cache_identities(
+        ['C:/Mission/DJI_0001.JPG',
+         'D:/Moved/FlightB/DJI_0001.JPG',
+         'D:/Moved/FlightB/DJI_0002.JPG'],
+        input_root='C:/Mission')
+
+    assert identities[cross_platform_path_key('C:/Mission/DJI_0001.JPG')] == 'dji_0001.jpg'
+    assert cross_platform_path_key('D:/Moved/FlightB/DJI_0001.JPG') not in identities
+    assert identities[cross_platform_path_key('D:/Moved/FlightB/DJI_0002.JPG')] == 'dji_0002.jpg'
+
+
 def test_identities_skip_empty_paths():
     assert build_image_cache_identities(['', None, 'a/x.jpg']) == {
         cross_platform_path_key('a/x.jpg'): 'x.jpg'}

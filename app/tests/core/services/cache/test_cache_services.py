@@ -182,6 +182,42 @@ def test_identity_written_thumbnails_survive_relocation(tmp_path, sample_aoi):
     assert loaded_b[:, :, 2].mean() > 250, 'FlightB must stay blue after relocation'
 
 
+def test_partial_relocation_never_returns_another_images_thumbnail(tmp_path, sample_aoi):
+    """One flight folder relinked elsewhere while the root image stayed put:
+    the moved image's over-stripped fallback identity landed on the rooted
+    image's identity and returned ITS crop. The collision is now dropped at
+    registration - the moved image misses (regenerates), the rooted image
+    still hits its own entry."""
+    from helpers.PathHelper import build_image_cache_identities
+
+    cache_dir = str(tmp_path / '.thumbnails')
+    original_root = 'C:/Mission'
+    path_a = 'C:/Mission/DJI_0001.JPG'
+    path_b = 'C:/Mission/FlightB/DJI_0001.JPG'
+    moved_b = 'D:/Moved/FlightB/DJI_0001.JPG'
+    red = np.full((16, 16, 3), [255, 0, 0], dtype=np.uint8)
+    blue = np.full((16, 16, 3), [0, 0, 255], dtype=np.uint8)
+
+    writer = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    writer.set_image_identities(build_image_cache_identities(
+        [path_a, path_b], input_root=original_root))
+    assert writer.save_thumbnail_from_array(path_a, sample_aoi, red)
+    assert writer.save_thumbnail_from_array(path_b, sample_aoi, blue)
+
+    # Path recovery persisted FlightB's new location; the XML keeps the
+    # original input_dir and the root image's original path.
+    reader = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    reader.set_image_identities(build_image_cache_identities(
+        [path_a, moved_b], input_root=original_root))
+
+    loaded_b = reader.load_thumbnail_from_disk(reader.get_cache_key(moved_b, sample_aoi))
+    assert loaded_b is None or loaded_b[:, :, 2].mean() > 250, \
+        'moved FlightB retrieved the red root-image crop'
+    loaded_a = reader.load_thumbnail_from_disk(reader.get_cache_key(path_a, sample_aoi))
+    assert loaded_a is not None and loaded_a[:, :, 0].mean() > 250, \
+        'the rooted image must keep hitting its own entry'
+
+
 def test_ambiguous_v1_entries_are_never_served(tmp_path, sample_aoi):
     """An old basename-keyed entry (potentially the wrong image's crop) must
     miss under the current formula instead of being returned."""

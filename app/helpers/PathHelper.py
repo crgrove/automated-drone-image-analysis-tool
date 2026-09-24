@@ -206,6 +206,15 @@ def build_image_cache_identities(paths, input_root=None):
       folder. A copy that rearranged the tree simply misses the cache and
       regenerates, which is the safe direction.
 
+    The finished map is validated for uniqueness: a fallback identity that
+    lands on a rooted image's identity is DROPPED, not registered. A partial
+    relocation (one flight folder relinked while the rest stayed put) can
+    otherwise over-strip the moved group down to identities the rooted images
+    already own, and the colliding image would be served the rooted image's
+    cached thumbnail. A dropped identity sends that image to the exact
+    full-path key namespace - a cache miss and regeneration, never a wrong
+    image.
+
     Args:
         paths (Iterable[str]): Every image path in the dataset. Pass the FULL
             set - a filtered subset shifts the common root and changes keys.
@@ -213,12 +222,13 @@ def build_image_cache_identities(paths, input_root=None):
 
     Returns:
         dict: :func:`cross_platform_path_key` of each path -> identity string
-        (casefolded, '/'-joined). Empty paths are skipped.
+        (casefolded, '/'-joined). Empty paths, and paths whose identity could
+        not be established uniquely, are absent.
     """
     root_parts = split_path_components(input_root) if input_root else []
     root_key = [unicodedata.normalize('NFC', p).casefold() for p in root_parts]
 
-    identities = {}
+    rooted = {}
     unrooted = []
     for path in paths:
         parts = split_path_components(path)
@@ -226,9 +236,15 @@ def build_image_cache_identities(paths, input_root=None):
             continue
         folded = [unicodedata.normalize('NFC', p).casefold() for p in parts]
         if root_key and len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
-            identities[cross_platform_path_key(path)] = '/'.join(folded[len(root_key):])
+            rooted[cross_platform_path_key(path)] = '/'.join(folded[len(root_key):])
         else:
             unrooted.append((path, folded))
+
+    # Relative paths below one root are unique per normalized path, so the
+    # rooted entries can never collide with each other - only a fallback
+    # identity can land on one of them.
+    identities = dict(rooted)
+    rooted_identities = set(rooted.values())
 
     if unrooted:
         prefix = 0
@@ -239,7 +255,10 @@ def build_image_cache_identities(paths, input_root=None):
                 break
             prefix += 1
         for path, folded in unrooted:
-            identities[cross_platform_path_key(path)] = '/'.join(folded[prefix:])
+            identity = '/'.join(folded[prefix:])
+            if identity in rooted_identities:
+                continue  # cannot be established uniquely - full-path fallback
+            identities[cross_platform_path_key(path)] = identity
 
     return identities
 

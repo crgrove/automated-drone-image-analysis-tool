@@ -47,19 +47,24 @@ def _folded_components(path):
 def image_identities(paths, input_root=None):
     """Reproduce helpers.PathHelper.build_image_cache_identities exactly.
 
-    Returns {path: identity} keyed by the ORIGINAL path strings given.
+    Returns {path: identity} keyed by the ORIGINAL path strings given. Paths
+    whose identity could not be established uniquely (a relocated group
+    over-stripped onto a rooted image's identity) are absent - production
+    keys those on the full path instead.
     """
     root_key = _folded_components(input_root) if input_root else []
-    identities = {}
+    rooted = {}
     unrooted = []
     for path in paths:
         folded = _folded_components(path)
         if not folded:
             continue
         if root_key and len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
-            identities[path] = '/'.join(folded[len(root_key):])
+            rooted[path] = '/'.join(folded[len(root_key):])
         else:
             unrooted.append((path, folded))
+    identities = dict(rooted)
+    rooted_identities = set(rooted.values())
     if unrooted:
         prefix = 0
         while True:
@@ -69,8 +74,18 @@ def image_identities(paths, input_root=None):
                 break
             prefix += 1
         for path, folded in unrooted:
-            identities[path] = '/'.join(folded[prefix:])
+            identity = '/'.join(folded[prefix:])
+            if identity in rooted_identities:
+                continue
+            identities[path] = identity
     return identities
+
+
+def path_key(path):
+    """Reproduce helpers.PathHelper.cross_platform_path_key exactly."""
+    normalized = (path or '').replace('\\', '/')
+    parts = [part for part in normalized.split('/') if part]
+    return unicodedata.normalize('NFC', '/'.join(parts)).casefold()
 
 
 def cache_key(identity, center, radius):
@@ -81,6 +96,13 @@ def cache_key(identity, center, radius):
     'v3' namespace applies.
     """
     identifier = f"v3:{identity}:{center[0]}:{center[1]}:{radius}"
+    return hashlib.md5(identifier.encode()).hexdigest()
+
+
+def fallback_cache_key(path, center, radius):
+    """Reproduce the unregistered-path ('v3f') key exactly: the full
+    normalized path, so it is unique per distinct path by construction."""
+    identifier = f"v3f:{path_key(path)}:{center[0]}:{center[1]}:{radius}"
     return hashlib.md5(identifier.encode()).hexdigest()
 
 
@@ -128,7 +150,11 @@ def main():
                 radius = int(aoi_xml.get('radius', '0'))
             except (ValueError, SyntaxError):
                 continue
-            key = cache_key(identities.get(path, ''), center, radius)
+            identity = identities.get(path)
+            if identity is not None:
+                key = cache_key(identity, center, radius)
+            else:
+                key = fallback_cache_key(path, center, radius)
             by_key[key].append((path, aoi_xml.get('number'), center, radius))
 
     dup_names = {name: paths for name, paths in by_basename.items() if len(paths) > 1}
