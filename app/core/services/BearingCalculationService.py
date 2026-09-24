@@ -25,6 +25,7 @@ from helpers.GeodesicHelper import GeodesicHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 from core.services.LoggerService import LoggerService
+from core.services.shadow.SolarPosition import SolarTimeUnresolvable, resolve_capture_utc
 import piexif
 
 kml = None
@@ -111,6 +112,11 @@ class BearingCalculationService(QObject):
             track_points = self._validate_track(track_points)
             # self._logger.info(f"Loaded {len(track_points)} trackpoints from {file_ext}")
 
+            # The recovery dialog hands over path-only records (timestamp
+            # None, filled "during calculation") - and only the auto path
+            # ever filled them, so track matching skipped every image.
+            self._populate_capture_times(images)
+
             # Calculate bearings
             results = self._bearing_from_track(images, track_points, source_type)
 
@@ -150,6 +156,48 @@ class BearingCalculationService(QObject):
             self._logger.error(f"Error auto-calculating bearings: {str(e)}")
             self.calculation_error.emit(str(e))
 
+    def _populate_capture_times(self, images: List[Dict[str, Any]]):
+        """Fill missing ``img['timestamp']`` with each image's capture time.
+
+        Track points carry UTC, so the time is first genuinely resolved to
+        UTC: resolve_capture_utc prefers the EXIF GPS timestamp (already
+        UTC), then explicit offsets, then the WALDO corrected/refined stamps,
+        then the timezone implied by the GPS position. An image carrying only
+        a bare DateTimeOriginal (no offset, no GPS) falls back to that value
+        under the service's existing naive-means-UTC convention (the same one
+        _bearing_from_track and the auto path apply) - a match the operator
+        can judge beats a silent skip, and out-of-track matches are flagged
+        'gap'. Only an image with no readable time at all keeps timestamp
+        None and is reported as skipped by _bearing_from_track.
+        """
+        total = len(images)
+        for idx, img in enumerate(images):
+            if img.get('timestamp') is not None:
+                continue
+            if idx % 10 == 0 or idx == total - 1:
+                self.progress_updated.emit(idx + 1, total, "Reading image capture times...")
+            try:
+                exif_data = MetaDataHelper.get_exif_data_piexif(img['path'])
+            except Exception as e:
+                self._logger.error(f"Error reading capture time from {img['path']}: {e}")
+                continue
+            try:
+                gps = LocationInfo.get_gps(exif_data=exif_data) or {}
+                xmp_data = MetaDataHelper.get_xmp_data_merged(img['path']) or {}
+                img['timestamp'] = resolve_capture_utc(
+                    exif_data, xmp_data,
+                    lat=gps.get('latitude'), lon=gps.get('longitude'))[0]
+            except SolarTimeUnresolvable:
+                try:
+                    img['timestamp'] = MetaDataHelper.get_exif_timestamp(exif_data)
+                except Exception:
+                    img['timestamp'] = None
+                if img.get('timestamp') is None:
+                    self._logger.warning(
+                        f"No readable capture time for {img['path']}; skipping in track matching")
+            except Exception as e:
+                self._logger.error(f"Error reading capture time from {img['path']}: {e}")
+
     def parse_track_file(self, track_file_path: str):
         """Parse a KML/GPX/CSV track file into TrackPoints.
 
@@ -176,7 +224,18 @@ class BearingCalculationService(QObject):
         raise ValueError(f"Unsupported track file format: {file_ext}")
 
     def _parse_kml(self, file_path: str) -> List[TrackPoint]:
-        """Parse KML file to extract trackpoints."""
+        """Parse KML file to extract trackpoints.
+
+        Supports both fastkml generations (requirements.txt allows either):
+        in 0.x ``from_string`` populates the instance and ``features()`` is a
+        method; in 1.x ``from_string`` is a classmethod returning the parsed
+        object, ``features`` is a list, a placemark's timestamp lives on
+        ``.times``, and a gx:Track carries explicit (when, coord) pairs on
+        ``.kml_geometry.track_items``. The old method-call parsing raised
+        ``TypeError: 'list' object is not callable`` under 1.x, which blocked
+        every KML recovery and made track discovery silently drop KML
+        candidates.
+        """
         if kml is None:
             raise ImportError("fastkml library not installed. Run: pip install fastkml")
 
@@ -186,41 +245,73 @@ class BearingCalculationService(QObject):
             doc = f.read()
 
         k = kml.KML()
-        k.from_string(doc)
+        # fastkml 0.x: instance method, populates k, returns None.
+        # fastkml 1.x: classmethod reached through the instance, returns the
+        # parsed document (k itself stays empty).
+        parsed = k.from_string(doc)
+        if parsed is not None:
+            k = parsed
+
+        def child_features(feature):
+            feats = getattr(feature, 'features', None)
+            if feats is None:
+                return []
+            return list(feats()) if callable(feats) else list(feats)
 
         # Recursively extract placemarks and tracks
         def extract_from_feature(feature):
-            if hasattr(feature, 'features'):
-                for f in feature.features():
-                    extract_from_feature(f)
+            for f in child_features(feature):
+                extract_from_feature(f)
 
-            # Handle gx:Track (timestamped coordinates)
-            if hasattr(feature, '_geometry') and feature._geometry:
-                geom = feature._geometry
+            # gx:Track / gx:MultiTrack under fastkml 1.x: explicit
+            # (when, coord) pairs, one container per flight segment for a
+            # MultiTrack (its .tracks children each carry track_items).
+            kml_geometry = getattr(feature, 'kml_geometry', None)
+            if getattr(kml_geometry, 'track_items', None):
+                containers = [kml_geometry]
+            else:
+                containers = [t for t in (getattr(kml_geometry, 'tracks', None) or [])
+                              if getattr(t, 'track_items', None)]
+            if containers:
+                for container in containers:
+                    for item in container.track_items:
+                        ts = self._parse_kml_timestamp(item)
+                        coord = getattr(item, 'coord', None)
+                        if ts and coord is not None:
+                            track_points.append(TrackPoint(
+                                ts, coord.y, coord.x, getattr(coord, 'z', None)))
+                return
 
-                # Check if it's a gx:Track or LineString with timestamps
-                if hasattr(geom, 'coords'):
+            geom = (getattr(feature, 'geometry', None)
+                    or getattr(feature, '_geometry', None))
+            # Probe by reading, not hasattr: pygeoif's multipart geometries
+            # RAISE NotImplementedError from the coords property, and hasattr
+            # only swallows AttributeError - the old check crashed the whole
+            # parse on any MultiGeometry placemark.
+            coords = None
+            if geom is not None:
+                try:
                     coords = list(geom.coords)
-
-                    # Try to get timestamps from gx:when elements
-                    # For simple LineString without timestamps, skip
-                    if hasattr(feature, 'timeStamp') and feature.timeStamp:
-                        # Single timestamp for placemark
-                        ts = self._parse_kml_timestamp(feature.timeStamp)
-                        if ts and len(coords) > 0:
-                            lon, lat, alt = coords[0][0], coords[0][1], coords[0][2] if len(coords[0]) > 2 else 0
+                except (AttributeError, NotImplementedError, TypeError):
+                    coords = None
+            if coords:
+                ts = self._parse_kml_timestamp(
+                    getattr(feature, 'times', None) or getattr(feature, 'timeStamp', None))
+                if ts and len(coords) > 0:
+                    # Single timestamp for placemark
+                    lon, lat, alt = coords[0][0], coords[0][1], coords[0][2] if len(coords[0]) > 2 else 0
+                    track_points.append(TrackPoint(ts, lat, lon, alt))
+                elif getattr(feature, '_times', None):
+                    # gx:Track under fastkml 0.x: parallel timestamp list
+                    for i, coord in enumerate(coords):
+                        if i < len(feature._times):
+                            ts = feature._times[i]
+                            lon, lat = coord[0], coord[1]
+                            alt = coord[2] if len(coord) > 2 else None
                             track_points.append(TrackPoint(ts, lat, lon, alt))
-                    elif hasattr(feature, '_times') and feature._times:
-                        # gx:Track with multiple timestamps
-                        for i, coord in enumerate(coords):
-                            if i < len(feature._times):
-                                ts = feature._times[i]
-                                lon, lat = coord[0], coord[1]
-                                alt = coord[2] if len(coord) > 2 else None
-                                track_points.append(TrackPoint(ts, lat, lon, alt))
 
         # Extract from all documents and folders
-        for feature in k.features():
+        for feature in child_features(k):
             extract_from_feature(feature)
 
         return track_points
@@ -360,14 +451,31 @@ class BearingCalculationService(QObject):
         raise ValueError(f"Unable to parse timestamp: {ts_str}")
 
     def _parse_kml_timestamp(self, timestamp_obj) -> Optional[datetime]:
-        """Parse KML timestamp object."""
-        if hasattr(timestamp_obj, 'timestamp'):
-            ts = timestamp_obj.timestamp
-            if isinstance(ts, datetime):
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-                return ts
-        return None
+        """Coerce any fastkml time carrier to an aware datetime.
+
+        Accepts a fastkml 0.x TimeStamp (``.timestamp`` is a datetime), a
+        1.x TimeStamp or gx TrackItem (``.timestamp`` / ``.when`` is a
+        KmlDateTime carrying ``.dt``), a bare KmlDateTime, or a bare
+        datetime. Anything else (e.g. a TimeSpan) resolves to None and the
+        point is skipped.
+        """
+        def coerce(obj, depth=0):
+            if obj is None or depth > 4:
+                return None
+            if isinstance(obj, datetime):
+                if obj.tzinfo is None:
+                    obj = obj.replace(tzinfo=timezone.utc)
+                return obj
+            # Unwrap one carrier level per recursion; only an unwrap that
+            # actually bottoms out in a datetime is accepted, so an object
+            # with unrelated same-named attributes cannot derail the parse.
+            for attr in ('when', 'timestamp', 'dt'):
+                result = coerce(getattr(obj, attr, None), depth + 1)
+                if result is not None:
+                    return result
+            return None
+
+        return coerce(timestamp_obj)
 
     def _validate_track(self, track_points: List[TrackPoint]) -> List[TrackPoint]:
         """Validate and sort trackpoints by timestamp."""
@@ -420,6 +528,7 @@ class BearingCalculationService(QObject):
             # Find bracketing trackpoints
             k = self._find_bracket_index(track, img_time)
 
+            confidence = 1.0
             if k == 0:
                 # Before first trackpoint - use first segment bearing
                 bearing = GeodesicHelper.initial_course(
@@ -437,33 +546,52 @@ class BearingCalculationService(QObject):
             else:
                 # Between trackpoints k-1 and k
                 p1, p2 = track[k - 1], track[k]
-
-                # Calculate segment bearing
-                bearing = GeodesicHelper.initial_course(
-                    p1.lat, p1.lon, p2.lat, p2.lon
-                )
-
-                # Check if stationary (slow speed)
-                distance = GeodesicHelper.haversine_distance(
-                    p1.lat, p1.lon, p2.lat, p2.lon
-                )
                 time_diff = (p2.timestamp - p1.timestamp).total_seconds()
 
-                if time_diff > 0 and distance / time_diff < self.MIN_SPEED_MPS:
-                    # Stationary - inherit last valid bearing
+                if time_diff > self.GAP_THRESHOLD_SEC:
+                    # A recording break: a MultiTrack segment boundary, a
+                    # paused logger, sparse rows. The aircraft's course
+                    # through the interval is unrecorded, and the
+                    # straight-line bearing between the bracketing points
+                    # includes the turnaround (eastbound between two
+                    # northbound legs). Fall back to the last recorded
+                    # heading, flagged as a gap with reduced confidence -
+                    # never a fully trusted estimate.
                     if last_valid_bearing is not None:
                         bearing = last_valid_bearing
-                        quality = 'hover_estimate'
+                    else:
+                        bearing = GeodesicHelper.initial_course(
+                            p1.lat, p1.lon, p2.lat, p2.lon
+                        )
+                    quality = 'gap'
+                    confidence = 0.3
+                else:
+                    # Calculate segment bearing
+                    bearing = GeodesicHelper.initial_course(
+                        p1.lat, p1.lon, p2.lat, p2.lon
+                    )
+
+                    # Check if stationary (slow speed)
+                    distance = GeodesicHelper.haversine_distance(
+                        p1.lat, p1.lon, p2.lat, p2.lon
+                    )
+
+                    if time_diff > 0 and distance / time_diff < self.MIN_SPEED_MPS:
+                        # Stationary - inherit last valid bearing
+                        if last_valid_bearing is not None:
+                            bearing = last_valid_bearing
+                            quality = 'hover_estimate'
+                        else:
+                            quality = 'good'
                     else:
                         quality = 'good'
-                else:
-                    quality = 'good'
-                    last_valid_bearing = bearing
+                        last_valid_bearing = bearing
 
             results[img['path']] = BearingResult(
                 bearing_deg=bearing,
                 source=source_type,
-                quality=quality
+                quality=quality,
+                confidence=confidence
             )
 
         return results

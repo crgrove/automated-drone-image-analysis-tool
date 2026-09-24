@@ -183,6 +183,35 @@ def test_analyze_service_non_recursive():
         assert service.recursive is False
 
 
+def test_process_complete_stamps_the_persisted_cache_identity(analyze_service):
+    """Each successful image carries its dataset-relative cache identity into
+    the XML data, so relocated datasets resolve cache keys from the persisted
+    value instead of inferring them from the new location."""
+    from algorithms.AlgorithmService import AnalysisResult
+    from helpers.PathHelper import build_image_cache_identities, cross_platform_path_key
+
+    input_path = os.path.join(analyze_service.input, 'FlightA', 'DJI_0001.JPG')
+    analyze_service._image_identities = build_image_cache_identities(
+        [input_path], input_root=analyze_service.input)
+    analyze_service.images_with_aois = []
+    analyze_service.ttl_images = 1
+    analyze_service._completed_images = 0
+    analyze_service._total_aois = 0
+
+    result = AnalysisResult(input_path=input_path)
+    result.output_path = input_path + '.tif'
+    result.areas_of_interest = [{'center': (10, 10), 'radius': 5, 'area': 50}]
+    result.image_width = 100
+    result.image_height = 100
+    analyze_service._process_complete(result)
+
+    assert len(analyze_service.images_with_aois) == 1
+    assert analyze_service.images_with_aois[0]['cache_id'] == 'flighta/dji_0001.jpg'
+    # The same value the identity map computed - writer and XML agree.
+    assert (analyze_service.images_with_aois[0]['cache_id']
+            == analyze_service._image_identities[cross_platform_path_key(input_path)])
+
+
 def test_process_complete_handles_none_result(analyze_service):
     """A None result must not raise.
 

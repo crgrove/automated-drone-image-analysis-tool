@@ -110,6 +110,19 @@ class AOISimilarityController(TranslationMixin, QObject):
                 if thumbnail_dir.exists():
                     dataset_dir = str(thumbnail_dir)
             self._similarity_service = AOISimilarityService(dataset_thumbnail_dir=dataset_dir)
+            # Key the crop cache by dataset-relative identity so same-named
+            # images in nested flight folders never trade crops. The viewer's
+            # full image list and the recorded input root define the identity.
+            try:
+                from helpers.PathHelper import image_cache_identity_map
+                images = getattr(self.parent, 'images', None) or []
+                settings = getattr(self.parent, 'settings', None)
+                input_root = settings.get('input_dir') if isinstance(settings, dict) else None
+                identities = image_cache_identity_map(images, input_root=input_root)
+                self._similarity_service.thumbnail_cache.set_image_identities(identities)
+            except Exception as e:
+                # Fallback keys mean a cache miss at worst, never a wrong crop.
+                self.logger.error(f"Error registering image identities: {e}")
         return self._similarity_service
 
     def find_similar_for_selected(self, image_idx=None, aoi_idx=None):

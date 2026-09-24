@@ -398,7 +398,8 @@ class AlgorithmService:
         image_path: str,
         areas_of_interest: list,
         output_dir: str,
-        thermal: bool = False
+        thermal: bool = False,
+        image_identity: str = None
     ) -> None:
         """Generate and cache thumbnails and color information for all AOIs.
 
@@ -411,6 +412,9 @@ class AlgorithmService:
             areas_of_interest: List of AOI dictionaries from detection.
             output_dir: Output directory where cache folders will be created.
             thermal: Whether this is a thermal image. Defaults to False.
+            image_identity: This image's dataset-relative cache identity, so
+                entries for same-named images in nested flight folders never
+                share a key. None keys on the path-tail fallback.
         """
         import colorsys
 
@@ -426,6 +430,12 @@ class AlgorithmService:
             thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
             color_service = ColorCacheService()  # In-memory only - data goes to XML
             temperature_service = TemperatureCacheService() if thermal else None
+            if image_identity:
+                identity_map = {image_path: image_identity}
+                thumbnail_service.set_image_identities(identity_map)
+                color_service.set_image_identities(identity_map)
+                if temperature_service is not None:
+                    temperature_service.set_image_identities(identity_map)
 
             # Convert BGR to RGB for color calculations
             if len(img.shape) == 3 and img.shape[2] == 3:

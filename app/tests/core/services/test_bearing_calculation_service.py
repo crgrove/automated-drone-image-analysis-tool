@@ -759,3 +759,371 @@ def test_auto_sorts_by_capture_time_when_present(service):
     assert len(results) == 3
     assert images[0]['timestamp'].second == 2      # b.jpg parsed
     assert images[2]['timestamp'] is None          # c.jpg has none
+
+
+# ---------------------------------------------------------------------------
+# Track mode capture-time extraction (second review, finding 2): the recovery
+# dialog hands over path-only records, and only the auto path ever filled
+# their timestamps - track matching then skipped every image.
+# ---------------------------------------------------------------------------
+
+def _write_jpeg_with_gps_time(tmp_path, name='DJI_0001.JPG',
+                              gps_date=b'2024:01:01', gps_time=((12, 1), (0, 1), (5, 1))):
+    """A real JPEG whose EXIF carries a UTC GPS timestamp and a GPS fix."""
+    import cv2
+    import numpy as np
+    import piexif
+
+    path = str(tmp_path / name)
+    cv2.imwrite(path, np.zeros((8, 8, 3), dtype=np.uint8))
+    exif_bytes = piexif.dump({
+        'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2024:01:01 07:00:05'},
+        'GPS': {
+            piexif.GPSIFD.GPSLatitude: ((40, 1), (0, 1), (0, 1)),
+            piexif.GPSIFD.GPSLatitudeRef: b'N',
+            piexif.GPSIFD.GPSLongitude: ((75, 1), (0, 1), (0, 1)),
+            piexif.GPSIFD.GPSLongitudeRef: b'W',
+            piexif.GPSIFD.GPSDateStamp: gps_date,
+            piexif.GPSIFD.GPSTimeStamp: gps_time,
+        },
+    })
+    piexif.insert(exif_bytes, path)
+    return path
+
+
+def _controller_shaped_record(path):
+    """Image record exactly as BearingRecoveryController builds it."""
+    return {'path': path, 'lat': None, 'lon': None, 'timestamp': None}
+
+
+def test_calculate_from_track_extracts_capture_times_from_images(service, tmp_path):
+    """A real JPEG with a valid EXIF capture time plus a CSV track covering
+    that time must update one image, not zero."""
+    image_path = _write_jpeg_with_gps_time(tmp_path)
+    track = _write_csv(
+        tmp_path,
+        [
+            "2024-01-01T12:00:00Z,40.0,-75.0,100",
+            "2024-01-01T12:00:10Z,40.001,-75.001,101",
+        ],
+    )
+    results = []
+    service.calculation_complete.connect(lambda r: results.append(r))
+
+    service.calculate_from_track(
+        images=[_controller_shaped_record(image_path)],
+        track_file_path=str(track))
+
+    assert len(results) == 1
+    assert image_path in results[0], 'track matching skipped the image'
+    assert isinstance(results[0][image_path], BearingResult)
+
+
+def test_populate_capture_times_resolves_gps_utc(service, tmp_path):
+    image_path = _write_jpeg_with_gps_time(tmp_path)
+    records = [_controller_shaped_record(image_path)]
+
+    service._populate_capture_times(records)
+
+    # The GPS EXIF stamp is already UTC and outranks the naive local
+    # DateTimeOriginal, so no timezone guessing is involved.
+    assert records[0]['timestamp'] == datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)
+
+
+def test_populate_capture_times_leaves_unresolvable_none(service, tmp_path):
+    """No resolvable capture time: the record keeps timestamp None (and the
+    matcher reports it skipped) instead of being matched hours off."""
+    import cv2
+    import numpy as np
+
+    plain = str(tmp_path / 'no_exif.jpg')
+    cv2.imwrite(plain, np.zeros((8, 8, 3), dtype=np.uint8))
+    records = [_controller_shaped_record(plain)]
+
+    service._populate_capture_times(records)
+
+    assert records[0]['timestamp'] is None
+
+
+def test_populate_capture_times_keeps_existing_timestamps(service):
+    """Records that already carry a timestamp are never re-read from disk."""
+    stamped = {'path': 'missing-on-purpose.jpg',
+               'timestamp': datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)}
+
+    with patch('core.services.BearingCalculationService.MetaDataHelper.get_exif_data_piexif') as read:
+        service._populate_capture_times([stamped])
+
+    read.assert_not_called()
+    assert stamped['timestamp'] == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# KML parsing against the installed fastkml (second review, finding 3): the
+# 0.x method-call API raised TypeError under fastkml 1.x, blocking every KML
+# recovery and silently dropping KML candidates from track discovery.
+# ---------------------------------------------------------------------------
+
+_KML_POINTS = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark><name>p1</name>
+      <TimeStamp><when>2024-01-01T12:00:00Z</when></TimeStamp>
+      <Point><coordinates>-75.000,40.000,100</coordinates></Point>
+    </Placemark>
+    <Placemark><name>p2</name>
+      <TimeStamp><when>2024-01-01T12:00:10Z</when></TimeStamp>
+      <Point><coordinates>-75.001,40.001,101</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+_KML_GX_TRACK = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <Placemark><name>trk</name>
+      <gx:Track>
+        <when>2024-01-01T12:00:00Z</when>
+        <gx:coord>-75.000 40.000 100</gx:coord>
+        <when>2024-01-01T12:00:10Z</when>
+        <gx:coord>-75.001 40.001 101</gx:coord>
+      </gx:Track>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+
+def _write_kml(tmp_path, content, name='track.kml'):
+    path = tmp_path / name
+    path.write_text(content, encoding='utf-8')
+    return str(path)
+
+
+def test_parse_kml_timestamped_point_placemarks(service, tmp_path):
+    points, source = service.parse_track_file(_write_kml(tmp_path, _KML_POINTS))
+
+    assert source == 'kml'
+    assert len(points) == 2
+    points.sort(key=lambda p: p.timestamp)
+    assert points[0].timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[0].lon == pytest.approx(-75.0)
+    assert points[1].timestamp == datetime(2024, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
+    assert points[1].lat == pytest.approx(40.001)
+
+
+def test_parse_kml_gx_track(service, tmp_path):
+    points, source = service.parse_track_file(_write_kml(tmp_path, _KML_GX_TRACK))
+
+    assert source == 'kml'
+    assert len(points) == 2
+    points.sort(key=lambda p: p.timestamp)
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[0].lon == pytest.approx(-75.0)
+    assert points[0].alt == pytest.approx(100.0)
+    assert points[1].timestamp == datetime(2024, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
+
+
+def test_calculate_from_track_kml_end_to_end(service, tmp_path):
+    """The reviewer's failing case: a valid timestamped KML must drive a
+    successful calculation, not TypeError inside the parser."""
+    kml_path = _write_kml(tmp_path, _KML_POINTS)
+    images = [{'path': 'img1.jpg', 'lat': None, 'lon': None,
+               'timestamp': datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)}]
+    results, errors = [], []
+    service.calculation_complete.connect(lambda r: results.append(r))
+    service.calculation_error.connect(errors.append)
+
+    service.calculate_from_track(images=images, track_file_path=kml_path)
+
+    assert errors == []
+    assert len(results) == 1 and 'img1.jpg' in results[0]
+
+
+def test_populate_capture_times_bare_datetime_original_falls_back(service, tmp_path):
+    """A bare DateTimeOriginal (no offset, no GPS) still matches under the
+    service's naive-means-UTC convention rather than being skipped."""
+    import cv2
+    import numpy as np
+    import piexif
+
+    path = str(tmp_path / 'bare.jpg')
+    cv2.imwrite(path, np.zeros((8, 8, 3), dtype=np.uint8))
+    piexif.insert(piexif.dump(
+        {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026:08:07 12:00:05'}}), path)
+    records = [_controller_shaped_record(path)]
+
+    service._populate_capture_times(records)
+
+    ts = records[0]['timestamp']
+    assert ts is not None
+    assert (ts.year, ts.hour, ts.second) == (2026, 12, 5)
+
+
+_KML_GX_MULTITRACK = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <Placemark><name>Two flight segments</name>
+      <gx:MultiTrack>
+        <gx:Track>
+          <when>2024-01-01T12:00:00Z</when><when>2024-01-01T12:00:10Z</when>
+          <gx:coord>-75.000 40.000 100</gx:coord><gx:coord>-75.001 40.001 101</gx:coord>
+        </gx:Track>
+        <gx:Track>
+          <when>2024-01-01T12:01:00Z</when><when>2024-01-01T12:01:10Z</when>
+          <gx:coord>-75.002 40.002 102</gx:coord><gx:coord>-75.003 40.003 103</gx:coord>
+        </gx:Track>
+      </gx:MultiTrack>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+_KML_MULTIGEOMETRY_AND_POINT = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark><name>untimed area</name>
+      <MultiGeometry>
+        <LineString><coordinates>-75.0,40.0 -75.1,40.1</coordinates></LineString>
+        <LineString><coordinates>-75.2,40.2 -75.3,40.3</coordinates></LineString>
+      </MultiGeometry>
+    </Placemark>
+    <Placemark><name>p1</name>
+      <TimeStamp><when>2024-01-01T12:00:00Z</when></TimeStamp>
+      <Point><coordinates>-75.000,40.000,100</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+
+def test_parse_kml_gx_multitrack_preserves_all_segments(service, tmp_path):
+    """A gx:MultiTrack's segments each carry their own (when, coord) pairs;
+    the multipart geometry has no coordinate sequence, so the old parse
+    raised NotImplementedError instead of returning the four points."""
+    points, source = service.parse_track_file(
+        _write_kml(tmp_path, _KML_GX_MULTITRACK, name='multi_track.kml'))
+
+    assert source == 'kml'
+    assert len(points) == 4
+    assert [p.timestamp.second for p in points] == [0, 10, 0, 10]
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[3].lat == pytest.approx(40.003)
+    assert points[3].timestamp == datetime(2024, 1, 1, 12, 1, 10, tzinfo=timezone.utc)
+
+
+def test_parse_kml_multigeometry_without_tracks_does_not_abort_the_parse(service, tmp_path):
+    """A MultiGeometry placemark (coords property raises, and hasattr does
+    not swallow NotImplementedError) must be skipped, not crash the parse:
+    the timestamped point after it still comes through."""
+    points, _source = service.parse_track_file(
+        _write_kml(tmp_path, _KML_MULTIGEOMETRY_AND_POINT, name='multi_geom.kml'))
+
+    assert len(points) == 1
+    assert points[0].timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Recording gaps (PR #151 recheck, finding 2): an interval longer than
+# GAP_THRESHOLD_SEC has no recorded course - the straight-line bearing
+# between its endpoints includes the turnaround and must never be reported
+# as a fully trusted 'good' estimate. Applies to every track format.
+# ---------------------------------------------------------------------------
+
+_KML_TWO_SEGMENTS_WITH_GAP = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document><Placemark><gx:MultiTrack><gx:interpolate>0</gx:interpolate>
+    <gx:Track>
+      <when>2024-01-01T12:00:00Z</when><when>2024-01-01T12:00:10Z</when>
+      <gx:coord>-75.000 40.000 100</gx:coord><gx:coord>-75.000 40.001 100</gx:coord>
+    </gx:Track>
+    <gx:Track>
+      <when>2024-01-01T12:10:00Z</when><when>2024-01-01T12:10:10Z</when>
+      <gx:coord>-74.900 40.001 100</gx:coord><gx:coord>-74.900 40.002 100</gx:coord>
+    </gx:Track>
+  </gx:MultiTrack></Placemark></Document>
+</kml>
+"""
+
+_CSV_TWO_SEGMENTS_WITH_GAP = (
+    'timestamp,latitude,longitude,altitude\n'
+    '2024-01-01T12:00:00Z,40.000,-75.000,100\n'
+    '2024-01-01T12:00:10Z,40.001,-75.000,100\n'
+    '2024-01-01T12:10:00Z,40.001,-74.900,100\n'
+    '2024-01-01T12:10:10Z,40.002,-74.900,100\n'
+)
+
+
+def _write_gap_track(tmp_path, track_format):
+    if track_format == 'kml':
+        return _write_kml(tmp_path, _KML_TWO_SEGMENTS_WITH_GAP, name='gap.kml')
+    path = tmp_path / 'gap.csv'
+    path.write_text(_CSV_TWO_SEGMENTS_WITH_GAP, encoding='utf-8')
+    return str(path)
+
+
+@pytest.mark.parametrize('track_format', ['kml', 'csv'])
+def test_image_inside_a_recording_gap_is_never_marked_good(service, tmp_path, track_format):
+    """Two northbound segments 10 minutes apart: an image at 12:05 sits in
+    unrecorded time, and the eastbound endpoint-to-endpoint course used to
+    come back quality='good', confidence=1.0."""
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'during-gap.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc)}],
+        _write_gap_track(tmp_path, track_format))
+
+    assert len(results) == 1
+    result = results[0]['during-gap.jpg']
+    assert result.quality == 'gap'
+    assert result.confidence < 1.0
+
+
+@pytest.mark.parametrize('track_format', ['kml', 'csv'])
+def test_gap_image_inherits_the_last_recorded_heading(service, tmp_path, track_format):
+    """With an earlier image on a recorded northbound leg, the gap image
+    falls back to that heading instead of the cross-gap eastbound course."""
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'on-track.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)},
+         {'path': 'during-gap.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc)}],
+        _write_gap_track(tmp_path, track_format))
+
+    on_track = results[0]['on-track.jpg']
+    during_gap = results[0]['during-gap.jpg']
+    assert on_track.quality == 'good'
+    assert on_track.confidence == 1.0
+    assert during_gap.quality == 'gap'
+    # Northbound (~0 deg), never the eastbound (~90 deg) cross-gap course.
+    assert during_gap.bearing_deg == pytest.approx(on_track.bearing_deg, abs=1.0)
+
+
+def test_continuous_interval_still_reports_good_with_full_confidence(service, tmp_path):
+    track = _write_csv(
+        tmp_path,
+        [
+            "2024-01-01T12:00:00Z,40.0,-75.0,100",
+            "2024-01-01T12:00:30Z,40.001,-75.0,101",
+        ],
+    )
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'a.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 0, 15, tzinfo=timezone.utc)}],
+        str(track))
+
+    result = results[0]['a.jpg']
+    assert result.quality == 'good'
+    assert result.confidence == 1.0
