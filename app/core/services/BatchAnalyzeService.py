@@ -141,6 +141,15 @@ class BatchAnalyzeService(QObject):
             # Loose images directly in the input root -- name the batch after
             # the input folder itself.
             rel = os.path.basename(os.path.normpath(self.input_dir)) or 'Batch'
+            # A direct child folder with that same name mirrors to this exact
+            # output path (its relpath IS the bare name). Two batches sharing
+            # one output directory destroy each other: the second pass removes
+            # the first's ADIAT_Results, and a resume mistakes the first
+            # batch's XML for the second's completion. Suffix the root batch
+            # until it cannot collide; the check is against the input tree, so
+            # a resume recomputes the same answer.
+            while os.path.isdir(os.path.join(self.input_dir, rel)):
+                rel += '_root'
         return os.path.join(self.output_dir, rel)
 
     def _batch_is_complete(self, batch_folder):

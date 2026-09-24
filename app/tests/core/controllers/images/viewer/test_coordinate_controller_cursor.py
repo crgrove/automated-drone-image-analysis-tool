@@ -43,6 +43,46 @@ def _controller(with_result=True):
     return controller, parent, service
 
 
+def test_flight_log_application_invalidates_cached_aoi_pose(app, monkeypatch):
+    """Review finding 6: invalidate_attitude_caches cleared the viewer image
+    service but left the AOI controller's cached AOIService (keyed only by
+    image index) holding the old pose - cursor coordinates copied after a
+    flight-log apply came from stale metadata until the image changed."""
+    import importlib
+    from types import SimpleNamespace
+
+    from core.controllers.images.viewer.WaldoPrePassController import (
+        invalidate_attitude_caches,
+    )
+    from core.controllers.images.viewer.aoi.AOIController import AOIController
+
+    old_service = SimpleNamespace(estimate_pixel_gps=lambda *a, **k: SimpleNamespace(
+        latitude=30.0, longitude=-120.0, elevation_source=None))
+    new_service = SimpleNamespace(estimate_pixel_gps=lambda *a, **k: SimpleNamespace(
+        latitude=31.0, longitude=-121.0, elevation_source=None))
+    aoi_module = importlib.import_module(
+        'core.controllers.images.viewer.aoi.AOIController')
+    monkeypatch.setattr(aoi_module, 'AOIService', lambda *a, **k: new_service)
+
+    aoi_controller = AOIController.__new__(AOIController)
+    viewer = _StubParent()
+    viewer.aoi_controller = aoi_controller
+    viewer.current_image_service = object()
+    aoi_controller.parent = viewer
+    aoi_controller.logger = MagicMock()
+    aoi_controller._cached_aoi_service = old_service
+    aoi_controller._cached_image_index = 0
+
+    invalidate_attitude_caches(viewer)
+
+    controller = CoordinateController(viewer)
+    resolved = controller.resolve_cursor_coords(100, 100)
+    assert resolved is not None
+    assert resolved[:2] == (31.0, -121.0), \
+        'cursor coordinates still use the old image pose'
+    assert viewer.current_image_service is None
+
+
 def test_resolve_cursor_coords_formats_and_reports_source(app):
     controller, parent, service = _controller()
     resolved = controller.resolve_cursor_coords(150, 200)

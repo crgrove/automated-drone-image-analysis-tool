@@ -43,14 +43,81 @@ def test_thumbnail_cache_service_initialization(thumbnail_cache_service):
 
 def test_get_cache_key(thumbnail_cache_service, sample_aoi):
     """Test cache key generation."""
-    # TODO: ThumbnailCacheService.get_cache_key builds the key from os.path.basename(image_path), which
-    # on POSIX does not split a Windows-authored XML path - hashing the whole path may defeat its documented
-    # portability intent. Same formula is in Color/TemperatureCacheService; the fix is cross_platform_basename.
-    # Check reachability first: Viewer's validate_and_fix_paths relinks paths before thumbnails run.
     key = thumbnail_cache_service.get_cache_key('test_image.jpg', sample_aoi)
 
     assert isinstance(key, str)
     assert len(key) > 0
+
+
+# ---------------------------------------------------------------------------
+# Cache-key identity (review finding 3, PR #58/#127 follow-up): the key must
+# distinguish same-named images in different folders, while remaining portable
+# across machine roots and authoring platforms.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('service_factory', [
+    lambda: ThumbnailCacheService(dataset_cache_dir=None),
+    ColorCacheService,
+    TemperatureCacheService,
+], ids=['thumbnail', 'color', 'temperature'])
+def test_cache_key_distinguishes_same_named_images(service_factory, sample_aoi):
+    """FlightA/DJI_0001.JPG and FlightB/DJI_0001.JPG are different photographs
+    and must never share a cache slot, whatever the AOI coordinates."""
+    service = service_factory()
+    key_a = service.get_cache_key('C:/Mission/FlightA/DJI_0001.JPG', sample_aoi)
+    key_b = service.get_cache_key('C:/Mission/FlightB/DJI_0001.JPG', sample_aoi)
+    assert key_a != key_b
+
+
+@pytest.mark.parametrize('service_factory', [
+    lambda: ThumbnailCacheService(dataset_cache_dir=None),
+    ColorCacheService,
+    TemperatureCacheService,
+], ids=['thumbnail', 'color', 'temperature'])
+def test_cache_key_is_portable_across_machines(service_factory, sample_aoi):
+    """Only the path tail is hashed: a Windows-authored path and the same
+    file relocated to a POSIX mount produce one key, so shipped caches keep
+    working after the results folder moves."""
+    service = service_factory()
+    key_win = service.get_cache_key(r'C:\Missions\FlightA\DJI_0001.JPG', sample_aoi)
+    key_posix = service.get_cache_key('/mnt/usb/copies/flighta/dji_0001.jpg', sample_aoi)
+    assert key_win == key_posix
+
+
+def test_same_named_images_keep_their_own_thumbnails(tmp_path, sample_aoi):
+    """Reviewer-visible repro: a red thumbnail saved for A/DJI_0001.JPG and a
+    blue one for B/DJI_0001.JPG must load back as themselves."""
+    service = ThumbnailCacheService(cache_dir=str(tmp_path / 'global'),
+                                    dataset_cache_dir=str(tmp_path / 'dataset'))
+    path_a = 'C:/Mission/A/DJI_0001.JPG'
+    path_b = 'C:/Mission/B/DJI_0001.JPG'
+    red = np.full((16, 16, 3), [255, 0, 0], dtype=np.uint8)
+    blue = np.full((16, 16, 3), [0, 0, 255], dtype=np.uint8)
+
+    assert service.save_thumbnail_from_array(path_a, sample_aoi, red)
+    assert service.save_thumbnail_from_array(path_b, sample_aoi, blue)
+
+    loaded_a = service.load_thumbnail_from_disk(service.get_cache_key(path_a, sample_aoi))
+    loaded_b = service.load_thumbnail_from_disk(service.get_cache_key(path_b, sample_aoi))
+    assert loaded_a is not None and loaded_b is not None
+    assert loaded_a[:, :, 0].mean() > 250, 'A must stay red'
+    assert loaded_b[:, :, 2].mean() > 250, 'B must stay blue'
+
+
+def test_ambiguous_v1_entries_are_never_served(tmp_path, sample_aoi):
+    """An old basename-keyed entry (potentially the wrong image's crop) must
+    miss under the v2 formula instead of being returned."""
+    import hashlib
+    service = ThumbnailCacheService(dataset_cache_dir=str(tmp_path))
+    image_path = 'C:/Mission/FlightA/DJI_0001.JPG'
+    # Write a loose file under the OLD (v1) key formula.
+    old_identifier = f"DJI_0001.JPG:{sample_aoi['center'][0]}:{sample_aoi['center'][1]}:{sample_aoi['radius']}"
+    old_key = hashlib.md5(old_identifier.encode()).hexdigest()
+    poison = np.full((16, 16, 3), [0, 255, 0], dtype=np.uint8)
+    assert service.save_thumbnail_to_disk(old_key, poison, tmp_path)
+
+    assert service.load_thumbnail_from_disk(
+        service.get_cache_key(image_path, sample_aoi)) is None
 
 
 def test_save_thumbnail_from_array(thumbnail_cache_service, sample_aoi):
