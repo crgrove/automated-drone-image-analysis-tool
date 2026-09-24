@@ -1055,11 +1055,15 @@ class PdfGeneratorService:
             # Get original image path (not mask/thumbnail)
             original_path = img.get('original_path', img['path']) if 'original_path' in img else img['path']
 
-            # Create image dict for AOIService
-            image_dict = {
-                'path': original_path,
-                'mask_path': img.get('mask_path', '')
-            }
+            # Preserve the viewer's image metadata, only substituting the
+            # original path. Rebuilding the dict from scratch silently dropped
+            # fov_alignment (the operator's hand-aligned footprint) and any
+            # XML-recovered bearing, so the report recomputed AOI coordinates
+            # from the raw camera metadata the operator had already corrected
+            # - and handed field teams positions ~100 m off.
+            image_dict = dict(img)
+            image_dict['path'] = original_path
+            image_dict.setdefault('mask_path', '')
 
             # Reuse ImageService if available (optimization)
             cache_key = original_path
