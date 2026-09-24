@@ -131,7 +131,7 @@ class AOIGalleryModel(QAbstractListModel):
         """Load the dataset's image list and key the thumbnail cache by it."""
         try:
             from core.services.XmlService import XmlService
-            from helpers.PathHelper import build_image_cache_identities
+            from helpers.PathHelper import image_cache_identity_map
 
             xml_service = XmlService(xml_path)
             images = xml_service.get_images()
@@ -139,9 +139,7 @@ class AOIGalleryModel(QAbstractListModel):
                 return
             settings, _count = xml_service.get_settings()
             input_root = settings.get('input_dir') if isinstance(settings, dict) else None
-            identities = build_image_cache_identities(
-                [img.get('path') for img in images if img.get('path')],
-                input_root=input_root)
+            identities = image_cache_identity_map(images, input_root=input_root)
             self.thumbnail_loader.set_image_identities(identities)
         except Exception as e:
             # Identity registration is an accuracy upgrade, never a blocker:

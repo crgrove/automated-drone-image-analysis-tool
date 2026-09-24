@@ -114,13 +114,11 @@ class AOISimilarityController(TranslationMixin, QObject):
             # images in nested flight folders never trade crops. The viewer's
             # full image list and the recorded input root define the identity.
             try:
-                from helpers.PathHelper import build_image_cache_identities
+                from helpers.PathHelper import image_cache_identity_map
                 images = getattr(self.parent, 'images', None) or []
                 settings = getattr(self.parent, 'settings', None)
                 input_root = settings.get('input_dir') if isinstance(settings, dict) else None
-                identities = build_image_cache_identities(
-                    [img.get('path') for img in images if img.get('path')],
-                    input_root=input_root)
+                identities = image_cache_identity_map(images, input_root=input_root)
                 self._similarity_service.thumbnail_cache.set_image_identities(identities)
             except Exception as e:
                 # Fallback keys mean a cache miss at worst, never a wrong crop.

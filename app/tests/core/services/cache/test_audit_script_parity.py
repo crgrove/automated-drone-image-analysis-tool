@@ -40,21 +40,29 @@ def test_script_exists_where_the_field_docs_say():
 
 def test_image_identities_match_production_helper(audit_script):
     """The script's stdlib image_identities must equal
-    build_image_cache_identities: rooted paths, relocated (common-prefix)
-    paths, both separator styles, and mixed case."""
+    build_image_cache_identities: rooted paths (both separator styles, mixed
+    case) get identities; unrooted paths and rootless calls get NONE -
+    identity is never inferred from a new location."""
     rooted = [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
               r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG',
               r'C:\Missions\loose.JPG']
     relocated = ['/mnt/usb/copy/FlightA/DCIM/100MEDIA/DJI_0001.JPG',
                  '/mnt/usb/copy/FlightB/DCIM/100MEDIA/DJI_0001.JPG']
-    for paths, root in ((rooted, r'C:\Missions'), (relocated, None), (rooted, None)):
+    for paths, root in ((rooted, r'C:\Missions'),
+                        (rooted + relocated, r'C:\Missions'),
+                        (relocated, None)):
         expected = build_image_cache_identities(paths, input_root=root)
         actual = audit_script.image_identities(paths, input_root=root)
         # The production map is keyed by normalized path; the script keeps the
-        # original strings. Compare identity by identity.
+        # original strings. Compare identity by identity, absences included.
         for path in paths:
-            assert actual[path] == expected[cross_platform_path_key(path)], \
-                f"identity drift for {path!r} (root={root!r})"
+            key = cross_platform_path_key(path)
+            assert (path in actual) == (key in expected), \
+                f"presence drift for {path!r} (root={root!r})"
+            if key in expected:
+                assert actual[path] == expected[key], \
+                    f"identity drift for {path!r} (root={root!r})"
+    assert audit_script.image_identities(relocated, input_root=None) == {}
 
 
 def test_cache_key_matches_production_formula(audit_script):

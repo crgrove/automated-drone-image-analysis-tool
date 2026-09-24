@@ -47,37 +47,21 @@ def _folded_components(path):
 def image_identities(paths, input_root=None):
     """Reproduce helpers.PathHelper.build_image_cache_identities exactly.
 
-    Returns {path: identity} keyed by the ORIGINAL path strings given. Paths
-    whose identity could not be established uniquely (a relocated group
-    over-stripped onto a rooted image's identity) are absent - production
-    keys those on the full path instead.
+    Returns {path: identity} keyed by the ORIGINAL path strings given. Only
+    paths under *input_root* have one; identity is never inferred for
+    anything else (production keys those on the full path, or on the
+    cache_id the analysis persisted into the XML - see main()).
     """
     root_key = _folded_components(input_root) if input_root else []
-    rooted = {}
-    unrooted = []
+    if not root_key:
+        return {}
+    identities = {}
     for path in paths:
         folded = _folded_components(path)
         if not folded:
             continue
-        if root_key and len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
-            rooted[path] = '/'.join(folded[len(root_key):])
-        else:
-            unrooted.append((path, folded))
-    identities = dict(rooted)
-    rooted_identities = set(rooted.values())
-    if unrooted:
-        prefix = 0
-        while True:
-            if any(len(folded) <= prefix + 1 for _path, folded in unrooted):
-                break
-            if len({folded[prefix] for _path, folded in unrooted}) != 1:
-                break
-            prefix += 1
-        for path, folded in unrooted:
-            identity = '/'.join(folded[prefix:])
-            if identity in rooted_identities:
-                continue
-            identities[path] = identity
+        if len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
+            identities[path] = '/'.join(folded[len(root_key):])
     return identities
 
 
@@ -120,10 +104,15 @@ def main():
     images_node = root.find('images')
     image_nodes = list(images_node) if images_node is not None else list(root.iter('image'))
 
-    # Identities need the FULL image set (the fallback root is their common
-    # prefix), so collect the paths before keying any AOI.
+    # Per image, in production's order of trust: the cache_id the analysis
+    # persisted into the XML, else the path below the recorded input root,
+    # else the full-path fallback namespace (applied at key time below).
     all_paths = [image_xml.get('path') for image_xml in image_nodes if image_xml.get('path')]
     identities = image_identities(all_paths, input_root=input_root or None)
+    for image_xml in image_nodes:
+        path = image_xml.get('path')
+        if path and image_xml.get('cache_id'):
+            identities[path] = image_xml.get('cache_id')
 
     by_basename = defaultdict(list)   # basename -> [path, ...]
     by_path = defaultdict(int)        # exact path -> how many <image> entries use it

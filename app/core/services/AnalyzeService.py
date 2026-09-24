@@ -166,9 +166,11 @@ class AnalyzeService(QObject):
             # the per-image workers never see the whole set. Every input file
             # sits under self.input, so each identity is the path below the
             # input root - unique within the dataset however deeply flights
-            # nest, and the readers recover the same identity from the
-            # input_dir recorded in the results XML.
-            image_identities = build_image_cache_identities(image_files, input_root=self.input)
+            # nest. Kept on self so _process_complete can persist each
+            # image's identity into the results XML, where it survives path
+            # recovery on any machine.
+            self._image_identities = build_image_cache_identities(image_files, input_root=self.input)
+            image_identities = self._image_identities
 
             self._completed_images = 0
             self._total_aois = 0
@@ -523,7 +525,11 @@ class AnalyzeService(QObject):
                 "original_path": result.input_path,  # Original image path
                 "aois": result.areas_of_interest,
                 "width": result.image_width,
-                "height": result.image_height
+                "height": result.image_height,
+                # Persisted so cache keys survive dataset relocation without
+                # ever inferring identity from a new location.
+                "cache_id": getattr(self, '_image_identities', {}).get(
+                    cross_platform_path_key(result.input_path))
             }
             self.images_with_aois.append(image_data)
 

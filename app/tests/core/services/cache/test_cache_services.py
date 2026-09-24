@@ -75,19 +75,23 @@ def test_cache_key_distinguishes_same_named_images(service_factory, sample_aoi):
     TemperatureCacheService,
 ], ids=['thumbnail', 'color', 'temperature'])
 def test_cache_key_is_portable_across_machines(service_factory, sample_aoi):
-    """Registered dataset-relative identities carry the portability: the
-    analysis writer keys below its input root, and a reviewer's relocated
-    copy (structure preserved, different machine root and separators)
-    resolves to the same identity, so shipped caches keep working."""
-    from helpers.PathHelper import build_image_cache_identities
+    """The persisted cache_id carries the portability: the analysis writer
+    keys below its input root and stamps that identity into the results XML;
+    a reviewer's relocated copy reads it back (path recovery rewrites the
+    path, never the identity), so shipped caches keep working."""
+    from helpers.PathHelper import build_image_cache_identities, image_cache_identity_map
 
     writer = service_factory()
     writer.set_image_identities(build_image_cache_identities(
         [r'C:\Missions\FlightA\DJI_0001.JPG', r'C:\Missions\FlightB\DJI_0001.JPG'],
         input_root=r'C:\Missions'))
     reader = service_factory()
-    reader.set_image_identities(build_image_cache_identities(
-        ['/mnt/usb/copies/FlightA/DJI_0001.JPG', '/mnt/usb/copies/FlightB/DJI_0001.JPG']))
+    reader.set_image_identities(image_cache_identity_map([
+        {'path': '/mnt/usb/copies/FlightA/DJI_0001.JPG',
+         'cache_id': 'flighta/dji_0001.jpg'},
+        {'path': '/mnt/usb/copies/FlightB/DJI_0001.JPG',
+         'cache_id': 'flightb/dji_0001.jpg'},
+    ]))
 
     key_win = writer.get_cache_key(r'C:\Missions\FlightA\DJI_0001.JPG', sample_aoi)
     key_posix = reader.get_cache_key('/mnt/usb/copies/flighta/dji_0001.jpg', sample_aoi)
@@ -155,9 +159,10 @@ def test_nested_flights_with_matching_camera_folders_keep_their_thumbnails(tmp_p
 
 
 def test_identity_written_thumbnails_survive_relocation(tmp_path, sample_aoi):
-    """Writer keys below its input root; a reader whose relocated copy kept
-    the structure resolves the same identity and loads the same entry."""
-    from helpers.PathHelper import build_image_cache_identities
+    """Writer keys below its input root and persists each identity; a reader
+    on another machine resolves the same identities from the persisted
+    cache_id and loads the same entries."""
+    from helpers.PathHelper import build_image_cache_identities, image_cache_identity_map
 
     cache_dir = str(tmp_path / 'dataset')
     writer = ThumbnailCacheService(dataset_cache_dir=cache_dir)
@@ -173,13 +178,50 @@ def test_identity_written_thumbnails_survive_relocation(tmp_path, sample_aoi):
     reader = ThumbnailCacheService(dataset_cache_dir=cache_dir)
     reader_paths = ['/mnt/usb/copy/FlightA/DCIM/100MEDIA/DJI_0001.JPG',
                     '/mnt/usb/copy/FlightB/DCIM/100MEDIA/DJI_0001.JPG']
-    reader.set_image_identities(build_image_cache_identities(reader_paths))
+    reader.set_image_identities(image_cache_identity_map([
+        {'path': reader_paths[0], 'cache_id': 'flighta/dcim/100media/dji_0001.jpg'},
+        {'path': reader_paths[1], 'cache_id': 'flightb/dcim/100media/dji_0001.jpg'},
+    ]))
 
     loaded_a = reader.load_thumbnail_from_disk(reader.get_cache_key(reader_paths[0], sample_aoi))
     loaded_b = reader.load_thumbnail_from_disk(reader.get_cache_key(reader_paths[1], sample_aoi))
     assert loaded_a is not None and loaded_b is not None
     assert loaded_a[:, :, 0].mean() > 250, 'FlightA must stay red after relocation'
     assert loaded_b[:, :, 2].mean() > 250, 'FlightB must stay blue after relocation'
+
+
+def test_full_move_without_persisted_identities_never_reuses_a_slot(tmp_path, sample_aoi):
+    """The reviewer's Photos/Photos case: moving the whole tree shifts what a
+    common-prefix inference would call the identity by one level, landing
+    the deeper image on the shallower image's WRITER identity. Identity is
+    never inferred, so both images miss (full-path namespace) instead of the
+    blue one being served the red one's crop."""
+    from helpers.PathHelper import build_image_cache_identities, image_cache_identity_map
+
+    cache_dir = str(tmp_path / '.thumbnails')
+    original_root = 'C:/Mission'
+    original_paths = ['C:/Mission/Photos/DJI_0001.JPG',
+                      'C:/Mission/Photos/Photos/DJI_0001.JPG']
+    moved_paths = ['D:/Moved/Mission/Photos/DJI_0001.JPG',
+                   'D:/Moved/Mission/Photos/Photos/DJI_0001.JPG']
+
+    writer = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    writer.set_image_identities(build_image_cache_identities(
+        original_paths, input_root=original_root))
+    red = np.full((16, 16, 3), [255, 0, 0], dtype=np.uint8)
+    blue = np.full((16, 16, 3), [0, 0, 255], dtype=np.uint8)
+    assert writer.save_thumbnail_from_array(original_paths[0], sample_aoi, red)
+    assert writer.save_thumbnail_from_array(original_paths[1], sample_aoi, blue)
+
+    # An old XML with no persisted cache_id, relinked to the new location.
+    reader = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    reader.set_image_identities(image_cache_identity_map(
+        [{'path': p} for p in moved_paths], input_root=original_root))
+
+    loaded = reader.load_thumbnail_from_disk(
+        reader.get_cache_key(moved_paths[1], sample_aoi))
+    assert loaded is None or loaded[:, :, 2].mean() > 250, \
+        'the blue image retrieved the red image'
 
 
 def test_partial_relocation_never_returns_another_images_thumbnail(tmp_path, sample_aoi):
