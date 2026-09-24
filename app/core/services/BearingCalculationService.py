@@ -263,22 +263,38 @@ class BearingCalculationService(QObject):
             for f in child_features(feature):
                 extract_from_feature(f)
 
-            # gx:Track under fastkml 1.x: explicit (when, coord) pairs.
-            track_items = getattr(getattr(feature, 'kml_geometry', None), 'track_items', None)
-            if track_items:
-                for item in track_items:
-                    ts = self._parse_kml_timestamp(item)
-                    coord = getattr(item, 'coord', None)
-                    if ts and coord is not None:
-                        track_points.append(TrackPoint(
-                            ts, coord.y, coord.x, getattr(coord, 'z', None)))
+            # gx:Track / gx:MultiTrack under fastkml 1.x: explicit
+            # (when, coord) pairs, one container per flight segment for a
+            # MultiTrack (its .tracks children each carry track_items).
+            kml_geometry = getattr(feature, 'kml_geometry', None)
+            if getattr(kml_geometry, 'track_items', None):
+                containers = [kml_geometry]
+            else:
+                containers = [t for t in (getattr(kml_geometry, 'tracks', None) or [])
+                              if getattr(t, 'track_items', None)]
+            if containers:
+                for container in containers:
+                    for item in container.track_items:
+                        ts = self._parse_kml_timestamp(item)
+                        coord = getattr(item, 'coord', None)
+                        if ts and coord is not None:
+                            track_points.append(TrackPoint(
+                                ts, coord.y, coord.x, getattr(coord, 'z', None)))
                 return
 
             geom = (getattr(feature, 'geometry', None)
                     or getattr(feature, '_geometry', None))
-            if geom is not None and hasattr(geom, 'coords'):
-                coords = list(geom.coords)
-
+            # Probe by reading, not hasattr: pygeoif's multipart geometries
+            # RAISE NotImplementedError from the coords property, and hasattr
+            # only swallows AttributeError - the old check crashed the whole
+            # parse on any MultiGeometry placemark.
+            coords = None
+            if geom is not None:
+                try:
+                    coords = list(geom.coords)
+                except (AttributeError, NotImplementedError, TypeError):
+                    coords = None
+            if coords:
                 ts = self._parse_kml_timestamp(
                     getattr(feature, 'times', None) or getattr(feature, 'timeStamp', None))
                 if ts and len(coords) > 0:

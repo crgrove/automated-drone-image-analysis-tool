@@ -960,3 +960,67 @@ def test_populate_capture_times_bare_datetime_original_falls_back(service, tmp_p
     ts = records[0]['timestamp']
     assert ts is not None
     assert (ts.year, ts.hour, ts.second) == (2026, 12, 5)
+
+
+_KML_GX_MULTITRACK = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <Placemark><name>Two flight segments</name>
+      <gx:MultiTrack>
+        <gx:Track>
+          <when>2024-01-01T12:00:00Z</when><when>2024-01-01T12:00:10Z</when>
+          <gx:coord>-75.000 40.000 100</gx:coord><gx:coord>-75.001 40.001 101</gx:coord>
+        </gx:Track>
+        <gx:Track>
+          <when>2024-01-01T12:01:00Z</when><when>2024-01-01T12:01:10Z</when>
+          <gx:coord>-75.002 40.002 102</gx:coord><gx:coord>-75.003 40.003 103</gx:coord>
+        </gx:Track>
+      </gx:MultiTrack>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+_KML_MULTIGEOMETRY_AND_POINT = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark><name>untimed area</name>
+      <MultiGeometry>
+        <LineString><coordinates>-75.0,40.0 -75.1,40.1</coordinates></LineString>
+        <LineString><coordinates>-75.2,40.2 -75.3,40.3</coordinates></LineString>
+      </MultiGeometry>
+    </Placemark>
+    <Placemark><name>p1</name>
+      <TimeStamp><when>2024-01-01T12:00:00Z</when></TimeStamp>
+      <Point><coordinates>-75.000,40.000,100</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
+"""
+
+
+def test_parse_kml_gx_multitrack_preserves_all_segments(service, tmp_path):
+    """A gx:MultiTrack's segments each carry their own (when, coord) pairs;
+    the multipart geometry has no coordinate sequence, so the old parse
+    raised NotImplementedError instead of returning the four points."""
+    points, source = service.parse_track_file(
+        _write_kml(tmp_path, _KML_GX_MULTITRACK, name='multi_track.kml'))
+
+    assert source == 'kml'
+    assert len(points) == 4
+    assert [p.timestamp.second for p in points] == [0, 10, 0, 10]
+    assert points[0].lat == pytest.approx(40.0)
+    assert points[3].lat == pytest.approx(40.003)
+    assert points[3].timestamp == datetime(2024, 1, 1, 12, 1, 10, tzinfo=timezone.utc)
+
+
+def test_parse_kml_multigeometry_without_tracks_does_not_abort_the_parse(service, tmp_path):
+    """A MultiGeometry placemark (coords property raises, and hasattr does
+    not swallow NotImplementedError) must be skipped, not crash the parse:
+    the timestamped point after it still comes through."""
+    points, _source = service.parse_track_file(
+        _write_kml(tmp_path, _KML_MULTIGEOMETRY_AND_POINT, name='multi_geom.kml'))
+
+    assert len(points) == 1
+    assert points[0].timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
