@@ -19,6 +19,7 @@ from core.services.LoggerService import LoggerService
 from core.services.advancedFeatures.HistogramNormalizationService import HistogramNormalizationService
 from core.services.advancedFeatures.KMeansClustersService import KMeansClustersService
 from core.services.XmlService import XmlService
+from helpers.PathHelper import build_image_cache_identities, cross_platform_path_key
 # Algorithm services imported lazily in process_file() to avoid worker startup overhead
 
 
@@ -161,6 +162,14 @@ class AnalyzeService(QObject):
                 self.tr("Processing {count} files").format(count=self.ttl_images)
             )
 
+            # Dataset-relative cache identities, computed once here because
+            # the per-image workers never see the whole set. Every input file
+            # sits under self.input, so each identity is the path below the
+            # input root - unique within the dataset however deeply flights
+            # nest, and the readers recover the same identity from the
+            # input_dir recorded in the results XML.
+            image_identities = build_image_cache_identities(image_files, input_root=self.input)
+
             self._completed_images = 0
             self._total_aois = 0
 
@@ -195,7 +204,8 @@ class AnalyzeService(QObject):
                                 self.hist_ref_path,
                                 self.kmeans_clusters,
                                 self.is_thermal,
-                                self.processing_resolution
+                                self.processing_resolution,
+                                image_identities.get(cross_platform_path_key(file))
                             )
                         )
                         pending.append((file, async_result))
@@ -346,7 +356,7 @@ class AnalyzeService(QObject):
 
     @staticmethod
     def process_file(algorithm, identifier_color, min_area, max_area, aoi_radius, options, full_path, input_dir, output_dir, hist_ref_path, kmeans_clusters,
-                     thermal, processing_resolution=1.0):
+                     thermal, processing_resolution=1.0, image_identity=None):
         """Process a single image using the selected algorithm and settings.
 
         Applies histogram normalization and k-means clustering if specified,
@@ -368,6 +378,10 @@ class AnalyzeService(QObject):
             thermal: Whether this is a thermal image algorithm.
             processing_resolution: Percentage to scale images (0.1 to 1.0).
                 1.0 = no scaling. Defaults to 1.0.
+            image_identity: This image's dataset-relative cache identity
+                (PathHelper.build_image_cache_identities), computed once by
+                the dispatching parent so AOI cache keys distinguish
+                same-named images in nested flight folders.
 
         Returns:
             AnalysisResult containing processed image path, areas of interest,
@@ -446,7 +460,8 @@ class AnalyzeService(QObject):
                         image_path=full_path,
                         areas_of_interest=result.areas_of_interest,
                         output_dir=output_dir,
-                        thermal=thermal
+                        thermal=thermal,
+                        image_identity=image_identity
                     )
                 except Exception as cache_error:
                     # Don't fail detection if cache generation fails

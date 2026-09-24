@@ -11,8 +11,10 @@ import unicodedata
 import pytest
 
 from helpers.PathHelper import (
+    build_image_cache_identities,
     canonical_path,
     cross_platform_basename,
+    cross_platform_path_key,
     cross_platform_path_tail,
     find_in_index,
     index_folder_by_filename,
@@ -20,6 +22,68 @@ from helpers.PathHelper import (
     normalize_filename_key,
     path_match_key,
 )
+
+
+# ------------------------- build_image_cache_identities ---------------------- #
+
+
+def test_identities_below_input_root_keep_every_directory():
+    paths = [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
+             r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG']
+    identities = build_image_cache_identities(paths, input_root=r'C:\Missions')
+    assert identities[cross_platform_path_key(paths[0])] == 'flighta/dcim/100media/dji_0001.jpg'
+    assert identities[cross_platform_path_key(paths[1])] == 'flightb/dcim/100media/dji_0001.jpg'
+
+
+def test_identities_survive_structure_preserving_relocation():
+    """A copy of the dataset onto another machine (different root, different
+    separators) reproduces the writer's identities via the common-prefix rule."""
+    writer = build_image_cache_identities(
+        [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
+         r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG'],
+        input_root=r'C:\Missions')
+    reader = build_image_cache_identities(
+        ['/mnt/usb/copy/FlightA/DCIM/100MEDIA/DJI_0001.JPG',
+         '/mnt/usb/copy/FlightB/DCIM/100MEDIA/DJI_0001.JPG'])
+    assert sorted(writer.values()) == sorted(reader.values())
+
+
+def test_identities_are_unique_per_path():
+    paths = ['C:/in/FlightA/DCIM/100MEDIA/x.jpg',
+             'C:/in/FlightB/DCIM/100MEDIA/x.jpg',
+             'C:/in/FlightA/DCIM/101MEDIA/x.jpg',
+             'C:/in/loose.jpg']
+    identities = build_image_cache_identities(paths, input_root='C:/in')
+    assert len(set(identities.values())) == len(paths)
+
+
+def test_identities_mix_rooted_and_relocated_paths():
+    """Paths outside the recorded root (a partially relinked dataset) get the
+    common-prefix rule without disturbing the rooted ones."""
+    identities = build_image_cache_identities(
+        ['C:/in/FlightA/x.jpg',
+         'E:/found/FlightB/x.jpg',
+         'E:/found/FlightC/x.jpg'],
+        input_root='C:/in')
+    assert identities[cross_platform_path_key('C:/in/FlightA/x.jpg')] == 'flighta/x.jpg'
+    assert identities[cross_platform_path_key('E:/found/FlightB/x.jpg')] == 'flightb/x.jpg'
+    assert identities[cross_platform_path_key('E:/found/FlightC/x.jpg')] == 'flightc/x.jpg'
+
+
+def test_identities_never_consume_a_basename():
+    identities = build_image_cache_identities(['/data/only.jpg'])
+    assert identities[cross_platform_path_key('/data/only.jpg')] == 'only.jpg'
+
+
+def test_identities_skip_empty_paths():
+    assert build_image_cache_identities(['', None, 'a/x.jpg']) == {
+        cross_platform_path_key('a/x.jpg'): 'x.jpg'}
+
+
+def test_path_key_normalizes_separators_and_case():
+    assert (cross_platform_path_key(r'C:\Missions\FlightA\DJI_0001.JPG')
+            == cross_platform_path_key('c:/missions/flighta/dji_0001.jpg'))
+    assert cross_platform_path_key('') == ''
 
 
 # --------------------------- cross_platform_path_tail ----------------------- #

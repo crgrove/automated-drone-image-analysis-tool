@@ -17,6 +17,7 @@ from core.services.cache.ThumbnailCacheService import ThumbnailCacheService
 from core.services.cache.ColorCacheService import ColorCacheService
 from core.services.image.AOIService import AOIService
 from core.services.XmlService import XmlService
+from helpers.PathHelper import build_image_cache_identities
 
 
 class BackfillCacheService(QObject):
@@ -75,9 +76,20 @@ class BackfillCacheService(QObject):
             # self.logger.info(f"Creating caches in {dataset_dir}")
             self.progress_message.emit(f"Creating caches for {len(images)} images...")
 
-            # Initialize cache services
+            # Initialize cache services. Both instances span every image in
+            # the dataset, so keys must carry the dataset-relative identity:
+            # nested flight folders repeat filenames, and tail-keyed entries
+            # would hand one image another image's thumbnail or color.
+            settings, _count = xml_service.get_settings()
+            input_root = settings.get('input_dir') if isinstance(settings, dict) else None
+            identities = build_image_cache_identities(
+                [img.get('original_path') or img.get('path') for img in images
+                 if img.get('original_path') or img.get('path')],
+                input_root=input_root)
             thumbnail_service = ThumbnailCacheService(dataset_cache_dir=str(thumbnail_cache_dir))
+            thumbnail_service.set_image_identities(identities)
             color_service = ColorCacheService()  # In-memory only - will update XML
+            color_service.set_image_identities(identities)
 
             # Track color info updates for XML
             color_updates = {}  # {(image_path, aoi): color_info}

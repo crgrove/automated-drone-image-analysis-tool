@@ -75,13 +75,46 @@ def test_cache_key_distinguishes_same_named_images(service_factory, sample_aoi):
     TemperatureCacheService,
 ], ids=['thumbnail', 'color', 'temperature'])
 def test_cache_key_is_portable_across_machines(service_factory, sample_aoi):
-    """Only the path tail is hashed: a Windows-authored path and the same
-    file relocated to a POSIX mount produce one key, so shipped caches keep
-    working after the results folder moves."""
-    service = service_factory()
-    key_win = service.get_cache_key(r'C:\Missions\FlightA\DJI_0001.JPG', sample_aoi)
-    key_posix = service.get_cache_key('/mnt/usb/copies/flighta/dji_0001.jpg', sample_aoi)
+    """Registered dataset-relative identities carry the portability: the
+    analysis writer keys below its input root, and a reviewer's relocated
+    copy (structure preserved, different machine root and separators)
+    resolves to the same identity, so shipped caches keep working."""
+    from helpers.PathHelper import build_image_cache_identities
+
+    writer = service_factory()
+    writer.set_image_identities(build_image_cache_identities(
+        [r'C:\Missions\FlightA\DJI_0001.JPG', r'C:\Missions\FlightB\DJI_0001.JPG'],
+        input_root=r'C:\Missions'))
+    reader = service_factory()
+    reader.set_image_identities(build_image_cache_identities(
+        ['/mnt/usb/copies/FlightA/DJI_0001.JPG', '/mnt/usb/copies/FlightB/DJI_0001.JPG']))
+
+    key_win = writer.get_cache_key(r'C:\Missions\FlightA\DJI_0001.JPG', sample_aoi)
+    key_posix = reader.get_cache_key('/mnt/usb/copies/flighta/dji_0001.jpg', sample_aoi)
     assert key_win == key_posix
+
+
+@pytest.mark.parametrize('service_factory', [
+    lambda: ThumbnailCacheService(dataset_cache_dir=None),
+    ColorCacheService,
+    TemperatureCacheService,
+], ids=['thumbnail', 'color', 'temperature'])
+def test_cache_key_distinguishes_nested_camera_folder_layouts(service_factory, sample_aoi):
+    """FlightA/DCIM/100MEDIA/DJI_0001.JPG vs FlightB/DCIM/100MEDIA/... share
+    every trailing component but the flight folder; registered identities and
+    the raw full-path fallback must both keep them apart."""
+    from helpers.PathHelper import build_image_cache_identities
+
+    path_a = 'C:/Mission/FlightA/DCIM/100MEDIA/DJI_0001.JPG'
+    path_b = 'C:/Mission/FlightB/DCIM/100MEDIA/DJI_0001.JPG'
+
+    raw = service_factory()
+    assert raw.get_cache_key(path_a, sample_aoi) != raw.get_cache_key(path_b, sample_aoi)
+
+    keyed = service_factory()
+    keyed.set_image_identities(build_image_cache_identities(
+        [path_a, path_b], input_root='C:/Mission'))
+    assert keyed.get_cache_key(path_a, sample_aoi) != keyed.get_cache_key(path_b, sample_aoi)
 
 
 def test_same_named_images_keep_their_own_thumbnails(tmp_path, sample_aoi):
@@ -104,9 +137,54 @@ def test_same_named_images_keep_their_own_thumbnails(tmp_path, sample_aoi):
     assert loaded_b[:, :, 2].mean() > 250, 'B must stay blue'
 
 
+def test_nested_flights_with_matching_camera_folders_keep_their_thumbnails(tmp_path, sample_aoi):
+    """Round-trip through disk with the raw service (no identities): the
+    repeated-DCIM layout must never return another flight's crop."""
+    service = ThumbnailCacheService(dataset_cache_dir=str(tmp_path / 'dataset'))
+    path_a = 'C:/Mission/FlightA/DCIM/100MEDIA/DJI_0001.JPG'
+    path_b = 'C:/Mission/FlightB/DCIM/100MEDIA/DJI_0001.JPG'
+    red = np.full((16, 16, 3), [255, 0, 0], dtype=np.uint8)
+    blue = np.full((16, 16, 3), [0, 0, 255], dtype=np.uint8)
+
+    assert service.save_thumbnail_from_array(path_a, sample_aoi, red)
+    assert service.save_thumbnail_from_array(path_b, sample_aoi, blue)
+
+    loaded_a = service.load_thumbnail_from_disk(service.get_cache_key(path_a, sample_aoi))
+    assert loaded_a is not None
+    assert loaded_a[:, :, 0].mean() > 250, 'FlightA retrieved the blue thumbnail saved for FlightB'
+
+
+def test_identity_written_thumbnails_survive_relocation(tmp_path, sample_aoi):
+    """Writer keys below its input root; a reader whose relocated copy kept
+    the structure resolves the same identity and loads the same entry."""
+    from helpers.PathHelper import build_image_cache_identities
+
+    cache_dir = str(tmp_path / 'dataset')
+    writer = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    writer_paths = [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
+                    r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG']
+    writer.set_image_identities(build_image_cache_identities(
+        writer_paths, input_root=r'C:\Missions'))
+    red = np.full((16, 16, 3), [255, 0, 0], dtype=np.uint8)
+    blue = np.full((16, 16, 3), [0, 0, 255], dtype=np.uint8)
+    assert writer.save_thumbnail_from_array(writer_paths[0], sample_aoi, red)
+    assert writer.save_thumbnail_from_array(writer_paths[1], sample_aoi, blue)
+
+    reader = ThumbnailCacheService(dataset_cache_dir=cache_dir)
+    reader_paths = ['/mnt/usb/copy/FlightA/DCIM/100MEDIA/DJI_0001.JPG',
+                    '/mnt/usb/copy/FlightB/DCIM/100MEDIA/DJI_0001.JPG']
+    reader.set_image_identities(build_image_cache_identities(reader_paths))
+
+    loaded_a = reader.load_thumbnail_from_disk(reader.get_cache_key(reader_paths[0], sample_aoi))
+    loaded_b = reader.load_thumbnail_from_disk(reader.get_cache_key(reader_paths[1], sample_aoi))
+    assert loaded_a is not None and loaded_b is not None
+    assert loaded_a[:, :, 0].mean() > 250, 'FlightA must stay red after relocation'
+    assert loaded_b[:, :, 2].mean() > 250, 'FlightB must stay blue after relocation'
+
+
 def test_ambiguous_v1_entries_are_never_served(tmp_path, sample_aoi):
     """An old basename-keyed entry (potentially the wrong image's crop) must
-    miss under the v2 formula instead of being returned."""
+    miss under the current formula instead of being returned."""
     import hashlib
     service = ThumbnailCacheService(dataset_cache_dir=str(tmp_path))
     image_path = 'C:/Mission/FlightA/DJI_0001.JPG'

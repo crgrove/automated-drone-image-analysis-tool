@@ -14,11 +14,13 @@ the results XML. It checks, in order of likelihood:
    same-named file).
 
 2. THUMBNAIL CACHE-KEY COLLISIONS - the disk cache (loose .jpg and
-   thumbnails.db alike) is keyed by md5("v2:" + path tail + center + radius),
-   where the path tail is the parent folder plus the filename. Two AOIs whose
-   images share BOTH names with identical center+radius share one thumbnail.
-   (Older builds keyed on the bare basename; those entries are orphaned by
-   the v2 prefix and regenerate rather than ever being served.)
+   thumbnails.db alike) is keyed by md5("v3:" + identity + center + radius),
+   where the identity is the image's dataset-relative path (below the
+   analysis input root, else below the image set's common root). Two AOIs
+   collide only when their images share that WHOLE relative path with
+   identical center+radius. (Older builds keyed on the bare basename (v1)
+   or a two-component tail (v2); those entries are orphaned by the version
+   prefix and regenerate rather than ever being served.)
 
 Usage:
     python scripts/audit_thumbnail_keys.py <path\\to\\ADIAT_Data.xml>
@@ -35,21 +37,50 @@ from collections import defaultdict
 from xml.etree import ElementTree
 
 
-def path_tail(path, components=2):
-    """Reproduce helpers.PathHelper.cross_platform_path_tail exactly."""
+def _folded_components(path):
+    """Split *path* on both separators; casefold and NFC-normalize each part."""
     normalized = (path or '').replace('\\', '/')
-    parts = [part for part in normalized.split('/') if part]
-    if not parts:
-        return ''
-    return unicodedata.normalize('NFC', '/'.join(parts[-components:])).casefold()
+    return [unicodedata.normalize('NFC', part).casefold()
+            for part in normalized.split('/') if part]
 
 
-def cache_key(tail, center, radius):
+def image_identities(paths, input_root=None):
+    """Reproduce helpers.PathHelper.build_image_cache_identities exactly.
+
+    Returns {path: identity} keyed by the ORIGINAL path strings given.
+    """
+    root_key = _folded_components(input_root) if input_root else []
+    identities = {}
+    unrooted = []
+    for path in paths:
+        folded = _folded_components(path)
+        if not folded:
+            continue
+        if root_key and len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
+            identities[path] = '/'.join(folded[len(root_key):])
+        else:
+            unrooted.append((path, folded))
+    if unrooted:
+        prefix = 0
+        while True:
+            if any(len(folded) <= prefix + 1 for _path, folded in unrooted):
+                break
+            if len({folded[prefix] for _path, folded in unrooted}) != 1:
+                break
+            prefix += 1
+        for path, folded in unrooted:
+            identities[path] = '/'.join(folded[prefix:])
+    return identities
+
+
+def cache_key(identity, center, radius):
     """Reproduce ThumbnailCacheService.get_cache_key exactly.
 
-    *tail* is the image's path tail from path_tail(), not a bare filename.
+    *identity* is the image's dataset-relative identity from
+    image_identities() - the same one the production writer registers, so the
+    'v3' namespace applies.
     """
-    identifier = f"v2:{tail}:{center[0]}:{center[1]}:{radius}"
+    identifier = f"v3:{identity}:{center[0]}:{center[1]}:{radius}"
     return hashlib.md5(identifier.encode()).hexdigest()
 
 
@@ -61,8 +92,16 @@ def main():
     xml_path = sys.argv[1]
     root = ElementTree.parse(xml_path).getroot()
 
+    settings_xml = root.find('settings')
+    input_root = settings_xml.get('input_dir', '') if settings_xml is not None else ''
+
     images_node = root.find('images')
-    image_nodes = list(images_node) if images_node is not None else root.iter('image')
+    image_nodes = list(images_node) if images_node is not None else list(root.iter('image'))
+
+    # Identities need the FULL image set (the fallback root is their common
+    # prefix), so collect the paths before keying any AOI.
+    all_paths = [image_xml.get('path') for image_xml in image_nodes if image_xml.get('path')]
+    identities = image_identities(all_paths, input_root=input_root or None)
 
     by_basename = defaultdict(list)   # basename -> [path, ...]
     by_path = defaultdict(int)        # exact path -> how many <image> entries use it
@@ -89,7 +128,7 @@ def main():
                 radius = int(aoi_xml.get('radius', '0'))
             except (ValueError, SyntaxError):
                 continue
-            key = cache_key(path_tail(path), center, radius)
+            key = cache_key(identities.get(path, ''), center, radius)
             by_key[key].append((path, aoi_xml.get('number'), center, radius))
 
     dup_names = {name: paths for name, paths in by_basename.items() if len(paths) > 1}
