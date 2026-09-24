@@ -25,6 +25,7 @@ from helpers.GeodesicHelper import GeodesicHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 from core.services.LoggerService import LoggerService
+from core.services.shadow.SolarPosition import SolarTimeUnresolvable, resolve_capture_utc
 import piexif
 
 kml = None
@@ -111,6 +112,11 @@ class BearingCalculationService(QObject):
             track_points = self._validate_track(track_points)
             # self._logger.info(f"Loaded {len(track_points)} trackpoints from {file_ext}")
 
+            # The recovery dialog hands over path-only records (timestamp
+            # None, filled "during calculation") - and only the auto path
+            # ever filled them, so track matching skipped every image.
+            self._populate_capture_times(images)
+
             # Calculate bearings
             results = self._bearing_from_track(images, track_points, source_type)
 
@@ -149,6 +155,48 @@ class BearingCalculationService(QObject):
         except Exception as e:
             self._logger.error(f"Error auto-calculating bearings: {str(e)}")
             self.calculation_error.emit(str(e))
+
+    def _populate_capture_times(self, images: List[Dict[str, Any]]):
+        """Fill missing ``img['timestamp']`` with each image's capture time.
+
+        Track points carry UTC, so the time is first genuinely resolved to
+        UTC: resolve_capture_utc prefers the EXIF GPS timestamp (already
+        UTC), then explicit offsets, then the WALDO corrected/refined stamps,
+        then the timezone implied by the GPS position. An image carrying only
+        a bare DateTimeOriginal (no offset, no GPS) falls back to that value
+        under the service's existing naive-means-UTC convention (the same one
+        _bearing_from_track and the auto path apply) - a match the operator
+        can judge beats a silent skip, and out-of-track matches are flagged
+        'gap'. Only an image with no readable time at all keeps timestamp
+        None and is reported as skipped by _bearing_from_track.
+        """
+        total = len(images)
+        for idx, img in enumerate(images):
+            if img.get('timestamp') is not None:
+                continue
+            if idx % 10 == 0 or idx == total - 1:
+                self.progress_updated.emit(idx + 1, total, "Reading image capture times...")
+            try:
+                exif_data = MetaDataHelper.get_exif_data_piexif(img['path'])
+            except Exception as e:
+                self._logger.error(f"Error reading capture time from {img['path']}: {e}")
+                continue
+            try:
+                gps = LocationInfo.get_gps(exif_data=exif_data) or {}
+                xmp_data = MetaDataHelper.get_xmp_data_merged(img['path']) or {}
+                img['timestamp'] = resolve_capture_utc(
+                    exif_data, xmp_data,
+                    lat=gps.get('latitude'), lon=gps.get('longitude'))[0]
+            except SolarTimeUnresolvable:
+                try:
+                    img['timestamp'] = MetaDataHelper.get_exif_timestamp(exif_data)
+                except Exception:
+                    img['timestamp'] = None
+                if img.get('timestamp') is None:
+                    self._logger.warning(
+                        f"No readable capture time for {img['path']}; skipping in track matching")
+            except Exception as e:
+                self._logger.error(f"Error reading capture time from {img['path']}: {e}")
 
     def parse_track_file(self, track_file_path: str):
         """Parse a KML/GPX/CSV track file into TrackPoints.
@@ -611,7 +659,7 @@ class BearingCalculationService(QObject):
                         prev_img['lat'], prev_img['lon']
                     )
 
-                    # Bearing from previous point to current point (i-1 → i)
+                    # Bearing from previous point to current point (i-1 â†’ i)
                     current_from_prev_bearing = GeodesicHelper.initial_course(
                         prev_img['lat'], prev_img['lon'],
                         lat, lon
@@ -635,9 +683,9 @@ class BearingCalculationService(QObject):
                         if i <= 10:  # Log first 10 points
                             # self._logger.info(
                             #     f"Point {i}: Aligned with PREV leg. "
-                            #     f"leg_bearing={leg_bearing:.2f}°, "
-                            #     f"point_bearing={current_from_prev_bearing:.2f}°, "
-                            #     f"diff={angle_diff:.2f}°"
+                            #     f"leg_bearing={leg_bearing:.2f}Â°, "
+                            #     f"point_bearing={current_from_prev_bearing:.2f}Â°, "
+                            #     f"diff={angle_diff:.2f}Â°"
                             # )
                             pass
 
@@ -653,7 +701,7 @@ class BearingCalculationService(QObject):
                         imgs_with_gps[leg_end_idx]['lat'], imgs_with_gps[leg_end_idx]['lon']
                     )
 
-                    # Bearing from current point to next point (i → i+1)
+                    # Bearing from current point to next point (i â†’ i+1)
                     current_to_next_bearing = GeodesicHelper.initial_course(
                         lat, lon,
                         next_img['lat'], next_img['lon']
@@ -675,9 +723,9 @@ class BearingCalculationService(QObject):
                         if i <= 10:
                             # self._logger.info(
                             #     f"Point {i}: Aligned with NEXT leg. "
-                            #     f"leg_bearing={next_leg_bearing:.2f}°, "
-                            #     f"point_bearing={current_to_next_bearing:.2f}°, "
-                            #     f"diff={angle_diff:.2f}°"
+                            #     f"leg_bearing={next_leg_bearing:.2f}Â°, "
+                            #     f"point_bearing={current_to_next_bearing:.2f}Â°, "
+                            #     f"diff={angle_diff:.2f}Â°"
                             # )
                             pass
                     else:

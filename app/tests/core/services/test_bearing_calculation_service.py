@@ -298,7 +298,7 @@ def test_calculate_auto_requires_two_gps_images(service):
 
 
 def test_calculate_auto_straight_line_emits_complete(service):
-    # Three images moving due north — should produce bearings near 0°
+    # Three images moving due north â€” should produce bearings near 0Â°
     base = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     images = [
         {"path": f"img{i}.jpg", "lat": 40.0 + 0.001 * i, "lon": -75.0, "timestamp": base + timedelta(seconds=i * 5)}
@@ -344,7 +344,7 @@ def test_calculate_turn_threshold_default_for_few_points(service):
 
 
 def test_calculate_turn_threshold_clamped_range(service):
-    # Straight line — perpendicular distances are zero, threshold clamps to 5.0
+    # Straight line â€” perpendicular distances are zero, threshold clamps to 5.0
     images = [{"lat": 40.0 + 0.0001 * i, "lon": -75.0} for i in range(20)]
     result = service._calculate_turn_threshold(images)
     assert 5.0 <= result <= 30.0
@@ -563,9 +563,9 @@ def test_calculate_auto_long_straight_path():
     svc.calculate_auto(images=images)
 
     assert len(received) == 1
-    # All bearings should be close to 0° (north)
+    # All bearings should be close to 0Â° (north)
     for br in received[0].values():
-        # Close to 0° or 360° (which is also north)
+        # Close to 0Â° or 360Â° (which is also north)
         assert br.bearing_deg < 30 or br.bearing_deg > 330
 
 
@@ -759,3 +759,119 @@ def test_auto_sorts_by_capture_time_when_present(service):
     assert len(results) == 3
     assert images[0]['timestamp'].second == 2      # b.jpg parsed
     assert images[2]['timestamp'] is None          # c.jpg has none
+
+
+# ---------------------------------------------------------------------------
+# Track mode capture-time extraction (second review, finding 2): the recovery
+# dialog hands over path-only records, and only the auto path ever filled
+# their timestamps - track matching then skipped every image.
+# ---------------------------------------------------------------------------
+
+def _write_jpeg_with_gps_time(tmp_path, name='DJI_0001.JPG',
+                              gps_date=b'2024:01:01', gps_time=((12, 1), (0, 1), (5, 1))):
+    """A real JPEG whose EXIF carries a UTC GPS timestamp and a GPS fix."""
+    import cv2
+    import numpy as np
+    import piexif
+
+    path = str(tmp_path / name)
+    cv2.imwrite(path, np.zeros((8, 8, 3), dtype=np.uint8))
+    exif_bytes = piexif.dump({
+        'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2024:01:01 07:00:05'},
+        'GPS': {
+            piexif.GPSIFD.GPSLatitude: ((40, 1), (0, 1), (0, 1)),
+            piexif.GPSIFD.GPSLatitudeRef: b'N',
+            piexif.GPSIFD.GPSLongitude: ((75, 1), (0, 1), (0, 1)),
+            piexif.GPSIFD.GPSLongitudeRef: b'W',
+            piexif.GPSIFD.GPSDateStamp: gps_date,
+            piexif.GPSIFD.GPSTimeStamp: gps_time,
+        },
+    })
+    piexif.insert(exif_bytes, path)
+    return path
+
+
+def _controller_shaped_record(path):
+    """Image record exactly as BearingRecoveryController builds it."""
+    return {'path': path, 'lat': None, 'lon': None, 'timestamp': None}
+
+
+def test_calculate_from_track_extracts_capture_times_from_images(service, tmp_path):
+    """A real JPEG with a valid EXIF capture time plus a CSV track covering
+    that time must update one image, not zero."""
+    image_path = _write_jpeg_with_gps_time(tmp_path)
+    track = _write_csv(
+        tmp_path,
+        [
+            "2024-01-01T12:00:00Z,40.0,-75.0,100",
+            "2024-01-01T12:00:10Z,40.001,-75.001,101",
+        ],
+    )
+    results = []
+    service.calculation_complete.connect(lambda r: results.append(r))
+
+    service.calculate_from_track(
+        images=[_controller_shaped_record(image_path)],
+        track_file_path=str(track))
+
+    assert len(results) == 1
+    assert image_path in results[0], 'track matching skipped the image'
+    assert isinstance(results[0][image_path], BearingResult)
+
+
+def test_populate_capture_times_resolves_gps_utc(service, tmp_path):
+    image_path = _write_jpeg_with_gps_time(tmp_path)
+    records = [_controller_shaped_record(image_path)]
+
+    service._populate_capture_times(records)
+
+    # The GPS EXIF stamp is already UTC and outranks the naive local
+    # DateTimeOriginal, so no timezone guessing is involved.
+    assert records[0]['timestamp'] == datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)
+
+
+def test_populate_capture_times_leaves_unresolvable_none(service, tmp_path):
+    """No resolvable capture time: the record keeps timestamp None (and the
+    matcher reports it skipped) instead of being matched hours off."""
+    import cv2
+    import numpy as np
+
+    plain = str(tmp_path / 'no_exif.jpg')
+    cv2.imwrite(plain, np.zeros((8, 8, 3), dtype=np.uint8))
+    records = [_controller_shaped_record(plain)]
+
+    service._populate_capture_times(records)
+
+    assert records[0]['timestamp'] is None
+
+
+def test_populate_capture_times_keeps_existing_timestamps(service):
+    """Records that already carry a timestamp are never re-read from disk."""
+    stamped = {'path': 'missing-on-purpose.jpg',
+               'timestamp': datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)}
+
+    with patch('core.services.BearingCalculationService.MetaDataHelper.get_exif_data_piexif') as read:
+        service._populate_capture_times([stamped])
+
+    read.assert_not_called()
+    assert stamped['timestamp'] == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def test_populate_capture_times_bare_datetime_original_falls_back(service, tmp_path):
+    """A bare DateTimeOriginal (no offset, no GPS) still matches under the
+    service's naive-means-UTC convention rather than being skipped."""
+    import cv2
+    import numpy as np
+    import piexif
+
+    path = str(tmp_path / 'bare.jpg')
+    cv2.imwrite(path, np.zeros((8, 8, 3), dtype=np.uint8))
+    piexif.insert(piexif.dump(
+        {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026:08:07 12:00:05'}}), path)
+    records = [_controller_shaped_record(path)]
+
+    service._populate_capture_times(records)
+
+    ts = records[0]['timestamp']
+    assert ts is not None
+    assert (ts.year, ts.hour, ts.second) == (2026, 12, 5)
