@@ -342,9 +342,19 @@ class BearingRecoveryDialog(TranslationMixin, QDialog):
         Args:
             results: Dictionary mapping image paths to BearingResult objects.
 
-        Shows a summary message and accepts the dialog.
+        Shows a summary message and accepts the dialog. An empty result set
+        (no image time matched the track) is reported like an error and keeps
+        the dialog open for another attempt - max() over the empty source
+        tally used to raise here instead, burying the real problem.
         """
         self.results = results
+
+        if not results:
+            self._on_calculation_error(self.tr(
+                "No bearings could be calculated: no image capture time "
+                "matched the track. Check that the track file covers the "
+                "flight and that the images carry capture times."))
+            return
 
         # Count results by source and quality
         sources = {}
