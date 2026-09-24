@@ -1024,3 +1024,106 @@ def test_parse_kml_multigeometry_without_tracks_does_not_abort_the_parse(service
 
     assert len(points) == 1
     assert points[0].timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Recording gaps (PR #151 recheck, finding 2): an interval longer than
+# GAP_THRESHOLD_SEC has no recorded course - the straight-line bearing
+# between its endpoints includes the turnaround and must never be reported
+# as a fully trusted 'good' estimate. Applies to every track format.
+# ---------------------------------------------------------------------------
+
+_KML_TWO_SEGMENTS_WITH_GAP = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+     xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document><Placemark><gx:MultiTrack><gx:interpolate>0</gx:interpolate>
+    <gx:Track>
+      <when>2024-01-01T12:00:00Z</when><when>2024-01-01T12:00:10Z</when>
+      <gx:coord>-75.000 40.000 100</gx:coord><gx:coord>-75.000 40.001 100</gx:coord>
+    </gx:Track>
+    <gx:Track>
+      <when>2024-01-01T12:10:00Z</when><when>2024-01-01T12:10:10Z</when>
+      <gx:coord>-74.900 40.001 100</gx:coord><gx:coord>-74.900 40.002 100</gx:coord>
+    </gx:Track>
+  </gx:MultiTrack></Placemark></Document>
+</kml>
+"""
+
+_CSV_TWO_SEGMENTS_WITH_GAP = (
+    'timestamp,latitude,longitude,altitude\n'
+    '2024-01-01T12:00:00Z,40.000,-75.000,100\n'
+    '2024-01-01T12:00:10Z,40.001,-75.000,100\n'
+    '2024-01-01T12:10:00Z,40.001,-74.900,100\n'
+    '2024-01-01T12:10:10Z,40.002,-74.900,100\n'
+)
+
+
+def _write_gap_track(tmp_path, track_format):
+    if track_format == 'kml':
+        return _write_kml(tmp_path, _KML_TWO_SEGMENTS_WITH_GAP, name='gap.kml')
+    path = tmp_path / 'gap.csv'
+    path.write_text(_CSV_TWO_SEGMENTS_WITH_GAP, encoding='utf-8')
+    return str(path)
+
+
+@pytest.mark.parametrize('track_format', ['kml', 'csv'])
+def test_image_inside_a_recording_gap_is_never_marked_good(service, tmp_path, track_format):
+    """Two northbound segments 10 minutes apart: an image at 12:05 sits in
+    unrecorded time, and the eastbound endpoint-to-endpoint course used to
+    come back quality='good', confidence=1.0."""
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'during-gap.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc)}],
+        _write_gap_track(tmp_path, track_format))
+
+    assert len(results) == 1
+    result = results[0]['during-gap.jpg']
+    assert result.quality == 'gap'
+    assert result.confidence < 1.0
+
+
+@pytest.mark.parametrize('track_format', ['kml', 'csv'])
+def test_gap_image_inherits_the_last_recorded_heading(service, tmp_path, track_format):
+    """With an earlier image on a recorded northbound leg, the gap image
+    falls back to that heading instead of the cross-gap eastbound course."""
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'on-track.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 0, 5, tzinfo=timezone.utc)},
+         {'path': 'during-gap.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc)}],
+        _write_gap_track(tmp_path, track_format))
+
+    on_track = results[0]['on-track.jpg']
+    during_gap = results[0]['during-gap.jpg']
+    assert on_track.quality == 'good'
+    assert on_track.confidence == 1.0
+    assert during_gap.quality == 'gap'
+    # Northbound (~0 deg), never the eastbound (~90 deg) cross-gap course.
+    assert during_gap.bearing_deg == pytest.approx(on_track.bearing_deg, abs=1.0)
+
+
+def test_continuous_interval_still_reports_good_with_full_confidence(service, tmp_path):
+    track = _write_csv(
+        tmp_path,
+        [
+            "2024-01-01T12:00:00Z,40.0,-75.0,100",
+            "2024-01-01T12:00:30Z,40.001,-75.0,101",
+        ],
+    )
+    results = []
+    service.calculation_complete.connect(results.append)
+
+    service.calculate_from_track(
+        [{'path': 'a.jpg',
+          'timestamp': datetime(2024, 1, 1, 12, 0, 15, tzinfo=timezone.utc)}],
+        str(track))
+
+    result = results[0]['a.jpg']
+    assert result.quality == 'good'
+    assert result.confidence == 1.0

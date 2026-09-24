@@ -528,6 +528,7 @@ class BearingCalculationService(QObject):
             # Find bracketing trackpoints
             k = self._find_bracket_index(track, img_time)
 
+            confidence = 1.0
             if k == 0:
                 # Before first trackpoint - use first segment bearing
                 bearing = GeodesicHelper.initial_course(
@@ -545,33 +546,52 @@ class BearingCalculationService(QObject):
             else:
                 # Between trackpoints k-1 and k
                 p1, p2 = track[k - 1], track[k]
-
-                # Calculate segment bearing
-                bearing = GeodesicHelper.initial_course(
-                    p1.lat, p1.lon, p2.lat, p2.lon
-                )
-
-                # Check if stationary (slow speed)
-                distance = GeodesicHelper.haversine_distance(
-                    p1.lat, p1.lon, p2.lat, p2.lon
-                )
                 time_diff = (p2.timestamp - p1.timestamp).total_seconds()
 
-                if time_diff > 0 and distance / time_diff < self.MIN_SPEED_MPS:
-                    # Stationary - inherit last valid bearing
+                if time_diff > self.GAP_THRESHOLD_SEC:
+                    # A recording break: a MultiTrack segment boundary, a
+                    # paused logger, sparse rows. The aircraft's course
+                    # through the interval is unrecorded, and the
+                    # straight-line bearing between the bracketing points
+                    # includes the turnaround (eastbound between two
+                    # northbound legs). Fall back to the last recorded
+                    # heading, flagged as a gap with reduced confidence -
+                    # never a fully trusted estimate.
                     if last_valid_bearing is not None:
                         bearing = last_valid_bearing
-                        quality = 'hover_estimate'
+                    else:
+                        bearing = GeodesicHelper.initial_course(
+                            p1.lat, p1.lon, p2.lat, p2.lon
+                        )
+                    quality = 'gap'
+                    confidence = 0.3
+                else:
+                    # Calculate segment bearing
+                    bearing = GeodesicHelper.initial_course(
+                        p1.lat, p1.lon, p2.lat, p2.lon
+                    )
+
+                    # Check if stationary (slow speed)
+                    distance = GeodesicHelper.haversine_distance(
+                        p1.lat, p1.lon, p2.lat, p2.lon
+                    )
+
+                    if time_diff > 0 and distance / time_diff < self.MIN_SPEED_MPS:
+                        # Stationary - inherit last valid bearing
+                        if last_valid_bearing is not None:
+                            bearing = last_valid_bearing
+                            quality = 'hover_estimate'
+                        else:
+                            quality = 'good'
                     else:
                         quality = 'good'
-                else:
-                    quality = 'good'
-                    last_valid_bearing = bearing
+                        last_valid_bearing = bearing
 
             results[img['path']] = BearingResult(
                 bearing_deg=bearing,
                 source=source_type,
-                quality=quality
+                quality=quality,
+                confidence=confidence
             )
 
         return results
