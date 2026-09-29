@@ -14,8 +14,11 @@ the results XML. It checks, in order of likelihood:
    same-named file).
 
 2. THUMBNAIL CACHE-KEY COLLISIONS - the disk cache (loose .jpg and
-   thumbnails.db alike) is keyed by md5(basename:cx:cy:radius). Two AOIs in
-   same-named images with identical center+radius share one thumbnail.
+   thumbnails.db alike) is keyed by md5("v2:" + path tail + center + radius),
+   where the path tail is the parent folder plus the filename. Two AOIs whose
+   images share BOTH names with identical center+radius share one thumbnail.
+   (Older builds keyed on the bare basename; those entries are orphaned by
+   the v2 prefix and regenerate rather than ever being served.)
 
 Usage:
     python scripts/audit_thumbnail_keys.py <path\\to\\ADIAT_Data.xml>
@@ -26,14 +29,27 @@ Exit code 1 if either problem was found, 0 otherwise.
 import hashlib
 import os
 import sys
+import unicodedata
 from ast import literal_eval
 from collections import defaultdict
 from xml.etree import ElementTree
 
 
-def cache_key(filename, center, radius):
-    """Reproduce ThumbnailCacheService.get_cache_key exactly."""
-    identifier = f"{filename}:{center[0]}:{center[1]}:{radius}"
+def path_tail(path, components=2):
+    """Reproduce helpers.PathHelper.cross_platform_path_tail exactly."""
+    normalized = (path or '').replace('\\', '/')
+    parts = [part for part in normalized.split('/') if part]
+    if not parts:
+        return ''
+    return unicodedata.normalize('NFC', '/'.join(parts[-components:])).casefold()
+
+
+def cache_key(tail, center, radius):
+    """Reproduce ThumbnailCacheService.get_cache_key exactly.
+
+    *tail* is the image's path tail from path_tail(), not a bare filename.
+    """
+    identifier = f"v2:{tail}:{center[0]}:{center[1]}:{radius}"
     return hashlib.md5(identifier.encode()).hexdigest()
 
 
@@ -73,7 +89,7 @@ def main():
                 radius = int(aoi_xml.get('radius', '0'))
             except (ValueError, SyntaxError):
                 continue
-            key = cache_key(basename, center, radius)
+            key = cache_key(path_tail(path), center, radius)
             by_key[key].append((path, aoi_xml.get('number'), center, radius))
 
     dup_names = {name: paths for name, paths in by_basename.items() if len(paths) > 1}

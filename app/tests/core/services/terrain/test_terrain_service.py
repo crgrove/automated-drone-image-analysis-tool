@@ -528,3 +528,80 @@ def test_factory_builds_3dep_when_files_exist(tmp_path):
 
     provider = TerrainProviderFactory.create('usgs_3dep_local', settings)
     assert provider.get_provider_kind() == 'local_geotiff'
+
+
+# ---------------------------------------------------------------------------
+# Local-DEM degradation notice: in-coverage failure vs coverage gap
+# ---------------------------------------------------------------------------
+
+
+class TestDegradationNotice:
+    """The operator hears ONCE when their local DEM stops answering.
+
+    NOTE: this module shadows TerrainService with a provider-pinning factory,
+    so class-level state and classmethods go through _TerrainService.
+    """
+
+    def setup_method(self):
+        _TerrainService._degradation_notified = False
+        _TerrainService._degradation_notice = None
+
+    def _local_service(self, tmpdir, failure_reason):
+        """TerrainService whose provider is a mocked local-GeoTIFF 3DEP."""
+        service = TerrainService(cache_dir=tmpdir, enable_geoid=False)
+        provider = Mock()
+        provider.get_provider_kind.return_value = 'local_geotiff'
+        provider.get_provider_name.return_value = 'USGS 3DEP 1m (Local GeoTIFF)'
+        provider.sample_elevation.return_value = None
+        provider.take_in_coverage_failure.side_effect = (
+            lambda: failure_reason)
+        service.provider = provider
+        return service
+
+    def test_in_coverage_failure_records_notice_once(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = self._local_service(tmpdir, "cannot open x.tif")
+            with patch.object(service, '_fallback_elevation', return_value=None):
+                service.get_elevation(38.5, -120.07)
+                service.get_elevation(38.6, -120.07)
+
+            notice = _TerrainService.take_degradation_notice()
+            assert notice is not None
+            assert notice['provider'] == 'USGS 3DEP 1m (Local GeoTIFF)'
+            assert notice['reason'] == "cannot open x.tif"
+            assert notice['degraded_to'] == 'flat'
+            # Once per session: taken, and never re-recorded
+            assert _TerrainService.take_degradation_notice() is None
+
+    def test_degraded_to_online_when_fallback_answers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = self._local_service(tmpdir, "reproject failed: no proj.db")
+            fallback_result = Mock()
+            with patch.object(service, '_fallback_elevation',
+                              return_value=fallback_result):
+                result = service.get_elevation(38.5, -120.07)
+
+            assert result is fallback_result
+            notice = _TerrainService.take_degradation_notice()
+            assert notice['degraded_to'] == 'online'
+
+    def test_coverage_gap_records_no_notice(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = self._local_service(tmpdir, None)  # no failure reason
+            with patch.object(service, '_fallback_elevation', return_value=None):
+                service.get_elevation(38.5, -120.07)
+
+            assert _TerrainService.take_degradation_notice() is None
+
+    def test_notice_is_shared_across_instances(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = self._local_service(tmpdir, "cannot open x.tif")
+            second = self._local_service(tmpdir, "cannot open y.tif")
+            with patch.object(first, '_fallback_elevation', return_value=None), \
+                    patch.object(second, '_fallback_elevation', return_value=None):
+                first.get_elevation(38.5, -120.07)
+                second.get_elevation(38.5, -120.07)
+
+            notice = _TerrainService.take_degradation_notice()
+            assert notice['reason'] == "cannot open x.tif", \
+                "only the first failure notifies"

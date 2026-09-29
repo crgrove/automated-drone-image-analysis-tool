@@ -197,6 +197,51 @@ class TerrainService:
                 f"TerrainService: local DEM has no coverage for {what}; "
                 "falling back to AWS Terrain Tiles (~30 m).")
 
+    # One in-coverage-failure notice per app session, shared by every
+    # TerrainService instance (the viewer's, the WALDO pre-pass's, worker
+    # threads') - the operator needs to hear it once, not per consumer.
+    # Set from whichever thread samples first; a rare double-set is benign.
+    _degradation_notice = None
+    _degradation_notified = False
+
+    def _note_in_coverage_failure(self, reason: str, degraded_to: str):
+        """Record that the local DEM is configured but not answering.
+
+        Distinct from a coverage gap (routine, silent): the sampled point WAS
+        inside the manifest's tiles and reading them failed - bad paths,
+        moved tiles, a broken PROJ install. The operator believes they are
+        working at the local DEM's resolution and is not.
+
+        Args:
+            reason: Provider-supplied failure description.
+            degraded_to: 'online' (~30 m global data answered instead) or
+                'flat' (no terrain at all for this sample).
+        """
+        if TerrainService._degradation_notified:
+            return
+        TerrainService._degradation_notified = True
+        provider_name = self.provider.get_provider_name()
+        self.logger.warning(
+            f"TerrainService: {provider_name} failed inside its coverage "
+            f"({reason}); degrading to {degraded_to} terrain data.")
+        TerrainService._degradation_notice = {
+            'provider': provider_name,
+            'reason': reason,
+            'degraded_to': degraded_to,
+        }
+
+    @classmethod
+    def take_degradation_notice(cls):
+        """Return-and-clear the pending degradation notice for UI display.
+
+        Returns:
+            dict | None: {'provider', 'reason', 'degraded_to'} once per
+            session, None otherwise.
+        """
+        notice = cls._degradation_notice
+        cls._degradation_notice = None
+        return notice
+
     def warmup(self) -> None:
         """Eagerly load the geoid grid and any provider-specific indices.
 
@@ -252,8 +297,16 @@ class TerrainService:
             elevation = self.provider.sample_elevation(lat, lon)
             if elevation is None:
                 # Outside the downloaded tiles: degrade to the global online
-                # baseline instead of pretending the terrain is flat.
+                # baseline instead of pretending the terrain is flat. When the
+                # provider failed INSIDE its coverage (configured but not
+                # answering), record it so the operator can be told.
+                take = getattr(self.provider, 'take_in_coverage_failure', None)
+                failure_reason = take() if callable(take) else None
                 fallback = self._fallback_elevation(lat, lon, offline_only)
+                if failure_reason:
+                    self._note_in_coverage_failure(
+                        failure_reason,
+                        degraded_to='online' if fallback is not None else 'flat')
                 if fallback is not None:
                     return fallback
                 return self._create_flat_result(lat, lon)

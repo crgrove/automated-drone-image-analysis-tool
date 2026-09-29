@@ -1,7 +1,11 @@
 """
-MapTileLoader - Downloads and caches OpenStreetMap tiles for map background.
+MapTileLoader - Downloads and caches XYZ map tiles for the map background.
 
-This module handles fetching map tiles from OpenStreetMap and caching them locally.
+Serves the base layers (street map, satellite, topo) and the transparent
+overlay layers (roads, USFS MVUM, hiking trails) from one registry. Each
+loader instance carries ONE source; the map view runs a loader per enabled
+layer. Tiles are cached on disk keyed by source name, so cached layers keep
+working in Offline Only mode.
 """
 
 import os
@@ -13,6 +17,56 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 from PySide6.QtGui import QPixmap, QImage, QColor, qGray
 import tempfile
 
+# Web Mercator (EPSG:3857) half-world extent in metres, for ArcGIS export
+# endpoints that render a bbox instead of serving a tile pyramid.
+WEB_MERCATOR_HALF_WORLD_M = 20037508.342789244
+
+# Base (opaque) tile sources. 'url' is an XYZ template. Curated and
+# hardcoded on purpose - matching the app's existing source handling.
+BASE_SOURCES = {
+    'map': {
+        'url': "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        'max_zoom': 19,
+    },
+    'satellite': {
+        'url': ("https://server.arcgisonline.com/ArcGIS/rest/services/"
+                "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
+        'max_zoom': 20,
+    },
+    'topo': {
+        # OpenTopoMap: global topographic rendering of OSM + SRTM contours.
+        'url': "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+        'max_zoom': 17,
+    },
+}
+
+# Transparent overlay sources drawn above a base layer. 'export' entries are
+# ArcGIS MapServer export endpoints (dynamic services with no tile pyramid);
+# the loader renders each XYZ tile via its EPSG:3857 bbox.
+# NOTE: the USFS trails service name is EDW_TrailNFSPublish_01
+# (EDW_TrailNFS_01 no longer exists).
+OVERLAY_SOURCES = {
+    'roads': {
+        'url': ("https://server.arcgisonline.com/ArcGIS/rest/services/"
+                "Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"),
+        'max_zoom': 19,
+    },
+    'mvum': {
+        'export': ("https://apps.fs.usda.gov/arcx/rest/services/"
+                   "EDW/EDW_MVUM_01/MapServer/export"),
+        'max_zoom': 22,
+    },
+    'trails': {
+        'url': "https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png",
+        'max_zoom': 18,
+    },
+    'usfs_trails': {
+        'export': ("https://apps.fs.usda.gov/arcx/rest/services/"
+                   "EDW/EDW_TrailNFSPublish_01/MapServer/export"),
+        'max_zoom': 22,
+    },
+}
+
 
 class MapTileLoader(QObject):
     """
@@ -23,6 +77,11 @@ class MapTileLoader(QObject):
 
     # Signal emitted when a tile is loaded
     tile_loaded = Signal(int, int, int, QPixmap)  # x, y, zoom, pixmap
+    # An overlay tile that is transparent because the FETCH failed (offline or
+    # network error), not because the layer is legitimately empty there. Kept
+    # distinct from tile_loaded so consumers never cache a failure as imagery
+    # and can retry once conditions change.
+    tile_placeholder = Signal(int, int, int, QPixmap)  # x, y, zoom, pixmap
 
     # Signal emitted when there's an error loading tiles
     tile_error = Signal(str)  # error message
@@ -142,14 +201,59 @@ class MapTileLoader(QObject):
         Set the tile source type.
 
         Args:
-            source: 'map' or 'satellite'
+            source: A key of BASE_SOURCES or OVERLAY_SOURCES
+                ('map', 'satellite', 'topo', 'roads', 'mvum', 'trails', ...).
         """
         self.tile_source = source
 
+    @staticmethod
+    def is_overlay(source):
+        """True for transparent overlay sources (roads/MVUM/trails).
+
+        Overlays skip the placeholder heuristic and the ancestor fallback: a
+        fully transparent tile is a legitimate answer ("no trail here"), not
+        missing imagery, and failures must yield transparency rather than a
+        gray square that would blot out the base map.
+        """
+        return source in OVERLAY_SOURCES
+
+    def _source_spec(self):
+        """Registry entry for the current source (defaults to the street map)."""
+        return (BASE_SOURCES.get(self.tile_source)
+                or OVERLAY_SOURCES.get(self.tile_source)
+                or BASE_SOURCES['map'])
+
+    def tile_bounds_3857(self, x_tile, y_tile, zoom):
+        """EPSG:3857 bounds of an XYZ tile, for ArcGIS export requests.
+
+        Returns:
+            tuple: (min_x, min_y, max_x, max_y) in metres.
+        """
+        n = 2.0 ** zoom
+        size = 2.0 * WEB_MERCATOR_HALF_WORLD_M / n
+        min_x = -WEB_MERCATOR_HALF_WORLD_M + x_tile * size
+        max_y = WEB_MERCATOR_HALF_WORLD_M - y_tile * size
+        return (min_x, max_y - size, min_x + size, max_y)
+
+    def tile_url(self, x_tile, y_tile, zoom):
+        """Server URL for one XYZ tile of the current source."""
+        spec = self._source_spec()
+        if 'export' in spec:
+            min_x, min_y, max_x, max_y = self.tile_bounds_3857(x_tile, y_tile, zoom)
+            return (f"{spec['export']}?bbox={min_x},{min_y},{max_x},{max_y}"
+                    f"&bboxSR=3857&imageSR=3857&size={self.tile_size},{self.tile_size}"
+                    f"&format=png32&transparent=true&f=image")
+        return spec['url'].format(z=zoom, x=x_tile, y=y_tile)
+
     def max_zoom(self):
         """Maximum tile zoom the current source can serve."""
-        return (self.MAX_ZOOM_SATELLITE if self.tile_source == 'satellite'
-                else self.MAX_ZOOM_MAP)
+        return self._source_spec().get('max_zoom', self.MAX_ZOOM_MAP)
+
+    def _transparent_tile(self):
+        """A fully transparent tile: the overlay layers' 'nothing here'."""
+        pixmap = QPixmap(self.tile_size, self.tile_size)
+        pixmap.fill(Qt.transparent)
+        return pixmap
 
     def set_offline_only(self, offline_only: bool):
         """Enable/disable offline-only mode (no new tile downloads)."""
@@ -166,6 +270,7 @@ class MapTileLoader(QObject):
         """
         # Check cache first (include source type in cache filename)
         cache_path = self.cache_dir / f"{self.tile_source}_{zoom}_{x_tile}_{y_tile}.png"
+        overlay = self.is_overlay(self.tile_source)
 
         if cache_path.exists():
             # Load from cache
@@ -173,14 +278,22 @@ class MapTileLoader(QObject):
             if not pixmap.isNull():
                 # A cached "no imagery at this zoom" placeholder is worth
                 # less than an upscaled crop of real imagery from a lower
-                # zoom - prefer the ancestor when one is usable.
-                if self._looks_unavailable(pixmap) and self._emit_fallback_tile(x_tile, y_tile, zoom):
+                # zoom - prefer the ancestor when one is usable. Overlays are
+                # exempt: their tiles are legitimately near-empty.
+                if (not overlay and self._looks_unavailable(pixmap)
+                        and self._emit_fallback_tile(x_tile, y_tile, zoom)):
                     return
                 self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
                 return
         # If offline, don't attempt network: fall back to a cached ancestor
-        # crop when possible, gray placeholder otherwise.
+        # crop when possible, gray placeholder otherwise. Overlays go
+        # transparent instead - a gray square would blot out the base map.
         if self.offline_only:
+            if overlay:
+                # A failure placeholder, NOT imagery: emitted on its own
+                # channel so it is never cached as a successful (empty) tile.
+                self.tile_placeholder.emit(x_tile, y_tile, zoom, self._transparent_tile())
+                return
             if self._emit_fallback_tile(x_tile, y_tile, zoom):
                 return
             self.tile_error.emit("Offline mode: map tiles unavailable")
@@ -201,13 +314,7 @@ class MapTileLoader(QObject):
             y_tile: Y tile coordinate
             zoom: Zoom level
         """
-        # Select tile server based on source type
-        if self.tile_source == 'satellite':
-            # Use ESRI World Imagery tiles
-            url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{zoom}/{y_tile}/{x_tile}"
-        else:
-            # Use OpenStreetMap tiles
-            url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
+        url = self.tile_url(x_tile, y_tile, zoom)
 
         # Check if already downloading
         key = (x_tile, y_tile, zoom, self.tile_source)
@@ -222,10 +329,16 @@ class MapTileLoader(QObject):
         reply = self.network_manager.get(request)
         self.active_downloads[key] = reply
 
-        # Connect signals
-        reply.finished.connect(lambda: self.on_tile_downloaded(reply, x_tile, y_tile, zoom))
+        # Capture the source the request was made FOR. The completion callback
+        # must never re-read self.tile_source: switching Map -> Satellite while
+        # a request is in flight would otherwise save the street-map response
+        # as a satellite tile (poisoning the on-disk cache across sessions),
+        # emit it into the wrong layer, and strand the original download key.
+        source = self.tile_source
+        reply.finished.connect(
+            lambda: self.on_tile_downloaded(reply, x_tile, y_tile, zoom, source))
 
-    def on_tile_downloaded(self, reply, x_tile, y_tile, zoom):
+    def on_tile_downloaded(self, reply, x_tile, y_tile, zoom, source=None):
         """
         Handle downloaded tile data.
 
@@ -234,8 +347,18 @@ class MapTileLoader(QObject):
             x_tile: X tile coordinate
             y_tile: Y tile coordinate
             zoom: Zoom level
+            source: Tile source the request was made for. Everything below
+                (cache filename, bookkeeping keys, overlay behavior) uses it,
+                never the source selected NOW. Defaults to the current source
+                for direct callers.
         """
-        key = (x_tile, y_tile, zoom, self.tile_source)
+        if source is None:
+            source = self.tile_source
+        # A response for a source that is no longer selected is still worth
+        # caching (under ITS OWN name), but must not be displayed.
+        current = (source == self.tile_source)
+
+        key = (x_tile, y_tile, zoom, source)
         if key in self.active_downloads:
             del self.active_downloads[key]
 
@@ -244,7 +367,7 @@ class MapTileLoader(QObject):
             data = reply.readAll()
 
             # Save to cache (include source type in filename)
-            cache_path = self.cache_dir / f"{self.tile_source}_{zoom}_{x_tile}_{y_tile}.png"
+            cache_path = self.cache_dir / f"{source}_{zoom}_{x_tile}_{y_tile}.png"
             with open(cache_path, 'wb') as f:
                 f.write(data.data())
 
@@ -252,17 +375,20 @@ class MapTileLoader(QObject):
             pixmap = QPixmap()
             pixmap.loadFromData(data)
 
-            if not pixmap.isNull():
+            if current and not pixmap.isNull():
                 # Some servers answer 200 with a "no imagery at this zoom"
                 # placeholder image; replace it with an upscaled ancestor
-                # crop when one is available (or arriving).
-                if self._looks_unavailable(pixmap) and self._emit_fallback_tile(x_tile, y_tile, zoom):
+                # crop when one is available (or arriving). Overlays are
+                # exempt (near-empty transparent tiles are legitimate).
+                if (not self.is_overlay(source)
+                        and self._looks_unavailable(pixmap)
+                        and self._emit_fallback_tile(x_tile, y_tile, zoom)):
                     pass
                 else:
                     self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
             # Descendant tiles may be waiting on this download to build
             # their fallback crops.
-            self._serve_fallback_waiters(x_tile, y_tile, zoom)
+            self._serve_fallback_waiters(x_tile, y_tile, zoom, source)
         else:
             # Handle error
             error_code = reply.error()
@@ -270,32 +396,40 @@ class MapTileLoader(QObject):
             http_status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
 
             # Check if we have a cached version from a previous session
-            cache_path = self.cache_dir / f"{self.tile_source}_{zoom}_{x_tile}_{y_tile}.png"
+            cache_path = self.cache_dir / f"{source}_{zoom}_{x_tile}_{y_tile}.png"
             if cache_path.exists():
                 pixmap = QPixmap(str(cache_path))
                 if not pixmap.isNull():
-                    self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
-                    self._serve_fallback_waiters(x_tile, y_tile, zoom)
+                    if current:
+                        self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
+                    self._serve_fallback_waiters(x_tile, y_tile, zoom, source)
                     # Don't count as error if we have cache
                     return
 
             # Remember the failure so fallback walks climb past this tile
             # instead of re-requesting it in a loop while the network is down.
-            self._fallback_failed.add((x_tile, y_tile, zoom, self.tile_source))
+            self._fallback_failed.add((x_tile, y_tile, zoom, source))
 
             # Track errors and notify user if necessary
             self._handle_tile_error(error_code, error_string, http_status)
 
-            # Prefer an upscaled ancestor crop over a blank gray tile so the
-            # user keeps context of where they are in the imagery.
-            if not self._emit_fallback_tile(x_tile, y_tile, zoom):
+            if not current:
+                pass  # never surface a tile for a deselected source
+            elif self.is_overlay(source):
+                # A failed overlay tile goes transparent so the base map stays
+                # readable - but on the placeholder channel, so the miss is
+                # retryable instead of cached as a successful empty tile.
+                self.tile_placeholder.emit(x_tile, y_tile, zoom, self._transparent_tile())
+            elif not self._emit_fallback_tile(x_tile, y_tile, zoom):
+                # Prefer an upscaled ancestor crop over a blank gray tile so
+                # the user keeps context of where they are in the imagery.
                 pixmap = QPixmap(self.tile_size, self.tile_size)
                 pixmap.fill(QColor(200, 200, 200))
                 self.tile_loaded.emit(x_tile, y_tile, zoom, pixmap)
 
             # Resolve any descendants waiting on this (failed) ancestor: their
             # walk will now skip it and climb further up.
-            self._serve_fallback_waiters(x_tile, y_tile, zoom)
+            self._serve_fallback_waiters(x_tile, y_tile, zoom, source)
 
         reply.deleteLater()
 
@@ -395,7 +529,7 @@ class MapTileLoader(QObject):
             return True
         return False
 
-    def _serve_fallback_waiters(self, x_tile, y_tile, zoom):
+    def _serve_fallback_waiters(self, x_tile, y_tile, zoom, source=None):
         """
         Re-run the fallback walk for tiles queued on a finished download.
 
@@ -403,10 +537,18 @@ class MapTileLoader(QObject):
         walk finds the fresh cache entry and emits crops; on failure (or a
         placeholder) it climbs past this ancestor. Waiters whose walk is
         fully exhausted get their own cached tile back, or gray.
+
+        Args:
+            source: The source the finished download belonged to. Waiters for
+                a source that is no longer selected are dropped - the view is
+                not showing that layer, and switching back reloads its
+                visible tiles from scratch anyway.
         """
-        key = (x_tile, y_tile, zoom, self.tile_source)
+        if source is None:
+            source = self.tile_source
+        key = (x_tile, y_tile, zoom, source)
         waiters = self.fallback_waiters.pop(key, None)
-        if not waiters:
+        if not waiters or source != self.tile_source:
             return
         for wx, wy, wz in waiters:
             if self._emit_fallback_tile(wx, wy, wz):

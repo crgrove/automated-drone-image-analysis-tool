@@ -17,6 +17,7 @@ import os
 from typing import List, Optional
 
 from core.services.LoggerService import LoggerService
+from core.services.RecoverySessionService import RecoverySession
 from core.services.SettingsService import SettingsService
 from core.services.waldo import WaldoMetadataService
 from core.services.waldo import WaldoClockDecisions
@@ -42,6 +43,16 @@ def invalidate_attitude_caches(viewer):
         return
     if hasattr(viewer, 'current_image_service'):
         viewer.current_image_service = None
+    # The AOI controller caches its own per-image AOIService (keyed only by
+    # image index, which a restamp does not change); cursor-coordinate lookups
+    # resolve through it, so a stale one shares GPS positions from the old
+    # pose until the user changes images.
+    aoi_controller = getattr(viewer, 'aoi_controller', None)
+    if aoi_controller is not None:
+        try:
+            aoi_controller.invalidate_aoi_service_cache()
+        except Exception:
+            pass
     pod_cache = getattr(viewer, 'pod_result_cache', None)
     if pod_cache is not None:
         try:
@@ -126,7 +137,9 @@ class WaldoPrePassController:
             self.logger.error(f"WaldoPrePassController: failed to init TerrainService - {e}")
             terrain_service = None
 
-        service = WaldoMetadataService(terrain_service=terrain_service)
+        service = WaldoMetadataService(
+            terrain_service=terrain_service,
+            extra_trigger_kml_paths=self._session_kml_candidates())
         dialog = WaldoPrePassDialog(self.parent, service, waldo_paths)
         dialog.exec()
         result = dialog.result_data
@@ -198,6 +211,24 @@ class WaldoPrePassController:
                    dialog.declined))
         except Exception as e:
             self.logger.error(f"WaldoPrePassController: flight-log offer failed - {e}")
+
+    def _session_kml_candidates(self):
+        """KML files found under the results-folder scan session, if one exists.
+
+        A WALDO ``*_Triggers.kml`` normally sits near the images, but a
+        relocated result set may keep it anywhere in the scanned tree.
+        Handing every session KML to trigger discovery means the user is not
+        asked to help locate it; discovery's name+GPS validation rejects
+        wrong-flight files, so over-supplying candidates is safe.
+        """
+        session = getattr(self.parent, 'recovery_session', None)
+        if not isinstance(session, RecoverySession):
+            return []
+        try:
+            return session.find_files_by_extension(('.kml',))
+        except Exception as e:
+            self.logger.warning(f"WaldoPrePassController: session KML sweep failed - {e}")
+            return []
 
     # ------------------------------------------------------------------
     # Clock correction

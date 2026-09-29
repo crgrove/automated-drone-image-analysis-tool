@@ -72,6 +72,23 @@ def is_absolute_any_platform(path):
     return False
 
 
+def is_filesystem_root(path):
+    """True for drive/filesystem roots, which are too big to index.
+
+    Recovery code walks candidate folders recursively; pointing that walk at
+    ``C:\\`` or ``/`` would index the whole machine, so roots are excluded
+    everywhere a folder is remembered or tried.
+
+    Args:
+        path (str): A local folder path.
+
+    Returns:
+        bool: True when *path* names a filesystem root.
+    """
+    normalized = os.path.abspath(path)
+    return os.path.dirname(normalized) == normalized
+
+
 def canonical_path(path):
     """Return *path* with redundant separators and ``..`` segments collapsed.
 
@@ -147,6 +164,35 @@ def split_path_components(path):
     for sep in _SEPARATORS:
         normalized = normalized.replace(sep, os.sep)
     return [part for part in normalized.split(os.sep) if part]
+
+
+def cross_platform_path_tail(path, components=2):
+    """Return the last *components* path components as one matching key.
+
+    The cache services key persisted artifacts (AOI thumbnails) by image
+    identity. A bare filename is not an identity: drone filenames repeat
+    across flights and sorties (WALDO per-sortie counters restart, every DJI
+    flight has a DJI_0001.JPG), so the enclosing folder must be part of the
+    key - while the machine-specific root must NOT be, or the cache would die
+    the moment a results folder moves to another machine. The tail (parent
+    folder + filename by default) is the portable middle ground.
+
+    Splits on both separator styles, joins with '/', and case/Unicode-folds,
+    so Windows- and POSIX-authored paths to the same file produce one key.
+
+    Args:
+        path (str): A path written by any platform, absolute or relative.
+        components (int): How many trailing components to keep. A path with
+            fewer components yields what it has (a bare filename stays one).
+
+    Returns:
+        str: Matching key, e.g. ``'sortie2/0_000_00_022.jpg'``, or '' when
+        *path* is empty.
+    """
+    parts = split_path_components(path)
+    if not parts:
+        return ''
+    return unicodedata.normalize('NFC', '/'.join(parts[-components:])).casefold()
 
 
 class FolderIndex(dict):

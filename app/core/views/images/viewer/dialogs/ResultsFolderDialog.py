@@ -1,7 +1,7 @@
 """ResultsFolderDialog - Dialog for displaying scanned results folders."""
 
 import os
-from typing import List, Callable
+from typing import List, Callable, Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
@@ -86,11 +86,17 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
     COL_IMAGES = 2
     COL_MISSING = 3
     COL_AOIS = 4
-    COL_MAP = 5
-    COL_VIEW = 6
+    COL_SETTINGS = 5
+    COL_MAP = 6
+    COL_VIEW = 7
+
+    # Cap on option lines rendered in the settings tooltip.
+    TOOLTIP_MAX_OPTIONS = 15
 
     def __init__(self, parent, results: List[ResultsScanResult], theme: str,
-                 open_viewer_callback: Callable[[str], None]):
+                 open_viewer_callback: Callable[[str], None],
+                 load_settings_callback: Optional[Callable[[str], None]] = None,
+                 export_combined_callback: Optional[Callable[[List[ResultsScanResult]], None]] = None):
         """
         Initialize the results folder dialog.
 
@@ -99,11 +105,17 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
             results: List of scan results to display
             theme: Current theme ('Light' or 'Dark')
             open_viewer_callback: Function to call when opening Results Viewer
+            load_settings_callback: Function to call to load a run's settings
+                into the main window; the Settings column is disabled when None
+            export_combined_callback: Function to call with the scan results to
+                build one collated PDF report; the button is hidden when None
         """
         super().__init__(parent)
         self.results = results
         self.theme = theme
         self.open_viewer_callback = open_viewer_callback
+        self.load_settings_callback = load_settings_callback
+        self.export_combined_callback = export_combined_callback
         self.logger = LoggerService()
 
         self.setupUi()
@@ -127,10 +139,11 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
 
         # Results table
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
             self.tr("Folder"), self.tr("Algorithm"), self.tr("Images"),
-            self.tr("Missing"), self.tr("AOIs"), self.tr("Map"), self.tr("View")
+            self.tr("Missing"), self.tr("AOIs"), self.tr("Settings"),
+            self.tr("Map"), self.tr("View")
         ])
 
         # Table configuration
@@ -153,11 +166,15 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
             self.COL_AOIS, QHeaderView.ResizeToContents
         )
         self.table.horizontalHeader().setSectionResizeMode(
+            self.COL_SETTINGS, QHeaderView.Fixed
+        )
+        self.table.horizontalHeader().setSectionResizeMode(
             self.COL_MAP, QHeaderView.Fixed
         )
         self.table.horizontalHeader().setSectionResizeMode(
             self.COL_VIEW, QHeaderView.Fixed
         )
+        self.table.setColumnWidth(self.COL_SETTINGS, 60)
         self.table.setColumnWidth(self.COL_MAP, 60)
         self.table.setColumnWidth(self.COL_VIEW, 60)
 
@@ -165,6 +182,17 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
 
         # Button row
         button_layout = QHBoxLayout()
+
+        # Collate every scanned run into one PDF report. The dialog stays
+        # open (the export's own progress dialog sits on top).
+        self.export_pdf_button = None
+        if self.export_combined_callback is not None:
+            self.export_pdf_button = QPushButton(self.tr("Export Combined PDF"))
+            self.export_pdf_button.setEnabled(bool(self.results))
+            self.export_pdf_button.clicked.connect(
+                lambda: self.export_combined_callback(self.results))
+            button_layout.addWidget(self.export_pdf_button)
+
         button_layout.addStretch()
 
         self.close_button = QPushButton(self.tr("Close"))
@@ -204,6 +232,36 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
             aoi_item = QTableWidgetItem(str(result.aoi_count))
             aoi_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, self.COL_AOIS, aoi_item)
+
+            # Settings button - hover shows the run's settings, click loads
+            # them into the main window like opening the results file would
+            settings_container = QWidget()
+            settings_layout = QHBoxLayout(settings_container)
+            settings_layout.setContentsMargins(0, 0, 0, 0)
+            settings_layout.setAlignment(Qt.AlignCenter)
+
+            settings_button = QPushButton()
+            settings_button.setIcon(IconHelper.create_icon('fa6s.sliders', self.theme))
+            settings_button.setFixedSize(40, 28)
+
+            settings_text = self._format_settings_tooltip(result.settings)
+            can_load = self.load_settings_callback is not None and bool(result.settings)
+            if can_load:
+                settings_button.setToolTip(
+                    self.tr("Click to load this run's settings into the main window")
+                    + "\n\n" + settings_text
+                )
+                settings_button.clicked.connect(
+                    lambda checked, path=result.xml_path: self._load_settings(path)
+                )
+            else:
+                # Tooltips still show on disabled buttons, so the settings
+                # summary stays readable even when loading is unavailable.
+                settings_button.setToolTip(settings_text)
+                settings_button.setEnabled(False)
+
+            settings_layout.addWidget(settings_button)
+            self.table.setCellWidget(row, self.COL_SETTINGS, settings_container)
 
             # Map button - create a container widget for centering
             map_container = QWidget()
@@ -257,6 +315,64 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
 
         # Alternate row colors
         self.table.setAlternatingRowColors(True)
+
+    def _format_settings_tooltip(self, settings: dict) -> str:
+        """Render a run's settings dict as a readable multi-line tooltip.
+
+        Args:
+            settings: Dict shaped like XmlService.get_settings() output.
+
+        Returns:
+            Translated, truncated plain-text summary.
+        """
+        if not settings:
+            return self.tr("No settings recorded for this run")
+
+        lines = []
+        algorithm = settings.get('algorithm')
+        if algorithm:
+            lines.append(self.tr("Algorithm: {value}").format(value=algorithm))
+        # 'thermal' is the string "True"/"False" as stored in the XML
+        if settings.get('thermal') == 'True':
+            lines.append(self.tr("Thermal: Yes"))
+        for label, key in (
+            (self.tr("Input folder"), 'input_dir'),
+            (self.tr("Output folder"), 'output_dir'),
+        ):
+            value = settings.get(key)
+            if value:
+                lines.append(f"{label}: {value}")
+        color = settings.get('identifier_color')
+        if color:
+            lines.append(self.tr("Identifier color: {value}").format(value=color))
+        for label, key in (
+            (self.tr("Min area"), 'min_area'),
+            (self.tr("Max area"), 'max_area'),
+            (self.tr("AOI radius"), 'aoi_radius'),
+        ):
+            value = settings.get(key)
+            if value:
+                lines.append(f"{label}: {value}")
+
+        options = settings.get('options') or {}
+        if options:
+            lines.append(self.tr("Options:"))
+            for i, name in enumerate(sorted(options)):
+                if i >= self.TOOLTIP_MAX_OPTIONS:
+                    lines.append(self.tr("  ... and {count} more").format(
+                        count=len(options) - i))
+                    break
+                value = str(options[name])
+                if len(value) > 60:
+                    value = value[:57] + "..."
+                lines.append(f"  {name}: {value}")
+
+        return '\n'.join(lines)
+
+    def _load_settings(self, xml_path: str):
+        """Load the run's settings into the main window and close the dialog."""
+        self.load_settings_callback(xml_path)
+        self.accept()  # Close so the user sees the hydrated main screen
 
     def _open_google_maps(self, lat: float, lon: float):
         """Open Google Maps at the specified coordinates."""

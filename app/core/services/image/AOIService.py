@@ -828,6 +828,28 @@ class AOIService:
 
         return self.estimate_aoi_gps(image, aoi, agl_override_m, use_terrain)
 
+    def estimate_pixel_gps(self, image, x, y, custom_altitude_ft=None, use_terrain=True):
+        """
+        Estimate the GPS position of an arbitrary pixel in an image.
+
+        Resolves through the exact same path as AOI geolocation (the
+        fov_alignment homography when the image has one, else the
+        terrain-aware ray-cast), so a pixel and an AOI at the same spot
+        always agree.
+
+        Args:
+            image (dict): Image metadata dict
+            x (float): Pixel column
+            y (float): Pixel row
+            custom_altitude_ft (float, optional): Custom altitude override in feet
+            use_terrain (bool): Whether to use terrain elevation data
+
+        Returns:
+            AOIGPSResult or None
+        """
+        pixel_aoi = {'center': (int(round(x)), int(round(y)))}
+        return self.calculate_gps_with_metadata(image, pixel_aoi, custom_altitude_ft, use_terrain)
+
     def get_aoi_gps_with_metadata(self, image, aoi, aoi_index, custom_altitude_ft=None, use_terrain=True):
         """
         Calculate AOI GPS and return with metadata.

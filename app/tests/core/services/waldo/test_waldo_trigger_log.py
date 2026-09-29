@@ -278,6 +278,77 @@ def test_discover_returns_none_when_no_kml_exists(tmp_path):
     assert WaldoTriggerLogService().discover(records) is None
 
 
+def _scan_tree_layout(tmp_path, marks):
+    """Images in one tree, the trigger KML buried in a separate scan tree.
+
+    The KML is two levels under a sibling of the image root, so the local
+    dir-plus-parents search can never reach it: only an extra candidate
+    (e.g. from a results-folder scan session) can bring it in.
+    """
+    batch_dir = tmp_path / "images_root" / "flight" / "batch1"
+    batch_dir.mkdir(parents=True)
+    records = [_rec(f"0_{n}.jpg", lat, lon, None, path=str(batch_dir / f"0_{n}.jpg"))
+               for n, lat, lon in marks]
+    scan_dir = tmp_path / "scan" / "deep"
+    scan_dir.mkdir(parents=True)
+    kml = _write_kml(scan_dir / "20260723_65561_Triggers.kml",
+                     [_placemark(n, lat, lon) for n, lat, lon in marks])
+    return kml, records
+
+
+def test_discover_uses_extra_candidates_outside_local_search(tmp_path):
+    marks = _lane(0, range(5), 41.0, -122.0, ascending=True)
+    kml, records = _scan_tree_layout(tmp_path, marks)
+    svc = WaldoTriggerLogService()
+
+    assert svc.discover(records) is None, "sanity: local search cannot see it"
+    found = svc.discover(records, extra_candidates=[kml])
+    assert found is not None
+    assert found[0] == kml
+    assert len(found[1]) == 5
+
+
+def test_discover_extra_candidates_still_position_validated(tmp_path):
+    # A wrong-flight KML handed in as an extra candidate must be rejected by
+    # the same GPS scoring that guards local candidates.
+    marks = _lane(0, range(5), 41.0, -122.0, ascending=True)
+    kml, records = _scan_tree_layout(tmp_path, marks)
+    far_marks = [(n, lat + 1.0, lon) for n, lat, lon in marks]
+    _write_kml(tmp_path / "scan" / "deep" / "20260723_65561_Triggers.kml",
+               [_placemark(n, lat, lon) for n, lat, lon in far_marks])
+    assert WaldoTriggerLogService().discover(records, extra_candidates=[kml]) is None
+
+
+def test_discover_local_kml_wins_tie_over_extra_candidate(tmp_path):
+    marks = _lane(0, range(5), 41.0, -122.0, ascending=True)
+    local_kml, records = _flight_layout(tmp_path, marks)
+    scan_dir = tmp_path / "scan"
+    scan_dir.mkdir()
+    duplicate = _write_kml(scan_dir / "copy_Triggers.kml",
+                           [_placemark(n, lat, lon) for n, lat, lon in marks])
+    found = WaldoTriggerLogService().discover(records, extra_candidates=[duplicate])
+    assert found is not None
+    assert found[0] == local_kml
+
+
+def test_metadata_service_passes_extra_kml_paths_to_discovery(tmp_path):
+    """WaldoMetadataService(extra_trigger_kml_paths=...) reaches discovery."""
+    marks = _lane(0, range(5), 41.0, -122.0, ascending=True)  # truth: north
+    kml, records = _scan_tree_layout(tmp_path, marks)
+    t0 = datetime(2026, 7, 23, 6, 30, 0)
+    for j, rec in enumerate(records):
+        rec.timestamp = t0 + timedelta(seconds=4 * j)
+        rec.heading_deg = 180.0
+
+    svc = WaldoMetadataService(terrain_service=None, extra_trigger_kml_paths=[kml])
+    result = WaldoProcessResult()
+    svc._apply_trigger_log_headings(records, result)
+
+    for rec in records:
+        assert rec.heading_deg == pytest.approx(0.0, abs=3.0) or \
+            rec.heading_deg == pytest.approx(360.0, abs=3.0)
+
+
 # --------------------------------------------------------------------------
 # WaldoMetadataService._apply_trigger_log_headings integration
 # --------------------------------------------------------------------------

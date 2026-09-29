@@ -4,13 +4,16 @@ GPSMapDialog - Dialog window for displaying GPS map visualization.
 This dialog shows all image GPS locations as connected points on an interactive map.
 """
 
+import json
+
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox,
-    QComboBox, QSlider
+    QComboBox, QSlider, QToolButton, QMenu
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QTimer
 from helpers.TranslationMixin import TranslationMixin
-from PySide6.QtGui import QKeySequence, QShortcut, QColor
+from PySide6.QtGui import QKeySequence, QShortcut, QColor, QActionGroup
+from core.services.SettingsService import SettingsService
 from core.views.images.viewer.widgets.GPSMapView import GPSMapView
 
 
@@ -56,6 +59,10 @@ class GPSMapDialog(TranslationMixin, QDialog):
         self.gps_data = gps_data
         self.current_image_index = current_image_index
         self.offline_only = bool(offline_only)
+        self.settings_service = SettingsService()
+        # True while the persisted layer selection is being applied, so the
+        # menu handlers do not write the settings back mid-load.
+        self._loading_layers = False
 
         self.setWindowTitle(self.tr("GPS Map View"))
         self.setModal(False)  # Non-modal so user can interact with main window
@@ -132,11 +139,47 @@ class GPSMapDialog(TranslationMixin, QDialog):
         # Add separator
         controls_layout.addSpacing(20)
 
-        # Toggle map/satellite view button
-        self.toggle_view_btn = QPushButton(self.tr("Satellite View"))
-        self.toggle_view_btn.setCheckable(True)
-        self.toggle_view_btn.toggled.connect(self.on_toggle_view)
-        controls_layout.addWidget(self.toggle_view_btn)
+        # Layer selection: exclusive base layer plus checkable overlays,
+        # persisted across sessions (SettingsService 'MapLayers').
+        self.layers_btn = QToolButton()
+        self.layers_btn.setText(self.tr("Layers"))
+        self.layers_btn.setPopupMode(QToolButton.InstantPopup)
+        layers_menu = QMenu(self.layers_btn)
+
+        self.base_action_group = QActionGroup(layers_menu)
+        self.base_action_group.setExclusive(True)
+        self.base_actions = {}
+        for key, label in (
+            ('map', self.tr("Street Map")),
+            ('satellite', self.tr("Satellite")),
+            ('topo', self.tr("Topographic")),
+        ):
+            action = layers_menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(key)
+            self.base_action_group.addAction(action)
+            self.base_actions[key] = action
+
+        layers_menu.addSeparator()
+        self.overlay_actions = {}
+        for key, label in (
+            ('roads', self.tr("Roads")),
+            ('mvum', self.tr("MVUM Roads (USFS)")),
+            ('trails', self.tr("Hiking Trails (Waymarked)")),
+            ('usfs_trails', self.tr("USFS Trails")),
+        ):
+            action = layers_menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(key)
+            self.overlay_actions[key] = action
+
+        self.layers_btn.setMenu(layers_menu)
+        controls_layout.addWidget(self.layers_btn)
+
+        self._apply_saved_layers()
+        self.base_action_group.triggered.connect(self._on_base_layer_selected)
+        for action in self.overlay_actions.values():
+            action.toggled.connect(self._on_overlay_toggled)
 
         # POD coverage overlay controls (enabled once a POD result is cached).
         controls_layout.addSpacing(20)
@@ -191,6 +234,14 @@ class GPSMapDialog(TranslationMixin, QDialog):
         controls_layout.addWidget(help_label)
 
         layout.addLayout(controls_layout)
+
+        # Data attribution for the base and overlay layer providers
+        attribution_label = QLabel(self.tr(
+            "Map data © OpenStreetMap contributors, Esri, OpenTopoMap • "
+            "Overlays: Esri, US Forest Service, Waymarked Trails"))
+        attribution_label.setStyleSheet("font-size: 9px; color: gray; padding: 1px 5px;")
+        layout.addWidget(attribution_label)
+
         self.setLayout(layout)
 
     def set_pod_available(self, available):
@@ -334,19 +385,66 @@ class GPSMapDialog(TranslationMixin, QDialog):
                 self.map_view.set_current_image(i)
                 break
 
-    def on_toggle_view(self, checked):
-        """
-        Toggle between map and satellite view.
+    # Persisted layer selection: {'base': 'map'|'satellite'|'topo',
+    # 'overlays': ['roads', 'mvum', ...]} as JSON.
+    LAYERS_SETTING = 'MapLayers'
 
-        Args:
-            checked: True for satellite view, False for map view
-        """
-        if checked:
-            self.toggle_view_btn.setText(self.tr("Map View"))
-            self.map_view.set_tile_source('satellite')
-        else:
-            self.toggle_view_btn.setText(self.tr("Satellite View"))
-            self.map_view.set_tile_source('map')
+    def _load_layer_prefs(self):
+        """Read the persisted layer selection, tolerating junk."""
+        raw = self.settings_service.get_setting(self.LAYERS_SETTING, '')
+        try:
+            prefs = json.loads(raw) if raw else {}
+        except (TypeError, ValueError):
+            prefs = {}
+        if not isinstance(prefs, dict):
+            prefs = {}
+        base = prefs.get('base')
+        if base not in self.base_actions:
+            base = 'map'
+        overlays = [o for o in (prefs.get('overlays') or [])
+                    if o in self.overlay_actions]
+        return base, overlays
+
+    def _save_layer_prefs(self):
+        """Persist the current layer selection."""
+        checked_base = self.base_action_group.checkedAction()
+        prefs = {
+            'base': checked_base.data() if checked_base else 'map',
+            'overlays': [key for key, action in self.overlay_actions.items()
+                         if action.isChecked()],
+        }
+        self.settings_service.set_setting(self.LAYERS_SETTING, json.dumps(prefs))
+
+    def _apply_saved_layers(self):
+        """Restore the persisted selection into the menu and the map."""
+        self._loading_layers = True
+        try:
+            base, overlays = self._load_layer_prefs()
+            self.base_actions[base].setChecked(True)
+            for key, action in self.overlay_actions.items():
+                action.setChecked(key in overlays)
+            if base != 'map':
+                self.map_view.set_tile_source(base)
+            if overlays:
+                self.map_view.set_overlays(overlays)
+        finally:
+            self._loading_layers = False
+
+    def _on_base_layer_selected(self, action):
+        """Switch the base tile source from the Layers menu."""
+        if self._loading_layers:
+            return
+        self.map_view.set_tile_source(action.data())
+        self._save_layer_prefs()
+
+    def _on_overlay_toggled(self, _checked):
+        """Enable/disable overlays from the Layers menu."""
+        if self._loading_layers:
+            return
+        overlays = [key for key, action in self.overlay_actions.items()
+                    if action.isChecked()]
+        self.map_view.set_overlays(overlays)
+        self._save_layer_prefs()
 
     def update_gps_data(self, gps_data, current_image_index):
         """

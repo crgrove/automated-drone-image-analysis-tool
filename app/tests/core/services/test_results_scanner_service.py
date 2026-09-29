@@ -324,6 +324,35 @@ class TestParseResultFile:
             assert result.image_count == 5
             assert result.aoi_count == 3
 
+    def test_parse_carries_full_settings_dict(self, scanner_service, temp_folder):
+        """The Settings column needs the whole settings dict, not just algorithm."""
+        results_folder = os.path.join(temp_folder, 'ADIAT_Results')
+        os.makedirs(results_folder)
+        xml_path = os.path.join(results_folder, 'ADIAT_DATA.XML')
+
+        settings = {
+            'algorithm': 'HSVColorRange',
+            'min_area': 10,
+            'options': {'sensitivity': '5'},
+        }
+        with patch('core.services.ResultsScannerService.XmlService') as MockXmlService:
+            mock_xml = MagicMock()
+            mock_xml.get_settings.return_value = (settings, 1)
+            mock_xml.get_images.return_value = [
+                {'path': 'image1.jpg', 'areas_of_interest': []}
+            ]
+            MockXmlService.return_value = mock_xml
+
+            result = scanner_service._parse_result_file(xml_path)
+
+        assert result.settings == settings
+        # Constructing without settings still works (default empty dict)
+        assert ResultsScanResult(
+            xml_path='x', folder_name='f', algorithm='a', image_count=0,
+            aoi_count=0, missing_images=0, first_image_path=None,
+            gps_coordinates=None
+        ).settings == {}
+
     def test_parse_with_missing_images(self, scanner_service, temp_folder):
         """Test parsing when some images are missing."""
         results_folder = os.path.join(temp_folder, 'ADIAT_Results')

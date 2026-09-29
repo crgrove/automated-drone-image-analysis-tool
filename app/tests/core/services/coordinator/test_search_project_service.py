@@ -203,6 +203,108 @@ def test_merge_matches_within_review_after_new_aoi_created():
     assert {r.get('review_id') for r in reviews} == {'r1', 'r2'}
 
 
+# --------------------------------------------------------------------------- #
+#  Capture identity: repeated camera filenames in separate flights/batches     #
+#  must stay separate detections (review finding 1, PR #126 follow-up).       #
+# --------------------------------------------------------------------------- #
+
+
+def test_merge_keeps_distinct_flights_with_repeated_filenames_separate():
+    """FlightA/DJI_0001 and FlightB/DJI_0001 with nearby centers are two
+    independent detections, never one consolidated AOI with two flags."""
+    service, consolidated = _project_with_consolidated()
+    images = [
+        {'path': 'C:/Mission/FlightA/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (100, 100), 'radius': 10, 'flagged': True}]},
+        {'path': 'C:/Mission/FlightB/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (104, 103), 'radius': 10, 'flagged': True}]},
+    ]
+
+    service._merge_aoi_data('batch1', images, _REVIEW_META)
+
+    aois = consolidated.findall('aoi')
+    assert len(aois) == 2, ET.tostring(consolidated).decode()
+    assert [a.findtext('flag_count') for a in aois] == ['1', '1']
+
+
+def test_merge_repeated_filenames_still_merge_across_machines():
+    """The relative key survives relocation: a second reviewer's copy of the
+    same two flights merges into the same two AOIs, not four."""
+    service, consolidated = _project_with_consolidated()
+    review1 = [
+        {'path': 'C:/Mission/FlightA/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (100, 100), 'flagged': True}]},
+        {'path': 'C:/Mission/FlightB/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (104, 103), 'flagged': False}]},
+    ]
+    review2 = [
+        {'path': '/mnt/usb/copies/Mission/FlightA/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (101, 99), 'flagged': True}]},
+        {'path': '/mnt/usb/copies/Mission/FlightB/DJI_0001.JPG',
+         'areas_of_interest': [{'center': (105, 102), 'flagged': True}]},
+    ]
+
+    service._merge_aoi_data('batch1', review1, _REVIEW_META)
+    service._merge_aoi_data('batch1', review2, {'review_id': 'r2', 'reviewer_name': 'Reviewer Two'})
+
+    aois = consolidated.findall('aoi')
+    assert len(aois) == 2, ET.tostring(consolidated).decode()
+    assert sorted(a.findtext('flag_count') for a in aois) == ['1', '2']
+
+
+def test_merge_scopes_matches_to_the_batch():
+    """The same relative key in two different batches is two captures."""
+    service, consolidated = _project_with_consolidated()
+    images = [{'path': 'C:/Area1/DJI_0001.JPG',
+               'areas_of_interest': [{'center': (100, 100), 'flagged': True}]}]
+
+    service._merge_aoi_data('batch1', images, _REVIEW_META)
+    service._merge_aoi_data('batch2', [{
+        'path': 'C:/Area2/DJI_0001.JPG',
+        'areas_of_interest': [{'center': (100, 100), 'flagged': True}]}],
+        {'review_id': 'r2', 'reviewer_name': 'Reviewer Two'})
+
+    assert len(consolidated.findall('aoi')) == 2
+
+
+def test_merge_legacy_entry_requires_path_suffix_not_bare_filename():
+    """A pre-identity project entry from FlightB must not swallow FlightA's
+    same-named detection: the stored path has to end in the new relative key."""
+    service, consolidated = _project_with_consolidated(
+        (r'C:\Search\FlightB\DJI_0042.JPG', '(100, 200)', 1),
+    )
+    images = [
+        {'path': '/mnt/usb/Search/FlightA/DJI_0042.JPG',
+         'areas_of_interest': [{'center': (102, 201), 'flagged': True}]},
+        {'path': '/mnt/usb/Search/FlightB/DJI_0042.JPG',
+         'areas_of_interest': [{'center': (99, 199), 'flagged': True}]},
+    ]
+
+    service._merge_aoi_data('batch1', images, _REVIEW_META)
+
+    aois = consolidated.findall('aoi')
+    assert len(aois) == 2, ET.tostring(consolidated).decode()
+    flag_counts = sorted(a.findtext('flag_count') for a in aois)
+    assert flag_counts == ['1', '2']  # FlightB merged, FlightA created fresh
+
+
+def test_merge_stamps_identity_onto_matched_legacy_entry():
+    """Matching a legacy entry upgrades it in place, so the next review of the
+    same batch matches by identity instead of re-running the suffix scan."""
+    service, consolidated = _project_with_consolidated(
+        (r'C:\Search\Batch1\DJI_0042.JPG', '(100, 200)', 1),
+    )
+    images = [{'path': '/mnt/usb/Batch1/DJI_0042.JPG',
+               'areas_of_interest': [{'center': (103, 198), 'flagged': True}]}]
+
+    service._merge_aoi_data('batch1', images, _REVIEW_META)
+
+    aois = consolidated.findall('aoi')
+    assert len(aois) == 1
+    assert aois[0].findtext('image_key') == 'dji_0042.jpg'
+    assert aois[0].findtext('batch_id') == 'batch1'
+
+
 def test_merge_survives_malicious_center_in_project_file(tmp_path):
     """A hostile center in the stored project neither runs nor kills the merge."""
     marker = tmp_path / 'pwned.txt'

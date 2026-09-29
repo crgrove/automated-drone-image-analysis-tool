@@ -166,3 +166,53 @@ def test_a_viewer_without_the_refresh_hook_is_tolerated():
 
     # hasattr is the guard the pipeline uses; prove it reports absence.
     assert not hasattr(parent, '_refresh_person_reference_dialog')
+
+
+# ---------------------------------------------------------------------------
+# Terrain degradation toast (once-per-session notice from TerrainService)
+# ---------------------------------------------------------------------------
+
+def test_pending_degradation_notice_becomes_a_toast():
+    from core.services.terrain.TerrainService import TerrainService
+    controller, parent = _controller()
+    TerrainService._degradation_notice = {
+        'provider': 'USGS 3DEP 1m (Local GeoTIFF)',
+        'reason': 'cannot open x.tif',
+        'degraded_to': 'online',
+    }
+    try:
+        controller._surface_terrain_degradation()
+    finally:
+        TerrainService._degradation_notice = None
+
+    parent.status_controller.show_toast.assert_called_once()
+    message = parent.status_controller.show_toast.call_args.args[0]
+    assert 'USGS 3DEP' in message
+    assert '30 m' in message
+
+
+def test_flat_degradation_gets_the_stronger_wording():
+    from core.services.terrain.TerrainService import TerrainService
+    controller, parent = _controller()
+    TerrainService._degradation_notice = {
+        'provider': 'USGS 3DEP 1m (Local GeoTIFF)',
+        'reason': 'cannot open x.tif',
+        'degraded_to': 'flat',
+    }
+    try:
+        controller._surface_terrain_degradation()
+    finally:
+        TerrainService._degradation_notice = None
+
+    message = parent.status_controller.show_toast.call_args.args[0]
+    assert 'flat terrain' in message
+
+
+def test_no_notice_means_no_toast():
+    from core.services.terrain.TerrainService import TerrainService
+    controller, parent = _controller()
+    TerrainService._degradation_notice = None
+
+    controller._surface_terrain_degradation()
+
+    parent.status_controller.show_toast.assert_not_called()

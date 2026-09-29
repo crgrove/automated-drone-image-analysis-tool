@@ -207,6 +207,21 @@ def test_calculate_gps_with_custom_altitude(sample_image_data, sample_aoi):
         assert result is None or (isinstance(result, tuple) and len(result) == 2)
 
 
+def test_estimate_pixel_gps_routes_through_the_aoi_path(sample_image_data):
+    """Cursor GPS resolves through the same code path as AOI geolocation."""
+    with patch('core.services.image.AOIService.ImageService'):
+        service = AOIService(sample_image_data)
+
+    with patch.object(service, 'calculate_gps_with_metadata',
+                      return_value='sentinel') as mock_calc:
+        result = service.estimate_pixel_gps(
+            sample_image_data, 123.6, 45.2, custom_altitude_ft=250, use_terrain=False)
+
+    assert result == 'sentinel'
+    mock_calc.assert_called_once_with(
+        sample_image_data, {'center': (124, 45)}, 250, False)
+
+
 def test_estimate_aoi_gps_with_terrain_disabled(sample_image_data, sample_aoi):
     """Test AOI GPS estimation with terrain explicitly disabled."""
     with patch('core.services.image.AOIService.ImageService') as MockImageService, \

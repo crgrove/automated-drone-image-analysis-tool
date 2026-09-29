@@ -11,6 +11,7 @@ import importlib
 from core.controllers.images.viewer.path.PathValidationController import (
     PathValidationController,
 )
+from core.services.RecoverySessionService import RecoverySession
 
 # The path package re-exports the class under the same name, so a plain
 # "import ... as path_module" would bind the class; resolve the real module.
@@ -501,6 +502,135 @@ def test_filesystem_roots_are_never_remembered(controller):
         )
     )
     assert stored == []
+
+
+# --------------------------------------------------------------------------- #
+#  Scan-session recovery: runs opened from one folder scan resolve silently   #
+#  from the scanned tree, and only prompt when the images are truly absent.   #
+# --------------------------------------------------------------------------- #
+
+
+def _with_session(controller, session):
+    """Attach a real RecoverySession to the mocked parent viewer."""
+    controller.parent.recovery_session = session
+    return session
+
+
+def test_scan_session_resolves_from_scan_root_without_prompt(controller, tmp_path):
+    """Images living inside the scanned tree relink with no dialog at all."""
+    flight = tmp_path / "mission" / "flight1"
+    flight.mkdir(parents=True)
+    (flight / "DJI_0042.JPG").write_text("fake")
+    _with_session(controller, RecoverySession(str(tmp_path)))
+
+    images = [{"path": r"C:\old\flight1\DJI_0042.JPG", "mask_path": ""}]
+
+    with patch.object(controller, "_prompt_for_source_folder") as mock_prompt:
+        assert controller.validate_and_fix_paths(images) is True
+
+    mock_prompt.assert_not_called()
+    assert images[0]["path"] == str(flight / "DJI_0042.JPG")
+
+
+def test_scan_session_lone_unrelated_match_still_prompts(controller, tmp_path):
+    """The silent branch keeps require_folder_agreement: a same-named file
+    from another flight line under the scan root must not be taken on trust."""
+    other = tmp_path / "Road1 North-South"
+    other.mkdir()
+    (other / "0_000_00_022.jpg").write_text("wrong flight line")
+    _with_session(controller, RecoverySession(str(tmp_path)))
+
+    images = [{"path": r"E:\Cap\Road2 South-North\0_000_00_022.jpg", "mask_path": ""}]
+
+    with patch.object(controller, "_prompt_for_source_folder", return_value=True) as mock_prompt:
+        assert controller.validate_and_fix_paths(images) is True
+
+    assert images[0]["path"] == r"E:\Cap\Road2 South-North\0_000_00_022.jpg"
+    assert [i["filename"] for i in mock_prompt.call_args.args[0]] == ["0_000_00_022.jpg"]
+
+
+def test_scan_session_index_is_shared_across_viewers(controller, tmp_path):
+    """Run 2..N from one scan reuses the index instead of re-walking the tree."""
+    # The silent branch requires folder agreement, so the files live in a
+    # subfolder whose name matches the stored paths' parent folder.
+    cap = tmp_path / "cap"
+    cap.mkdir()
+    (cap / "a.jpg").write_text("x")
+    (cap / "b.jpg").write_text("x")
+    session = _with_session(controller, RecoverySession(str(tmp_path)))
+
+    import core.services.RecoverySessionService as recovery_module
+    with patch.object(
+        recovery_module, 'index_folder_by_filename',
+        wraps=recovery_module.index_folder_by_filename
+    ) as mock_index:
+        first = [{"path": r"C:\old\cap\a.jpg", "mask_path": ""}]
+        assert controller.validate_and_fix_paths(first) is True
+
+        # Second viewer from the same scan shares the session object
+        with patch.object(path_module, 'SettingsService', side_effect=_FakeSettings):
+            second_controller = PathValidationController(MagicMock())
+        second_controller.parent.recovery_session = session
+        second = [{"path": r"C:\old\cap\b.jpg", "mask_path": ""}]
+        assert second_controller.validate_and_fix_paths(second) is True
+
+    assert mock_index.call_count == 1
+    assert first[0]["path"] == str(cap / "a.jpg")
+    assert second[0]["path"] == str(cap / "b.jpg")
+
+
+def test_scan_session_user_pick_serves_the_next_run(controller, tmp_path):
+    """A folder picked at a prompt is tried silently for later runs of the scan."""
+    scan_root = tmp_path / "results_only"
+    scan_root.mkdir()
+    elsewhere = tmp_path / "on_the_nas"
+    batch = elsewhere / "nas_batch"
+    batch.mkdir(parents=True)
+    (batch / "one.jpg").write_text("x")
+    (batch / "two.jpg").write_text("x")
+    session = _with_session(controller, RecoverySession(str(scan_root)))
+
+    with patch(f"{_MODULE}.QMessageBox") as MockMsgBox, \
+            patch(f"{_MODULE}.QFileDialog") as MockFileDialog:
+        _mock_msgbox(MockMsgBox)
+        MockFileDialog.getExistingDirectory.return_value = str(elsewhere)
+        first = [{"path": r"C:\old\nas_batch\one.jpg", "mask_path": ""}]
+        assert controller.validate_and_fix_paths(first) is True
+
+    with patch.object(path_module, 'SettingsService', side_effect=_FakeSettings):
+        second_controller = PathValidationController(MagicMock())
+    second_controller.parent.recovery_session = session
+
+    second = [{"path": r"C:\old\nas_batch\two.jpg", "mask_path": ""}]
+    with patch.object(second_controller, "_prompt_for_source_folder") as mock_prompt:
+        assert second_controller.validate_and_fix_paths(second) is True
+
+    mock_prompt.assert_not_called()
+    assert second[0]["path"] == str(batch / "two.jpg")
+
+
+def test_scan_session_stale_index_entry_falls_back_to_prompt(controller, tmp_path):
+    """A file that vanished after indexing must not be persisted as found."""
+    (tmp_path / "a.jpg").write_text("x")
+    session = _with_session(controller, RecoverySession(str(tmp_path)))
+    session.get_index(str(tmp_path))  # warm the cache
+    os.remove(tmp_path / "a.jpg")
+
+    images = [{"path": r"C:\old\a.jpg", "mask_path": ""}]
+    with patch.object(controller, "_prompt_for_source_folder", return_value=True) as mock_prompt:
+        assert controller.validate_and_fix_paths(images) is True
+
+    mock_prompt.assert_called_once()
+    assert images[0]["path"] == r"C:\old\a.jpg"
+
+
+def test_non_session_attribute_on_parent_is_ignored(controller, tmp_path):
+    """Anything that is not a real RecoverySession (mocks, junk) is a no-op."""
+    controller.parent.recovery_session = "not a session"
+    images = [{"path": r"C:\old\a.jpg", "mask_path": ""}]
+    with patch.object(controller, "_prompt_for_source_folder", return_value=True) as mock_prompt:
+        assert controller.validate_and_fix_paths(images) is True
+    mock_prompt.assert_called_once()
 
 
 def test_successful_manual_recovery_remembers_the_folder(controller, tmp_path):

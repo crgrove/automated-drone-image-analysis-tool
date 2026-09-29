@@ -11,7 +11,10 @@ from core.services.waldo.WaldoMetadataService import (
     WaldoMetadataService,
     CLOCK_CORRECTED_UTC_XMP,
     CLOCK_FACE_SHIFT_XMP,
+    CLOCK_OFFSET_SECONDS_XMP,
+    CLOCK_REFINED_UTC_XMP,
     CLOCK_TIMEZONE_XMP,
+    FLIGHTLOG_SIGNATURE_XMP,
     WALDO_NAMESPACE_URI,
 )
 
@@ -228,6 +231,66 @@ def test_apply_stays_idempotent_with_refined_stamp_present(tmp_path, monkeypatch
     result = svc.apply_clock_correction([path], -12, tz_name="America/Los_Angeles")
     assert result.already_current == 1 and result.processed == 0
     assert calls == []
+
+
+def test_apply_changed_correction_blanks_stale_refinement(tmp_path, monkeypatch):
+    """Amending the clock must invalidate the flight-log refinement computed
+    on the OLD clock in the same write: refined time, offset, and the stage's
+    idempotence signature all blank, so a future log fit restamps them."""
+    path = _make_image(tmp_path)
+    written = {}
+    monkeypatch.setattr(waldo_module.MetaDataHelper, 'get_exif_data_piexif',
+                        staticmethod(lambda p: _fault_exif()))
+    monkeypatch.setattr(waldo_module.MetaDataHelper, 'add_xmp_fields',
+                        staticmethod(lambda p, fields: written.update({p: fields})))
+    monkeypatch.setattr(WaldoMetadataService, 'get_corrected_utc_stamp',
+                        staticmethod(lambda p: "2026-07-23T12:49:37+00:00"))  # old clock
+
+    svc = WaldoMetadataService(terrain_service=None)
+    result = svc.apply_clock_correction([path], -12, tz_name="America/Los_Angeles")
+
+    assert result.processed == 1 and not result.errors
+    fields = {name: value for ns, name, value in written[path]}
+    assert fields[CLOCK_CORRECTED_UTC_XMP] == "2026-07-23T13:49:37+00:00"
+    assert fields[CLOCK_REFINED_UTC_XMP] == ""
+    assert fields[CLOCK_OFFSET_SECONDS_XMP] == ""
+    assert fields[FLIGHTLOG_SIGNATURE_XMP] == ""
+
+
+def test_amendment_repro_resolved_time_follows_the_new_clock(monkeypatch):
+    """End to end (review finding 5): an image with a refined time receives a
+    one-hour amendment; resolve_capture_utc must return the NEW corrected
+    time, never the refinement computed on the old clock."""
+    from helpers.MetaDataHelper import MetaDataHelper
+    from core.services.shadow.SolarPosition import resolve_capture_utc
+
+    exif = {'Exif': {piexif.ExifIFD.DateTimeOriginal: b'2026:08:07 12:00:00'},
+            'GPS': {}}
+    xmp = {'waldo:CaptureUtcCorrected': '2026-08-07T12:00:00+00:00',
+           'waldo:CaptureUtcRefined': '2026-08-07T12:00:17+00:00',
+           'waldo:ClockOffsetSeconds': '+17.00'}
+    monkeypatch.setattr(MetaDataHelper, 'get_exif_data_piexif',
+                        staticmethod(lambda _: exif))
+    monkeypatch.setattr(MetaDataHelper, 'get_xmp_data_merged',
+                        staticmethod(lambda _: xmp))
+
+    def write_fields(path, fields):
+        for _namespace, tag, value in fields:
+            xmp['waldo:' + tag] = value
+
+    monkeypatch.setattr(MetaDataHelper, 'add_xmp_fields',
+                        staticmethod(write_fields))
+    monkeypatch.setattr(WaldoMetadataService, 'is_waldo_image',
+                        staticmethod(lambda _: 0))
+
+    svc = WaldoMetadataService(terrain_service=None)
+    result = svc.apply_clock_correction(['example.jpg'], face_shift_h=1,
+                                        fixed_offset_h=0)
+    assert result.processed == 1
+
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert utc == datetime(2026, 8, 7, 13, 0, tzinfo=timezone.utc), (utc, source, xmp)
+    assert source == 'waldo_corrected'
 
 
 def test_apply_skips_non_waldo_and_reports_missing_exif(tmp_path, monkeypatch):

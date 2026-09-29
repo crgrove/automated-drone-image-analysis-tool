@@ -12,12 +12,13 @@ from urllib.parse import quote_plus
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QDialog, QApplication
 from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QUrl, QPoint
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QCursor, QDesktopServices
 from PySide6.QtCore import QThread
 
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from core.services.image.ImageService import ImageService
 from core.services.LoggerService import LoggerService
+from helpers.LocationInfo import LocationInfo
 from helpers.TranslationMixin import TranslationMixin
 import qimage2ndarray
 
@@ -59,7 +60,86 @@ class CoordinateController(TranslationMixin):
         # Show coordinates popup
         self.show_coordinates_popup(coord_text)
 
-    def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None, tooltip=None):
+    def resolve_cursor_coords(self, x, y):
+        """Resolve an image pixel to GPS coordinates.
+
+        Args:
+            x: Pixel column in the current image.
+            y: Pixel row in the current image.
+
+        Returns:
+            tuple | None: (lat, lon, coord_text, source_tooltip) where
+            coord_text follows the PositionFormat preference, or None when the
+            position cannot be resolved (no image, no pose, out of frame).
+        """
+        try:
+            current = getattr(self.parent, 'current_image', None)
+            if current is None or current < 0 or current >= len(self.parent.images):
+                return None
+            image = self.parent.images[current]
+
+            aoi_service = self.parent.aoi_controller.get_aoi_service()
+            if aoi_service is None:
+                return None
+
+            custom_alt_ft = None
+            if (hasattr(self.parent, 'custom_agl_altitude_ft')
+                    and self.parent.custom_agl_altitude_ft
+                    and self.parent.custom_agl_altitude_ft > 0):
+                custom_alt_ft = self.parent.custom_agl_altitude_ft
+            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+
+            result = aoi_service.estimate_pixel_gps(
+                image, x, y, custom_altitude_ft=custom_alt_ft, use_terrain=use_terrain)
+            if result is None:
+                return None
+
+            position_format = getattr(self.parent, 'position_format', 'Decimal Degrees')
+            coord_text = LocationInfo.format_coordinates(
+                result.latitude, result.longitude, position_format)
+            tooltip = None
+            if result.elevation_source:
+                tooltip = self.tr("Elevation source: {source}").format(
+                    source=result.elevation_source)
+            return (result.latitude, result.longitude, coord_text, tooltip)
+        except Exception as e:
+            self.logger.error(f"Error resolving cursor coordinates at ({x}, {y}): {e}")
+            return None
+
+    def copy_cursor_coordinates(self, x, y):
+        """Copy the GPS coordinates of an image pixel to the clipboard."""
+        resolved = self.resolve_cursor_coords(x, y)
+        if resolved is None:
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"), 3000, color="#F44336")
+            return
+        _, _, coord_text, _ = resolved
+        self.copy_coords_to_clipboard(coord_text)
+
+    def show_cursor_coordinates(self, x, y, anchor_point=None):
+        """Show the coordinate-sharing popup for an image pixel.
+
+        Args:
+            x: Pixel column in the current image.
+            y: Pixel row in the current image.
+            anchor_point: Optional global QPoint for the popup; defaults to
+                the current cursor position.
+        """
+        resolved = self.resolve_cursor_coords(x, y)
+        if resolved is None:
+            self.parent.status_controller.show_toast(
+                self.tr("Coordinates unavailable"), 3000, color="#F44336")
+            return
+        lat, lon, coord_text, tooltip = resolved
+        self.show_coordinates_popup(
+            coord_text,
+            anchor_point=anchor_point or QCursor.pos(),
+            tooltip=tooltip,
+            decimal_coords=(lat, lon),
+        )
+
+    def show_coordinates_popup(self, coord_text, anchor_widget=None, anchor_point=None, tooltip=None,
+                               decimal_coords=None):
         """Show a small popup with coordinate sharing options.
 
         Args:
@@ -67,6 +147,9 @@ class CoordinateController(TranslationMixin):
             anchor_widget: Optional widget to anchor the popup to (for single-image mode)
             anchor_point: Optional QPoint in global coordinates to anchor the popup to (for gallery mode)
             tooltip: Optional tooltip/subtitle text to show (e.g., elevation source info)
+            decimal_coords: Optional (lat, lon) the share buttons should use.
+                Without it they fall back to the viewer-level coordinates
+                (image center), which is wrong for a cursor-position popup.
         """
         # Close any existing popup
         if self.current_coords_popup:
@@ -150,19 +233,19 @@ class CoordinateController(TranslationMixin):
         layout.addWidget(copy_btn)
 
         maps_btn = QPushButton(self.tr("🗺️ Open in Google Maps"))
-        maps_btn.clicked.connect(make_action_handler(self.open_in_maps))
+        maps_btn.clicked.connect(make_action_handler(self.open_in_maps, decimal_coords))
         layout.addWidget(maps_btn)
 
         earth_btn = QPushButton(self.tr("🌍 View in Google Earth"))
-        earth_btn.clicked.connect(make_action_handler(self.open_in_earth))
+        earth_btn.clicked.connect(make_action_handler(self.open_in_earth, decimal_coords))
         layout.addWidget(earth_btn)
 
         whatsapp_btn = QPushButton(self.tr("📱 Send via WhatsApp"))
-        whatsapp_btn.clicked.connect(make_action_handler(self.share_whatsapp))
+        whatsapp_btn.clicked.connect(make_action_handler(self.share_whatsapp, decimal_coords))
         layout.addWidget(whatsapp_btn)
 
         telegram_btn = QPushButton(self.tr("📨 Send via Telegram"))
-        telegram_btn.clicked.connect(make_action_handler(self.share_telegram))
+        telegram_btn.clicked.connect(make_action_handler(self.share_telegram, decimal_coords))
         layout.addWidget(telegram_btn)
 
         # Position popup near anchor point/widget or status bar
@@ -238,9 +321,14 @@ class CoordinateController(TranslationMixin):
             color="#00C853"
         )
 
-    def open_in_maps(self):
-        """Open coordinates in Google Maps."""
-        lat_lon = self.get_decimals_or_parse()
+    def open_in_maps(self, lat_lon=None):
+        """Open coordinates in Google Maps.
+
+        Args:
+            lat_lon: Optional explicit (lat, lon); defaults to the viewer's
+                current coordinates.
+        """
+        lat_lon = lat_lon or self.get_decimals_or_parse()
         if not lat_lon:
             self.parent.status_controller.show_toast(
                 self.tr("Coordinates unavailable"),
@@ -252,9 +340,14 @@ class CoordinateController(TranslationMixin):
         url = QUrl(f"https://www.google.com/maps?q={lat},{lon}")
         QDesktopServices.openUrl(url)
 
-    def open_in_earth(self):
-        """Open coordinates in Google Earth."""
-        lat_lon = self.get_decimals_or_parse()
+    def open_in_earth(self, lat_lon=None):
+        """Open coordinates in Google Earth.
+
+        Args:
+            lat_lon: Optional explicit (lat, lon); defaults to the viewer's
+                current coordinates.
+        """
+        lat_lon = lat_lon or self.get_decimals_or_parse()
         if not lat_lon:
             self.parent.status_controller.show_toast(
                 self.tr("Coordinates unavailable"),
@@ -315,9 +408,14 @@ class CoordinateController(TranslationMixin):
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(kml_path))
 
-    def share_whatsapp(self):
-        """Share coordinates via WhatsApp."""
-        lat_lon = self.get_decimals_or_parse()
+    def share_whatsapp(self, lat_lon=None):
+        """Share coordinates via WhatsApp.
+
+        Args:
+            lat_lon: Optional explicit (lat, lon); defaults to the viewer's
+                current coordinates.
+        """
+        lat_lon = lat_lon or self.get_decimals_or_parse()
         if not lat_lon:
             self.parent.status_controller.show_toast(
                 self.tr("Coordinates unavailable"),
@@ -335,9 +433,14 @@ class CoordinateController(TranslationMixin):
         wa_url = f"https://wa.me/?text={quote_plus(text)}"
         QDesktopServices.openUrl(QUrl(wa_url))
 
-    def share_telegram(self):
-        """Share coordinates via Telegram."""
-        lat_lon = self.get_decimals_or_parse()
+    def share_telegram(self, lat_lon=None):
+        """Share coordinates via Telegram.
+
+        Args:
+            lat_lon: Optional explicit (lat, lon); defaults to the viewer's
+                current coordinates.
+        """
+        lat_lon = lat_lon or self.get_decimals_or_parse()
         if not lat_lon:
             self.parent.status_controller.show_toast(
                 self.tr("Coordinates unavailable"),

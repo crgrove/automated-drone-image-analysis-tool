@@ -13,12 +13,36 @@ import pytest
 from helpers.PathHelper import (
     canonical_path,
     cross_platform_basename,
+    cross_platform_path_tail,
     find_in_index,
     index_folder_by_filename,
     is_absolute_any_platform,
     normalize_filename_key,
     path_match_key,
 )
+
+
+# --------------------------- cross_platform_path_tail ----------------------- #
+
+
+def test_path_tail_keeps_parent_and_filename():
+    assert (cross_platform_path_tail(r'C:\Missions\FlightA\DJI_0001.JPG')
+            == 'flighta/dji_0001.jpg')
+    assert (cross_platform_path_tail('/mnt/usb/Missions/FlightA/DJI_0001.JPG')
+            == 'flighta/dji_0001.jpg')
+
+
+def test_path_tail_distinguishes_parents_and_survives_roots():
+    tail_a = cross_platform_path_tail('C:/Mission/FlightA/DJI_0001.JPG')
+    tail_b = cross_platform_path_tail('C:/Mission/FlightB/DJI_0001.JPG')
+    relocated_a = cross_platform_path_tail('/media/sd/backup/FlightA/DJI_0001.JPG')
+    assert tail_a != tail_b
+    assert tail_a == relocated_a
+
+
+def test_path_tail_of_bare_filename_and_empty():
+    assert cross_platform_path_tail('DJI_0001.JPG') == 'dji_0001.jpg'
+    assert cross_platform_path_tail('') == ''
 
 
 # ------------------------------ canonical_path ----------------------------- #

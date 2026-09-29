@@ -43,11 +43,16 @@ class ZipExportThread(QThread):
 
     def run(self):
         staging_root = tempfile.mkdtemp(prefix="adiat_zip_")
-        total = len(self.images)
+        total = len(self.images) or 1
         current = 0
         try:
             # Export step-by-step to update progress
-            if self.export_mode == 'native':
+            if self.export_mode == 'results_only':
+                # Just the XML + detection masks: the emailable transfer.
+                self.progressUpdated.emit(0, total, "Collecting results files...")
+                self.controller._export_results_only(staging_root)
+                current = total
+            elif self.export_mode == 'native':
                 # Native export: copy images preserving structure; update XML
                 self.controller._export_native_prepare(self.images, staging_root)
                 for img in self.images:
@@ -121,7 +126,7 @@ class ZipExportController(TranslationMixin):
             if options_dialog.exec() != QDialog.Accepted:
                 return False
 
-            export_mode = options_dialog.get_export_mode()  # 'native' or 'augmented'
+            export_mode = options_dialog.get_export_mode()  # 'native' | 'augmented' | 'results_only'
             include_no_flagged = options_dialog.should_include_images_without_flagged_aois()
 
             # Open file dialog for ZIP export
@@ -135,36 +140,41 @@ class ZipExportController(TranslationMixin):
             if not file_name:  # User cancelled
                 return False
 
-            # Filter visible images and track original indices
-            visible_images = []
-            visible_indices = []
-            for idx, img in enumerate(images):
-                if not img.get('hidden', False):
-                    visible_images.append(img)
-                    visible_indices.append(idx)
+            if export_mode == 'results_only':
+                # The complete results file travels regardless of visibility
+                # or flags; no per-image staging happens.
+                visible_images = []
+            else:
+                # Filter visible images and track original indices
+                visible_images = []
+                visible_indices = []
+                for idx, img in enumerate(images):
+                    if not img.get('hidden', False):
+                        visible_images.append(img)
+                        visible_indices.append(idx)
 
-            # Filter by flagged AOIs if checkbox is unchecked
-            if not include_no_flagged:
-                # Get flagged AOIs from AOI controller
-                flagged_aois = {}
-                if hasattr(self.parent, 'aoi_controller') and hasattr(self.parent.aoi_controller, 'flagged_aois'):
-                    flagged_aois = self.parent.aoi_controller.flagged_aois
+                # Filter by flagged AOIs if checkbox is unchecked
+                if not include_no_flagged:
+                    # Get flagged AOIs from AOI controller
+                    flagged_aois = {}
+                    if hasattr(self.parent, 'aoi_controller') and hasattr(self.parent.aoi_controller, 'flagged_aois'):
+                        flagged_aois = self.parent.aoi_controller.flagged_aois
 
-                # Only include images that have at least one flagged AOI
-                filtered_images = []
-                for img, orig_idx in zip(visible_images, visible_indices):
-                    # Check if this image index (from original images list) has any flagged AOIs
-                    if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
-                        filtered_images.append(img)
+                    # Only include images that have at least one flagged AOI
+                    filtered_images = []
+                    for img, orig_idx in zip(visible_images, visible_indices):
+                        # Check if this image index (from original images list) has any flagged AOIs
+                        if orig_idx in flagged_aois and len(flagged_aois[orig_idx]) > 0:
+                            filtered_images.append(img)
 
-                visible_images = filtered_images
+                    visible_images = filtered_images
 
-            if not visible_images:
-                self._show_toast(self.tr("No images to export"), 3000, color="#F44336")
-                return False
+                if not visible_images:
+                    self._show_toast(self.tr("No images to export"), 3000, color="#F44336")
+                    return False
 
             # Create and show progress dialog
-            total_items = len(visible_images)
+            total_items = len(visible_images) or 1
             self.progress_dialog = ExportProgressDialog(
                 self.parent,
                 title="Generating ZIP Export",
@@ -308,6 +318,109 @@ class ZipExportController(TranslationMixin):
             # No XML service available; just copy if exists
             if xml_path and os.path.exists(xml_path):
                 shutil.copy2(xml_path, xml_dst_path)
+
+    def _export_results_only(self, staging_root):
+        """Stage just the results: the XML and the detection masks it references.
+
+        The small emailable transfer (KB-MB instead of the full imagery). The
+        recipient opens the XML wherever they unzip it; the source images are
+        relinked to their own copy through the missing-image recovery flow.
+        The whole run travels (hidden images and unflagged AOIs included).
+
+        Masks that live inside the results folder keep their relative layout.
+        A mask relinked to somewhere OUTSIDE it (path recovery legitimately
+        persists such absolute paths) is copied to a collision-safe spot under
+        ``external_masks/`` INSIDE the staging tree, and the STAGED XML's
+        reference is rewritten to that portable location - naively resolving
+        ``../..`` references used to write the copy outside staging and ship a
+        bundle whose masks were silently absent. The original XML on disk is
+        never modified; missing masks are disclosed in MISSING_MASKS.txt
+        rather than silently dropped.
+        """
+        import hashlib
+
+        xml_path = getattr(self.parent, 'xml_path', None)
+        if not xml_path or not os.path.exists(xml_path):
+            raise FileNotFoundError("No results XML to export")
+        # A fresh parse: the staged tree gets its mask references rewritten,
+        # and that mutation must never touch the viewer's live XML service.
+        xml_service = XmlService(xml_path)
+
+        results_root = os.path.realpath(os.path.join(staging_root, "ADIAT_Results"))
+        os.makedirs(results_root, exist_ok=True)
+        xml_dst_path = os.path.join(results_root, os.path.basename(xml_path))
+
+        xml_dir = os.path.dirname(os.path.abspath(xml_path))
+        rel_by_source = {}   # realpath(source mask) -> archive-relative path
+        used_rels = set()
+        missing = []
+
+        def _archive_rel(src):
+            """Collision-safe archive location for one mask source file."""
+            try:
+                rel = os.path.relpath(src, xml_dir)
+            except ValueError:
+                rel = None                      # other drive on Windows
+            if rel is not None and (os.path.isabs(rel) or rel.split(os.sep)[0] == '..'):
+                rel = None                      # outside the results folder
+            if rel is None:
+                rel = os.path.join('external_masks', os.path.basename(src))
+            rel = rel.replace('\\', '/')
+            if rel.lower() in used_rels:
+                digest = hashlib.sha1(
+                    os.path.normcase(src).encode('utf-8')).hexdigest()[:8]
+                rel = f"external_masks/{digest}_{os.path.basename(src)}"
+            # Containment is enforced, never assumed: a destination that
+            # resolves outside the staging tree falls back to a flat name.
+            dst = os.path.normcase(os.path.realpath(os.path.join(results_root, rel)))
+            if not dst.startswith(os.path.normcase(results_root) + os.sep):
+                digest = hashlib.sha1(
+                    os.path.normcase(src).encode('utf-8')).hexdigest()[:8]
+                rel = f"external_masks/{digest}_{os.path.basename(src)}"
+            return rel
+
+        root = xml_service.xml.getroot()
+        images_xml = root.find('images')
+        for image_xml in (images_xml if images_xml is not None else []):
+            mask_attr = image_xml.get('mask_path', '')
+            if not mask_attr:
+                continue
+            # Mirror XmlService.get_images: relative names resolve beside the XML.
+            src = mask_attr
+            if not os.path.isabs(src):
+                src = os.path.join(xml_dir, src)
+            src = os.path.normpath(src)
+            if not os.path.exists(src):
+                if mask_attr not in missing:
+                    missing.append(mask_attr)
+                continue
+            src_key = os.path.normcase(os.path.realpath(src))
+            rel = rel_by_source.get(src_key)
+            if rel is None:
+                rel = _archive_rel(src)
+                rel_by_source[src_key] = rel
+                used_rels.add(rel.lower())
+                dst = os.path.join(results_root, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+            if mask_attr.replace('\\', '/') != rel:
+                image_xml.set('mask_path', rel)
+
+        try:
+            xml_service.save_xml_file(xml_dst_path)
+        except Exception:
+            # The un-rewritten original still beats an absent XML.
+            shutil.copy2(xml_path, xml_dst_path)
+
+        if missing:
+            self.logger.warning(
+                f"Results-only export: {len(missing)} referenced mask(s) were "
+                f"not found and are absent from the bundle: {missing}")
+            with open(os.path.join(results_root, "MISSING_MASKS.txt"), 'w',
+                      encoding='utf-8') as fh:
+                fh.write("The following mask references in the results XML "
+                         "could not be found when this bundle was exported:\n")
+                fh.write("\n".join(missing) + "\n")
 
     def _export_augmented_one(self, img, staging_root):
         """Render and write a single augmented image preserving metadata."""

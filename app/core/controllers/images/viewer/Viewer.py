@@ -20,6 +20,13 @@ from core.controllers.images.viewer.GPSMapController import GPSMapController
 from core.controllers.images.viewer.TeamPlanningController import TeamPlanningController
 from core.controllers.images.viewer.status.StatusController import StatusController
 from core.controllers.images.viewer.CoordinateController import CoordinateController
+from core.controllers.images.viewer.ImageContextMenuController import ImageContextMenuController
+from core.services.AOIInteractionLogService import (
+    AOIInteractionLogService,
+    LOG_FILENAME as AOI_LOG_FILENAME,
+    REASON_MODE_TOGGLE,
+    REASON_WINDOW_UNFOCUSED,
+)
 from core.controllers.images.viewer.bearing.BearingRecoveryController import BearingRecoveryController
 from core.controllers.images.viewer.path.PathValidationController import PathValidationController
 from core.controllers.images.viewer.thumbnails.ThumbnailController import ThumbnailController
@@ -98,7 +105,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
     and interaction logic for navigating and analyzing drone images.
     """
 
-    def __init__(self, xml_path, position_format, temperature_unit, distance_unit, show_hidden, theme):
+    def __init__(self, xml_path, position_format, temperature_unit, distance_unit, show_hidden, theme,
+                 recovery_session=None):
         """Initializes the ADIAT Image Viewer.
 
         Args:
@@ -108,6 +116,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             distance_unit (str): The unit in which distance values will be displayed.
             show_hidden (bool): Whether or not to show hidden images by default.
             theme (str): The current active theme.
+            recovery_session (RecoverySession): Session-scoped folder candidates
+                from a results-folder scan, consumed by PathValidationController
+                to relink missing images without re-prompting. None outside a
+                scan (behavior unchanged).
         """
         super().__init__()
         self.settings_service = SettingsService()
@@ -150,6 +162,9 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         self._loading_dialog.set_status(self.tr("Reading result file..."))
 
         self.xml_path = xml_path
+        # Read by PathValidationController via self.parent during the
+        # validate/relink pass below.
+        self.recovery_session = recovery_session
         self.xml_service = XmlService(xml_path)
         self.images = self.xml_service.get_images()
         # Backfill persistent run-wide AOI numbers on legacy result files so
@@ -162,6 +177,15 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # Settings parsed early so the WALDO pre-pass and source-folder enumeration
         # can both see settings['input_dir'] (the original capture folder).
         self.settings, _ = self.xml_service.get_settings()
+
+        # Per-run review-activity log (sidecar JSONL beside the results XML).
+        # AOI numbers are guaranteed by ensure_aoi_numbers above.
+        review_meta = self.xml_service.get_review_metadata()
+        self.interaction_log = AOIInteractionLogService(
+            os.path.join(os.path.dirname(xml_path), AOI_LOG_FILENAME))
+        self.interaction_log.start_session(
+            review_id=(review_meta or {}).get('review_id'),
+            reviewer_name=self.settings_service.get_setting('ReviewerName', None))
 
         self._loading_dialog.set_status(
             self.tr("Checking image dimensions ({n} images)...").format(n=len(self.images))
@@ -405,8 +429,21 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             if hasattr(self, 'overlay'):
                 self.overlay._place_overlay()
 
+    def changeEvent(self, event):
+        """Window deactivation ends the current AOI dwell interval.
+
+        Time spent with the viewer in the background is not review time; the
+        interval ends here rather than pausing (no resume bookkeeping).
+        """
+        if (event.type() == QEvent.ActivationChange and not self.isActiveWindow()
+                and hasattr(self, 'interaction_log')):
+            self.interaction_log.end_current_interval(REASON_WINDOW_UNFOCUSED)
+        super().changeEvent(event)
+
     def closeEvent(self, event):
         """Event triggered on window close; quits all thumbnail threads."""
+        if hasattr(self, 'interaction_log'):
+            self.interaction_log.end_session()
         for thread, loader in self._threads:
             if thread.isRunning():
                 thread.requestInterruption()  # Optional: politely request interruption
@@ -695,6 +732,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
 
     def _on_gallery_mode_clicked(self):
         """Handle Gallery Mode button click - update styling and toggle gallery mode."""
+        # A mode switch ends the current dwell interval; the next selection
+        # is recorded under the new mode.
+        if hasattr(self, 'interaction_log'):
+            self.interaction_log.end_current_interval(REASON_MODE_TOGGLE)
         # Gallery and grid review are mutually exclusive single-surface modes
         if hasattr(self, 'grid_review_controller'):
             self.grid_review_controller.deactivate()
@@ -991,6 +1032,12 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         if e.key() == Qt.Key_C and e.modifiers() == Qt.NoModifier:
             # Enter AOI creation mode with 'C' key (no modifier)
             self._enter_aoi_creation_mode()
+        if e.key() == Qt.Key_C and e.modifiers() == Qt.ShiftModifier:
+            # Shift+C: show GPS coordinates of the pixel under the cursor
+            if self.last_mouse_pos.x() >= 0 and self.last_mouse_pos.y() >= 0:
+                self.coordinate_controller.show_cursor_coordinates(
+                    self.last_mouse_pos.x(), self.last_mouse_pos.y()
+                )
         if e.key() == Qt.Key_R and e.modifiers() == Qt.NoModifier:
             # Show north-oriented image with 'R' key
             self.coordinate_controller.show_north_oriented_image()
@@ -1394,6 +1441,16 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.gps_map_open = False
             self.rotate_image_open = False
 
+    def apply_control_scheme(self):
+        """Re-read the ViewerControlScheme setting and apply it to the viewer.
+
+        Pushed by the Preferences dialog when the user changes the scheme
+        while this viewer is open, so the swap takes effect immediately.
+        """
+        if getattr(self, 'main_image', None) is not None:
+            self.main_image.set_control_scheme(
+                self.settings_service.get_setting('ViewerControlScheme', 'classic'))
+
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:
@@ -1414,6 +1471,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.main_image.aspectRatioMode = Qt.KeepAspectRatio
             self.main_image.canZoom = True
             self.main_image.canPan = True
+            self.main_image.set_control_scheme(
+                self.settings_service.get_setting('ViewerControlScheme', 'classic'))
 
             # Replace the QHBoxLayout with a QSplitter for draggable divider
             self._setup_splitter_layout()
@@ -1432,6 +1491,11 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
 
             # Selected-AOI on-image decoration (number badge + real-world ruler)
             self.aoi_overlay_controller = AOIOverlayController(self)
+
+            # Right-click (without drag) context menu, both control schemes
+            self.image_context_menu_controller = ImageContextMenuController(self)
+            self.main_image.contextMenuRequested.connect(
+                self.image_context_menu_controller.show_menu)
 
             # Connect signals
             self.main_image.zoomChanged.connect(self._update_scale_bar)

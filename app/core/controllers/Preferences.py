@@ -259,6 +259,18 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
         self.themeComboBox.setCurrentText(self.parent.settings_service.get_setting('Theme'))
         self.AOIRadiusSpinBox.setValue(int(self.parent.settings_service.get_setting('AOIRadius', 15)))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
+
+        # Image viewer control scheme. Items are populated in code with stable
+        # itemData IDs so persistence never depends on translated labels.
+        if self.controlSchemeComboBox.count() == 0:
+            self.controlSchemeComboBox.addItem(
+                self.tr("ADIAT classic (drag = box zoom, right-drag = pan)"), 'classic')
+            self.controlSchemeComboBox.addItem(
+                self.tr("Standard (drag = pan, Shift+drag = box zoom)"), 'standard')
+        scheme = self.parent.settings_service.get_setting('ViewerControlScheme', 'classic') or 'classic'
+        scheme_idx = self.controlSchemeComboBox.findData(scheme)
+        if scheme_idx >= 0:
+            self.controlSchemeComboBox.setCurrentIndex(scheme_idx)
         self.temperatureComboBox.setCurrentText(self.parent.settings_service.get_setting('TemperatureUnit'))
         # Load distance unit with default of 'Feet' if not set
         # Also handle legacy 'ft'/'m' values and convert to 'Feet'/'Meters'
@@ -332,6 +344,7 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
         self.AOIRadiusSpinBox.valueChanged.connect(self._update_aoi_radius)
         self.themeComboBox.currentTextChanged.connect(self._update_theme)
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
+        self.controlSchemeComboBox.currentIndexChanged.connect(self._update_viewer_control_scheme)
         self.temperatureComboBox.currentTextChanged.connect(self._update_temperature_unit)
         self.distanceComboBox.currentTextChanged.connect(self._update_distance_unit)
         if hasattr(self, 'offlineOnlyCheckBox'):
@@ -370,6 +383,15 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
     def _update_position_format(self):
         """Updates the position format setting based on the selected combobox value."""
         self.parent.settings_service.set_setting('PositionFormat', self.positionFormatComboBox.currentText())
+
+    def _update_viewer_control_scheme(self):
+        """Persist the image-viewer control scheme and push it to an open viewer."""
+        scheme = self.controlSchemeComboBox.currentData() or 'classic'
+        self.parent.settings_service.set_setting('ViewerControlScheme', scheme)
+        # Live apply: a viewer open right now swaps controls immediately.
+        viewer = getattr(self.parent, 'viewer', None)
+        if viewer is not None and hasattr(viewer, 'apply_control_scheme'):
+            viewer.apply_control_scheme()
 
     def _update_temperature_unit(self):
         """Updates the temperature unit setting based on the selected combobox value."""

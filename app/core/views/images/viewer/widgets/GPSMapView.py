@@ -18,6 +18,14 @@ from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QWheelEvent, QMous
 WEB_MERCATOR_ORIGIN_SHIFT = 20037508.342789244
 # z-value for the POD overlay: above basemap tiles (-100), below flight path (5).
 POD_OVERLAY_Z = -50
+# z-values for the transparent tile overlays: above basemap tiles (-100),
+# below the POD raster (-50). Order = draw order (later names on top).
+OVERLAY_LAYER_Z = {
+    'roads': -95,
+    'mvum': -94,
+    'trails': -93,
+    'usfs_trails': -92,
+}
 from core.views.images.viewer.widgets.MapTileLoader import MapTileLoader
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService, _get_terrain_service
@@ -73,6 +81,16 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         # Map tiles storage - keep tiles from all zoom levels
         self.tile_items = {}  # Dictionary of (x, y, zoom): QGraphicsPixmapItem
         self.all_tile_items = {}  # Cache all tiles ever loaded
+
+        # Transparent overlay layers (roads / MVUM / trails), one loader per
+        # enabled overlay so each keeps its own source and error throttling.
+        self.active_overlays = []          # overlay names, draw order
+        self.overlay_loaders = {}          # name -> MapTileLoader
+        self.overlay_tile_items = {}       # name -> {(x, y, zoom): item}
+        # Overlay tiles whose FETCH failed (offline/network): remembered so the
+        # visible-tile sweep does not hammer a down server, never cached as
+        # imagery, and cleared when the layer is toggled so recovery retries.
+        self.overlay_failed_tiles = {}     # name -> {(x, y, zoom)}
         self.current_zoom = 15  # Default zoom level
 
         # GPS data storage
@@ -146,6 +164,97 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         self.offline_only = bool(offline_only)
         if hasattr(self, "tile_loader"):
             self.tile_loader.set_offline_only(self.offline_only)
+        for loader in getattr(self, "overlay_loaders", {}).values():
+            loader.set_offline_only(self.offline_only)
+
+    def set_overlays(self, names):
+        """Enable exactly the named transparent overlays (roads/MVUM/trails).
+
+        Args:
+            names (list): Overlay names from MapTileLoader.OVERLAY_SOURCES,
+                in any order; unknown names are ignored. Disabling an overlay
+                removes its tiles; enabling one starts loading immediately
+                (cached tiles only in Offline Only mode).
+        """
+        wanted = [n for n in names if n in OVERLAY_LAYER_Z]
+
+        # Remove tiles of overlays being switched off
+        for name in list(self.active_overlays):
+            if name not in wanted:
+                self._remove_overlay_tiles(name)
+
+        # Create loaders for newly enabled overlays
+        for name in wanted:
+            if name not in self.overlay_loaders:
+                loader = MapTileLoader(offline_only=self.offline_only)
+                loader.set_tile_source(name)
+                # Bind the overlay name so one handler serves every layer
+                loader.tile_loaded.connect(
+                    lambda x, y, z, pixmap, overlay=name:
+                    self._on_overlay_tile_loaded(overlay, x, y, z, pixmap))
+                loader.tile_placeholder.connect(
+                    lambda x, y, z, pixmap, overlay=name:
+                    self._on_overlay_tile_placeholder(overlay, x, y, z))
+                # Overlay errors surface through the base loader's channel
+                loader.tile_error.connect(self.tile_loader.tile_error)
+                self.overlay_loaders[name] = loader
+
+        self.active_overlays = wanted
+        if wanted:
+            self.load_visible_tiles()
+
+    def _remove_overlay_tiles(self, name):
+        """Drop one overlay's tile items from the scene.
+
+        Also forgets the layer's failed fetches: toggling an overlay is the
+        user's retry gesture, so misses recorded while offline or during a
+        server outage are re-requested when the layer comes back on.
+        """
+        for item in list(self.overlay_tile_items.get(name, {}).values()):
+            try:
+                if item.scene() == self.scene:
+                    self.scene.removeItem(item)
+            except RuntimeError:
+                pass
+        self.overlay_tile_items[name] = {}
+        self.overlay_failed_tiles[name] = set()
+
+    def _on_overlay_tile_placeholder(self, name, x_tile, y_tile, zoom):
+        """Record an overlay tile whose fetch failed (offline/network).
+
+        Failure placeholders are transparent, so nothing needs drawing — the
+        key is remembered only to stop the visible-tile sweep re-requesting it
+        every pan while conditions are unchanged. It is NEVER stored in the
+        imagery cache, so a later success (after a layer toggle, or a retry at
+        this zoom) replaces the blank with real data.
+        """
+        if name not in self.active_overlays:
+            return
+        self.overlay_failed_tiles.setdefault(name, set()).add(
+            (x_tile, y_tile, zoom))
+
+    def _on_overlay_tile_loaded(self, name, x_tile, y_tile, zoom, pixmap):
+        """Place a loaded overlay tile above the base tiles."""
+        if name not in self.active_overlays:
+            return
+        # A real result clears any remembered failure for this tile.
+        self.overlay_failed_tiles.get(name, set()).discard((x_tile, y_tile, zoom))
+        cache_key = (x_tile, y_tile, zoom, name)
+        if cache_key not in self.all_tile_items:
+            self.all_tile_items[cache_key] = pixmap
+
+        items = self.overlay_tile_items.setdefault(name, {})
+        key = (x_tile, y_tile, zoom)
+        if zoom != self.current_zoom or key in items:
+            return
+
+        lat, lon = self.tile_loader.tile_to_lat_lon(x_tile, y_tile, zoom)
+        scene_pos = self.lat_lon_to_scene(lat, lon)
+        tile_item = QGraphicsPixmapItem(pixmap)
+        tile_item.setPos(scene_pos)
+        tile_item.setZValue(OVERLAY_LAYER_Z[name])
+        self.scene.addItem(tile_item)
+        items[key] = tile_item
 
     def eventFilter(self, obj, event):
         """Filter events from the viewport to manage compass overlay."""
@@ -530,6 +639,9 @@ class GPSMapView(TranslationMixin, QGraphicsView):
         self.aoi_marker = None
         self.fov_box = None
         self.tile_items = {}
+        # scene.clear() dropped the overlay tile items too; the visible-tiles
+        # sweep repopulates enabled overlays from cache/network.
+        self.overlay_tile_items = {}
 
         if not self.gps_data:
             return
@@ -637,6 +749,27 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                         # Load from network/disk
                         self.tile_loader.load_tile(x, y, self.current_zoom)
 
+        # Overlay layers sweep the same tile range at their own z-levels
+        for name in self.active_overlays:
+            loader = self.overlay_loaders.get(name)
+            if loader is None:
+                continue
+            items = self.overlay_tile_items.setdefault(name, {})
+            failed = self.overlay_failed_tiles.setdefault(name, set())
+            for x in range(min_tile_x, max_tile_x + 1):
+                for y in range(min_tile_y, max_tile_y + 1):
+                    key = (x, y, self.current_zoom)
+                    if key in items or key in failed:
+                        # Known failures are not re-hammered every pan; a
+                        # layer toggle clears them (_remove_overlay_tiles).
+                        continue
+                    cache_key = (x, y, self.current_zoom, name)
+                    if cache_key in self.all_tile_items:
+                        self._on_overlay_tile_loaded(
+                            name, x, y, self.current_zoom, self.all_tile_items[cache_key])
+                    else:
+                        loader.load_tile(x, y, self.current_zoom)
+
     def on_tile_loaded(self, x_tile, y_tile, zoom, pixmap):
         """
         Handle loaded tile.
@@ -692,6 +825,13 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             self.path_item.setZValue(5)
             self.scene.addItem(self.path_item)
 
+        # Count coincident markers so tooltips can say a point is stacked
+        # (WALDO pairs share one position; only the chooser reaches them all).
+        position_counts = {}
+        for data in self.gps_data:
+            key = (round(data['latitude'], 6), round(data['longitude'], 6))
+            position_counts[key] = position_counts.get(key, 0) + 1
+
         # Draw GPS points
         for i, (data, scene_point) in enumerate(zip(self.gps_data, points)):
             # Determine point appearance
@@ -741,6 +881,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 if has_flagged:
                     tooltip += "🚩 Has flagged AOIs\n"
                 tooltip += f"AOIs: {aoi_count}\nLat: {data['latitude']:.6f}\nLon: {data['longitude']:.6f}"
+                stacked = position_counts.get(
+                    (round(data['latitude'], 6), round(data['longitude'], 6)), 1)
+                if stacked > 1:
+                    tooltip += self.tr("\n{count} images at this location").format(count=stacked)
                 point_item.setToolTip(tooltip)
 
             self.scene.addItem(point_item)
@@ -1087,6 +1231,10 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     pass
         self.tile_items = {}
 
+        # Overlay tiles are zoom-specific too - drop and let the sweep reload
+        for name in list(self.overlay_tile_items):
+            self._remove_overlay_tiles(name)
+
         # Update scene rect
         world_size = 256 * (2 ** self.current_zoom)
         self.scene.setSceneRect(-world_size / 2, -world_size / 2, world_size * 2, world_size * 2)
@@ -1192,17 +1340,17 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                     event.accept()
                     return
 
-            # Check point click
-            click_tolerance = 10
-            for item in self.point_items:
-                item_view_pos = self.mapFromScene(item.pos())
-                dx = event.pos().x() - item_view_pos.x()
-                dy = event.pos().y() - item_view_pos.y()
-                if math.sqrt(dx * dx + dy * dy) <= click_tolerance:
-                    image_index = item.data(0)
-                    if image_index is not None:
-                        self.point_clicked.emit(image_index)
-                        return
+            # Check point click. All markers within tolerance are collected,
+            # not just the first: WALDO pairs are two captures at the same
+            # instant and position, so one map point can stand for several
+            # images and first-hit-wins made the later ones unreachable.
+            hits = self._hit_test_points(event.pos())
+            if len(hits) == 1:
+                self.point_clicked.emit(hits[0]['index'])
+                return
+            if len(hits) > 1:
+                self._show_point_chooser(hits, event.globalPos())
+                return
 
         super().mousePressEvent(event)
 
@@ -1247,16 +1395,61 @@ class GPSMapView(TranslationMixin, QGraphicsView):
             self.aoi_marker.setPos(self.lat_lon_to_scene(
                 self.aoi_data['latitude'], self.aoi_data['longitude']))
 
-    def show_aoi_popup(self, global_pos):
-        """
-        Show a popup with AOI data and copy button.
+    def _hit_test_points(self, view_pos, tolerance=10):
+        """All clickable image markers within *tolerance* px of a view position.
 
         Args:
-            global_pos: Global position for the popup
-        """
-        if not self.aoi_data:
-            return
+            view_pos: Position in view (widget) coordinates.
+            tolerance (int): Hit radius in view pixels.
 
+        Returns:
+            list: gps_data dicts for the hits, nearest first; coincident
+            markers keep their gps_data (timestamp) order. Source-only dots
+            (index None) are not click targets and are excluded.
+        """
+        hits = []
+        for order, (data, item) in enumerate(zip(self.gps_data, self.point_items)):
+            if item.data(0) is None:
+                continue
+            item_view_pos = self.mapFromScene(item.pos())
+            dx = view_pos.x() - item_view_pos.x()
+            dy = view_pos.y() - item_view_pos.y()
+            distance = math.sqrt(dx * dx + dy * dy)
+            if distance <= tolerance:
+                hits.append((distance, order, data))
+        hits.sort(key=lambda hit: (hit[0], hit[1]))
+        return [data for _, _, data in hits]
+
+    def _show_point_chooser(self, entries, global_pos):
+        """Let the user pick which of several stacked images to open.
+
+        Args:
+            entries (list): gps_data dicts for the markers under the click.
+            global_pos: Global position for the menu.
+        """
+        menu = self._create_popup_menu()
+        for data in entries:
+            parts = [data['name']]
+            timestamp = data.get('timestamp')
+            if timestamp:
+                parts.append(timestamp.strftime('%H:%M:%S'))
+            parts.append(self.tr("{count} AOIs").format(count=data.get('aoi_count', 0)))
+            label = " — ".join(parts)
+            if data.get('has_flagged'):
+                label = "🚩 " + label
+            if data.get('hidden'):
+                label += self.tr(" (hidden)")
+            action = menu.addAction(label)
+            # Default argument captures this entry's viewer index; the emit
+            # follows the exact single-click path so dialog/controller
+            # handling stays unchanged.
+            action.triggered.connect(
+                lambda checked=False, idx=data['index']: self.point_clicked.emit(idx)
+            )
+        menu.exec(global_pos)
+
+    def _create_popup_menu(self):
+        """Styled QMenu shared by the AOI popup and the stacked-point chooser."""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -1274,6 +1467,19 @@ class GPSMapView(TranslationMixin, QGraphicsView):
                 background-color: #505050;
             }
         """)
+        return menu
+
+    def show_aoi_popup(self, global_pos):
+        """
+        Show a popup with AOI data and copy button.
+
+        Args:
+            global_pos: Global position for the popup
+        """
+        if not self.aoi_data:
+            return
+
+        menu = self._create_popup_menu()
 
         copy_action = menu.addAction(self.tr("Copy Data"))
         copy_action.triggered.connect(self.copy_aoi_data)

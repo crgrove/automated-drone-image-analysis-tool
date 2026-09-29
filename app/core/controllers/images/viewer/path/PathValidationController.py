@@ -10,12 +10,14 @@ import json
 from pathlib import Path
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from core.services.LoggerService import LoggerService
+from core.services.RecoverySessionService import RecoverySession
 from core.services.SettingsService import SettingsService
 from helpers.TranslationMixin import TranslationMixin
 from helpers.PathHelper import (
     cross_platform_basename,
     index_folder_by_filename,
     find_in_index,
+    is_filesystem_root,
     normalize_filename_key,
 )
 
@@ -92,6 +94,15 @@ class PathValidationController(TranslationMixin):
                     'filename': cross_platform_basename(mask_path),
                     'stored_path': mask_path,
                 })
+
+        # A run opened from a results-folder scan usually keeps its images
+        # inside the scanned tree itself; try the scan session's folders first
+        # so run 2..N from one scan never re-prompts for a folder the user
+        # already identified.
+        if missing_images:
+            missing_images = self._resolve_from_session(missing_images, 'path')
+        if missing_masks:
+            missing_masks = self._resolve_from_session(missing_masks, 'mask_path')
 
         # Folders that fixed earlier batches usually fix this one too; try
         # them silently so batch 2..N never re-prompts on the same machine
@@ -183,8 +194,7 @@ class PathValidationController(TranslationMixin):
     @staticmethod
     def _is_filesystem_root(folder):
         """True for drive/filesystem roots, which are too big to index."""
-        normalized = os.path.abspath(folder)
-        return os.path.dirname(normalized) == normalized
+        return is_filesystem_root(folder)
 
     def _load_remembered_raw(self):
         """Read the stored recovery-folder list without existence filtering.
@@ -208,6 +218,11 @@ class PathValidationController(TranslationMixin):
 
     def _remember_folder(self, folder):
         """Store a folder that just fixed a relink, plus its parent."""
+        # The scan session (when one exists) learns the pick too, so sibling
+        # runs opened from the same scan try it first with a warm index.
+        session = self._recovery_session()
+        if session is not None:
+            session.remember(folder)
         try:
             candidates = []
             normalized = os.path.abspath(folder)
@@ -228,6 +243,33 @@ class PathValidationController(TranslationMixin):
         except Exception as e:
             self.logger.warning(f"Could not remember recovery folder {folder}: {e}")
 
+    def _recovery_session(self):
+        """The scan session handed in by MainWindow, or None outside a scan.
+
+        The isinstance check keeps mocked parents (tests hand in MagicMock
+        viewers whose attribute lookups auto-create objects) from being
+        mistaken for a live session.
+        """
+        session = getattr(self.parent, 'recovery_session', None)
+        return session if isinstance(session, RecoverySession) else None
+
+    def _resolve_from_session(self, missing, path_key):
+        """Try the results-folder scan session's folders before anything else.
+
+        Args:
+            missing (list): Dicts with 'image' and 'filename' keys.
+            path_key (str): Key on the image dict to repair ('path'/'mask_path').
+
+        Returns:
+            list: The subset of ``missing`` that is still unresolved.
+        """
+        session = self._recovery_session()
+        if session is None:
+            return missing
+        return self._resolve_from_folders(
+            missing, path_key, session.candidate_folders(), session.get_index,
+            'scan-session')
+
     def _resolve_from_remembered_folders(self, missing, path_key):
         """Try previously successful folders before prompting the user.
 
@@ -238,14 +280,36 @@ class PathValidationController(TranslationMixin):
         Returns:
             list: The subset of ``missing`` that is still unresolved.
         """
+        # Route indexing through the scan session when one exists so a folder
+        # that is both remembered and session-cached is only walked once.
+        session = self._recovery_session()
+        index_for = session.get_index if session is not None else index_folder_by_filename
+        return self._resolve_from_folders(
+            missing, path_key, self._remembered_folders(), index_for,
+            'remembered')
+
+    def _resolve_from_folders(self, missing, path_key, folders, index_for, source_label):
+        """Silently resolve *missing* against *folders*, best candidate first.
+
+        Args:
+            missing (list): Dicts with 'image' and 'filename' keys.
+            path_key (str): Key on the image dict to repair ('path'/'mask_path').
+            folders (list): Candidate folders, most promising first.
+            index_for (callable): folder -> FolderIndex. Session-cached or a
+                fresh :func:`index_folder_by_filename` build.
+            source_label (str): Log wording for where the folders came from.
+
+        Returns:
+            list: The subset of ``missing`` that is still unresolved.
+        """
         remaining = list(missing)
-        for folder in self._remembered_folders():
+        for folder in folders:
             if not remaining:
                 break
             try:
-                index = index_folder_by_filename(folder)
+                index = index_for(folder)
             except Exception as e:
-                self.logger.warning(f"Could not index remembered folder {folder}: {e}")
+                self.logger.warning(f"Could not index {source_label} folder {folder}: {e}")
                 continue
 
             resolved = {}
@@ -259,7 +323,10 @@ class PathValidationController(TranslationMixin):
                 located = find_in_index(
                     item.get('stored_path') or item['filename'], index,
                     require_folder_agreement=True)
-                if located:
+                # exists(): a session-cached index can be stale (files moved
+                # mid-session), and a stale path persisted into the XML is
+                # worse than a prompt.
+                if located and os.path.exists(located):
                     resolved[id(item)] = located
                 else:
                     next_remaining.append(item)
@@ -272,7 +339,7 @@ class PathValidationController(TranslationMixin):
                 self._apply_resolved(remaining, resolved, path_key, input_dir)
                 self.logger.info(
                     f"Auto-relinked {len(resolved)} {path_key} entries via "
-                    f"remembered folder {folder}"
+                    f"{source_label} folder {folder}"
                 )
             remaining = next_remaining
         return remaining

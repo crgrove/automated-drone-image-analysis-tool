@@ -249,6 +249,41 @@ This setting affects coordinate display in the viewer, exports, and overlays.</s
        </widget>
       </item>
       <item>
+       <widget class="QWidget" name="controlSchemeWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayoutControlScheme">
+         <item>
+          <widget class="QLabel" name="controlSchemeLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Mouse controls for the results-viewer image display.</string>
+           </property>
+           <property name="text">
+            <string>Image Viewer Controls:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="controlSchemeComboBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>ADIAT classic: left-drag draws a zoom box, right-drag pans.
+Standard: left-drag pans, Shift+left-drag draws a zoom box, right-click opens a menu.
+The mouse wheel zooms and middle-click toggles the magnifier in both schemes.</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
        <widget class="QWidget" name="TemperatureWidget" native="true">
         <layout class="QHBoxLayout" name="horizontalLayout_5">
          <item>

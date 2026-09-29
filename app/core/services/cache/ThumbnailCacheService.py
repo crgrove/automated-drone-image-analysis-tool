@@ -26,6 +26,7 @@ import qimage2ndarray
 
 from core.services.LoggerService import LoggerService
 from core.services.cache.ThumbnailBlobStore import ThumbnailBlobStore
+from helpers.PathHelper import cross_platform_path_tail
 
 
 class ThumbnailCacheService:
@@ -81,9 +82,18 @@ class ThumbnailCacheService:
         """
         Generate a unique cache key for a thumbnail.
 
-        Uses only the filename and AOI coordinates to make caches fully portable
-        across machines and time. Modification time is NOT included so cached
-        thumbnails remain valid when files are copied/moved.
+        Keyed by the image's path tail (parent folder + filename) and the AOI
+        coordinates. The bare filename was not enough: drone filenames repeat
+        across flights and sorties (FlightA/DJI_0001.JPG vs
+        FlightB/DJI_0001.JPG), and two same-named images with one AOI position
+        shared a single cache slot - a reviewer then saw a crop belonging to a
+        different photograph. The tail still strips the machine-specific root,
+        so caches shipped inside a results folder stay portable, and mtime
+        stays excluded for the same reason (copying changes it).
+
+        The 'v2' prefix versions the formula: every ambiguous old-format entry
+        misses and regenerates rather than ever being served for the wrong
+        image.
 
         Args:
             image_path: Path to the source image
@@ -92,17 +102,12 @@ class ThumbnailCacheService:
         Returns:
             Unique hash key for this thumbnail
         """
-        # Use only the filename to make cache portable across machines
-        # Drone images have unique filenames, so this is safe
-        filename = os.path.basename(image_path)
+        tail = cross_platform_path_tail(image_path)
 
         center = aoi_data.get('center', (0, 0))
         radius = aoi_data.get('radius', 50)
 
-        # Create unique identifier using filename and AOI coordinates only
-        # NOTE: mtime is intentionally NOT included to allow caches to work
-        # when files are copied between machines (which changes mtime)
-        identifier = f"{filename}:{center[0]}:{center[1]}:{radius}"
+        identifier = f"v2:{tail}:{center[0]}:{center[1]}:{radius}"
 
         # Generate hash
         return hashlib.md5(identifier.encode()).hexdigest()

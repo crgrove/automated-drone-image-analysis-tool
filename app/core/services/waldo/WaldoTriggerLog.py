@@ -134,7 +134,9 @@ class WaldoTriggerLogService:
     # Discovery
     # ------------------------------------------------------------------
 
-    def discover(self, records: Sequence) -> Optional[Tuple[str, List[TriggerPoint]]]:
+    def discover(self, records: Sequence,
+                 extra_candidates: Optional[Sequence[str]] = None
+                 ) -> Optional[Tuple[str, List[TriggerPoint]]]:
         """Find the trigger KML for a set of WaldoImageRecords, if any.
 
         Searches the image directories and up to TRIGGER_SEARCH_LEVELS parent
@@ -142,6 +144,13 @@ class WaldoTriggerLogService:
         of records it matches BY NAME AND GPS POSITION. Position matching is
         essential: every flight numbers its lanes from zero, so a sibling
         flight's log can contain the same trigger names at different places.
+
+        Args:
+            records: WaldoImageRecords with name/path/lat/lon populated.
+            extra_candidates: Additional KML paths to score after the local
+                ones (e.g. every ``*.kml`` under a results-folder scan tree).
+                Wrong-flight files are harmless here - scoring by name+GPS
+                position rejects them - so callers can pass everything found.
 
         Returns (kml_path, triggers) for the best candidate above
         TRIGGER_MIN_MATCH_FRACTION, or None.
@@ -163,6 +172,12 @@ class WaldoTriggerLogService:
                 if parent == d:
                     break
                 d = parent
+
+        # Local candidates first: on a tied score the file beside the images
+        # wins over one found elsewhere in a scanned tree.
+        for path in (extra_candidates or []):
+            if path and path.lower().endswith('.kml') and os.path.isfile(path):
+                candidates.append(path)
 
         best: Optional[Tuple[str, List[TriggerPoint]]] = None
         best_score = 0.0

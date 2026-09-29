@@ -12,6 +12,13 @@ from PySide6.QtWidgets import QApplication
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'app')))
 
+# Mirror app startup (app/__main__.py): clear PROJ/GDAL data env vars left by
+# other GIS installs (VTP, old QGIS). rasterio-backed fixtures fail under a
+# PROJ4-era PROJ_LIB exactly like the app did ("Cannot find proj.db"), so the
+# suite must run with the same sanitized environment the app runs with.
+from helpers.GeoDataEnvHelper import sanitize_geo_data_env  # noqa: E402
+sanitize_geo_data_env()
+
 
 # Throwaway location for any QSettings a test needs to write to.
 #
