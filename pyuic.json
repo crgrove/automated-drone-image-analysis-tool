@@ -97,6 +97,14 @@
       "app/algorithms/images/MRMap/views"
     ],
     [
+      "resources/views/algorithms/RectilinearShape.ui",
+      "app/algorithms/images/RectilinearShape/views"
+    ],
+    [
+      "resources/views/algorithms/RectilinearShapeWizard.ui",
+      "app/algorithms/images/RectilinearShape/views"
+    ],
+    [
       "resources/views/algorithms/ColorRangeWizard.ui",
       "app/algorithms/images/ColorRange/views"
     ],
