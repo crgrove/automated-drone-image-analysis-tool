@@ -765,94 +765,94 @@ This may be due to missing image metadata (GPS, altitude, or camera info).</tran
 <context>
     <name>AOISimilarityController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="156"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="154"/>
         <source>No AOI Selected</source>
         <translation>No AOI Selected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="157"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="155"/>
         <source>Please select an AOI first by clicking on it in the thumbnail panel.</source>
         <translation>Please select an AOI first by clicking on it in the thumbnail panel.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="174"/>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="326"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="172"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="324"/>
         <source>Similarity Search Error</source>
         <translation>Similarity Search Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="175"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="173"/>
         <source>An error occurred while starting the similarity search:
 {error}</source>
         <translation>An error occurred while starting the similarity search:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="186"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="184"/>
         <source>Analyzing AOIs for visual similarity...</source>
         <translation>Analyzing AOIs for visual similarity...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="187"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="185"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="191"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="189"/>
         <source>Find Similar AOIs</source>
         <translation>Find Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="248"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="246"/>
         <source>Analyzing AOI {done} of {total}...</source>
         <translation>Analyzing AOI {done} of {total}...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="293"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="291"/>
         <source>No Similar AOIs</source>
         <translation>No Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="294"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="292"/>
         <source>No other AOIs could be analyzed for similarity.</source>
         <translation>No other AOIs could be analyzed for similarity.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="327"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="325"/>
         <source>The similarity search could not be completed:
 {error}</source>
         <translation>The similarity search could not be completed:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="433"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="431"/>
         <source>Display Error</source>
         <translation>Display Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="434"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="432"/>
         <source>An error occurred while displaying results:
 {error}</source>
         <translation>An error occurred while displaying results:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="486"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="484"/>
         <source>Flagged {count} AOI(s)</source>
         <translation>Flagged {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="489"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="487"/>
         <source>Removed flag from {count} AOI(s)</source>
         <translation>Removed flag from {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="521"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="519"/>
         <source>Comment saved on {count} AOI(s)</source>
         <translation>Comment saved on {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="524"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="522"/>
         <source>Comment cleared on {count} AOI(s)</source>
         <translation>Comment cleared on {count} AOI(s)</translation>
     </message>
@@ -1358,47 +1358,47 @@ Each corner handle is colour-matched to a corner of the drone photo (the small c
         <translation>Processing {count} files</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="215"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="217"/>
         <source>Skipping {file} :: File is not an image</source>
         <translation>Skipping {file} :: File is not an image</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="220"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="222"/>
         <source>All {count} images queued, processing started...</source>
         <translation>All {count} images queued, processing started...</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="278"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="280"/>
         <source>{images} images with {aois} areas of interest identified</source>
         <translation>{images} images with {aois} areas of interest identified</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="284"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="286"/>
         <source>Total Processing Time: {seconds} seconds</source>
         <translation>Total Processing Time: {seconds} seconds</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="287"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="289"/>
         <source>Total Images Processed: {count}</source>
         <translation>Total Images Processed: {count}</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="510"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="512"/>
         <source>Unable to process {file} :: {error} ({percent}%)</source>
         <translation>Unable to process {file} :: {error} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="533"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="539"/>
         <source>{count} areas of interest identified in {file} ({percent}%)</source>
         <translation>{count} areas of interest identified in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="550"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="556"/>
         <source>No areas of interest identified in {file} ({percent}%)</source>
         <translation>No areas of interest identified in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="632"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="638"/>
         <source>--- Cancelling Image Processing ---</source>
         <translation>--- Cancelling Image Processing ---</translation>
     </message>
@@ -12109,6 +12109,416 @@ Aggressive</translation>
         <location filename="../resources/views/streaming/RecordingsDialog.ui" line="82"/>
         <source>Cancel</source>
         <translation type="unfinished">Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShape</name>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="14"/>
+        <source>Form</source>
+        <translation type="unfinished">Form</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="35"/>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="52"/>
+        <source>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="40"/>
+        <source>Target Type:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="58"/>
+        <source>Suitcase (any orientation)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="63"/>
+        <source>Suitcase (lying flat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="68"/>
+        <source>Cooler or box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="73"/>
+        <source>Small tent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="78"/>
+        <source>Custom size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="107"/>
+        <source>Expected length of the longer side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="110"/>
+        <source>Long Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="122"/>
+        <source>Shortest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="149"/>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="230"/>
+        <source>to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="161"/>
+        <source>Longest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="188"/>
+        <source>Expected length of the shorter side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="191"/>
+        <source>Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="203"/>
+        <source>Shortest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="242"/>
+        <source>Longest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="269"/>
+        <source>Min Confidence:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="281"/>
+        <source>Only shapes scoring at least this confidence (0-100) become AOIs.
+Raise if rock fields or talus produce many hits; lower to see weaker candidates.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="309"/>
+        <source>Max Per Image:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="321"/>
+        <source>At most this many AOIs are kept per image, highest confidence first.
+Protects reviewers from floods of hits in rocky or built-up terrain.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="343"/>
+        <source>Size Tolerance:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="355"/>
+        <source>How far a shape may fall outside the size range before its score starts to drop.
+Raise when altitude data is uncertain or the terrain is steep.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="359"/>
+        <source>%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="380"/>
+        <source>Angle Tolerance:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="392"/>
+        <source>How far from a right angle (or from parallel) two edges may be and still form a rectangle.
+Raise for soft or sagging targets such as tents; lower to reject more natural clutter.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="396"/>
+        <source>°</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="423"/>
+        <source>Edge Contrast:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="435"/>
+        <source>Minimum brightness step across an edge (0-255 scale).
+Raise if grass, gravel or shadows produce many weak edges; lower for faded or dusty targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="463"/>
+        <source>Edge Support:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="475"/>
+        <source>Fraction of a candidate&apos;s outline that must lie on a real edge.
+Lower for partly hidden or blurred targets; raise if rock fractures produce many hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="503"/>
+        <source>Min Boxiness:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="515"/>
+        <source>Threshold for candidates found from edge orientation alone, used when blur or low contrast
+breaks the edges up. Raise if textured ground produces spurious hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="543"/>
+        <source>Min Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="555"/>
+        <source>Smallest target size, in processing pixels, worth searching for. Images where the target
+would be smaller are skipped and logged - raise the processing resolution or fly lower.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="559"/>
+        <source> px</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="580"/>
+        <source>Fallback GSD:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="592"/>
+        <source>Ground sample distance (cm per pixel at full resolution) to assume when an image has no usable
+altitude or camera metadata. Leave at None to report such images as errors instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="596"/>
+        <source> cm/px</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="599"/>
+        <source>None</source>
+        <translation type="unfinished">None</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="626"/>
+        <source>Score candidates on how strongly two perpendicular edge directions dominate the area,
+and use that to find targets whose edges are too broken up to trace.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="630"/>
+        <source>Use Boxiness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="645"/>
+        <source>Save an overlay per image (edges, candidates, boxiness heatmap) to a rectilinear_debug folder
+in the output folder. Useful for tuning in new terrain; slows processing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="649"/>
+        <source>Write Debug Images</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeController</name>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="63"/>
+        <source> in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="63"/>
+        <source> cm</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="138"/>
+        <source>The minimum long side must not be larger than the maximum long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="140"/>
+        <source>The minimum short side must not be larger than the maximum short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="142"/>
+        <source>The short side range must not exceed the long side range.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeWizard</name>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="29"/>
+        <source>What kind of object are you looking for?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="46"/>
+        <source>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="52"/>
+        <source>Suitcase (any orientation)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="57"/>
+        <source>Suitcase (lying flat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="62"/>
+        <source>Cooler or box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="67"/>
+        <source>Small tent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="72"/>
+        <source>Custom size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="101"/>
+        <source>Detection uses the object&apos;s size and straight edges, not its colour. Sizes are as seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="119"/>
+        <source>Expected length of the longer side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="122"/>
+        <source>Long Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="134"/>
+        <source>Shortest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="161"/>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="242"/>
+        <source>to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="173"/>
+        <source>Longest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="200"/>
+        <source>Expected length of the shorter side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="203"/>
+        <source>Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="215"/>
+        <source>Shortest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="254"/>
+        <source>Longest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="306"/>
+        <source>How many candidates should ADIAT show?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="319"/>
+        <source>Note: A higher setting shows weaker candidates too, which finds more targets but also more rocks, logs and debris.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeWizardController</name>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>Low</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>Medium</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>High</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="71"/>
+        <source> in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="71"/>
+        <source> cm</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="130"/>
+        <source>The minimum long side must not be larger than the maximum long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="132"/>
+        <source>The minimum short side must not be larger than the maximum short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="134"/>
+        <source>The short side range must not exceed the long side range.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
