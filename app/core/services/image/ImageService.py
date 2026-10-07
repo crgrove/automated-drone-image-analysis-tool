@@ -592,7 +592,7 @@ class ImageService:
         return math.degrees(hfov)
 
     def get_working_altitude_m(self, use_terrain=True, custom_altitude_ft=None,
-                               offline_only=False):
+                               offline_only=False, frame_size=None):
         """The altitude image geometry should be computed with, in metres.
 
         The single place this decision is made, so GSD, ground distances and
@@ -614,6 +614,11 @@ class ImageService:
             offline_only (bool): Use cached elevation only. A caller that
                 must not block passes True and accepts ATO until terrain
                 acquisition has stocked the area.
+            frame_size (tuple, optional): (width, height) of the full-resolution
+                frame, used to locate the centre pixel instead of
+                ``img_array``. Analysis workers hold a downscaled array, whose
+                centre would project the wrong ground point, and must not
+                decode the full frame a second time just to learn its size.
 
         Returns:
             float or None: Altitude in metres, or None when the image has
@@ -632,9 +637,12 @@ class ImageService:
             # consulted and the reported figure is all there is.
             return reported
         try:
-            if self.img_array is None:
+            if frame_size is not None:
+                width, height = frame_size
+            elif self.img_array is None:
                 return reported
-            height, width = self.img_array.shape[:2]
+            else:
+                height, width = self.img_array.shape[:2]
             # The iteration projects with `base`, an ATO-altitude service, so
             # it cannot re-enter this method. Sampled where the camera is
             # pointed - the same value the altitude readout shows.
@@ -651,7 +659,7 @@ class ImageService:
         return effective_agl_m
 
     def get_gsd_service(self, custom_altitude_ft=None, use_terrain=True,
-                        offline_only=False):
+                        offline_only=False, frame_size=None):
         """Return a GSDService for this image, at the best altitude available.
 
         Ground sample distance scales with height above the ground being
@@ -663,13 +671,15 @@ class ImageService:
             custom_altitude_ft (float, optional): Operator override, feet.
             use_terrain (bool): Honor the DEM.
             offline_only (bool): Use cached elevation only.
+            frame_size (tuple, optional): Full-resolution (width, height); see
+                :meth:`get_working_altitude_m`.
 
         Returns:
             GSDService or None: None when intrinsics or altitude are missing.
         """
         altitude_m = self.get_working_altitude_m(
             use_terrain=use_terrain, custom_altitude_ft=custom_altitude_ft,
-            offline_only=offline_only)
+            offline_only=offline_only, frame_size=frame_size)
         return self._build_gsd_service(altitude_m=altitude_m)
 
     def _build_gsd_service(self, custom_altitude_ft=None, altitude_m=None):
