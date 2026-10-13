@@ -15,7 +15,10 @@ reviewer input:
   separation (in SAR, two people relocating a find differently is itself
   information);
 - an image hidden by one reviewer stays visible if any reviewer kept it;
-- reviewer-created AOIs appear once, attributed to their creator.
+- reviewer-created AOIs appear once, attributed to their creator;
+- a duplicate mark (another sighting of an object reported at a primary
+  AOI) is kept only when no reviewer flagged the AOI itself: a flag is never
+  hidden behind someone else's duplicate link.
 
 Everything merged lives only in the report's in-memory dicts - no results
 XML is ever rewritten, so there is no format-compatibility exposure.
@@ -24,6 +27,7 @@ XML is ever rewritten, so there is no format-compatibility exposure.
 import hashlib
 import os
 
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
 from helpers.LocationInfo import LocationInfo
@@ -284,7 +288,8 @@ class ReviewMergeService:
                 slot = find_slot(aoi, copy_idx)
                 if slot is None:
                     slot = {'aoi': dict(aoi), 'flagged_by': [], 'comments': [],
-                            'moved': [], 'created_by': None, 'copies': set()}
+                            'moved': [], 'created_by': None, 'copies': set(),
+                            'duplicate_of': []}
                     if aoi.get('user_created', False):
                         slot['created_by'] = reviewer
                     merged.append(slot)
@@ -298,6 +303,9 @@ class ReviewMergeService:
                         and aoi.get('user_longitude') is not None):
                     slot['moved'].append(
                         (reviewer, aoi['user_latitude'], aoi['user_longitude']))
+                duplicate_of = AOIDuplicateService.get_duplicate_of(aoi)
+                if duplicate_of is not None:
+                    slot['duplicate_of'].append(duplicate_of)
 
         return [self._finalize_aoi(slot, review_count) for slot in merged]
 
@@ -305,6 +313,15 @@ class ReviewMergeService:
         """Turn an accumulator into the report-ready merged AOI dict."""
         aoi = slot['aoi']
         aoi['flagged'] = bool(slot['flagged_by'])
+
+        # First reviewer's duplicate link, unless anyone flagged the AOI itself.
+        # Run-wide numbers are shared by every copy of a run, so the link means
+        # the same AOI in the merge (reviewer-created AOIs number locally, so a
+        # link to one of those can name another reviewer's AOI - a rare case
+        # that can only mislabel a sighting, never hide a flag).
+        aoi.pop('duplicate_of', None)
+        if slot['duplicate_of'] and not slot['flagged_by']:
+            aoi['duplicate_of'] = slot['duplicate_of'][0]
 
         if slot['comments']:
             aoi['user_comment'] = " — ".join(

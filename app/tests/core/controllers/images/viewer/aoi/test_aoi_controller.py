@@ -848,3 +848,185 @@ def test_deselect_ends_the_open_interval(controller):
 
     log.record_selection.assert_not_called()
     log.end_current_interval.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Duplicate marking (an AOI is flagged, a duplicate, or neither)
+# ---------------------------------------------------------------------------
+
+def _duplicate_parent():
+    """Two images of numbered AOIs with XML elements; #1 is flagged."""
+    import xml.etree.ElementTree as ET
+    parent = _mock_parent(images=[
+        {"areas_of_interest": [
+            _aoi(center=(10, 10), number=1, flagged=True, xml=ET.Element("areas_of_interest")),
+            _aoi(center=(20, 20), number=2, xml=ET.Element("areas_of_interest")),
+        ]},
+        {"areas_of_interest": [
+            _aoi(center=(30, 30), number=3, flagged=True, xml=ET.Element("areas_of_interest")),
+        ]},
+    ])
+    parent.xml_path = "results.xml"
+    parent.xml_service = MagicMock()
+    parent.gallery_controller = MagicMock()
+    parent.gps_map_controller = None
+    return parent
+
+
+@pytest.fixture
+def dup_controller():
+    with patch("core.controllers.images.viewer.aoi.AOIController.AOIUIComponent"):
+        from core.controllers.images.viewer.aoi.AOIController import AOIController
+        controller = AOIController(_duplicate_parent())
+        controller.initialize_from_xml(controller.parent.images)
+        return controller
+
+
+def test_set_aoi_duplicates_bulk_links_unflags_and_saves_once(dup_controller):
+    change = dup_controller.set_aoi_duplicates_bulk([(0, 1), (1, 0)], (0, 0))
+
+    assert change.primary == (0, 0)
+    assert change.count == 2
+    images = dup_controller.parent.images
+    duplicate = images[1]["areas_of_interest"][0]
+    assert duplicate["duplicate_of"] == 1
+    assert duplicate["flagged"] is False
+    assert duplicate["xml"].get("duplicate_of") == "1"
+    assert duplicate["xml"].get("flagged") == "False"
+    assert images[0]["areas_of_interest"][1]["xml"].get("duplicate_of") == "1"
+    # #3 left the flagged set (exports iterate it), #1 stays
+    assert dup_controller.flagged_aois == {0: {0}, 1: set()}
+    dup_controller.parent.xml_service.save_xml_file.assert_called_once_with("results.xml")
+    dup_controller.parent.gallery_controller.refresh_review_state.assert_called_once()
+    dup_controller.ui_component.refresh_aoi_display.assert_called_once()
+
+
+def test_set_aoi_duplicates_bulk_nothing_changed_does_not_save(dup_controller):
+    change = dup_controller.set_aoi_duplicates_bulk([(0, 0), (9, 9)], (0, 0))
+
+    assert change.count == 0
+    dup_controller.parent.xml_service.save_xml_file.assert_not_called()
+
+
+def test_clear_aoi_duplicates_bulk_removes_the_attribute(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (0, 0))
+    dup_controller.parent.xml_service.reset_mock()
+
+    change = dup_controller.clear_aoi_duplicates_bulk([(0, 1)])
+
+    aoi = dup_controller.parent.images[0]["areas_of_interest"][1]
+    assert change.count == 1
+    assert "duplicate_of" not in aoi
+    assert "duplicate_of" not in aoi["xml"].attrib
+    dup_controller.parent.xml_service.save_xml_file.assert_called_once()
+
+
+def test_unmark_duplicate_only_acts_on_duplicates(dup_controller):
+    assert dup_controller.unmark_duplicate(0, 1) is False
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (0, 0))
+
+    assert dup_controller.unmark_duplicate(0, 1) is True
+
+    assert "duplicate_of" not in dup_controller.parent.images[0]["areas_of_interest"][1]
+    toast = dup_controller.parent.status_controller.show_toast.call_args[0][0]
+    assert "#2" in toast and "#1" in toast
+
+
+def test_flag_toggle_on_a_duplicate_removes_the_mark_without_flagging(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (0, 0))
+    dup_controller.parent.current_image = 0
+
+    dup_controller.toggle_aoi_flag_by_index(1)
+
+    aoi = dup_controller.parent.images[0]["areas_of_interest"][1]
+    assert "duplicate_of" not in aoi
+    assert aoi.get("flagged", False) is False
+    assert 1 not in dup_controller.flagged_aois[0]
+
+
+def test_flagging_drops_a_stale_duplicate_link(dup_controller):
+    aoi = dup_controller.parent.images[0]["areas_of_interest"][1]
+    aoi["duplicate_of"] = 99          # primary no longer exists
+    aoi["xml"].set("duplicate_of", "99")
+
+    dup_controller.save_flagged_aoi_to_xml(0, 1, True)
+
+    assert aoi["flagged"] is True
+    assert "duplicate_of" not in aoi
+    assert "duplicate_of" not in aoi["xml"].attrib
+
+
+def test_bulk_flag_replaces_a_duplicate_mark(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(1, 0)], (0, 0))
+
+    dup_controller.set_aoi_flags_bulk([(1, 0)], True)
+
+    aoi = dup_controller.parent.images[1]["areas_of_interest"][0]
+    assert aoi["flagged"] is True
+    assert "duplicate_of" not in aoi
+    assert "duplicate_of" not in aoi["xml"].attrib
+
+
+def test_flagged_only_filter_keeps_duplicates(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (1, 0))
+    dup_controller.filter_flagged_only = True
+    aois = list(enumerate(dup_controller.parent.images[0]["areas_of_interest"]))
+
+    filtered = dup_controller.filter_aois_with_indices(aois, 0)
+
+    assert [index for index, _ in filtered] == [0, 1]
+
+
+def test_flagged_only_filter_drops_orphaned_duplicate_links(dup_controller):
+    dup_controller.parent.images[0]["areas_of_interest"][1]["duplicate_of"] = 99
+    dup_controller.filter_flagged_only = True
+    aois = list(enumerate(dup_controller.parent.images[0]["areas_of_interest"]))
+
+    assert [index for index, _ in dup_controller.filter_aois_with_indices(aois, 0)] == [0]
+
+
+def test_context_menu_mark_as_duplicate_triggers_controller(dup_controller):
+    actions = _open_context_menu(dup_controller, aoi_index=1, image_idx=0)
+
+    action = actions["Mark as Duplicate..."]
+    action.setEnabled.assert_called_once_with(True)
+    action.triggered.connect.call_args[0][0]()
+    dup_controller.parent.similarity_controller.mark_duplicate_for_selected.assert_called_once_with(
+        image_idx=0, aoi_idx=1)
+
+
+def test_context_menu_offers_unmark_on_a_duplicate(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (0, 0))
+
+    actions = _open_context_menu(dup_controller, aoi_index=1, image_idx=None)
+
+    assert "Mark as Duplicate..." not in actions
+    actions["Not a Duplicate of AOI #1"].triggered.connect.call_args[0][0]()
+    assert "duplicate_of" not in dup_controller.parent.images[0]["areas_of_interest"][1]
+
+
+def test_context_menu_mark_as_duplicate_disabled_without_aoi(controller):
+    actions = _open_context_menu(controller, aoi_index=None, image_idx=None)
+
+    actions["Mark as Duplicate..."].setEnabled.assert_called_once_with(False)
+
+
+def test_deleting_a_primary_releases_its_duplicates(dup_controller):
+    import xml.etree.ElementTree as ET
+    from PySide6.QtWidgets import QMessageBox
+    parent = dup_controller.parent
+    image_xml = ET.Element("image")
+    custom = _aoi(center=(40, 40), number=4, user_created=True, xml=ET.SubElement(image_xml, "areas_of_interest"))
+    parent.images[1]["areas_of_interest"].append(custom)
+    parent.images[1]["xml"] = image_xml
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (1, 1))
+    parent.current_image = 1
+
+    with patch("core.controllers.images.viewer.aoi.AOIController.QMessageBox.question",
+               return_value=QMessageBox.Yes):
+        dup_controller.delete_aoi(1)
+
+    released = parent.images[0]["areas_of_interest"][1]
+    assert "duplicate_of" not in released
+    assert "duplicate_of" not in released["xml"].attrib
+    assert len(parent.images[1]["areas_of_interest"]) == 1

@@ -21,6 +21,7 @@ from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
 
+from core.services import AOIDuplicateService
 from core.services.AOIInteractionLogService import REASON_DESELECT
 from core.services.LoggerService import LoggerService
 from core.services.image.MaskFilterService import MaskFilterService
@@ -534,10 +535,13 @@ class AOIController(TranslationMixin):
             if 'areas_of_interest' in image and 0 <= aoi_index < len(image['areas_of_interest']):
                 aoi = image['areas_of_interest'][aoi_index]
                 aoi['flagged'] = is_flagged
+                if is_flagged:
+                    # Flagged and duplicate are exclusive: a flagged AOI is reported itself
+                    aoi.pop('duplicate_of', None)
 
                 # Update the XML element if it exists
                 if 'xml' in aoi and aoi['xml'] is not None:
-                    aoi['xml'].set('flagged', str(is_flagged))
+                    self._sync_review_state_to_xml(aoi)
                     # Save the XML file using the xml_service method
                     if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
                         try:
@@ -597,8 +601,9 @@ class AOIController(TranslationMixin):
             if aoi is None:
                 continue
             aoi['flagged'] = flagged
-            if aoi.get('xml') is not None:
-                aoi['xml'].set('flagged', str(flagged))
+            # An explicit flag/unflag decision replaces a duplicate mark
+            aoi.pop('duplicate_of', None)
+            self._sync_review_state_to_xml(aoi)
 
             flagged_set = self.flagged_aois.setdefault(image_index, set())
             if flagged:
@@ -642,6 +647,116 @@ class AOIController(TranslationMixin):
         if touched_images:
             self._save_xml_and_refresh_bulk(touched_images)
         return applied
+
+    def set_aoi_duplicates_bulk(self, items, primary):
+        """Mark AOIs as duplicates of a primary AOI with a single XML save.
+
+        See AOIDuplicateService.mark_duplicates for the linking rules (a
+        duplicate's own flag is cleared; links stay one level deep).
+
+        Args:
+            items: Iterable of (image_index, aoi_index) pairs to mark.
+            primary: (image_index, aoi_index) of the AOI they duplicate.
+
+        Returns:
+            AOIDuplicateService.DuplicateChange: ``primary`` is the AOI actually
+                linked to (None if unusable) and ``count`` how many were marked.
+        """
+        change = AOIDuplicateService.mark_duplicates(self.parent.images, items, primary)
+        self._apply_review_state_change(change.touched)
+        return change
+
+    def clear_aoi_duplicates_bulk(self, items):
+        """Remove the duplicate mark from AOIs with a single XML save.
+
+        Returns:
+            AOIDuplicateService.DuplicateChange
+        """
+        change = AOIDuplicateService.clear_duplicates(self.parent.images, items)
+        self._apply_review_state_change(change.touched)
+        return change
+
+    def unmark_duplicate(self, image_index, aoi_index):
+        """Remove the duplicate mark from one AOI if it has one.
+
+        The flag toggles call this first: on a duplicate the flag shows in the
+        duplicate colour, and toggling it switches the duplicate mark off rather
+        than flagging the AOI on top of it.
+
+        Returns:
+            bool: True if the AOI was a duplicate (and no longer is).
+        """
+        aoi = self._get_aoi_safe(image_index, aoi_index)
+        if aoi is None or not AOIDuplicateService.is_duplicate(self.parent.images, aoi):
+            return False
+        primary_number = AOIDuplicateService.get_duplicate_of(aoi)
+        self.clear_aoi_duplicates_bulk([(image_index, aoi_index)])
+        if hasattr(self.parent, 'status_controller'):
+            self.parent.status_controller.show_toast(
+                self.tr("AOI #{number} is no longer a duplicate of AOI #{primary}").format(
+                    number=aoi.get('number'), primary=primary_number),
+                2500, color="#808080")
+        return True
+
+    def _sync_review_state_to_xml(self, aoi):
+        """Write an AOI's flag and duplicate link to its XML element (no save)."""
+        if aoi is None or aoi.get('xml') is None:
+            return
+        xml_element = aoi['xml']
+        xml_element.set('flagged', str(bool(aoi.get('flagged', False))))
+        duplicate_of = AOIDuplicateService.get_duplicate_of(aoi)
+        if duplicate_of is not None:
+            xml_element.set('duplicate_of', str(duplicate_of))
+        elif 'duplicate_of' in xml_element.attrib:
+            del xml_element.attrib['duplicate_of']
+
+    def _apply_review_state_change(self, refs):
+        """Persist flag/duplicate changes on *refs* with one save and refresh the views."""
+        touched_images = set()
+        for image_index, aoi_index in refs:
+            aoi = self._get_aoi_safe(image_index, aoi_index)
+            if aoi is None:
+                continue
+            self._sync_review_state_to_xml(aoi)
+            flagged_set = self.flagged_aois.setdefault(image_index, set())
+            if aoi.get('flagged', False):
+                flagged_set.add(aoi_index)
+            else:
+                flagged_set.discard(aoi_index)
+            touched_images.add(image_index)
+
+        if not touched_images:
+            return
+
+        if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+            try:
+                self.parent.xml_service.save_xml_file(self.parent.xml_path)
+            except Exception as e:
+                self.logger.error(f"Failed to save duplicate AOI changes to '{self.parent.xml_path}': {e}")
+
+        if getattr(self.parent, 'current_image', None) in touched_images and self.ui_component:
+            self.ui_component.refresh_aoi_display()
+
+        gallery_controller = getattr(self.parent, 'gallery_controller', None)
+        if gallery_controller:
+            try:
+                gallery_controller.refresh_review_state()
+            except Exception as e:
+                self.logger.error(f"Error refreshing gallery after duplicate change: {e}")
+
+        # Marking a flagged AOI as a duplicate unflags it, which the GPS map shows
+        gps_map_controller = getattr(self.parent, 'gps_map_controller', None)
+        map_dialog = getattr(gps_map_controller, 'map_dialog', None) if gps_map_controller else None
+        if map_dialog is not None and map_dialog.isVisible():
+            try:
+                gps_map_controller.extract_gps_data()
+                current_gps_index = next(
+                    (i for i, data in enumerate(gps_map_controller.gps_data)
+                     if data['index'] == self.parent.current_image), None)
+                if current_gps_index is not None:
+                    map_dialog.update_gps_data(gps_map_controller.gps_data, current_gps_index)
+            except Exception as e:
+                self.logger.error(f"Error refreshing GPS map after duplicate change: {e}")
 
     def _get_aoi_safe(self, image_index, aoi_index):
         """Return the AOI dict at (image_index, aoi_index), or None if invalid."""
@@ -743,6 +858,10 @@ class AOIController(TranslationMixin):
         if aoi_index is None or aoi_index < 0:
             return
 
+        # On a duplicate the toggle switches the duplicate mark off
+        if self.unmark_duplicate(self.parent.current_image, aoi_index):
+            return
+
         # Get or create flagged set for current image
         if self.parent.current_image not in self.flagged_aois:
             self.flagged_aois[self.parent.current_image] = set()
@@ -826,6 +945,22 @@ class AOIController(TranslationMixin):
             lambda: self.parent.similarity_controller.find_similar_for_selected(
                 image_idx=image_idx, aoi_idx=aoi_index)
         )
+
+        # Duplicate marking: link to the AOI it repeats, or undo that link
+        target_image_idx = image_idx if image_idx is not None else getattr(self.parent, 'current_image', None)
+        aoi = self._get_aoi_safe(target_image_idx, aoi_index)
+        if aoi is not None and AOIDuplicateService.is_duplicate(self.parent.images, aoi):
+            duplicate_action = menu.addAction(self.tr("Not a Duplicate of AOI #{number}").format(
+                number=AOIDuplicateService.get_duplicate_of(aoi)))
+            duplicate_action.triggered.connect(
+                lambda: self.unmark_duplicate(target_image_idx, aoi_index))
+        else:
+            duplicate_action = menu.addAction(self.tr("Mark as Duplicate..."))
+            duplicate_action.setEnabled(aoi is not None and hasattr(self.parent, 'similarity_controller'))
+            duplicate_action.triggered.connect(
+                lambda: self.parent.similarity_controller.mark_duplicate_for_selected(
+                    image_idx=target_image_idx, aoi_idx=aoi_index)
+            )
 
         # Get the current cursor position (global coordinates)
         global_pos = QCursor.pos()
@@ -1297,10 +1432,13 @@ class AOIController(TranslationMixin):
         """
         filtered = []
         flagged_set = self.flagged_aois.get(img_idx, set())
+        images = getattr(self.parent, 'images', None) or []
+        numbers = AOIDuplicateService.index_by_number(images) if self.filter_flagged_only else {}
 
         for original_idx, aoi in aois_with_indices:
-            # Apply flag filter
-            if self.filter_flagged_only and original_idx not in flagged_set:
+            # Apply flag filter (a duplicate shows its flag in the duplicate colour)
+            if (self.filter_flagged_only and original_idx not in flagged_set
+                    and not AOIDuplicateService.is_duplicate(images, aoi, numbers)):
                 continue
 
             # Apply color filter
@@ -1978,6 +2116,12 @@ class AOIController(TranslationMixin):
 
             # Remove from XML if it exists
             aoi = image['areas_of_interest'][aoi_index]
+
+            # Its duplicates have nothing left to point at: release them
+            released = AOIDuplicateService.release_duplicates_of(self.parent.images, aoi.get('number'))
+            for ref in released.touched:
+                self._sync_review_state_to_xml(self._get_aoi_safe(*ref))
+
             if 'xml' in aoi and aoi['xml'] is not None:
                 xml_element = aoi['xml']
                 image_xml = image.get('xml')

@@ -204,3 +204,32 @@ def test_export_pdf_file_dialog_cancelled_returns_false(controller):
         MockFileDialog.getSaveFileName.return_value = ("", "")  # cancelled
         result = controller.export_pdf(images, flagged_aois)
     assert result is False
+
+
+def test_export_pdf_lists_duplicates_found_outside_the_filtered_copy(controller):
+    """Duplicates are unflagged, so the filtered report images drop them; the
+    generator gets their sightings from the full image list instead."""
+    images = [
+        {"path": "a.jpg", "name": "a.jpg", "hidden": False,
+         "areas_of_interest": [{"number": 1, "flagged": True}]},
+        {"path": "b.jpg", "name": "b.jpg", "hidden": False,
+         "areas_of_interest": [{"number": 2, "duplicate_of": 1}]},
+    ]
+    module = "core.controllers.images.viewer.exports.PDFExportController"
+    with patch(f"{module}.PDFExportDialog") as MockDialog, \
+            patch(f"{module}.QFileDialog") as MockFileDialog, \
+            patch(f"{module}.QMessageBox"), \
+            patch(f"{module}.PdfGeneratorService") as MockGenerator, \
+            patch(f"{module}.ExportProgressDialog"), \
+            patch(f"{module}.PdfGenerationThread"):
+        dialog = MockDialog.return_value
+        dialog.exec.return_value = QDialog.Accepted
+        dialog.get_include_images_without_flagged_aois.return_value = False
+        MockFileDialog.getSaveFileName.return_value = ("/tmp/out.pdf", "")
+
+        controller.export_pdf(images, {0: {0}})
+
+    generator = MockGenerator.return_value
+    assert [img["name"] for img in MockGenerator.call_args.kwargs["images"]] == ["a.jpg"]
+    sightings = generator.duplicate_sightings[1]
+    assert [(s.image_name, s.number) for s in sightings] == [("b.jpg", 2)]

@@ -519,3 +519,51 @@ def test_xml_path_attribute_preserved_for_legacy_cache_lookups(tmp_path):
     xml_path = _xml_with_image_path(tmp_path, r"C:\Flight1\DJI_0042.JPG")
     images = XmlService(str(xml_path)).get_images()
     assert images[0]["xml_path"] == r"C:\Flight1\DJI_0042.JPG"
+
+
+# ---------------------------------------------------------------------------
+# Duplicate AOI links (duplicate_of = the primary AOI's run-wide number)
+# ---------------------------------------------------------------------------
+
+def test_legacy_xml_loads_without_duplicate_link(sample_xml):
+    for image in XmlService(sample_xml).get_images():
+        for aoi in image["areas_of_interest"]:
+            assert "duplicate_of" not in aoi
+
+
+def test_duplicate_link_round_trips_through_save_reload(tmp_path, sample_xml):
+    service = XmlService(sample_xml)
+    aoi = service.get_images()[0]["areas_of_interest"][0]
+    aoi["xml"].set("duplicate_of", "7")
+    out_path = tmp_path / "saved.xml"
+    service.save_xml_file(out_path)
+
+    reloaded = XmlService(out_path).get_images()
+    assert reloaded[0]["areas_of_interest"][0]["duplicate_of"] == 7
+    assert "duplicate_of" not in reloaded[1]["areas_of_interest"][0]
+
+
+def test_add_image_to_xml_writes_duplicate_link():
+    service = XmlService()
+    service.add_image_to_xml({
+        "path": "new_image.jpg",
+        "aois": [{"center": (25, 25), "radius": 5, "area": 50, "number": 3, "duplicate_of": 1},
+                 {"center": (75, 75), "radius": 5, "area": 50, "number": 4}],
+    })
+    aois = service.get_images()[0]["areas_of_interest"]
+    assert aois[0]["duplicate_of"] == 1
+    assert "duplicate_of" not in aois[1]
+    assert "duplicate_of" not in aois[1]["xml"].attrib
+
+
+def test_malformed_duplicate_link_is_ignored(tmp_path):
+    xml_content = (
+        '<data><images><image path="image1.jpg">'
+        '<areas_of_interest center="(50,50)" radius="10" area="150" number="2" duplicate_of="abc"/>'
+        '</image></images></data>'
+    )
+    path = tmp_path / "bad_duplicate.xml"
+    path.write_text(xml_content)
+    aoi = XmlService(path).get_images()[0]["areas_of_interest"][0]
+    assert "duplicate_of" not in aoi
+    assert aoi["number"] == 2

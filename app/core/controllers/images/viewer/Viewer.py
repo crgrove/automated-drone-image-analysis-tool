@@ -988,7 +988,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # similarity (Shift+Z) and align (A) shortcuts each start a worker
         # thread and a modal progress dialog. Navigation and toggles below are
         # cheap and idempotent, so only the expensive shortcuts are filtered.
-        if e.isAutoRepeat() and e.key() in (Qt.Key_Z, Qt.Key_A, Qt.Key_E, Qt.Key_W, Qt.Key_M):
+        # D (mark duplicate) also starts a worker and opens a picker.
+        if e.isAutoRepeat() and e.key() in (Qt.Key_Z, Qt.Key_A, Qt.Key_E, Qt.Key_W, Qt.Key_M, Qt.Key_D):
             return
 
         if e.key() == Qt.Key_Right:
@@ -1130,6 +1131,21 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
                         )
                 else:
                     self.similarity_controller.find_similar_for_selected()
+        if e.key() == Qt.Key_D and e.modifiers() == Qt.NoModifier:
+            # Mark the selected AOI as a duplicate of another AOI with 'D'
+            # (pressing it on a duplicate removes the mark). Gallery mode reads
+            # the selection from the gallery model, as Shift+Z does.
+            if hasattr(self, 'similarity_controller'):
+                if (hasattr(self, 'gallery_mode') and self.gallery_mode and
+                        hasattr(self, 'gallery_controller') and self.gallery_controller):
+                    gallery_selection = self._resolve_gallery_selected_aoi()
+                    if gallery_selection:
+                        image_idx, aoi_idx = gallery_selection
+                        self.similarity_controller.mark_duplicate_for_selected(
+                            image_idx=image_idx, aoi_idx=aoi_idx
+                        )
+                else:
+                    self.similarity_controller.mark_duplicate_for_selected()
         if e.key() == Qt.Key_W and e.modifiers() == Qt.ShiftModifier:
             # Load Wingtra CSV flight log with 'Shift+W' key
             self.wingtra_controller.prompt_and_load_csv()

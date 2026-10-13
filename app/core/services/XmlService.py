@@ -4,6 +4,7 @@ from ast import literal_eval
 from datetime import datetime
 import uuid
 import xml.etree.ElementTree as ET
+from core.services.AOIDuplicateService import get_duplicate_of, parse_duplicate_of
 from core.services.GridReviewService import GridReviewService
 from core.services.LoggerService import LoggerService
 from helpers.PathHelper import is_absolute_any_platform, canonical_path
@@ -228,6 +229,11 @@ class XmlService:
                     area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
                     # Load user comment (default to empty string if not present)
                     area_of_interest['user_comment'] = area_of_interest_xml.get('user_comment', '')
+                    # Load the duplicate link (the primary AOI's run-wide number).
+                    # Absent on files from builds without duplicate marking.
+                    duplicate_of = parse_duplicate_of(area_of_interest_xml.get('duplicate_of'))
+                    if duplicate_of is not None:
+                        area_of_interest['duplicate_of'] = duplicate_of
                     # Load user_created flag (default to False if not present)
                     area_of_interest['user_created'] = area_of_interest_xml.get('user_created') == 'True'
                     # Load confidence scoring data if present
@@ -404,6 +410,9 @@ class XmlService:
             # Save user comment if present
             if 'user_comment' in area and area['user_comment']:
                 area_xml.set('user_comment', str(area['user_comment']))
+            # Save the duplicate link if present
+            if get_duplicate_of(area) is not None:
+                area_xml.set('duplicate_of', str(get_duplicate_of(area)))
             # Save a user-corrected GPS position if present
             if (area.get('user_latitude') is not None
                     and area.get('user_longitude') is not None):

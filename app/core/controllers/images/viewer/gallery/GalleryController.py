@@ -13,6 +13,7 @@ import traceback
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QProgressDialog, QApplication
 from PySide6.QtCore import Qt
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from core.services.image.AOIService import AOIService
 from core.services.HeatmapService import HeatmapService
@@ -55,6 +56,8 @@ class GalleryController:
         self.sort_method = None
         self.sort_color_hue = None
         self.filter_flagged_only = False
+        # Primary AOI number -> how many AOIs are marked as its duplicates
+        self.duplicate_counts = {}
         self.filter_comment_pattern = None
         self.filter_color_hue = None
         self.filter_color_range = None
@@ -258,6 +261,7 @@ class GalleryController:
 
             # Get current items
             all_aois = list(self.model.aoi_items)
+            self.duplicate_counts = AOIDuplicateService.duplicate_counts(self.parent.images)
 
             # Apply sorting (using cached colors)
             sorted_aois = self._sort_aois_global(all_aois)
@@ -390,11 +394,14 @@ class GalleryController:
             Filtered list of tuples
         """
         filtered = []
+        images = getattr(self.parent, 'images', None) or []
+        numbers = AOIDuplicateService.index_by_number(images) if self.filter_flagged_only else {}
 
         for img_idx, aoi_idx, aoi in aoi_items:
-            # Apply flag filter
+            # Apply flag filter (a duplicate shows its flag in the duplicate colour)
             if self.filter_flagged_only:
-                if not aoi.get('flagged', False):
+                if (not aoi.get('flagged', False)
+                        and not AOIDuplicateService.is_duplicate(images, aoi, numbers)):
                     continue
 
             # Apply comment filter — case-insensitive substring match. Any
@@ -809,6 +816,29 @@ class GalleryController:
         if self.ui_component:
             self.ui_component.refresh_gallery()
 
+    def refresh_review_state(self):
+        """Show changed flag/duplicate state without losing the reviewer's place.
+
+        Tiles read the live AOI dicts, so a repaint is enough - unless the
+        flagged-only filter is on, where the change can add or remove tiles and
+        the gallery is reloaded with the selection kept (as the F toggle does).
+        """
+        self.duplicate_counts = AOIDuplicateService.duplicate_counts(getattr(self.parent, 'images', None) or [])
+        if not self.ui_component or not self.ui_component.gallery_view:
+            return
+        view = self.ui_component.gallery_view
+
+        if self.filter_flagged_only:
+            current_index = view.currentIndex()
+            selected = self.model.get_aoi_info(current_index) if current_index.isValid() else None
+            self.load_all_aois()
+            if selected:
+                row = self.model.aoi_to_row.get((selected[0], selected[1]))
+                if row is not None:
+                    view.setCurrentIndex(self.model.index(row, 0))
+        else:
+            view.viewport().update()
+
     def clear_gallery(self):
         """Clear the gallery display."""
         self.model.set_aoi_items([])
@@ -924,6 +954,10 @@ class GalleryController:
             return
 
         aoi_ctrl = self.parent.aoi_controller
+
+        # On a duplicate the toggle switches the duplicate mark off
+        if aoi_ctrl.unmark_duplicate(image_idx, aoi_idx):
+            return
 
         # Get or create flagged set for the image
         if image_idx not in aoi_ctrl.flagged_aois:

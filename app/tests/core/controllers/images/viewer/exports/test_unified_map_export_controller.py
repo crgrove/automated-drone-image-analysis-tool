@@ -919,3 +919,32 @@ def test_pod_summary_canopy_note_combines_with_skips(controller):
     assert color == "#FFA726"
     assert "skipped" in msg
     assert "canopy data covered 50% of the searched area" in msg
+
+
+def test_thread_flagged_aoi_description_lists_other_sightings():
+    kml_service = MagicMock()
+    images = [
+        {"path": "a.jpg", "name": "a.jpg", "hidden": False,
+         "areas_of_interest": [{"number": 1, "flagged": True, "center": (5, 5), "area": 10}]},
+        {"path": "b.jpg", "name": "b.jpg", "hidden": False,
+         "areas_of_interest": [{"number": 2, "duplicate_of": 1, "center": (5, 5), "area": 10}]},
+    ]
+    thread = UnifiedMapExportThread(
+        kml_service, MagicMock(), images, {0: {0}},
+        include_locations=False,
+        include_images_without_flagged_aois=False,
+        include_flagged_aois=True,
+        include_coverage=False,
+        output_path="/out.kml",
+    )
+    module = "core.controllers.images.viewer.exports.UnifiedMapExportController"
+    with patch(f"{module}.ImageService"), \
+            patch(f"{module}.LocationInfo.get_gps", return_value={"latitude": 1.0, "longitude": 2.0}), \
+            patch(f"{module}.AOIService") as mock_aoi_service:
+        mock_aoi_service.return_value.calculate_gps_with_custom_altitude.return_value = (1.0, 2.0)
+        mock_aoi_service.return_value.get_cached_or_representative_color.return_value = None
+        thread.run()
+
+    kml_service.add_aoi_placemark.assert_called_once()
+    description = kml_service.add_aoi_placemark.call_args[0][3]
+    assert "Also seen in: b.jpg (AOI #2)" in description

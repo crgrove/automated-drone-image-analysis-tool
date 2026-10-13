@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem
 )
 
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
 
@@ -77,6 +78,8 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
 
         # Status badges (flag / comment), refreshed after bulk actions
         self._badge_items = {}  # row -> (flag_item, comment_item)
+        # AOI-number caption per row; shows "-> #12" while the AOI is a duplicate
+        self._number_caption_items = {}  # row -> QGraphicsTextItem
 
         # Style settings
         self.thumbnail_spacing = 20
@@ -101,6 +104,7 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
         self._checkbox_rects = []
         self._checkbox_items = {}
         self._badge_items = {}
+        self._number_caption_items = {}
         self.selection_changed.emit(0)
 
         if not results:
@@ -184,17 +188,11 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
 
                 # Caption line 3: AOI number (fallback to 1-based index within its image;
                 # external query images have no AOI, so their line is left blank)
-                aoi_number = result.get('aoi_number')
-                aoi_idx = result.get('aoi_idx')
-                if aoi_number is not None:
-                    aoi_text = self.tr("AOI #{number}").format(number=aoi_number)
-                elif aoi_idx is not None:
-                    aoi_text = self.tr("AOI {index}").format(index=aoi_idx + 1)
-                else:
-                    aoi_text = ""
+                aoi_text = self._number_caption_text(result)
                 if aoi_text:
-                    self._add_caption(aoi_text, QColor(170, 170, 170),
-                                      x, y + self.thumbnail_size + 39)
+                    self._number_caption_items[row] = self._add_caption(
+                        aoi_text, self._number_caption_color(result),
+                        x, y + self.thumbnail_size + 39)
 
                 x += self.thumbnail_size + self.thumbnail_spacing
 
@@ -218,15 +216,49 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
                           self.thumbnail_spacing + self.thumbnail_size / 2)
 
     def _add_caption(self, text, color, tile_x, text_y, bold=False):
-        """Add a centered caption line under a tile."""
+        """Add a centered caption line under a tile and return its item."""
         text_item = QGraphicsTextItem(text)
         text_item.setDefaultTextColor(color)
         font = QFont("Arial", 9)
         font.setBold(bold)
         text_item.setFont(font)
+        text_item.setData(0, tile_x)  # Tile left edge, for re-centering on refresh
         text_width = text_item.boundingRect().width()
         text_item.setPos(tile_x + (self.thumbnail_size - text_width) / 2, text_y)
         self.scene.addItem(text_item)
+        return text_item
+
+    def _number_caption_text(self, result):
+        """'AOI #46', plus '-> #12' while the AOI is marked a duplicate of #12.
+
+        Falls back to the 1-based index within its image; external query images
+        have no AOI, so their line is left blank.
+        """
+        aoi_number = result.get('aoi_number')
+        aoi_idx = result.get('aoi_idx')
+        if aoi_number is not None:
+            text = self.tr("AOI #{number}").format(number=aoi_number)
+        elif aoi_idx is not None:
+            text = self.tr("AOI {index}").format(index=aoi_idx + 1)
+        else:
+            return ""
+        duplicate_of = AOIDuplicateService.get_duplicate_of(result.get('aoi_data'))
+        if duplicate_of is not None:
+            text += f" \u2192 #{duplicate_of}"
+        return text
+
+    @staticmethod
+    def _number_caption_color(result):
+        if AOIDuplicateService.get_duplicate_of(result.get('aoi_data')) is not None:
+            return QColor(AOIDuplicateService.DUPLICATE_FLAG_COLOR)
+        return QColor(170, 170, 170)
+
+    @staticmethod
+    def _flag_badge_state(aoi_data):
+        """(visible, colour) of a tile's flag badge: red when flagged, violet when a duplicate."""
+        if AOIDuplicateService.get_duplicate_of(aoi_data) is not None:
+            return True, QColor(AOIDuplicateService.DUPLICATE_FLAG_COLOR)
+        return bool(aoi_data.get('flagged')), QColor(255, 82, 82)
 
     def _add_checkbox(self, row, tile_x, tile_y):
         """Add a selection checkbox at the tile's top-left corner."""
@@ -257,12 +289,13 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
         aoi_data = result.get('aoi_data') or {}
 
         flag_item = QGraphicsTextItem("⚑")
-        flag_item.setDefaultTextColor(QColor(255, 82, 82))
+        flag_visible, flag_color = self._flag_badge_state(aoi_data)
+        flag_item.setDefaultTextColor(flag_color)
         flag_font = QFont("Arial", 13)
         flag_font.setBold(True)
         flag_item.setFont(flag_font)
         flag_item.setPos(tile_x + self.thumbnail_size - 28, tile_y + 2)
-        flag_item.setVisible(bool(aoi_data.get('flagged')))
+        flag_item.setVisible(flag_visible)
         self.scene.addItem(flag_item)
 
         comment_item = QGraphicsTextItem("\U0001F5E8")
@@ -275,13 +308,21 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
         self._badge_items[row] = (flag_item, comment_item)
 
     def refresh_status_badges(self, results=None):
-        """Update flag/comment badges from the (live) result AOI dicts."""
+        """Update flag/comment badges and duplicate captions from the (live) result AOI dicts."""
         results = results if results is not None else self._results
         for row, (flag_item, comment_item) in self._badge_items.items():
             if row < len(results):
                 aoi_data = results[row].get('aoi_data') or {}
-                flag_item.setVisible(bool(aoi_data.get('flagged')))
+                flag_visible, flag_color = self._flag_badge_state(aoi_data)
+                flag_item.setDefaultTextColor(flag_color)
+                flag_item.setVisible(flag_visible)
                 comment_item.setVisible(bool(aoi_data.get('user_comment')))
+        for row, caption_item in self._number_caption_items.items():
+            if row < len(results):
+                caption_item.setPlainText(self._number_caption_text(results[row]))
+                caption_item.setDefaultTextColor(self._number_caption_color(results[row]))
+                tile_x = caption_item.data(0) or 0
+                caption_item.setX(tile_x + (self.thumbnail_size - caption_item.boundingRect().width()) / 2)
 
     def toggle_row_checked(self, row):
         """Toggle the checkbox state of a row."""
@@ -423,6 +464,7 @@ class AOISimilarityResultsDialog(TranslationMixin, QDialog):
     result_clicked = Signal(int)          # Emits the result row when the user clicks a thumbnail
     bulk_flag_requested = Signal(list, bool)  # (checked rows, desired flag state)
     bulk_comment_requested = Signal(list)     # (checked rows)
+    bulk_duplicate_requested = Signal(list, bool)  # (checked rows, True = mark as duplicates of the reference)
 
     def __init__(self, parent=None, results=None, total_candidates=0):
         """
@@ -529,6 +571,20 @@ class AOISimilarityResultsDialog(TranslationMixin, QDialog):
         self.comment_button.clicked.connect(self._emit_bulk_comment)
         selection_layout.addWidget(self.comment_button)
 
+        self.duplicate_button = QPushButton(self.tr("Mark Duplicate"))
+        self.duplicate_button.setToolTip(self.tr(
+            "Mark all checked AOIs as duplicates of the reference AOI: reports show the "
+            "reference once and list these as other sightings of it"))
+        self.duplicate_button.setEnabled(False)
+        self.duplicate_button.clicked.connect(lambda: self._emit_bulk_duplicate(True))
+        selection_layout.addWidget(self.duplicate_button)
+
+        self.not_duplicate_button = QPushButton(self.tr("Not Duplicate"))
+        self.not_duplicate_button.setToolTip(self.tr("Remove the duplicate mark from all checked AOIs"))
+        self.not_duplicate_button.setEnabled(False)
+        self.not_duplicate_button.clicked.connect(lambda: self._emit_bulk_duplicate(False))
+        selection_layout.addWidget(self.not_duplicate_button)
+
         main_layout.addLayout(selection_layout)
 
         # Button layout
@@ -558,6 +614,17 @@ class AOISimilarityResultsDialog(TranslationMixin, QDialog):
         self.flag_button.setEnabled(has_selection)
         self.unflag_button.setEnabled(has_selection)
         self.comment_button.setEnabled(has_selection)
+        self.duplicate_button.setEnabled(has_selection and self._reference_is_aoi())
+        self.not_duplicate_button.setEnabled(has_selection)
+
+    def _reference_is_aoi(self):
+        """Duplicates need a reference AOI to point at (row 0 must be a real AOI)."""
+        return bool(self.results) and self.results[0].get('aoi_idx') is not None
+
+    def _emit_bulk_duplicate(self, mark):
+        rows = self.gallery_view.get_checked_rows()
+        if rows:
+            self.bulk_duplicate_requested.emit(rows, mark)
 
     def _emit_bulk_flag(self, flagged):
         rows = self.gallery_view.get_checked_rows()

@@ -12,6 +12,7 @@ import cv2
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QThread, QEventLoop, Signal
+from core.services import AOIDuplicateService
 from core.services.export.CalTopoService import CalTopoService
 from core.services.export.CalTopoAPIService import CalTopoAPIService
 from core.services.export.CalTopoCredentialHelper import CalTopoCredentialHelper
@@ -755,6 +756,8 @@ class CalTopoExportController(TranslationMixin):
             # The mode decides what gets generated below; record it for diagnosis
             self.logger.info(f"CalTopo AOI photo mode: {aoi_photo_mode}")
 
+        duplicate_sightings = AOIDuplicateService.sightings_by_primary(images)
+
         for img_idx, aoi_indices in flagged_aois.items():
             if img_idx >= len(images):
                 continue
@@ -899,6 +902,9 @@ class CalTopoExportController(TranslationMixin):
                     f"{confidence_info}"
                     f"{color_info}"
                 )
+                sightings_line = AOIDuplicateService.sightings_line(aoi, duplicate_sightings)
+                if sightings_line:
+                    description += f"{sightings_line}\n"
 
                 marker = {
                     'lat': aoi_lat,

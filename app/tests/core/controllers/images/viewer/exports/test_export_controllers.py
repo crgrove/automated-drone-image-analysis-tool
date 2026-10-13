@@ -902,3 +902,20 @@ def test_cleanup_aoi_thumbnails_removes_generated_files(caltopo_controller, aoi_
 
     assert not os.path.exists(thumbnail_path)
     assert caltopo_controller.aoi_thumbnail_service is None
+
+
+def test_prepare_markers_lists_other_sightings(caltopo_controller, mock_viewer, aoi_source_image):
+    """A flagged AOI's marker names the images its duplicates were seen in."""
+    mock_viewer.messages = {}
+    mock_viewer.custom_agl_altitude_ft = None
+    images = [
+        {'path': aoi_source_image, 'name': 'IMG_0001.jpg', 'hidden': False,
+         'areas_of_interest': [{'center': (400, 300), 'radius': 20, 'number': 1, 'flagged': True}]},
+        {'path': aoi_source_image, 'name': 'IMG_0002.jpg', 'hidden': False,
+         'areas_of_interest': [{'center': (100, 100), 'radius': 20, 'number': 2, 'duplicate_of': 1}]},
+    ]
+
+    markers = _patched_prepare_markers(caltopo_controller, images, {0: {0}}, include_images=False)
+
+    assert len(markers) == 1
+    assert "Also seen in: IMG_0002.jpg (AOI #2)" in markers[0]['description']
