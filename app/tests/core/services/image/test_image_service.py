@@ -944,3 +944,30 @@ class TestAnchoredAglResolution:
 
         assert ctx['altitude_anchored'] is False
         assert ctx['drone_absolute_elev_m'] == pytest.approx(384.7, abs=0.1)
+
+
+def test_get_image_size_reads_header_without_decoding():
+    """A deferred service learns its size from the header, not a full decode."""
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        cv2.imwrite(tmp_file.name, np.zeros((60, 80, 3), dtype=np.uint8))
+        tmp_path = tmp_file.name
+
+    try:
+        service = ImageService(tmp_path, defer_load=True)
+        assert service.get_image_size() == (80, 60)
+        assert service.pixels_loaded is False
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_get_image_size_uses_loaded_pixels():
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        cv2.imwrite(tmp_file.name, np.zeros((60, 80, 3), dtype=np.uint8))
+        tmp_path = tmp_file.name
+
+    try:
+        service = ImageService(tmp_path, img_array=np.zeros((30, 40, 3), dtype=np.uint8))
+        assert service.pixels_loaded is True
+        assert service.get_image_size() == (40, 30)
+    finally:
+        os.unlink(tmp_path)

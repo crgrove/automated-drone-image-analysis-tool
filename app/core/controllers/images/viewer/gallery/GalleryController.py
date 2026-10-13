@@ -368,6 +368,12 @@ class GalleryController:
                     return temp
                 aoi_items.sort(key=temp_sort_key_desc, reverse=True)
 
+            elif self.sort_method == 'similarity_groups':
+                # Order computed by the "Similar & Nearby" grouping, held by the AOI controller
+                aoi_ctrl = self.parent.aoi_controller
+                aoi_items.sort(key=lambda x: aoi_ctrl.get_similarity_rank(
+                    self.parent.images[x[0]].get('path'), x[2]))
+
         except Exception as e:
             self.logger.error(f"Error sorting AOIs globally: {e}")
 
@@ -566,7 +572,7 @@ class GalleryController:
 
         Args:
             method: Sort method ('area_asc', 'area_desc', 'confidence_asc',
-                    'confidence_desc', 'color', 'x', 'y', or None)
+                    'confidence_desc', 'color', 'x', 'y', 'similarity_groups', or None)
             color_hue: Hue value (0-360) for color-based sorting (optional)
         """
         self.sort_method = method

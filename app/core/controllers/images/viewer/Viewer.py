@@ -1358,6 +1358,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
 
             self.aoiSortComboBox.currentTextChanged.connect(self.aoi_controller.on_sort_combo_changed)
+            self.aoiSortComboBox.activated.connect(self.aoi_controller.on_sort_combo_activated)
             self.filterButton.clicked.connect(self.aoi_controller.open_filter_dialog)
 
             # Set the buttons in the AOI controller

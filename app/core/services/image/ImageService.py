@@ -106,6 +106,28 @@ class ImageService:
     def img_array(self, value):
         self._img_array = value
 
+    @property
+    def pixels_loaded(self):
+        """True once pixel data is in memory (never for a deferred service until img_array is read)."""
+        return self._img_array is not None
+
+    def get_image_size(self):
+        """(width, height) in pixels, without decoding pixels that are not loaded yet.
+
+        A deferred service answers from the file header (PIL reads only the
+        header on open). That matches the decoded array because neither PIL's
+        size nor cv2.IMREAD_UNCHANGED applies EXIF orientation. Falls back to
+        decoding when the header cannot be read.
+        """
+        if self._img_array is None:
+            try:
+                with Image.open(self.path) as img:
+                    return img.size
+            except Exception:
+                pass
+        height, width = self.img_array.shape[:2]
+        return width, height
+
     def get_relative_altitude(self, distance_unit='m'):
         """
         Retrieves the drone's relative altitude from metadata.

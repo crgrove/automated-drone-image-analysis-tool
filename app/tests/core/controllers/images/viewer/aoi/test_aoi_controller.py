@@ -194,6 +194,109 @@ def test_sort_by_temperature_desc(controller):
     assert temps[-1] is None
 
 
+def test_sort_by_similarity_groups_follows_ranks(controller):
+    from core.services.image.AOISimilarityGroupingService import aoi_sort_key
+    controller.parent.images = [{"path": "a.jpg"}]
+    aois = [_aoi(center=(1, 1)), _aoi(center=(2, 2)), _aoi(center=(3, 3)), _aoi(center=(4, 4))]
+    controller.similarity_sort_ranks = {
+        aoi_sort_key("a.jpg", aois[2]): 0,
+        aoi_sort_key("a.jpg", aois[0]): 5,
+    }
+    controller.sort_method = "similarity_groups"
+    result = controller.sort_aois_with_indices(aois)
+    # Ranked first, then AOIs added after the grouping ran, in their usual order
+    assert [idx for idx, _ in result] == [2, 0, 1, 3]
+
+
+# ---------------------------------------------------------------------------
+# "Similar & Nearby" sort selection
+# ---------------------------------------------------------------------------
+
+def _sort_combo(controller, current='area_desc'):
+    """A real combo with the controller's options, parked on *current*."""
+    from PySide6.QtWidgets import QComboBox
+    combo = QComboBox()
+    controller.parent.aoiSortComboBox = combo
+    controller._initialize_sort_combo()
+    controller.sort_method = current
+    controller._update_combo_selection()
+    return combo
+
+
+def test_sort_combo_offers_similarity_groups(controller, qapp):
+    combo = _sort_combo(controller)
+    assert combo.findData('similarity_groups') >= 0
+
+
+def test_update_combo_selection_does_not_re_run_a_sort(controller, qapp):
+    combo = _sort_combo(controller, current='area_desc')
+    fired = []
+    combo.currentTextChanged.connect(fired.append)
+    controller.sort_method = 'color'
+    controller._update_combo_selection()
+    assert combo.currentData() == 'color'
+    assert fired == []  # would otherwise re-open the color picker
+
+
+def _pick_similarity(controller, combo, dialog_result, started=True):
+    dialog = MagicMock()
+    dialog.exec.return_value = dialog_result
+    dialog.get_max_distance_m.return_value = 25.0
+    dialog.get_min_similarity.return_value = 80
+    controller.parent.similarity_controller.sort_by_similarity_groups.return_value = started
+    with patch("core.controllers.images.viewer.aoi.AOIController.AOISimilaritySortDialog",
+               return_value=dialog):
+        combo.setCurrentIndex(combo.findData('similarity_groups'))
+        controller.on_sort_combo_changed(combo.currentText())
+
+
+def test_similarity_groups_starts_grouping_with_dialog_values(controller, qapp):
+    combo = _sort_combo(controller)
+    _pick_similarity(controller, combo, dialog_result=True)
+    controller.parent.similarity_controller.sort_by_similarity_groups.assert_called_once_with(25.0, 80)
+    # Not applied until the grouping finishes
+    assert controller.sort_method == 'area_desc'
+    assert combo.currentData() == 'similarity_groups'
+
+
+def test_similarity_groups_dialog_cancel_restores_combo(controller, qapp):
+    combo = _sort_combo(controller)
+    _pick_similarity(controller, combo, dialog_result=False)
+    controller.parent.similarity_controller.sort_by_similarity_groups.assert_not_called()
+    assert combo.currentData() == 'area_desc'
+
+
+def test_similarity_groups_not_started_restores_combo(controller, qapp):
+    combo = _sort_combo(controller)
+    _pick_similarity(controller, combo, dialog_result=True, started=False)
+    assert combo.currentData() == 'area_desc'
+
+
+def test_apply_similarity_groups_sets_sort_and_syncs_gallery(controller, qapp):
+    combo = _sort_combo(controller)
+    result = MagicMock(ranks={("a.jpg", 1, 1): 0})
+    controller.apply_similarity_groups(result)
+    assert controller.sort_method == 'similarity_groups'
+    assert controller.similarity_sort_ranks == {("a.jpg", 1, 1): 0}
+    assert combo.currentData() == 'similarity_groups'
+    controller.parent.gallery_controller.set_sort_method.assert_called_with('similarity_groups', None)
+
+
+def test_re_picking_applied_similarity_groups_re_runs(controller, qapp):
+    combo = _sort_combo(controller, current='similarity_groups')
+    with patch.object(controller, '_start_similarity_group_sort') as start:
+        controller.on_sort_combo_activated(combo.findData('similarity_groups'))
+        start.assert_called_once()
+
+
+def test_activation_ignored_when_similarity_groups_not_applied(controller, qapp):
+    combo = _sort_combo(controller, current='area_desc')
+    with patch.object(controller, '_start_similarity_group_sort') as start:
+        controller.on_sort_combo_activated(combo.findData('similarity_groups'))
+        controller.on_sort_combo_activated(combo.findData('area_desc'))
+        start.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # filter_aois_with_indices
 # ---------------------------------------------------------------------------

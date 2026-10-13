@@ -90,6 +90,21 @@ def test_sort_global_none_returns_input(controller):
     assert result == items
 
 
+def test_sort_global_by_similarity_groups_spans_images(controller):
+    from core.controllers.images.viewer.aoi.AOIController import AOIController
+    from core.services.image.AOISimilarityGroupingService import aoi_sort_key
+    controller.parent.images = [{"path": "a.jpg"}, {"path": "b.jpg"}]
+    a0, a1, b0 = _aoi(center=(1, 1)), _aoi(center=(2, 2)), _aoi(center=(3, 3))
+    ranks = {aoi_sort_key("b.jpg", b0): 0, aoi_sort_key("a.jpg", a1): 1}
+    aoi_ctrl = MagicMock()
+    aoi_ctrl.get_similarity_rank.side_effect = (
+        lambda path, aoi: ranks.get(aoi_sort_key(path, aoi), float('inf')))
+    controller.parent.aoi_controller = aoi_ctrl
+    controller.sort_method = "similarity_groups"
+    result = controller._sort_aois_global([(0, 0, a0), (0, 1, a1), (1, 0, b0)])
+    assert [(i, j) for i, j, _ in result] == [(1, 0), (0, 1), (0, 0)]
+
+
 def test_sort_global_by_area_asc(controller):
     items = [
         (0, 0, _aoi(area=30)),

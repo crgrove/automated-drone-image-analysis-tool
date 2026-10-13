@@ -25,11 +25,13 @@ from core.services.AOIInteractionLogService import REASON_DESELECT
 from core.services.LoggerService import LoggerService
 from core.services.image.MaskFilterService import MaskFilterService
 from core.services.image.AOIService import AOIService
+from core.services.image.AOISimilarityGroupingService import aoi_sort_key
 from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
 from helpers.FormatHelper import FormatHelper
 from helpers.LocationInfo import LocationInfo
 from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
 from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
+from core.views.images.viewer.dialogs.AOISimilaritySortDialog import AOISimilaritySortDialog
 from helpers.TranslationMixin import TranslationMixin
 
 
@@ -57,8 +59,9 @@ class AOIController(TranslationMixin):
         self.filter_flagged_only = False
 
         # Sort and filter state
-        self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y', 'temperature_asc', 'temperature_desc'
+        self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y', 'temperature_asc', 'temperature_desc', 'similarity_groups'
         self.sort_color_hue = None  # Hue value (0-360) for color-based sorting
+        self.similarity_sort_ranks = {}  # aoi_sort_key -> position, for 'similarity_groups'
         self.filter_color_hue = None  # Hue value (0-360) for color filtering
         self.filter_color_range = None  # ± degrees for color filtering
         self.filter_color_mode = 'include'  # 'include' or 'exclude'
@@ -1272,6 +1275,11 @@ class AOIController(TranslationMixin):
                     return temp
                 aois_with_indices.sort(key=temp_sort_key_desc, reverse=True)
 
+            elif self.sort_method == 'similarity_groups':
+                # Keep this image's AOIs in the dataset-wide group order
+                image_path = self.parent.images[self.parent.current_image].get('path')
+                aois_with_indices.sort(key=lambda x: self.get_similarity_rank(image_path, x[1]))
+
         except Exception as e:
             self.logger.error(f"Error sorting AOIs: {e}")
 
@@ -1480,7 +1488,9 @@ class AOIController(TranslationMixin):
             ("Temperature (Highest First)", 'temperature_desc', qta.icon('fa6s.temperature-high', color='#F44336')),
             ("Color (Closest to Target)", 'color', qta.icon('fa6s.palette', color='#CCCCCC')),
             ("Left to Right", 'x', qta.icon('fa6s.arrow-right', color='#2196F3')),
-            ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3'))
+            ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3')),
+            (self.tr("Similar & Nearby (Groups)"), 'similarity_groups',
+             qta.icon('fa6s.object-group', color='#9C27B0'))
         ]
 
         # Check if dataset has thermal data and AOIs have temperature values
@@ -1561,23 +1571,87 @@ class AOIController(TranslationMixin):
             else:
                 # User cancelled - revert to previous sort method
                 self._update_combo_selection()
+        elif current_data == 'similarity_groups':
+            self._start_similarity_group_sort()
         else:
             # Other sort methods (area_asc, area_desc, x, y)
             self.set_sort_method(current_data)
 
+    def on_sort_combo_activated(self, index):
+        """Re-picking "Similar & Nearby" while it is applied re-runs it with new settings.
+
+        currentTextChanged does not fire for the item that is already current,
+        so this is the only way back into its settings dialog.
+        """
+        if not hasattr(self.parent, 'aoiSortComboBox'):
+            return
+        combo = self.parent.aoiSortComboBox
+        if combo.itemData(index) == 'similarity_groups' and self.sort_method == 'similarity_groups':
+            self._start_similarity_group_sort()
+
+    def _start_similarity_group_sort(self):
+        """Ask for the grouping settings, then group every AOI in the background.
+
+        The sort is applied by apply_similarity_groups once the grouping
+        finishes; until then (and on cancel or failure) the current sort stays.
+        """
+        similarity_controller = getattr(self.parent, 'similarity_controller', None)
+        if similarity_controller is None:
+            self._update_combo_selection()
+            return
+
+        dialog = AOISimilaritySortDialog(self.parent, getattr(self.parent, 'distance_unit', 'm'))
+        if not dialog.exec():
+            self._update_combo_selection()
+            return
+
+        started = similarity_controller.sort_by_similarity_groups(
+            dialog.get_max_distance_m(), dialog.get_min_similarity())
+        if not started:
+            self._update_combo_selection()
+
+    def apply_similarity_groups(self, result):
+        """Apply a finished SimilarityGroupingResult as the current sort.
+
+        Args:
+            result: SimilarityGroupingResult from AOISimilarityGroupingService.
+        """
+        self.similarity_sort_ranks = dict(result.ranks)
+        self.set_sort_method('similarity_groups')
+
+    def get_similarity_rank(self, image_path, aoi):
+        """Position of an AOI in the "Similar & Nearby" order.
+
+        AOIs added since the grouping ran have no rank and sort after all
+        grouped ones (stable sort keeps them in their usual order).
+        """
+        return self.similarity_sort_ranks.get(aoi_sort_key(image_path, aoi), float('inf'))
+
+    def restore_sort_selection(self):
+        """Point the sort combo back at the sort that is actually applied."""
+        self._update_combo_selection()
+
     def _update_combo_selection(self):
-        """Update combo box selection to match current sort method."""
+        """Update combo box selection to match current sort method.
+
+        Display-only: signals are blocked so syncing the combo never re-runs a
+        sort (or re-opens the color picker / similarity settings).
+        """
         if not hasattr(self.parent, 'aoiSortComboBox'):
             return
 
         combo = self.parent.aoiSortComboBox
-        if self.sort_method is None:
-            combo.setCurrentIndex(0)  # "No Sort"
-        else:
-            for i in range(combo.count()):
-                if combo.itemData(i) == self.sort_method:
-                    combo.setCurrentIndex(i)
-                    break
+        was_blocked = combo.blockSignals(True)
+        try:
+            if self.sort_method is None:
+                combo.setCurrentIndex(0)  # "No Sort"
+            else:
+                for i in range(combo.count()):
+                    if combo.itemData(i) == self.sort_method:
+                        combo.setCurrentIndex(i)
+                        break
+        finally:
+            combo.blockSignals(was_blocked)
 
     def _get_reference_hue_from_settings(self):
         """Extract reference hue from parent settings.

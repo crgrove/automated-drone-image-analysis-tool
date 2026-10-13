@@ -4,6 +4,10 @@ AOISimilarityController - Controller for finding visually similar AOIs.
 Runs the AOISimilarityService on a worker thread to rank every other AOI in the
 dataset against the selected one, then displays the top matches in a gallery
 dialog. Mirrors the AOINeighborTrackingController threading pattern.
+
+Also drives the "Similar & Nearby" AOI sort: the same worker-thread plumbing runs
+AOISimilarityGroupingService over every AOI and hands the resulting order to the
+AOIController.
 """
 
 from pathlib import Path
@@ -12,6 +16,7 @@ from PySide6.QtCore import QObject, Signal, QThread, Qt
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
 from core.services.image.AOISimilarityService import AOISimilarityService
+from core.services.image.AOISimilarityGroupingService import AOISimilarityGroupingService, make_aoi_locator
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
 
@@ -60,12 +65,62 @@ class SimilaritySearchWorker(QObject):
             self.progress.emit(done, total)
 
 
+class SimilarityGroupingWorker(QObject):
+    """Worker that orders every AOI into similar-and-nearby groups off the GUI thread."""
+
+    progress = Signal(int, int)  # done, total
+    # object, not list: the result is a dataclass, and Qt's list marshalling
+    # would rewrite its tuples anyway
+    finished = Signal(object)    # SimilarityGroupingResult, or None when cancelled
+    error = Signal(str)          # Error message
+
+    def __init__(self, grouping_service, images, locate_aois, max_distance_m, min_similarity):
+        super().__init__()
+        self.grouping_service = grouping_service
+        self.images = images
+        self.locate_aois = locate_aois
+        self.max_distance_m = max_distance_m
+        self.min_similarity = min_similarity
+        self._cancelled = False
+
+    def cancel(self):
+        """Cancel the grouping operation."""
+        self._cancelled = True
+
+    def run(self):
+        """Execute the grouping."""
+        try:
+            if self._cancelled:
+                self.finished.emit(None)
+                return
+
+            result = self.grouping_service.group(
+                images=self.images,
+                locate_aois=self.locate_aois,
+                max_distance_m=self.max_distance_m,
+                min_similarity=self.min_similarity,
+                progress_callback=self._emit_progress,
+                cancel_check=lambda: self._cancelled,
+            )
+
+            self.finished.emit(None if self._cancelled else result)
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _emit_progress(self, done, total):
+        if not self._cancelled:
+            self.progress.emit(done, total)
+
+
 class AOISimilarityController(TranslationMixin, QObject):
     """Controller for ranking all AOIs by visual similarity to a selected AOI."""
 
     search_started = Signal()
     search_completed = Signal(list)  # Ranked result dicts (reference excluded)
     search_error = Signal(str)
+    grouping_completed = Signal(object)  # SimilarityGroupingResult that was applied
+    grouping_error = Signal(str)
 
     def __init__(self, parent):
         """
@@ -99,6 +154,8 @@ class AOISimilarityController(TranslationMixin, QObject):
         self._current_results = []
         self._ref_indices = None
         self._total_candidates = 0
+        # True while the running worker is a sort grouping rather than a search
+        self._grouping = False
 
     def _get_service(self):
         """Lazily build the similarity service with the dataset thumbnail cache dir."""
@@ -163,17 +220,70 @@ class AOISimilarityController(TranslationMixin, QObject):
             )
 
     def _start_search(self, **worker_kwargs):
-        """Show the progress dialog and start the worker thread."""
+        """Start a similarity search worker for the reference AOI."""
+        worker = SimilaritySearchWorker(
+            similarity_service=self._get_service(),
+            images=self.parent.images,
+            **worker_kwargs
+        )
+        self._start_worker(
+            worker, self._on_search_complete, self._on_search_error,
+            title=self.tr("Find Similar AOIs"),
+            label=self.tr("Analyzing AOIs for visual similarity..."),
+        )
+        self.search_started.emit()
+
+    def sort_by_similarity_groups(self, max_distance_m, min_similarity):
+        """
+        Order every AOI so look-alikes that are close on the ground sit together.
+
+        Triggered by the "Similar & Nearby" AOI sort option. On success the order
+        is handed to AOIController.apply_similarity_groups; on cancel or failure
+        the sort selection is restored.
+
+        Args:
+            max_distance_m (float): Largest ground distance between grouped AOIs.
+            min_similarity (int): Smallest appearance similarity (0-100) between them.
+
+        Returns:
+            bool: True if the grouping started.
+        """
+        if self._thread is not None:
+            return False
+        if not any(image.get('areas_of_interest') for image in (self.parent.images or [])):
+            return False
+
+        worker = SimilarityGroupingWorker(
+            grouping_service=AOISimilarityGroupingService(self._get_service()),
+            images=self.parent.images,
+            locate_aois=make_aoi_locator(
+                custom_altitude_ft=getattr(self.parent, 'custom_agl_altitude_ft', None),
+                use_terrain=getattr(self.parent, 'use_terrain_elevation', True),
+            ),
+            max_distance_m=max_distance_m,
+            min_similarity=min_similarity,
+        )
+        self._start_worker(
+            worker, self._on_grouping_complete, self._on_grouping_error,
+            title=self.tr("Sort: Similar & Nearby"),
+            label=self.tr("Grouping AOIs that look alike and are close together..."),
+            grouping=True,
+        )
+        return True
+
+    def _start_worker(self, worker, on_finished, on_error, title, label, grouping=False):
+        """Show the progress dialog and run *worker* on its own thread."""
         self._cancelled = False
+        self._grouping = grouping
 
         # Show progress dialog (indeterminate until the first progress signal)
         self.progress_dialog = QProgressDialog(
-            self.tr("Analyzing AOIs for visual similarity..."),
+            label,
             self.tr("Cancel"),
             0, 0,
             self.parent
         )
-        self.progress_dialog.setWindowTitle(self.tr("Find Similar AOIs"))
+        self.progress_dialog.setWindowTitle(title)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
         # Own the dialog's lifetime explicitly. With autoClose/autoReset on,
@@ -186,21 +296,16 @@ class AOISimilarityController(TranslationMixin, QObject):
 
         # Create worker and thread
         self._thread = QThread()
-        self._worker = SimilaritySearchWorker(
-            similarity_service=self._get_service(),
-            images=self.parent.images,
-            **worker_kwargs
-        )
+        self._worker = worker
         self._worker.moveToThread(self._thread)
 
         # Connect signals
         self._thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_search_complete)
-        self._worker.error.connect(self._on_search_error)
+        self._worker.finished.connect(on_finished)
+        self._worker.error.connect(on_error)
         self.progress_dialog.canceled.connect(self._on_cancelled)
 
-        self.search_started.emit()
         self._thread.start()
 
     def _on_progress(self, done, total):
@@ -319,10 +424,90 @@ class AOISimilarityController(TranslationMixin, QObject):
         except Exception as e:
             self.logger.error(f"Error handling similarity search error: {e}")
 
+    def _on_grouping_complete(self, result):
+        """Apply a finished similar-and-nearby grouping as the AOI sort."""
+        if self._defer_while_pumping(self._on_grouping_complete, result):
+            return
+        try:
+            self._cleanup_thread()
+            self._close_progress_dialog()
+
+            if self._cancelled:
+                return  # _on_cancelled already restored the sort selection
+
+            if result is None or not result.total:
+                self._restore_sort_selection()
+                return
+
+            if result.unlocated_count == result.total:
+                self._restore_sort_selection()
+                QMessageBox.information(
+                    self.parent,
+                    self.tr("No AOI Positions"),
+                    self.tr("None of the AOIs have a GPS position, so AOIs that are close "
+                            "together cannot be grouped.")
+                )
+                return
+
+            self.parent.aoi_controller.apply_similarity_groups(result)
+            self._show_grouping_toast(result)
+            self.grouping_completed.emit(result)
+
+        except Exception as e:
+            self.logger.error(f"Error applying similarity grouping: {e}")
+
+    def _on_grouping_error(self, error_msg):
+        """Handle a failed grouping: keep the previous sort and report it."""
+        if self._defer_while_pumping(self._on_grouping_error, error_msg):
+            return
+        try:
+            self._cleanup_thread()
+            self._close_progress_dialog()
+
+            if self._cancelled:
+                return
+
+            self._restore_sort_selection()
+            QMessageBox.warning(
+                self.parent,
+                self.tr("Sort Error"),
+                self.tr("The AOIs could not be sorted by similarity:\n{error}").format(error=error_msg)
+            )
+            self.grouping_error.emit(error_msg)
+
+        except Exception as e:
+            self.logger.error(f"Error handling similarity grouping error: {e}")
+
+    def _show_grouping_toast(self, result):
+        """Summarize the applied grouping in a status toast."""
+        if not hasattr(self.parent, 'status_controller'):
+            return
+        if result.groups:
+            message = self.tr("Sorted into {groups} group(s) of similar, nearby AOIs "
+                              "({grouped} of {total} AOIs)").format(
+                groups=len(result.groups), grouped=result.grouped_count, total=result.total)
+            color = "#00C853"
+        else:
+            message = self.tr("No similar AOIs found close together - try a larger distance "
+                              "or a lower similarity")
+            color = "#808080"
+        if result.unlocated_count:
+            message += self.tr("; {count} AOI(s) without a GPS position left ungrouped").format(
+                count=result.unlocated_count)
+        self.parent.status_controller.show_toast(message, 4000, color=color)
+
+    def _restore_sort_selection(self):
+        """Point the sort combo back at the sort that is actually applied."""
+        aoi_controller = getattr(self.parent, 'aoi_controller', None)
+        if aoi_controller is not None:
+            aoi_controller.restore_sort_selection()
+
     def _on_cancelled(self):
         """Handle cancellation from the progress dialog."""
         self._cancelled = True
         self._cleanup_thread()
+        if self._grouping:
+            self._restore_sort_selection()
 
     def _close_progress_dialog(self):
         """Close the progress dialog without triggering a spurious cancellation.

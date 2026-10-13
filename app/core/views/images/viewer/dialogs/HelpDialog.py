@@ -244,6 +244,8 @@ class HelpDialog(TranslationMixin, QDialog):
                     <tr>
                         <td>Shift + Z</td>
                         <td>Find visually similar AOIs (ranks all other AOIs by color/size similarity to the selected AOI)</td>
+                    </tr>
+                    <tr>
                         <td>S</td>
                         <td>Toggle Grid Review Mode — sweep the image cell by cell at a fixed zoom.
                             While active: Space marks the cell reviewed and advances (rolling into the
@@ -425,7 +427,9 @@ class HelpDialog(TranslationMixin, QDialog):
                 <table>
                     <tr>
                         <td>⬍ Sort Button</td>
-                        <td>Sort AOIs by various criteria (color, size, and distance)</td>
+                        <td>Sort AOIs by various criteria (color, size, and distance). <b>Similar &amp; Nearby
+                            (Groups)</b> places AOIs that look alike and are close together on the ground
+                            next to each other; pick it again to change its distance and similarity</td>
                     </tr>
                     <tr>
                         <td>⊙ Filter Button</td>
@@ -515,6 +519,8 @@ class HelpDialog(TranslationMixin, QDialog):
                     <li>Press <b>Shift+Z</b> (or right-click an AOI thumbnail and choose
                         <b>Find Similar AOIs</b>) to rank all other AOIs by visual similarity
                         - useful for finding other detections of the same object or material</li>
+                    <li>Sort by <b>Similar &amp; Nearby (Groups)</b> to review repeat detections of
+                        the same object (or the same kind of false positive) together</li>
                     <li>In the similar-AOI results, <b>check thumbnails</b> to select them, then
                         use <b>Flag</b>, <b>Unflag</b>, or <b>Comment</b> to update all checked
                         AOIs at once</li>
