@@ -791,6 +791,39 @@ def test_set_aoi_comments_bulk_empty_clears_attribute(bulk_controller):
 
 
 # ---------------------------------------------------------------------------
+# delete_aoi keeps flagged_aois aligned with the AOI list
+# ---------------------------------------------------------------------------
+
+def _confirm_delete():
+    from PySide6.QtWidgets import QMessageBox
+    return patch.object(QMessageBox, "question", return_value=QMessageBox.Yes)
+
+
+def test_delete_unflagged_aoi_shifts_later_flag_down(bulk_controller):
+    """Deleting an unflagged AOI before a flagged one must re-index the flag;
+    otherwise the survivor reads as unflagged and drops out of KML/CalTopo/PDF
+    exports until the results are reopened."""
+    bulk_controller.set_aoi_flags_bulk([(0, 1)], True)
+    survivor = bulk_controller.parent.images[0]["areas_of_interest"][1]
+
+    with _confirm_delete():
+        bulk_controller.delete_aoi(0)
+
+    assert bulk_controller.parent.images[0]["areas_of_interest"] == [survivor]
+    assert bulk_controller.flagged_aois == {0: {0}}
+
+
+def test_delete_flagged_aoi_removes_its_flag(bulk_controller):
+    bulk_controller.set_aoi_flags_bulk([(0, 0)], True)
+
+    with _confirm_delete():
+        bulk_controller.delete_aoi(0)
+
+    assert len(bulk_controller.parent.images[0]["areas_of_interest"]) == 1
+    assert bulk_controller.flagged_aois == {0: set()}
+
+
+# ---------------------------------------------------------------------------
 # area_of_interest_click (thumbnail click must SELECT, not just zoom)
 # ---------------------------------------------------------------------------
 

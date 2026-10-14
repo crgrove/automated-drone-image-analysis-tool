@@ -26,7 +26,7 @@ import qimage2ndarray
 
 from core.services.LoggerService import LoggerService
 from core.services.cache.ThumbnailBlobStore import ThumbnailBlobStore
-from helpers.PathHelper import cross_platform_path_tail
+from helpers.PathHelper import cross_platform_path_key
 
 
 class ThumbnailCacheService:
@@ -75,25 +75,52 @@ class ThumbnailCacheService:
         # Memory cache size
         self.max_memory_cache = max_memory_cache
 
+        # Dataset-relative image identities (PathHelper.build_image_cache_
+        # identities): the full path below the dataset root, which is unique
+        # within the dataset however deeply flights nest. Populated by the
+        # analysis writer and the viewer-side readers; consumers without one
+        # fall back to the full normalized path under a SEPARATE key
+        # namespace, so a fallback lookup is exact too and can never be
+        # answered with an identity-written entry for a different image.
+        self._image_identities: Dict[str, str] = {}
+
         # Clear the LRU cache to set max size
         self.get_thumbnail_from_memory.cache_clear()
+
+    def set_image_identities(self, identities: Dict[str, str]):
+        """Register dataset-relative identities for cache keying.
+
+        Args:
+            identities: Mapping of image path (any platform's spelling) to its
+                dataset-relative identity, as built by
+                PathHelper.build_image_cache_identities. Merged into any
+                identities already registered.
+        """
+        for path, identity in identities.items():
+            if path and identity:
+                self._image_identities[cross_platform_path_key(path)] = identity
 
     def get_cache_key(self, image_path: str, aoi_data: Dict[str, Any]) -> str:
         """
         Generate a unique cache key for a thumbnail.
 
-        Keyed by the image's path tail (parent folder + filename) and the AOI
-        coordinates. The bare filename was not enough: drone filenames repeat
-        across flights and sorties (FlightA/DJI_0001.JPG vs
-        FlightB/DJI_0001.JPG), and two same-named images with one AOI position
-        shared a single cache slot - a reviewer then saw a crop belonging to a
-        different photograph. The tail still strips the machine-specific root,
-        so caches shipped inside a results folder stay portable, and mtime
-        stays excluded for the same reason (copying changes it).
+        Keyed by the image's dataset-relative identity (its full path below
+        the dataset root) and the AOI coordinates. A bare filename - or any
+        fixed number of trailing components - is not an identity: drone
+        filenames repeat across nested flight folders
+        (FlightA/DCIM/100MEDIA/DJI_0001.JPG vs FlightB/DCIM/100MEDIA/...),
+        and a colliding key showed a reviewer a crop belonging to a different
+        photograph. The identity still strips the machine-specific root, so
+        caches shipped inside a results folder stay portable, and mtime stays
+        excluded for the same reason (copying changes it).
 
-        The 'v2' prefix versions the formula: every ambiguous old-format entry
-        misses and regenerates rather than ever being served for the wrong
-        image.
+        Callers that never registered identities key on the FULL normalized
+        path under the separate 'v3f' namespace: exact (so it can never
+        collide either), machine-local (a relocated dataset misses and
+        regenerates), and unable to answer an identity-keyed lookup with the
+        wrong image. The version prefixes orphan every ambiguous older-format
+        entry (v1 basename, v2 tail), which regenerates rather than ever
+        being served.
 
         Args:
             image_path: Path to the source image
@@ -102,12 +129,16 @@ class ThumbnailCacheService:
         Returns:
             Unique hash key for this thumbnail
         """
-        tail = cross_platform_path_tail(image_path)
+        path_key = cross_platform_path_key(image_path)
+        identity = self._image_identities.get(path_key)
 
         center = aoi_data.get('center', (0, 0))
         radius = aoi_data.get('radius', 50)
 
-        identifier = f"v2:{tail}:{center[0]}:{center[1]}:{radius}"
+        if identity:
+            identifier = f"v3:{identity}:{center[0]}:{center[1]}:{radius}"
+        else:
+            identifier = f"v3f:{path_key}:{center[0]}:{center[1]}:{radius}"
 
         # Generate hash
         return hashlib.md5(identifier.encode()).hexdigest()

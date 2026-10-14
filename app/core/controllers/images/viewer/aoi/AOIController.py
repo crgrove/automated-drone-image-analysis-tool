@@ -2140,20 +2140,21 @@ class AOIController(TranslationMixin):
                 if image_xml is not None:
                     image_xml.remove(xml_element)
 
-            # Remove from flagged_aois if it's flagged
+            # Keep flagged_aois in step with the list after the pop below: drop the
+            # deleted index, then shift every later flagged index down by one. The
+            # shift must happen whether or not the deleted AOI was itself flagged,
+            # or a flagged AOI after it loses its flag in the sidebar and exports.
             img_idx = self.parent.current_image
             if img_idx in self.flagged_aois:
                 flagged_set = self.flagged_aois[img_idx]
-                if aoi_index in flagged_set:
-                    flagged_set.remove(aoi_index)
-                    # Decrement indices of all flagged AOIs after the deleted one
-                    new_flagged_set = set()
-                    for idx in flagged_set:
-                        if idx > aoi_index:
-                            new_flagged_set.add(idx - 1)
-                        else:
-                            new_flagged_set.add(idx)
-                    self.flagged_aois[img_idx] = new_flagged_set
+                flagged_set.discard(aoi_index)
+                new_flagged_set = set()
+                for idx in flagged_set:
+                    if idx > aoi_index:
+                        new_flagged_set.add(idx - 1)
+                    else:
+                        new_flagged_set.add(idx)
+                self.flagged_aois[img_idx] = new_flagged_set
 
             # Remove the AOI from the list
             image['areas_of_interest'].pop(aoi_index)

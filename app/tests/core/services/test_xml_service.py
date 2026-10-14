@@ -98,6 +98,27 @@ def test_save_xml_file(tmp_path):
     assert os.path.exists(path)
 
 
+def test_cache_id_round_trip(tmp_path):
+    """The analysis-time cache identity persists as an <image> attribute and
+    parses back; images without one stay unchanged (legacy files)."""
+    service = XmlService()
+    service.add_image_to_xml({
+        "path": "with_id.jpg",
+        "cache_id": "flighta/dcim/100media/with_id.jpg",
+        "aois": [{"center": (25, 25), "radius": 5, "area": 50}],
+    })
+    service.add_image_to_xml({
+        "path": "without_id.jpg",
+        "aois": [{"center": (30, 30), "radius": 5, "area": 50}],
+    })
+    out_path = tmp_path / "saved.xml"
+    service.save_xml_file(out_path)
+
+    reloaded = XmlService(out_path).get_images()
+    assert reloaded[0]["cache_id"] == "flighta/dcim/100media/with_id.jpg"
+    assert "cache_id" not in reloaded[1]
+
+
 def test_user_corrected_aoi_position_round_trip(tmp_path, sample_xml):
     """A user-corrected AOI position (dragged map marker) persists through
     save/reload, and files without one parse exactly as before."""

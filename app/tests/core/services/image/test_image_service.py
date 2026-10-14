@@ -721,6 +721,33 @@ class TestWorkingAltitude:
         service = self._service(image_service, reported=None, effective=None)
         assert service.get_working_altitude_m() is None
 
+    def test_the_centre_comes_from_the_pixel_array_by_default(self, image_service):
+        """The fixture frame is 100 x 100, so its centre is (50, 50)."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        service.get_working_altitude_m()
+        assert service._effective_agl_at_pixel.call_args.args[:2] == (50, 50)
+
+    def test_a_frame_size_locates_the_centre_instead(self, image_service):
+        """Analysis workers hold a downscaled array; the full frame's centre is wanted."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        assert service.get_working_altitude_m(frame_size=(8000, 6000)) == 71.5
+        assert service._effective_agl_at_pixel.call_args.args[:2] == (4000, 3000)
+
+    def test_a_frame_size_never_decodes_the_image(self, image_service):
+        """A deferred-load service must not read pixels just to learn the frame size."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        service._img_array = None
+        service._load_img_array = MagicMock(side_effect=AssertionError("decoded"))
+        assert service.get_working_altitude_m(frame_size=(8000, 6000)) == 71.5
+
+    def test_the_gsd_service_forwards_the_frame_size(self, image_service):
+        image_service.get_working_altitude_m = MagicMock(return_value=71.5)
+        image_service._build_gsd_service = MagicMock()
+        image_service.get_gsd_service(offline_only=True, frame_size=(8000, 6000))
+        kwargs = image_service.get_working_altitude_m.call_args.kwargs
+        assert kwargs['frame_size'] == (8000, 6000)
+        assert kwargs['offline_only'] is True
+
 
 class TestGsdUsesTheWorkingAltitude:
     def test_the_gsd_service_is_built_at_the_resolved_altitude(self, image_service):

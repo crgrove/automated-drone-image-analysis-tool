@@ -45,6 +45,10 @@ class ThumbnailLoader(QObject):
         # Cache service with per-dataset cache support
         self.cache_service = ThumbnailCacheService(dataset_cache_dir=dataset_cache_dir)
 
+        # Dataset-relative image identities, kept here so they survive the
+        # cache service being recreated on a cache-directory change.
+        self._image_identities = {}
+
         # Track pending loads
         self.pending_loads: List[Tuple[int, int, str, Dict]] = []
         self.loading_set: Set[Tuple[int, int]] = set()
@@ -186,6 +190,17 @@ class ThumbnailLoader(QObject):
             self.logger.error(f"Error starting thumbnail load: {e}")
             self.loading_set.discard((image_idx, aoi_idx))
 
+    def set_image_identities(self, identities: dict):
+        """Register the dataset's image identities for cache keying.
+
+        Args:
+            identities: Mapping of image path to dataset-relative identity
+                (PathHelper.build_image_cache_identities), computed over the
+                dataset's FULL image list.
+        """
+        self._image_identities = dict(identities or {})
+        self.cache_service.set_image_identities(self._image_identities)
+
     def set_dataset_cache_dir(self, dataset_cache_dir: Optional[str]):
         """
         Update the dataset cache directory.
@@ -193,8 +208,11 @@ class ThumbnailLoader(QObject):
         Args:
             dataset_cache_dir: Per-dataset cache directory path
         """
-        # Recreate cache service with new dataset cache directory
+        # Recreate cache service with new dataset cache directory. The image
+        # identities describe the dataset, not the cache location, so they
+        # carry over to the fresh service.
         self.cache_service = ThumbnailCacheService(dataset_cache_dir=dataset_cache_dir)
+        self.cache_service.set_image_identities(self._image_identities)
         # self.logger.info(f"Updated thumbnail cache to use dataset directory: {dataset_cache_dir}")
 
     def clear_queue(self):

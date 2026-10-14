@@ -166,6 +166,113 @@ def split_path_components(path):
     return [part for part in normalized.split(os.sep) if part]
 
 
+def cross_platform_path_key(path):
+    """Full separator/case/Unicode-normalized form of *path* for map lookups.
+
+    The identity maps built by :func:`build_image_cache_identities` are keyed
+    with this, so a consumer can look a path up however its platform spelled
+    it. Comparison only - never store or open the value.
+
+    Args:
+        path (str): A path written by any platform.
+
+    Returns:
+        str: Normalized key, or '' when *path* is empty.
+    """
+    if not path:
+        return ''
+    joined = '/'.join(split_path_components(path))
+    return unicodedata.normalize('NFC', joined).casefold()
+
+
+def build_image_cache_identities(paths, input_root=None):
+    """Map each image path to its dataset-relative cache identity.
+
+    The AOI caches (thumbnails on disk, colors/temperatures in memory) need a
+    per-image key that is unique WITHIN a dataset - a bare filename or fixed
+    tail is not, because drone filenames repeat across nested flight folders
+    (FlightA/DCIM/100MEDIA/DJI_0001.JPG vs FlightB/DCIM/100MEDIA/...) - while
+    still surviving the dataset moving to another machine. The identity is the
+    path below the dataset root:
+
+    An identity exists ONLY for a path under *input_root* (the analysis
+    input directory, which the analysis writes into the results XML): it is
+    everything after the root, exact and unique (relative paths within one
+    tree cannot repeat). Any other path gets NO identity and keys on its
+    full normalized path instead - a cache miss and regeneration.
+
+    Identity is deliberately never INFERRED for paths outside the root
+    (e.g. by stripping the relocated set's common prefix). Inference
+    produces a key in the writer's namespace without establishing that it
+    denotes the same image: moving a whole tree containing Photos/x.jpg and
+    Photos/Photos/x.jpg shifts every inferred identity one level, handing
+    the second image the first one's cached thumbnail. Relocated datasets
+    keep their caches through the identity the analysis PERSISTS per image
+    ('cache_id' in the results XML, resolved by
+    :func:`image_cache_identity_map`), which path recovery never rewrites.
+
+    Args:
+        paths (Iterable[str]): Image paths.
+        input_root (str): The dataset's analysis input directory, when known.
+
+    Returns:
+        dict: :func:`cross_platform_path_key` of each rooted path ->
+        identity string (casefolded, '/'-joined). Empty paths and paths
+        outside *input_root* are absent.
+    """
+    root_parts = split_path_components(input_root) if input_root else []
+    root_key = [unicodedata.normalize('NFC', p).casefold() for p in root_parts]
+    if not root_key:
+        return {}
+
+    identities = {}
+    for path in paths:
+        parts = split_path_components(path)
+        if not parts:
+            continue
+        folded = [unicodedata.normalize('NFC', p).casefold() for p in parts]
+        if len(folded) > len(root_key) and folded[:len(root_key)] == root_key:
+            identities[cross_platform_path_key(path)] = '/'.join(folded[len(root_key):])
+    return identities
+
+
+def image_cache_identity_map(images, input_root=None):
+    """Cache-identity map for a dataset's image dicts (XmlService.get_images).
+
+    Per image, in order of trust: the PERSISTED analysis-time identity
+    ('cache_id', written into the results XML and untouched by path
+    recovery, so it survives any relocation), else the path below
+    *input_root* for datasets analyzed before the identity was persisted and
+    never moved. An image with neither keys on its full normalized path -
+    the safe miss.
+
+    Args:
+        images (Iterable[dict]): Image dicts carrying 'path' and optionally
+            'cache_id' (as parsed by XmlService.get_images).
+        input_root (str): The dataset's recorded analysis input directory.
+
+    Returns:
+        dict: :func:`cross_platform_path_key` of each resolvable image's
+        path -> identity string.
+    """
+    identities = {}
+    unidentified_paths = []
+    for img in images:
+        path = img.get('path')
+        if not path:
+            continue
+        cache_id = img.get('cache_id')
+        if cache_id:
+            identities[cross_platform_path_key(path)] = cache_id
+        else:
+            unidentified_paths.append(path)
+    if unidentified_paths:
+        for key, identity in build_image_cache_identities(
+                unidentified_paths, input_root=input_root).items():
+            identities.setdefault(key, identity)
+    return identities
+
+
 def cross_platform_path_tail(path, components=2):
     """Return the last *components* path components as one matching key.
 
