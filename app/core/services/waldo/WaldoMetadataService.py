@@ -1318,6 +1318,20 @@ class WaldoMetadataService:
                     (WALDO_NAMESPACE_URI, CLOCK_FACE_SHIFT_XMP, f"{face_shift_h:+.0f}"),
                     (WALDO_NAMESPACE_URI, CLOCK_TIMEZONE_XMP,
                      tz_name or f"UTC{fixed_offset_h:+.1f}"),
+                    # A CHANGED clock invalidates any flight-log refinement
+                    # computed on the old clock: blank the refined time, its
+                    # offset, and the stage's idempotence signature in the
+                    # same write, so time consumers use the new corrected
+                    # stamp until a fresh log fit restamps them. Left behind,
+                    # the stale CaptureUtcRefined keeps outranking this
+                    # correction in resolve_capture_utc - and the silent
+                    # log re-apply cannot fix that on a machine that never
+                    # had the log. (Unchanged corrections skip this whole
+                    # write above, so remembered-clock auto-applies never
+                    # touch a live refinement.)
+                    (WALDO_NAMESPACE_URI, CLOCK_REFINED_UTC_XMP, ""),
+                    (WALDO_NAMESPACE_URI, CLOCK_OFFSET_SECONDS_XMP, ""),
+                    (WALDO_NAMESPACE_URI, FLIGHTLOG_SIGNATURE_XMP, ""),
                 ])
                 result.processed += 1
             except Exception as e:

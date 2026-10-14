@@ -7,9 +7,9 @@ This service provides:
 """
 
 import hashlib
-import os
 from typing import Dict, Optional, Any
 from core.services.LoggerService import LoggerService
+from helpers.PathHelper import cross_platform_path_tail
 
 
 class TemperatureCacheService:
@@ -46,14 +46,16 @@ class TemperatureCacheService:
             MD5 hash cache key
         """
         try:
-            # Use only the filename to make cache portable across machines
-            filename = os.path.basename(image_path)
+            # Parent folder + filename: bare filenames repeat across flight
+            # folders, and a colliding key showed one AOI another image's
+            # temperature. The tail still strips the machine-specific root.
+            tail = cross_platform_path_tail(image_path)
 
-            # Create unique identifier from filename, center, radius
+            # Create unique identifier from path tail, center, radius
             center = aoi_data.get('center', (0, 0))
             radius = aoi_data.get('radius', 0)
 
-            identifier = f"{filename}_{center[0]}_{center[1]}_{radius}"
+            identifier = f"v2:{tail}_{center[0]}_{center[1]}_{radius}"
 
             # Generate hash
             return hashlib.md5(identifier.encode()).hexdigest()

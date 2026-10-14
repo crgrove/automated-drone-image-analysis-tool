@@ -165,6 +165,85 @@ def test_batch_output_dir_for_root_images(tmp_path):
     assert result == str(tmp_path / 'out' / 'searcharea')
 
 
+def test_root_batch_and_same_named_child_have_distinct_outputs(tmp_path):
+    """Mission/ (loose images) and Mission/Mission/ must never share an output
+    directory: the second pass would rmtree the first's ADIAT_Results, and a
+    resume would mistake the first batch's XML for the second's completion."""
+    input_dir = tmp_path / 'Mission'
+    _touch_image(str(input_dir))
+    _touch_image(str(input_dir / 'Mission'))
+
+    service = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+    root_output = service._batch_output_dir(str(input_dir))
+    child_output = service._batch_output_dir(str(input_dir / 'Mission'))
+
+    assert root_output != child_output, (root_output, child_output)
+    assert child_output == str(tmp_path / 'output' / 'Mission')
+    assert root_output == str(tmp_path / 'output' / 'Mission_root')
+
+
+def test_root_batch_output_is_stable_across_resume(tmp_path):
+    """The disambiguated root path derives from the input tree alone, so a
+    fresh service instance (a resume) computes the same mapping."""
+    input_dir = tmp_path / 'Mission'
+    _touch_image(str(input_dir))
+    _touch_image(str(input_dir / 'Mission'))
+
+    first = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+    second = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+
+    assert (first._batch_output_dir(str(input_dir))
+            == second._batch_output_dir(str(input_dir)))
+
+
+def test_root_batch_suffix_escalates_past_same_named_children(tmp_path):
+    """A child literally named Mission_root cannot capture the root's slot."""
+    input_dir = tmp_path / 'Mission'
+    _touch_image(str(input_dir))
+    _touch_image(str(input_dir / 'Mission'))
+    _touch_image(str(input_dir / 'Mission_root'))
+
+    service = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+
+    assert (service._batch_output_dir(str(input_dir))
+            == str(tmp_path / 'output' / 'Mission_root_root'))
+
+
+def test_root_batch_without_collision_keeps_its_folder_name(tmp_path):
+    """No same-named child: the root keeps the pre-existing output layout, so
+    resuming an interrupted run from an older build still finds its results."""
+    input_dir = tmp_path / 'Mission'
+    _touch_image(str(input_dir))
+    _touch_image(str(input_dir / 'FlightA'))
+
+    service = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+
+    assert service._batch_output_dir(str(input_dir)) == str(tmp_path / 'output' / 'Mission')
+
+
+def test_process_batches_same_named_child_keeps_both_results(tmp_path):
+    """End to end: both batches complete with their own ADIAT_Data.xml, and a
+    resume count sees two completed batches, not one shadowing the other."""
+    input_dir = tmp_path / 'Mission'
+    _touch_image(str(input_dir))
+    _touch_image(str(input_dir / 'Mission'))
+
+    service = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+    with patch('core.services.BatchAnalyzeService.AnalyzeService',
+               side_effect=_make_analyze_factory({})):
+        service.process_batches()
+
+    assert len(service.results) == 2
+    assert all(r['status'] == 'Completed' for r in service.results)
+    xml_paths = {r['xml_path'] for r in service.results}
+    assert len(xml_paths) == 2
+    assert all(os.path.isfile(p) for p in xml_paths)
+
+    resumed = BatchAnalyzeService(str(input_dir), str(tmp_path / 'output'), _make_config())
+    completed, total = resumed.count_completed_batches()
+    assert (completed, total) == (2, 2)
+
+
 # --- _safe_filename ---------------------------------------------------------
 
 def test_safe_filename():

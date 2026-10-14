@@ -98,6 +98,64 @@ def test_resolve_utc_bad_refined_value_falls_to_corrected():
     assert utc == datetime(2026, 7, 23, 13, 49, 37, tzinfo=timezone.utc)
 
 
+# ---------------------------------------------------------------------------
+# Refinement staleness (review finding 5): a refined stamp only outranks the
+# corrected stamp while refined - corrected still equals its ClockOffsetSeconds.
+# A clock amendment applied after the fit breaks that arithmetic.
+# ---------------------------------------------------------------------------
+
+def test_resolve_utc_refined_consistent_with_offset_stays_authoritative():
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'waldo:CaptureUtcCorrected': '2026-07-23T13:49:37+00:00',
+        'waldo:CaptureUtcRefined': '2026-07-23T13:49:20+00:00',
+        'waldo:ClockOffsetSeconds': '-17.00',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_refined'
+    assert utc == datetime(2026, 7, 23, 13, 49, 20, tzinfo=timezone.utc)
+
+
+def test_resolve_utc_amended_clock_demotes_stale_refined():
+    """A one-hour amendment leaves refined - corrected 3600 s away from the
+    stamped offset: the refinement belongs to a clock that no longer exists."""
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'waldo:CaptureUtcCorrected': '2026-07-23T14:49:37+00:00',  # amended +1h
+        'waldo:CaptureUtcRefined': '2026-07-23T13:49:20+00:00',    # old-clock fit
+        'waldo:ClockOffsetSeconds': '-17.00',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_corrected'
+    assert utc == datetime(2026, 7, 23, 14, 49, 37, tzinfo=timezone.utc)
+
+
+def test_resolve_utc_unparseable_offset_fails_toward_corrected():
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'waldo:CaptureUtcCorrected': '2026-07-23T13:49:37+00:00',
+        'waldo:CaptureUtcRefined': '2026-07-23T13:49:20+00:00',
+        'waldo:ClockOffsetSeconds': 'garbage',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_corrected'
+
+
+def test_resolve_utc_blanked_refined_falls_to_corrected():
+    """apply_clock_correction blanks the refinement fields on amendment; the
+    empty stamps must read as absent, not as parse errors."""
+    exif = _make_gps_exif(b'2025:06:15', ((19, 1), (30, 1), (0, 1)))
+    xmp = {
+        'waldo:CaptureUtcCorrected': '2026-07-23T14:49:37+00:00',
+        'waldo:CaptureUtcRefined': '',
+        'waldo:ClockOffsetSeconds': '',
+        'waldo:FlightLogSignature': '',
+    }
+    utc, source = resolve_capture_utc(exif, xmp)
+    assert source == 'waldo_corrected'
+    assert utc == datetime(2026, 7, 23, 14, 49, 37, tzinfo=timezone.utc)
+
+
 def test_timezone_name_for_position_returns_zone_or_none():
     name = solar_mod.timezone_name_for_position(_TX_LAT, _TX_LON)
     assert name in ('America/Chicago', None)  # None only if tzfinder missing

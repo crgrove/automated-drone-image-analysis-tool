@@ -299,6 +299,133 @@ def test_b6_genuinely_empty_successful_tile_stays_cached(app):
     assert view.overlay_failed_tiles.get('trails', set()) == set()
 
 
+# ---------------------------------------------------------------------------
+# Source captured at request time (review finding 4, PR #43 follow-up): a
+# reply that arrives after the user switched layers must neither be cached
+# under the NEW source's name nor displayed in the new layer.
+# ---------------------------------------------------------------------------
+
+def _fake_reply_factory(error=None, png_data=None):
+    """A finished-signal reply the loader can consume like a QNetworkReply."""
+    from PySide6.QtCore import QObject, Signal
+    from PySide6.QtNetwork import QNetworkReply
+
+    class Reply(QObject):
+        finished = Signal()
+
+        def error(self):
+            return error if error is not None else QNetworkReply.NetworkError.NoError
+
+        def errorString(self):
+            return "refused"
+
+        def attribute(self, _attr):
+            return None
+
+        def readAll(self):
+            return png_data
+
+    return Reply()
+
+
+def _png_bytes(color=Qt.red):
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.WriteOnly)
+    tile = QPixmap(32, 32)
+    tile.fill(color)
+    assert tile.save(buffer, 'PNG')
+    buffer.close()
+    return data
+
+
+def test_switching_source_mid_download_never_poisons_the_other_cache(app, tmp_path, monkeypatch):
+    """A street-map response arriving after a switch to satellite is cached as
+    a MAP tile, not a satellite tile, and is not displayed."""
+    from types import SimpleNamespace
+
+    loader = _loader(tmp_path, 'map', offline=False)
+    reply = _fake_reply_factory(png_data=_png_bytes())
+    loader.network_manager = SimpleNamespace(get=lambda request: reply)
+    monkeypatch.setattr(loader, '_looks_unavailable', lambda pixmap: False)
+    tiles, placeholders = [], []
+    loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append((x, y, z)))
+    loader.tile_placeholder.connect(lambda x, y, z, pm: placeholders.append((x, y, z)))
+
+    loader.download_tile(1, 2, 3)  # requested while the source is 'map'
+    loader.set_tile_source('satellite')
+    reply.finished.emit()  # the original street-map response arrives late
+
+    assert not (tmp_path / 'satellite_3_1_2.png').exists(), \
+        'street map saved into the satellite cache'
+    assert (tmp_path / 'map_3_1_2.png').exists()
+    assert not loader.active_downloads
+    assert tiles == [], 'a deselected source must not be displayed'
+    assert placeholders == []
+
+
+def test_download_completing_for_current_source_still_emits(app, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    loader = _loader(tmp_path, 'map', offline=False)
+    reply = _fake_reply_factory(png_data=_png_bytes())
+    loader.network_manager = SimpleNamespace(get=lambda request: reply)
+    monkeypatch.setattr(loader, '_looks_unavailable', lambda pixmap: False)
+    tiles = []
+    loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append((x, y, z)))
+
+    loader.download_tile(1, 2, 3)
+    reply.finished.emit()
+
+    assert tiles == [(1, 2, 3)]
+    assert (tmp_path / 'map_3_1_2.png').exists()
+    assert not loader.active_downloads
+
+
+def test_switching_away_and_back_before_completion_still_displays(app, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    loader = _loader(tmp_path, 'map', offline=False)
+    reply = _fake_reply_factory(png_data=_png_bytes())
+    loader.network_manager = SimpleNamespace(get=lambda request: reply)
+    monkeypatch.setattr(loader, '_looks_unavailable', lambda pixmap: False)
+    tiles = []
+    loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append((x, y, z)))
+
+    loader.download_tile(1, 2, 3)
+    loader.set_tile_source('satellite')
+    loader.set_tile_source('map')  # back before the reply lands
+    reply.finished.emit()
+
+    assert tiles == [(1, 2, 3)]
+
+
+def test_stale_source_error_never_grays_the_new_layer(app, tmp_path):
+    """A late FAILURE for the old source must not paint a gray tile (or a
+    fallback crop) into the layer the user is looking at now, and the failure
+    is remembered under the ORIGINAL source's key."""
+    from types import SimpleNamespace
+    from PySide6.QtNetwork import QNetworkReply
+
+    loader = _loader(tmp_path, 'map', offline=False)
+    reply = _fake_reply_factory(error=QNetworkReply.NetworkError.ConnectionRefusedError)
+    loader.network_manager = SimpleNamespace(get=lambda request: reply)
+    tiles, placeholders = [], []
+    loader.tile_loaded.connect(lambda x, y, z, pm: tiles.append((x, y, z)))
+    loader.tile_placeholder.connect(lambda x, y, z, pm: placeholders.append((x, y, z)))
+
+    loader.download_tile(1, 2, 3)
+    loader.set_tile_source('satellite')
+    reply.finished.emit()
+
+    assert tiles == []
+    assert placeholders == []
+    assert (1, 2, 3, 'map') in loader._fallback_failed
+    assert (1, 2, 3, 'satellite') not in loader._fallback_failed
+    assert not loader.active_downloads
+
+
 def test_b6_online_error_emits_placeholder_channel(app, tmp_path):
     """The download-error path emits on tile_placeholder, not tile_loaded, so
     consumers cannot mistake the failure for a served tile."""

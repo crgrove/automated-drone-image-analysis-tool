@@ -53,6 +53,29 @@ def test_hue_distance_maximum_is_180(controller):
 
 
 # ---------------------------------------------------------------------------
+# invalidate_aoi_service_cache
+# ---------------------------------------------------------------------------
+
+def test_invalidate_aoi_service_cache_forces_rebuild(controller):
+    """After invalidation the next access must construct a fresh AOIService,
+    even though the image index is unchanged (a mid-session XMP restamp
+    changes the pose without changing the index)."""
+    stale = MagicMock(name="stale")
+    controller.parent.images = [{"path": "img.jpg"}]
+    controller._cached_aoi_service = stale
+    controller._cached_image_index = 0
+
+    controller.invalidate_aoi_service_cache()
+
+    fresh = MagicMock(name="fresh")
+    with patch(
+        "core.controllers.images.viewer.aoi.AOIController.AOIService",
+        return_value=fresh,
+    ):
+        assert controller.get_aoi_service() is fresh
+
+
+# ---------------------------------------------------------------------------
 # initialize_from_xml
 # ---------------------------------------------------------------------------
 

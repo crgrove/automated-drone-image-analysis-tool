@@ -6,7 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
-from helpers.PathHelper import cross_platform_basename
+from core.services.export.ReviewMergeService import ReviewMergeService
 
 
 class SearchProjectService:
@@ -344,26 +344,32 @@ class SearchProjectService:
         return (0.0, 0.0)
 
     @staticmethod
-    def _image_match_key(image_path):
-        """Key used to decide two review rows refer to the same capture.
+    def _normalized_image_path(image_path):
+        """Separator- and case-normalized form of a stored image path."""
+        return (image_path or '').replace('\\', '/').lower()
 
-        Reviewers run on different machines, so the same image arrives with
-        different absolute paths, separators, and casing. Raw string equality
-        made every cross-machine review create duplicates instead of merging.
-        The filename (case-insensitive, split on both separator styles) plus
-        the center-proximity check identifies the AOI across machines.
+    @staticmethod
+    def _legacy_entry_batch(aoi_elem):
+        """Creating batch of a consolidated AOI that predates <batch_id>.
 
-        Args:
-            image_path (str): Stored image path from a review or the project.
-
-        Returns:
-            str: Normalized match key.
+        Old entries never stored the batch on the AOI itself, but every entry
+        records it on its first <review> element. '' means unknowable (match
+        any batch, the old behavior).
         """
-        return cross_platform_basename(image_path or '').lower()
+        reviews_elem = aoi_elem.find('reviews')
+        first_review = reviews_elem.find('review') if reviews_elem is not None else None
+        return first_review.get('batch_id', '') if first_review is not None else ''
 
     def _merge_aoi_data(self, batch_id, images, review_meta):
         """
         Merge AOI data from a review into consolidated_aois.
+
+        Capture identity is (batch, dataset-relative image path), not the bare
+        filename: separate flights routinely repeat camera filenames
+        (FlightA/DJI_0001.JPG vs FlightB/DJI_0001.JPG), and matching on the
+        filename alone silently combined their detections - hiding a lead and
+        fabricating reviewer agreement. The relative key strips only the
+        review's common root, so reviewer copies on other machines still merge.
 
         Args:
             batch_id (str): Batch ID for this review.
@@ -373,36 +379,70 @@ class SearchProjectService:
         root = self.xml.getroot()
         consolidated_elem = root.find('consolidated_aois')
 
-        # Index existing AOIs by filename once, instead of rescanning (and
-        # re-parsing every center of) the whole consolidated list per AOI
-        existing_by_name = {}
+        # Index existing AOIs once by stored identity. Entries written before
+        # <image_key>/<batch_id> were stored fall back to path-suffix matching.
+        existing_by_identity = {}
+        legacy_entries = []
         for existing_aoi in consolidated_elem.findall('aoi'):
-            key = self._image_match_key(existing_aoi.findtext('image_path', ''))
             center = self._parse_center(existing_aoi.findtext('center', '(0, 0)'))
-            existing_by_name.setdefault(key, []).append((existing_aoi, center))
+            stored_key = existing_aoi.findtext('image_key', '')
+            if stored_key:
+                stored_batch = existing_aoi.findtext('batch_id', '')
+                existing_by_identity.setdefault(
+                    (stored_batch, stored_key), []).append((existing_aoi, center))
+            else:
+                legacy_entries.append((
+                    existing_aoi, center, self._legacy_entry_batch(existing_aoi),
+                    self._normalized_image_path(existing_aoi.findtext('image_path', ''))))
 
-        for image in images:
+        image_keys = ReviewMergeService._relative_image_keys(images)
+        for image, image_key in zip(images, image_keys):
             image_path = image.get('path', '')
-            image_key = self._image_match_key(image_path)
 
             for aoi in image.get('areas_of_interest', []):
                 # Try to find matching AOI
                 matched = False
                 center = aoi.get('center', (0, 0))
 
-                for existing_aoi, existing_center in existing_by_name.get(image_key, []):
-                    # Check if centers are close (within 10 pixels)
-                    if abs(existing_center[0] - center[0]) <= 10 and abs(existing_center[1] - center[1]) <= 10:
-                        # Match found - update existing AOI
+                def centers_close(existing_center):
+                    # Cross-reviewer identity of one detection (within 10 px)
+                    return (abs(existing_center[0] - center[0]) <= 10
+                            and abs(existing_center[1] - center[1]) <= 10)
+
+                for existing_aoi, existing_center in existing_by_identity.get(
+                        (batch_id, image_key), []):
+                    if centers_close(existing_center):
                         self._update_existing_aoi(existing_aoi, aoi, review_meta, batch_id)
                         matched = True
                         break
 
                 if not matched:
+                    # Legacy entries: same batch (or unknowable) and the stored
+                    # absolute path ends in this relative key - never a bare
+                    # filename match against some other folder's image.
+                    for legacy_aoi, legacy_center, legacy_batch, legacy_path in legacy_entries:
+                        if legacy_batch and legacy_batch != batch_id:
+                            continue
+                        if not (legacy_path == image_key
+                                or legacy_path.endswith('/' + image_key)):
+                            continue
+                        if centers_close(legacy_center):
+                            self._update_existing_aoi(legacy_aoi, aoi, review_meta, batch_id)
+                            # Stamp the identity so future merges match directly
+                            ET.SubElement(legacy_aoi, 'image_key').text = image_key
+                            ET.SubElement(legacy_aoi, 'batch_id').text = batch_id
+                            legacy_entries.remove((legacy_aoi, legacy_center, legacy_batch, legacy_path))
+                            existing_by_identity.setdefault(
+                                (batch_id, image_key), []).append((legacy_aoi, legacy_center))
+                            matched = True
+                            break
+
+                if not matched:
                     # Create new AOI entry
-                    new_elem = self._create_new_aoi(consolidated_elem, aoi, image_path, review_meta, batch_id)
+                    new_elem = self._create_new_aoi(
+                        consolidated_elem, aoi, image_path, image_key, review_meta, batch_id)
                     # Later AOIs in this same review must be able to match it
-                    existing_by_name.setdefault(image_key, []).append(
+                    existing_by_identity.setdefault((batch_id, image_key), []).append(
                         (new_elem, (float(center[0]), float(center[1])) if len(center) >= 2 else (0.0, 0.0))
                     )
 
@@ -432,7 +472,7 @@ class SearchProjectService:
         if comment:
             ET.SubElement(review, 'comment').text = comment
 
-    def _create_new_aoi(self, consolidated_elem, aoi, image_path, review_meta, batch_id):
+    def _create_new_aoi(self, consolidated_elem, aoi, image_path, image_key, review_meta, batch_id):
         """Create a new consolidated AOI entry.
 
         Returns:
@@ -440,6 +480,10 @@ class SearchProjectService:
         """
         aoi_elem = ET.SubElement(consolidated_elem, 'aoi')
         ET.SubElement(aoi_elem, 'image_path').text = image_path
+        # Capture identity for future merges: the dataset-relative image key
+        # plus the batch it belongs to. Older readers ignore both elements.
+        ET.SubElement(aoi_elem, 'image_key').text = image_key
+        ET.SubElement(aoi_elem, 'batch_id').text = batch_id
         ET.SubElement(aoi_elem, 'center').text = str(aoi.get('center', (0, 0)))
         ET.SubElement(aoi_elem, 'radius').text = str(aoi.get('radius', 0))
         ET.SubElement(aoi_elem, 'area').text = str(aoi.get('area', 0))
