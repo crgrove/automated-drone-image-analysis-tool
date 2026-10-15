@@ -11,15 +11,106 @@ import unicodedata
 import pytest
 
 from helpers.PathHelper import (
+    build_image_cache_identities,
     canonical_path,
     cross_platform_basename,
+    cross_platform_path_key,
     cross_platform_path_tail,
     find_in_index,
+    image_cache_identity_map,
     index_folder_by_filename,
     is_absolute_any_platform,
     normalize_filename_key,
     path_match_key,
 )
+
+
+# ------------------------- build_image_cache_identities ---------------------- #
+
+
+def test_identities_below_input_root_keep_every_directory():
+    paths = [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
+             r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG']
+    identities = build_image_cache_identities(paths, input_root=r'C:\Missions')
+    assert identities[cross_platform_path_key(paths[0])] == 'flighta/dcim/100media/dji_0001.jpg'
+    assert identities[cross_platform_path_key(paths[1])] == 'flightb/dcim/100media/dji_0001.jpg'
+
+
+def test_identities_survive_relocation_via_the_persisted_cache_id():
+    """A relocated dataset reproduces the writer's identities through the
+    cache_id the analysis persisted into the XML (path recovery rewrites
+    'path' but never cache_id) - identity is NEVER inferred from the new
+    location."""
+    writer = build_image_cache_identities(
+        [r'C:\Missions\FlightA\DCIM\100MEDIA\DJI_0001.JPG',
+         r'C:\Missions\FlightB\DCIM\100MEDIA\DJI_0001.JPG'],
+        input_root=r'C:\Missions')
+    reader = image_cache_identity_map([
+        {'path': '/mnt/usb/copy/FlightA/DCIM/100MEDIA/DJI_0001.JPG',
+         'cache_id': 'flighta/dcim/100media/dji_0001.jpg'},
+        {'path': '/mnt/usb/copy/FlightB/DCIM/100MEDIA/DJI_0001.JPG',
+         'cache_id': 'flightb/dcim/100media/dji_0001.jpg'},
+    ])
+    assert sorted(writer.values()) == sorted(reader.values())
+
+
+def test_identities_are_unique_per_path():
+    paths = ['C:/in/FlightA/DCIM/100MEDIA/x.jpg',
+             'C:/in/FlightB/DCIM/100MEDIA/x.jpg',
+             'C:/in/FlightA/DCIM/101MEDIA/x.jpg',
+             'C:/in/loose.jpg']
+    identities = build_image_cache_identities(paths, input_root='C:/in')
+    assert len(set(identities.values())) == len(paths)
+
+
+def test_identity_is_never_inferred_for_paths_outside_the_root():
+    """Inference from a new location can produce a key in the writer's
+    namespace that denotes a DIFFERENT image (moving a tree containing
+    Photos/x.jpg and Photos/Photos/x.jpg shifts every inferred identity one
+    level). Unrooted paths therefore get no identity at all - they key on
+    the full path and miss, never hit another image's entry."""
+    identities = build_image_cache_identities(
+        ['C:/in/FlightA/x.jpg',
+         'D:/Moved/Mission/Photos/DJI_0001.JPG',
+         'D:/Moved/Mission/Photos/Photos/DJI_0001.JPG'],
+        input_root='C:/in')
+
+    assert identities == {
+        cross_platform_path_key('C:/in/FlightA/x.jpg'): 'flighta/x.jpg'}
+
+
+def test_identities_without_a_root_are_empty():
+    assert build_image_cache_identities(['/data/only.jpg']) == {}
+
+
+def test_identity_map_prefers_the_persisted_cache_id():
+    """image_cache_identity_map trusts the persisted cache_id over the
+    path's position, and falls back to the rooted rule only for images that
+    predate the persisted identity."""
+    identities = image_cache_identity_map(
+        [{'path': 'E:/anywhere/DJI_0001.JPG', 'cache_id': 'photos/dji_0001.jpg'},
+         {'path': 'C:/in/FlightA/DJI_0002.JPG'},
+         {'path': 'E:/elsewhere/DJI_0003.JPG'}],
+        input_root='C:/in')
+
+    assert identities[cross_platform_path_key('E:/anywhere/DJI_0001.JPG')] == 'photos/dji_0001.jpg'
+    assert identities[cross_platform_path_key('C:/in/FlightA/DJI_0002.JPG')] == 'flighta/dji_0002.jpg'
+    assert cross_platform_path_key('E:/elsewhere/DJI_0003.JPG') not in identities
+
+
+def test_identity_map_skips_images_without_paths():
+    assert image_cache_identity_map([{'cache_id': 'x.jpg'}, {}]) == {}
+
+
+def test_identities_skip_empty_paths():
+    assert build_image_cache_identities(['', None, 'a/x.jpg'], input_root='a') == {
+        cross_platform_path_key('a/x.jpg'): 'x.jpg'}
+
+
+def test_path_key_normalizes_separators_and_case():
+    assert (cross_platform_path_key(r'C:\Missions\FlightA\DJI_0001.JPG')
+            == cross_platform_path_key('c:/missions/flighta/dji_0001.jpg'))
+    assert cross_platform_path_key('') == ''
 
 
 # --------------------------- cross_platform_path_tail ----------------------- #

@@ -116,9 +116,36 @@ class AOIGalleryModel(QAbstractListModel):
                 # self.logger.debug(f"No thumbnail cache found at {thumbnail_cache_dir}, will use global cache")
                 pass
 
+            # Register the dataset's image identities so cache keys match the
+            # analysis writer's: the identity is the path below the recorded
+            # input root, which distinguishes same-named images in nested
+            # flight folders. Read from the XML directly - the model may be
+            # configured before the viewer hands it the image list.
+            self._register_image_identities(xml_path)
+
         except Exception as e:
             self.logger.error(f"Error setting dataset directory: {e}")
             self.color_cache_service = None
+
+    def _register_image_identities(self, xml_path: str):
+        """Load the dataset's image list and key the thumbnail cache by it."""
+        try:
+            from core.services.XmlService import XmlService
+            from helpers.PathHelper import image_cache_identity_map
+
+            xml_service = XmlService(xml_path)
+            images = xml_service.get_images()
+            if not images:
+                return
+            settings, _count = xml_service.get_settings()
+            input_root = settings.get('input_dir') if isinstance(settings, dict) else None
+            identities = image_cache_identity_map(images, input_root=input_root)
+            self.thumbnail_loader.set_image_identities(identities)
+        except Exception as e:
+            # Identity registration is an accuracy upgrade, never a blocker:
+            # without it lookups fall back to the tail namespace (cache miss
+            # at worst, never another image's thumbnail).
+            self.logger.error(f"Error registering image identities: {e}")
 
     def _create_placeholder_icon(self):
         """Create a placeholder icon for thumbnails that haven't loaded yet."""

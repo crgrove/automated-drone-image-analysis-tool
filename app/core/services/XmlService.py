@@ -181,6 +181,12 @@ class XmlService:
                 else:
                     image['height'] = None
 
+                # The persisted dataset-relative cache identity (analysis-time
+                # path below the input root). Survives path recovery, which
+                # rewrites 'path' but never this attribute.
+                if image_xml.get('cache_id'):
+                    image['cache_id'] = image_xml.get('cache_id')
+
                 # Load bearing metadata if present
                 if image_xml.get('bearing'):
                     image['bearing'] = float(image_xml.get('bearing'))
@@ -388,6 +394,14 @@ class XmlService:
             image.set('width', str(img['width']))
         if 'height' in img and img['height']:
             image.set('height', str(img['height']))
+
+        # Persist the image's dataset-relative cache identity (its path below
+        # the analysis input root). Path recovery rewrites 'path' when a
+        # dataset moves, but never touches this, so AOI cache keys stay
+        # correct on any machine without inferring identity from the new
+        # location - inference can hand one image another image's thumbnail.
+        if img.get('cache_id'):
+            image.set('cache_id', str(img['cache_id']))
 
         temp_count = 0  # Track AOIs with temperature data
         for area in img["aois"]:

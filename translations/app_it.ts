@@ -226,103 +226,103 @@ Permissivo</translation>
 <context>
     <name>AOIController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="404"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="416"/>
         <source>No AOI #{number} in this analysis.</source>
         <translation>Nessuna AOI #{number} in questa analisi.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="417"/>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="427"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="429"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="439"/>
         <source>AOI #{number} is hidden by the current filter.</source>
         <translation>L&apos;AOI #{number} è nascosta dal filtro corrente.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="723"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="735"/>
         <source>Comment saved</source>
         <translation>Commento salvato</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="725"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="737"/>
         <source>Comment cleared</source>
         <translation>Commento cancellato</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="814"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="826"/>
         <source>Copy Data</source>
         <translation>Copia Dati</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="820"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="832"/>
         <source>Find Similar AOIs</source>
         <translation>Trova AOI simili</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="923"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="935"/>
         <source>AOI data copied</source>
         <translation>Dati AOI copiati</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1010"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1022"/>
         <source>Invalid image index</source>
         <translation>Indice immagine non valido</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1015"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1027"/>
         <source>Invalid AOI index</source>
         <translation>Indice AOI non valido</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1084"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1096"/>
         <source>Could not calculate AOI location. Diagnostic info copied to clipboard!</source>
         <translation>Impossibile calcolare la posizione dell&apos;AOI. Informazioni diagnostiche copiate negli appunti!</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1090"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1102"/>
         <source>Could not calculate AOI location</source>
         <translation>Impossibile calcolare la posizione dell&apos;AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1111"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1123"/>
         <source>Terrain elevation: {value}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1114"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1126"/>
         <source>Terrain-corrected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1120"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1132"/>
         <source> (~{value} resolution)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1125"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1137"/>
         <source>Flat terrain assumed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1531"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1543"/>
         <source>Temperature sorting unavailable (no thermal data)</source>
         <translation>Ordinamento per temperatura non disponibile (nessun dato termico)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1883"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1895"/>
         <source>Cannot Delete AOI</source>
         <translation>Impossibile eliminare l&apos;AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1885"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1897"/>
         <source>Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted.</source>
         <translation>Solo le AOI create manualmente possono essere eliminate. Le AOI rilevate dagli algoritmi non possono essere eliminate.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1894"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1906"/>
         <source>Delete AOI</source>
         <translation>Elimina AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1896"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1908"/>
         <source>Are you sure you want to delete this AOI? This action cannot be undone.</source>
         <translation>Sei sicuro di voler eliminare questa AOI? Questa azione non può essere annullata.</translation>
     </message>
@@ -765,94 +765,94 @@ Ciò potrebbe essere dovuto alla mancanza di metadati dell&apos;immagine (GPS, a
 <context>
     <name>AOISimilarityController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="141"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="156"/>
         <source>No AOI Selected</source>
         <translation>Nessuna AOI selezionata</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="142"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="157"/>
         <source>Please select an AOI first by clicking on it in the thumbnail panel.</source>
         <translation>Seleziona prima un&apos;AOI cliccandoci sopra nel pannello delle miniature.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="159"/>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="311"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="174"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="326"/>
         <source>Similarity Search Error</source>
         <translation>Errore nella ricerca di similarità</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="160"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="175"/>
         <source>An error occurred while starting the similarity search:
 {error}</source>
         <translation>Si è verificato un errore durante l&apos;avvio della ricerca di similarità:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="171"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="186"/>
         <source>Analyzing AOIs for visual similarity...</source>
         <translation>Analisi delle AOI per similarità visiva...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="172"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="187"/>
         <source>Cancel</source>
         <translation>Annulla</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="176"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="191"/>
         <source>Find Similar AOIs</source>
         <translation>Trova AOI simili</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="233"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="248"/>
         <source>Analyzing AOI {done} of {total}...</source>
         <translation>Analisi AOI {done} di {total}...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="278"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="293"/>
         <source>No Similar AOIs</source>
         <translation>Nessuna AOI simile</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="279"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="294"/>
         <source>No other AOIs could be analyzed for similarity.</source>
         <translation>Non è stato possibile analizzare altre AOI per la similarità.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="312"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="327"/>
         <source>The similarity search could not be completed:
 {error}</source>
         <translation>Non è stato possibile completare la ricerca di similarità:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="418"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="433"/>
         <source>Display Error</source>
         <translation>Errore di visualizzazione</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="419"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="434"/>
         <source>An error occurred while displaying results:
 {error}</source>
         <translation>Si è verificato un errore durante la visualizzazione dei risultati:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="471"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="486"/>
         <source>Flagged {count} AOI(s)</source>
         <translation>{count} AOI contrassegnate</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="474"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="489"/>
         <source>Removed flag from {count} AOI(s)</source>
         <translation>Contrassegno rimosso da {count} AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="506"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="521"/>
         <source>Comment saved on {count} AOI(s)</source>
         <translation>Commento salvato su {count} AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="509"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="524"/>
         <source>Comment cleared on {count} AOI(s)</source>
         <translation>Commento cancellato su {count} AOI</translation>
     </message>
@@ -1353,52 +1353,52 @@ Ogni maniglia d&apos;angolo è abbinata per colore a un angolo della foto del dr
 <context>
     <name>AnalyzeService</name>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="161"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="162"/>
         <source>Processing {count} files</source>
         <translation>Elaborazione di {count} file</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="205"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="215"/>
         <source>Skipping {file} :: File is not an image</source>
         <translation>Saltato {file} :: Il file non è un&apos;immagine</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="210"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="220"/>
         <source>All {count} images queued, processing started...</source>
         <translation>Tutte le {count} immagini in coda, elaborazione avviata...</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="268"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="278"/>
         <source>{images} images with {aois} areas of interest identified</source>
         <translation>{images} immagini con {aois} aree di interesse identificate</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="274"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="284"/>
         <source>Total Processing Time: {seconds} seconds</source>
         <translation>Tempo totale di elaborazione: {seconds} secondi</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="277"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="287"/>
         <source>Total Images Processed: {count}</source>
         <translation>Totale immagini elaborate: {count}</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="495"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="510"/>
         <source>Unable to process {file} :: {error} ({percent}%)</source>
         <translation>Impossibile elaborare {file} :: {error} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="518"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="533"/>
         <source>{count} areas of interest identified in {file} ({percent}%)</source>
         <translation>{count} aree di interesse identificate in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="535"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="550"/>
         <source>No areas of interest identified in {file} ({percent}%)</source>
         <translation>Nessuna area di interesse identificata in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="617"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="632"/>
         <source>--- Cancelling Image Processing ---</source>
         <translation>--- Annullamento elaborazione immagini ---</translation>
     </message>
@@ -1457,42 +1457,47 @@ Ogni maniglia d&apos;angolo è abbinata per colore a un angolo della foto del dr
         <translation>File Traccia (*.kml *.gpx *.csv);;File KML (*.kml);;File GPX (*.gpx);;File CSV (*.csv);;Tutti i File (*.*)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="368"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="354"/>
+        <source>No bearings could be calculated: no image capture time matched the track. Check that the track file covers the flight and that the images carry capture times.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="378"/>
         <source>Bearings set for {count} images ({source})</source>
         <translation>Orientamenti impostati per {count} immagini ({source})</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="373"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="383"/>
         <source>, {count} flagged near turns</source>
         <translation>, {count} segnalati vicino alle virate</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="375"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="385"/>
         <source>, {count} hover estimates</source>
         <translation>, {count} stime di stazionamento</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="377"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="387"/>
         <source>, {count} time gaps</source>
         <translation>, {count} intervalli di tempo</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="384"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="394"/>
         <source>Bearing Calculation Complete</source>
         <translation>Calcolo Orientamento Completato</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="385"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="395"/>
         <source>{summary}.</source>
         <translation>{summary}.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="414"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="424"/>
         <source>Bearing Calculation Failed</source>
         <translation>Calcolo Orientamento Fallito</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="416"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="426"/>
         <source>An error occurred during bearing calculation:
 
 {error}
@@ -1505,22 +1510,22 @@ Please check your input files and try again.</source>
 Controlla i file di input e riprova.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="438"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="448"/>
         <source>Cancelled</source>
         <translation>Annullato</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="449"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="459"/>
         <source>Cancelling...</source>
         <translation>Annullamento in corso...</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="462"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="472"/>
         <source>Bearing Recovery Not Needed</source>
         <translation>Recupero Orientamento Non Necessario</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="464"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="474"/>
         <source>Bearing recovery requires multiple images to calculate direction of travel.
 
 With only one image, bearing recovery cannot be performed.</source>
@@ -1529,7 +1534,7 @@ With only one image, bearing recovery cannot be performed.</source>
 Con una sola immagine, il recupero dell&apos;orientamento non può essere eseguito.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="479"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="489"/>
         <source>
 &lt;h3&gt;What is Bearing Recovery?&lt;/h3&gt;
 
@@ -1590,7 +1595,7 @@ Procedi senza il recupero dell&apos;orientamento. Alcune funzioni potrebbero non
         </translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="510"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="520"/>
         <source>About Bearing Recovery</source>
         <translation>Informazioni sul Recupero dell&apos;Orientamento</translation>
     </message>
@@ -6046,44 +6051,44 @@ La mappa continuerà a funzionare con i tasselli memorizzati nella cache, ove di
 <context>
     <name>GPSMapView</name>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="855"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="887"/>
         <source>
 {count} images at this location</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1404"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1436"/>
         <source>{count} AOIs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1409"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1441"/>
         <source> (hidden)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1452"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1484"/>
         <source>Copy Data</source>
         <translation>Copia Dati</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1456"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1488"/>
         <source>Reset to estimated position</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1596"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1628"/>
         <source>Position corrected by user</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1597"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="1629"/>
         <source>Drag to correct the location</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="2058"/>
-        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="2169"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="2090"/>
+        <location filename="../app/core/views/images/viewer/widgets/GPSMapView.py" line="2201"/>
         <source>Zoom FOV</source>
         <translation>Zoom FOV</translation>
     </message>
@@ -17590,17 +17595,17 @@ Ensure image filenames in the CSV match exactly.</source>
         <translation>Nessuna immagine da esportare</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="445"/>
+        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="510"/>
         <source>ZIP file created</source>
         <translation>File ZIP creato</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="451"/>
+        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="516"/>
         <source>Failed to generate Zip file: {error}</source>
         <translation>Impossibile generare il file Zip: {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="472"/>
+        <location filename="../app/core/controllers/images/viewer/exports/ZipExportController.py" line="537"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>
