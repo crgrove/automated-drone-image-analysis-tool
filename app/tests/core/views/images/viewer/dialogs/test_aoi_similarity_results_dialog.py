@@ -370,3 +370,74 @@ class TestStatusBadges:
         view.toggle_row_checked(row)
         assert view.get_checked_rows() == [row]
         assert clicked == []
+
+
+class TestDuplicateActions:
+
+    def test_duplicate_buttons_follow_selection(self, app, sample_results):
+        dialog = _loaded_dialog(app, sample_results)
+        assert not dialog.duplicate_button.isEnabled()
+        assert not dialog.not_duplicate_button.isEnabled()
+
+        dialog.gallery_view.set_row_checked(1, True)
+
+        assert dialog.duplicate_button.isEnabled()
+        assert dialog.not_duplicate_button.isEnabled()
+
+    def test_mark_duplicate_needs_a_reference_aoi(self, app, sample_results):
+        sample_results[0]['aoi_idx'] = None   # external query image
+        dialog = _loaded_dialog(app, sample_results)
+
+        dialog.gallery_view.set_row_checked(1, True)
+
+        assert not dialog.duplicate_button.isEnabled()
+        assert dialog.not_duplicate_button.isEnabled()
+
+    def test_bulk_duplicate_signal_carries_checked_rows(self, app, sample_results):
+        dialog = _loaded_dialog(app, sample_results)
+        dialog.gallery_view.set_row_checked(1, True)
+        dialog.gallery_view.set_row_checked(2, True)
+
+        received = []
+        dialog.bulk_duplicate_requested.connect(lambda rows, mark: received.append((rows, mark)))
+        dialog.duplicate_button.click()
+        dialog.not_duplicate_button.click()
+
+        assert received == [([1, 2], True), ([1, 2], False)]
+
+    def test_no_signal_without_selection(self, app, sample_results):
+        dialog = _loaded_dialog(app, sample_results)
+        received = []
+        dialog.bulk_duplicate_requested.connect(lambda rows, mark: received.append(rows))
+
+        dialog._emit_bulk_duplicate(True)
+
+        assert received == []
+
+    def test_duplicate_shows_violet_flag_and_primary_number(self, app, sample_results):
+        from core.services.AOIDuplicateService import DUPLICATE_FLAG_COLOR
+        from PySide6.QtGui import QColor
+        sample_results[1]['aoi_data'] = {'duplicate_of': 12}
+        view = SimilarityGalleryView()
+        view.load_thumbnails(sample_results)
+
+        flag_item, _ = view._badge_items[1]
+        assert flag_item.isVisible()
+        assert flag_item.defaultTextColor() == QColor(DUPLICATE_FLAG_COLOR)
+        assert view._number_caption_items[1].toPlainText().endswith("→ #12")
+
+    def test_refresh_updates_duplicate_badge_and_caption(self, app, sample_results):
+        dialog = _loaded_dialog(app, sample_results)
+        caption = dialog.gallery_view._number_caption_items[1]
+        before = caption.toPlainText()
+        assert "→" not in before
+
+        dialog.results[1]['aoi_data']['duplicate_of'] = 12
+        dialog.refresh_status_badges()
+        assert caption.toPlainText() == before + " → #12"
+        assert dialog.gallery_view._badge_items[1][0].isVisible()
+
+        del dialog.results[1]['aoi_data']['duplicate_of']
+        dialog.refresh_status_badges()
+        assert caption.toPlainText() == before
+        assert not dialog.gallery_view._badge_items[1][0].isVisible()

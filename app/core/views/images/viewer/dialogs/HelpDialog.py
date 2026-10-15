@@ -244,6 +244,13 @@ class HelpDialog(TranslationMixin, QDialog):
                     <tr>
                         <td>Shift + Z</td>
                         <td>Find visually similar AOIs (ranks all other AOIs by color/size similarity to the selected AOI)</td>
+                    </tr>
+                    <tr>
+                        <td>D</td>
+                        <td>Mark the selected AOI as a duplicate (another sighting) of a flagged AOI - pick it from
+                            the closest, most alike matches. Press D on a duplicate to remove the mark</td>
+                    </tr>
+                    <tr>
                         <td>S</td>
                         <td>Toggle Grid Review Mode — sweep the image cell by cell at a fixed zoom.
                             While active: Space marks the cell reviewed and advances (rolling into the
@@ -260,6 +267,12 @@ class HelpDialog(TranslationMixin, QDialog):
                         <td>Shift + O</td>
                         <td>Override altitude for all images (manually set the height above
                             the ground being flown over, for GSD calculations)</td>
+                    </tr>
+                    <tr>
+                        <td>Shift + W</td>
+                        <td>Load a Wingtra geotags CSV (camera orientation and altitude for
+                            Wingtra imagery). A CSV beside the source images is offered
+                            automatically when the results open</td>
                     </tr>
                     <tr>
                         <td>Ctrl + H</td>
@@ -425,7 +438,9 @@ class HelpDialog(TranslationMixin, QDialog):
                 <table>
                     <tr>
                         <td>⬍ Sort Button</td>
-                        <td>Sort AOIs by various criteria (color, size, and distance)</td>
+                        <td>Sort AOIs by various criteria (color, size, and distance). <b>Similar &amp; Nearby
+                            (Groups)</b> places AOIs that look alike and are close together on the ground
+                            next to each other; pick it again to change its distance and similarity</td>
                     </tr>
                     <tr>
                         <td>⊙ Filter Button</td>
@@ -515,9 +530,18 @@ class HelpDialog(TranslationMixin, QDialog):
                     <li>Press <b>Shift+Z</b> (or right-click an AOI thumbnail and choose
                         <b>Find Similar AOIs</b>) to rank all other AOIs by visual similarity
                         - useful for finding other detections of the same object or material</li>
+                    <li>Sort by <b>Similar &amp; Nearby (Groups)</b> to review repeat detections of
+                        the same object (or the same kind of false positive) together</li>
                     <li>In the similar-AOI results, <b>check thumbnails</b> to select them, then
                         use <b>Flag</b>, <b>Unflag</b>, or <b>Comment</b> to update all checked
                         AOIs at once</li>
+                    <li>When the same object shows up in several images, flag the best view and mark
+                        the others as <b>duplicates</b>: press <b>D</b> on each one, or use
+                        <b>Mark Duplicate</b> in the Shift+Z results. Duplicates show a purple flag and
+                        "#46 &rarr; #12" on their number. Reports list the object once, at the flagged
+                        AOI's position, with "Also seen in" naming every duplicate's image and AOI
+                        number. Check <b>Hide Duplicate AOIs</b> in the filter to show only the
+                        originals</li>
                 </ul>
             </div>
 

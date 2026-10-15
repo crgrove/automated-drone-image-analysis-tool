@@ -30,6 +30,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, PageBreak, Paragraph, Spacer, Table, TableStyle
 
+from core.services import AOIDuplicateService
 from core.services.export.PdfGeneratorService import PdfGeneratorService, PDFDocTemplate
 from core.services.export.ReviewMergeService import ReviewMergeService
 from helpers.ColorUtils import ColorUtils
@@ -46,7 +47,8 @@ class RunReportContext:
 
     def __init__(self, xml_path, run_name, images, xml_service, settings,
                  position_format, distance_unit, use_terrain_elevation,
-                 unavailable_count, total_aoi_count, reviewer_names=None):
+                 unavailable_count, total_aoi_count, reviewer_names=None,
+                 duplicate_sightings=None):
         self.xml_path = xml_path
         self.run_name = run_name
         self.images = images
@@ -58,6 +60,8 @@ class RunReportContext:
         self.unavailable_count = unavailable_count
         self.total_aoi_count = total_aoi_count
         self.reviewer_names = reviewer_names or []
+        # Primary AOI number -> other sightings, from the run's unfiltered images
+        self.duplicate_sightings = duplicate_sightings or {}
 
     @property
     def review_count(self):
@@ -109,6 +113,13 @@ class RunReportContext:
         Returns:
             RunReportContext
         """
+        # Duplicates are filtered out of the report below, so their sightings
+        # are collected first, under the names the report gives images
+        duplicate_sightings = AOIDuplicateService.sightings_by_primary([
+            dict(img, name=img.get('merge_key') or cross_platform_basename(img.get('path', '')))
+            for img in merged_run.images
+        ])
+
         images = []
         unavailable = 0
         total_aois = 0
@@ -152,6 +163,7 @@ class RunReportContext:
             unavailable_count=unavailable,
             total_aoi_count=total_aois,
             reviewer_names=merged_run.reviewer_names,
+            duplicate_sightings=duplicate_sightings,
         )
 
 
@@ -299,6 +311,7 @@ class CombinedPdfReportService(PdfGeneratorService):
                     return
                 self.viewer = ctx
                 self.images = ctx.images
+                self.duplicate_sightings = ctx.duplicate_sightings
 
                 # Unique numeric prefix -> unique h2 bookmark key + TOC entry
                 self.story.append(Paragraph(f"{run_idx}. {ctx.run_name}", self.h2))

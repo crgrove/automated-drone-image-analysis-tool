@@ -7,6 +7,7 @@ This module contains algorithms for analyzing static images and image batches:
 - MatchedFilter: Spectral matched filter detection
 - RXAnomaly: RX anomaly detection
 - MRMap: Mahalanobis-Reed anomaly mapping
+- RectilinearShape: Man-made rectangles of a known physical size (geometry, not colour)
 - ThermalRange: Thermal temperature range detection
 - ThermalAnomaly: Thermal anomaly detection
 - ThermalResidualAnomaly: Local delta-T residual anomaly detection
@@ -19,6 +20,7 @@ __all__ = [
     'MatchedFilter',
     'RXAnomaly',
     'MRMap',
+    'RectilinearShape',
     'ThermalRange',
     'ThermalAnomaly',
     'ThermalResidualAnomaly',

@@ -89,3 +89,41 @@ def test_a_missing_altitude_reads_as_not_available(service):
 
     assert 'None' not in text
     assert 'N/A' in text
+
+
+# ---------------------------------------------------------------------------
+# Duplicate sightings (not altitude, but the same metadata block)
+# ---------------------------------------------------------------------------
+
+def test_primary_lists_its_other_sightings(service):
+    from core.services.AOIDuplicateService import sightings_by_primary
+    images = [
+        {'name': 'A&B.JPG', 'areas_of_interest': [{'number': 1, 'flagged': True}]},
+        {'name': 'C.JPG', 'areas_of_interest': [{'number': 2, 'duplicate_of': 1},
+                                                {'number': 3, 'duplicate_of': 1}]},
+    ]
+    service.duplicate_sightings = sightings_by_primary(images)
+
+    assert service._duplicate_metadata_lines(images[0]['areas_of_interest'][0]) == [
+        "<b>Also seen in:</b> C.JPG (AOI #2), C.JPG (AOI #3)"]
+    assert service._duplicate_metadata_lines(images[1]['areas_of_interest'][0]) == [
+        "<b>Duplicate of:</b> AOI #1"]
+
+
+def test_sighting_names_are_escaped_for_the_pdf_markup(service):
+    from core.services.AOIDuplicateService import sightings_by_primary
+    images = [
+        {'name': 'a.jpg', 'areas_of_interest': [{'number': 1, 'flagged': True}]},
+        {'name': 'R&D <1>.jpg', 'areas_of_interest': [{'number': 2, 'duplicate_of': 1}]},
+    ]
+    service.duplicate_sightings = sightings_by_primary(images)
+
+    line = service._duplicate_metadata_lines(images[0]['areas_of_interest'][0])[0]
+    assert "R&amp;D &lt;1&gt;.jpg (AOI #2)" in line
+
+
+def test_no_duplicate_lines_without_links(service):
+    assert service.duplicate_sightings == {}
+    assert service._duplicate_metadata_lines({'number': 1, 'flagged': True}) == []
+    # A link whose primary is gone is not reported
+    assert service._duplicate_metadata_lines({'number': 2, 'duplicate_of': 9}) == []

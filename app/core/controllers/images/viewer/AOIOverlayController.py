@@ -280,13 +280,14 @@ class AOIOverlayController(QObject):
 
         The reviewer can correct an inaccurate GPS altitude there; the
         Measure tool and the person-size reference both honor it, so the
-        ruler must too.
+        ruler must too. Without an override, a Wingtra image's per-image AGL
+        stands in, as it does for the scale bar.
         """
         controller = getattr(self.parent, 'altitude_controller', None)
         if controller is None:
             return None
         try:
-            return controller.get_effective_altitude()
+            return controller.get_effective_altitude_for_current_image()
         except Exception:
             return None
 

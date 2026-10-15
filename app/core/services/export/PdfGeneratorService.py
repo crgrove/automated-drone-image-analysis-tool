@@ -13,6 +13,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 
 import os
 import cv2
+import html
 import numpy as np
 from io import BytesIO
 from datetime import datetime
@@ -27,10 +28,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from helpers.FormatHelper import FormatHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.ColorUtils import ColorUtils
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
 from core.services.image.AOICompositeService import AOICompositeService
+from core.services.image.WingtraDataService import resolve_altitude_ft, wingtra_agl_ft
 from helpers.MetaDataHelper import MetaDataHelper
 
 import traceback
@@ -197,6 +200,10 @@ class PdfGeneratorService:
         self.include_images_without_flagged_aois = include_images_without_flagged_aois
         self.map_tile_source = map_tile_source if map_tile_source in ("map", "satellite") else "map"
         self.images = images  # Store the images to use for PDF generation
+        # Primary AOI number -> other sightings (AOIDuplicateService.sightings_by_primary).
+        # Built by the caller from the FULL image list: self.images is the
+        # report's filtered copy and no longer holds the duplicates.
+        self.duplicate_sightings = {}
         self.story = []
         self.doc = None
         self._initialize_styles()
@@ -531,12 +538,16 @@ class PdfGeneratorService:
             # DEM-derived AGL beside an ATO figure. The service resolves
             # which planes apply; a printed report is read away from the app,
             # so neither is left implied.
+            # A Wingtra image has no altitude of its own; the per-image AGL
+            # from its geotags CSV labels it and sizes its GSD.
             readings = image_service.get_altitude_readings(
                 self.viewer.distance_unit,
                 use_terrain=getattr(self.viewer, 'use_terrain_elevation', True),
-                offline_only=False)
+                offline_only=False,
+                terrain_agl_ft=wingtra_agl_ft(img))
             orientation_str = self._report_value(image_service.get_camera_yaw(), "°")
-            gsd_str = self._report_value(image_service.get_average_gsd(), "cm/px")
+            gsd_str = self._report_value(
+                image_service.get_average_gsd(custom_altitude_ft=wingtra_agl_ft(img)), "cm/px")
 
             # Add image header once per image (not per AOI)
             self.story.append(Paragraph(img['name'], self.h3))
@@ -625,6 +636,9 @@ class PdfGeneratorService:
                 if user_comment:
                     metadata_lines.append(f"<b>Comment:</b> {user_comment}")
 
+                # Other images this object was detected in (marked duplicates)
+                metadata_lines.extend(self._duplicate_metadata_lines(aoi))
+
                 # Multi-reviewer note (set by the combined report's merge;
                 # never present on single-run data or in the results XML)
                 review_note = aoi.get('review_note', '')
@@ -655,6 +669,23 @@ class PdfGeneratorService:
                 image_service = self._image_service_cache[cache_key]
                 if hasattr(image_service, 'img_array') and image_service.img_array is not None:
                     image_service.img_array = None
+
+    def _duplicate_metadata_lines(self, aoi):
+        """Report lines tying an AOI to its other sightings.
+
+        A primary lists every image/AOI number marked as its duplicate; a
+        duplicate (reported only when the report includes unflagged AOIs)
+        names its primary.
+        """
+        lines = []
+        sightings = AOIDuplicateService.sightings_for(aoi, self.duplicate_sightings)
+        if sightings:
+            sightings_text = html.escape(AOIDuplicateService.format_sightings(sightings), quote=False)
+            lines.append(f"<b>Also seen in:</b> {sightings_text}")
+        duplicate_of = AOIDuplicateService.get_duplicate_of(aoi)
+        if duplicate_of is not None and duplicate_of in self.duplicate_sightings:
+            lines.append(f"<b>Duplicate of:</b> AOI #{duplicate_of}")
+        return lines
 
     def _initialize_styles(self):
         """Initialize paragraph styles for the document."""
@@ -1081,8 +1112,11 @@ class PdfGeneratorService:
             # Get terrain preference
             use_terrain = getattr(self.viewer, 'use_terrain_elevation', True)
 
-            # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft, use_terrain)
+            # Calculate AOI GPS coordinates using the convenience method; a
+            # Wingtra image's AGL stands in when no override is set, as it
+            # does on the GPS map.
+            result = aoi_service.calculate_gps_with_custom_altitude(
+                image_dict, aoi, resolve_altitude_ft(image_dict, custom_alt_ft), use_terrain)
 
             if result:
                 lat, lon = result

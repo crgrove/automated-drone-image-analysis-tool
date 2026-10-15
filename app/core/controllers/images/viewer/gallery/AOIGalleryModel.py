@@ -12,6 +12,7 @@ import numpy as np
 import qimage2ndarray
 from pathlib import Path
 from typing import Dict, Tuple, Optional
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from core.services.image.AOIService import AOIService
 from core.services.cache.ColorCacheService import ColorCacheService
@@ -602,6 +603,8 @@ class AOIGalleryModel(QAbstractListModel):
             flagged = aoi_data.get('flagged', False)
             if flagged:
                 lines.append("🚩 Flagged")
+            if AOIDuplicateService.is_duplicate(self.viewer.images, aoi_data):
+                lines.append(f"Duplicate of AOI #{AOIDuplicateService.get_duplicate_of(aoi_data)}")
 
             comment = aoi_data.get('user_comment', '').strip()
             if comment:

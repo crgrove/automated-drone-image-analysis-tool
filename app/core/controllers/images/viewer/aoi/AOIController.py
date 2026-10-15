@@ -21,15 +21,18 @@ from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtGui import QCursor, QColor
 
+from core.services import AOIDuplicateService
 from core.services.AOIInteractionLogService import REASON_DESELECT
 from core.services.LoggerService import LoggerService
 from core.services.image.MaskFilterService import MaskFilterService
 from core.services.image.AOIService import AOIService
+from core.services.image.AOISimilarityGroupingService import aoi_sort_key
 from core.controllers.images.viewer.aoi.AOIUIComponent import AOIUIComponent
 from helpers.FormatHelper import FormatHelper
 from helpers.LocationInfo import LocationInfo
 from core.views.images.viewer.dialogs.AOICommentDialog import AOICommentDialog
 from core.views.images.viewer.dialogs.AOIFilterDialog import AOIFilterDialog
+from core.views.images.viewer.dialogs.AOISimilaritySortDialog import AOISimilaritySortDialog
 from helpers.TranslationMixin import TranslationMixin
 
 
@@ -55,10 +58,12 @@ class AOIController(TranslationMixin):
         self.selected_aoi_index = -1
         self.flagged_aois = {}
         self.filter_flagged_only = False
+        self.filter_hide_duplicates = False  # Hide AOIs marked as a duplicate of another AOI
 
         # Sort and filter state
-        self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y', 'temperature_asc', 'temperature_desc'
+        self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y', 'temperature_asc', 'temperature_desc', 'similarity_groups'
         self.sort_color_hue = None  # Hue value (0-360) for color-based sorting
+        self.similarity_sort_ranks = {}  # aoi_sort_key -> position, for 'similarity_groups'
         self.filter_color_hue = None  # Hue value (0-360) for color filtering
         self.filter_color_range = None  # ± degrees for color filtering
         self.filter_color_mode = 'include'  # 'include' or 'exclude'
@@ -543,10 +548,13 @@ class AOIController(TranslationMixin):
             if 'areas_of_interest' in image and 0 <= aoi_index < len(image['areas_of_interest']):
                 aoi = image['areas_of_interest'][aoi_index]
                 aoi['flagged'] = is_flagged
+                if is_flagged:
+                    # Flagged and duplicate are exclusive: a flagged AOI is reported itself
+                    aoi.pop('duplicate_of', None)
 
                 # Update the XML element if it exists
                 if 'xml' in aoi and aoi['xml'] is not None:
-                    aoi['xml'].set('flagged', str(is_flagged))
+                    self._sync_review_state_to_xml(aoi)
                     # Save the XML file using the xml_service method
                     if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
                         try:
@@ -606,8 +614,9 @@ class AOIController(TranslationMixin):
             if aoi is None:
                 continue
             aoi['flagged'] = flagged
-            if aoi.get('xml') is not None:
-                aoi['xml'].set('flagged', str(flagged))
+            # An explicit flag/unflag decision replaces a duplicate mark
+            aoi.pop('duplicate_of', None)
+            self._sync_review_state_to_xml(aoi)
 
             flagged_set = self.flagged_aois.setdefault(image_index, set())
             if flagged:
@@ -651,6 +660,116 @@ class AOIController(TranslationMixin):
         if touched_images:
             self._save_xml_and_refresh_bulk(touched_images)
         return applied
+
+    def set_aoi_duplicates_bulk(self, items, primary):
+        """Mark AOIs as duplicates of a primary AOI with a single XML save.
+
+        See AOIDuplicateService.mark_duplicates for the linking rules (a
+        duplicate's own flag is cleared; links stay one level deep).
+
+        Args:
+            items: Iterable of (image_index, aoi_index) pairs to mark.
+            primary: (image_index, aoi_index) of the AOI they duplicate.
+
+        Returns:
+            AOIDuplicateService.DuplicateChange: ``primary`` is the AOI actually
+                linked to (None if unusable) and ``count`` how many were marked.
+        """
+        change = AOIDuplicateService.mark_duplicates(self.parent.images, items, primary)
+        self._apply_review_state_change(change.touched)
+        return change
+
+    def clear_aoi_duplicates_bulk(self, items):
+        """Remove the duplicate mark from AOIs with a single XML save.
+
+        Returns:
+            AOIDuplicateService.DuplicateChange
+        """
+        change = AOIDuplicateService.clear_duplicates(self.parent.images, items)
+        self._apply_review_state_change(change.touched)
+        return change
+
+    def unmark_duplicate(self, image_index, aoi_index):
+        """Remove the duplicate mark from one AOI if it has one.
+
+        The flag toggles call this first: on a duplicate the flag shows in the
+        duplicate colour, and toggling it switches the duplicate mark off rather
+        than flagging the AOI on top of it.
+
+        Returns:
+            bool: True if the AOI was a duplicate (and no longer is).
+        """
+        aoi = self._get_aoi_safe(image_index, aoi_index)
+        if aoi is None or not AOIDuplicateService.is_duplicate(self.parent.images, aoi):
+            return False
+        primary_number = AOIDuplicateService.get_duplicate_of(aoi)
+        self.clear_aoi_duplicates_bulk([(image_index, aoi_index)])
+        if hasattr(self.parent, 'status_controller'):
+            self.parent.status_controller.show_toast(
+                self.tr("AOI #{number} is no longer a duplicate of AOI #{primary}").format(
+                    number=aoi.get('number'), primary=primary_number),
+                2500, color="#808080")
+        return True
+
+    def _sync_review_state_to_xml(self, aoi):
+        """Write an AOI's flag and duplicate link to its XML element (no save)."""
+        if aoi is None or aoi.get('xml') is None:
+            return
+        xml_element = aoi['xml']
+        xml_element.set('flagged', str(bool(aoi.get('flagged', False))))
+        duplicate_of = AOIDuplicateService.get_duplicate_of(aoi)
+        if duplicate_of is not None:
+            xml_element.set('duplicate_of', str(duplicate_of))
+        elif 'duplicate_of' in xml_element.attrib:
+            del xml_element.attrib['duplicate_of']
+
+    def _apply_review_state_change(self, refs):
+        """Persist flag/duplicate changes on *refs* with one save and refresh the views."""
+        touched_images = set()
+        for image_index, aoi_index in refs:
+            aoi = self._get_aoi_safe(image_index, aoi_index)
+            if aoi is None:
+                continue
+            self._sync_review_state_to_xml(aoi)
+            flagged_set = self.flagged_aois.setdefault(image_index, set())
+            if aoi.get('flagged', False):
+                flagged_set.add(aoi_index)
+            else:
+                flagged_set.discard(aoi_index)
+            touched_images.add(image_index)
+
+        if not touched_images:
+            return
+
+        if hasattr(self.parent, 'xml_service') and self.parent.xml_service:
+            try:
+                self.parent.xml_service.save_xml_file(self.parent.xml_path)
+            except Exception as e:
+                self.logger.error(f"Failed to save duplicate AOI changes to '{self.parent.xml_path}': {e}")
+
+        if getattr(self.parent, 'current_image', None) in touched_images and self.ui_component:
+            self.ui_component.refresh_aoi_display()
+
+        gallery_controller = getattr(self.parent, 'gallery_controller', None)
+        if gallery_controller:
+            try:
+                gallery_controller.refresh_review_state()
+            except Exception as e:
+                self.logger.error(f"Error refreshing gallery after duplicate change: {e}")
+
+        # Marking a flagged AOI as a duplicate unflags it, which the GPS map shows
+        gps_map_controller = getattr(self.parent, 'gps_map_controller', None)
+        map_dialog = getattr(gps_map_controller, 'map_dialog', None) if gps_map_controller else None
+        if map_dialog is not None and map_dialog.isVisible():
+            try:
+                gps_map_controller.extract_gps_data()
+                current_gps_index = next(
+                    (i for i, data in enumerate(gps_map_controller.gps_data)
+                     if data['index'] == self.parent.current_image), None)
+                if current_gps_index is not None:
+                    map_dialog.update_gps_data(gps_map_controller.gps_data, current_gps_index)
+            except Exception as e:
+                self.logger.error(f"Error refreshing GPS map after duplicate change: {e}")
 
     def _get_aoi_safe(self, image_index, aoi_index):
         """Return the AOI dict at (image_index, aoi_index), or None if invalid."""
@@ -752,6 +871,10 @@ class AOIController(TranslationMixin):
         if aoi_index is None or aoi_index < 0:
             return
 
+        # On a duplicate the toggle switches the duplicate mark off
+        if self.unmark_duplicate(self.parent.current_image, aoi_index):
+            return
+
         # Get or create flagged set for current image
         if self.parent.current_image not in self.flagged_aois:
             self.flagged_aois[self.parent.current_image] = set()
@@ -835,6 +958,22 @@ class AOIController(TranslationMixin):
             lambda: self.parent.similarity_controller.find_similar_for_selected(
                 image_idx=image_idx, aoi_idx=aoi_index)
         )
+
+        # Duplicate marking: link to the AOI it repeats, or undo that link
+        target_image_idx = image_idx if image_idx is not None else getattr(self.parent, 'current_image', None)
+        aoi = self._get_aoi_safe(target_image_idx, aoi_index)
+        if aoi is not None and AOIDuplicateService.is_duplicate(self.parent.images, aoi):
+            duplicate_action = menu.addAction(self.tr("Not a Duplicate of AOI #{number}").format(
+                number=AOIDuplicateService.get_duplicate_of(aoi)))
+            duplicate_action.triggered.connect(
+                lambda: self.unmark_duplicate(target_image_idx, aoi_index))
+        else:
+            duplicate_action = menu.addAction(self.tr("Mark as Duplicate..."))
+            duplicate_action.setEnabled(aoi is not None and hasattr(self.parent, 'similarity_controller'))
+            duplicate_action.triggered.connect(
+                lambda: self.parent.similarity_controller.mark_duplicate_for_selected(
+                    image_idx=target_image_idx, aoi_idx=aoi_index)
+            )
 
         # Get the current cursor position (global coordinates)
         global_pos = QCursor.pos()
@@ -1284,6 +1423,11 @@ class AOIController(TranslationMixin):
                     return temp
                 aois_with_indices.sort(key=temp_sort_key_desc, reverse=True)
 
+            elif self.sort_method == 'similarity_groups':
+                # Keep this image's AOIs in the dataset-wide group order
+                image_path = self.parent.images[self.parent.current_image].get('path')
+                aois_with_indices.sort(key=lambda x: self.get_similarity_rank(image_path, x[1]))
+
         except Exception as e:
             self.logger.error(f"Error sorting AOIs: {e}")
 
@@ -1301,10 +1445,19 @@ class AOIController(TranslationMixin):
         """
         filtered = []
         flagged_set = self.flagged_aois.get(img_idx, set())
+        images = getattr(self.parent, 'images', None) or []
+        uses_duplicates = self.filter_flagged_only or self.filter_hide_duplicates
+        numbers = AOIDuplicateService.index_by_number(images) if uses_duplicates else {}
 
         for original_idx, aoi in aois_with_indices:
-            # Apply flag filter
-            if self.filter_flagged_only and original_idx not in flagged_set:
+            is_duplicate = uses_duplicates and AOIDuplicateService.is_duplicate(images, aoi, numbers)
+
+            # Apply flag filter (a duplicate shows its flag in the duplicate colour)
+            if self.filter_flagged_only and original_idx not in flagged_set and not is_duplicate:
+                continue
+
+            # Apply duplicate filter: the primary represents the object, so its repeats go
+            if self.filter_hide_duplicates and is_duplicate:
                 continue
 
             # Apply color filter
@@ -1432,6 +1585,7 @@ class AOIController(TranslationMixin):
         Args:
             filters: Dict with filter settings {
                 'flagged_only': bool,
+                'hide_duplicates': bool,
                 'color_hue': int or None,
                 'color_range': int or None,
                 'area_min': float or None,
@@ -1442,6 +1596,7 @@ class AOIController(TranslationMixin):
             }
         """
         self.filter_flagged_only = filters.get('flagged_only', False)
+        self.filter_hide_duplicates = filters.get('hide_duplicates', False)
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
         self.filter_color_mode = filters.get('color_filter_mode', 'include')
@@ -1492,7 +1647,9 @@ class AOIController(TranslationMixin):
             ("Temperature (Highest First)", 'temperature_desc', qta.icon('fa6s.temperature-high', color='#F44336')),
             ("Color (Closest to Target)", 'color', qta.icon('fa6s.palette', color='#CCCCCC')),
             ("Left to Right", 'x', qta.icon('fa6s.arrow-right', color='#2196F3')),
-            ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3'))
+            ("Top to Bottom", 'y', qta.icon('fa6s.arrow-down', color='#2196F3')),
+            (self.tr("Similar & Nearby (Groups)"), 'similarity_groups',
+             qta.icon('fa6s.object-group', color='#9C27B0'))
         ]
 
         # Check if dataset has thermal data and AOIs have temperature values
@@ -1573,23 +1730,87 @@ class AOIController(TranslationMixin):
             else:
                 # User cancelled - revert to previous sort method
                 self._update_combo_selection()
+        elif current_data == 'similarity_groups':
+            self._start_similarity_group_sort()
         else:
             # Other sort methods (area_asc, area_desc, x, y)
             self.set_sort_method(current_data)
 
+    def on_sort_combo_activated(self, index):
+        """Re-picking "Similar & Nearby" while it is applied re-runs it with new settings.
+
+        currentTextChanged does not fire for the item that is already current,
+        so this is the only way back into its settings dialog.
+        """
+        if not hasattr(self.parent, 'aoiSortComboBox'):
+            return
+        combo = self.parent.aoiSortComboBox
+        if combo.itemData(index) == 'similarity_groups' and self.sort_method == 'similarity_groups':
+            self._start_similarity_group_sort()
+
+    def _start_similarity_group_sort(self):
+        """Ask for the grouping settings, then group every AOI in the background.
+
+        The sort is applied by apply_similarity_groups once the grouping
+        finishes; until then (and on cancel or failure) the current sort stays.
+        """
+        similarity_controller = getattr(self.parent, 'similarity_controller', None)
+        if similarity_controller is None:
+            self._update_combo_selection()
+            return
+
+        dialog = AOISimilaritySortDialog(self.parent, getattr(self.parent, 'distance_unit', 'm'))
+        if not dialog.exec():
+            self._update_combo_selection()
+            return
+
+        started = similarity_controller.sort_by_similarity_groups(
+            dialog.get_max_distance_m(), dialog.get_min_similarity())
+        if not started:
+            self._update_combo_selection()
+
+    def apply_similarity_groups(self, result):
+        """Apply a finished SimilarityGroupingResult as the current sort.
+
+        Args:
+            result: SimilarityGroupingResult from AOISimilarityGroupingService.
+        """
+        self.similarity_sort_ranks = dict(result.ranks)
+        self.set_sort_method('similarity_groups')
+
+    def get_similarity_rank(self, image_path, aoi):
+        """Position of an AOI in the "Similar & Nearby" order.
+
+        AOIs added since the grouping ran have no rank and sort after all
+        grouped ones (stable sort keeps them in their usual order).
+        """
+        return self.similarity_sort_ranks.get(aoi_sort_key(image_path, aoi), float('inf'))
+
+    def restore_sort_selection(self):
+        """Point the sort combo back at the sort that is actually applied."""
+        self._update_combo_selection()
+
     def _update_combo_selection(self):
-        """Update combo box selection to match current sort method."""
+        """Update combo box selection to match current sort method.
+
+        Display-only: signals are blocked so syncing the combo never re-runs a
+        sort (or re-opens the color picker / similarity settings).
+        """
         if not hasattr(self.parent, 'aoiSortComboBox'):
             return
 
         combo = self.parent.aoiSortComboBox
-        if self.sort_method is None:
-            combo.setCurrentIndex(0)  # "No Sort"
-        else:
-            for i in range(combo.count()):
-                if combo.itemData(i) == self.sort_method:
-                    combo.setCurrentIndex(i)
-                    break
+        was_blocked = combo.blockSignals(True)
+        try:
+            if self.sort_method is None:
+                combo.setCurrentIndex(0)  # "No Sort"
+            else:
+                for i in range(combo.count()):
+                    if combo.itemData(i) == self.sort_method:
+                        combo.setCurrentIndex(i)
+                        break
+        finally:
+            combo.blockSignals(was_blocked)
 
     def _get_reference_hue_from_settings(self):
         """Extract reference hue from parent settings.
@@ -1683,6 +1904,7 @@ class AOIController(TranslationMixin):
         # Get current filter settings
         current_filters = {
             'flagged_only': self.filter_flagged_only,
+            'hide_duplicates': self.filter_hide_duplicates,
             'color_hue': self.filter_color_hue,
             'color_range': self.filter_color_range if self.filter_color_range is not None else 30,
             'color_filter_mode': self.filter_color_mode,
@@ -1916,26 +2138,33 @@ class AOIController(TranslationMixin):
 
             # Remove from XML if it exists
             aoi = image['areas_of_interest'][aoi_index]
+
+            # Its duplicates have nothing left to point at: release them
+            released = AOIDuplicateService.release_duplicates_of(self.parent.images, aoi.get('number'))
+            for ref in released.touched:
+                self._sync_review_state_to_xml(self._get_aoi_safe(*ref))
+
             if 'xml' in aoi and aoi['xml'] is not None:
                 xml_element = aoi['xml']
                 image_xml = image.get('xml')
                 if image_xml is not None:
                     image_xml.remove(xml_element)
 
-            # Remove from flagged_aois if it's flagged
+            # Keep flagged_aois in step with the list after the pop below: drop the
+            # deleted index, then shift every later flagged index down by one. The
+            # shift must happen whether or not the deleted AOI was itself flagged,
+            # or a flagged AOI after it loses its flag in the sidebar and exports.
             img_idx = self.parent.current_image
             if img_idx in self.flagged_aois:
                 flagged_set = self.flagged_aois[img_idx]
-                if aoi_index in flagged_set:
-                    flagged_set.remove(aoi_index)
-                    # Decrement indices of all flagged AOIs after the deleted one
-                    new_flagged_set = set()
-                    for idx in flagged_set:
-                        if idx > aoi_index:
-                            new_flagged_set.add(idx - 1)
-                        else:
-                            new_flagged_set.add(idx)
-                    self.flagged_aois[img_idx] = new_flagged_set
+                flagged_set.discard(aoi_index)
+                new_flagged_set = set()
+                for idx in flagged_set:
+                    if idx > aoi_index:
+                        new_flagged_set.add(idx - 1)
+                    else:
+                        new_flagged_set.add(idx)
+                self.flagged_aois[img_idx] = new_flagged_set
 
             # Remove the AOI from the list
             image['areas_of_interest'].pop(aoi_index)

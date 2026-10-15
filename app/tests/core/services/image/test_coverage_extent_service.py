@@ -363,3 +363,65 @@ def test_dji_pitch_gets_no_footprint_shift():
     corners = _fov_corners_with(service, fake)
     assert corners is not None
     assert _centroid_north_m(corners) == pytest.approx(0.0, abs=0.01)
+
+
+class _WingtraFakeImageService(_FakeImageService):
+    """A Wingtra frame: no altitude in its own metadata, so a GSD exists only
+    when an altitude is supplied."""
+
+    def __init__(self, **kwargs):
+        super().__init__(reported_agl_m=None, pitch_deg=None, **kwargs)
+        self.altitudes_used = []
+
+    def get_average_gsd(self, custom_altitude_ft=None):
+        self.altitudes_used.append(custom_altitude_ft)
+        if custom_altitude_ft is None:
+            return None
+        # 1 cm/px per 100 ft keeps the arithmetic visible.
+        return custom_altitude_ft / 100.0
+
+
+def _wingtra_corners(service, fake, agl_ft):
+    image = {'path': 'W.jpg', 'name': 'W.jpg', 'wingtra_agl_ft': agl_ft}
+    with patch('core.services.image.CoverageExtentService.MetaDataHelper') as mdh, \
+            patch('core.services.image.CoverageExtentService.LocationInfo') as loc, \
+            patch('core.services.image.CoverageExtentService.ImageService',
+                  return_value=fake):
+        mdh.get_exif_data_piexif.return_value = {}
+        loc.get_gps.return_value = {'latitude': _LAT, 'longitude': _LON}
+        return service.get_image_fov_corners(image)
+
+
+def test_a_wingtra_frame_is_sized_by_its_own_agl():
+    """Wingtra imagery carries no altitude; without its geotags AGL every
+    frame was skipped for want of a GSD and the coverage KML came out empty."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    fake = _WingtraFakeImageService()
+    service = CoverageExtentService(use_terrain=False)
+
+    corners = _wingtra_corners(service, fake, agl_ft=200.0)
+
+    assert corners is not None and len(corners) == 4
+    assert fake.altitudes_used == [200.0]
+    # 2 cm/px * 4000 px = 80 m across.
+    assert _span_east_m(corners) == pytest.approx(80.0, rel=0.01)
+
+
+def test_the_operator_override_still_beats_a_wingtra_agl():
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    fake = _WingtraFakeImageService()
+    service = CoverageExtentService(custom_altitude_ft=300.0, use_terrain=False)
+
+    _wingtra_corners(service, fake, agl_ft=200.0)
+
+    assert fake.altitudes_used == [300.0]
+
+
+def test_a_wingtra_frame_without_an_agl_is_still_skipped():
+    """No CSV loaded: nothing to size it with, exactly as before."""
+    fake = _WingtraFakeImageService()
+    service = CoverageExtentService(use_terrain=False)
+
+    assert _wingtra_corners(service, fake, agl_ft=None) is None

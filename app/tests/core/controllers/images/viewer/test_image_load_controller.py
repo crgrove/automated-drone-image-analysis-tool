@@ -216,3 +216,19 @@ def test_no_notice_means_no_toast():
     controller._surface_terrain_degradation()
 
     parent.status_controller.show_toast.assert_not_called()
+
+
+def test_the_scale_bar_gsd_uses_a_wingtra_agl(qtbot):
+    """Wingtra imagery has no RelativeAltitude; the per-image AGL from its
+    geotags CSV is what gives it a GSD at all."""
+    from core.controllers.images.viewer.AltitudeController import AltitudeController
+
+    controller, parent = _controller()
+    parent.images = [{'name': 'W.JPG', 'wingtra_agl_ft': 318.0}]
+    parent.current_image = 0
+    parent.altitude_controller = AltitudeController(parent)
+    svc = _image_service()
+
+    controller._update_overlay(svc)
+
+    svc.get_average_gsd.assert_called_once_with(custom_altitude_ft=318.0)

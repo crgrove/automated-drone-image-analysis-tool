@@ -421,6 +421,18 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         except Exception as e:
             self.logger.error(f"First-load view defaults failed: {e}")
 
+        # Offered once the viewer is on screen, so the question appears over
+        # the results it applies to.
+        self._offer_wingtra_geotags()
+
+    def _offer_wingtra_geotags(self):
+        """Load, or offer, the Wingtra geotags CSV for these results. A
+        failure here must not take the viewer down with it."""
+        try:
+            self.wingtra_controller.auto_load_on_open()
+        except Exception as e:
+            self.logger.error(f"Wingtra geotags auto-load failed for {self.xml_path}: {e}")
+
     def _initial_fit_image(self):
         if self.main_image is not None and not self.main_image._is_destroyed:
             # Ensure the widget is properly sized before resetting zoom
@@ -988,7 +1000,8 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         # similarity (Shift+Z) and align (A) shortcuts each start a worker
         # thread and a modal progress dialog. Navigation and toggles below are
         # cheap and idempotent, so only the expensive shortcuts are filtered.
-        if e.isAutoRepeat() and e.key() in (Qt.Key_Z, Qt.Key_A, Qt.Key_E, Qt.Key_W, Qt.Key_M):
+        # D (mark duplicate) also starts a worker and opens a picker.
+        if e.isAutoRepeat() and e.key() in (Qt.Key_Z, Qt.Key_A, Qt.Key_E, Qt.Key_W, Qt.Key_M, Qt.Key_D):
             return
 
         if e.key() == Qt.Key_Right:
@@ -1130,6 +1143,21 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
                         )
                 else:
                     self.similarity_controller.find_similar_for_selected()
+        if e.key() == Qt.Key_D and e.modifiers() == Qt.NoModifier:
+            # Mark the selected AOI as a duplicate of another AOI with 'D'
+            # (pressing it on a duplicate removes the mark). Gallery mode reads
+            # the selection from the gallery model, as Shift+Z does.
+            if hasattr(self, 'similarity_controller'):
+                if (hasattr(self, 'gallery_mode') and self.gallery_mode and
+                        hasattr(self, 'gallery_controller') and self.gallery_controller):
+                    gallery_selection = self._resolve_gallery_selected_aoi()
+                    if gallery_selection:
+                        image_idx, aoi_idx = gallery_selection
+                        self.similarity_controller.mark_duplicate_for_selected(
+                            image_idx=image_idx, aoi_idx=aoi_idx
+                        )
+                else:
+                    self.similarity_controller.mark_duplicate_for_selected()
         if e.key() == Qt.Key_W and e.modifiers() == Qt.ShiftModifier:
             # Load Wingtra CSV flight log with 'Shift+W' key
             self.wingtra_controller.prompt_and_load_csv()
@@ -1358,6 +1386,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.nextImageButton.clicked.connect(self._nextImageButton_clicked)
 
             self.aoiSortComboBox.currentTextChanged.connect(self.aoi_controller.on_sort_combo_changed)
+            self.aoiSortComboBox.activated.connect(self.aoi_controller.on_sort_combo_activated)
             self.filterButton.clicked.connect(self.aoi_controller.open_filter_dialog)
 
             # Set the buttons in the AOI controller
@@ -2166,7 +2195,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         custom_alt = None
         if hasattr(self, 'altitude_controller'):
             try:
-                custom_alt = self.altitude_controller.get_effective_altitude()
+                custom_alt = self.altitude_controller.get_effective_altitude_for_current_image()
             except Exception:
                 custom_alt = None
         try:
@@ -2189,7 +2218,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         custom_alt = None
         if hasattr(self, 'altitude_controller'):
             try:
-                custom_alt = self.altitude_controller.get_effective_altitude()
+                custom_alt = self.altitude_controller.get_effective_altitude_for_current_image()
             except Exception:
                 custom_alt = None
 

@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RectilinearShapeWizard</class>
+ <widget class="QWidget" name="RectilinearShapeWizard">
+  <layout class="QVBoxLayout" name="verticalLayout_root">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>5</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="widgetTarget" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout_target">
+      <item>
+       <widget class="QLabel" name="labelTarget">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>What kind of object are you looking for?</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_preset">
+        <item>
+         <widget class="QComboBox" name="presetComboBox">
+          <property name="font">
+           <font>
+            <pointsize>11</pointsize>
+           </font>
+          </property>
+          <property name="toolTip">
+           <string>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</string>
+          </property>
+          <item>
+           <property name="text">
+            <string>Suitcase (any orientation)</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Suitcase (lying flat)</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Cooler or box</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Small tent</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Custom size</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_preset">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="labelPresetNote">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+          <italic>true</italic>
+         </font>
+        </property>
+        <property name="text">
+         <string>Detection uses the object's size and straight edges, not its colour. Sizes are as seen from directly above.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="customSizeWidget" native="true">
+        <layout class="QGridLayout" name="customSizeGridLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="longSideLabel">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Expected length of the longer side of the target, seen from directly above.</string>
+           </property>
+           <property name="text">
+            <string>Long Side:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QDoubleSpinBox" name="longMinSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Shortest expected long side.</string>
+           </property>
+           <property name="decimals">
+            <number>1</number>
+           </property>
+           <property name="minimum">
+            <double>1.0</double>
+           </property>
+           <property name="maximum">
+            <double>2000.0</double>
+           </property>
+           <property name="singleStep">
+            <double>1.0</double>
+           </property>
+           <property name="value">
+            <double>35.0</double>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="longToLabel">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>to</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QDoubleSpinBox" name="longMaxSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Longest expected long side.</string>
+           </property>
+           <property name="decimals">
+            <number>1</number>
+           </property>
+           <property name="minimum">
+            <double>1.0</double>
+           </property>
+           <property name="maximum">
+            <double>2000.0</double>
+           </property>
+           <property name="singleStep">
+            <double>1.0</double>
+           </property>
+           <property name="value">
+            <double>80.0</double>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="shortSideLabel">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Expected length of the shorter side of the target, seen from directly above.</string>
+           </property>
+           <property name="text">
+            <string>Short Side:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QDoubleSpinBox" name="shortMinSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Shortest expected short side.</string>
+           </property>
+           <property name="decimals">
+            <number>1</number>
+           </property>
+           <property name="minimum">
+            <double>1.0</double>
+           </property>
+           <property name="maximum">
+            <double>2000.0</double>
+           </property>
+           <property name="singleStep">
+            <double>1.0</double>
+           </property>
+           <property name="value">
+            <double>20.0</double>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QLabel" name="shortToLabel">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>to</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QDoubleSpinBox" name="shortMaxSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Longest expected short side.</string>
+           </property>
+           <property name="decimals">
+            <number>1</number>
+           </property>
+           <property name="minimum">
+            <double>1.0</double>
+           </property>
+           <property name="maximum">
+            <double>2000.0</double>
+           </property>
+           <property name="singleStep">
+            <double>1.0</double>
+           </property>
+           <property name="value">
+            <double>55.0</double>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="4">
+          <spacer name="customSizeSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widgetSensitivity" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout_sensitivity">
+      <property name="spacing">
+       <number>3</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="labelSensitivity">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>How many candidates should ADIAT show?</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="labelSensitivityNote">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+          <italic>true</italic>
+         </font>
+        </property>
+        <property name="text">
+         <string>Note: A higher setting shows weaker candidates too, which finds more targets but also more rocks, logs and debris.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="sensitivitySliderPlaceholder" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>600</width>
+          <height>60</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer_bottom">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType">
+      <enum>QSizePolicy::Expanding</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

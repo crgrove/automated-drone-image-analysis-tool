@@ -106,6 +106,28 @@ class ImageService:
     def img_array(self, value):
         self._img_array = value
 
+    @property
+    def pixels_loaded(self):
+        """True once pixel data is in memory (never for a deferred service until img_array is read)."""
+        return self._img_array is not None
+
+    def get_image_size(self):
+        """(width, height) in pixels, without decoding pixels that are not loaded yet.
+
+        A deferred service answers from the file header (PIL reads only the
+        header on open). That matches the decoded array because neither PIL's
+        size nor cv2.IMREAD_UNCHANGED applies EXIF orientation. Falls back to
+        decoding when the header cannot be read.
+        """
+        if self._img_array is None:
+            try:
+                with Image.open(self.path) as img:
+                    return img.size
+            except Exception:
+                pass
+        height, width = self.img_array.shape[:2]
+        return width, height
+
     def get_relative_altitude(self, distance_unit='m'):
         """
         Retrieves the drone's relative altitude from metadata.
@@ -164,7 +186,8 @@ class ImageService:
         return FormatHelper.ALTITUDE_REFERENCE_TAKEOFF
 
     def get_altitude_readings(self, distance_unit='m', use_terrain=True,
-                              custom_altitude_ft=None, offline_only=True):
+                              custom_altitude_ft=None, offline_only=True,
+                              terrain_agl_ft=None):
         """Every altitude reference that applies to this image, resolved once.
 
         The single place that decides *which* planes an image has, so no
@@ -172,6 +195,10 @@ class ImageService:
 
         * an operator override is height above the ground being flown over,
           so it stands alone as AGL;
+        * a terrain-referenced AGL supplied from outside the image - a
+          Wingtra geotags CSV, whose imagery carries no RelativeAltitude -
+          stands alone as AGL too, labelled as terrain-referenced rather
+          than operator-entered;
         * WALDO-prepassed imagery already carries a terrain-referenced AGL
           in ``RelativeAltitude``, so it stands alone too;
         * DJI imagery carries ATO, and the DEM is asked for the matching
@@ -184,6 +211,9 @@ class ImageService:
             custom_altitude_ft (float, optional): Operator override, in feet.
             offline_only (bool): Passed to :meth:`get_terrain_agl`; default
                 True keeps a display read off the network.
+            terrain_agl_ft (float, optional): Terrain-referenced AGL for this
+                image from an external source, in feet. Yields to an operator
+                override.
 
         Returns:
             AltitudeReadings: ``value``/``reference`` from the image's own
@@ -195,6 +225,15 @@ class ImageService:
             return AltitudeReadings(
                 value=round(value, 2),
                 reference=FormatHelper.ALTITUDE_REFERENCE_MANUAL,
+                unit=distance_unit,
+            )
+
+        if terrain_agl_ft is not None and terrain_agl_ft > 0:
+            value = (terrain_agl_ft if distance_unit == 'ft'
+                     else terrain_agl_ft / 3.28084)
+            return AltitudeReadings(
+                value=round(value, 2),
+                reference=FormatHelper.ALTITUDE_REFERENCE_TERRAIN,
                 unit=distance_unit,
             )
 
@@ -592,7 +631,7 @@ class ImageService:
         return math.degrees(hfov)
 
     def get_working_altitude_m(self, use_terrain=True, custom_altitude_ft=None,
-                               offline_only=False):
+                               offline_only=False, frame_size=None):
         """The altitude image geometry should be computed with, in metres.
 
         The single place this decision is made, so GSD, ground distances and
@@ -614,6 +653,11 @@ class ImageService:
             offline_only (bool): Use cached elevation only. A caller that
                 must not block passes True and accepts ATO until terrain
                 acquisition has stocked the area.
+            frame_size (tuple, optional): (width, height) of the full-resolution
+                frame, used to locate the centre pixel instead of
+                ``img_array``. Analysis workers hold a downscaled array, whose
+                centre would project the wrong ground point, and must not
+                decode the full frame a second time just to learn its size.
 
         Returns:
             float or None: Altitude in metres, or None when the image has
@@ -632,9 +676,12 @@ class ImageService:
             # consulted and the reported figure is all there is.
             return reported
         try:
-            if self.img_array is None:
+            if frame_size is not None:
+                width, height = frame_size
+            elif self.img_array is None:
                 return reported
-            height, width = self.img_array.shape[:2]
+            else:
+                height, width = self.img_array.shape[:2]
             # The iteration projects with `base`, an ATO-altitude service, so
             # it cannot re-enter this method. Sampled where the camera is
             # pointed - the same value the altitude readout shows.
@@ -651,7 +698,7 @@ class ImageService:
         return effective_agl_m
 
     def get_gsd_service(self, custom_altitude_ft=None, use_terrain=True,
-                        offline_only=False):
+                        offline_only=False, frame_size=None):
         """Return a GSDService for this image, at the best altitude available.
 
         Ground sample distance scales with height above the ground being
@@ -663,13 +710,15 @@ class ImageService:
             custom_altitude_ft (float, optional): Operator override, feet.
             use_terrain (bool): Honor the DEM.
             offline_only (bool): Use cached elevation only.
+            frame_size (tuple, optional): Full-resolution (width, height); see
+                :meth:`get_working_altitude_m`.
 
         Returns:
             GSDService or None: None when intrinsics or altitude are missing.
         """
         altitude_m = self.get_working_altitude_m(
             use_terrain=use_terrain, custom_altitude_ft=custom_altitude_ft,
-            offline_only=offline_only)
+            offline_only=offline_only, frame_size=frame_size)
         return self._build_gsd_service(altitude_m=altitude_m)
 
     def _build_gsd_service(self, custom_altitude_ft=None, altitude_m=None):

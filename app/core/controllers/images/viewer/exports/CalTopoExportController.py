@@ -12,6 +12,7 @@ import cv2
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QThread, QEventLoop, Signal
+from core.services import AOIDuplicateService
 from core.services.export.CalTopoService import CalTopoService
 from core.services.export.CalTopoAPIService import CalTopoAPIService
 from core.services.export.CalTopoCredentialHelper import CalTopoCredentialHelper
@@ -26,6 +27,7 @@ from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
 from core.services.image.AOICompositeService import AOICompositeService
 from core.services.image.CoverageExtentService import CoverageExtentService
+from core.services.image.WingtraDataService import resolve_altitude_ft, wingtra_agl_ft
 from helpers.FormatHelper import FormatHelper
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
@@ -755,6 +757,8 @@ class CalTopoExportController(TranslationMixin):
             # The mode decides what gets generated below; record it for diagnosis
             self.logger.info(f"CalTopo AOI photo mode: {aoi_photo_mode}")
 
+        duplicate_sightings = AOIDuplicateService.sightings_by_primary(images)
+
         for img_idx, aoi_indices in flagged_aois.items():
             if img_idx >= len(images):
                 continue
@@ -807,9 +811,11 @@ class CalTopoExportController(TranslationMixin):
                         except (ValueError, IndexError):
                             pass
 
-                # Calculate GSD if not available
+                # Calculate GSD if not available (a Wingtra image's own AGL
+                # stands in when no override is set)
                 if gsd_cm is None:
-                    gsd_cm = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
+                    gsd_cm = image_service.get_average_gsd(
+                        custom_altitude_ft=resolve_altitude_ft(image, custom_alt))
 
             except Exception:
                 continue
@@ -849,8 +855,11 @@ class CalTopoExportController(TranslationMixin):
                     # Get terrain preference
                     use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
 
-                    # Calculate AOI GPS coordinates using the convenience method
-                    result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft, use_terrain)
+                    # Calculate AOI GPS coordinates using the convenience method;
+                    # a Wingtra image's AGL stands in when no override is set,
+                    # as it does on the GPS map.
+                    result = aoi_service.calculate_gps_with_custom_altitude(
+                        image, aoi, resolve_altitude_ft(image, custom_alt_ft), use_terrain)
 
                     if result:
                         aoi_lat, aoi_lon = result
@@ -899,6 +908,9 @@ class CalTopoExportController(TranslationMixin):
                     f"{confidence_info}"
                     f"{color_info}"
                 )
+                sightings_line = AOIDuplicateService.sightings_line(aoi, duplicate_sightings)
+                if sightings_line:
+                    description += f"{sightings_line}\n"
 
                 marker = {
                     'lat': aoi_lat,
@@ -966,7 +978,8 @@ class CalTopoExportController(TranslationMixin):
                 readings = image_service.get_altitude_readings(
                     'ft',
                     use_terrain=getattr(self.parent, 'use_terrain_elevation', True),
-                    custom_altitude_ft=custom_alt, offline_only=False)
+                    custom_altitude_ft=custom_alt, offline_only=False,
+                    terrain_agl_ft=wingtra_agl_ft(image))
 
                 gimbal_pitch = image_service.get_camera_pitch()
                 gimbal_yaw = image_service.get_camera_yaw()
