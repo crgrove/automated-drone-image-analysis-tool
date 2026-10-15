@@ -1,4 +1,4 @@
-# version: 1.2.2
+# version: 1.2.3
 # date: 2026-10-14
 Manufacturer,Model,Model (Exif),Image Source (XMP),Camera,Nominal Sensor Size,sensor_w,sensor_h,Image Width
 DJI,Mavic 3E,"M3E, M3ED",WideCamera,Wide,3-Apr,17.3,13,
@@ -129,4 +129,5 @@ Anzu,Raptor,Raptor,ZoomCamera,Zoom,"1/2""",6.4,4.8,
 Sony,ILX-LR1,ILX-LR1,,,"1.38""",35.7,23.8,
 Sony,RX1R II,DSC-RX1RM2,,,Full Frame,36,24,
 Wingtra,RGB61,RGB61,,,Full Frame,35.7,23.8,
+Wingtra,RGB61,RGB6,,,Full Frame,35.7,23.8,
 Canon,EOS 5DS R,Canon EOS 5DS R,,,Full Frame,36,24,

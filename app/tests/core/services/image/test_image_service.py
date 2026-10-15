@@ -998,3 +998,72 @@ def test_get_image_size_uses_loaded_pixels():
         assert service.get_image_size() == (40, 30)
     finally:
         os.unlink(tmp_path)
+
+
+def _bundled_drones_df():
+    """The drones.csv that ships with the source tree, read the way PickleHelper
+    reads it, so a test sees the bundled rows, not a stale AppData copy."""
+    from helpers.PickleHelper import PickleHelper
+    path = os.path.join(PickleHelper._bundled_root(), 'drones.csv')
+    return pd.read_csv(path, comment='#')
+
+
+def _wingtra_rgb61_exif(terminated):
+    """EXIF for an RGB61 frame, with the Model tag either well-formed or
+    exactly as the camera writes it: count 5, no NUL terminator."""
+    exif_bytes = piexif.dump({
+        '0th': {
+            piexif.ImageIFD.Make: b'WINGTRA\x00\x00\x00',
+            piexif.ImageIFD.Model: b'RGB61',
+        },
+        'Exif': {
+            piexif.ExifIFD.FocalLength: (240, 10),
+            piexif.ExifIFD.PixelXDimension: 9504,
+            piexif.ExifIFD.PixelYDimension: 6336,
+        },
+    })
+    if terminated:
+        return exif_bytes
+    # piexif writes big-endian IFD entries: tag 0x0110 (Model), type 2
+    # (ASCII), count 6 for 'RGB61\0'. Drop the count to 5 so the NUL falls
+    # outside the tag, as it does in the real files.
+    well_formed = b'\x01\x10\x00\x02\x00\x00\x00\x06'
+    assert exif_bytes.count(well_formed) == 1
+    return exif_bytes.replace(well_formed, b'\x01\x10\x00\x02\x00\x00\x00\x05')
+
+
+@pytest.mark.parametrize('terminated', [True, False], ids=['well_formed', 'as_written_by_camera'])
+def test_wingtra_rgb61_resolves_full_frame_sensor(terminated):
+    """A Wingtra RGB61 frame must find its sensor in drones.csv.
+
+    The camera is a Sony a7R IV body but writes Make=WINGTRA (null-padded to
+    10 bytes, as the real files are) and Model=RGB61, so no Sony row matches;
+    without its own row GSD, FOV boxes and coverage are all unavailable.
+
+    It also writes the Model tag without a NUL terminator, and piexif always
+    drops an ASCII tag's last byte, so ADIAT reads the model as 'RGB6'.
+    drones.csv carries a row for each spelling; both must resolve.
+    """
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        tmp_path = tmp_file.name
+    ok, encoded = cv2.imencode('.jpg', np.zeros((40, 60, 3), dtype=np.uint8))
+    assert ok
+    with open(tmp_path, 'wb') as f:
+        f.write(encoded.tobytes())
+    piexif.insert(_wingtra_rgb61_exif(terminated), tmp_path)
+
+    try:
+        expected_model = b'RGB61' if terminated else b'RGB6'
+        assert piexif.load(tmp_path)['0th'][piexif.ImageIFD.Model] == expected_model
+        with patch('core.services.image.ImageService.PickleHelper.get_drone_sensor_info',
+                   return_value=_bundled_drones_df()):
+            service = ImageService(tmp_path)
+            assert service.drone_make == 'WINGTRA'
+            intrinsics = service.get_camera_intrinsics()
+        assert intrinsics == {
+            'focal_length_mm': pytest.approx(24.0),
+            'sensor_width_mm': pytest.approx(35.7),
+            'sensor_height_mm': pytest.approx(23.8),
+        }
+    finally:
+        os.unlink(tmp_path)
