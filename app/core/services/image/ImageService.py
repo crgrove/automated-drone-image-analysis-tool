@@ -186,7 +186,8 @@ class ImageService:
         return FormatHelper.ALTITUDE_REFERENCE_TAKEOFF
 
     def get_altitude_readings(self, distance_unit='m', use_terrain=True,
-                              custom_altitude_ft=None, offline_only=True):
+                              custom_altitude_ft=None, offline_only=True,
+                              terrain_agl_ft=None):
         """Every altitude reference that applies to this image, resolved once.
 
         The single place that decides *which* planes an image has, so no
@@ -194,6 +195,10 @@ class ImageService:
 
         * an operator override is height above the ground being flown over,
           so it stands alone as AGL;
+        * a terrain-referenced AGL supplied from outside the image - a
+          Wingtra geotags CSV, whose imagery carries no RelativeAltitude -
+          stands alone as AGL too, labelled as terrain-referenced rather
+          than operator-entered;
         * WALDO-prepassed imagery already carries a terrain-referenced AGL
           in ``RelativeAltitude``, so it stands alone too;
         * DJI imagery carries ATO, and the DEM is asked for the matching
@@ -206,6 +211,9 @@ class ImageService:
             custom_altitude_ft (float, optional): Operator override, in feet.
             offline_only (bool): Passed to :meth:`get_terrain_agl`; default
                 True keeps a display read off the network.
+            terrain_agl_ft (float, optional): Terrain-referenced AGL for this
+                image from an external source, in feet. Yields to an operator
+                override.
 
         Returns:
             AltitudeReadings: ``value``/``reference`` from the image's own
@@ -217,6 +225,15 @@ class ImageService:
             return AltitudeReadings(
                 value=round(value, 2),
                 reference=FormatHelper.ALTITUDE_REFERENCE_MANUAL,
+                unit=distance_unit,
+            )
+
+        if terrain_agl_ft is not None and terrain_agl_ft > 0:
+            value = (terrain_agl_ft if distance_unit == 'ft'
+                     else terrain_agl_ft / 3.28084)
+            return AltitudeReadings(
+                value=round(value, 2),
+                reference=FormatHelper.ALTITUDE_REFERENCE_TERRAIN,
                 unit=distance_unit,
             )
 

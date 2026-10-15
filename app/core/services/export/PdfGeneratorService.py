@@ -33,6 +33,7 @@ from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
 from core.services.image.AOICompositeService import AOICompositeService
+from core.services.image.WingtraDataService import resolve_altitude_ft, wingtra_agl_ft
 from helpers.MetaDataHelper import MetaDataHelper
 
 import traceback
@@ -537,12 +538,16 @@ class PdfGeneratorService:
             # DEM-derived AGL beside an ATO figure. The service resolves
             # which planes apply; a printed report is read away from the app,
             # so neither is left implied.
+            # A Wingtra image has no altitude of its own; the per-image AGL
+            # from its geotags CSV labels it and sizes its GSD.
             readings = image_service.get_altitude_readings(
                 self.viewer.distance_unit,
                 use_terrain=getattr(self.viewer, 'use_terrain_elevation', True),
-                offline_only=False)
+                offline_only=False,
+                terrain_agl_ft=wingtra_agl_ft(img))
             orientation_str = self._report_value(image_service.get_camera_yaw(), "°")
-            gsd_str = self._report_value(image_service.get_average_gsd(), "cm/px")
+            gsd_str = self._report_value(
+                image_service.get_average_gsd(custom_altitude_ft=wingtra_agl_ft(img)), "cm/px")
 
             # Add image header once per image (not per AOI)
             self.story.append(Paragraph(img['name'], self.h3))
@@ -1107,8 +1112,11 @@ class PdfGeneratorService:
             # Get terrain preference
             use_terrain = getattr(self.viewer, 'use_terrain_elevation', True)
 
-            # Calculate AOI GPS coordinates using the convenience method
-            result = aoi_service.calculate_gps_with_custom_altitude(image_dict, aoi, custom_alt_ft, use_terrain)
+            # Calculate AOI GPS coordinates using the convenience method; a
+            # Wingtra image's AGL stands in when no override is set, as it
+            # does on the GPS map.
+            result = aoi_service.calculate_gps_with_custom_altitude(
+                image_dict, aoi, resolve_altitude_ft(image_dict, custom_alt_ft), use_terrain)
 
             if result:
                 lat, lon = result

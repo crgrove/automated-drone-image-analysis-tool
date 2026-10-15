@@ -187,3 +187,29 @@ class TestNegativeAltitudePrompt:
 
         viewer.altitude_controller.prompt_for_custom_altitude.assert_not_called()
         assert viewer.messages['Relative Altitude'] is None
+
+
+class TestWingtraAltitude:
+    """Wingtra imagery carries no altitude; its geotags CSV supplies a
+    terrain-referenced AGL, which the readout must show as AGL."""
+
+    def test_the_wingtra_agl_is_handed_to_the_service(self):
+        service = MagicMock()
+        service.get_altitude_readings.return_value = AltitudeReadings(
+            value=318.0, reference=FormatHelper.ALTITUDE_REFERENCE_TERRAIN, unit='ft')
+        viewer = MagicMock()
+        viewer.messages = {}
+        viewer.distance_unit = 'ft'
+        viewer.images = [{'path': 'w.jpg', 'name': 'w.jpg', 'wingtra_agl_ft': 318.0}]
+        viewer.current_image = 0
+
+        ImageLoadController._update_metadata_displays(
+            SimpleNamespace(parent=viewer), service)
+
+        assert service.get_altitude_readings.call_args.kwargs['terrain_agl_ft'] == 318.0
+        assert viewer.messages['Relative Altitude'] == "318.0 ft AGL"
+
+    def test_other_imagery_supplies_none(self):
+        _, service, _ = _run(AltitudeReadings(
+            value=171.0, reference=FormatHelper.ALTITUDE_REFERENCE_TAKEOFF, unit='ft'))
+        assert service.get_altitude_readings.call_args.kwargs['terrain_agl_ft'] is None

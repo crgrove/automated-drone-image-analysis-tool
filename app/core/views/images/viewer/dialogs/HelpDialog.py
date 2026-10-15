@@ -269,6 +269,12 @@ class HelpDialog(TranslationMixin, QDialog):
                             the ground being flown over, for GSD calculations)</td>
                     </tr>
                     <tr>
+                        <td>Shift + W</td>
+                        <td>Load a Wingtra geotags CSV (camera orientation and altitude for
+                            Wingtra imagery). A CSV beside the source images is offered
+                            automatically when the results open</td>
+                    </tr>
+                    <tr>
                         <td>Ctrl + H</td>
                         <td>Open image adjustments dialog</td>
                     </tr>

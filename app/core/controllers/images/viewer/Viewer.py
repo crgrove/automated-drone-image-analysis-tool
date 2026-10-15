@@ -421,6 +421,18 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         except Exception as e:
             self.logger.error(f"First-load view defaults failed: {e}")
 
+        # Offered once the viewer is on screen, so the question appears over
+        # the results it applies to.
+        self._offer_wingtra_geotags()
+
+    def _offer_wingtra_geotags(self):
+        """Load, or offer, the Wingtra geotags CSV for these results. A
+        failure here must not take the viewer down with it."""
+        try:
+            self.wingtra_controller.auto_load_on_open()
+        except Exception as e:
+            self.logger.error(f"Wingtra geotags auto-load failed for {self.xml_path}: {e}")
+
     def _initial_fit_image(self):
         if self.main_image is not None and not self.main_image._is_destroyed:
             # Ensure the widget is properly sized before resetting zoom
@@ -2183,7 +2195,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         custom_alt = None
         if hasattr(self, 'altitude_controller'):
             try:
-                custom_alt = self.altitude_controller.get_effective_altitude()
+                custom_alt = self.altitude_controller.get_effective_altitude_for_current_image()
             except Exception:
                 custom_alt = None
         try:
@@ -2206,7 +2218,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         custom_alt = None
         if hasattr(self, 'altitude_controller'):
             try:
-                custom_alt = self.altitude_controller.get_effective_altitude()
+                custom_alt = self.altitude_controller.get_effective_altitude_for_current_image()
             except Exception:
                 custom_alt = None
 

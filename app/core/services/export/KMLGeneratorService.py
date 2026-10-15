@@ -4,6 +4,7 @@ from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
 from core.services.image.ImageService import ImageService
 from core.services.image.AOIService import AOIService
+from core.services.image.WingtraDataService import resolve_altitude_ft, wingtra_agl_ft
 
 
 class KMLGeneratorService:
@@ -271,8 +272,10 @@ class KMLGeneratorService:
                 try:
                     aoi_service = AOIService(image)
 
-                    # Use custom altitude if one was set during initialization
-                    custom_alt_ft = self.custom_altitude_ft
+                    # The custom altitude set at initialization, else this
+                    # image's Wingtra AGL - the same order the GPS map uses,
+                    # so the exported AOI lands where the map shows it.
+                    custom_alt_ft = resolve_altitude_ft(image, self.custom_altitude_ft)
 
                     # Calculate AOI GPS coordinates using the convenience method
                     result = aoi_service.calculate_gps_with_custom_altitude(image, aoi, custom_alt_ft, self.use_terrain)
@@ -376,7 +379,8 @@ class KMLGeneratorService:
                 readings = image_service.get_altitude_readings(
                     'ft', use_terrain=self.use_terrain,
                     custom_altitude_ft=self.custom_altitude_ft,
-                    offline_only=False)
+                    offline_only=False,
+                    terrain_agl_ft=wingtra_agl_ft(image))
 
                 gimbal_pitch = image_service.get_camera_pitch()
                 gimbal_yaw = image_service.get_camera_yaw()

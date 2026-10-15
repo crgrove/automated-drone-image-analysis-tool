@@ -632,6 +632,39 @@ class TestAltitudeReadings:
         assert readings.value == pytest.approx(100.0, abs=0.01)
         assert readings.unit == 'm'
 
+    def test_a_supplied_terrain_agl_is_labelled_agl_above_terrain(self, image_service):
+        """A Wingtra geotags AGL: terrain-referenced, not operator-entered,
+        and it stands in for metadata the image does not have."""
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF, 141.2)
+        service.get_relative_altitude = MagicMock(return_value=None)
+
+        readings = service.get_altitude_readings('m', terrain_agl_ft=318.0)
+
+        assert readings.value == pytest.approx(96.93, abs=0.01)
+        assert readings.reference == FormatHelper.ALTITUDE_REFERENCE_TERRAIN
+        assert FormatHelper.altitude_reference_abbreviation(readings.reference) == 'AGL'
+        service.get_terrain_agl.assert_not_called()
+
+    def test_an_override_beats_a_supplied_terrain_agl(self, image_service):
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF)
+
+        readings = service.get_altitude_readings(
+            'ft', custom_altitude_ft=250.0, terrain_agl_ft=318.0)
+
+        assert readings.value == 250.0
+        assert readings.reference == FormatHelper.ALTITUDE_REFERENCE_MANUAL
+
+    def test_no_supplied_terrain_agl_changes_nothing(self, image_service):
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF, 141.2)
+
+        readings = service.get_altitude_readings('ft', terrain_agl_ft=None)
+
+        assert readings.value == 171.0
+        assert readings.terrain_agl == 141.2
+
     def test_an_unavailable_dem_leaves_the_ato_alone(self, image_service):
         """No tile cached, or no coverage: the ATO figure is still correct."""
         service = self._service(

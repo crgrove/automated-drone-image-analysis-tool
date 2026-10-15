@@ -15,19 +15,29 @@ are the ones that matter:
   plausible.
 """
 
+import os
 from types import SimpleNamespace
 
+import cv2
+import numpy as np
+import piexif
 import pytest
 
 from core.services.image.WingtraDataService import (
     METERS_TO_FEET,
     WingtraImageData,
     build_column_map,
+    candidate_folders,
     compute_agl,
+    find_wingtra_csvs,
+    is_wingtra_image,
     kappa_to_bearing,
     match_image_names,
     parse_wingtra_csv,
+    read_csv_image_names,
+    resolve_altitude_ft,
     summarize_errors,
+    wingtra_agl_ft,
 )
 
 WINGTRA_HEADER = (
@@ -332,3 +342,149 @@ def test_short_error_lists_are_not_annotated():
 
 def test_the_feet_conversion_is_the_shared_constant():
     assert METERS_TO_FEET == pytest.approx(3.28084)
+
+
+# ---------------------------------------------------------------------------
+# finding a geotags CSV for the operator
+# ---------------------------------------------------------------------------
+
+def _images(folder, *names):
+    """Result-image paths in *folder*; the files need not exist for the search."""
+    return [str(folder / name) for name in names]
+
+
+def test_only_the_image_column_of_a_wingtra_csv_is_read(tmp_path):
+    path = _write(tmp_path, _row("A.JPG"), _row("B.JPG"))
+
+    assert read_csv_image_names(path) == ["A.JPG", "B.JPG"]
+
+
+def test_a_csv_missing_a_wingtra_column_is_not_a_geotags_file(tmp_path):
+    """A bearing-track CSV has a position but no orientation triple."""
+    path = _write(tmp_path, "2026-10-12T10:00:00Z,43.7,-110.7,2190",
+                  header="timestamp,latitude,longitude,altitude")
+
+    assert read_csv_image_names(path) is None
+
+
+def test_an_unreadable_csv_is_not_a_geotags_file(tmp_path):
+    path = tmp_path / "binary.csv"
+    path.write_bytes(b"\xff\xfe\x00\x81garbage")
+
+    assert read_csv_image_names(str(path)) is None
+
+
+def test_the_search_covers_each_image_folder_and_its_parent(tmp_path):
+    flight_a = tmp_path / "mission" / "flight_a"
+    flight_b = tmp_path / "mission" / "flight_b"
+    paths = _images(flight_a, "1.JPG", "2.JPG") + _images(flight_b, "3.JPG")
+
+    folders = candidate_folders(paths)
+
+    assert folders == [str(flight_a), str(tmp_path / "mission"), str(flight_b)]
+
+
+def test_a_geotags_csv_beside_the_images_is_found(tmp_path):
+    csv_path = _write(tmp_path, _row("A.JPG"), _row("B.JPG"), _row("C.JPG"),
+                      name="Flight 1 geotags.csv")
+
+    found = find_wingtra_csvs(_images(tmp_path, "A.JPG", "B.JPG"), ["A.JPG", "B.JPG"])
+
+    assert len(found) == 1
+    assert found[0].path == csv_path
+    assert found[0].row_count == 3
+    assert found[0].matched_count == 2
+
+
+def test_a_geotags_csv_one_folder_up_is_found(tmp_path):
+    """Operators move the photos into a subfolder; the CSV stays behind."""
+    images = tmp_path / "images"
+    images.mkdir()
+    csv_path = _write(tmp_path, _row("A.JPG"))
+
+    found = find_wingtra_csvs(_images(images, "A.JPG"), ["A.JPG"])
+
+    assert [c.path for c in found] == [csv_path]
+
+
+def test_names_match_case_insensitively(tmp_path):
+    _write(tmp_path, _row("img_0001.jpg"))
+
+    found = find_wingtra_csvs(_images(tmp_path, "IMG_0001.JPG"), ["IMG_0001.JPG"])
+
+    assert len(found) == 1
+
+
+def test_csvs_that_are_not_geotags_for_these_results_are_not_offered(tmp_path):
+    """An unrelated CSV, and a Wingtra CSV from another flight, are both
+    left alone - offering them would put the wrong footprints on the map."""
+    _write(tmp_path, "1,2,3", header="a,b,c", name="notes.csv")
+    _write(tmp_path, _row("OTHER_FLIGHT.JPG"), name="other.csv")
+
+    assert find_wingtra_csvs(_images(tmp_path, "A.JPG"), ["A.JPG"]) == []
+
+
+def test_the_csv_naming_the_most_results_comes_first(tmp_path):
+    _write(tmp_path, _row("A.JPG"), name="partial.csv")
+    best = _write(tmp_path, _row("A.JPG"), _row("B.JPG"), name="full.csv")
+
+    found = find_wingtra_csvs(_images(tmp_path, "A.JPG", "B.JPG"), ["A.JPG", "B.JPG"])
+
+    assert [c.path for c in found][0] == best
+    assert [c.matched_count for c in found] == [2, 1]
+
+
+def test_a_missing_folder_is_skipped(tmp_path):
+    assert find_wingtra_csvs(_images(tmp_path / "gone", "A.JPG"), ["A.JPG"]) == []
+
+
+def _jpeg_with_make(tmp_path, make, model=b'RGB61'):
+    path = str(tmp_path / "frame.jpg")
+    ok, encoded = cv2.imencode('.jpg', np.zeros((8, 8, 3), dtype=np.uint8))
+    assert ok
+    with open(path, 'wb') as handle:
+        handle.write(encoded.tobytes())
+    piexif.insert(piexif.dump({'0th': {piexif.ImageIFD.Make: make,
+                                       piexif.ImageIFD.Model: model}}), path)
+    return path
+
+
+def test_a_wingtra_payload_is_recognised_by_its_make(tmp_path):
+    """The RGB61 pads its Make with NULs; that must not hide it."""
+    assert is_wingtra_image(_jpeg_with_make(tmp_path, b'WINGTRA\x00\x00\x00'))
+
+
+def test_other_makes_are_not_wingtra(tmp_path):
+    assert not is_wingtra_image(_jpeg_with_make(tmp_path, b'DJI', b'M3T'))
+
+
+def test_an_unreadable_image_is_not_wingtra(tmp_path):
+    path = tmp_path / "broken.jpg"
+    path.write_bytes(b"not a jpeg")
+
+    assert not is_wingtra_image(str(path))
+    assert not is_wingtra_image(os.path.join(str(tmp_path), "missing.jpg"))
+
+
+# ---------------------------------------------------------------------------
+# the altitude every surface sizes a Wingtra image with
+# ---------------------------------------------------------------------------
+
+def test_the_operator_override_wins():
+    assert resolve_altitude_ft({'wingtra_agl_ft': 318.0}, 250.0) == 250.0
+
+
+def test_a_wingtra_agl_stands_in_without_an_override():
+    assert resolve_altitude_ft({'wingtra_agl_ft': 318.0}, None) == 318.0
+
+
+@pytest.mark.parametrize('image', [None, {}, {'wingtra_agl_ft': None}, {'wingtra_agl_ft': 0.0}])
+def test_without_either_the_image_metadata_decides(image):
+    """None, not zero: a zero would feed straight into GSD."""
+    assert resolve_altitude_ft(image, None) is None
+    assert wingtra_agl_ft(image) is None
+
+
+def test_a_non_positive_override_is_no_override():
+    """The altitude dialog stores -1 when the operator declines it."""
+    assert resolve_altitude_ft({'wingtra_agl_ft': 318.0}, -1) == 318.0

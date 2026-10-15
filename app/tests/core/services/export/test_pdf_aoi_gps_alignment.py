@@ -125,3 +125,29 @@ def test_pdf_aoi_gps_preserves_metadata_and_substitutes_original_path(pdf_servic
         assert received['fov_alignment'] == img['fov_alignment']
         assert received['bearing'] == 123.4
         assert received['width'] == 4000 and received['height'] == 3000
+
+
+@pytest.mark.parametrize('override_ft, expected_ft', [(None, 318.0), (250.0, 250.0)])
+def test_pdf_aoi_gps_uses_a_wingtra_agl_unless_overridden(
+        pdf_service, monkeypatch, override_ft, expected_ft):
+    """Wingtra imagery has no altitude of its own; the report positions its
+    AOIs with the geotags AGL, as the GPS map does, unless the operator set
+    an override."""
+    captured = {}
+
+    class RecordingService:
+        def __init__(self, image, img_array=None, image_service=None):
+            pass
+
+        def calculate_gps_with_custom_altitude(self, image, aoi, custom_alt_ft, use_terrain):
+            captured['altitude_ft'] = custom_alt_ft
+            return (1.0, 2.0)
+
+    import core.services.export.PdfGeneratorService as pdf_module
+    monkeypatch.setattr(pdf_module, 'AOIService', RecordingService)
+    pdf_service.viewer.custom_agl_altitude_ft = override_ft
+
+    img = {'path': 'C:/mission/W.JPG', 'mask_path': '', 'wingtra_agl_ft': 318.0}
+    pdf_service._calculate_aoi_gps(img, {'center': (10, 10), 'radius': 5})
+
+    assert captured['altitude_ft'] == expected_ft

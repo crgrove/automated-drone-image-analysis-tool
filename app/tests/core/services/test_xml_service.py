@@ -588,3 +588,29 @@ def test_malformed_duplicate_link_is_ignored(tmp_path):
     aoi = XmlService(path).get_images()[0]["areas_of_interest"][0]
     assert "duplicate_of" not in aoi
     assert aoi["number"] == 2
+
+
+def test_results_written_before_wingtra_geotags_have_no_link(sample_xml):
+    """Every existing ADIAT_Data.xml lacks the block; it must read as unlinked."""
+    assert XmlService(sample_xml).get_wingtra_geotags() is None
+
+
+def test_wingtra_geotags_link_survives_a_save_and_reload(sample_xml):
+    service = XmlService(sample_xml)
+    service.set_wingtra_geotags(r"C:\flights\Flight 1 geotags.csv", "loaded")
+    service.save_xml_file(sample_xml)
+
+    reloaded = XmlService(sample_xml)
+    assert reloaded.get_wingtra_geotags() == {
+        'csv_path': r"C:\flights\Flight 1 geotags.csv", 'status': 'loaded'}
+    # The rest of the file is untouched.
+    assert len(reloaded.get_images()) == 2
+
+
+def test_setting_the_wingtra_geotags_link_replaces_the_old_one(sample_xml):
+    service = XmlService(sample_xml)
+    service.set_wingtra_geotags("a.csv", "declined")
+    service.set_wingtra_geotags("b.csv", "loaded")
+
+    assert service.get_wingtra_geotags() == {'csv_path': "b.csv", 'status': "loaded"}
+    assert len(service.xml.getroot().findall('wingtra_geotags')) == 1
