@@ -6,6 +6,7 @@ Manages custom altitude settings for GSD calculations when GPS altitude is unrel
 
 from PySide6.QtWidgets import QInputDialog
 from core.services.LoggerService import LoggerService
+from core.services.image.WingtraDataService import resolve_altitude_ft
 from helpers.TranslationMixin import TranslationMixin
 
 
@@ -210,6 +211,25 @@ class AltitudeController(TranslationMixin):
         if self.custom_agl_altitude_ft and self.custom_agl_altitude_ft > 0:
             return self.custom_agl_altitude_ft
         return None
+
+    def get_effective_altitude_for_current_image(self):
+        """
+        Get the altitude GSD should use for the image on screen.
+
+        The operator override wins, as everywhere; otherwise the per-image
+        AGL a Wingtra geotags CSV supplied. Wingtra imagery carries no
+        RelativeAltitude, so without this fallback it has no GSD at all. The
+        order matches AOI geolocation (GPSMapController), so the scale the
+        operator measures with agrees with where the AOI lands.
+
+        Returns:
+            float or None: Altitude in feet above the ground, or None to let
+            the image's own metadata decide.
+        """
+        images = getattr(self.parent, 'images', None) or []
+        index = getattr(self.parent, 'current_image', None)
+        image = images[index] if index is not None and 0 <= index < len(images) else None
+        return resolve_altitude_ft(image, self.get_effective_altitude())
 
     def set_custom_altitude(self, altitude_ft):
         """

@@ -226,103 +226,123 @@ Permissive</translation>
 <context>
     <name>AOIController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="416"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="421"/>
         <source>No AOI #{number} in this analysis.</source>
         <translation>No AOI #{number} in this analysis.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="429"/>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="439"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="434"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="444"/>
         <source>AOI #{number} is hidden by the current filter.</source>
         <translation>AOI #{number} is hidden by the current filter.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="735"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="709"/>
+        <source>AOI #{number} is no longer a duplicate of AOI #{primary}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="854"/>
         <source>Comment saved</source>
         <translation>Comment saved</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="737"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="856"/>
         <source>Comment cleared</source>
         <translation>Comment cleared</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="826"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="949"/>
         <source>Copy Data</source>
         <translation>Copy Data</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="832"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="955"/>
         <source>Find Similar AOIs</source>
         <translation>Find Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="935"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="966"/>
+        <source>Not a Duplicate of AOI #{number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="971"/>
+        <source>Mark as Duplicate...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1074"/>
         <source>AOI data copied</source>
         <translation>AOI data copied</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1022"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1161"/>
         <source>Invalid image index</source>
         <translation>Invalid image index</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1027"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1166"/>
         <source>Invalid AOI index</source>
         <translation>Invalid AOI index</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1096"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1235"/>
         <source>Could not calculate AOI location. Diagnostic info copied to clipboard!</source>
         <translation>Could not calculate AOI location. Diagnostic info copied to clipboard!</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1102"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1241"/>
         <source>Could not calculate AOI location</source>
         <translation>Could not calculate AOI location</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1123"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1262"/>
         <source>Terrain elevation: {value}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1127"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1266"/>
         <source>Terrain-corrected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1132"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1271"/>
         <source> (~{value} resolution)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1140"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1279"/>
         <source>Flat terrain assumed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1544"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1651"/>
+        <source>Similar &amp; Nearby (Groups)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1701"/>
         <source>Temperature sorting unavailable (no thermal data)</source>
         <translation>Temperature sorting unavailable (no thermal data)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1895"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="2117"/>
         <source>Cannot Delete AOI</source>
         <translation>Cannot Delete AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1900"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="2122"/>
         <source>Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted.</source>
         <translation>Only manually created AOIs can be deleted. Algorithm-detected AOIs cannot be deleted.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1906"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="2128"/>
         <source>Delete AOI</source>
         <translation>Delete AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="1909"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIController.py" line="2131"/>
         <source>Are you sure you want to delete this AOI? This action cannot be undone.</source>
         <translation>Are you sure you want to delete this AOI? This action cannot be undone.</translation>
     </message>
@@ -351,287 +371,357 @@ Permissive</translation>
     </message>
 </context>
 <context>
+    <name>AOIDuplicatePickerDialog</name>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="80"/>
+        <location filename="../resources/views/images/viewer/AOIDuplicatePickerDialog.ui" line="20"/>
+        <source>Mark as Duplicate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="105"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="130"/>
+        <source>AOI #{number}</source>
+        <translation type="unfinished">AOI #{number}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="106"/>
+        <source>AOI</source>
+        <translation type="unfinished">AOI</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="108"/>
+        <source>(+{count} dup.)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="116"/>
+        <source>{distance:.0f} ft away</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="119"/>
+        <source>{distance:.0f} m away</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIDuplicatePickerDialog.py" line="121"/>
+        <source>{similarity}% alike</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOIDuplicatePickerDialog.ui" line="32"/>
+        <source>Pick the AOI this one is another sighting of. Reports show that AOI once, at its position, and list this image and AOI number under it. The best match (closest and most alike) is selected - press Enter to confirm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOIDuplicatePickerDialog.ui" line="43"/>
+        <source>This AOI</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOIDuplicatePickerDialog.ui" line="109"/>
+        <source>Is a duplicate of</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOIDuplicatePickerDialog.ui" line="122"/>
+        <source>Flagged AOIs and AOIs that already have duplicates, best match first. Double-click to choose one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AOIFilterDialog</name>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="74"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="76"/>
         <source>Filter AOIs</source>
         <translation>Filter AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="91"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="93"/>
         <source>Filter Areas of Interest by flagged status, comments, color, and/or pixel area:</source>
         <translation>Filter Areas of Interest by flagged status, comments, color, and/or pixel area:</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="96"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="98"/>
         <source>Flagged AOIs</source>
         <translation>Flagged AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="99"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="101"/>
         <source>Show Only Flagged AOIs</source>
         <translation>Show Only Flagged AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="103"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="105"/>
         <source>Only AOIs marked with a flag will be displayed</source>
         <translation>Only AOIs marked with a flag will be displayed</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="111"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="109"/>
+        <source>Hide Duplicate AOIs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="113"/>
+        <source>AOIs marked as a duplicate are hidden; the original AOI each one repeats is still shown</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="122"/>
         <source>Comment Filter</source>
         <translation>Comment Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="115"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="126"/>
         <source>Enable Comment Filter</source>
         <translation>Enable Comment Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="122"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="133"/>
         <source>Pattern:</source>
         <translation>Pattern:</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="125"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="136"/>
         <source>e.g., damage or crack</source>
         <translation>e.g., damage or crack</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="133"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="144"/>
         <source>Case-insensitive substring match (e.g. &quot;blue&quot; matches &quot;blueface&quot;)</source>
         <translation>Case-insensitive substring match (e.g. &quot;blue&quot; matches &quot;blueface&quot;)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="137"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="148"/>
         <source>Only AOIs with non-empty comments matching the pattern will be shown</source>
         <translation>Only AOIs with non-empty comments matching the pattern will be shown</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="145"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="156"/>
         <source>Color Filter</source>
         <translation>Color Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="149"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="160"/>
         <source>Enable Color Filter</source>
         <translation>Enable Color Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="156"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="167"/>
         <source>Show Only This Color</source>
         <translation>Show Only This Color</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="157"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="168"/>
         <source>Exclude This Color</source>
         <translation>Exclude This Color</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="174"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="185"/>
         <source>Target Hue:</source>
         <translation>Target Hue:</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="176"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="187"/>
         <source>Select Color</source>
         <translation>Select Color</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="188"/>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="556"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="199"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="567"/>
         <source>No color selected</source>
         <translation>No color selected</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="196"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="207"/>
         <source>Hue Range (±):</source>
         <translation>Hue Range (±):</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="214"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="225"/>
         <source>AOIs with hue within ±range of target will be shown</source>
         <translation>AOIs with hue within ±range of target will be shown</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="222"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="233"/>
         <source>Pixel Area Filter</source>
         <translation>Pixel Area Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="226"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="237"/>
         <source>Enable Pixel Area Filter</source>
         <translation>Enable Pixel Area Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="233"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="244"/>
         <source>Minimum Area (px):</source>
         <translation>Minimum Area (px):</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="247"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="258"/>
         <source>Maximum Area (px):</source>
         <translation>Maximum Area (px):</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="263"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="274"/>
         <source>Temperature Filter</source>
         <translation>Temperature Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="267"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="278"/>
         <source>Enable Temperature Filter</source>
         <translation>Enable Temperature Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="321"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="332"/>
         <source>Temperature filtering unavailable (no thermal data)</source>
         <translation>Temperature filtering unavailable (no thermal data)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="336"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="347"/>
         <source>Spatial Filters</source>
         <translation>Spatial Filters</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="341"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="352"/>
         <source>Detection Density Heatmap</source>
         <translation>Detection Density Heatmap</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="347"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="358"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="348"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="359"/>
         <source>Filter Hot Zones</source>
         <translation>Filter Hot Zones</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="349"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="360"/>
         <source>Show Hot Zones Only</source>
         <translation>Show Hot Zones Only</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="374"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="385"/>
         <source>Threshold:</source>
         <translation>Threshold:</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="392"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="403"/>
         <source>View Heatmap</source>
         <translation>View Heatmap</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="405"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="416"/>
         <source>Heatmap filtering unavailable (image dimensions not in dataset)</source>
         <translation>Heatmap filtering unavailable (image dimensions not in dataset)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="418"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="429"/>
         <source>Image Mask Filter</source>
         <translation>Image Mask Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="422"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="433"/>
         <source>Enable Image Mask Filter</source>
         <translation>Enable Image Mask Filter</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="429"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="440"/>
         <source>Show Only Detections in Mask</source>
         <translation>Show Only Detections in Mask</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="430"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="441"/>
         <source>Exclude Detections in Mask</source>
         <translation>Exclude Detections in Mask</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="449"/>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="630"/>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="690"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="460"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="641"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="702"/>
         <source>No mask image selected</source>
         <translation>No mask image selected</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="454"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="465"/>
         <source>Browse...</source>
         <translation>Browse...</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="458"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="469"/>
         <source>Clear</source>
         <translation>Clear</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="465"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="476"/>
         <source>White regions = areas of interest. Mask is scaled to each image&apos;s dimensions.</source>
         <translation>White regions = areas of interest. Mask is scaled to each image&apos;s dimensions.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="483"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="494"/>
         <source>Clear All Filters</source>
         <translation>Clear All Filters</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="489"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="500"/>
         <source>Apply</source>
         <translation>Apply</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="494"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="505"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="531"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="542"/>
         <source>Select Target Hue</source>
         <translation>Select Target Hue</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="607"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="618"/>
         <source>Select Mask Image</source>
         <translation>Select Mask Image</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="610"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="621"/>
         <source>Images (*.png *.jpg *.jpeg *.bmp *.tiff);;All Files (*)</source>
         <translation>Images (*.png *.jpg *.jpeg *.bmp *.tiff);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="618"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="629"/>
         <source>Invalid Image</source>
         <translation>Invalid Image</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="620"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="631"/>
         <source>Could not load the selected image. Please choose a valid image file.</source>
         <translation>Could not load the selected image. Please choose a valid image file.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="637"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="648"/>
         <source>AOIs in high-density zones (above threshold) will be hidden</source>
         <translation>AOIs in high-density zones (above threshold) will be hidden</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="640"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="651"/>
         <source>Only AOIs in high-density zones (above threshold) will be shown</source>
         <translation>Only AOIs in high-density zones (above threshold) will be shown</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="643"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="654"/>
         <source>Heatmap spatial filtering is disabled</source>
         <translation>Heatmap spatial filtering is disabled</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="649"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="660"/>
         <source>Heatmap</source>
         <translation>Heatmap</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="650"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOIFilterDialog.py" line="661"/>
         <source>No heatmap data available. Ensure image dimensions are present in the dataset.</source>
         <translation>No heatmap data available. Ensure image dimensions are present in the dataset.</translation>
     </message>
@@ -765,94 +855,196 @@ This may be due to missing image metadata (GPS, altitude, or camera info).</tran
 <context>
     <name>AOISimilarityController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="141"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="295"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="390"/>
         <source>No AOI Selected</source>
         <translation>No AOI Selected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="143"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="297"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="392"/>
         <source>Please select an AOI first by clicking on it in the thumbnail panel.</source>
         <translation>Please select an AOI first by clicking on it in the thumbnail panel.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="159"/>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="311"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="313"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="672"/>
         <source>Similarity Search Error</source>
         <translation>Similarity Search Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="160"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="314"/>
         <source>An error occurred while starting the similarity search:
 {error}</source>
         <translation>An error occurred while starting the similarity search:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="171"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="329"/>
         <source>Analyzing AOIs for visual similarity...</source>
         <translation>Analyzing AOIs for visual similarity...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="172"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="538"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="176"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="328"/>
         <source>Find Similar AOIs</source>
         <translation>Find Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="233"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="365"/>
+        <source>Sort: Similar &amp; Nearby</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="366"/>
+        <source>Grouping AOIs that look alike and are close together...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="414"/>
+        <source>Nothing to Link To</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="419"/>
+        <source>There are no flagged AOIs to mark this AOI as a duplicate of.
+
+Flag the AOI you want in the report first (F), then press D on each other sighting of the same object. You can also use Find Similar AOIs (Shift+Z) on the flagged AOI and mark several at once.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="434"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="485"/>
+        <source>Mark as Duplicate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="435"/>
+        <source>Finding the AOIs this one may repeat...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="486"/>
+        <source>The AOIs to link to could not be found:
+{error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="506"/>
+        <source>Already marked as duplicates of AOI #{primary}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="511"/>
+        <source>AOI #{number} marked as a duplicate of AOI #{primary}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="514"/>
+        <source>Marked {count} AOI(s) as duplicates of AOI #{primary}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="519"/>
+        <source> - AOI #{primary} is not flagged, so it is not in reports yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="594"/>
         <source>Analyzing AOI {done} of {total}...</source>
         <translation>Analyzing AOI {done} of {total}...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="278"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="639"/>
         <source>No Similar AOIs</source>
         <translation>No Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="280"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="641"/>
         <source>No other AOIs could be analyzed for similarity.</source>
         <translation>No other AOIs could be analyzed for similarity.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="312"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="673"/>
         <source>The similarity search could not be completed:
 {error}</source>
         <translation>The similarity search could not be completed:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="418"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="702"/>
+        <source>No AOI Positions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="705"/>
+        <source>None of the AOIs have a GPS position, so AOIs that are close together cannot be grouped.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="729"/>
+        <source>Sort Error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="730"/>
+        <source>The AOIs could not be sorted by similarity:
+{error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="743"/>
+        <source>Sorted into {groups} group(s) of similar, nearby AOIs ({grouped} of {total} AOIs)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="749"/>
+        <source>No similar AOIs found close together - try a larger distance or a lower similarity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="751"/>
+        <source>; {count} AOI(s) without a GPS position left ungrouped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="860"/>
         <source>Display Error</source>
         <translation>Display Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="419"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="861"/>
         <source>An error occurred while displaying results:
 {error}</source>
         <translation>An error occurred while displaying results:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="471"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="913"/>
         <source>Flagged {count} AOI(s)</source>
         <translation>Flagged {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="474"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="916"/>
         <source>Removed flag from {count} AOI(s)</source>
         <translation>Removed flag from {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="506"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="939"/>
+        <source>Removed the duplicate mark from {count} AOI(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="974"/>
         <source>Comment saved on {count} AOI(s)</source>
         <translation>Comment saved on {count} AOI(s)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="509"/>
+        <location filename="../app/core/controllers/images/viewer/similarity/AOISimilarityController.py" line="977"/>
         <source>Comment cleared on {count} AOI(s)</source>
         <translation>Comment cleared on {count} AOI(s)</translation>
     </message>
@@ -860,99 +1052,157 @@ This may be due to missing image metadata (GPS, altitude, or camera info).</tran
 <context>
     <name>AOISimilarityResultsDialog</name>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="442"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="484"/>
         <source>Similar AOIs</source>
         <translation>Similar AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="482"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="524"/>
         <source>Top {shown} of {total} AOIs ranked by similarity to {reference}. Use mouse wheel to zoom, right-click drag to pan. Click a thumbnail to jump to that AOI.</source>
         <translation>Top {shown} of {total} AOIs ranked by similarity to {reference}. Use mouse wheel to zoom, right-click drag to pan. Click a thumbnail to jump to that AOI.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="500"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="542"/>
         <source>Select All</source>
         <translation>Select All</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="504"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="546"/>
         <source>Clear Selection</source>
         <translation>Clear Selection</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="508"/>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="556"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="550"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="612"/>
         <source>{count} selected</source>
         <translation>{count} selected</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="514"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="556"/>
         <source>Flag</source>
         <translation>Flag</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="515"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="557"/>
         <source>Flag all checked AOIs</source>
         <translation>Flag all checked AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="520"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="562"/>
         <source>Unflag</source>
         <translation>Unflag</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="521"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="563"/>
         <source>Remove the flag from all checked AOIs</source>
         <translation>Remove the flag from all checked AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="526"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="568"/>
         <source>Comment...</source>
         <translation>Comment...</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="527"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="569"/>
         <source>Add or edit the comment on all checked AOIs</source>
         <translation>Add or edit the comment on all checked AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="538"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="574"/>
+        <source>Mark Duplicate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="577"/>
+        <source>Mark all checked AOIs as duplicates of the reference AOI: reports show the reference once and list these as other sightings of it</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="582"/>
+        <source>Not Duplicate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="583"/>
+        <source>Remove the duplicate mark from all checked AOIs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="594"/>
         <source>Reset View</source>
         <translation>Reset View</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="541"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="597"/>
         <source>Reset zoom and fit all thumbnails in view</source>
         <translation>Reset zoom and fit all thumbnails in view</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="546"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="602"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="581"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="648"/>
         <source>AOI #{number}</source>
         <translation>AOI #{number}</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="584"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="651"/>
         <source>the selected AOI</source>
         <translation>the selected AOI</translation>
     </message>
 </context>
 <context>
+    <name>AOISimilaritySortDialog</name>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="20"/>
+        <source>Sort: Similar &amp; Nearby</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="32"/>
+        <source>Places AOIs that look alike (the same score as Find Similar AOIs, Shift+Z) and are close together on the ground next to each other. The largest groups come first; AOIs without a match follow in their usual order.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="41"/>
+        <source>Max distance apart:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="48"/>
+        <source>Largest ground distance between two AOIs in the same group, from their estimated GPS positions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="61"/>
+        <source>Min similarity:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="68"/>
+        <source>Smallest visual similarity between two AOIs in the same group.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/AOISimilaritySortDialog.ui" line="71"/>
+        <source>%</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AOIUIComponent</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="251"/>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="347"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="252"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="356"/>
         <source>AOI Information
 Right-click to copy data to clipboard</source>
         <translation>AOI Information
 Right-click to copy data to clipboard</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="257"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="258"/>
         <source>
 
 Score Type: {type}
@@ -963,22 +1213,33 @@ Score Type: {type}
 Raw Score: {score} ({method})</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="320"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="273"/>
+        <source>Duplicate of AOI #{number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="329"/>
         <source>Confidence Score: {score:.1f}%</source>
         <translation>Confidence Score: {score:.1f}%</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="386"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="395"/>
+        <source>Duplicate of AOI #{number} (reported with it)
+Click to remove the duplicate mark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="399"/>
         <source>Unflag AOI</source>
         <translation>Unflag AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="387"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="402"/>
         <source>Flag AOI</source>
         <translation>Flag AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="403"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="421"/>
         <source>Comment:
 {comment}
 
@@ -989,7 +1250,7 @@ Click to edit comment</source>
 Click to edit comment</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="415"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="433"/>
         <source>No comment yet.
 Click to add a comment for this AOI.
 
@@ -1002,52 +1263,52 @@ Use comments to note important details, observations,
 or actions needed for this detection.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="429"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="447"/>
         <source>Calculate and show GPS location for this AOI</source>
         <translation>Calculate and show GPS location for this AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="446"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="464"/>
         <source>Delete this AOI</source>
         <translation>Delete this AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="484"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="509"/>
         <source>Area</source>
         <translation>Area</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="485"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="510"/>
         <source>Areas</source>
         <translation>Areas</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="486"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="511"/>
         <source>{filtered} of {total} {label}</source>
         <translation>{filtered} of {total} {label}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="496"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="521"/>
         <source>Area of Interest</source>
         <translation>Area of Interest</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="498"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="523"/>
         <source>Areas of Interest</source>
         <translation>Areas of Interest</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="500"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="525"/>
         <source>{count} {label}</source>
         <translation>{count} {label}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="643"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="668"/>
         <source>Loading AOIs...</source>
         <translation>Loading AOIs...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="684"/>
+        <location filename="../app/core/controllers/images/viewer/aoi/AOIUIComponent.py" line="709"/>
         <source>Loading AOIs... ({current}/{total})</source>
         <translation>Loading AOIs... ({current}/{total})</translation>
     </message>
@@ -1315,37 +1576,37 @@ Each corner handle is colour-matched to a corner of the drone photo (the small c
 <context>
     <name>AltitudeController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="98"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="99"/>
         <source>meters</source>
         <translation>meters</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="100"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="101"/>
         <source>feet</source>
         <translation>feet</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="109"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="110"/>
         <source>Negative Altitude Detected</source>
         <translation>Negative Altitude Detected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="113"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="114"/>
         <source>WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in {unit}):</source>
         <translation>WARNING! Relative Altitude is negative. Enter an AGL altitude to be used for GSD calculations (in {unit}):</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="130"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="131"/>
         <source>Override Altitude</source>
         <translation>Override Altitude</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="133"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="134"/>
         <source>Enter a custom AGL altitude to be used for GSD calculations for all images (in {unit}):</source>
         <translation>Enter a custom AGL altitude to be used for GSD calculations for all images (in {unit}):</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="180"/>
+        <location filename="../app/core/controllers/images/viewer/AltitudeController.py" line="181"/>
         <source>Custom AGL set to {value:.1f} {unit}</source>
         <translation>Custom AGL set to {value:.1f} {unit}</translation>
     </message>
@@ -1353,52 +1614,52 @@ Each corner handle is colour-matched to a corner of the drone photo (the small c
 <context>
     <name>AnalyzeService</name>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="161"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="162"/>
         <source>Processing {count} files</source>
         <translation>Processing {count} files</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="205"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="217"/>
         <source>Skipping {file} :: File is not an image</source>
         <translation>Skipping {file} :: File is not an image</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="210"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="222"/>
         <source>All {count} images queued, processing started...</source>
         <translation>All {count} images queued, processing started...</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="268"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="280"/>
         <source>{images} images with {aois} areas of interest identified</source>
         <translation>{images} images with {aois} areas of interest identified</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="274"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="286"/>
         <source>Total Processing Time: {seconds} seconds</source>
         <translation>Total Processing Time: {seconds} seconds</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="277"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="289"/>
         <source>Total Images Processed: {count}</source>
         <translation>Total Images Processed: {count}</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="495"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="512"/>
         <source>Unable to process {file} :: {error} ({percent}%)</source>
         <translation>Unable to process {file} :: {error} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="518"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="539"/>
         <source>{count} areas of interest identified in {file} ({percent}%)</source>
         <translation>{count} areas of interest identified in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="535"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="556"/>
         <source>No areas of interest identified in {file} ({percent}%)</source>
         <translation>No areas of interest identified in {file} ({percent}%)</translation>
     </message>
     <message>
-        <location filename="../app/core/services/AnalyzeService.py" line="617"/>
+        <location filename="../app/core/services/AnalyzeService.py" line="638"/>
         <source>--- Cancelling Image Processing ---</source>
         <translation>--- Cancelling Image Processing ---</translation>
     </message>
@@ -1457,42 +1718,47 @@ Each corner handle is colour-matched to a corner of the drone photo (the small c
         <translation>Track Files (*.kml *.gpx *.csv);;KML Files (*.kml);;GPX Files (*.gpx);;CSV Files (*.csv);;All Files (*.*)</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="368"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="356"/>
+        <source>No bearings could be calculated: no image capture time matched the track. Check that the track file covers the flight and that the images carry capture times.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="378"/>
         <source>Bearings set for {count} images ({source})</source>
         <translation>Bearings set for {count} images ({source})</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="373"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="383"/>
         <source>, {count} flagged near turns</source>
         <translation>, {count} flagged near turns</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="375"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="385"/>
         <source>, {count} hover estimates</source>
         <translation>, {count} hover estimates</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="377"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="387"/>
         <source>, {count} time gaps</source>
         <translation>, {count} time gaps</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="384"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="394"/>
         <source>Bearing Calculation Complete</source>
         <translation>Bearing Calculation Complete</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="385"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="395"/>
         <source>{summary}.</source>
         <translation>{summary}.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="414"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="424"/>
         <source>Bearing Calculation Failed</source>
         <translation>Bearing Calculation Failed</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="418"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="428"/>
         <source>An error occurred during bearing calculation:
 
 {error}
@@ -1505,22 +1771,22 @@ Please check your input files and try again.</source>
 Please check your input files and try again.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="438"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="448"/>
         <source>Cancelled</source>
         <translation>Cancelled</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="449"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="459"/>
         <source>Cancelling...</source>
         <translation>Cancelling...</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="462"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="472"/>
         <source>Bearing Recovery Not Needed</source>
         <translation>Bearing Recovery Not Needed</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="467"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="477"/>
         <source>Bearing recovery requires multiple images to calculate direction of travel.
 
 With only one image, bearing recovery cannot be performed.</source>
@@ -1529,7 +1795,7 @@ With only one image, bearing recovery cannot be performed.</source>
 With only one image, bearing recovery cannot be performed.</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="509"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="519"/>
         <source>
 &lt;h3&gt;What is Bearing Recovery?&lt;/h3&gt;
 
@@ -1590,7 +1856,7 @@ Proceed without bearing recovery. Some features may not work correctly.&lt;/p&gt
         </translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="510"/>
+        <location filename="../app/core/views/images/viewer/dialogs/BearingRecoveryDialog.py" line="520"/>
         <source>About Bearing Recovery</source>
         <translation>About Bearing Recovery</translation>
     </message>
@@ -2062,14 +2328,14 @@ Please check:
 <context>
     <name>CalTopoExportController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="488"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1298"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="490"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1311"/>
         <source>Offline Mode Enabled</source>
         <translation>Offline Mode Enabled</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="495"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1305"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="497"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1318"/>
         <source>Offline Only is turned on in Preferences:
 
 • Map tiles will not be retrieved.
@@ -2084,39 +2350,39 @@ Turn off Offline Only to export to CalTopo.</source>
 Turn off Offline Only to export to CalTopo.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="501"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1311"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="503"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1324"/>
         <source>Nothing Selected</source>
         <translation>Nothing Selected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="505"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1315"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="507"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1328"/>
         <source>Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export.</source>
         <translation>Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="511"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="513"/>
         <source>Preparing Export Data</source>
         <translation>Preparing Export Data</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="514"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="516"/>
         <source>Preparing data for export...</source>
         <translation>Preparing data for export...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="515"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="517"/>
         <source>Processing images and AOIs...</source>
         <translation>Processing images and AOIs...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="560"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="562"/>
         <source>Preparation Error</source>
         <translation>Preparation Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="563"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="565"/>
         <source>An error occurred while preparing export data:
 
 {error}</source>
@@ -2125,29 +2391,29 @@ Turn off Offline Only to export to CalTopo.</translation>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="571"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="573"/>
         <source>flagged AOIs</source>
         <translation>flagged AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="573"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="575"/>
         <source>image locations</source>
         <translation>image locations</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="575"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="577"/>
         <source>coverage area</source>
         <translation>coverage area</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="582"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="584"/>
         <source>No flagged AOIs, geotagged image locations, or coverage areas are available.
 Flag some AOIs with the &apos;F&apos; key or ensure your images have GPS metadata.</source>
         <translation>No flagged AOIs, geotagged image locations, or coverage areas are available.
 Flag some AOIs with the &apos;F&apos; key or ensure your images have GPS metadata.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="590"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="592"/>
         <source>Found {count} flagged AOI(s), but could not extract GPS coordinates.
 
 This usually means:
@@ -2164,30 +2430,30 @@ This usually means:
 Please ensure your images have GPS coordinates embedded.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="596"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="598"/>
         <source>No geotagged drone/image locations were found.
 Ensure your images contain GPS metadata and try again.</source>
         <translation>No geotagged drone/image locations were found.
 Ensure your images contain GPS metadata and try again.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="609"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="611"/>
         <source>No {types} are available to export.</source>
         <translation>No {types} are available to export.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="613"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="615"/>
         <source>Nothing to Export</source>
         <translation>Nothing to Export</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="638"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="681"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="640"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="683"/>
         <source>No Map Selected</source>
         <translation>No Map Selected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="644"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="646"/>
         <source>Please navigate to a CalTopo map before clicking &apos;I&apos;m Logged In&apos;.
 
 The map URL should look like:
@@ -2198,7 +2464,7 @@ The map URL should look like:
 https://caltopo.com/map.html#...&amp;id=ABC123</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="687"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="689"/>
         <source>No CalTopo map was selected, so there was nothing to export to.
 
 Open your map in the CalTopo window before clicking &apos;I&apos;m Logged In - Export Data&apos;.</source>
@@ -2207,7 +2473,7 @@ Open your map in the CalTopo window before clicking &apos;I&apos;m Logged In - E
 Open your map in the CalTopo window before clicking &apos;I&apos;m Logged In - Export Data&apos;.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1616"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1629"/>
         <source>Nothing could be exported to CalTopo.
 
 The reason was written to the log (adiat_logs.txt) and the console.</source>
@@ -2216,12 +2482,12 @@ The reason was written to the log (adiat_logs.txt) and the console.</source>
 The reason was written to the log (adiat_logs.txt) and the console.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1623"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1636"/>
         <source>Photos uploaded: {uploaded} of {total}.</source>
         <translation>Photos uploaded: {uploaded} of {total}.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1632"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1645"/>
         <source>Successfully exported all {total} item(s) to CalTopo.
 
 The items should now be visible on your map.</source>
@@ -2230,7 +2496,7 @@ The items should now be visible on your map.</source>
 The items should now be visible on your map.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1642"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1655"/>
         <source>Exported {created} of {total} item(s) to CalTopo.{photos}
 
 Details for anything that failed were written to the log (adiat_logs.txt) and the console.</source>
@@ -2239,30 +2505,30 @@ Details for anything that failed were written to the log (adiat_logs.txt) and th
 Details for anything that failed were written to the log (adiat_logs.txt) and the console.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1628"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1641"/>
         <source>Export Successful</source>
         <translation>Export Successful</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1637"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1650"/>
         <source>Partial Success</source>
         <translation>Partial Success</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1611"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1624"/>
         <source>Export Failed</source>
         <translation>Export Failed</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="719"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1378"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1573"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="721"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1391"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1586"/>
         <source>Export Error</source>
         <translation>Export Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="722"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1576"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="724"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1589"/>
         <source>An error occurred during CalTopo export:
 
 {error}</source>
@@ -2271,7 +2537,7 @@ Details for anything that failed were written to the log (adiat_logs.txt) and th
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1058"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1071"/>
         <source>Coverage area: {sqkm:.3f} km² ({acres:.2f} acres)
 Area in square meters: {sqm:.0f} m²
 Number of corners: {count}</source>
@@ -2280,17 +2546,17 @@ Area in square meters: {sqm:.0f} m²
 Number of corners: {count}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1535"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1548"/>
         <source>Exporting to CalTopo</source>
         <translation>Exporting to CalTopo</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1266"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1279"/>
         <source>Logged Out</source>
         <translation>Logged Out</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="606"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="608"/>
         <source>No coverage area polygons could be calculated.
 
 This usually means:
@@ -2303,32 +2569,32 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1268"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1281"/>
         <source>Successfully logged out from CalTopo.</source>
         <translation>Successfully logged out from CalTopo.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1426"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1439"/>
         <source>Loading CalTopo Maps</source>
         <translation>Loading CalTopo Maps</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1429"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1442"/>
         <source>Connecting to CalTopo...</source>
         <translation>Connecting to CalTopo...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1430"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1443"/>
         <source>Fetching account data and maps...</source>
         <translation>Fetching account data and maps...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1486"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1499"/>
         <source>Connection Error</source>
         <translation>Connection Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1488"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1501"/>
         <source>An error occurred while connecting to CalTopo API:
 
 {error}</source>
@@ -2337,18 +2603,18 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="696"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1491"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="698"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1504"/>
         <source>Authentication Failed</source>
         <translation>Authentication Failed</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="698"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="700"/>
         <source>No CalTopo session cookies were captured. Please log in and try again.</source>
         <translation>No CalTopo session cookies were captured. Please log in and try again.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1381"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1394"/>
         <source>An error occurred during CalTopo API export:
 
 {error}</source>
@@ -2357,7 +2623,7 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1498"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1511"/>
         <source>CalTopo did not accept these credentials.
 
 The reason was written to the log (adiat_logs.txt) and the console.
@@ -2370,12 +2636,12 @@ The reason was written to the log (adiat_logs.txt) and the console.
 Would you like to re-enter your Team ID, Credential ID and Credential Secret?</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1538"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1551"/>
         <source>Exporting to CalTopo...</source>
         <translation>Exporting to CalTopo...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1539"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1552"/>
         <source>Preparing data and exporting...</source>
         <translation>Preparing data and exporting...</translation>
     </message>
@@ -6101,33 +6367,33 @@ The map will continue to work with cached tiles where available.</translation>
 <context>
     <name>GalleryUIComponent</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="369"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="394"/>
         <source>0 AOIs</source>
         <translation>0 AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="410"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="435"/>
         <source>AOI</source>
         <translation>AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="411"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="436"/>
         <source>AOIs</source>
         <translation>AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="412"/>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="435"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="437"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="460"/>
         <source>{count} {label}</source>
         <translation>{count} {label}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="431"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="456"/>
         <source>Area of Interest</source>
         <translation>Area of Interest</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="433"/>
+        <location filename="../app/core/controllers/images/viewer/gallery/GalleryUIComponent.py" line="458"/>
         <source>Areas of Interest</source>
         <translation>Areas of Interest</translation>
     </message>
@@ -8162,27 +8428,27 @@ li.checked::marker { content: &quot;\2612&quot;; }
 <context>
     <name>ImageLoadController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="126"/>
+        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="127"/>
         <source>(Image {current} of {total})</source>
         <translation>(Image {current} of {total})</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="191"/>
+        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="192"/>
         <source>Local terrain data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="196"/>
+        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="197"/>
         <source>{provider} is not answering and no fallback terrain is available — some calculations assume flat terrain. Check the terrain settings in Preferences.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="201"/>
+        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="202"/>
         <source>{provider} is not answering — using ~30 m global terrain data instead. Check the terrain settings in Preferences.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="555"/>
+        <location filename="../app/core/controllers/images/viewer/image/ImageLoadController.py" line="559"/>
         <source>Error Loading Image</source>
         <translation>Error Loading Image</translation>
     </message>
@@ -10588,13 +10854,13 @@ Open this file from the Image Analysis window via Menu → Load Results File.</t
 <context>
     <name>PDFExportController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="151"/>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="160"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="152"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="161"/>
         <source>No Images to Export</source>
         <translation>No Images to Export</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="156"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="157"/>
         <source>There are no images available to include in the PDF report.
 
 All images may be hidden or there are no images in the dataset.</source>
@@ -10603,7 +10869,7 @@ All images may be hidden or there are no images in the dataset.</source>
 All images may be hidden or there are no images in the dataset.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="166"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="167"/>
         <source>There are no images with flagged AOIs to include in the PDF report.
 
 Please flag at least one AOI, or check &apos;Include images without flagged AOIs&apos; to include all images in the report.</source>
@@ -10612,47 +10878,47 @@ Please flag at least one AOI, or check &apos;Include images without flagged AOIs
 Please flag at least one AOI, or check &apos;Include images without flagged AOIs&apos; to include all images in the report.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="172"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="173"/>
         <source>Save PDF File</source>
         <translation>Save PDF File</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="175"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="176"/>
         <source>PDF files (*.pdf)</source>
         <translation>PDF files (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="216"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="219"/>
         <source>Generating PDF Report</source>
         <translation>Generating PDF Report</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="219"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="222"/>
         <source>Generating PDF Report...</source>
         <translation>Generating PDF Report...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="260"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="263"/>
         <source>Failed to generate PDF file: {error}</source>
         <translation>Failed to generate PDF file: {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="276"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="279"/>
         <source>Success</source>
         <translation>Success</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="278"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="281"/>
         <source>PDF report generated successfully!</source>
         <translation>PDF report generated successfully!</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="294"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="297"/>
         <source>PDF generation failed: {error}</source>
         <translation>PDF generation failed: {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="308"/>
+        <location filename="../app/core/controllers/images/viewer/exports/PDFExportController.py" line="311"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
@@ -12117,6 +12383,416 @@ Aggressive</translation>
     </message>
 </context>
 <context>
+    <name>RectilinearShape</name>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="14"/>
+        <source>Form</source>
+        <translation type="unfinished">Form</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="35"/>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="52"/>
+        <source>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="40"/>
+        <source>Target Type:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="58"/>
+        <source>Suitcase (any orientation)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="63"/>
+        <source>Suitcase (lying flat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="68"/>
+        <source>Cooler or box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="73"/>
+        <source>Small tent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="78"/>
+        <source>Custom size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="107"/>
+        <source>Expected length of the longer side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="110"/>
+        <source>Long Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="122"/>
+        <source>Shortest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="149"/>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="230"/>
+        <source>to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="161"/>
+        <source>Longest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="188"/>
+        <source>Expected length of the shorter side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="191"/>
+        <source>Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="203"/>
+        <source>Shortest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="242"/>
+        <source>Longest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="269"/>
+        <source>Min Confidence:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="281"/>
+        <source>Only shapes scoring at least this confidence (0-100) become AOIs.
+Raise if rock fields or talus produce many hits; lower to see weaker candidates.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="309"/>
+        <source>Max Per Image:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="321"/>
+        <source>At most this many AOIs are kept per image, highest confidence first.
+Protects reviewers from floods of hits in rocky or built-up terrain.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="343"/>
+        <source>Size Tolerance:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="355"/>
+        <source>How far a shape may fall outside the size range before its score starts to drop.
+Raise when altitude data is uncertain or the terrain is steep.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="359"/>
+        <source>%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="380"/>
+        <source>Angle Tolerance:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="392"/>
+        <source>How far from a right angle (or from parallel) two edges may be and still form a rectangle.
+Raise for soft or sagging targets such as tents; lower to reject more natural clutter.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="396"/>
+        <source>°</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="423"/>
+        <source>Edge Contrast:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="435"/>
+        <source>Minimum brightness step across an edge (0-255 scale).
+Raise if grass, gravel or shadows produce many weak edges; lower for faded or dusty targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="463"/>
+        <source>Edge Support:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="475"/>
+        <source>Fraction of a candidate&apos;s outline that must lie on a real edge.
+Lower for partly hidden or blurred targets; raise if rock fractures produce many hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="503"/>
+        <source>Min Boxiness:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="515"/>
+        <source>Threshold for candidates found from edge orientation alone, used when blur or low contrast
+breaks the edges up. Raise if textured ground produces spurious hits.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="543"/>
+        <source>Min Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="555"/>
+        <source>Smallest target size, in processing pixels, worth searching for. Images where the target
+would be smaller are skipped and logged - raise the processing resolution or fly lower.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="559"/>
+        <source> px</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="580"/>
+        <source>Fallback GSD:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="592"/>
+        <source>Ground sample distance (cm per pixel at full resolution) to assume when an image has no usable
+altitude or camera metadata. Leave at None to report such images as errors instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="596"/>
+        <source> cm/px</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="599"/>
+        <source>None</source>
+        <translation type="unfinished">None</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="626"/>
+        <source>Score candidates on how strongly two perpendicular edge directions dominate the area,
+and use that to find targets whose edges are too broken up to trace.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="630"/>
+        <source>Use Boxiness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="645"/>
+        <source>Save an overlay per image (edges, candidates, boxiness heatmap) to a rectilinear_debug folder
+in the output folder. Useful for tuning in new terrain; slows processing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShape.ui" line="649"/>
+        <source>Write Debug Images</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeController</name>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="63"/>
+        <source> in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="65"/>
+        <source> cm</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="139"/>
+        <source>The minimum long side must not be larger than the maximum long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="141"/>
+        <source>The minimum short side must not be larger than the maximum short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeController.py" line="143"/>
+        <source>The short side range must not exceed the long side range.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeWizard</name>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="29"/>
+        <source>What kind of object are you looking for?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="46"/>
+        <source>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="52"/>
+        <source>Suitcase (any orientation)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="57"/>
+        <source>Suitcase (lying flat)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="62"/>
+        <source>Cooler or box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="67"/>
+        <source>Small tent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="72"/>
+        <source>Custom size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="101"/>
+        <source>Detection uses the object&apos;s size and straight edges, not its colour. Sizes are as seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="119"/>
+        <source>Expected length of the longer side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="122"/>
+        <source>Long Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="134"/>
+        <source>Shortest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="161"/>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="242"/>
+        <source>to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="173"/>
+        <source>Longest expected long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="200"/>
+        <source>Expected length of the shorter side of the target, seen from directly above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="203"/>
+        <source>Short Side:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="215"/>
+        <source>Shortest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="254"/>
+        <source>Longest expected short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="306"/>
+        <source>How many candidates should ADIAT show?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/algorithms/RectilinearShapeWizard.ui" line="319"/>
+        <source>Note: A higher setting shows weaker candidates too, which finds more targets but also more rocks, logs and debris.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RectilinearShapeWizardController</name>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>Low</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>Medium</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="56"/>
+        <source>High</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="71"/>
+        <source> in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="72"/>
+        <source> cm</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="131"/>
+        <source>The minimum long side must not be larger than the maximum long side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="133"/>
+        <source>The minimum short side must not be larger than the maximum short side.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/RectilinearShape/controllers/RectilinearShapeWizardController.py" line="135"/>
+        <source>The short side range must not exceed the long side range.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>RenderingTab</name>
     <message>
         <location filename="../app/core/views/streaming/components/RenderingTab.py" line="44"/>
@@ -12739,22 +13415,22 @@ You can change it later in Preferences or by clicking the reviewer name in the v
 <context>
     <name>SimilarityGalleryView</name>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="173"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="177"/>
         <source>Reference</source>
         <translation>Reference</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="182"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="186"/>
         <source>Unknown</source>
         <translation>Unknown</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="190"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="240"/>
         <source>AOI #{number}</source>
         <translation>AOI #{number}</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="192"/>
+        <location filename="../app/core/views/images/viewer/dialogs/AOISimilarityResultsDialog.py" line="242"/>
         <source>AOI {index}</source>
         <translation>AOI {index}</translation>
     </message>
@@ -15877,114 +16553,114 @@ Register the downloaded Meta/WRI canopy tiles instead? (Your LANDFIRE files stay
 <context>
     <name>UnifiedMapExportController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="439"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="444"/>
         <source>No Data Selected</source>
         <translation>No Data Selected</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="441"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="446"/>
         <source>Please select at least one type of data to export.</source>
         <translation>Please select at least one type of data to export.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="470"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="475"/>
         <source>Select folder for POD coverage files</source>
         <translation>Select folder for POD coverage files</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="478"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="585"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="886"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="924"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="969"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="483"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="590"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="891"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="929"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="974"/>
         <source>Export Error</source>
         <translation>Export Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="479"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="484"/>
         <source>An error occurred during export:
 {error}</source>
         <translation>An error occurred during export:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="497"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="502"/>
         <source>Save Map Export</source>
         <translation>Save Map Export</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="500"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="505"/>
         <source>KML files (*.kml);;KMZ files (*.kmz)</source>
         <translation>KML files (*.kml);;KMZ files (*.kmz)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="586"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="591"/>
         <source>Failed to export to KML:
 {error}</source>
         <translation>Failed to export to KML:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="653"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="845"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="658"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="850"/>
         <source>POD Error</source>
         <translation>POD Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="654"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="659"/>
         <source>Could not start the POD calculation:
 {error}</source>
         <translation>Could not start the POD calculation:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="704"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="717"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="709"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="722"/>
         <source>POD coverage complete</source>
         <translation>POD coverage complete</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="714"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="719"/>
         <source>POD coverage complete — {count} frame(s) used online elevation (outside local DEM)</source>
         <translation>POD coverage complete — {count} frame(s) used online elevation (outside local DEM)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="721"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="726"/>
         <source>POD complete — {skipped} of {total} frames skipped</source>
         <translation>POD complete — {skipped} of {total} frames skipped</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="724"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="729"/>
         <source>({count} without elevation data)</source>
         <translation>({count} without elevation data)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="732"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="737"/>
         <source>(canopy data covered {pct}% of the searched area)</source>
         <translation>(canopy data covered {pct}% of the searched area)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="809"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="814"/>
         <source>Terrain and canopy aware probability-of-detection heatmap.</source>
         <translation>Terrain and canopy aware probability-of-detection heatmap.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="812"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="817"/>
         <source>Mean POD over covered area: {pod}%</source>
         <translation>Mean POD over covered area: {pod}%</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="815"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="820"/>
         <source>POD Coverage</source>
         <translation>POD Coverage</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="823"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="828"/>
         <source>POD Overlay</source>
         <translation>POD Overlay</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="826"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="831"/>
         <source>The POD coverage was computed, but embedding it into the exported file failed:
 {error}
 
@@ -15995,59 +16671,59 @@ The POD GeoTIFF products were still written next to the export.</source>
 The POD GeoTIFF products were still written next to the export.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="837"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="842"/>
         <source>POD calculation cancelled</source>
         <translation>POD calculation cancelled</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="846"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="851"/>
         <source>POD calculation failed:
 {error}</source>
         <translation>POD calculation failed:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="887"/>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="925"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="892"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="930"/>
         <source>Failed to export to CalTopo:
 {error}</source>
         <translation>Failed to export to CalTopo:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="941"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="946"/>
         <source>Map export completed successfully!</source>
         <translation>Map export completed successfully!</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="956"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="961"/>
         <source>Map export cancelled</source>
         <translation>Map export cancelled</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="970"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="975"/>
         <source>Map export failed:
 {error}</source>
         <translation>Map export failed:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="743"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="748"/>
         <source>(takeoff elevation {elev})</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="748"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="753"/>
         <source>(no takeoff elevation — POD is approximate over changing terrain)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="754"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="759"/>
         <source>{value} ft</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="755"/>
+        <location filename="../app/core/controllers/images/viewer/exports/UnifiedMapExportController.py" line="760"/>
         <source>{value} m</source>
         <translation type="unfinished"></translation>
     </message>
@@ -16652,13 +17328,13 @@ When disabled, shows the original unprocessed image.
 Use to compare original image with detection results.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="538"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="550"/>
         <location filename="../resources/views/images/viewer/Viewer.ui" line="205"/>
         <source>Show Overlay</source>
         <translation>Show Overlay</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1393"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1422"/>
         <location filename="../resources/views/images/viewer/Viewer.ui" line="225"/>
         <source>Toggle Gallery Mode (G)
 Shows all AOIs from all images in a grid view</source>
@@ -16676,7 +17352,7 @@ Shows all AOIs from all images in a grid view</translation>
         <translation>Show AOIs</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1411"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1440"/>
         <location filename="../resources/views/images/viewer/Viewer.ui" line="328"/>
         <source>Open Histogram</source>
         <translation>Open Histogram</translation>
@@ -16724,7 +17400,7 @@ Shows all AOIs from all images in a grid view</translation>
         <translation>ruler.png</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2222"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2251"/>
         <location filename="../resources/views/images/viewer/Viewer.ui" line="427"/>
         <source>Person Size Reference (Ctrl+P)</source>
         <translation>Person Size Reference (Ctrl+P)</translation>
@@ -16973,7 +17649,7 @@ The viewer will now close.</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/Viewer.py" line="244"/>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1670"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1699"/>
         <source>Skip Hidden ({count}) </source>
         <translation>Skip Hidden ({count}) </translation>
     </message>
@@ -17000,22 +17676,22 @@ Click on GPS Coordinates to copy, share, or open in mapping applications.</trans
         <translation>Preparing thumbnails...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="760"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="772"/>
         <source>No Dataset</source>
         <translation>No Dataset</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="762"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="774"/>
         <source>No dataset is currently loaded.</source>
         <translation>No dataset is currently loaded.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="768"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="780"/>
         <source>Generate Cache</source>
         <translation>Generate Cache</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="773"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="785"/>
         <source>This will regenerate thumbnail and color caches for all AOIs in this dataset.
 
 This may take a few minutes depending on the dataset size.
@@ -17028,39 +17704,39 @@ This may take a few minutes depending on the dataset size.
 Continue?</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="783"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="795"/>
         <source>Initializing cache generation...</source>
         <translation>Initializing cache generation...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="784"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="796"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="789"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="801"/>
         <source>Generating Cache</source>
         <translation>Generating Cache</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="826"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="838"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="827"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="839"/>
         <source>Failed to start cache generation:
 {error}</source>
         <translation>Failed to start cache generation:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="845"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="857"/>
         <source>Cache Generated</source>
         <translation>Cache Generated</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="850"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="862"/>
         <source>Cache generation complete!
 
 Processed {images} images with {aois} AOIs.
@@ -17073,12 +17749,12 @@ Processed {images} images with {aois} AOIs.
 The viewer will now load thumbnails and colors much faster.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="878"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="890"/>
         <source>Cache Generation Error</source>
         <translation>Cache Generation Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="881"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="893"/>
         <source>An error occurred during cache generation:
 
 {error}</source>
@@ -17087,12 +17763,12 @@ The viewer will now load thumbnails and colors much faster.</translation>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1073"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1086"/>
         <source>AOI Not Visible</source>
         <translation>AOI Not Visible</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1079"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1092"/>
         <source>The AOI at the cursor position cannot be selected because it is currently hidden due to active filters.
 
 To select this AOI, please clear or adjust your filters.</source>
@@ -17101,12 +17777,12 @@ To select this AOI, please clear or adjust your filters.</source>
 To select this AOI, please clear or adjust your filters.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1269"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1297"/>
         <source>Update Image Dimensions</source>
         <translation>Update Image Dimensions</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1275"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1303"/>
         <source>This dataset is missing image dimensions needed for heatmap filtering ({count} images).
 
 Would you like to read dimensions from the image files and update the results file?</source>
@@ -17115,61 +17791,61 @@ Would you like to read dimensions from the image files and update the results fi
 Would you like to read dimensions from the image files and update the results file?</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1310"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1338"/>
         <source>Reading image dimensions ({done}/{total})...</source>
         <translation>Reading image dimensions ({done}/{total})...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1402"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1431"/>
         <source>Show Pixels of Interest (H or Ctrl+I)</source>
         <translation>Show Pixels of Interest (H or Ctrl+I)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1416"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1445"/>
         <source>Toggle AOI Circles</source>
         <translation>Toggle AOI Circles</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1423"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1452"/>
         <source>Toggle AOI Ruler</source>
         <translation>Toggle AOI Ruler</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1856"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1885"/>
         <source>Missing Dependency</source>
         <translation>Missing Dependency</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1861"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1890"/>
         <source>The qimage2ndarray module is required for the upscale feature.
 Please install it using: pip install qimage2ndarray</source>
         <translation>The qimage2ndarray module is required for the upscale feature.
 Please install it using: pip install qimage2ndarray</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1867"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1896"/>
         <source>Upscale Error</source>
         <translation>Upscale Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1870"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="1899"/>
         <source>An error occurred while opening the upscale dialog:
 {error}</source>
         <translation>An error occurred while opening the upscale dialog:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2226"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2255"/>
         <source>Person Size Reference is unavailable: no GSD for this image</source>
         <translation>Person Size Reference is unavailable: no GSD for this image</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2341"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2370"/>
         <source>Unknown Reviewer</source>
         <translation>Unknown Reviewer</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2401"/>
+        <location filename="../app/core/controllers/images/viewer/Viewer.py" line="2430"/>
         <source>Loading gallery...</source>
         <translation>Loading gallery...</translation>
     </message>
@@ -17481,42 +18157,90 @@ Please install it using: pip install qimage2ndarray</translation>
 <context>
     <name>WingtraDataController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="74"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="93"/>
         <source>Select Wingtra CSV File</source>
         <translation>Select Wingtra CSV File</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="77"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="96"/>
         <source>CSV files (*.csv);;All files (*.*)</source>
         <translation>CSV files (*.csv);;All files (*.*)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="95"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="165"/>
         <source>Empty CSV</source>
         <translation>Empty CSV</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="97"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="167"/>
         <source>The CSV file contains no valid data rows.</source>
         <translation>The CSV file contains no valid data rows.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="137"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="225"/>
         <source>Wingtra data loaded: {matched} images matched, {agl} AGL computed</source>
         <translation>Wingtra data loaded: {matched} images matched, {agl} AGL computed</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="141"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="229"/>
         <source>Wingtra data loaded: {matched} images matched</source>
         <translation>Wingtra data loaded: {matched} images matched</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="152"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="245"/>
+        <source>Wingtra Geotags Found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="247"/>
+        <source>You can also load geotags later with Shift+W.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="254"/>
+        <source>Wingtra geotags found - Load?
+
+{file}
+{matched} of {total} images in these results match.
+
+{later}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="262"/>
+        <source>{file} ({matched} of {total} images match)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="271"/>
+        <source>Wingtra geotags found - Load?
+
+More than one geotags file matches these results. Choose one, or Cancel to skip.
+
+{later}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="286"/>
+        <source>Wingtra Imagery</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="293"/>
+        <source>Load Wingtra GeoTag .csv file?
+
+These results are Wingtra imagery. Its geotags CSV supplies the camera orientation and altitude needed for accurate footprints, bearings and AGL.
+
+You can also load it later with Shift+W.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="331"/>
         <source>CSV Parse Error</source>
         <translation>CSV Parse Error</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="153"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="332"/>
         <source>Failed to parse Wingtra CSV:
 
 {errors}</source>
@@ -17525,7 +18249,7 @@ Please install it using: pip install qimage2ndarray</translation>
 {errors}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="167"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="346"/>
         <source>No images in the CSV match the current results.
 
 CSV images: {csv_count}
@@ -17540,28 +18264,28 @@ Result images: {image_count}
 </translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="170"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="349"/>
         <source>CSV examples: {names}
 </source>
         <translation>CSV examples: {names}
 </translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="173"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="352"/>
         <source>Result examples: {names}
 </source>
         <translation>Result examples: {names}
 </translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="178"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="357"/>
         <source>
 Ensure image filenames in the CSV match exactly.</source>
         <translation>
 Ensure image filenames in the CSV match exactly.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="180"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="359"/>
         <source>No Matching Images</source>
         <translation>No Matching Images</translation>
     </message>

@@ -8,6 +8,7 @@ flagged AOIs, and coverage extent into a single export to either KML file or Cal
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QApplication
 from core.views.images.viewer.dialogs.MapExportDialog import MapExportDialog
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
+from core.services import AOIDuplicateService
 from core.services.export.KMLGeneratorService import KMLGeneratorService
 from core.services.image.CoverageExtentService import CoverageExtentService
 from core.services.LoggerService import LoggerService
@@ -148,6 +149,7 @@ class UnifiedMapExportThread(QThread):
 
                 total_aois = sum(len(aois) for aois in self.flagged_aois.values())
                 current_aoi = 0
+                duplicate_sightings = AOIDuplicateService.sightings_by_primary(self.images)
 
                 for img_idx, aoi_indices in self.flagged_aois.items():
                     if self.is_cancelled():
@@ -260,6 +262,9 @@ class UnifiedMapExportThread(QThread):
                                 f"{confidence_info}"
                                 f"{color_info}"
                             )
+                            sightings_line = AOIDuplicateService.sightings_line(aoi, duplicate_sightings)
+                            if sightings_line:
+                                description += f"{sightings_line}\n"
 
                             # Add placemark to KML
                             self.kml_service.add_aoi_placemark(

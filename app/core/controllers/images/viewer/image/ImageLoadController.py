@@ -14,6 +14,7 @@ from core.services.AOIInteractionLogService import REASON_IMAGE_CHANGE
 from core.services.LoggerService import LoggerService
 from core.services.image.ImageService import ImageService
 from core.services.image.ImageHighlightService import ImageHighlightService
+from core.services.image.WingtraDataService import wingtra_agl_ft
 from helpers.LocationInfo import LocationInfo
 from helpers.TranslationMixin import TranslationMixin
 from helpers.FormatHelper import FormatHelper
@@ -437,9 +438,12 @@ class ImageLoadController(TranslationMixin):
         # position, both are shown: ATO is what the aircraft reported,
         # AGL is height above the ground actually being flown over, and
         # over relief they are materially different numbers.
+        # Wingtra imagery has no altitude of its own; its geotags CSV
+        # supplies a terrain-referenced AGL once loaded.
         readings = image_service.get_altitude_readings(
             self.parent.distance_unit,
             use_terrain=getattr(self.parent, 'use_terrain_elevation', True),
+            terrain_agl_ft=wingtra_agl_ft(image),
         )
         self.parent.messages['Relative Altitude'] = FormatHelper.altitude_inline(
             readings)
@@ -459,10 +463,10 @@ class ImageLoadController(TranslationMixin):
         else:
             self.parent.messages['Gimbal Orientation'] = None
 
-        # GSD with custom altitude if available
+        # GSD with custom altitude (or a Wingtra per-image AGL) if available
         custom_alt = None
         if hasattr(self.parent, 'altitude_controller'):
-            custom_alt = self.parent.altitude_controller.get_effective_altitude()
+            custom_alt = self.parent.altitude_controller.get_effective_altitude_for_current_image()
         avg_gsd = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
         if avg_gsd is not None:
             self.parent.messages['Estimated Average GSD'] = f"{avg_gsd}cm/px"
@@ -510,10 +514,10 @@ class ImageLoadController(TranslationMixin):
         """Update overlay with new image data."""
         direction = image_service.get_camera_yaw()
 
-        # Get custom altitude if available
+        # Get custom altitude (or a Wingtra per-image AGL) if available
         custom_alt = None
         if hasattr(self.parent, 'altitude_controller'):
-            custom_alt = self.parent.altitude_controller.get_effective_altitude()
+            custom_alt = self.parent.altitude_controller.get_effective_altitude_for_current_image()
         avg_gsd = image_service.get_average_gsd(custom_altitude_ft=custom_alt)
 
         # Update overlay with new image data - AFTER zoom reset so scene is properly set up

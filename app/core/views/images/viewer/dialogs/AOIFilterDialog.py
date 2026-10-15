@@ -27,6 +27,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
                 'area_min': float or None,
                 'area_max': float or None,
                 'flagged_only': bool or None,
+                'hide_duplicates': bool or None,
                 'comment_filter': str or None,
                 'temperature_min': float or None,
                 'temperature_max': float or None,
@@ -50,6 +51,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
         self.area_min = current_filters.get('area_min', None)
         self.area_max = current_filters.get('area_max', None)
         self.flagged_only = current_filters.get('flagged_only', False)
+        self.hide_duplicates = current_filters.get('hide_duplicates', False)
         self.comment_filter = current_filters.get('comment_filter', None)
         self.temperature_min = current_filters.get('temperature_min', None)
         self.temperature_max = current_filters.get('temperature_max', None)
@@ -103,6 +105,15 @@ class AOIFilterDialog(TranslationMixin, QDialog):
         info_label = QLabel(self.tr("Only AOIs marked with a flag will be displayed"))
         info_label.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
         flagged_layout.addWidget(info_label)
+
+        self.hide_duplicates_enabled = QCheckBox(self.tr("Hide Duplicate AOIs"))
+        self.hide_duplicates_enabled.setChecked(self.hide_duplicates)
+        flagged_layout.addWidget(self.hide_duplicates_enabled)
+
+        duplicates_info_label = QLabel(self.tr("AOIs marked as a duplicate are hidden; the original AOI each one repeats is still shown"))
+        duplicates_info_label.setWordWrap(True)
+        duplicates_info_label.setStyleSheet("QLabel { color: gray; font-size: 9pt; }")
+        flagged_layout.addWidget(duplicates_info_label)
 
         flagged_group.setLayout(flagged_layout)
         layout.addWidget(flagged_group)
@@ -665,6 +676,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
     def clear_all_filters(self):
         """Clear all filter settings."""
         self.flagged_filter_enabled.setChecked(False)
+        self.hide_duplicates_enabled.setChecked(False)
         self.comment_filter_enabled.setChecked(False)
         self.comment_pattern_input.clear()
         self.color_filter_enabled.setChecked(False)
@@ -696,6 +708,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
         Returns:
             dict: Filter settings {
                 'flagged_only': bool,
+                'hide_duplicates': bool,
                 'comment_filter': str or None,
                 'color_hue': int or None,
                 'color_range': int or None,
@@ -739,6 +752,7 @@ class AOIFilterDialog(TranslationMixin, QDialog):
 
         filters = {
             'flagged_only': self.flagged_filter_enabled.isChecked(),
+            'hide_duplicates': self.hide_duplicates_enabled.isChecked(),
             'comment_filter': comment_pattern,
             'color_hue': self.color_hue if self.color_filter_enabled.isChecked() else None,
             'color_range': self.color_range if self.color_filter_enabled.isChecked() else None,

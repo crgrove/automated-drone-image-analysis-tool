@@ -4,6 +4,7 @@ from ast import literal_eval
 from datetime import datetime
 import uuid
 import xml.etree.ElementTree as ET
+from core.services.AOIDuplicateService import get_duplicate_of, parse_duplicate_of
 from core.services.GridReviewService import GridReviewService
 from core.services.LoggerService import LoggerService
 from helpers.PathHelper import is_absolute_any_platform, canonical_path
@@ -181,6 +182,12 @@ class XmlService:
                 else:
                     image['height'] = None
 
+                # The persisted dataset-relative cache identity (analysis-time
+                # path below the input root). Survives path recovery, which
+                # rewrites 'path' but never this attribute.
+                if image_xml.get('cache_id'):
+                    image['cache_id'] = image_xml.get('cache_id')
+
                 # Load bearing metadata if present
                 if image_xml.get('bearing'):
                     image['bearing'] = float(image_xml.get('bearing'))
@@ -228,6 +235,11 @@ class XmlService:
                     area_of_interest['flagged'] = area_of_interest_xml.get('flagged') == 'True'
                     # Load user comment (default to empty string if not present)
                     area_of_interest['user_comment'] = area_of_interest_xml.get('user_comment', '')
+                    # Load the duplicate link (the primary AOI's run-wide number).
+                    # Absent on files from builds without duplicate marking.
+                    duplicate_of = parse_duplicate_of(area_of_interest_xml.get('duplicate_of'))
+                    if duplicate_of is not None:
+                        area_of_interest['duplicate_of'] = duplicate_of
                     # Load user_created flag (default to False if not present)
                     area_of_interest['user_created'] = area_of_interest_xml.get('user_created') == 'True'
                     # Load confidence scoring data if present
@@ -389,6 +401,14 @@ class XmlService:
         if 'height' in img and img['height']:
             image.set('height', str(img['height']))
 
+        # Persist the image's dataset-relative cache identity (its path below
+        # the analysis input root). Path recovery rewrites 'path' when a
+        # dataset moves, but never touches this, so AOI cache keys stay
+        # correct on any machine without inferring identity from the new
+        # location - inference can hand one image another image's thumbnail.
+        if img.get('cache_id'):
+            image.set('cache_id', str(img['cache_id']))
+
         temp_count = 0  # Track AOIs with temperature data
         for area in img["aois"]:
             area_xml = ET.SubElement(image, 'areas_of_interest')
@@ -404,6 +424,9 @@ class XmlService:
             # Save user comment if present
             if 'user_comment' in area and area['user_comment']:
                 area_xml.set('user_comment', str(area['user_comment']))
+            # Save the duplicate link if present
+            if get_duplicate_of(area) is not None:
+                area_xml.set('duplicate_of', str(get_duplicate_of(area)))
             # Save a user-corrected GPS position if present
             if (area.get('user_latitude') is not None
                     and area.get('user_longitude') is not None):
@@ -830,6 +853,39 @@ class XmlService:
                 team_xml = ET.SubElement(planning_xml, 'team')
                 team_xml.set('name', team['name'])
                 team_xml.set('color', team['color'])
+
+    def get_wingtra_geotags(self):
+        """The Wingtra geotags CSV these results are linked to, if any.
+
+        Returns:
+            dict or None: ``{'csv_path': str, 'status': str}`` where status is
+            ``'loaded'`` (reload it on open) or ``'declined'`` (the operator
+            said no; do not ask again). None for results that were never
+            linked, including every file written before this block existed.
+        """
+        geotags_xml = self.xml.getroot().find('wingtra_geotags')
+        if geotags_xml is None:
+            return None
+        return {
+            'csv_path': geotags_xml.get('csv_path', ''),
+            'status': geotags_xml.get('status', ''),
+        }
+
+    def set_wingtra_geotags(self, csv_path, status):
+        """Record the Wingtra geotags link in a <wingtra_geotags> block,
+        replacing any earlier one. The caller saves the file.
+
+        Args:
+            csv_path: Path of the geotags CSV.
+            status: ``'loaded'`` or ``'declined'``.
+        """
+        root = self.xml.getroot()
+        existing = root.find('wingtra_geotags')
+        if existing is not None:
+            root.remove(existing)
+        geotags_xml = ET.SubElement(root, 'wingtra_geotags')
+        geotags_xml.set('csv_path', csv_path or '')
+        geotags_xml.set('status', status)
 
     def save_aoi_team(self, image_index, aoi_index, team_name, images):
         """Set (or clear) the team assignment for a single AOI and persist to XML.

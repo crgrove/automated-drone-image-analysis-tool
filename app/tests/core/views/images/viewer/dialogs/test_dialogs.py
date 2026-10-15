@@ -57,6 +57,18 @@ def test_aoi_filter_dialog_initialization(app):
     assert dialog is not None
 
 
+def test_aoi_filter_dialog_hide_duplicates_round_trip(app):
+    """The hide-duplicates option starts from the current filters, is returned, and clears."""
+    assert AOIFilterDialog(None).get_filters()['hide_duplicates'] is False
+
+    dialog = AOIFilterDialog(None, {'hide_duplicates': True})
+    assert dialog.hide_duplicates_enabled.isChecked()
+    assert dialog.get_filters()['hide_duplicates'] is True
+
+    dialog.clear_all_filters()
+    assert dialog.get_filters()['hide_duplicates'] is False
+
+
 def test_bearing_recovery_dialog_initialization(app):
     """Test BearingRecoveryDialog initialization."""
     # Mock QMessageBox to avoid showing dialog during test

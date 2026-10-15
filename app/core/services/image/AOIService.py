@@ -106,6 +106,17 @@ class AOIService:
                 calculated_bearing=image.get('bearing')
             )
 
+    def _image_size(self):
+        """(width, height) of the source image.
+
+        A metadata-only (deferred) ImageService answers from the file header,
+        so locating AOIs never decodes a full image just to learn its size.
+        """
+        if self.image_service.pixels_loaded:
+            height, width = self.image_service.img_array.shape[:2]
+            return width, height
+        return self.image_service.get_image_size()
+
     def estimate_aoi_gps(self, image, aoi, agl_override_m=None, use_terrain=True):
         """
         Estimates the GPS coordinates of an AOI.
@@ -187,8 +198,7 @@ class AOIService:
             absolute_alt = self.image_service.get_asl_altitude('m')
 
             # --- Step 2: Camera intrinsics ---
-            img_array = self.image_service.img_array
-            img_height, img_width = img_array.shape[:2]
+            img_width, img_height = self._image_size()
 
             intrinsics = self.image_service.get_camera_intrinsics()
             if intrinsics is None:
@@ -327,10 +337,7 @@ class AOIService:
             width = image.get('width')
             height = image.get('height')
             if not width or not height:
-                img_array = self.image_service.img_array
-                if img_array is None:
-                    return None
-                height, width = img_array.shape[:2]
+                width, height = self._image_size()
 
             tie_points = alignment.get('tie_points') or []
             u, v = aoi['center']

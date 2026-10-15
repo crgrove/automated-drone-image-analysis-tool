@@ -84,3 +84,26 @@ def test_delegate_draws_number_badge(app):
         delegate._draw_number_badge(painter, QRect(0, 0, 180, 180), 123)
     finally:
         painter.end()
+
+
+def test_delegate_draws_duplicate_badge_text(app):
+    """The badge accepts the duplicate/primary text forms and the duplicate colour."""
+    from core.controllers.images.viewer.gallery.GalleryUIComponent import AOIGalleryDelegate
+
+    delegate = AOIGalleryDelegate.__new__(AOIGalleryDelegate)
+    pixmap = QPixmap(200, 200)
+    painter = QPainter(pixmap)
+    try:
+        delegate._draw_number_badge(painter, QRect(0, 0, 180, 180), 46, text="#46 → #12", duplicate=True)
+        delegate._draw_number_badge(painter, QRect(0, 0, 180, 180), 12, text="#12 +3")
+    finally:
+        painter.end()
+
+
+def test_tooltip_names_the_primary_of_a_duplicate(gallery_model):
+    gallery_model.viewer.images = [
+        {'name': 'a.jpg', 'areas_of_interest': [{'number': 12, 'center': (1, 1)},
+                                                {'number': 46, 'center': (5, 5), 'duplicate_of': 12}]},
+    ]
+    text = gallery_model._get_tooltip_text(0, 1, gallery_model.viewer.images[0]['areas_of_interest'][1])
+    assert 'Duplicate of AOI #12' in text

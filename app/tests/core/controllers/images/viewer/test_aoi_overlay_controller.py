@@ -14,7 +14,7 @@ def overlay_controller():
         parent = MagicMock()
         parent.main_image._is_destroyed = False
         parent.current_image_service.get_average_gsd.return_value = 2.5
-        parent.altitude_controller.get_effective_altitude.return_value = None
+        parent.altitude_controller.get_effective_altitude_for_current_image.return_value = None
         parent.showAOIsButton.isChecked.return_value = True
         parent.showRulerButton.isChecked.return_value = True
         parent.settings_service.get_setting.return_value = 'Feet'
@@ -120,7 +120,7 @@ def test_show_for_aoi_resets_ruler_angle(overlay_controller):
 
 def test_current_gsd_cm_uses_average_gsd_with_altitude(overlay_controller):
     """The ruler GSD matches the Measure tool: average GSD + corrected altitude."""
-    overlay_controller.parent.altitude_controller.get_effective_altitude.return_value = 180.0
+    overlay_controller.parent.altitude_controller.get_effective_altitude_for_current_image.return_value = 180.0
     overlay_controller.parent.current_image_service.get_average_gsd.return_value = 2.5
 
     assert overlay_controller._current_gsd_cm() == 2.5

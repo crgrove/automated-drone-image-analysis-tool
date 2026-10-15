@@ -21,13 +21,31 @@ terrain-referenced **AGL**, never an ATO (CLAUDE.md 2.11).
 """
 
 import csv
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from PIL import Image
 
 from core.services.LoggerService import LoggerService
 from core.services.terrain.TerrainService import TerrainService
 
 METERS_TO_FEET = 3.28084
+
+# EXIF Make written by Wingtra's own payloads (RGB61). The older WingtraOne
+# payload is a stock Sony RX1R II and says SONY, so the make alone cannot
+# rule an image out - a geotags CSV naming it is the stronger evidence.
+WINGTRA_MAKE = 'WINGTRA'
+
+# EXIF tag 271 (Make). Read through PIL rather than piexif: piexif drops the
+# last byte of every ASCII tag, which corrupts the unterminated strings
+# Wingtra payloads write.
+_EXIF_MAKE_TAG = 271
+
+# How a results file was linked to a geotags CSV, persisted in
+# ADIAT_Data.xml so reopening the results neither re-asks nor forgets.
+GEOTAGS_LOADED = 'loaded'
+GEOTAGS_DECLINED = 'declined'
 
 REQUIRED_COLUMNS = [
     'image', 'latitude', 'longitude', 'altitude',
@@ -71,6 +89,43 @@ class WingtraImageData:
     accuracy_h: float
     accuracy_v: float
     altitude_agl: Optional[float] = field(default=None)  # meters (computed)
+
+
+@dataclass
+class WingtraCsvCandidate:
+    """A CSV near the source imagery that is shaped like Wingtra geotags and
+    names at least one of the loaded results."""
+    path: str
+    row_count: int       # image rows in the CSV
+    matched_count: int   # result images the CSV names
+
+
+def wingtra_agl_ft(image: Optional[dict]) -> Optional[float]:
+    """The per-image AGL a loaded geotags CSV wrote into *image*, in feet, or
+    None when there is none (not Wingtra, no CSV, or no DEM answer)."""
+    if not image:
+        return None
+    agl_ft = image.get('wingtra_agl_ft')
+    if agl_ft is not None and agl_ft > 0:
+        return agl_ft
+    return None
+
+
+def resolve_altitude_ft(image: Optional[dict], override_ft: Optional[float]) -> Optional[float]:
+    """The altitude, in feet above the ground, to size *image* with.
+
+    The operator override wins, as it does everywhere; otherwise the image's
+    Wingtra per-image AGL. Wingtra imagery carries no RelativeAltitude, so
+    without this fallback it has no GSD, no footprint and no AOI position.
+    The order matches AOI geolocation in the GPS map, so every surface
+    agrees on where an AOI is and how big it is.
+
+    Returns:
+        Feet, or None to let the image's own metadata decide.
+    """
+    if override_ft is not None and override_ft > 0:
+        return override_ft
+    return wingtra_agl_ft(image)
 
 
 def get_terrain_service(logger=None) -> Optional[TerrainService]:
@@ -233,6 +288,114 @@ def match_image_names(
     unmatched_images = [name for name in result_names if name not in matched]
 
     return matched, unmatched_csv, unmatched_images
+
+
+def read_csv_image_names(file_path: str) -> Optional[List[str]]:
+    """The image-name column of a Wingtra-shaped CSV.
+
+    Only the header and one column are looked at, so screening every CSV in
+    a folder stays cheap; the full parse waits until the operator agrees to
+    load the file.
+
+    Returns:
+        The image names, or None when the file is unreadable or lacks any
+        column :func:`parse_wingtra_csv` requires.
+    """
+    try:
+        with open(file_path, 'r', newline='', encoding='utf-8-sig') as handle:
+            reader = csv.DictReader(handle)
+            if not reader.fieldnames:
+                return None
+            column_map = build_column_map(reader.fieldnames)
+            if any(col not in column_map for col in REQUIRED_COLUMNS):
+                return None
+            image_column = column_map['image']
+            names = []
+            for row in reader:
+                name = (row.get(image_column) or '').strip()
+                if name:
+                    names.append(name)
+            return names
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return None
+
+
+def candidate_folders(image_paths: Sequence[str]) -> List[str]:
+    """Where a geotags CSV for these images would plausibly be.
+
+    Each source image's folder, then that folder's parent: WingtraHub exports
+    the CSV beside the photos, but operators often move the photos into a
+    subfolder before processing. Duplicates are dropped, first sighting kept.
+    """
+    folders = []
+    seen = set()
+    for image_path in image_paths:
+        folder = os.path.dirname(os.path.abspath(image_path))
+        for candidate in (folder, os.path.dirname(folder)):
+            key = os.path.normcase(candidate)
+            if candidate and key not in seen:
+                seen.add(key)
+                folders.append(candidate)
+    return folders
+
+
+def find_wingtra_csvs(image_paths: Sequence[str],
+                      image_names: Sequence[str]) -> List[WingtraCsvCandidate]:
+    """Geotags CSVs near the source imagery that name the loaded results.
+
+    A CSV qualifies only when it has every required Wingtra column *and*
+    names at least one result image (case-insensitively, as
+    :func:`match_image_names` does), so an unrelated CSV in the same folder
+    is never offered.
+
+    Args:
+        image_paths: Full paths of the result images' source files.
+        image_names: Filenames of the loaded results.
+
+    Returns:
+        Candidates, the one naming the most result images first.
+    """
+    result_names = {name.lower() for name in image_names if name}
+    candidates = []
+    seen = set()
+    for folder in candidate_folders(image_paths):
+        try:
+            entries = sorted(os.listdir(folder))
+        except OSError:
+            continue
+        for entry in entries:
+            if not entry.lower().endswith('.csv'):
+                continue
+            path = os.path.join(folder, entry)
+            key = os.path.normcase(os.path.abspath(path))
+            if key in seen or not os.path.isfile(path):
+                continue
+            seen.add(key)
+
+            names = read_csv_image_names(path)
+            if not names:
+                continue
+            matched_count = len({name.lower() for name in names} & result_names)
+            if matched_count > 0:
+                candidates.append(WingtraCsvCandidate(
+                    path=path, row_count=len(names), matched_count=matched_count))
+
+    candidates.sort(key=lambda c: (-c.matched_count, c.path.lower()))
+    return candidates
+
+
+def is_wingtra_image(image_path: str) -> bool:
+    """True when the image's EXIF Make says it came from a Wingtra payload."""
+    try:
+        with Image.open(image_path) as image:
+            make = image.getexif().get(_EXIF_MAKE_TAG)
+    except Exception:  # noqa: BLE001 - unreadable just means "not known to be Wingtra"
+        return False
+    if isinstance(make, bytes):
+        make = make.decode('utf-8', errors='ignore')
+    if not make:
+        return False
+    return make.strip().rstrip('\x00').upper() == WINGTRA_MAKE
 
 
 def compute_agl(image_data: Dict[str, WingtraImageData],

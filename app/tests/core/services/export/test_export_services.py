@@ -318,3 +318,54 @@ class TestKmlAltitudeReferenceLabels:
         """This pass moves labels, never numbers."""
         descriptions, _ = self._descriptions(kml_service, sample_images)
         assert "37.774900, -122.419400" in descriptions[0]
+
+
+class TestKmlWingtraAltitude:
+    """Wingtra imagery carries no altitude of its own; the per-image AGL its
+    geotags CSV supplied must reach both the label and the AOI position."""
+
+    @staticmethod
+    def _wingtra_images(agl_ft=318.0):
+        return [{
+            'path': 'W.jpg', 'name': 'W.jpg', 'hidden': False,
+            'wingtra_agl_ft': agl_ft,
+            'areas_of_interest': [{'center': (10, 10), 'radius': 5, 'area': 50,
+                                   'flagged': True}],
+        }]
+
+    def test_the_wingtra_agl_is_handed_to_the_altitude_label(self, kml_service):
+        _descriptions, mock_img = TestKmlAltitudeReferenceLabels._descriptions(
+            kml_service, self._wingtra_images())
+        assert mock_img.get_altitude_readings.call_args.kwargs[
+            'terrain_agl_ft'] == 318.0
+
+    @staticmethod
+    def _aoi_altitude(service, images):
+        with patch('core.services.export.KMLGeneratorService.ImageService') as MockImageService, \
+                patch('core.services.export.KMLGeneratorService.LocationInfo') as MockLocationInfo, \
+                patch('core.services.export.KMLGeneratorService.AOIService') as MockAOIService:
+            mock_img_service = MagicMock()
+            mock_img_service.exif_data = {}
+            mock_img_service.img_array.shape = (200, 200, 3)
+            MockImageService.return_value = mock_img_service
+            MockLocationInfo.get_gps.return_value = {
+                'latitude': 37.7749, 'longitude': -122.4194}
+            aoi_service = MagicMock()
+            aoi_service.calculate_gps_with_custom_altitude.return_value = (37.775, -122.4195)
+            aoi_service.get_cached_or_representative_color.return_value = None
+            MockAOIService.return_value = aoi_service
+
+            with tempfile.TemporaryDirectory() as folder:
+                service.generate_kml_export(images, os.path.join(folder, 'aois.kml'))
+            return aoi_service.calculate_gps_with_custom_altitude.call_args.args[2]
+
+    def test_a_wingtra_aoi_is_positioned_with_its_agl(self, kml_service):
+        """The same altitude the GPS map uses, so the export agrees with it."""
+        assert self._aoi_altitude(kml_service, self._wingtra_images()) == 318.0
+
+    def test_the_operator_override_still_wins(self):
+        service = KMLGeneratorService(custom_altitude_ft=250.0)
+        assert self._aoi_altitude(service, self._wingtra_images()) == 250.0
+
+    def test_other_imagery_is_positioned_as_before(self, kml_service):
+        assert self._aoi_altitude(kml_service, self._wingtra_images(agl_ft=None)) is None

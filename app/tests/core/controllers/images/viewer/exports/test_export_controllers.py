@@ -902,3 +902,52 @@ def test_cleanup_aoi_thumbnails_removes_generated_files(caltopo_controller, aoi_
 
     assert not os.path.exists(thumbnail_path)
     assert caltopo_controller.aoi_thumbnail_service is None
+
+
+def test_prepare_markers_lists_other_sightings(caltopo_controller, mock_viewer, aoi_source_image):
+    """A flagged AOI's marker names the images its duplicates were seen in."""
+    mock_viewer.messages = {}
+    mock_viewer.custom_agl_altitude_ft = None
+    images = [
+        {'path': aoi_source_image, 'name': 'IMG_0001.jpg', 'hidden': False,
+         'areas_of_interest': [{'center': (400, 300), 'radius': 20, 'number': 1, 'flagged': True}]},
+        {'path': aoi_source_image, 'name': 'IMG_0002.jpg', 'hidden': False,
+         'areas_of_interest': [{'center': (100, 100), 'radius': 20, 'number': 2, 'duplicate_of': 1}]},
+    ]
+
+    markers = _patched_prepare_markers(caltopo_controller, images, {0: {0}}, include_images=False)
+
+    assert len(markers) == 1
+    assert "Also seen in: IMG_0002.jpg (AOI #2)" in markers[0]['description']
+
+
+@pytest.mark.parametrize('override_ft, expected_ft', [(None, 318.0), (250.0, 250.0)])
+def test_prepare_markers_positions_a_wingtra_aoi_with_its_agl(
+        caltopo_controller, mock_viewer, aoi_source_image, override_ft, expected_ft):
+    """Wingtra imagery has no altitude of its own. Its geotags AGL sizes the
+    GSD and positions the AOI, as on the GPS map, unless the operator set an
+    override."""
+    import numpy as np
+    module = 'core.controllers.images.viewer.exports.CalTopoExportController'
+    mock_viewer.messages = {}
+    mock_viewer.custom_agl_altitude_ft = override_ft
+    images = [{'path': aoi_source_image, 'name': 'W.jpg', 'hidden': False,
+               'wingtra_agl_ft': 318.0,
+               'areas_of_interest': [{'center': (400, 300), 'radius': 20}]}]
+
+    with patch(f'{module}.MetaDataHelper.get_exif_data_piexif', return_value={}), \
+            patch(f'{module}.LocationInfo.get_gps', return_value={'latitude': 39.5, 'longitude': -105.2}), \
+            patch(f'{module}.ImageService') as mock_image_service, \
+            patch(f'{module}.AOIService') as mock_aoi_service:
+        image_service = mock_image_service.return_value
+        image_service.img_array = np.zeros((600, 800, 3), dtype=np.uint8)
+        image_service.get_camera_yaw.return_value = 0
+        image_service.get_average_gsd.return_value = 1.0
+        aoi_service = mock_aoi_service.return_value
+        aoi_service.calculate_gps_with_custom_altitude.return_value = (39.5001, -105.2001)
+        aoi_service.get_cached_or_representative_color.return_value = None
+
+        caltopo_controller._prepare_markers(images, {0: {0}}, include_images=False)
+
+    assert image_service.get_average_gsd.call_args.kwargs['custom_altitude_ft'] == expected_ft
+    assert aoi_service.calculate_gps_with_custom_altitude.call_args.args[2] == expected_ft

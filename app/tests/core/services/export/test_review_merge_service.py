@@ -538,3 +538,44 @@ def test_b4_copies_with_identical_shapes_still_group(tmp_path):
     aois = merged.images[0]['areas_of_interest']
     assert len(aois) == 1
     assert aois[0]['flagged'] is True
+
+
+# ---------------------------------------------------------------------------
+# Duplicate links (another sighting of an object reported at a primary AOI)
+# ---------------------------------------------------------------------------
+
+def _dup_xml(center, number, duplicate_of, flagged=False):
+    return _aoi_xml(center, number=number, flagged=flagged).replace(
+        '/>', f' duplicate_of="{duplicate_of}"/>')
+
+
+def test_duplicate_link_survives_the_merge(tmp_path):
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Sarah", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1, flagged=True), _dup_xml("(60, 60)", 2, 1)])]),
+        ("R2", "John", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1), _aoi_xml("(60, 60)", number=2)])]),
+    ])
+    assert aois[1]['duplicate_of'] == 1
+    assert aois[1]['flagged'] is False
+
+
+def test_later_reviewers_duplicate_link_is_used(tmp_path):
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Sarah", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1, flagged=True), _aoi_xml("(60, 60)", number=2)])]),
+        ("R2", "John", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1), _dup_xml("(60, 60)", 2, 1)])]),
+    ])
+    assert aois[1]['duplicate_of'] == 1
+
+
+def test_a_flag_from_any_reviewer_beats_a_duplicate_link(tmp_path):
+    _, aois = _merged_single_image(tmp_path, [
+        ("R1", "Sarah", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1, flagged=True), _dup_xml("(60, 60)", 2, 1)])]),
+        ("R2", "John", [("C:/o/a.jpg", "False", [
+            _aoi_xml("(10, 10)", number=1), _aoi_xml("(60, 60)", number=2, flagged=True)])]),
+    ])
+    assert aois[1]['flagged'] is True
+    assert 'duplicate_of' not in aois[1]

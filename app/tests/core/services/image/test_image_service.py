@@ -632,6 +632,39 @@ class TestAltitudeReadings:
         assert readings.value == pytest.approx(100.0, abs=0.01)
         assert readings.unit == 'm'
 
+    def test_a_supplied_terrain_agl_is_labelled_agl_above_terrain(self, image_service):
+        """A Wingtra geotags AGL: terrain-referenced, not operator-entered,
+        and it stands in for metadata the image does not have."""
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF, 141.2)
+        service.get_relative_altitude = MagicMock(return_value=None)
+
+        readings = service.get_altitude_readings('m', terrain_agl_ft=318.0)
+
+        assert readings.value == pytest.approx(96.93, abs=0.01)
+        assert readings.reference == FormatHelper.ALTITUDE_REFERENCE_TERRAIN
+        assert FormatHelper.altitude_reference_abbreviation(readings.reference) == 'AGL'
+        service.get_terrain_agl.assert_not_called()
+
+    def test_an_override_beats_a_supplied_terrain_agl(self, image_service):
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF)
+
+        readings = service.get_altitude_readings(
+            'ft', custom_altitude_ft=250.0, terrain_agl_ft=318.0)
+
+        assert readings.value == 250.0
+        assert readings.reference == FormatHelper.ALTITUDE_REFERENCE_MANUAL
+
+    def test_no_supplied_terrain_agl_changes_nothing(self, image_service):
+        service = self._service(
+            image_service, FormatHelper.ALTITUDE_REFERENCE_TAKEOFF, 141.2)
+
+        readings = service.get_altitude_readings('ft', terrain_agl_ft=None)
+
+        assert readings.value == 171.0
+        assert readings.terrain_agl == 141.2
+
     def test_an_unavailable_dem_leaves_the_ato_alone(self, image_service):
         """No tile cached, or no coverage: the ATO figure is still correct."""
         service = self._service(
@@ -720,6 +753,33 @@ class TestWorkingAltitude:
     def test_no_altitude_at_all_stays_none(self, image_service):
         service = self._service(image_service, reported=None, effective=None)
         assert service.get_working_altitude_m() is None
+
+    def test_the_centre_comes_from_the_pixel_array_by_default(self, image_service):
+        """The fixture frame is 100 x 100, so its centre is (50, 50)."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        service.get_working_altitude_m()
+        assert service._effective_agl_at_pixel.call_args.args[:2] == (50, 50)
+
+    def test_a_frame_size_locates_the_centre_instead(self, image_service):
+        """Analysis workers hold a downscaled array; the full frame's centre is wanted."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        assert service.get_working_altitude_m(frame_size=(8000, 6000)) == 71.5
+        assert service._effective_agl_at_pixel.call_args.args[:2] == (4000, 3000)
+
+    def test_a_frame_size_never_decodes_the_image(self, image_service):
+        """A deferred-load service must not read pixels just to learn the frame size."""
+        service = self._service(image_service, reported=100.0, effective=71.5)
+        service._img_array = None
+        service._load_img_array = MagicMock(side_effect=AssertionError("decoded"))
+        assert service.get_working_altitude_m(frame_size=(8000, 6000)) == 71.5
+
+    def test_the_gsd_service_forwards_the_frame_size(self, image_service):
+        image_service.get_working_altitude_m = MagicMock(return_value=71.5)
+        image_service._build_gsd_service = MagicMock()
+        image_service.get_gsd_service(offline_only=True, frame_size=(8000, 6000))
+        kwargs = image_service.get_working_altitude_m.call_args.kwargs
+        assert kwargs['frame_size'] == (8000, 6000)
+        assert kwargs['offline_only'] is True
 
 
 class TestGsdUsesTheWorkingAltitude:
@@ -944,3 +1004,99 @@ class TestAnchoredAglResolution:
 
         assert ctx['altitude_anchored'] is False
         assert ctx['drone_absolute_elev_m'] == pytest.approx(384.7, abs=0.1)
+
+
+def test_get_image_size_reads_header_without_decoding():
+    """A deferred service learns its size from the header, not a full decode."""
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        cv2.imwrite(tmp_file.name, np.zeros((60, 80, 3), dtype=np.uint8))
+        tmp_path = tmp_file.name
+
+    try:
+        service = ImageService(tmp_path, defer_load=True)
+        assert service.get_image_size() == (80, 60)
+        assert service.pixels_loaded is False
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_get_image_size_uses_loaded_pixels():
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        cv2.imwrite(tmp_file.name, np.zeros((60, 80, 3), dtype=np.uint8))
+        tmp_path = tmp_file.name
+
+    try:
+        service = ImageService(tmp_path, img_array=np.zeros((30, 40, 3), dtype=np.uint8))
+        assert service.pixels_loaded is True
+        assert service.get_image_size() == (40, 30)
+    finally:
+        os.unlink(tmp_path)
+
+
+def _bundled_drones_df():
+    """The drones.csv that ships with the source tree, read the way PickleHelper
+    reads it, so a test sees the bundled rows, not a stale AppData copy."""
+    from helpers.PickleHelper import PickleHelper
+    path = os.path.join(PickleHelper._bundled_root(), 'drones.csv')
+    return pd.read_csv(path, comment='#')
+
+
+def _wingtra_rgb61_exif(terminated):
+    """EXIF for an RGB61 frame, with the Model tag either well-formed or
+    exactly as the camera writes it: count 5, no NUL terminator."""
+    exif_bytes = piexif.dump({
+        '0th': {
+            piexif.ImageIFD.Make: b'WINGTRA\x00\x00\x00',
+            piexif.ImageIFD.Model: b'RGB61',
+        },
+        'Exif': {
+            piexif.ExifIFD.FocalLength: (240, 10),
+            piexif.ExifIFD.PixelXDimension: 9504,
+            piexif.ExifIFD.PixelYDimension: 6336,
+        },
+    })
+    if terminated:
+        return exif_bytes
+    # piexif writes big-endian IFD entries: tag 0x0110 (Model), type 2
+    # (ASCII), count 6 for 'RGB61\0'. Drop the count to 5 so the NUL falls
+    # outside the tag, as it does in the real files.
+    well_formed = b'\x01\x10\x00\x02\x00\x00\x00\x06'
+    assert exif_bytes.count(well_formed) == 1
+    return exif_bytes.replace(well_formed, b'\x01\x10\x00\x02\x00\x00\x00\x05')
+
+
+@pytest.mark.parametrize('terminated', [True, False], ids=['well_formed', 'as_written_by_camera'])
+def test_wingtra_rgb61_resolves_full_frame_sensor(terminated):
+    """A Wingtra RGB61 frame must find its sensor in drones.csv.
+
+    The camera is a Sony a7R IV body but writes Make=WINGTRA (null-padded to
+    10 bytes, as the real files are) and Model=RGB61, so no Sony row matches;
+    without its own row GSD, FOV boxes and coverage are all unavailable.
+
+    It also writes the Model tag without a NUL terminator, and piexif always
+    drops an ASCII tag's last byte, so ADIAT reads the model as 'RGB6'.
+    drones.csv carries a row for each spelling; both must resolve.
+    """
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+        tmp_path = tmp_file.name
+    ok, encoded = cv2.imencode('.jpg', np.zeros((40, 60, 3), dtype=np.uint8))
+    assert ok
+    with open(tmp_path, 'wb') as f:
+        f.write(encoded.tobytes())
+    piexif.insert(_wingtra_rgb61_exif(terminated), tmp_path)
+
+    try:
+        expected_model = b'RGB61' if terminated else b'RGB6'
+        assert piexif.load(tmp_path)['0th'][piexif.ImageIFD.Model] == expected_model
+        with patch('core.services.image.ImageService.PickleHelper.get_drone_sensor_info',
+                   return_value=_bundled_drones_df()):
+            service = ImageService(tmp_path)
+            assert service.drone_make == 'WINGTRA'
+            intrinsics = service.get_camera_intrinsics()
+        assert intrinsics == {
+            'focal_length_mm': pytest.approx(24.0),
+            'sensor_width_mm': pytest.approx(35.7),
+            'sensor_height_mm': pytest.approx(23.8),
+        }
+    finally:
+        os.unlink(tmp_path)

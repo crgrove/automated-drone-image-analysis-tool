@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, QSize, QRect, QTimer, Signal, QModelIndex, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QFontMetrics, QPixmap, QIcon, QKeyEvent
 import qtawesome as qta
 
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
 
@@ -32,6 +33,8 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         # Create flag icons (same as single-image mode)
         self.flag_icon_active = qta.icon('fa6s.flag', color='#FF7043').pixmap(16, 16)
         self.flag_icon_inactive = qta.icon('fa6s.flag', color='#808080').pixmap(16, 16)
+        self.flag_icon_duplicate = qta.icon(
+            'fa6s.flag', color=AOIDuplicateService.DUPLICATE_FLAG_COLOR).pixmap(16, 16)
 
         # Create location icon
         self.location_icon = qta.icon('fa6s.location-dot', color='#4CAF50').pixmap(16, 16)
@@ -97,18 +100,37 @@ class AOIGalleryDelegate(QStyledItemDelegate):
             painter.setPen(QPen(QColor(100, 100, 100), 1))
             painter.drawRect(thumbnail_rect)
 
-            # Draw the run-wide AOI number badge in the top-left corner.
+            # Duplicate state: counts are keyed by primaries with live links, so a
+            # link to a number nothing carries any more is not drawn.
+            duplicate_counts = getattr(self.gallery_controller, 'duplicate_counts', None) or {}
+            duplicate_of = AOIDuplicateService.get_duplicate_of(aoi_data)
+            if duplicate_of not in duplicate_counts:
+                duplicate_of = None
+
+            # Draw the run-wide AOI number badge in the top-left corner:
+            # "#46 → #12" on a duplicate, "#12 +3" on a primary with duplicates.
             number = aoi_data.get('number')
             if number is not None:
-                self._draw_number_badge(painter, thumbnail_rect, number)
+                if duplicate_of is not None:
+                    badge_text = f"#{number} \u2192 #{duplicate_of}"
+                elif duplicate_counts.get(number):
+                    badge_text = f"#{number} +{duplicate_counts[number]}"
+                else:
+                    badge_text = None
+                self._draw_number_badge(painter, thumbnail_rect, number, text=badge_text,
+                                        duplicate=duplicate_of is not None)
 
             # Draw bottom-right icon cluster: flag | comment | location.
             # Positions are reflowed from the original flag/location pair so
             # the new comment icon can slot between them without overlap.
             icon_y = thumbnail_rect.bottom() - 20
 
-            flagged = aoi_data.get('flagged', False)
-            flag_icon = self.flag_icon_active if flagged else self.flag_icon_inactive
+            if duplicate_of is not None:
+                flag_icon = self.flag_icon_duplicate
+            elif aoi_data.get('flagged', False):
+                flag_icon = self.flag_icon_active
+            else:
+                flag_icon = self.flag_icon_inactive
             painter.drawPixmap(thumbnail_rect.right() - 60, icon_y, flag_icon)
 
             has_comment = bool(aoi_data.get('user_comment', '').strip())
@@ -142,16 +164,18 @@ class AOIGalleryDelegate(QStyledItemDelegate):
 
         painter.restore()
 
-    def _draw_number_badge(self, painter, thumbnail_rect, number):
+    def _draw_number_badge(self, painter, thumbnail_rect, number, text=None, duplicate=False):
         """Draw the run-wide AOI number badge in the thumbnail's top-left corner.
 
         Args:
             painter: The active QPainter.
             thumbnail_rect: The thumbnail's QRect.
             number: The AOI's run-wide unique number.
+            text: Badge text replacing the plain "#number" (duplicate/primary forms).
+            duplicate: Draw the text in the duplicate colour.
         """
         painter.save()
-        text = f"#{number}"
+        text = text or f"#{number}"
         font = QFont()
         font.setPointSize(9)
         font.setBold(True)
@@ -167,7 +191,8 @@ class AOIGalleryDelegate(QStyledItemDelegate):
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(0, 0, 0, 180))
         painter.drawRoundedRect(badge_rect, 4, 4)
-        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.setPen(QPen(QColor(AOIDuplicateService.DUPLICATE_FLAG_COLOR) if duplicate
+                            else QColor(255, 255, 255)))
         painter.drawText(badge_rect, Qt.AlignCenter, text)
         painter.restore()
 
@@ -552,7 +577,7 @@ class GalleryUIComponent(TranslationMixin, QObject):
                 # QAbstractItemView's keyboard-search feature swallows letter
                 # keys before Viewer.keyPressEvent sees them.
                 global_shortcut_keys = {
-                    Qt.Key_A, Qt.Key_F, Qt.Key_G, Qt.Key_Z, Qt.Key_C, Qt.Key_R,
+                    Qt.Key_A, Qt.Key_D, Qt.Key_F, Qt.Key_G, Qt.Key_Z, Qt.Key_C, Qt.Key_R,
                     Qt.Key_H, Qt.Key_M, Qt.Key_E, Qt.Key_W, Qt.Key_O,
                     Qt.Key_I,
                 }

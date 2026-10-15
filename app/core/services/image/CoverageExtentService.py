@@ -11,6 +11,7 @@ from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 
 from core.services.image.ImageService import ImageService
+from core.services.image.WingtraDataService import resolve_altitude_ft
 from core.services.LoggerService import LoggerService
 from helpers.LocationInfo import LocationInfo
 from helpers.MetaDataHelper import MetaDataHelper
@@ -259,6 +260,11 @@ class CoverageExtentService:
 
             height, width = img_array.shape[:2]
 
+            # The operator override, else this frame's Wingtra AGL: Wingtra
+            # imagery has no altitude of its own, so without it every Wingtra
+            # frame was skipped for want of a GSD.
+            altitude_ft = resolve_altitude_ft(image, self.custom_altitude_ft)
+
             # Get GSD — terrain-corrected at the image center when enabled, so
             # the footprint size reflects DEM-derived effective AGL (matching
             # the AOI / GPS-map FOV pipeline) instead of the drone's reported
@@ -270,17 +276,17 @@ class CoverageExtentService:
                     gsd_cm = image_service.compute_gsd_at_pixel(
                         width / 2.0, height / 2.0,
                         use_terrain=True,
-                        custom_altitude_ft=self.custom_altitude_ft,
+                        custom_altitude_ft=altitude_ft,
                     )
                     effective_agl_m = image_service.get_effective_agl_at_pixel(
                         width / 2.0, height / 2.0,
-                        custom_altitude_ft=self.custom_altitude_ft,
+                        custom_altitude_ft=altitude_ft,
                     )
                 except Exception:
                     gsd_cm = None
                     effective_agl_m = None
             if gsd_cm is None or gsd_cm <= 0:
-                gsd_cm = image_service.get_average_gsd(custom_altitude_ft=self.custom_altitude_ft)
+                gsd_cm = image_service.get_average_gsd(custom_altitude_ft=altitude_ft)
             if gsd_cm is None or gsd_cm <= 0:
                 self.logger.warning(f"Image {image.get('name', 'unknown')} skipped: no valid GSD")
                 return None
@@ -312,8 +318,8 @@ class CoverageExtentService:
                 agl_m = image_service.get_relative_altitude('m')
             if agl_m is None or agl_m <= 0:
                 # Custom altitude already factored into GSD; back-derive in m.
-                if self.custom_altitude_ft and self.custom_altitude_ft > 0:
-                    agl_m = self.custom_altitude_ft / 3.28084
+                if altitude_ft and altitude_ft > 0:
+                    agl_m = altitude_ft / 3.28084
                 else:
                     agl_m = 0.0
 

@@ -10,6 +10,7 @@ from PySide6.QtCore import QThread, Signal
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
 from helpers.TranslationMixin import TranslationMixin
 from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
+from core.services import AOIDuplicateService
 from core.services.export.PdfGeneratorService import PdfGeneratorService
 from core.services.LoggerService import LoggerService
 
@@ -189,6 +190,8 @@ class PDFExportController(TranslationMixin):
 
             # Store all images for map generation
             pdf_generator.all_images_for_map = original_images
+            # Duplicates live outside the filtered copy; list them under their primary
+            pdf_generator.duplicate_sightings = AOIDuplicateService.sightings_by_primary(original_images)
 
             # Count total flagged AOIs for progress dialog
             total_aois = sum(len(img.get('areas_of_interest', [])) for img in filtered_images)

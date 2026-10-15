@@ -50,3 +50,23 @@ def test_found_button_follows_busy_state(app):
     assert not dialog.found_track_button.isEnabled()
     dialog._on_calculation_cancelled()
     assert dialog.found_track_button.isEnabled()
+
+
+def test_empty_results_are_reported_and_dialog_stays_open(app):
+    """Zero calculated bearings must be told to the user like an error, with
+    the dialog left open for another attempt - the summary path used to run
+    max() over the empty source tally and raise instead."""
+    dialog = BearingRecoveryDialog(None, list(_IMAGES))
+    accepted = []
+    dialog.accepted.connect(lambda: accepted.append(True))
+
+    with patch(
+        "core.views.images.viewer.dialogs.BearingRecoveryDialog.QMessageBox"
+    ) as MockBox:
+        dialog._on_calculation_complete({})
+
+    MockBox.critical.assert_called_once()
+    MockBox.information.assert_not_called()
+    assert accepted == []
+    assert dialog.track_button.isEnabled()
+    assert dialog.auto_button.isEnabled()

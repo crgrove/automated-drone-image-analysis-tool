@@ -1,0 +1,677 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RectilinearShape</class>
+ <widget class="QWidget" name="RectilinearShape">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>760</width>
+    <height>190</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_options">
+     <item>
+      <layout class="QGridLayout" name="optionsGridLayout">
+       <property name="horizontalSpacing">
+        <number>6</number>
+       </property>
+       <property name="verticalSpacing">
+        <number>4</number>
+       </property>
+       <item row="0" column="0">
+        <widget class="QLabel" name="targetLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</string>
+         </property>
+         <property name="text">
+          <string>Target Type:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1" colspan="3">
+        <widget class="QComboBox" name="presetComboBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>The kind of object to search for. Each preset sets the expected top-down size range;
+choose Custom size to enter your own. Detection is driven by size and straight edges,
+not colour, so it works for black, grey or earth-toned targets.</string>
+         </property>
+         <item>
+          <property name="text">
+           <string>Suitcase (any orientation)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Suitcase (lying flat)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Cooler or box</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Small tent</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Custom size</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="0" column="4">
+        <spacer name="gridSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="longSideLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Expected length of the longer side of the target, seen from directly above.</string>
+         </property>
+         <property name="text">
+          <string>Long Side:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QDoubleSpinBox" name="longMinSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Shortest expected long side.</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>2000.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>35.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="longToLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>to</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QDoubleSpinBox" name="longMaxSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Longest expected long side.</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>2000.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>80.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="shortSideLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Expected length of the shorter side of the target, seen from directly above.</string>
+         </property>
+         <property name="text">
+          <string>Short Side:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QDoubleSpinBox" name="shortMinSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Shortest expected short side.</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>2000.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>20.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QLabel" name="shortToLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>to</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="3">
+        <widget class="QDoubleSpinBox" name="shortMaxSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Longest expected short side.</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>2000.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>55.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="5">
+        <widget class="QLabel" name="minConfidenceLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Min Confidence:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="6">
+        <widget class="QDoubleSpinBox" name="minConfidenceSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Only shapes scoring at least this confidence (0-100) become AOIs.
+Raise if rock fields or talus produce many hits; lower to see weaker candidates.</string>
+         </property>
+         <property name="decimals">
+          <number>0</number>
+         </property>
+         <property name="minimum">
+          <double>0.0</double>
+         </property>
+         <property name="maximum">
+          <double>100.0</double>
+         </property>
+         <property name="singleStep">
+          <double>5.0</double>
+         </property>
+         <property name="value">
+          <double>50.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="5">
+        <widget class="QLabel" name="maxDetectionsLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Max Per Image:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="6">
+        <widget class="QSpinBox" name="maxDetectionsSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>At most this many AOIs are kept per image, highest confidence first.
+Protects reviewers from floods of hits in rocky or built-up terrain.</string>
+         </property>
+         <property name="minimum">
+          <number>1</number>
+         </property>
+         <property name="maximum">
+          <number>500</number>
+         </property>
+         <property name="value">
+          <number>25</number>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="5">
+        <widget class="QLabel" name="sizeToleranceLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Size Tolerance:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="6">
+        <widget class="QSpinBox" name="sizeToleranceSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>How far a shape may fall outside the size range before its score starts to drop.
+Raise when altitude data is uncertain or the terrain is steep.</string>
+         </property>
+         <property name="suffix">
+          <string>%</string>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>100</number>
+         </property>
+         <property name="value">
+          <number>20</number>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="angleToleranceLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Angle Tolerance:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QDoubleSpinBox" name="angleToleranceSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>How far from a right angle (or from parallel) two edges may be and still form a rectangle.
+Raise for soft or sagging targets such as tents; lower to reject more natural clutter.</string>
+         </property>
+         <property name="suffix">
+          <string>°</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>30.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>12.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="2">
+        <widget class="QLabel" name="edgeContrastLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Edge Contrast:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="3">
+        <widget class="QDoubleSpinBox" name="edgeContrastSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Minimum brightness step across an edge (0-255 scale).
+Raise if grass, gravel or shadows produce many weak edges; lower for faded or dusty targets.</string>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="minimum">
+          <double>1.0</double>
+         </property>
+         <property name="maximum">
+          <double>100.0</double>
+         </property>
+         <property name="singleStep">
+          <double>1.0</double>
+         </property>
+         <property name="value">
+          <double>10.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="5">
+        <widget class="QLabel" name="edgeSupportLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Edge Support:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="6">
+        <widget class="QDoubleSpinBox" name="edgeSupportSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Fraction of a candidate's outline that must lie on a real edge.
+Lower for partly hidden or blurred targets; raise if rock fractures produce many hits.</string>
+         </property>
+         <property name="decimals">
+          <number>2</number>
+         </property>
+         <property name="minimum">
+          <double>0.05</double>
+         </property>
+         <property name="maximum">
+          <double>1.0</double>
+         </property>
+         <property name="singleStep">
+          <double>0.05</double>
+         </property>
+         <property name="value">
+          <double>0.45</double>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="minBoxinessLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Min Boxiness:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QDoubleSpinBox" name="minBoxinessSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Threshold for candidates found from edge orientation alone, used when blur or low contrast
+breaks the edges up. Raise if textured ground produces spurious hits.</string>
+         </property>
+         <property name="decimals">
+          <number>2</number>
+         </property>
+         <property name="minimum">
+          <double>0.05</double>
+         </property>
+         <property name="maximum">
+          <double>1.0</double>
+         </property>
+         <property name="singleStep">
+          <double>0.05</double>
+         </property>
+         <property name="value">
+          <double>0.35</double>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="2">
+        <widget class="QLabel" name="minShortSideLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Min Short Side:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="3">
+        <widget class="QSpinBox" name="minShortSideSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Smallest target size, in processing pixels, worth searching for. Images where the target
+would be smaller are skipped and logged - raise the processing resolution or fly lower.</string>
+         </property>
+         <property name="suffix">
+          <string> px</string>
+         </property>
+         <property name="minimum">
+          <number>4</number>
+         </property>
+         <property name="maximum">
+          <number>200</number>
+         </property>
+         <property name="value">
+          <number>12</number>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="5">
+        <widget class="QLabel" name="fallbackGsdLabel">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Fallback GSD:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="6">
+        <widget class="QDoubleSpinBox" name="fallbackGsdSpinBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Ground sample distance (cm per pixel at full resolution) to assume when an image has no usable
+altitude or camera metadata. Leave at None to report such images as errors instead.</string>
+         </property>
+         <property name="suffix">
+          <string> cm/px</string>
+         </property>
+         <property name="specialValueText">
+          <string>None</string>
+         </property>
+         <property name="decimals">
+          <number>2</number>
+         </property>
+         <property name="minimum">
+          <double>0.0</double>
+         </property>
+         <property name="maximum">
+          <double>50.0</double>
+         </property>
+         <property name="singleStep">
+          <double>0.1</double>
+         </property>
+         <property name="value">
+          <double>0.0</double>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="0" colspan="2">
+        <widget class="QCheckBox" name="useBoxinessCheckBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Score candidates on how strongly two perpendicular edge directions dominate the area,
+and use that to find targets whose edges are too broken up to trace.</string>
+         </property>
+         <property name="text">
+          <string>Use Boxiness</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="2" colspan="3">
+        <widget class="QCheckBox" name="debugOutputCheckBox">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>Save an overlay per image (edges, candidates, boxiness heatmap) to a rectilinear_debug folder
+in the output folder. Useful for tuning in new terrain; slows processing.</string>
+         </property>
+         <property name="text">
+          <string>Write Debug Images</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

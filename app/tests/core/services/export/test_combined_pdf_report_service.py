@@ -201,3 +201,33 @@ def test_progress_offsets_accumulate_across_runs(tmp_path):
     assert run_updates[1][:2] == (3, 3)   # run 2: offset 2 + 1
     assert "Flight1" in run_updates[0][2]
     assert "Flight2" in run_updates[1][2]
+
+
+def test_context_collects_duplicate_sightings_before_filtering(tmp_path):
+    """The duplicate's image has no flagged AOI, so the report drops it -
+    its sighting must still be listed under the primary."""
+    run_dir = tmp_path / "Flight9"
+    results_dir = run_dir / "ADIAT_Results"
+    results_dir.mkdir(parents=True)
+    for name in ("primary.jpg", "dup.jpg"):
+        (run_dir / name).write_text("jpg")
+    xml = (
+        '<data><settings input_dir="in" output_dir="out" identifier_color="(255, 0, 255)" '
+        'aoi_radius="15" algorithm="HSVColorRange" thermal="False" num_processes="1" '
+        'min_area="10" max_area="" hist_ref_path="" kmeans_clusters=""><options/></settings>'
+        '<images>'
+        '<image path="../primary.jpg" hidden="False" width="100" height="100">'
+        '<areas_of_interest center="(10, 10)" radius="5" area="20.0" flagged="True" number="1"/></image>'
+        '<image path="../dup.jpg" hidden="False" width="100" height="100">'
+        '<areas_of_interest center="(60, 60)" radius="5" area="20.0" flagged="False" number="2" '
+        'duplicate_of="1"/></image>'
+        '</images></data>'
+    )
+    xml_path = results_dir / "ADIAT_Data.xml"
+    xml_path.write_text(xml)
+
+    ctx = RunReportContext.from_xml(str(xml_path), 'Lat/Long - Decimal Degrees', 'ft')
+
+    assert [img['name'] for img in ctx.images] == ['primary.jpg']
+    sightings = ctx.duplicate_sightings[1]
+    assert [(s.image_name, s.number) for s in sightings] == [('dup.jpg', 2)]

@@ -90,6 +90,21 @@ def test_sort_global_none_returns_input(controller):
     assert result == items
 
 
+def test_sort_global_by_similarity_groups_spans_images(controller):
+    from core.controllers.images.viewer.aoi.AOIController import AOIController
+    from core.services.image.AOISimilarityGroupingService import aoi_sort_key
+    controller.parent.images = [{"path": "a.jpg"}, {"path": "b.jpg"}]
+    a0, a1, b0 = _aoi(center=(1, 1)), _aoi(center=(2, 2)), _aoi(center=(3, 3))
+    ranks = {aoi_sort_key("b.jpg", b0): 0, aoi_sort_key("a.jpg", a1): 1}
+    aoi_ctrl = MagicMock()
+    aoi_ctrl.get_similarity_rank.side_effect = (
+        lambda path, aoi: ranks.get(aoi_sort_key(path, aoi), float('inf')))
+    controller.parent.aoi_controller = aoi_ctrl
+    controller.sort_method = "similarity_groups"
+    result = controller._sort_aois_global([(0, 0, a0), (0, 1, a1), (1, 0, b0)])
+    assert [(i, j) for i, j, _ in result] == [(1, 0), (0, 1), (0, 0)]
+
+
 def test_sort_global_by_area_asc(controller):
     items = [
         (0, 0, _aoi(area=30)),
@@ -531,3 +546,137 @@ def test_overlay_handler_untouched_when_toggle_already_on(controller):
     parent.main_image.zoomToArea.assert_called_once_with((7, 8), 6)
     parent._show_overlay_change.assert_not_called()
     parent.showOverlayToggle.setChecked.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Duplicate AOIs
+# ---------------------------------------------------------------------------
+
+def _duplicate_images():
+    """#1 flagged, #2 a duplicate of #1, #3 neither."""
+    return [
+        {"areas_of_interest": [_aoi(number=1, flagged=True), _aoi(number=2, duplicate_of=1)]},
+        {"areas_of_interest": [_aoi(number=3)]},
+    ]
+
+
+def test_filter_global_flagged_only_keeps_duplicates(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_flagged_only = True
+    items = controller._collect_all_aois()
+
+    result = controller._filter_aois_global(items)
+
+    assert [(img, aoi) for img, aoi, _ in result] == [(0, 0), (0, 1)]
+
+
+def test_filter_global_hide_duplicates_shows_only_originals(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_hide_duplicates = True
+    items = controller._collect_all_aois()
+
+    result = controller._filter_aois_global(items)
+
+    assert [(img, aoi) for img, aoi, _ in result] == [(0, 0), (1, 0)]
+
+
+def test_filter_global_hide_duplicates_keeps_orphaned_links(controller):
+    images = _duplicate_images()
+    images[0]["areas_of_interest"][1]["duplicate_of"] = 99   # primary was deleted
+    controller.parent.images = images
+    controller.filter_hide_duplicates = True
+
+    result = controller._filter_aois_global(controller._collect_all_aois())
+
+    assert len(result) == 3
+
+
+def test_filter_global_hide_duplicates_with_flagged_only(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_flagged_only = True
+    controller.filter_hide_duplicates = True
+
+    result = controller._filter_aois_global(controller._collect_all_aois())
+
+    assert [(img, aoi) for img, aoi, _ in result] == [(0, 0)]
+
+
+def test_set_filters_hide_duplicates_defaults_off(controller):
+    controller.load_all_aois = MagicMock()
+    controller.set_filters({"hide_duplicates": True})
+    assert controller.filter_hide_duplicates is True
+
+    controller.set_filters({"flagged_only": True})
+    assert controller.filter_hide_duplicates is False
+
+
+def test_sync_filters_copies_hide_duplicates(controller):
+    controller.load_all_aois = MagicMock()
+    controller.parent.aoi_controller.filter_hide_duplicates = True
+
+    controller.sync_filters_from_aoi_controller()
+
+    assert controller.filter_hide_duplicates is True
+
+
+def test_refresh_review_state_reloads_when_hiding_duplicates(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_hide_duplicates = True
+    controller.load_all_aois = MagicMock()
+    controller.ui_component.gallery_view.currentIndex.return_value.isValid.return_value = False
+
+    controller.refresh_review_state()
+
+    controller.load_all_aois.assert_called_once()
+
+
+def test_refresh_review_state_repaints_without_reload(controller):
+    controller.parent.images = _duplicate_images()
+    controller.load_all_aois = MagicMock()
+
+    controller.refresh_review_state()
+
+    assert controller.duplicate_counts == {1: 1}
+    controller.load_all_aois.assert_not_called()
+    controller.ui_component.gallery_view.viewport.return_value.update.assert_called_once()
+
+
+def test_refresh_review_state_reloads_and_keeps_selection_when_flag_filtered(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_flagged_only = True
+    controller.load_all_aois = MagicMock()
+    view = controller.ui_component.gallery_view
+    view.currentIndex.return_value.isValid.return_value = True
+    controller.model.get_aoi_info.return_value = (0, 1, {})
+    controller.model.aoi_to_row = {(0, 1): 4}
+
+    controller.refresh_review_state()
+
+    controller.load_all_aois.assert_called_once()
+    controller.model.index.assert_called_with(4, 0)
+    view.setCurrentIndex.assert_called_once_with(controller.model.index.return_value)
+
+
+def test_flag_toggle_on_duplicate_delegates_to_unmark(controller):
+    aoi_controller = controller.parent.aoi_controller
+    aoi_controller.unmark_duplicate.return_value = True
+    aoi_controller.flagged_aois = {}
+
+    controller.toggle_aoi_flag_by_index(0, 1)
+
+    aoi_controller.unmark_duplicate.assert_called_once_with(0, 1)
+    aoi_controller.save_flagged_aoi_to_xml.assert_not_called()
+    assert aoi_controller.flagged_aois == {}
+
+
+def test_flag_toggle_on_plain_aoi_still_flags(controller):
+    controller.parent.images = _duplicate_images()
+    aoi_controller = controller.parent.aoi_controller
+    aoi_controller.unmark_duplicate.return_value = False
+    aoi_controller.flagged_aois = {}
+    controller._refresh_gallery_flag_display = MagicMock()
+
+    controller.toggle_aoi_flag_by_index(1, 0)
+
+    aoi_controller.save_flagged_aoi_to_xml.assert_called_once_with(1, 0, True)
+    assert aoi_controller.flagged_aois == {1: {0}}

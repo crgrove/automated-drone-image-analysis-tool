@@ -206,3 +206,46 @@ def test_manual_override_uses_current_altitude_as_default():
     # Positional args: (parent, title, message, default, min, max, decimals)
     default_value = call_kwargs[0][3]
     assert default_value == 250.0
+
+
+# ---------------------------------------------------------------------------
+# get_effective_altitude_for_current_image: the operator override, else a
+# Wingtra per-image AGL (Wingtra imagery has no RelativeAltitude for GSD)
+# ---------------------------------------------------------------------------
+
+def _on_image(controller, image, index=0):
+    controller.parent.images = [image]
+    controller.parent.current_image = index
+    return controller
+
+
+def test_a_wingtra_agl_stands_in_without_an_override(controller):
+    _on_image(controller, {'wingtra_agl_ft': 318.0})
+
+    assert controller.get_effective_altitude_for_current_image() == 318.0
+
+
+def test_the_operator_override_beats_the_wingtra_agl(controller):
+    """Same order as AOI geolocation, so the scale and the AOI position agree."""
+    _on_image(controller, {'wingtra_agl_ft': 318.0})
+    controller.set_custom_altitude(400.0)
+
+    assert controller.get_effective_altitude_for_current_image() == 400.0
+
+
+def test_an_image_without_a_wingtra_agl_falls_back_to_its_metadata(controller):
+    _on_image(controller, {'name': 'DJI_0001.JPG'})
+
+    assert controller.get_effective_altitude_for_current_image() is None
+
+
+def test_a_non_positive_wingtra_agl_is_ignored(controller):
+    _on_image(controller, {'wingtra_agl_ft': 0.0})
+
+    assert controller.get_effective_altitude_for_current_image() is None
+
+
+def test_no_current_image_means_no_wingtra_agl(controller):
+    _on_image(controller, {'wingtra_agl_ft': 318.0}, index=5)
+
+    assert controller.get_effective_altitude_for_current_image() is None

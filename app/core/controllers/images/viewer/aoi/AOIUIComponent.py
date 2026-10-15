@@ -19,6 +19,7 @@ from shiboken6 import isValid as _qt_is_valid
 from PySide6.QtCore import Qt, QSize, QPoint, QTimer
 from PySide6.QtGui import QCursor
 
+from core.services import AOIDuplicateService
 from core.services.LoggerService import LoggerService
 from core.views.images.viewer.widgets.QtImageViewer import QtImageViewer
 from helpers.TranslationMixin import TranslationMixin
@@ -265,9 +266,17 @@ class AOIUIComponent(TranslationMixin):
         # return to regardless of the current sort order or view mode.
         number = area_of_interest.get('number')
         if number is not None:
-            number_label = QLabel(f"#{number}")
+            duplicate_of = self._live_duplicate_of(area_of_interest)
+            if duplicate_of is not None:
+                number_label = QLabel(f"#{number} \u2192 #{duplicate_of}")
+                number_label.setToolTip(
+                    self.tr("Duplicate of AOI #{number}").format(number=duplicate_of))
+                number_color = AOIDuplicateService.DUPLICATE_FLAG_COLOR
+            else:
+                number_label = QLabel(f"#{number}")
+                number_color = '#4FC3F7'
             number_label.setStyleSheet(
-                "QLabel { color: #4FC3F7; font-size: 10px; font-weight: bold; }"
+                "QLabel { color: %s; font-size: 10px; font-weight: bold; }" % number_color
             )
             info_layout.addWidget(number_label)
             number_separator = QLabel("|")
@@ -376,15 +385,24 @@ class AOIUIComponent(TranslationMixin):
         # Stretch between info and action icons
         info_layout.addStretch()
 
-        # Flag icon (always visible)
+        # Flag icon (always visible); a duplicate shows it in the duplicate colour
         is_flagged = original_index in flagged_set
-        flag_color = '#FF7043' if is_flagged else '#808080'
+        duplicate_of = self._live_duplicate_of(area_of_interest)
+        if duplicate_of is not None:
+            flag_color = AOIDuplicateService.DUPLICATE_FLAG_COLOR
+            flag_tooltip = self.tr(
+                "Duplicate of AOI #{number} (reported with it)\nClick to remove the duplicate mark"
+            ).format(number=duplicate_of)
+        elif is_flagged:
+            flag_color = '#FF7043'
+            flag_tooltip = self.tr("Unflag AOI")
+        else:
+            flag_color = '#808080'
+            flag_tooltip = self.tr("Flag AOI")
         flag_icon = qta.icon('fa6s.flag', color=flag_color)
         flag_label = QLabel()
         flag_label.setCursor(Qt.PointingHandCursor)
-        flag_label.setToolTip(
-            self.tr("Unflag AOI") if is_flagged else self.tr("Flag AOI")
-        )
+        flag_label.setToolTip(flag_tooltip)
         flag_label.setPixmap(flag_icon.pixmap(16, 16))
 
         def make_flag_click_handler(aoi_idx):
@@ -464,6 +482,13 @@ class AOIUIComponent(TranslationMixin):
         )
 
         return info_widget
+
+    def _live_duplicate_of(self, area_of_interest):
+        """The primary number this AOI duplicates, if that primary still exists."""
+        images = getattr(self.aoi_controller.parent, 'images', None) or []
+        if not AOIDuplicateService.is_duplicate(images, area_of_interest):
+            return None
+        return AOIDuplicateService.get_duplicate_of(area_of_interest)
 
     def _update_count_label(self, filtered_count, total_count):
         """Update the area count label.

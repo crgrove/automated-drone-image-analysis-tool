@@ -752,3 +752,28 @@ def test_terrain_agl_equals_reported_on_flat_terrain():
     assert res is not None
     # reported 61, RTK-implied 66; both within a few metres of reported on flat ground
     assert abs(res.effective_agl_m - 61.0) < 6.0
+
+
+def test_estimate_aoi_gps_with_deferred_service_never_decodes(sample_image_data, sample_aoi):
+    """A metadata-only ImageService answers the image size from the header."""
+    from unittest.mock import PropertyMock
+    with patch('helpers.MetaDataHelper.MetaDataHelper.get_exif_data_piexif', return_value={}), \
+            patch('helpers.LocationInfo.LocationInfo.get_gps',
+                  return_value={'latitude': 37.7749, 'longitude': -122.4194}):
+        deferred = MagicMock()
+        deferred.pixels_loaded = False
+        deferred.get_image_size.return_value = (200, 200)
+        type(deferred).img_array = PropertyMock(side_effect=AssertionError("decoded the image"))
+        deferred.get_camera_yaw.return_value = 0.0
+        deferred.get_camera_pitch.return_value = -90.0
+        deferred.get_gimbal_roll.return_value = 0.0
+        deferred.get_relative_altitude.return_value = 100.0
+        deferred.get_asl_altitude.return_value = None
+        deferred.get_camera_intrinsics.return_value = {
+            'focal_length_mm': 24.0, 'sensor_width_mm': 23.5, 'sensor_height_mm': 15.6}
+
+        service = AOIService(sample_image_data, image_service=deferred)
+        result = service.estimate_aoi_gps(sample_image_data, sample_aoi, use_terrain=False)
+
+        assert result is not None
+        deferred.get_image_size.assert_called_once()

@@ -9,7 +9,7 @@ This service provides:
 import hashlib
 from typing import Dict, Optional, Any
 from core.services.LoggerService import LoggerService
-from helpers.PathHelper import cross_platform_path_tail
+from helpers.PathHelper import cross_platform_path_key
 
 
 class TemperatureCacheService:
@@ -31,12 +31,28 @@ class TemperatureCacheService:
         # In-memory cache: {cache_key: temperature_celsius}
         self.memory_cache: Dict[str, Optional[float]] = {}
 
+        # Dataset-relative image identities (see ThumbnailCacheService):
+        # one instance can span every image in a dataset (cache backfill
+        # walks the whole XML), so keys need the identity, not a filename.
+        self._image_identities: Dict[str, str] = {}
+
+    def set_image_identities(self, identities: Dict[str, str]):
+        """Register dataset-relative identities for cache keying.
+
+        Args:
+            identities: Mapping of image path to its dataset-relative
+                identity, as built by PathHelper.build_image_cache_identities.
+        """
+        for path, identity in identities.items():
+            if path and identity:
+                self._image_identities[cross_platform_path_key(path)] = identity
+
     def get_cache_key(self, image_path: str, aoi_data: Dict[str, Any]) -> str:
         """
         Generate a unique cache key for an AOI.
 
-        Uses only the filename and AOI coordinates to make caches fully portable
-        across machines and time.
+        Keyed by the image's dataset-relative identity and AOI coordinates:
+        unique within the dataset, portable across machines.
 
         Args:
             image_path: Path to the source image
@@ -46,16 +62,21 @@ class TemperatureCacheService:
             MD5 hash cache key
         """
         try:
-            # Parent folder + filename: bare filenames repeat across flight
-            # folders, and a colliding key showed one AOI another image's
-            # temperature. The tail still strips the machine-specific root.
-            tail = cross_platform_path_tail(image_path)
+            # Dataset-relative identity (see ThumbnailCacheService): bare
+            # filenames and fixed tails repeat across nested flight folders,
+            # and a colliding key showed one AOI another image's temperature.
+            # Unregistered paths fall back to the full normalized path in
+            # a separate namespace: exact (never collides), machine-local.
+            path_key = cross_platform_path_key(image_path)
+            identity = self._image_identities.get(path_key)
 
-            # Create unique identifier from path tail, center, radius
             center = aoi_data.get('center', (0, 0))
             radius = aoi_data.get('radius', 0)
 
-            identifier = f"v2:{tail}_{center[0]}_{center[1]}_{radius}"
+            if identity:
+                identifier = f"v3:{identity}_{center[0]}_{center[1]}_{radius}"
+            else:
+                identifier = f"v3f:{path_key}_{center[0]}_{center[1]}_{radius}"
 
             # Generate hash
             return hashlib.md5(identifier.encode()).hexdigest()
