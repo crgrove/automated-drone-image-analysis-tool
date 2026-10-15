@@ -58,6 +58,7 @@ class AOIController(TranslationMixin):
         self.selected_aoi_index = -1
         self.flagged_aois = {}
         self.filter_flagged_only = False
+        self.filter_hide_duplicates = False  # Hide AOIs marked as a duplicate of another AOI
 
         # Sort and filter state
         self.sort_method = None  # 'area_asc', 'area_desc', 'color', 'x', 'y', 'temperature_asc', 'temperature_desc', 'similarity_groups'
@@ -1445,12 +1446,18 @@ class AOIController(TranslationMixin):
         filtered = []
         flagged_set = self.flagged_aois.get(img_idx, set())
         images = getattr(self.parent, 'images', None) or []
-        numbers = AOIDuplicateService.index_by_number(images) if self.filter_flagged_only else {}
+        uses_duplicates = self.filter_flagged_only or self.filter_hide_duplicates
+        numbers = AOIDuplicateService.index_by_number(images) if uses_duplicates else {}
 
         for original_idx, aoi in aois_with_indices:
+            is_duplicate = uses_duplicates and AOIDuplicateService.is_duplicate(images, aoi, numbers)
+
             # Apply flag filter (a duplicate shows its flag in the duplicate colour)
-            if (self.filter_flagged_only and original_idx not in flagged_set
-                    and not AOIDuplicateService.is_duplicate(images, aoi, numbers)):
+            if self.filter_flagged_only and original_idx not in flagged_set and not is_duplicate:
+                continue
+
+            # Apply duplicate filter: the primary represents the object, so its repeats go
+            if self.filter_hide_duplicates and is_duplicate:
                 continue
 
             # Apply color filter
@@ -1578,6 +1585,7 @@ class AOIController(TranslationMixin):
         Args:
             filters: Dict with filter settings {
                 'flagged_only': bool,
+                'hide_duplicates': bool,
                 'color_hue': int or None,
                 'color_range': int or None,
                 'area_min': float or None,
@@ -1588,6 +1596,7 @@ class AOIController(TranslationMixin):
             }
         """
         self.filter_flagged_only = filters.get('flagged_only', False)
+        self.filter_hide_duplicates = filters.get('hide_duplicates', False)
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
         self.filter_color_mode = filters.get('color_filter_mode', 'include')
@@ -1895,6 +1904,7 @@ class AOIController(TranslationMixin):
         # Get current filter settings
         current_filters = {
             'flagged_only': self.filter_flagged_only,
+            'hide_duplicates': self.filter_hide_duplicates,
             'color_hue': self.filter_color_hue,
             'color_range': self.filter_color_range if self.filter_color_range is not None else 30,
             'color_filter_mode': self.filter_color_mode,

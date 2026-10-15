@@ -534,7 +534,8 @@ class HelpDialog(TranslationMixin, QDialog):
                         <b>Mark Duplicate</b> in the Shift+Z results. Duplicates show a purple flag and
                         "#46 &rarr; #12" on their number. Reports list the object once, at the flagged
                         AOI's position, with "Also seen in" naming every duplicate's image and AOI
-                        number</li>
+                        number. Check <b>Hide Duplicate AOIs</b> in the filter to show only the
+                        originals</li>
                 </ul>
             </div>
 

@@ -570,6 +570,66 @@ def test_filter_global_flagged_only_keeps_duplicates(controller):
     assert [(img, aoi) for img, aoi, _ in result] == [(0, 0), (0, 1)]
 
 
+def test_filter_global_hide_duplicates_shows_only_originals(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_hide_duplicates = True
+    items = controller._collect_all_aois()
+
+    result = controller._filter_aois_global(items)
+
+    assert [(img, aoi) for img, aoi, _ in result] == [(0, 0), (1, 0)]
+
+
+def test_filter_global_hide_duplicates_keeps_orphaned_links(controller):
+    images = _duplicate_images()
+    images[0]["areas_of_interest"][1]["duplicate_of"] = 99   # primary was deleted
+    controller.parent.images = images
+    controller.filter_hide_duplicates = True
+
+    result = controller._filter_aois_global(controller._collect_all_aois())
+
+    assert len(result) == 3
+
+
+def test_filter_global_hide_duplicates_with_flagged_only(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_flagged_only = True
+    controller.filter_hide_duplicates = True
+
+    result = controller._filter_aois_global(controller._collect_all_aois())
+
+    assert [(img, aoi) for img, aoi, _ in result] == [(0, 0)]
+
+
+def test_set_filters_hide_duplicates_defaults_off(controller):
+    controller.load_all_aois = MagicMock()
+    controller.set_filters({"hide_duplicates": True})
+    assert controller.filter_hide_duplicates is True
+
+    controller.set_filters({"flagged_only": True})
+    assert controller.filter_hide_duplicates is False
+
+
+def test_sync_filters_copies_hide_duplicates(controller):
+    controller.load_all_aois = MagicMock()
+    controller.parent.aoi_controller.filter_hide_duplicates = True
+
+    controller.sync_filters_from_aoi_controller()
+
+    assert controller.filter_hide_duplicates is True
+
+
+def test_refresh_review_state_reloads_when_hiding_duplicates(controller):
+    controller.parent.images = _duplicate_images()
+    controller.filter_hide_duplicates = True
+    controller.load_all_aois = MagicMock()
+    controller.ui_component.gallery_view.currentIndex.return_value.isValid.return_value = False
+
+    controller.refresh_review_state()
+
+    controller.load_all_aois.assert_called_once()
+
+
 def test_refresh_review_state_repaints_without_reload(controller):
     controller.parent.images = _duplicate_images()
     controller.load_all_aois = MagicMock()

@@ -1041,6 +1041,51 @@ def test_flagged_only_filter_drops_orphaned_duplicate_links(dup_controller):
     assert [index for index, _ in dup_controller.filter_aois_with_indices(aois, 0)] == [0]
 
 
+def test_hide_duplicates_filter_shows_only_originals(dup_controller):
+    # #2 and #3 are repeats of #1: both go, #1 stays
+    dup_controller.set_aoi_duplicates_bulk([(0, 1), (1, 0)], (0, 0))
+    dup_controller.filter_hide_duplicates = True
+    images = dup_controller.parent.images
+
+    first = dup_controller.filter_aois_with_indices(list(enumerate(images[0]["areas_of_interest"])), 0)
+    second = dup_controller.filter_aois_with_indices(list(enumerate(images[1]["areas_of_interest"])), 1)
+
+    assert [index for index, _ in first] == [0]
+    assert second == []
+
+
+def test_hide_duplicates_filter_keeps_unflagged_aois_and_orphaned_links(dup_controller):
+    # #2 points at a deleted primary, so it is not a duplicate and stays visible
+    dup_controller.parent.images[0]["areas_of_interest"][1]["duplicate_of"] = 99
+    dup_controller.filter_hide_duplicates = True
+    aois = list(enumerate(dup_controller.parent.images[0]["areas_of_interest"]))
+
+    assert [index for index, _ in dup_controller.filter_aois_with_indices(aois, 0)] == [0, 1]
+
+
+def test_hide_duplicates_with_flagged_only_leaves_the_reported_aois(dup_controller):
+    dup_controller.set_aoi_duplicates_bulk([(0, 1)], (0, 0))
+    dup_controller.filter_flagged_only = True
+    dup_controller.filter_hide_duplicates = True
+    images = dup_controller.parent.images
+
+    first = dup_controller.filter_aois_with_indices(list(enumerate(images[0]["areas_of_interest"])), 0)
+    second = dup_controller.filter_aois_with_indices(list(enumerate(images[1]["areas_of_interest"])), 1)
+
+    assert [index for index, _ in first] == [0]
+    assert [index for index, _ in second] == [0]
+
+
+def test_set_filters_reads_hide_duplicates_and_defaults_off(dup_controller):
+    dup_controller.set_filters({"hide_duplicates": True})
+    assert dup_controller.filter_hide_duplicates is True
+    dup_controller.parent.gallery_controller.set_filters.assert_called_with({"hide_duplicates": True})
+
+    # Filter dicts saved before the option existed have no key
+    dup_controller.set_filters({"flagged_only": True})
+    assert dup_controller.filter_hide_duplicates is False
+
+
 def test_context_menu_mark_as_duplicate_triggers_controller(dup_controller):
     actions = _open_context_menu(dup_controller, aoi_index=1, image_idx=0)
 

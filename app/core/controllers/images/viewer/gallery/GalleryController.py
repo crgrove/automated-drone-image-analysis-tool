@@ -56,6 +56,7 @@ class GalleryController:
         self.sort_method = None
         self.sort_color_hue = None
         self.filter_flagged_only = False
+        self.filter_hide_duplicates = False  # Hide AOIs marked as a duplicate of another AOI
         # Primary AOI number -> how many AOIs are marked as its duplicates
         self.duplicate_counts = {}
         self.filter_comment_pattern = None
@@ -395,14 +396,19 @@ class GalleryController:
         """
         filtered = []
         images = getattr(self.parent, 'images', None) or []
-        numbers = AOIDuplicateService.index_by_number(images) if self.filter_flagged_only else {}
+        uses_duplicates = self.filter_flagged_only or self.filter_hide_duplicates
+        numbers = AOIDuplicateService.index_by_number(images) if uses_duplicates else {}
 
         for img_idx, aoi_idx, aoi in aoi_items:
+            is_duplicate = uses_duplicates and AOIDuplicateService.is_duplicate(images, aoi, numbers)
+
             # Apply flag filter (a duplicate shows its flag in the duplicate colour)
-            if self.filter_flagged_only:
-                if (not aoi.get('flagged', False)
-                        and not AOIDuplicateService.is_duplicate(images, aoi, numbers)):
-                    continue
+            if self.filter_flagged_only and not aoi.get('flagged', False) and not is_duplicate:
+                continue
+
+            # Apply duplicate filter: the primary represents the object, so its repeats go
+            if self.filter_hide_duplicates and is_duplicate:
+                continue
 
             # Apply comment filter — case-insensitive substring match. Any
             # '*' characters are stripped so saved wildcard patterns from
@@ -593,6 +599,7 @@ class GalleryController:
         Args:
             filters: Dict with filter settings {
                 'flagged_only': bool,
+                'hide_duplicates': bool,
                 'comment_filter': str or None,
                 'color_hue': int or None,
                 'color_range': int or None,
@@ -603,6 +610,7 @@ class GalleryController:
             }
         """
         self.filter_flagged_only = filters.get('flagged_only', False)
+        self.filter_hide_duplicates = filters.get('hide_duplicates', False)
         self.filter_comment_pattern = filters.get('comment_filter')
         self.filter_color_hue = filters.get('color_hue')
         self.filter_color_range = filters.get('color_range')
@@ -631,6 +639,7 @@ class GalleryController:
 
         # Sync filter settings
         self.filter_flagged_only = aoi_ctrl.filter_flagged_only
+        self.filter_hide_duplicates = aoi_ctrl.filter_hide_duplicates
         if hasattr(aoi_ctrl, 'filter_comment_pattern'):
             self.filter_comment_pattern = aoi_ctrl.filter_comment_pattern
         self.filter_color_hue = aoi_ctrl.filter_color_hue
@@ -820,15 +829,16 @@ class GalleryController:
         """Show changed flag/duplicate state without losing the reviewer's place.
 
         Tiles read the live AOI dicts, so a repaint is enough - unless the
-        flagged-only filter is on, where the change can add or remove tiles and
-        the gallery is reloaded with the selection kept (as the F toggle does).
+        flagged-only or hide-duplicates filter is on, where the change can add or
+        remove tiles and the gallery is reloaded with the selection kept (as the
+        F toggle does).
         """
         self.duplicate_counts = AOIDuplicateService.duplicate_counts(getattr(self.parent, 'images', None) or [])
         if not self.ui_component or not self.ui_component.gallery_view:
             return
         view = self.ui_component.gallery_view
 
-        if self.filter_flagged_only:
+        if self.filter_flagged_only or self.filter_hide_duplicates:
             current_index = view.currentIndex()
             selected = self.model.get_aoi_info(current_index) if current_index.isValid() else None
             self.load_all_aois()
@@ -1445,6 +1455,7 @@ class GalleryController:
                     # Check if filters have changed since last sync
                     current_filters = (
                         self.parent.aoi_controller.filter_flagged_only,
+                        self.parent.aoi_controller.filter_hide_duplicates,
                         self.parent.aoi_controller.filter_color_hue,
                         self.parent.aoi_controller.filter_color_range,
                         self.parent.aoi_controller.filter_area_min,
@@ -1462,6 +1473,7 @@ class GalleryController:
                     self.load_all_aois()
                     self.parent._last_filter_sync = (
                         self.parent.aoi_controller.filter_flagged_only,
+                        self.parent.aoi_controller.filter_hide_duplicates,
                         self.parent.aoi_controller.filter_color_hue,
                         self.parent.aoi_controller.filter_color_range,
                         self.parent.aoi_controller.filter_area_min,
