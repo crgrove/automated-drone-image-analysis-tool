@@ -83,3 +83,9 @@ Then copy the R-JPEGs together with the new `.temps.npy` / `.thermal.json` files
 - Image Analysis Guide (`AlgorithmSelectionPage`) appends a short macOS sidecar note when a Temperature* algorithm is selected on Darwin.
 
 Do **not** redistribute additional DJI SDK binaries; the converter uses the SDK already bundled under `app/external/dji_thermal_sdk_v1.7_*` on Windows/Linux.
+
+## Mac follow-up (2026-10-20) — no Windows DIRP host
+
+This checkout is Apple Silicon (`arm64`). There is no Windows machine, Parallels, or Wine here, so `tools/thermal_sidecar_convert.py` cannot call DIRP. Running it on the public M4T sample `DJI_0001_R.JPG` exits 1 and prints the hybrid instructions. No real `<stem>.temps.npy` was produced, and none was committed.
+
+What was verified on Darwin instead: a synthetic 64×64 °C sidecar (background 22 °C, 16×16 blob at 37 °C) is read by `DjiThermalParserService` through `OpenThermalParserAdapter`, then Temperature Range, Anomaly, and Residual Anomaly masks all mark that blob (`tests/thermal/test_darwin_sidecar_algorithms.py`). That is the Mac half of Option A2, not a DIRP parity check.
