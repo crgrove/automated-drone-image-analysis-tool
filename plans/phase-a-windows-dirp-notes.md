@@ -89,3 +89,5 @@ Do **not** redistribute additional DJI SDK binaries; the converter uses the SDK 
 This checkout is Apple Silicon (`arm64`). There is no Windows machine, Parallels, or Wine here, so `tools/thermal_sidecar_convert.py` cannot call DIRP. Running it on the public M4T sample `DJI_0001_R.JPG` exits 1 and prints the hybrid instructions. No real `<stem>.temps.npy` was produced, and none was committed.
 
 What was verified on Darwin instead: a synthetic 64×64 °C sidecar (background 22 °C, 16×16 blob at 37 °C) is read by `DjiThermalParserService` through `OpenThermalParserAdapter`, then Temperature Range, Anomaly, and Residual Anomaly masks all mark that blob (`tests/thermal/test_darwin_sidecar_algorithms.py`). That is the Mac half of Option A2, not a DIRP parity check.
+
+Linux DIRP lookup previously pointed at `windows/release_*/libdirp.so`, which is not where the bundled libraries live. It now uses `linux/release_x86` and `linux/release_x64`. Windows `.dll` paths are unchanged. Those `.so` files are x86-64/x86 ELF, so this Apple Silicon Mac still cannot load them. No real M4T `.temps.npy` was created here.
