@@ -33,3 +33,26 @@
 ## Evaluated open parser
 
 [SanNianYiSi/thermal_parser](https://github.com/SanNianYiSi/thermal_parser) also wraps the DJI Thermal SDK (win/linux natives only). Useful as a Windows/Linux reference and optional dependency; it does **not** remove the Darwin dylib gap by itself.
+
+## Spike (2026-10-20, Apple Silicon) — native decode failed
+
+Host: Darwin, `platform.architecture()` reports `64bit` (so the library names the platform `Darwin x64`).
+
+Sample (not committed): `SanNianYiSi/thermal_parser` `images/M4T/DJI_0001_R.JPG`.
+ExifTool dump in that repo: Make `DJI`, Camera Model Name `M4T`, 640×512, software `10.00.08.09`.
+
+What ran:
+
+1. `Thermal()` from `thermal_parser` (SDK 1.7 plugins, `.dll` / `.so` only).
+   Raised before any pixel was read:
+
+   `NotImplementedError: currently not supported for running on this platform: Darwin x64`
+
+   `get_default_filepaths()` only accepts Windows and Linux, and looks for `libdirp.dll` or `libdirp.so`. There is no Darwin `.dylib` in DJI Thermal SDK 1.7 or in that repo’s `plugins/`.
+
+2. `python tools/thermal_decode.py` on the same R-JPEG, with no sidecar.
+   Raised `ImportError` from `OpenThermalParserAdapter`. No min/max/mean °C was produced from the file.
+
+Hybrid path still works: a sibling `<stem>.temps.npy` (synthetic 2×2 map, not temperatures from this R-JPEG) printed `min=10 max=40 mean=25` with `decode_backend=sidecar_npy`. Windows/Linux DIRP `CDLL` loading is unchanged. No extra DJI SDK binaries were added to this repo.
+
+Stopped here. Do not treat the three Temperature algorithms as native radiometric on macOS until a real °C map can be produced without Windows/Linux SDK binaries. The NumPy AOI helpers stay unit-tested on synthetic maps only.

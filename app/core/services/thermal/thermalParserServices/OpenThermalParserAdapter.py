@@ -67,6 +67,7 @@ class OpenThermalParserAdapter:
     def __init__(self, dtype=np.float32):
         self._dtype = dtype
         self._Thermal = try_import_thermal_parser()
+        self._last_backend = "unavailable"
 
     def temperatures(
         self,
@@ -84,11 +85,15 @@ class OpenThermalParserAdapter:
 
         temps = self._try_thermal_parser(filepath_image)
         if temps is not None:
+            self._last_backend = "thermal_parser"
             return np.asarray(temps, dtype=self._dtype)
 
         temps = self._try_sidecar(filepath_image)
         if temps is not None:
+            self._last_backend = "sidecar_npy"
             return np.asarray(temps, dtype=self._dtype)
+
+        self._last_backend = "unavailable"
 
         detail = (
             "thermal_parser not importable or failed on this platform; "
@@ -152,15 +157,8 @@ class OpenThermalParserAdapter:
         return meta
 
     def _infer_backend(self, filepath_image: str) -> str:
-        if os.path.isfile(sidecar_temps_path(filepath_image)):
-            # Prefer reporting sidecar when present (hybrid path is explicit).
-            if self._Thermal is None:
-                return "sidecar_npy"
-        if self._Thermal is not None:
-            return "thermal_parser_or_sidecar"
-        if os.path.isfile(sidecar_temps_path(filepath_image)):
-            return "sidecar_npy"
-        return "unavailable"
+        del filepath_image
+        return self._last_backend
 
 
 def render_temperature_preview(temps: np.ndarray, palette: str = "White Hot") -> np.ndarray:

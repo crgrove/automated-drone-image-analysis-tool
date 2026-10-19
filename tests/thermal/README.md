@@ -29,7 +29,11 @@ Spike decode on Apple Silicon:
 PYTHONPATH=app python tools/thermal_decode.py fixtures/thermal/DJI_M4T_sample_T.JPG --print-stats --out-dir /tmp/m4t-decode
 ```
 
+## Spike status (2026-10-20)
+
+Native decode of the public `thermal_parser` M4T sample failed on Apple Silicon (`NotImplementedError: Darwin x64`). No real R-JPEG or `.temps.npy` derived from DIRP is committed. Hybrid sidecar remains the Darwin input.
+
 ## Pending
 
 - Parity check vs Windows DIRP on the same M4T fixture (AOI count ± tolerance).
-- Confirm SanNianYiSi/thermal_parser once Darwin natives exist (or stick with sidecar / Phase B dylib).
+- A Darwin-native °C decoder. `thermal_parser` does not provide one (Windows/Linux SDK only).

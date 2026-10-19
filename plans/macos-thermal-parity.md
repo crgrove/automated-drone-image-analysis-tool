@@ -50,6 +50,12 @@ Build a small helper that turns each R-JPEG into a float32 temperature map + a r
 3. Update User Guide: remove “Windows only” for Temperature algorithms when Phase A/B passes.
 4. CI: matrix job `macos-14` + `windows-latest` running thermal fixture tests.
 
+## Spike result (2026-10-20)
+
+Native Matrice 4T decode on Apple Silicon **failed**. `SanNianYiSi/thermal_parser` raises `NotImplementedError` on Darwin (`Darwin x64`) because it only loads Windows `.dll` / Linux `.so` DIRP libraries. `tools/thermal_decode.py` did not print °C for `images/M4T/DJI_0001_R.JPG` without a sidecar. Details: `plans/phase-a-windows-dirp-notes.md`.
+
+Kept the hybrid converter: Darwin still reads `<stem>.temps.npy` and does not load DIRP. Windows DIRP path is unchanged. No further UI work until a real °C decode exists.
+
 ## Concrete Cursor work order
 1. Clone upstream; locate Temperature* algorithm modules and the DJI DIRP ctypes wrapper on Windows.
 2. Spike: decode one M4T R-JPEG on macOS without DLLs; print min/max/mean °C; fail fast if impossible.
