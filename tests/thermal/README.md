@@ -33,6 +33,22 @@ PYTHONPATH=app python tools/thermal_decode.py fixtures/thermal/DJI_M4T_sample_T.
 
 Native decode of the public `thermal_parser` M4T sample failed on Apple Silicon (`NotImplementedError: Darwin x64`). No real R-JPEG or `.temps.npy` derived from DIRP is committed. Hybrid sidecar remains the Darwin input.
 
+## Hybrid converter (Windows → Mac)
+
+On a Windows machine with DIRP available:
+
+```bat
+python tools/thermal_sidecar_convert.py path\to\R-JPEG-or-folder
+```
+
+Produces `<stem>.temps.npy` next to each image. Copy R-JPEG + sidecar to the Mac; Darwin decode uses the sidecar.
+
+Converter unit tests (mocked decode, no DLL):
+
+```bash
+PYTHONPATH=app pytest tests/thermal/test_thermal_sidecar_convert.py -q
+```
+
 ## Pending
 
 - Parity check vs Windows DIRP on the same M4T fixture (AOI count ± tolerance).

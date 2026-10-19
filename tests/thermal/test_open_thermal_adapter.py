@@ -41,7 +41,8 @@ def test_missing_sidecar_raises_importerror(tmp_path):
     with patch.object(adapter, "_Thermal", None):
         with pytest.raises(ImportError) as exc:
             adapter.temperatures(str(image))
-    assert "sidecar" in str(exc.value).lower() or "Darwin radiometric" in str(exc.value)
+    msg = str(exc.value).lower()
+    assert "sidecar" in msg or "temps.npy" in msg or "hybrid" in msg or "macos radiometric" in msg
 
 
 def test_dji_parser_uses_adapter_on_darwin(tmp_path):

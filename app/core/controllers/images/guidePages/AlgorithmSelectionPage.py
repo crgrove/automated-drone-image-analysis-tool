@@ -2,6 +2,8 @@
 Algorithm Selection page for the Image Analysis Guide wizard.
 """
 
+import platform
+
 from .BasePage import BasePage
 
 
@@ -219,9 +221,29 @@ class AlgorithmSelectionPage(BasePage):
     def _show_algorithm_result(self):
         """Display the selected algorithm result."""
         if self.selected_algorithm:
-            self.dialog.labelAlgorithmResult.setText(
-                self.tr("Selected Algorithm: {algorithm}").format(algorithm=self.selected_algorithm)
+            result_text = self.tr("Selected Algorithm: {algorithm}").format(
+                algorithm=self.selected_algorithm
             )
+            # Phase A hybrid path: on Darwin, Temperature* algorithms need .temps.npy sidecars.
+            thermal_labels = {
+                "Temperature Range",
+                "Temperature Anomaly",
+                "Temperature Residual Anomaly",
+            }
+            if (
+                platform.system() == "Darwin"
+                and self.selected_algorithm in thermal_labels
+            ):
+                result_text = (
+                    result_text
+                    + "\n\n"
+                    + self.tr(
+                        "macOS note: DJI R-JPEG °C maps need a sibling '<stem>.temps.npy'. "
+                        "On Windows run: python tools/thermal_sidecar_convert.py <folder>, "
+                        "then copy the R-JPEGs and sidecars to this Mac."
+                    )
+                )
+            self.dialog.labelAlgorithmResult.setText(result_text)
             self.dialog.labelAlgorithmResult.setVisible(True)
             self.dialog.buttonYes.setVisible(False)
             self.dialog.buttonNo.setVisible(False)

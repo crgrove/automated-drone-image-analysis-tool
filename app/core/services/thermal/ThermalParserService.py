@@ -58,6 +58,21 @@ class ThermalParserService:
         self.logger = LoggerService()
         self.dtype = dtype
 
+    @staticmethod
+    def _reraise_parse_failure(exc: Exception) -> None:
+        """Re-raise parse failures, preserving Darwin hybrid sidecar guidance."""
+        message = str(exc)
+        lowered = message.lower()
+        if isinstance(exc, ImportError) or (
+            "sidecar" in lowered
+            or "temps.npy" in lowered
+            or "thermal_sidecar_convert" in lowered
+            or "macos radiometric" in lowered
+            or "darwin radiometric" in lowered
+        ):
+            raise Exception(message) from exc
+        raise Exception("Invalid image file") from exc
+
     def _get_model_and_platform(self, meta_fields):
         """
         Determine the camera model and platform based on metadata.
@@ -172,8 +187,8 @@ class ThermalParserService:
                 temps = parser.temperatures(filepath_image=full_path, **kwargs)
                 img = parser.image(full_path, palette)
                 return temps, img
-            except Exception:
-                raise Exception("Invalid image file")
+            except Exception as exc:
+                self._reraise_parse_failure(exc)
 
         elif platform == 'AUTEL':
             kwargs = {

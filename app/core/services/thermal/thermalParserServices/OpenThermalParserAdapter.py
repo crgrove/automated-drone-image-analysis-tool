@@ -26,15 +26,26 @@ import cv2
 import numpy as np
 
 _THERMAL_PARSER_IMPORT_ERROR = (
-    "Darwin radiometric DJI decode is unavailable: neither an installable open "
-    "parser with native macOS libs nor a sidecar temperature map was found.\n"
-    "Options:\n"
-    "  1) Place a float32 HxW °C map next to the R-JPEG as '<stem>.temps.npy'\n"
-    "     (optional '<stem>.thermal.json' for metadata).\n"
-    "  2) Install SanNianYiSi/thermal_parser if your platform has SDK natives "
-    "(currently Windows/Linux only; see plans/phase-a-windows-dirp-notes.md).\n"
-    "  3) Wait for DJI Thermal SDK Darwin dylibs (Phase B).\n"
-    "Original import/error detail: {detail}"
+    "macOS radiometric DJI decode needs a temperature sidecar "
+    "(native DIRP / thermal_parser are Windows/Linux only).\n"
+    "\n"
+    "Hybrid workflow:\n"
+    "  1) On Windows (or Linux with DIRP), from the ADIAT repo root run:\n"
+    "       python tools/thermal_sidecar_convert.py <folder-or-R-JPEG>\n"
+    "  2) Copy each R-JPEG with its sibling '<stem>.temps.npy'\n"
+    "     (and optional '<stem>.thermal.json').\n"
+    "  3) On macOS, analyze that folder in ADIAT — Temperature* algorithms\n"
+    "     read the sidecar via OpenThermalParserAdapter.\n"
+    "\n"
+    "Also see plans/macos-thermal-parity.md and plans/phase-a-windows-dirp-notes.md.\n"
+    "Detail: {detail}"
+)
+
+# Short form used when surfacing errors in AnalysisResult / UI toasts.
+HYBRID_SIDECAR_HINT = (
+    "Missing temperature sidecar on macOS. On Windows run: "
+    "python tools/thermal_sidecar_convert.py <R-JPEG-or-folder> "
+    "then copy '<stem>.temps.npy' next to each image."
 )
 
 

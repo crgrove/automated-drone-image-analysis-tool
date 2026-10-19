@@ -15,6 +15,9 @@ On Darwin this uses OpenThermalParserAdapter (optional thermal_parser, else
 `<stem>.temps.npy` sidecar). On Windows/Linux it prefers DIRP via
 DjiThermalParserService when available.
 
+To **create** sidecars from R-JPEGs on Windows/Linux, use
+`tools/thermal_sidecar_convert.py` (hybrid Option A2).
+
 Does not redistribute DJI proprietary SDK binaries.
 """
 

@@ -34,10 +34,14 @@ Build a small helper that turns each R-JPEG into a float32 temperature map + a r
 6. Wire as Mac-only algorithm backends in `algorithms.conf` / algorithm service layer, gated by `platform.system() == "Darwin"`.
 7. Acceptance: same AOI count ±tolerance vs Windows ADIAT on the fixture set; export PDF/KML still works.
 
-**Option A2 (if open parsers fail on M4T): decode via DJI Windows tool in a VM, then analyze on Mac**
-1. Automate a headless Windows VM (Parallels/UTM) or containerized Wine **only if DIRP works under Wine** (often flaky; treat as experiment).
-2. Batch-convert R-JPEG → temperature TIFF/CSV with DJI Thermal Analysis Tool 3 / DIRP CLI if available.
-3. ADIAT Mac reads the converted maps. Document this as “hybrid workflow”, not true native.
+**Option A2 (active after spike failure): Windows/Linux DIRP → `.temps.npy` sidecar → analyze on Mac**
+1. On Windows (or Linux with DIRP), from the ADIAT repo root run:
+   `python tools/thermal_sidecar_convert.py <folder-or-R-JPEG>`
+   This uses `DjiThermalParserService` / DIRP and writes `<stem>.temps.npy` (+ `.thermal.json`) next to each R-JPEG.
+2. Copy the R-JPEGs **and** sidecars to the Mac (same folder layout).
+3. ADIAT on Darwin reads sidecars via `OpenThermalParserAdapter` — Temperature Range / Anomaly / Residual Anomaly run without DIRP.
+4. On Darwin, `thermal_sidecar_convert.py` exits non-zero with instructions (unless validating existing `.temps.npy`).
+5. Document as “hybrid workflow”, not true native radiometric decode.
 
 ### Phase B — Native Mac DJI Thermal SDK (blocked unless DJI ships dylib)
 1. Check current DJI Enterprise Thermal SDK release notes for macOS ARM64 binaries.
@@ -54,13 +58,13 @@ Build a small helper that turns each R-JPEG into a float32 temperature map + a r
 
 Native Matrice 4T decode on Apple Silicon **failed**. `SanNianYiSi/thermal_parser` raises `NotImplementedError` on Darwin (`Darwin x64`) because it only loads Windows `.dll` / Linux `.so` DIRP libraries. `tools/thermal_decode.py` did not print °C for `images/M4T/DJI_0001_R.JPG` without a sidecar. Details: `plans/phase-a-windows-dirp-notes.md`.
 
-Kept the hybrid converter: Darwin still reads `<stem>.temps.npy` and does not load DIRP. Windows DIRP path is unchanged. No further UI work until a real °C decode exists.
+Kept / implemented the hybrid converter (`tools/thermal_sidecar_convert.py`): Darwin still reads `<stem>.temps.npy` and does not load DIRP. Windows DIRP path is unchanged. Mac UI / ImportError messages point users at the Windows converter.
 
 ## Concrete Cursor work order
 1. Clone upstream; locate Temperature* algorithm modules and the DJI DIRP ctypes wrapper on Windows.
 2. Spike: decode one M4T R-JPEG on macOS without DLLs; print min/max/mean °C; fail fast if impossible.
 3. If spike OK → implement NumPy ports of the three algorithms + Mac UI enablement.
-4. If spike fails → implement hybrid converter workflow + clear UI messaging; file upstream issue summarizing the DLL gap.
+4. If spike fails → implement hybrid converter workflow + clear UI messaging (**done**: `tools/thermal_sidecar_convert.py` + Darwin ImportError / AlgorithmSelection tip); file upstream issue summarizing the DLL gap.
 5. Do **not** redistribute DJI SDK binaries beyond upstream’s existing Windows packaging rules; respect DJI and Autel licenses.
 6. Keep AI Person Detector / colour / anomaly on both platforms unchanged.
 
@@ -70,7 +74,7 @@ Kept the hybrid converter: Darwin still reads `<stem>.temps.npy` and does not lo
 - Shipping Wine inside the .app as the “native” solution.
 
 ## Success criteria
-- On Apple Silicon Mac, user can run Temperature Range on Matrice 4T R-JPEG and get AOIs without a Windows VM.
+- On Apple Silicon Mac, user can run Temperature Range on Matrice 4T R-JPEG **with sidecar** `.temps.npy` (from Windows converter) and get AOIs; true native decode remains Phase B.
 - Fixture parity tests documented in `tests/thermal/README.md`.
 - PR description links TEXSAR pages + notes the 3rd-party DLL limitation and how this plan removes it for Mac.
 

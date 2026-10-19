@@ -56,3 +56,30 @@ What ran:
 Hybrid path still works: a sibling `<stem>.temps.npy` (synthetic 2×2 map, not temperatures from this R-JPEG) printed `min=10 max=40 mean=25` with `decode_backend=sidecar_npy`. Windows/Linux DIRP `CDLL` loading is unchanged. No extra DJI SDK binaries were added to this repo.
 
 Stopped here. Do not treat the three Temperature algorithms as native radiometric on macOS until a real °C map can be produced without Windows/Linux SDK binaries. The NumPy AOI helpers stay unit-tested on synthetic maps only.
+
+## Hybrid sidecar converter (Option A2) — implemented
+
+Tool: `tools/thermal_sidecar_convert.py`
+
+| Host | Behavior |
+|------|----------|
+| Windows / Linux | Decode each R-JPEG via `DjiThermalParserService` (DIRP), write `<stem>.temps.npy` + `<stem>.thermal.json` next to the image |
+| Darwin | Exit non-zero with hybrid instructions (unless every input is already `.temps.npy`, which is validated only) |
+
+### CLI (Windows example)
+
+```bat
+cd automated-drone-image-analysis-tool
+python tools/thermal_sidecar_convert.py D:\flights\m4t\ --glob *_R.JPG --glob *_T.JPG
+python tools/thermal_sidecar_convert.py D:\flights\m4t\DJI_0001_R.JPG --force
+```
+
+Then copy the R-JPEGs together with the new `.temps.npy` / `.thermal.json` files to the Mac and open that folder in ADIAT.
+
+### Mac UX when sidecar is missing
+
+- `OpenThermalParserAdapter` raises `ImportError` with the hybrid workflow steps (mentions `thermal_sidecar_convert.py`).
+- `ThermalParserService.parse_file` preserves that message instead of collapsing to generic "Invalid image file" for DJI.
+- Image Analysis Guide (`AlgorithmSelectionPage`) appends a short macOS sidecar note when a Temperature* algorithm is selected on Darwin.
+
+Do **not** redistribute additional DJI SDK binaries; the converter uses the SDK already bundled under `app/external/dji_thermal_sdk_v1.7_*` on Windows/Linux.
