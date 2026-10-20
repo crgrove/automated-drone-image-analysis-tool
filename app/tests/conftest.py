@@ -162,6 +162,27 @@ def thermal_sdk_available():
     return True
 
 
+# Sample imagery lives in app/tests/data, which is gitignored (unpack
+# app/tests/data.zip), so a CI checkout never has it. Tests that read it carry
+# @pytest.mark.sample_data and skip when CI=true and the input is absent;
+# outside CI a missing tree still fails loudly. The check is on the input
+# folder because the E2E tests write ADIAT_Results under data/rgb/output even
+# when there is no input, so the data root existing proves nothing.
+_SAMPLE_DATA_INPUT = os.path.join(os.path.dirname(__file__), 'data', 'rgb', 'input')
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "sample_data: reads app/tests/data; skipped when CI=true and it is absent")
+
+
+def pytest_runtest_setup(item):
+    if (item.get_closest_marker("sample_data") is not None
+            and os.environ.get("CI", "").lower() == "true"
+            and not os.path.isdir(_SAMPLE_DATA_INPUT)):
+        pytest.skip("app/tests/data is not present (gitignored - unpack app/tests/data.zip)")
+
+
 @pytest.fixture
 def testData():
     return {
