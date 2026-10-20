@@ -72,3 +72,8 @@ AI_CODEBASE_GUIDE.md
 RELEASE_AUDIT_v2.1.0.md
 TODO.md
 scripts/repair_relinked_paths.py
+
+# Real radiometric fixtures (keep offline; synthetic tests live under tests/thermal/)
+fixtures/thermal/*
+!fixtures/thermal/.gitkeep
+!fixtures/thermal/README.md

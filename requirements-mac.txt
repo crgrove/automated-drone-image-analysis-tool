@@ -33,3 +33,6 @@ aiortc>=1.9
 qasync>=0.27
 httpx>=0.27
 websockets>=13
+
+# Optional (Windows/Linux natives only today; Darwin uses sidecar / Phase B dylib):
+# pip install "git+https://github.com/SanNianYiSi/thermal_parser.git"

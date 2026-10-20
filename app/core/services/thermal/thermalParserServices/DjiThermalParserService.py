@@ -6,6 +6,9 @@ import os
 import platform
 import sys
 
+# Darwin has no DJI DIRP dylib; see OpenThermalParserAdapter / plans/phase-a-windows-dirp-notes.md
+from core.services.thermal.thermalParserServices.OpenThermalParserAdapter import OpenThermalParserAdapter
+
 DIRP_HANDLE = c_void_p
 DIRP_VERBOSE_LEVEL_NONE = 0
 DIRP_VERBOSE_LEVEL_DEBUG = 1
@@ -40,6 +43,7 @@ class dirp_measurement_params_t(Structure):
         ('humidity', c_float),     # Relative humidity of the environment (20-100%)
         ('emissivity', c_float),   # Surface emissivity (0.10-1.00)
         ('reflection', c_float),   # Reflected apparent temperature (-40.0 to 500.0°C)
+        ('ambient_temp', c_float), # Ambient temperature (TSDK 1.7 added this field; M4T etc. write it)
     ]
 
 
@@ -71,6 +75,12 @@ class DjiThermalParserService:
             dtype (type, optional): Data type for temperature arrays. Defaults to np.float32.
         """
         self._dtype = dtype
+        # Phase A: Darwin has no DIRP dylib — use open/sidecar adapter. Windows/Linux keep CDLL path.
+        self._use_open_adapter = platform.system() == "Darwin"
+        self._open_adapter = OpenThermalParserAdapter(dtype=dtype) if self._use_open_adapter else None
+        if self._use_open_adapter:
+            return
+
         (
             self._filepath_dirp,
             self._filepath_dirp_sub,
@@ -78,6 +88,15 @@ class DjiThermalParserService:
             self._filepath_exiftool,
         ) = self._get_default_filepaths()
 
+        if platform.system() == "Linux":
+            # libv_hirp.so (M4T/M30T/M3T path) depends on libMicro*_Release_*.so next to it,
+            # which are not on the default loader path. Preload them globally so DIRP can
+            # open its sub-libraries without LD_LIBRARY_PATH (otherwise create returns -16).
+            import ctypes as _ct
+            _sdk_dir = os.path.dirname(self._filepath_dirp)
+            for _name in sorted(os.listdir(_sdk_dir)):
+                if _name.startswith(("libMicro", "libexif")) and ".so" in _name:
+                    _ct.CDLL(os.path.join(_sdk_dir, _name), mode=_ct.RTLD_GLOBAL)
         self._dll_dirp = CDLL(self._filepath_dirp)
         self._dll_dirp_sub = CDLL(self._filepath_dirp_sub)
         self._dll_iirp = CDLL(self._filepath_iirp)
@@ -149,6 +168,18 @@ class DjiThermalParserService:
         References:
             * [DJI Thermal SDK](https://www.dji.com/cn/downloads/softwares/dji-thermal-sdk)
         """
+        if getattr(self, "_use_open_adapter", False):
+            return self._open_adapter.temperatures(
+                filepath_image=filepath_image,
+                image_height=image_height,
+                image_width=image_width,
+                object_distance=object_distance,
+                relative_humidity=relative_humidity,
+                emissivity=emissivity,
+                reflected_apparent_temperature=reflected_apparent_temperature,
+                m2ea_mode=m2ea_mode,
+            )
+
         with open(filepath_image, 'rb') as file:
             raw = file.read()
             raw_size = c_int32(len(raw))
@@ -206,7 +237,11 @@ class DjiThermalParserService:
         Returns:
             np.ndarray: Color-mapped thermal image.
         """
+        if getattr(self, "_use_open_adapter", False):
+            return self._open_adapter.image(filepath_image, palette)
+
         color_map = self._get_color_map(palette)
+
         with open(filepath_image, 'rb') as file:
             raw = file.read()
             raw_size = c_int32(len(raw))
@@ -302,18 +337,18 @@ class DjiThermalParserService:
             if architecture == "32bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_iirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libdirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_dirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]
             elif architecture == "64bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_iirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libdirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_dirp.so',
+                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]
