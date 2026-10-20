@@ -43,6 +43,7 @@ class dirp_measurement_params_t(Structure):
         ('humidity', c_float),     # Relative humidity of the environment (20-100%)
         ('emissivity', c_float),   # Surface emissivity (0.10-1.00)
         ('reflection', c_float),   # Reflected apparent temperature (-40.0 to 500.0°C)
+        ('ambient_temp', c_float), # Ambient temperature (TSDK 1.7 added this field; M4T etc. write it)
     ]
 
 
@@ -87,6 +88,15 @@ class DjiThermalParserService:
             self._filepath_exiftool,
         ) = self._get_default_filepaths()
 
+        if platform.system() == "Linux":
+            # libv_hirp.so (M4T/M30T/M3T path) depends on libMicro*_Release_*.so next to it,
+            # which are not on the default loader path. Preload them globally so DIRP can
+            # open its sub-libraries without LD_LIBRARY_PATH (otherwise create returns -16).
+            import ctypes as _ct
+            _sdk_dir = os.path.dirname(self._filepath_dirp)
+            for _name in sorted(os.listdir(_sdk_dir)):
+                if _name.startswith(("libMicro", "libexif")) and ".so" in _name:
+                    _ct.CDLL(os.path.join(_sdk_dir, _name), mode=_ct.RTLD_GLOBAL)
         self._dll_dirp = CDLL(self._filepath_dirp)
         self._dll_dirp_sub = CDLL(self._filepath_dirp_sub)
         self._dll_iirp = CDLL(self._filepath_iirp)
