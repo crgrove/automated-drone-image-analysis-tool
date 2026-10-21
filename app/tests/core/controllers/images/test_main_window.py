@@ -72,6 +72,7 @@ def testVisible(main_window):
     assert main_window.isVisible()
 
 
+@pytest.mark.sample_data
 def testBasicEndToEnd(main_window, testData, qtbot):
     """Test complete end-to-end workflow from setup to viewing results."""
     # Set input and output folders
@@ -135,6 +136,7 @@ def testBasicEndToEnd(main_window, testData, qtbot):
     assert viewer.aoiListWidget.count() > 0
 
 
+@pytest.mark.sample_data
 def test_viewer_toolbar_buttons(main_window, testData, qtbot):
     """Ensure every viewer tool/control is present once the viewer loads."""
     viewer = _open_viewer_with_sample_data(main_window, testData, qtbot)
@@ -173,6 +175,7 @@ def test_viewer_toolbar_buttons(main_window, testData, qtbot):
     assert not missing, "Missing viewer controls: " + ", ".join(missing)
 
 
+@pytest.mark.sample_data
 def testNormalizeHistogram(main_window, testData, qtbot):
     """Test histogram normalization feature."""
     main_window.inputFolderLine.setText(testData['RGB_Input'])
@@ -223,6 +226,7 @@ def testNormalizeHistogram(main_window, testData, qtbot):
         assert main_window.viewResultsButton.isEnabled(), "expected AOIs for this fixture/params"
 
 
+@pytest.mark.sample_data
 def testKmlCollection(main_window, testData, qtbot):
     """Test KML export functionality."""
     # Prepare the main window
@@ -279,6 +283,7 @@ def testKmlCollection(main_window, testData, qtbot):
     os.remove(kml_path)
 
 
+@pytest.mark.sample_data
 def testPdfGenerator(main_window, testData, qtbot):
     """Test PDF generation functionality."""
     main_window.inputFolderLine.setText(testData['RGB_Input'])
@@ -361,6 +366,7 @@ def testPdfGenerator(main_window, testData, qtbot):
             assert mock_thread.start.called, "PDF generation thread should have been started"
 
 
+@pytest.mark.sample_data
 def testLoadFile(main_window, testData, qtbot):
     """Test loading a previous analysis XML file."""
     if not _DEPENDENCIES_AVAILABLE:
