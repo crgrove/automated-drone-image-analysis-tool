@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.skipif(platform.system() == "Linux", reason="Thermal E2E is Windows-only for now (algorithms.conf platforms)")
+@pytest.mark.sample_data
 def testTemperatureResidualAnomalyE2E(main_window, testData, qtbot, thermal_sdk_available):
     main_window.inputFolderLine.setText(testData['Thermal_Input'])
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
