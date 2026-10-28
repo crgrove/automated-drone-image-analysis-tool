@@ -155,9 +155,11 @@ def _check_thermal_sdk_available():
 
 
 @pytest.fixture
-def thermal_sdk_available():
-    """Fixture to check if thermal SDK is available."""
-    if not _check_thermal_sdk_available():
+def thermal_conversion_available():
+    """Skip unless this computer can convert DJI thermal images: with DJI's SDK where ThermalParserService uses it
+    (Windows, x86/x86-64 Linux), otherwise with the pure-Python converter, which needs no SDK."""
+    from core.services.thermal.ThermalParserService import ThermalParserService
+    if ThermalParserService._uses_dji_sdk() and not _check_thermal_sdk_available():
         pytest.skip("DJI thermal SDK DLL not available")
     return True
 

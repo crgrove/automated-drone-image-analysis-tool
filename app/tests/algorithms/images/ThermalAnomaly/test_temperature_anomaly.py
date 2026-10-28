@@ -1,14 +1,11 @@
-import platform
-
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog
 from unittest.mock import patch, MagicMock
 
 
-@pytest.mark.skipif(platform.system() == "Linux", reason="Thermal E2E is Windows-only for now (algorithms.conf platforms)")
 @pytest.mark.sample_data
-def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_sdk_available):
+def testTemperatureAnomalyE2E(main_window, testData, qtbot, thermal_conversion_available):
     main_window.inputFolderLine.setText(testData['Thermal_Input'])
     main_window.outputFolderLine.setText(testData['Thermal_Output'])
     assert main_window.algorithmWidget is not None

@@ -6,6 +6,7 @@ import piexif
 import hashlib
 import platform
 import re
+import shutil
 import struct
 import xml.etree.ElementTree as ET
 import sys
@@ -82,6 +83,9 @@ class MetaDataHelper:
         """
         Returns the absolute path to the ExifTool binary for the current platform.
 
+        On macOS the build bundles ExifTool; running from source without that
+        copy, an installed one on PATH (e.g. Homebrew's) is used instead.
+
         Returns:
             str: Path to ExifTool executable.
         """
@@ -96,7 +100,8 @@ class MetaDataHelper:
         if platform.system() == 'Windows':
             return path.abspath(path.join(app_root, 'external/exiftool.exe'))
         elif platform.system() == 'Darwin':
-            return path.abspath(path.join(app_root, 'external/exiftool'))
+            bundled = path.abspath(path.join(app_root, 'external/exiftool'))
+            return bundled if path.isfile(bundled) else shutil.which('exiftool') or bundled
 
     @staticmethod
     def _transfer_exif_piexif(origin_file, destination_file):

@@ -889,6 +889,9 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             position_format = self.settings_service.get_setting('PositionFormat')
             temperature_unit = self.settings_service.get_setting('TemperatureUnit')
             distance_unit = self.settings_service.get_setting('DistanceUnit')
+            # Replacing a viewer deletes it without a closeEvent; close it so it stops its threads.
+            if getattr(self, 'viewer', None) is not None:
+                self.viewer.close()
             self.viewer = Viewer(file, position_format, temperature_unit, distance_unit, False,
                                  self.settings_service.get_setting('Theme'))
             self.viewer.show()
@@ -1309,6 +1312,9 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
             distance_unit = self.settings_service.get_setting('DistanceUnit')
             theme = self.settings_service.get_setting('Theme')
 
+            # Replacing a viewer deletes it without a closeEvent; close it so it stops its threads.
+            if getattr(self, 'viewer', None) is not None:
+                self.viewer.close()
             self.viewer = Viewer(
                 xml_path,
                 position_format,
@@ -1829,10 +1835,15 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
 
     def closeEvent(self, event):
         """
-        Closes all top-level windows when the main window is closed.
+        Closes all top-level windows when the main window is closed, and
+        stops its terrain downloads.
         """
         for window in QApplication.topLevelWidgets():
             window.close()
+        # Qt aborts the process if it deletes a running thread along with this window.
+        from core.controllers.images.TerrainAcquisitionController import (
+            TerrainAcquisitionController)
+        TerrainAcquisitionController.stop_all(self)
 
     def _set_StartButton(self, enabled):
         """

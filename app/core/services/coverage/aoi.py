@@ -39,10 +39,16 @@ def image_gps(path):
     return None
 
 
-def compute_mission_gps_bounds(images):
-    """(min_lon, min_lat, max_lon, max_lat) over all image GPS, or None."""
+def compute_mission_gps_bounds(images, cancel_check=None):
+    """(min_lon, min_lat, max_lon, max_lat) over all image GPS, or None.
+
+    ``cancel_check``, if given, is asked before each image; once it returns
+    True the scan stops and None is returned.
+    """
     lons, lats = [], []
     for image in images:
+        if cancel_check and cancel_check():
+            return None
         gps = image_gps(_image_path(image))
         if gps is not None:
             lats.append(gps[0])
@@ -64,11 +70,13 @@ def _frame_geometry(path):
         return None
 
 
-def suggest_buffer_m(images, params=None, sample_limit=24):
+def suggest_buffer_m(images, params=None, sample_limit=24, cancel_check=None):
     """Suggest a buffer (meters) covering image footprints.
 
     Samples up to ``sample_limit`` images evenly across the mission, projects
     each footprint, and takes the largest reach (capped at ``max_range_m``).
+    ``cancel_check``, if given, is asked before each sampled image; once it
+    returns True sampling stops and the default buffer is returned.
     """
     params = params or PodParams()
     from core.services.coverage.kernel import project_footprint_corners
@@ -81,6 +89,8 @@ def suggest_buffer_m(images, params=None, sample_limit=24):
 
     reaches = []
     for path in sampled:
+        if cancel_check and cancel_check():
+            return _DEFAULT_BUFFER_M
         fg = _frame_geometry(path)
         if fg is None:
             continue
