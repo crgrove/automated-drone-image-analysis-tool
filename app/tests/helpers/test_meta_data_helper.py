@@ -313,6 +313,7 @@ def test_get_xmp_data_direct_delegates_to_parse_xmp_direct():
     exiftool.assert_not_called()  # subprocess-free wrapper
 
 
+@pytest.mark.sample_data
 def test_get_xmp_data_direct_matches_parse_on_real_image(example_image_path):
     """On a real testData image the public wrapper returns a dict identical to
     the private _parse_xmp_direct it wraps (no divergence between the two)."""

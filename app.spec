@@ -152,9 +152,14 @@ elif platform.system() == 'Darwin':
     a = Analysis(['app/__main__.py'],
                     pathex=['app'],
                     binaries=[
-                        ('LICENSE','.')
+                        ('LICENSE','.'),
+                        # ExifTool reads the thermal images' metadata. Before building, copy the
+                        # exiftool script and its lib folder from Image-ExifTool-*.tar.gz
+                        # (exiftool.org) into app/external; the script finds lib beside itself.
+                        ('app/external/exiftool', 'external')
                     ],
                     datas=[
+                        ('app/external/lib', 'external/lib'),
                         ('resources/icons/ADIAT.ico','.'),
                         ('app/algorithms.conf','.'),
                         ('app/drones.csv', '.'),

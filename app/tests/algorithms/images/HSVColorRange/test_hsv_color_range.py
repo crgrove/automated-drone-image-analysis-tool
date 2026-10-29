@@ -1,7 +1,9 @@
+import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 
 
+@pytest.mark.sample_data
 def testHSVColorRangeE2E(main_window, testData, qtbot):
     main_window.inputFolderLine.setText(testData['RGB_Input'])
     main_window.outputFolderLine.setText(testData['RGB_Output'])

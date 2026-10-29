@@ -1,7 +1,9 @@
 """Unit tests for StreamStatistics."""
 
 import pytest
+import sys
 import time
+from types import SimpleNamespace
 from core.controllers.streaming.components.StreamStatistics import StreamStatistics, PerformanceStats
 
 
@@ -98,23 +100,26 @@ class TestStreamStatistics:
         assert stats.get_stats().total_frames == 0
         assert stats.get_stats().dropped_frames == 0
 
-    def test_fps_calculation(self):
+    def test_fps_calculation(self, monkeypatch):
         """Test FPS calculation."""
+        # FPS comes from wall-clock frame intervals, so drive the module's clock
+        # rather than sleeping: a macOS CI runner overslept 33 ms sleeps ~4x and
+        # the sleep-based version of this test measured 8 FPS.
+        now = [1000.0]
+        monkeypatch.setattr(sys.modules[StreamStatistics.__module__], 'time', SimpleNamespace(time=lambda: now[0]))
         stats = StreamStatistics()
 
-        # Record frames at ~30 FPS (33.33ms per frame)
+        # Record frames at exactly 30 FPS (33.33ms per frame)
         # Note: FPS is calculated from frame intervals, not processing times
-        frame_interval = 1.0 / 30.0  # ~33.33ms between frames
+        frame_interval = 1.0 / 30.0
         for i in range(30):
+            now[0] += frame_interval
             stats.on_frame_received()
-            time.sleep(frame_interval)  # Wait actual frame time
             stats.on_frame_processed(33.33, 0)
 
         performance = stats.get_stats()
 
-        # FPS should be approximately 30 (allowing for some timing variance and overhead)
-        # Since we're sleeping for the exact interval, FPS might be slightly lower due to overhead
-        assert 20 <= performance.fps <= 35
+        assert performance.fps == pytest.approx(30.0)
 
     def test_processing_time_average(self):
         """Test processing time average calculation."""

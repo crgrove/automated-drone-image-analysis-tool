@@ -205,7 +205,7 @@ class TestPlanning:
 
     def test_imagery_bounds_are_derived_and_padded(self, monkeypatch):
         monkeypatch.setattr('core.services.coverage.aoi.compute_mission_gps_bounds',
-                            lambda images: BOUNDS)
+                            lambda images, *a, **k: BOUNDS)
         monkeypatch.setattr('core.services.coverage.aoi.suggest_buffer_m',
                             lambda images, *a, **k: 50.0)
         plan, reason = service().plan(images=[{'path': 'a.jpg'}])
@@ -219,7 +219,7 @@ class TestPlanning:
 
     def test_imagery_without_gps_is_a_quiet_skip(self, monkeypatch):
         monkeypatch.setattr('core.services.coverage.aoi.compute_mission_gps_bounds',
-                            lambda images: None)
+                            lambda images, *a, **k: None)
         plan, reason = service().plan(images=[{'path': 'a.jpg'}])
         assert plan is None
         assert reason == SKIP_NO_AREA

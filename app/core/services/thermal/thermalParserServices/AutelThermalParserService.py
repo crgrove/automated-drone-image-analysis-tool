@@ -140,6 +140,6 @@ class AutelThermalImageParser:
             app_root = sys._MEIPASS
         else:
             # Running from source code
-            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
         return os.path.join(app_root, 'external/autel/AutelBridge.dll')
