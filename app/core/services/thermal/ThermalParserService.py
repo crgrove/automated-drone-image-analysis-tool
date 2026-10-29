@@ -1,7 +1,11 @@
+import platform
+import sys
+
 import numpy as np
 from helpers.MetaDataHelper import MetaDataHelper
 
 from core.services.thermal.thermalParserServices.DjiThermalParserService import DjiThermalParserService
+from core.services.thermal.thermalParserServices.PythonDjiThermalParserService import PythonDjiThermalParserService, RjpegUnsupportedError
 from core.services.thermal.thermalParserServices.FlirThermalParserService import FlirThermalParserService
 from core.services.thermal.thermalParserServices.AutelThermalParserService import AutelThermalImageParser
 from core.services.LoggerService import LoggerService
@@ -47,6 +51,13 @@ class ThermalParserService:
         'MODELX'
     ]
 
+    # The processors DJI's Thermal SDK has Linux builds for, as platform.machine() reports them.
+    DJI_SDK_LINUX_MACHINES = [
+        'x86_64',
+        'i386',
+        'i686'
+    ]
+
     def __init__(self, dtype=np.float32):
         """
         Initialize the ThermalParserService.
@@ -57,6 +68,16 @@ class ThermalParserService:
         self.logger = LoggerService()
         self.logger = LoggerService()
         self.dtype = dtype
+
+    @staticmethod
+    def _uses_dji_sdk():
+        """
+        Whether DJI images go to DJI's Thermal SDK rather than the Python converter.
+
+        Returns:
+            bool: True on Windows, and on Linux on the x86 and x86-64 processors the SDK ships for.
+        """
+        return sys.platform == 'win32' or (sys.platform == 'linux' and platform.machine() in ThermalParserService.DJI_SDK_LINUX_MACHINES)
 
     def _get_model_and_platform(self, meta_fields):
         """
@@ -168,14 +189,18 @@ class ThermalParserService:
                 kwargs['m2ea_mode'] = True
 
             try:
-                parser = DjiThermalParserService(self.dtype)
+                # Windows and x86/x86-64 Linux use DJI's Thermal SDK; elsewhere DJI images convert in Python.
+                parser = DjiThermalParserService(self.dtype) if self._uses_dji_sdk() else PythonDjiThermalParserService(self.dtype)
                 temps = parser.temperatures(filepath_image=full_path, **kwargs)
                 img = parser.image(full_path, palette)
                 return temps, img
+            except RjpegUnsupportedError:
+                raise Exception(f"{camera_model} thermal images are not supported on this computer")
             except Exception:
                 raise Exception("Invalid image file")
 
         elif platform == 'AUTEL':
+            assert sys.platform == 'win32', "Autel thermal images can only be processed on Windows"
             kwargs = {
                 'image_height': int(meta_fields['ImageHeight']),
                 'image_width': int(meta_fields['ImageWidth'])

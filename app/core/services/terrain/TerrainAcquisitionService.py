@@ -93,6 +93,7 @@ SKIP_COVERED = "elevation data already covers this area"
 SKIP_ALREADY_TRIED = "already attempted for this area"
 SKIP_NO_NETWORK = "no connectivity"
 SKIP_UNSUPPORTED = "the selected elevation source needs no download"
+SKIP_CANCELLED = "cancelled while planning"
 
 
 # Areas attempted in this process, keyed by (provider id, rounded bounds).
@@ -494,7 +495,8 @@ class TerrainAcquisitionService:
     # ------------------------------------------------------------------
 
     def plan(self, images: Optional[Sequence[dict]] = None, bounds=None,
-             trigger: str = TRIGGER_ANALYSIS):
+             trigger: str = TRIGGER_ANALYSIS,
+             cancel_check: Optional[Callable] = None):
         """Decide what to acquire, or why not to.
 
         Args:
@@ -504,6 +506,8 @@ class TerrainAcquisitionService:
             bounds (tuple, optional): Explicit ``(min_lon, min_lat, max_lon,
                 max_lat)`` in WGS84.
             trigger (str): One of :data:`TRIGGERS`, for the log line.
+            cancel_check (callable, optional): Returns True to stop deriving
+                the area, between images.
 
         Returns:
             tuple[AcquisitionPlan | None, str | None]: The plan, or None
@@ -520,7 +524,12 @@ class TerrainAcquisitionService:
         if strategy is None:
             return None, SKIP_UNSUPPORTED
 
-        area = bounds if bounds is not None else self._bounds_for(images)
+        if bounds is not None:
+            area = bounds
+        else:
+            area = self._bounds_for(images, cancel_check)
+            if cancel_check and cancel_check():
+                return None, SKIP_CANCELLED
         if area is None:
             return None, SKIP_NO_AREA
 
@@ -546,7 +555,7 @@ class TerrainAcquisitionService:
             detail=strategy.label,
         ), None
 
-    def _bounds_for(self, images):
+    def _bounds_for(self, images, cancel_check=None):
         """Padded GPS bounding box of ``images``, or None without GPS.
 
         Reuses the helpers the manual download dialog fills its area from,
@@ -557,10 +566,10 @@ class TerrainAcquisitionService:
         try:
             from core.services.coverage.aoi import (
                 compute_mission_gps_bounds, suggest_buffer_m, pad_bounds)
-            raw = compute_mission_gps_bounds(images)
+            raw = compute_mission_gps_bounds(images, cancel_check=cancel_check)
             if raw is None:
                 return None
-            return pad_bounds(raw, suggest_buffer_m(images))
+            return pad_bounds(raw, suggest_buffer_m(images, cancel_check=cancel_check))
         except Exception as exc:  # noqa: BLE001 - degrade, never crash a caller
             self.logger.warning(f"TerrainAcquisition: could not derive bounds: {exc}")
             return None
@@ -627,6 +636,9 @@ class TerrainAcquisitionService:
             return AcquisitionOutcome(plan=plan, skipped_reason=str(exc))
 
         if outcome.cancelled:
+            # A cancel is not an attempt: leave the area to the next trigger.
+            with _attempted_lock:
+                _attempted.discard(_attempt_key(plan.provider_id, plan.bounds))
             self.logger.info("TerrainAcquisition: cancelled")
         elif outcome.acquired:
             self.logger.info(
@@ -642,14 +654,16 @@ class TerrainAcquisitionService:
             cancel_check: Optional[Callable] = None) -> AcquisitionOutcome:
         """Plan and acquire in one call. Never raises."""
         try:
-            plan, reason = self.plan(images=images, bounds=bounds, trigger=trigger)
+            plan, reason = self.plan(images=images, bounds=bounds, trigger=trigger,
+                                     cancel_check=cancel_check)
         except Exception as exc:  # noqa: BLE001
             self.logger.warning(f"TerrainAcquisition: planning failed: {exc}")
             return AcquisitionOutcome(trigger=trigger, skipped_reason=str(exc))
 
         if plan is None:
             self.logger.info(f"TerrainAcquisition[{trigger}]: skipped - {reason}")
-            return AcquisitionOutcome(trigger=trigger, skipped_reason=reason)
+            return AcquisitionOutcome(trigger=trigger, skipped_reason=reason,
+                                      cancelled=reason == SKIP_CANCELLED)
 
         outcome = self.acquire(plan, progress_callback=progress_callback,
                                cancel_check=cancel_check)

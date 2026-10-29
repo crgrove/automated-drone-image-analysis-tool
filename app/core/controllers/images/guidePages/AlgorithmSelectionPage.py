@@ -94,10 +94,6 @@ class AlgorithmSelectionPage(BasePage):
         self.dialog.buttonYes.setVisible(True)
         self.dialog.buttonNo.setVisible(True)
         self._reset_algorithm_buttons_style()
-        # On macOS, automatically skip the thermal image question after reset
-        if platform.system() == 'Darwin':
-            # Automatically answer "No" to thermal question (thermal images not supported on macOS)
-            self._on_algorithm_answer(False)
 
     def _reset_algorithm_buttons_style(self):
         """Reset both algorithm selection buttons to inactive state."""

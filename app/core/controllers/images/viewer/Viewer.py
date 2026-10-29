@@ -453,7 +453,7 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
         super().changeEvent(event)
 
     def closeEvent(self, event):
-        """Event triggered on window close; quits all thumbnail threads."""
+        """Event triggered on window close; quits all thumbnail threads and terrain downloads."""
         if hasattr(self, 'interaction_log'):
             self.interaction_log.end_session()
         for thread, loader in self._threads:
@@ -461,6 +461,10 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
                 thread.requestInterruption()  # Optional: politely request interruption
                 thread.quit()
                 thread.wait()  # Wait until the thread has terminated
+        # Qt aborts the process if it deletes a running thread along with this window.
+        from core.controllers.images.TerrainAcquisitionController import (
+            TerrainAcquisitionController)
+        TerrainAcquisitionController.stop_all(self)
 
         # Clean up magnifying glass controller
         if hasattr(self, 'magnifying_glass'):

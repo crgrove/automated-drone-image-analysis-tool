@@ -42,7 +42,7 @@ _REPORTABLE_SKIPS = ('exceeds', 'connectivity', 'offline')
 
 
 class _AcquisitionWorker(QThread):
-    """Downloads on its own thread; cancellable between tiles."""
+    """Downloads on its own thread; cancellable between images and tiles."""
 
     message = Signal(str)
 
@@ -142,6 +142,24 @@ class TerrainAcquisitionController(QObject):
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.wait(msecs)
+
+    @staticmethod
+    def stop_all(owner):
+        """Cancel every download started for ``owner`` and wait for each to end.
+
+        For the owner's close. Qt deletes a window's children with it, and
+        deleting a thread that is still running aborts the whole process, so
+        the wait has no time limit. It is short: planning and downloading
+        check for cancellation between images and between tiles.
+
+        Args:
+            owner (QObject): The window the controllers were parented to.
+        """
+        workers = owner.findChildren(_AcquisitionWorker)
+        for worker in workers:
+            worker.cancel()
+        for worker in workers:
+            worker.wait()
 
     @staticmethod
     def _images_in(input_folder):
