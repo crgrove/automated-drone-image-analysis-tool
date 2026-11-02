@@ -737,6 +737,21 @@ class CalTopoExportController(TranslationMixin):
             pass
         return False
 
+    def _use_terrain(self):
+        """Whether AOI positions and coverage use terrain elevation data."""
+        return getattr(self.parent, 'use_terrain_elevation', True)
+
+    def _identifier_color(self):
+        """RGB of the AOI circle drawn on report photos, as the PDF draws it."""
+        identifier_color = (255, 255, 0)
+        if hasattr(self.parent, 'settings') and isinstance(self.parent.settings, dict):
+            identifier_color = self.parent.settings.get('identifier_color', identifier_color)
+        return identifier_color
+
+    def _duplicate_sightings(self, images):
+        """Primary AOI number -> its other sightings, for marker descriptions."""
+        return AOIDuplicateService.sightings_by_primary(images)
+
     def _prepare_markers(self, images, flagged_aois, include_images=True, aoi_photo_mode='full'):
         """Prepare marker data from flagged AOIs.
 
@@ -757,7 +772,7 @@ class CalTopoExportController(TranslationMixin):
             # The mode decides what gets generated below; record it for diagnosis
             self.logger.info(f"CalTopo AOI photo mode: {aoi_photo_mode}")
 
-        duplicate_sightings = AOIDuplicateService.sightings_by_primary(images)
+        duplicate_sightings = self._duplicate_sightings(images)
 
         for img_idx, aoi_indices in flagged_aois.items():
             if img_idx >= len(images):
@@ -853,7 +868,7 @@ class CalTopoExportController(TranslationMixin):
                         custom_alt_ft = self.parent.custom_agl_altitude_ft
 
                     # Get terrain preference
-                    use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+                    use_terrain = self._use_terrain()
 
                     # Calculate AOI GPS coordinates using the convenience method;
                     # a Wingtra image's AGL stands in when no override is set,
@@ -911,6 +926,11 @@ class CalTopoExportController(TranslationMixin):
                 sightings_line = AOIDuplicateService.sightings_line(aoi, duplicate_sightings)
                 if sightings_line:
                     description += f"{sightings_line}\n"
+                # Only a combined multi-reviewer export sets this; it is never
+                # stored in a results XML
+                review_note = aoi.get('review_note', '')
+                if review_note:
+                    description += f"Review: {review_note}\n"
 
                 marker = {
                     'lat': aoi_lat,
@@ -977,7 +997,7 @@ class CalTopoExportController(TranslationMixin):
                 # KMLGeneratorService for why both planes are exported.
                 readings = image_service.get_altitude_readings(
                     'ft',
-                    use_terrain=getattr(self.parent, 'use_terrain_elevation', True),
+                    use_terrain=self._use_terrain(),
                     custom_altitude_ft=custom_alt, offline_only=False,
                     terrain_agl_ft=wingtra_agl_ft(image))
 
@@ -1037,7 +1057,7 @@ class CalTopoExportController(TranslationMixin):
                 return polygons
 
             # Create coverage extent service (honor the terrain-elevation preference)
-            use_terrain = getattr(self.parent, 'use_terrain_elevation', True)
+            use_terrain = self._use_terrain()
             coverage_service = CoverageExtentService(custom_altitude_ft=custom_alt, logger=self.logger, use_terrain=use_terrain)
 
             # Calculate coverage extents using only non-hidden images
@@ -1108,15 +1128,11 @@ class CalTopoExportController(TranslationMixin):
             else:
                 source_array = ImageService(source_path, image.get('mask_path', '')).img_array
 
-            # Same identifier color the PDF uses for the AOI circle
-            identifier_color = (255, 255, 0)
-            if hasattr(self.parent, 'settings') and isinstance(self.parent.settings, dict):
-                identifier_color = self.parent.settings.get('identifier_color', identifier_color)
-
             return {
                 'img_array_bgr': cv2.cvtColor(source_array, cv2.COLOR_RGB2BGR),
                 'bearing': bearing,
-                'identifier_color': identifier_color,
+                # Same identifier color the PDF uses for the AOI circle
+                'identifier_color': self._identifier_color(),
                 'cache_key': source_path,
             }
         except Exception as e:

@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CombinedExportDialog</class>
+ <widget class="QDialog" name="CombinedExportDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>460</width>
+    <height>340</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>440</width>
+    <height>0</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Export Combined Results</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="descriptionLabel">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Choose what to make from the scanned results. Every output covers the same AOIs, numbered as in the PDF report.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="pdfCheckBox">
+     <property name="text">
+      <string>PDF report</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="pdfOptionsWidget" native="true">
+     <layout class="QFormLayout" name="pdfOptionsLayout">
+      <property name="leftMargin">
+       <number>24</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="organizationLabel">
+        <property name="text">
+         <string>Organization:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="organizationLineEdit">
+        <property name="placeholderText">
+         <string>Enter organization name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="searchNameLabel">
+        <property name="text">
+         <string>Search Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="searchNameLineEdit">
+        <property name="placeholderText">
+         <string>Enter search name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="mapTilesLabel">
+        <property name="text">
+         <string>Map Tiles:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="mapTilesComboBox">
+        <property name="toolTip">
+         <string>Choose the background tiles for the PDF overview map.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="kmlCheckBox">
+     <property name="toolTip">
+      <string>One placemark per AOI, in a folder per result set, named as in the PDF report. Opens in Google Earth and imports into CalTopo or SARTopo.</string>
+     </property>
+     <property name="text">
+      <string>KML file of detections</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="caltopoCheckBox">
+     <property name="toolTip">
+      <string>Add a marker for every AOI to a CalTopo map. You will choose how to sign in and which map next.</string>
+     </property>
+     <property name="text">
+      <string>Add detections to CalTopo</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="caltopoOptionsWidget" native="true">
+     <layout class="QVBoxLayout" name="caltopoOptionsLayout">
+      <property name="leftMargin">
+       <number>24</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="caltopoPhotoCheckBox">
+        <property name="toolTip">
+         <string>Upload each AOI's photo from the PDF report (the full image with zoomed insets) to its marker. Turn off on a slow connection.</string>
+        </property>
+        <property name="text">
+         <string>Attach the report photo to each marker</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="scopeSeparator">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="includeImagesWithoutFlaggedAoisCheckBox">
+     <property name="toolTip">
+      <string>Applies to every output. When unchecked, only flagged AOIs (and AOIs a reviewer commented on) are exported. When checked, images with no flagged AOIs are also exported, with all of their AOIs.</string>
+     </property>
+     <property name="text">
+      <string>Include images without flagged AOIs</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>10</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>pdfCheckBox</tabstop>
+  <tabstop>organizationLineEdit</tabstop>
+  <tabstop>searchNameLineEdit</tabstop>
+  <tabstop>mapTilesComboBox</tabstop>
+  <tabstop>kmlCheckBox</tabstop>
+  <tabstop>caltopoCheckBox</tabstop>
+  <tabstop>caltopoPhotoCheckBox</tabstop>
+  <tabstop>includeImagesWithoutFlaggedAoisCheckBox</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>CombinedExportDialog</receiver>
+   <slot>accept()</slot>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>CombinedExportDialog</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

@@ -751,7 +751,7 @@ class TestIntegration:
 
 
 # ============================================================================
-# Test Export Combined PDF button
+# Test Export Combined Results button
 # ============================================================================
 
 class TestExportCombinedButton:
@@ -759,7 +759,7 @@ class TestExportCombinedButton:
 
     def test_button_absent_without_callback(self, app, sample_results, mock_callback):
         dialog = ResultsFolderDialog(None, sample_results, 'Dark', mock_callback)
-        assert dialog.export_pdf_button is None
+        assert dialog.export_combined_button is None
 
     def test_button_invokes_callback_with_results_and_stays_open(
             self, app, sample_results, mock_callback):
@@ -772,7 +772,7 @@ class TestExportCombinedButton:
         original_accept = dialog.accept
         dialog.accept = lambda: accepted.append(True) or original_accept()
 
-        dialog.export_pdf_button.click()
+        dialog.export_combined_button.click()
 
         export_callback.assert_called_once_with(sample_results)
         assert accepted == [], "the scan dialog stays open during the export"
@@ -781,4 +781,4 @@ class TestExportCombinedButton:
         dialog = ResultsFolderDialog(
             None, [], 'Dark', mock_callback,
             export_combined_callback=MagicMock())
-        assert not dialog.export_pdf_button.isEnabled()
+        assert not dialog.export_combined_button.isEnabled()

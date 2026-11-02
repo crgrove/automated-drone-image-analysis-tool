@@ -30,6 +30,7 @@ from core.services.image.WingtraDataService import (
     METERS_TO_FEET,
     WingtraCsvCandidate,
     WingtraImageData,
+    apply_geotag,
     compute_agl,
     find_wingtra_csvs,
     is_wingtra_image,
@@ -393,10 +394,7 @@ class WingtraDataController(TranslationMixin):
             if data is None:
                 continue
 
-            image['bearing'] = kappa_to_bearing(data.kappa)
-
-            if data.altitude_agl is not None:
-                image['wingtra_agl_ft'] = data.altitude_agl * METERS_TO_FEET
+            apply_geotag(image, data)
 
         # Also update gps_data entries (separate list used by GPS map)
         if hasattr(self.parent, 'gps_map_controller'):

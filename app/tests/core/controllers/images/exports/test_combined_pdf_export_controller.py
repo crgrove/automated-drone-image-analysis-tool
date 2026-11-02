@@ -72,27 +72,43 @@ def test_thread_cancel_emits_canceled(app):
 # Controller flow
 # ---------------------------------------------------------------------------
 
-def test_no_results_warns_and_returns_false(app):
+def test_generate_runs_the_build_behind_a_progress_dialog(app):
     controller = CombinedPdfExportController(None)
-    with patch(f"{_MODULE}.QMessageBox") as MockBox:
-        assert controller.export_combined_pdf([]) is False
-    MockBox.warning.assert_called_once()
+    options = MagicMock()
+    session = MagicMock()
+    with patch(f"{_MODULE}.ExportProgressDialog") as MockProgress, \
+            patch(f"{_MODULE}.CombinedPdfGenerationThread") as MockThread, \
+            patch(f"{_MODULE}.SettingsService"), \
+            patch(f"{_MODULE}.CombinedPdfReportService") as MockService:
+        MockProgress.return_value.exec.return_value = QDialog.Accepted
+        started = controller.generate_combined_pdf(
+            "/out.pdf", ["/a.xml"], options, recovery_session=session)
+
+    assert started is True
+    assert MockThread.call_args.args[1:] == ("/out.pdf", ["/a.xml"])
+    MockThread.return_value.start.assert_called_once()
+    MockThread.return_value.cancel.assert_not_called()
+    assert MockService.call_args.kwargs['recovery_session'] is session
 
 
-def test_dialog_rejection_aborts(app):
+def test_generate_cancel_stops_the_build(app):
     controller = CombinedPdfExportController(None)
-    with patch(f"{_MODULE}.PDFExportDialog") as MockDialog:
-        MockDialog.return_value.exec.return_value = QDialog.Rejected
-        assert controller.export_combined_pdf([_result("/a.xml")]) is False
+    with patch(f"{_MODULE}.ExportProgressDialog") as MockProgress, \
+            patch(f"{_MODULE}.CombinedPdfGenerationThread") as MockThread, \
+            patch(f"{_MODULE}.SettingsService"), \
+            patch(f"{_MODULE}.CombinedPdfReportService"):
+        MockProgress.return_value.exec.return_value = QDialog.Rejected
+        controller.generate_combined_pdf("/out.pdf", ["/a.xml"], MagicMock())
+
+    MockThread.return_value.cancel.assert_called_once()
 
 
-def test_save_cancel_aborts(app):
+def test_generate_reports_a_failure_to_start(app):
     controller = CombinedPdfExportController(None)
-    with patch(f"{_MODULE}.PDFExportDialog") as MockDialog, \
-            patch(f"{_MODULE}.QFileDialog") as MockFile:
-        MockDialog.return_value.exec.return_value = QDialog.Accepted
-        MockFile.getSaveFileName.return_value = ("", "")
-        assert controller.export_combined_pdf([_result("/a.xml")]) is False
+    with patch(f"{_MODULE}.SettingsService", side_effect=RuntimeError("no settings")), \
+            patch(f"{_MODULE}.QMessageBox") as MockBox:
+        assert controller.generate_combined_pdf("/out.pdf", ["/a.xml"], MagicMock()) is False
+    MockBox.critical.assert_called_once()
 
 
 def test_build_service_reads_preferences(app):

@@ -22,7 +22,7 @@ class KMLGeneratorService:
         self.custom_altitude_ft = custom_altitude_ft
         self.use_terrain = use_terrain
 
-    def add_aoi_placemark(self, name, lat, lon, description, color_rgb=None):
+    def add_aoi_placemark(self, name, lat, lon, description, color_rgb=None, folder=None):
         """
         Adds an AOI placemark to the KML document with optional color.
 
@@ -32,8 +32,11 @@ class KMLGeneratorService:
             lon (float): Longitude of the point.
             description (str): Description text for the placemark.
             color_rgb (tuple): Optional RGB color tuple (R, G, B) for the icon.
+            folder: Optional simplekml Folder (from ``self.kml.newfolder``) to
+                place the point in; the document root when None.
         """
-        pnt = self.kml.newpoint(name=name, coords=[(lon, lat)])
+        container = folder if folder is not None else self.kml
+        pnt = container.newpoint(name=name, coords=[(lon, lat)])
         pnt.description = description
 
         # Set icon color if provided using StyleMap for proper normal/highlight states

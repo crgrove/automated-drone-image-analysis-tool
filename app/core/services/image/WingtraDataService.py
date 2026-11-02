@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from PIL import Image
 
 from core.services.LoggerService import LoggerService
+from core.services.SettingsService import SettingsService
 from core.services.terrain.TerrainService import TerrainService
 
 METERS_TO_FEET = 3.28084
@@ -438,6 +439,104 @@ def compute_agl(image_data: Dict[str, WingtraImageData],
             computed += 1
 
     return computed
+
+
+def apply_geotag(image: dict, data: WingtraImageData):
+    """Write one geotags row into an image dict, in the fields every consumer
+    reads: ``bearing`` (rotation, footprints, AOI positions) and
+    ``wingtra_agl_ft`` (GSD and AOI positions, via :func:`resolve_altitude_ft`).
+    """
+    image['bearing'] = kappa_to_bearing(data.kappa)
+    if data.altitude_agl is not None:
+        image['wingtra_agl_ft'] = data.altitude_agl * METERS_TO_FEET
+
+
+def resolve_geotags_csv(link: Optional[dict], image_paths: Sequence[str],
+                        image_names: Sequence[str]) -> Optional[str]:
+    """The geotags CSV a results file should use, decided without asking.
+
+    The viewer's order (``WingtraDataController.auto_load_on_open``) minus its
+    prompts, for exports that never open a viewer: an operator's decline
+    stands; a CSV they loaded is used while it is still there; otherwise the
+    geotags CSV beside the images that names the most of them - the one the
+    viewer would offer first.
+
+    Args:
+        link: ``XmlService.get_wingtra_geotags()`` for the results, or None.
+        image_paths: Full paths of the result images.
+        image_names: Their filenames.
+
+    Returns:
+        The CSV path, or None when there is none to use.
+    """
+    if link is not None:
+        if link.get('status') == GEOTAGS_DECLINED:
+            return None
+        csv_path = link.get('csv_path', '')
+        if link.get('status') == GEOTAGS_LOADED and csv_path and os.path.isfile(csv_path):
+            return csv_path
+        # A linked CSV that has since moved falls through to a fresh search.
+    candidates = find_wingtra_csvs(image_paths, image_names)
+    return candidates[0].path if candidates else None
+
+
+def attach_geotags(images: Sequence[dict], link: Optional[dict],
+                   terrain_service=None, logger=None) -> Optional[str]:
+    """Apply a results file's Wingtra geotags to its image dicts, unprompted.
+
+    Wingtra imagery carries no altitude or heading of its own; the viewer
+    reads both from the geotags CSV when the results open. A collation of
+    several results files never opens a viewer, so without this its Wingtra
+    AOIs had no position but the camera's and its report had no GSD. Images
+    are matched by file name, so dicts renamed for display still match.
+
+    Args:
+        images: Result image dicts, updated in place.
+        link: ``XmlService.get_wingtra_geotags()`` for the results, or None.
+        terrain_service: For the AGL lookups; one is built when None. Pass
+            one per thread - its geoid transformer is PROJ state, and PROJ
+            contexts are thread-affine (see TelemetryEnrichmentService).
+        logger: Optional logger.
+
+    Returns:
+        The CSV applied, or None when there was none or it was unusable.
+    """
+    logger = logger or LoggerService()
+    image_paths = [image['path'] for image in images if image.get('path')]
+    if not image_paths:
+        return None
+    image_names = [os.path.basename(path) for path in image_paths]
+    csv_path = resolve_geotags_csv(link, image_paths, image_names)
+    if csv_path is None:
+        return None
+
+    parsed, errors = parse_wingtra_csv(csv_path)
+    if errors:
+        # The viewer refuses such a file so the operator can fix it; nobody
+        # sees this path, and a truncated last line must not cost the flight.
+        logger.warning(f"Wingtra geotags {csv_path}: rows skipped:\n{summarize_errors(errors)}")
+    if not parsed:
+        logger.warning(f"Wingtra geotags {csv_path} not applied: no usable rows")
+        return None
+    matched, _, _ = match_image_names(parsed, image_names)
+    if not matched:
+        return None
+
+    if terrain_service is None:
+        # Geoid kept on: the CSV altitude is ellipsoidal, and without the
+        # undulation the AGL is overstated - the one direction it must never
+        # err in. Built here so it lives on the calling thread.
+        terrain_service = TerrainService(settings_service=SettingsService())
+    computed = compute_agl(matched, terrain_service=terrain_service, logger=logger)
+
+    for image in images:
+        data = matched.get(os.path.basename(image.get('path', '')))
+        if data is not None:
+            apply_geotag(image, data)
+    logger.info(
+        f"Wingtra geotags {csv_path} applied: {len(matched)} images matched, "
+        f"{computed} AGL computed")
+    return csv_path
 
 
 def summarize_errors(errors: Sequence[str],

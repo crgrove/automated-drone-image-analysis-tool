@@ -921,6 +921,36 @@ def test_prepare_markers_lists_other_sightings(caltopo_controller, mock_viewer, 
     assert "Also seen in: IMG_0002.jpg (AOI #2)" in markers[0]['description']
 
 
+def test_prepare_markers_carries_the_review_note(caltopo_controller, mock_viewer, aoi_source_image):
+    """A merged multi-reviewer AOI's marker says who flagged or moved it."""
+    mock_viewer.messages = {}
+    mock_viewer.custom_agl_altitude_ft = None
+    images = [{'path': aoi_source_image, 'name': 'IMG_0001.jpg', 'hidden': False,
+               'areas_of_interest': [
+                   {'center': (400, 300), 'radius': 20,
+                    'review_note': 'Flagged by 2 of 3 reviewers (Alice, Bob).'},
+                   {'center': (100, 100), 'radius': 20}]}]
+
+    markers = _patched_prepare_markers(caltopo_controller, images, {0: {0, 1}}, include_images=False)
+
+    descriptions = {marker['title']: marker['description'] for marker in markers}
+    assert "Review: Flagged by 2 of 3 reviewers (Alice, Bob)." in descriptions['IMG_0001.jpg - AOI 1']
+    assert "Review:" not in descriptions['IMG_0001.jpg - AOI 2']
+
+
+def test_prepare_markers_reads_terrain_and_circle_color_from_the_viewer(
+        caltopo_controller, mock_viewer, aoi_source_image):
+    """A single-run export keeps taking these from the Viewer it came from."""
+    mock_viewer.use_terrain_elevation = False
+    mock_viewer.settings = {'identifier_color': (0, 0, 255)}
+
+    assert caltopo_controller._use_terrain() is False
+    assert caltopo_controller._identifier_color() == (0, 0, 255)
+
+    mock_viewer.settings = None
+    assert caltopo_controller._identifier_color() == (255, 255, 0)
+
+
 @pytest.mark.parametrize('override_ft, expected_ft', [(None, 318.0), (250.0, 250.0)])
 def test_prepare_markers_positions_a_wingtra_aoi_with_its_agl(
         caltopo_controller, mock_viewer, aoi_source_image, override_ft, expected_ft):
