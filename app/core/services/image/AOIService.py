@@ -99,11 +99,14 @@ class AOIService:
         if image_service is not None:
             self.image_service = image_service
         else:
+            # Pixels load on first use: most callers want an AOI's position,
+            # which needs metadata and the frame size, never a full decode.
             self.image_service = ImageService(
                 image['path'],
                 image.get('mask_path', ''),
                 img_array=img_array,
-                calculated_bearing=image.get('bearing')
+                calculated_bearing=image.get('bearing'),
+                defer_load=True
             )
 
     def _image_size(self):

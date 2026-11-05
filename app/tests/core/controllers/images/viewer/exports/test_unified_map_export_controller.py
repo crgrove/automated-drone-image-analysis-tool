@@ -948,3 +948,35 @@ def test_thread_flagged_aoi_description_lists_other_sightings():
     kml_service.add_aoi_placemark.assert_called_once()
     description = kml_service.add_aoi_placemark.call_args[0][3]
     assert "Also seen in: b.jpg (AOI #2)" in description
+
+
+def test_thread_flagged_aois_share_one_pixel_less_image_service():
+    """Placemarks need metadata only: each image is opened once, without its
+    pixels, and every AOI on it reuses that service. Built bare, AOIService
+    decoded the full frame again - twice per flagged AOI."""
+    kml_service = MagicMock()
+    images = [{"path": "a.jpg", "name": "a.jpg", "hidden": False,
+               "areas_of_interest": [{"flagged": True, "center": (5, 5), "area": 10},
+                                     {"flagged": True, "center": (9, 9), "area": 10}]}]
+    thread = UnifiedMapExportThread(
+        kml_service, MagicMock(), images, {0: {0, 1}},
+        include_locations=False,
+        include_images_without_flagged_aois=False,
+        include_flagged_aois=True,
+        include_coverage=False,
+        output_path="/out.kml",
+    )
+    module = "core.controllers.images.viewer.exports.UnifiedMapExportController"
+    with patch(f"{module}.ImageService") as mock_image_service, \
+            patch(f"{module}.LocationInfo.get_gps", return_value={"latitude": 1.0, "longitude": 2.0}), \
+            patch(f"{module}.AOIService") as mock_aoi_service:
+        mock_aoi_service.return_value.calculate_gps_with_custom_altitude.return_value = (1.0, 2.0)
+        mock_aoi_service.return_value.get_cached_or_representative_color.return_value = None
+        thread.run()
+
+    assert kml_service.add_aoi_placemark.call_count == 2
+    assert mock_image_service.call_count == 1
+    assert mock_image_service.call_args.kwargs.get('defer_load') is True
+    assert mock_aoi_service.call_args_list
+    assert all(c.kwargs.get('image_service') is mock_image_service.return_value
+               for c in mock_aoi_service.call_args_list)

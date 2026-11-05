@@ -457,6 +457,57 @@ def test_calculate_aoi_average_info_falls_back_to_live_color(controller):
 
 
 # ---------------------------------------------------------------------------
+# AOI location lookups: which AOIService answers
+# ---------------------------------------------------------------------------
+
+_LOCATION_LOOKUPS = {
+    'calculate_aoi_gps': lambda c, idx: c.calculate_aoi_gps(0, image_idx=idx),
+    'show_aoi_location': lambda c, idx: c.show_aoi_location(0, image_idx=idx),
+}
+
+
+def _location_result():
+    from types import SimpleNamespace
+    return SimpleNamespace(latitude=30.0, longitude=-97.0, elevation_source='flat',
+                           terrain_elevation_m=None, terrain_resolution_m=None)
+
+
+@pytest.mark.parametrize('lookup', _LOCATION_LOOKUPS.values(), ids=_LOCATION_LOOKUPS.keys())
+def test_location_of_an_on_screen_aoi_reuses_the_cached_service(controller, lookup):
+    """The image on screen is already decoded; building a fresh AOIService for
+    it decoded the frame a second time (~175 ms on the UI thread per click)."""
+    controller.parent.images = [{"path": "img.jpg", "areas_of_interest": [_aoi()]}]
+    controller.parent.custom_agl_altitude_ft = None
+    cached = MagicMock()
+    cached.calculate_gps_with_metadata.return_value = _location_result()
+
+    with patch.object(controller, '_get_aoi_service', return_value=cached), \
+            patch('core.controllers.images.viewer.aoi.AOIController.AOIService') as fresh:
+        lookup(controller, 0)
+
+    fresh.assert_not_called()
+    cached.calculate_gps_with_metadata.assert_called_once()
+
+
+@pytest.mark.parametrize('lookup', _LOCATION_LOOKUPS.values(), ids=_LOCATION_LOOKUPS.keys())
+def test_location_of_an_aoi_on_another_image_builds_its_own_service(controller, lookup):
+    """Gallery lookups for an image not on screen must not use the cached
+    service - it belongs to a different image."""
+    controller.parent.images = [{"path": "a.jpg", "areas_of_interest": [_aoi()]},
+                                {"path": "b.jpg", "areas_of_interest": [_aoi()]}]
+    controller.parent.custom_agl_altitude_ft = None
+
+    with patch.object(controller, '_get_aoi_service') as cached, \
+            patch('core.controllers.images.viewer.aoi.AOIController.AOIService') as fresh:
+        fresh.return_value.calculate_gps_with_metadata.return_value = _location_result()
+        lookup(controller, 1)
+
+    cached.assert_not_called()
+    fresh.assert_called_once_with(controller.parent.images[1])
+    fresh.return_value.calculate_gps_with_metadata.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # _invalidate_mask_cache
 # ---------------------------------------------------------------------------
 

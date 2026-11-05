@@ -169,9 +169,11 @@ class UnifiedMapExportThread(QThread):
                     image_path = image.get('path', '')
 
                     try:
-                        # Create ImageService to extract EXIF data
+                        # Metadata only, shared by this image's AOIs below:
+                        # placemarks never need the decoded pixels
                         calculated_bearing = image.get('bearing', None)
-                        image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=calculated_bearing)
+                        image_service = ImageService(image_path, image.get('mask_path', ''),
+                                                     calculated_bearing=calculated_bearing, defer_load=True)
 
                         # Get GPS from EXIF data
                         image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
@@ -209,8 +211,8 @@ class UnifiedMapExportThread(QThread):
                             gps_note = ""
 
                             # Try to calculate precise AOI GPS
+                            aoi_service = AOIService(image, image_service=image_service)
                             try:
-                                aoi_service = AOIService(image)
                                 result = aoi_service.calculate_gps_with_custom_altitude(
                                     image, aoi, self.custom_altitude_ft, self.use_terrain
                                 )
@@ -227,7 +229,6 @@ class UnifiedMapExportThread(QThread):
                             color_info = ""
                             marker_rgb = None
                             try:
-                                aoi_service = AOIService(image)
                                 color_result = aoi_service.get_cached_or_representative_color(aoi)
                                 if color_result:
                                     marker_rgb = color_result['rgb']

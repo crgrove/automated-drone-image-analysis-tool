@@ -754,6 +754,22 @@ def test_terrain_agl_equals_reported_on_flat_terrain():
     assert abs(res.effective_agl_m - 61.0) < 6.0
 
 
+def test_bare_aoi_service_opens_its_image_without_pixels(tmp_path):
+    """Built without an ImageService, AOIService must not decode the frame up front.
+
+    Most callers want an AOI's position - metadata and the frame size - and a
+    48 MP decode for that cost ~175 ms per call. The colour path still gets
+    pixels: they load on first use.
+    """
+    path = str(tmp_path / "frame.jpg")
+    cv2.imwrite(path, np.full((60, 80, 3), (0, 0, 255), dtype=np.uint8))
+    service = AOIService({'path': path, 'mask_path': ''})
+
+    assert service.image_service.pixels_loaded is False
+    assert service.get_aoi_representative_color({'center': (40, 30), 'radius': 5}) is not None
+    assert service.image_service.pixels_loaded is True
+
+
 def test_estimate_aoi_gps_with_deferred_service_never_decodes(sample_image_data, sample_aoi):
     """A metadata-only ImageService answers the image size from the header."""
     from unittest.mock import PropertyMock

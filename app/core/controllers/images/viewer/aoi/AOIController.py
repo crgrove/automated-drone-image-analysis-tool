@@ -1102,8 +1102,10 @@ class AOIController(TranslationMixin):
 
             aoi = image['areas_of_interest'][aoi_index]
 
-            # Use AOIService for GPS calculation
-            aoi_service = AOIService(image)
+            # The image on screen reuses the cached service built on the
+            # viewer's already-loaded ImageService; any other image gets its own
+            aoi_service = (self._get_aoi_service() if image_idx == self.parent.current_image else None) \
+                or AOIService(image)
 
             # Get custom altitude if available
             custom_alt_ft = None
@@ -1168,8 +1170,10 @@ class AOIController(TranslationMixin):
 
             aoi = image['areas_of_interest'][aoi_index]
 
-            # Use AOIService for GPS calculation
-            aoi_service = AOIService(image)
+            # The image on screen reuses the cached service built on the
+            # viewer's already-loaded ImageService; any other image gets its own
+            aoi_service = (self._get_aoi_service() if image_idx == self.parent.current_image else None) \
+                or AOIService(image)
 
             # Get custom altitude if available
             custom_alt_ft = None
