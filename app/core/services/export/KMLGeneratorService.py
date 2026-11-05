@@ -222,18 +222,15 @@ class KMLGeneratorService:
 
             # Get image GPS coordinates and metadata
             try:
-                # Create ImageService to extract EXIF data
-                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
+                # Metadata only: placemarks never need the decoded pixels
+                image_service = ImageService(image_path, image.get('mask_path', ''),
+                                             calculated_bearing=image.get('bearing'), defer_load=True)
 
                 # Get GPS from EXIF data as a dict (not formatted string)
                 image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
 
                 if not image_gps:
                     continue
-
-                # Get image dimensions and metadata
-                img_array = image_service.img_array
-                height, width = img_array.shape[:2]
 
             except Exception:
                 continue
@@ -270,7 +267,9 @@ class KMLGeneratorService:
 
                 # Try to calculate precise AOI GPS using AOIService
                 try:
-                    aoi_service = AOIService(image)
+                    # Reuse this image's service: built bare, AOIService
+                    # would decode the full frame again for every AOI.
+                    aoi_service = AOIService(image, image_service=image_service)
 
                     # The custom altitude set at initialization, else this
                     # image's Wingtra AGL - the same order the GPS map uses,
@@ -356,8 +355,9 @@ class KMLGeneratorService:
 
             # Get image GPS coordinates
             try:
-                # Create ImageService to extract EXIF data
-                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
+                # Metadata only: placemarks never need the decoded pixels
+                image_service = ImageService(image_path, image.get('mask_path', ''),
+                                             calculated_bearing=image.get('bearing'), defer_load=True)
 
                 # Get GPS from EXIF data
                 image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)

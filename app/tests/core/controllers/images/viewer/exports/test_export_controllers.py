@@ -921,6 +921,61 @@ def test_prepare_markers_lists_other_sightings(caltopo_controller, mock_viewer, 
     assert "Also seen in: IMG_0002.jpg (AOI #2)" in markers[0]['description']
 
 
+@pytest.mark.parametrize('aoi_photo_mode, decodes', [('thumbnail', False), ('full', True)])
+def test_prepare_markers_decodes_pixels_only_for_composites(
+        caltopo_controller, mock_viewer, aoi_source_image, aoi_photo_mode, decodes):
+    """Marker positions need metadata only; only the composite photo needs pixels.
+
+    The image is opened without pixels and each AOI reuses that one service,
+    so a frame is decoded at most once, and only when composites are wanted.
+    """
+    import numpy as np
+    from unittest.mock import PropertyMock
+    module = 'core.controllers.images.viewer.exports.CalTopoExportController'
+    mock_viewer.messages = {}
+    mock_viewer.custom_agl_altitude_ft = None
+    images = [{'path': aoi_source_image, 'name': 'IMG_0001.jpg', 'hidden': False,
+               'areas_of_interest': [{'center': (400, 300), 'radius': 20}]}]
+
+    with patch(f'{module}.MetaDataHelper.get_exif_data_piexif', return_value={}), \
+            patch(f'{module}.LocationInfo.get_gps', return_value={'latitude': 39.5, 'longitude': -105.2}), \
+            patch(f'{module}.ImageService') as mock_image_service, \
+            patch(f'{module}.AOIService') as mock_aoi_service:
+        image_service = mock_image_service.return_value
+        pixels = PropertyMock(return_value=np.zeros((600, 800, 3), dtype=np.uint8))
+        type(image_service).img_array = pixels
+        image_service.get_camera_yaw.return_value = 0
+        image_service.get_average_gsd.return_value = 1.0
+        mock_aoi_service.return_value.calculate_gps_with_custom_altitude.return_value = (39.5001, -105.2001)
+        mock_aoi_service.return_value.get_cached_or_representative_color.return_value = None
+
+        caltopo_controller._prepare_markers(
+            images, {0: {0}}, include_images=True, aoi_photo_mode=aoi_photo_mode)
+
+    assert mock_image_service.call_args.kwargs.get('defer_load') is True
+    assert mock_aoi_service.call_args.kwargs.get('image_service') is image_service
+    assert pixels.call_count == (1 if decodes else 0)
+
+    caltopo_controller._cleanup_aoi_thumbnails()
+
+
+def test_prepare_location_markers_open_images_without_pixels(caltopo_controller, mock_viewer):
+    """Image-location markers carry metadata only - never a full-frame decode."""
+    module = 'core.controllers.images.viewer.exports.CalTopoExportController'
+    mock_viewer.custom_agl_altitude_ft = None
+    images = [{'path': 'IMG_0001.jpg', 'name': 'IMG_0001.jpg', 'hidden': False}]
+
+    with patch(f'{module}.LocationInfo.get_gps', return_value={'latitude': 39.5, 'longitude': -105.2}), \
+            patch(f'{module}.ImageService') as mock_image_service:
+        mock_image_service.return_value.get_altitude_readings.return_value = MagicMock(has_value=False)
+        mock_image_service.return_value.get_camera_pitch.return_value = None
+        mock_image_service.return_value.get_camera_yaw.return_value = None
+        markers = caltopo_controller._prepare_location_markers(images, include_images=False)
+
+    assert len(markers) == 1
+    assert mock_image_service.call_args.kwargs.get('defer_load') is True
+
+
 @pytest.mark.parametrize('override_ft, expected_ft', [(None, 318.0), (250.0, 250.0)])
 def test_prepare_markers_positions_a_wingtra_aoi_with_its_agl(
         caltopo_controller, mock_viewer, aoi_source_image, override_ft, expected_ft):

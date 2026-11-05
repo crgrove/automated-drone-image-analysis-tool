@@ -105,8 +105,6 @@ def test_generate_kml_export_mock(kml_service, sample_images):
         # Mock ImageService
         mock_img_service = MagicMock()
         mock_img_service.exif_data = {}
-        mock_img_service.img_array = MagicMock()
-        mock_img_service.img_array.shape = (200, 200, 3)
         MockImageService.return_value = mock_img_service
 
         # Mock LocationInfo
@@ -135,6 +133,12 @@ def test_generate_kml_export_mock(kml_service, sample_images):
             if os.path.exists(kml_path):
                 os.remove(kml_path)
 
+        # Placemarks need metadata only: the image is opened without pixels,
+        # and each AOI reuses that one service instead of decoding the frame
+        # again per flagged AOI.
+        assert MockImageService.call_args.kwargs.get('defer_load') is True
+        assert MockAOIService.call_args.kwargs.get('image_service') is mock_img_service
+
 
 def test_generate_image_locations_kml(kml_service, sample_images):
     """Test generating KML with image locations."""
@@ -156,6 +160,8 @@ def test_generate_image_locations_kml(kml_service, sample_images):
         }
 
         kml_service.generate_image_locations_kml(sample_images)
+        # Image placemarks need metadata only - never a full-frame decode.
+        assert MockImageService.call_args.kwargs.get('defer_load') is True
 
         # Verify placemarks were added
         assert len(kml_service.kml.features) > 0
@@ -346,7 +352,6 @@ class TestKmlWingtraAltitude:
                 patch('core.services.export.KMLGeneratorService.AOIService') as MockAOIService:
             mock_img_service = MagicMock()
             mock_img_service.exif_data = {}
-            mock_img_service.img_array.shape = (200, 200, 3)
             MockImageService.return_value = mock_img_service
             MockLocationInfo.get_gps.return_value = {
                 'latitude': 37.7749, 'longitude': -122.4194}

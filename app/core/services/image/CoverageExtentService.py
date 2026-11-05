@@ -215,8 +215,9 @@ class CoverageExtentService:
             image_lat = gps_coords['latitude']
             image_lon = gps_coords['longitude']
 
-            # Load image service
-            image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=image.get('bearing'))
+            # Metadata only: a footprint needs the frame size, never its pixels
+            image_service = ImageService(image_path, image.get('mask_path', ''),
+                                         calculated_bearing=image.get('bearing'), defer_load=True)
 
             # Outward gimbal roll (e.g. WALDO ±22.5°) shifts the ground footprint
             # cross-track by h*tan(roll). >90° rolls are the DJI "inverted gimbal"
@@ -254,11 +255,7 @@ class CoverageExtentService:
                     return None
 
             # Get image dimensions (needed first: terrain GSD samples the center pixel)
-            img_array = image_service.img_array
-            if img_array is None:
-                return None
-
-            height, width = img_array.shape[:2]
+            width, height = image_service.get_image_size()
 
             # The operator override, else this frame's Wingtra AGL: Wingtra
             # imagery has no altitude of its own, so without it every Wingtra

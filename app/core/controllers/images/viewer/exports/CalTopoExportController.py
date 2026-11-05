@@ -776,7 +776,10 @@ class CalTopoExportController(TranslationMixin):
             try:
                 # Create ImageService to extract EXIF data
                 calculated_bearing = image.get('bearing', None)
-                image_service = ImageService(image_path, image.get('mask_path', ''), calculated_bearing=calculated_bearing)
+                # Metadata only: pixels are decoded later, and only if the
+                # composite photo asks for them
+                image_service = ImageService(image_path, image.get('mask_path', ''),
+                                             calculated_bearing=calculated_bearing, defer_load=True)
 
                 # Get GPS from EXIF data
                 exif_data = MetaDataHelper.get_exif_data_piexif(image_path)
@@ -784,10 +787,6 @@ class CalTopoExportController(TranslationMixin):
 
                 if not image_gps:
                     continue
-
-                # Get image dimensions for AOI GPS calculation
-                img_array = image_service.img_array
-                height, width = img_array.shape[:2]
 
                 # Get bearing
                 # Use get_drone_orientation() for nadir shots (gimbal check below ensures nadir)
@@ -820,11 +819,13 @@ class CalTopoExportController(TranslationMixin):
             except Exception:
                 continue
 
-            # Composites reuse this image's already-loaded pixels; build the
-            # shared per-image context once, not per AOI
+            # Composites are the one consumer of this image's pixels (the
+            # first img_array read decodes them); build the shared per-image
+            # context once, not per AOI
             composite_context = None
             if include_images and aoi_photo_mode in ('full', 'both'):
-                composite_context = self._build_composite_context(image, image_path, img_array, bearing)
+                composite_context = self._build_composite_context(
+                    image, image_path, image_service.img_array, bearing)
 
             # Get AOI data
             aois = image.get('areas_of_interest', [])
@@ -845,7 +846,9 @@ class CalTopoExportController(TranslationMixin):
 
                 # Try to calculate precise AOI GPS using AOIService
                 try:
-                    aoi_service = AOIService(image)
+                    # Reuse this image's service: built bare, AOIService
+                    # would decode the full frame again for every AOI.
+                    aoi_service = AOIService(image, image_service=image_service)
 
                     # Get custom altitude if viewer has one set
                     custom_alt_ft = None
@@ -961,7 +964,8 @@ class CalTopoExportController(TranslationMixin):
                 continue
 
             try:
-                image_service = ImageService(image_path, image.get('mask_path', ''))
+                # Metadata only: location markers never need the decoded pixels
+                image_service = ImageService(image_path, image.get('mask_path', ''), defer_load=True)
                 image_gps = LocationInfo.get_gps(exif_data=image_service.exif_data)
 
                 if not image_gps:

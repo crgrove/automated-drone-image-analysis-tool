@@ -99,9 +99,13 @@ class _FakeImageService:
         self.pitch_deg = pitch_deg
         self.waldo_version = waldo_version
         self.roll_axis_deg = roll_axis_deg
-        self.img_array = MagicMock(shape=(3000, 4000))
         self.compute_calls = []
         self.average_calls = []
+
+    def get_image_size(self):
+        # No img_array on purpose: a footprint needs the frame size, never its
+        # pixels, so any pixel read fails the test instead of passing silently.
+        return (4000, 3000)
 
     def get_camera_pitch(self):
         return self.pitch_deg
@@ -167,6 +171,23 @@ def _centroid_north_m(corners):
     lats = [lat for lat, _lon in corners]
     mean_dlat = sum(lats) / len(lats) - _LAT
     return mean_dlat * _EARTH_RADIUS * math.pi / 180.0
+
+
+def test_fov_corners_open_the_image_without_pixels():
+    """A footprint needs metadata and the frame size, never a full-frame decode."""
+    if not _SHAPELY_AVAILABLE:
+        pytest.skip(f"Shapely not available: {_SHAPELY_IMPORT_ERROR}")
+    image = {'path': 'fake.jpg', 'name': 'fake.jpg'}
+    with patch('core.services.image.CoverageExtentService.MetaDataHelper') as mdh, \
+            patch('core.services.image.CoverageExtentService.LocationInfo') as loc, \
+            patch('core.services.image.CoverageExtentService.ImageService',
+                  return_value=_FakeImageService()) as image_service_cls:
+        mdh.get_exif_data_piexif.return_value = {}
+        loc.get_gps.return_value = {'latitude': _LAT, 'longitude': _LON}
+        corners = CoverageExtentService(use_terrain=False).get_image_fov_corners(image)
+
+    assert corners is not None
+    assert image_service_cls.call_args.kwargs.get('defer_load') is True
 
 
 def test_fov_polygon_uses_terrain_gsd_and_agl():
