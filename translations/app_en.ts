@@ -10491,9 +10491,23 @@ Use this to see what colors are going to be detected and optimize the thresholds
 <context>
     <name>MatchedFilterRowWidget</name>
     <message>
-        <location filename="../app/algorithms/images/MatchedFilter/views/MatchedFilterRowWidget.py" line="116"/>
+        <location filename="../app/algorithms/images/MatchedFilter/views/MatchedFilterRowWidget.py" line="109"/>
+        <source>Target color for this row. Click to change it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/MatchedFilter/views/MatchedFilterRowWidget.py" line="117"/>
         <source>Threshold:</source>
         <translation>Threshold:</translation>
+    </message>
+    <message>
+        <location filename="../app/algorithms/images/MatchedFilter/views/MatchedFilterRowWidget.py" line="151"/>
+        <source>Minimum matched-filter score a pixel needs to be detected as this color.
+A score of 1.0 matches the target color; 0 looks like the image&apos;s average background.
+• Lower values (0.1-0.3): more lenient, more detections, more false positives
+• Higher values (0.7-1.0): stricter, fewer detections, only close matches
+Start around 0.3 and use View Range to tune it before processing.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

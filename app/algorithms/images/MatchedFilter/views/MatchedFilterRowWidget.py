@@ -106,6 +106,7 @@ class MatchedFilterRowWidget(TranslationMixin, QWidget):
 
         # Column 1: Color swatch (clickable to change color)
         self.colorSwatch = ClickableColorSwatch(self, self.color)
+        self.colorSwatch.setToolTip(self.tr("Target color for this row. Click to change it."))
         self.colorSwatch.colorChanged.connect(self.set_color)
         layout.addWidget(self.colorSwatch)
 
@@ -137,6 +138,18 @@ class MatchedFilterRowWidget(TranslationMixin, QWidget):
         self.thresholdValueLabel.setStyleSheet("font-weight: bold;")
         self._update_threshold_label()
         threshold_layout.addWidget(self.thresholdValueLabel)
+
+        # One explanation for the whole control, so hovering the label, the
+        # slider or the value all answer "what does this number do?".
+        threshold_tip = self.tr(
+            "Minimum matched-filter score a pixel needs to be detected as this color.\n"
+            "A score of 1.0 matches the target color; 0 looks like the image's average background.\n"
+            "• Lower values (0.1-0.3): more lenient, more detections, more false positives\n"
+            "• Higher values (0.7-1.0): stricter, fewer detections, only close matches\n"
+            "Start around 0.3 and use View Range to tune it before processing."
+        )
+        for widget in (threshold_label, self.thresholdSlider, self.thresholdValueLabel):
+            widget.setToolTip(threshold_tip)
 
         # Add threshold_layout with stretch factor so it expands
         layout.addLayout(threshold_layout, 1)  # Stretch factor to expand
