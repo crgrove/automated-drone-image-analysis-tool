@@ -139,11 +139,23 @@ class FrameGeometry:
 
     @staticmethod
     def _resolve_image_size(image_service) -> Optional[Tuple[int, int]]:
-        """(width_px, height_px) from the loaded array, else EXIF dimensions."""
-        arr = getattr(image_service, 'img_array', None)
-        if arr is not None:
-            h, w = arr.shape[:2]
-            return int(w), int(h)
+        """(width_px, height_px) from the loaded array, else the file header or EXIF.
+
+        Never reads ``img_array`` on a service whose pixels are not loaded:
+        the property decodes on first access, which cost the altitude anchor a
+        full-frame decode per sampled image just to learn a size.
+        """
+        if getattr(image_service, 'pixels_loaded', True):
+            arr = getattr(image_service, 'img_array', None)
+            if arr is not None:
+                h, w = arr.shape[:2]
+                return int(w), int(h)
+        else:
+            try:
+                w, h = image_service.get_image_size()
+                return int(w), int(h)
+            except Exception:
+                pass
         try:
             import piexif
             exif = image_service.exif_data.get("Exif", {})

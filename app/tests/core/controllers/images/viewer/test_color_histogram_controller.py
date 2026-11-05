@@ -4,19 +4,32 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
+import core.controllers.images.viewer.ColorHistogramController as controller_module
 from core.controllers.images.viewer.ColorHistogramController import (
     ColorHistogramController,
 )
 
 
-def test_color_histogram_controller_refreshes_context_when_aois_change():
-    """Same-image AOI updates should rebuild the histogram context."""
+def _controller(dialog_open=True):
+    """A controller on a mock viewer, optionally with its dialog showing.
+
+    The histogram is only built while the dialog is open, so tests of the
+    histogram's own behaviour run with a visible (mock) dialog.
+    """
     parent = MagicMock()
     parent.is_thermal = False
     parent.current_image = 0
     parent.image_load_controller = MagicMock()
-
     controller = ColorHistogramController(parent)
+    if dialog_open:
+        controller.dialog = MagicMock()
+        controller.dialog.isVisible.return_value = True
+    return controller
+
+
+def test_color_histogram_controller_refreshes_context_when_aois_change():
+    """Same-image AOI updates should rebuild the histogram context."""
+    controller = _controller()
     image_array = np.array(
         [
             [[255, 0, 0], [0, 255, 0]],
@@ -48,17 +61,40 @@ def _sample_image():
     )
 
 
-def test_range_change_debounces_viewer_refresh(qtbot):
-    """A burst of range changes (a drag) collapses into a single refresh."""
-    parent = MagicMock()
-    parent.is_thermal = False
-    parent.current_image = 0
-    parent.image_load_controller = MagicMock()
+def test_closed_dialog_skips_histogram_build():
+    """An image load with the dialog closed must not build the histogram.
 
-    controller = ColorHistogramController(parent)
+    The build is a full-frame HSV pass plus AOI rasterisation - over a second
+    per 48 MP frame - and nothing reads it until the dialog opens.
+    """
+    controller = _controller(dialog_open=False)
+    controller.service.build_histogram_context = MagicMock()
+
     controller.on_image_data_updated(_sample_image(), [])
 
-    refresh = parent.image_load_controller.refresh_image_preserving_view_from_cache
+    controller.service.build_histogram_context.assert_not_called()
+    assert controller.get_visibility_mask() is None
+    assert controller.get_hover_mask() is None
+
+
+def test_open_dialog_builds_histogram_on_demand(monkeypatch):
+    """Opening the dialog builds the histogram for the image already loaded."""
+    monkeypatch.setattr(controller_module, 'ColorHistogramDialog', MagicMock())
+    controller = _controller(dialog_open=False)
+    controller.on_image_data_updated(_sample_image(), [])
+
+    controller.open_dialog()
+
+    assert controller.has_histogram_data()
+    controller.dialog.set_histogram_context.assert_called_with(controller.current_context)
+
+
+def test_range_change_debounces_viewer_refresh(qtbot):
+    """A burst of range changes (a drag) collapses into a single refresh."""
+    controller = _controller()
+    controller.on_image_data_updated(_sample_image(), [])
+
+    refresh = controller.parent.image_load_controller.refresh_image_preserving_view_from_cache
     refresh.reset_mock()
 
     full_min, full_max = controller._full_range()
@@ -75,12 +111,7 @@ def test_range_change_debounces_viewer_refresh(qtbot):
 
 def test_visibility_mask_is_cached():
     """get_visibility_mask computes once per (image, range) and reuses it."""
-    parent = MagicMock()
-    parent.is_thermal = False
-    parent.current_image = 0
-    parent.image_load_controller = MagicMock()
-
-    controller = ColorHistogramController(parent)
+    controller = _controller()
     controller.on_image_data_updated(_sample_image(), [])
 
     full_min, full_max = controller._full_range()

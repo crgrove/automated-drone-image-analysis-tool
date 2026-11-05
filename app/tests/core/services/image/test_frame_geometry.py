@@ -67,6 +67,21 @@ def test_from_image_service_populates_all_fields():
     assert fg.asl_alt_m == pytest.approx(1500.0)
 
 
+def test_image_size_does_not_decode_unloaded_pixels(tmp_path):
+    """A service whose pixels are not loaded answers its size without a decode.
+
+    img_array is lazy, so reading it just to learn the size decoded every frame
+    the altitude anchor sampled - ~25 full-frame JPEG decodes, seconds of UI
+    stall, on the first image opened in each flight.
+    """
+    path = str(tmp_path / "frame.jpg")
+    cv2.imwrite(path, np.zeros((30, 40, 3), dtype=np.uint8))
+    svc = ImageService(path, xmp_data={}, defer_load=True)
+
+    assert FrameGeometry._resolve_image_size(svc) == (40, 30)
+    assert not svc.pixels_loaded
+
+
 def test_no_gps_returns_none():
     svc = _mock_image_service()
     with patch("core.services.image.FrameGeometry.LocationInfo.get_gps", return_value={}):

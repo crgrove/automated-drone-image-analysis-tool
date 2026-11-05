@@ -51,6 +51,10 @@ class ColorHistogramController(TranslationMixin):
         if self.parent.is_thermal:
             return
 
+        # Built on demand: image loads skip it while the dialog is closed.
+        if self.current_context is None and self.current_image_array is not None:
+            self._load_context(reset_range=True)
+
         if not self.has_histogram_data():
             QMessageBox.information(
                 self.parent,
@@ -85,12 +89,20 @@ class ColorHistogramController(TranslationMixin):
         self.current_image_array = image_array
         self.current_aois = areas_of_interest or []
 
-        self._load_context(
-            reset_range=image_changed or self.active_range is None
-        )
-
+        # The context is a full-frame HSV pass plus AOI rasterisation - over a
+        # second on a 48 MP frame, on the UI thread. Nothing reads it while the
+        # dialog is closed (the range is then the full span, so there is no
+        # visibility mask), so build it only for an open dialog; open_dialog
+        # builds it on demand.
         if self.dialog and self.dialog.isVisible():
+            self._load_context(
+                reset_range=image_changed or self.active_range is None
+            )
             self._sync_dialog_state()
+        else:
+            self.current_context = None
+            self.active_range = None
+            self.hovered_range = None
 
     def get_visibility_mask(self):
         """Return the active hue visibility mask."""
