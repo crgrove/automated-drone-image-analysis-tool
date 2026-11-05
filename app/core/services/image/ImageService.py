@@ -284,9 +284,7 @@ class ImageService:
         if not use_terrain:
             return None
         try:
-            if self.img_array is None:
-                return None
-            height, width = self.img_array.shape[:2]
+            width, height = self.get_image_size()
             agl_m = self.get_effective_agl_at_pixel(
                 width / 2.0, height / 2.0, use_terrain=True,
                 custom_altitude_ft=custom_altitude_ft,
@@ -678,10 +676,8 @@ class ImageService:
         try:
             if frame_size is not None:
                 width, height = frame_size
-            elif self.img_array is None:
-                return reported
             else:
-                height, width = self.img_array.shape[:2]
+                width, height = self.get_image_size()
             # The iteration projects with `base`, an ATO-altitude service, so
             # it cannot re-enter this method. Sampled where the camera is
             # pointed - the same value the altitude readout shows.
@@ -929,18 +925,15 @@ class ImageService:
             return cached
 
         try:
-            # Preserve the historical guard: this path requires the pixel array
-            # (per-pixel projection callers always have it loaded).
-            if self.img_array is None:
-                return None
-
             fg = self.get_frame_geometry(custom_altitude_ft=custom_altitude_ft)
             if fg is None:
                 return None
 
             drone_lat = fg.lat
             drone_lon = fg.lon
-            img_h, img_w = self.img_array.shape[:2]
+            # Size only: get_image_size answers from the header when pixels are
+            # not loaded, where reading img_array would decode the full frame.
+            img_w, img_h = self.get_image_size()
             reported_agl = fg.agl_m
             absolute_alt = fg.asl_alt_m
 

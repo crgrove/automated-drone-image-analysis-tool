@@ -1033,6 +1033,58 @@ def test_get_image_size_uses_loaded_pixels():
         os.unlink(tmp_path)
 
 
+# img_array is lazy, so a `self.img_array is None` guard can never be true -
+# it decodes the frame instead. These paths need only the frame's size, and
+# metadata-only callers (similarity grouping, neighbour tracking, coverage,
+# the shape algorithm's workers) must not pay a full-frame decode for it.
+
+def _deferred_service(tmp_path):
+    path = str(tmp_path / "frame.jpg")
+    cv2.imwrite(path, np.zeros((60, 80, 3), dtype=np.uint8))
+    return ImageService(path, xmp_data={}, defer_load=True)
+
+
+def test_terrain_agl_does_not_decode_unloaded_pixels(tmp_path):
+    service = _deferred_service(tmp_path)
+    service.get_effective_agl_at_pixel = MagicMock(return_value=42.0)
+
+    assert service.get_terrain_agl() == 42.0
+    assert service.get_effective_agl_at_pixel.call_args.args[:2] == (40.0, 30.0)
+    assert service.pixels_loaded is False
+
+
+def test_working_altitude_does_not_decode_unloaded_pixels(tmp_path):
+    service = _deferred_service(tmp_path)
+    service.get_relative_altitude = lambda unit='m': 46.0
+    service._build_gsd_service = MagicMock(return_value=MagicMock())
+    service._effective_agl_at_pixel = MagicMock(return_value=38.0)
+
+    assert service.get_working_altitude_m() == 38.0
+    assert service._effective_agl_at_pixel.call_args.args[:2] == (40, 30)
+    assert service.pixels_loaded is False
+
+
+def test_projection_context_does_not_decode_unloaded_pixels(tmp_path):
+    service = _deferred_service(tmp_path)
+    service.get_camera_intrinsics = lambda: {
+        'focal_length_mm': 8.8, 'sensor_width_mm': 13.2, 'sensor_height_mm': 8.8}
+    service.get_camera_yaw_with_source = lambda: (0.0, 'gimbal')
+    service.get_camera_pitch = lambda: -90.0
+    service.get_gimbal_roll = lambda: 0.0
+    service.get_relative_altitude = lambda unit='m': 46.0
+    service.get_asl_altitude = lambda unit: 358.1
+    terrain = MagicMock()
+    terrain.enabled = False
+
+    with patch("core.services.image.FrameGeometry.LocationInfo.get_gps",
+               return_value={'latitude': 30.6535, 'longitude': -97.9536}), \
+         patch("core.services.terrain.TerrainService", return_value=terrain):
+        ctx = service._get_projection_context()
+
+    assert (ctx['img_w'], ctx['img_h']) == (80, 60)
+    assert service.pixels_loaded is False
+
+
 def _bundled_drones_df():
     """The drones.csv that ships with the source tree, read the way PickleHelper
     reads it, so a test sees the bundled rows, not a stale AppData copy."""
