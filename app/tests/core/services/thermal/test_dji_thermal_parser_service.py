@@ -6,7 +6,6 @@ None of these call the SDK, so they run in CI on every OS.
 
 import ctypes
 import os
-import platform
 from unittest.mock import patch
 
 import pytest
@@ -25,9 +24,8 @@ def _libraries_loaded_on(system, architecture):
     return [call.args[0] for call in MockCdll.call_args_list]
 
 
-def test_measurement_params_struct_has_ambient_on_linux_only():
-    # The SDK's struct is five floats; Windows and macOS keep the original four (see the TODO on the struct).
-    assert ctypes.sizeof(dirp_measurement_params_t) == (20 if platform.system() == 'Linux' else 16)
+def test_measurement_params_struct_has_the_sdks_five_floats():
+    assert ctypes.sizeof(dirp_measurement_params_t) == 20
 
 
 @pytest.mark.parametrize('architecture, arch', [('64bit', 'x64'), ('32bit', 'x86')])

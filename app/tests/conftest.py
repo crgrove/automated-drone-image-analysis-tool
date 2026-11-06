@@ -127,19 +127,19 @@ def _check_thermal_sdk_available():
         if system == "Windows":
             if architecture == "32bit":
                 dll_path = os.path.join(folder_plugin,
-                                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libdirp.dll')
+                                        'dji_thermal_sdk_v1.9_20260526/windows/release_x86/libdirp.dll')
             elif architecture == "64bit":
                 dll_path = os.path.join(folder_plugin,
-                                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libdirp.dll')
+                                        'dji_thermal_sdk_v1.9_20260526/windows/release_x64/libdirp.dll')
             else:
                 return False
         elif system == "Linux":
             if architecture == "32bit":
                 dll_path = os.path.join(folder_plugin,
-                                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libdirp.so')
+                                        'dji_thermal_sdk_v1.9_20260526/linux/release_x86/libdirp.so')
             elif architecture == "64bit":
                 dll_path = os.path.join(folder_plugin,
-                                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libdirp.so')
+                                        'dji_thermal_sdk_v1.9_20260526/linux/release_x64/libdirp.so')
             else:
                 return False
         else:
