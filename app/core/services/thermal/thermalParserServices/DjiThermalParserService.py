@@ -35,17 +35,13 @@ class dirp_resolution_t(Structure):
 class dirp_measurement_params_t(Structure):
     """Structure representing temperature measurement parameters."""
 
-    # TODO/Investigate: The SDK's struct has a fifth float, ambient_temp. Windows works with the four below for reasons
-    # not yet understood; on Linux the SDK writes the fifth past their end, which crashes or hangs the process.
-    # See `tsdk-core/api/dirp_api.h` in the v1.9 SDK (the only one currently available for download)
     _fields_ = [
         ('distance', c_float),     # Distance to target (1-25 meters)
         ('humidity', c_float),     # Relative humidity of the environment (20-100%)
         ('emissivity', c_float),   # Surface emissivity (0.10-1.00)
         ('reflection', c_float),   # Reflected apparent temperature (-40.0 to 500.0°C)
+        ('ambient_temp', c_float),  # Ambient temperature in Celsius
     ]
-    if platform.system() == 'Linux':
-        _fields_ = _fields_ + [('ambient_temp', c_float)]   # Ambient temperature in Celsius
 
 
 class DjiThermalParserService:
