@@ -1264,7 +1264,7 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
                 theme,
                 self._open_viewer_from_path,
                 load_settings_callback=self._load_settings_from_path,
-                export_combined_callback=self._export_combined_pdf
+                export_combined_callback=self._export_combined
             )
             dialog.exec()
 
@@ -1334,26 +1334,27 @@ class MainWindow(TranslationMixin, QMainWindow, Ui_MainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def _export_combined_pdf(self, results):
+    def _export_combined(self, results):
         """
-        Collate the scanned results into one PDF report.
-        Called from ResultsFolderDialog's Export Combined PDF button.
+        Export the scanned results together: a combined PDF report, a KML of
+        the detections and/or the detections on a CalTopo map.
+        Called from ResultsFolderDialog's Export Combined Results button.
 
         Args:
             results: List of ResultsScanResult from the folder scan
         """
         try:
-            from core.controllers.images.exports.CombinedPdfExportController import (
-                CombinedPdfExportController,
+            from core.controllers.images.exports.CombinedExportController import (
+                CombinedExportController,
             )
-            controller = CombinedPdfExportController(self, self.logger)
-            controller.export_combined_pdf(
+            controller = CombinedExportController(self, self.logger)
+            controller.export(
                 results,
                 recovery_session=getattr(self, '_recovery_session', None))
         except Exception as e:
-            self.logger.error(f"Error starting combined PDF export: {e}")
+            self.logger.error(f"Error starting combined export: {e}")
             self._show_error(
-                self.tr("Failed to export combined PDF: {error}").format(error=str(e))
+                self.tr("Failed to export combined results: {error}").format(error=str(e))
             )
 
     def _load_settings_from_path(self, xml_path):

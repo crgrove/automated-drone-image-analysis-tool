@@ -33,6 +33,7 @@ from reportlab.platypus import Image, PageBreak, Paragraph, Spacer, Table, Table
 from core.services import AOIDuplicateService
 from core.services.export.PdfGeneratorService import PdfGeneratorService, PDFDocTemplate
 from core.services.export.ReviewMergeService import ReviewMergeService
+from core.services.image.WingtraDataService import attach_geotags
 from helpers.ColorUtils import ColorUtils
 from helpers.PathHelper import cross_platform_basename
 
@@ -167,6 +168,64 @@ class RunReportContext:
         )
 
 
+def load_run_contexts(xml_paths, position_format, distance_unit,
+                      include_images_without_flagged_aois=False,
+                      use_terrain_elevation=True, path_resolver=None, logger=None):
+    """Parse, group and merge every results XML into report contexts.
+
+    Copies of the SAME run (identical detection payload; several people
+    reviewed the same batch on different computers) are merged into one
+    context carrying combined flags, comments and corrected positions.
+    Unreadable files are skipped with a log. Shared by the combined PDF and
+    the combined KML/CalTopo exports so every output covers the same AOIs.
+
+    Args:
+        xml_paths: The ADIAT_Data.xml files to collate.
+        position_format: PositionFormat preference string.
+        distance_unit: 'ft' or 'm' (already normalized).
+        include_images_without_flagged_aois: The report scope flag.
+        use_terrain_elevation: UseTerrainElevation preference.
+        path_resolver: Optional callable(stored_path) -> located | None.
+        logger: Optional LoggerService for skipped runs.
+
+    Returns:
+        list: RunReportContext per run group, in scan order. Runs with no
+        exportable image are included (with empty images) so callers can
+        report them.
+    """
+    merge_service = ReviewMergeService(logger=logger)
+    records = merge_service.load_run_records(xml_paths)
+    contexts = []
+    for group in merge_service.group_records(records):
+        try:
+            merged = merge_service.merge_group(group)
+            context = RunReportContext.from_merged(
+                merged, position_format, distance_unit,
+                include_images_without_flagged_aois=include_images_without_flagged_aois,
+                use_terrain_elevation=use_terrain_elevation,
+                path_resolver=path_resolver,
+            )
+            # The heading and altitude a viewer would read from a Wingtra
+            # run's geotags CSV on open; after from_merged, so the search
+            # sees image paths the scan session has already resolved. A
+            # failure costs the run its geotags, not its place in the report.
+            try:
+                attach_geotags(context.images, merged.xml_service.get_wingtra_geotags(),
+                               logger=logger)
+            except Exception as e:
+                if logger is not None:
+                    logger.warning(
+                        f"Combined report: Wingtra geotags not applied to "
+                        f"{merged.xml_path}: {e}")
+            contexts.append(context)
+        except Exception as e:
+            if logger is not None:
+                logger.error(
+                    f"Combined report: skipping run group "
+                    f"({group[0].xml_path}): {e}")
+    return contexts
+
+
 class CombinedPdfReportService(PdfGeneratorService):
     """Collate several results XMLs into one PDF report."""
 
@@ -211,30 +270,14 @@ class CombinedPdfReportService(PdfGeneratorService):
         return session.resolve_file
 
     def load_contexts(self, xml_paths):
-        """Parse, group and merge every results XML into report contexts.
-
-        Copies of the SAME run (identical detection payload; several people
-        reviewed the same batch on different computers) are merged into one
-        context carrying combined flags, comments and corrected positions.
-        Unreadable files are skipped with a log.
-        """
-        merge_service = ReviewMergeService(logger=self.logger)
-        records = merge_service.load_run_records(xml_paths)
-        contexts = []
-        for group in merge_service.group_records(records):
-            try:
-                merged = merge_service.merge_group(group)
-                contexts.append(RunReportContext.from_merged(
-                    merged, self.position_format, self.distance_unit,
-                    include_images_without_flagged_aois=self.include_images_without_flagged_aois,
-                    use_terrain_elevation=self.use_terrain_elevation,
-                    path_resolver=self._path_resolver(),
-                ))
-            except Exception as e:
-                self.logger.error(
-                    f"Combined report: skipping run group "
-                    f"({group[0].xml_path}): {e}")
-        return contexts
+        """Report contexts for every run group; see load_run_contexts."""
+        return load_run_contexts(
+            xml_paths, self.position_format, self.distance_unit,
+            include_images_without_flagged_aois=self.include_images_without_flagged_aois,
+            use_terrain_elevation=self.use_terrain_elevation,
+            path_resolver=self._path_resolver(),
+            logger=self.logger,
+        )
 
     def generate_combined_report(self, output_path, xml_paths,
                                  progress_callback=None, cancel_check=None):

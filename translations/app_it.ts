@@ -2329,13 +2329,13 @@ Controlla:
     <name>CalTopoExportController</name>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="490"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1315"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1331"/>
         <source>Offline Mode Enabled</source>
         <translation>Modalità Offline Abilitata</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="497"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1322"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1338"/>
         <source>Offline Only is turned on in Preferences:
 
 • Map tiles will not be retrieved.
@@ -2351,13 +2351,13 @@ Disattiva Solo Offline per esportare su CalTopo.</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="503"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1328"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1344"/>
         <source>Nothing Selected</source>
         <translation>Nessuna Selezione</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="507"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1332"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1348"/>
         <source>Select at least one data type (flagged AOIs, drone/image locations, or coverage area) to export.</source>
         <translation>Seleziona almeno un tipo di dati (AOI contrassegnate, posizioni drone/immagini o area di copertura) da esportare.</translation>
     </message>
@@ -2473,7 +2473,7 @@ Open your map in the CalTopo window before clicking &apos;I&apos;m Logged In - E
 Apri la mappa nella finestra CalTopo prima di fare clic su &apos;Sono connesso - Esporta Dati&apos;.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1633"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1649"/>
         <source>Nothing could be exported to CalTopo.
 
 The reason was written to the log (adiat_logs.txt) and the console.</source>
@@ -2482,12 +2482,12 @@ The reason was written to the log (adiat_logs.txt) and the console.</source>
 Il motivo è stato scritto nel registro (adiat_logs.txt) e nella console.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1640"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1656"/>
         <source>Photos uploaded: {uploaded} of {total}.</source>
         <translation>Foto caricate: {uploaded} di {total}.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1649"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1665"/>
         <source>Successfully exported all {total} item(s) to CalTopo.
 
 The items should now be visible on your map.</source>
@@ -2496,7 +2496,7 @@ The items should now be visible on your map.</source>
 Gli elementi dovrebbero ora essere visibili sulla mappa.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1659"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1675"/>
         <source>Exported {created} of {total} item(s) to CalTopo.{photos}
 
 Details for anything that failed were written to the log (adiat_logs.txt) and the console.</source>
@@ -2505,30 +2505,30 @@ Details for anything that failed were written to the log (adiat_logs.txt) and th
 I dettagli di eventuali errori sono stati scritti nel registro (adiat_logs.txt) e nella console.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1645"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1661"/>
         <source>Export Successful</source>
         <translation>Esportazione Riuscita</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1654"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1670"/>
         <source>Partial Success</source>
         <translation>Successo Parziale</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1628"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1644"/>
         <source>Export Failed</source>
         <translation>Esportazione Fallita</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="721"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1395"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1590"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1411"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1606"/>
         <source>Export Error</source>
         <translation>Errore di Esportazione</translation>
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="724"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1593"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1609"/>
         <source>An error occurred during CalTopo export:
 
 {error}</source>
@@ -2537,7 +2537,7 @@ I dettagli di eventuali errori sono stati scritti nel registro (adiat_logs.txt) 
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1075"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1095"/>
         <source>Coverage area: {sqkm:.3f} km² ({acres:.2f} acres)
 Area in square meters: {sqm:.0f} m²
 Number of corners: {count}</source>
@@ -2546,12 +2546,12 @@ Area in metri quadrati: {sqm:.0f} m²
 Numero di angoli: {count}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1552"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1568"/>
         <source>Exporting to CalTopo</source>
         <translation>Esportazione su CalTopo</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1283"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1299"/>
         <source>Logged Out</source>
         <translation>Disconnesso</translation>
     </message>
@@ -2569,32 +2569,32 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1285"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1301"/>
         <source>Successfully logged out from CalTopo.</source>
         <translation>Disconnessione da CalTopo riuscita.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1443"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1459"/>
         <source>Loading CalTopo Maps</source>
         <translation>Caricamento Mappe CalTopo</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1446"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1462"/>
         <source>Connecting to CalTopo...</source>
         <translation>Connessione a CalTopo...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1447"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1463"/>
         <source>Fetching account data and maps...</source>
         <translation>Recupero dati account e mappe...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1503"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1519"/>
         <source>Connection Error</source>
         <translation>Errore di Connessione</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1505"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1521"/>
         <source>An error occurred while connecting to CalTopo API:
 
 {error}</source>
@@ -2604,7 +2604,7 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
     </message>
     <message>
         <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="698"/>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1508"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1524"/>
         <source>Authentication Failed</source>
         <translation>Autenticazione Fallita</translation>
     </message>
@@ -2614,7 +2614,7 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
         <translation>Nessun cookie di sessione CalTopo acquisito. Effettua l&apos;accesso e riprova.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1398"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1414"/>
         <source>An error occurred during CalTopo API export:
 
 {error}</source>
@@ -2623,7 +2623,7 @@ Please ensure your images have GPS coordinates and are near-nadir shots.</source
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1515"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1531"/>
         <source>CalTopo did not accept these credentials.
 
 The reason was written to the log (adiat_logs.txt) and the console.
@@ -2636,12 +2636,12 @@ Il motivo è stato scritto nel registro (adiat_logs.txt) e nella console.
 Vuoi reinserire ID team, ID credenziale e segreto credenziale?</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1555"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1571"/>
         <source>Exporting to CalTopo...</source>
         <translation>Esportazione su CalTopo...</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1556"/>
+        <location filename="../app/core/controllers/images/viewer/exports/CalTopoExportController.py" line="1572"/>
         <source>Preparing data and exporting...</source>
         <translation>Preparazione dati ed esportazione...</translation>
     </message>
@@ -4399,60 +4399,236 @@ Corrispondenza:</translation>
     </message>
 </context>
 <context>
-    <name>CombinedPdfExportController</name>
+    <name>CombinedExportController</name>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="94"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="119"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="145"/>
         <source>Nothing to Export</source>
         <translation type="unfinished">Nulla da Esportare</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="95"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="120"/>
         <source>The scan found no results files to collate.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="104"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="148"/>
+        <source>None of the scanned results have AOIs to export on this computer.
+
+Flag AOIs in the viewer, or check &apos;Include images without flagged AOIs&apos;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="170"/>
         <source>Save Combined PDF</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="106"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="172"/>
         <source>PDF files (*.pdf)</source>
         <translation type="unfinished">File PDF (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="114"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="180"/>
+        <source>Save Detections KML</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="182"/>
+        <source>KML files (*.kml);;KMZ files (*.kmz)</source>
+        <translation type="unfinished">File KML (*.kml);;File KMZ (*.kmz)</translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="193"/>
+        <source>Reading Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="194"/>
+        <source>Reading results files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="219"/>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="257"/>
+        <source>Export Failed</source>
+        <translation type="unfinished">Esportazione Fallita</translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="220"/>
+        <source>Failed to read the results files: {error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="227"/>
+        <source>Exporting Detections KML</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="228"/>
+        <source>Placing detections...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="258"/>
+        <source>Failed to export the detections KML: {error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="264"/>
+        <source>Exported {count} detection(s) to:
+{path}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="269"/>
+        <source>{count} AOI(s) were left out: neither they nor their image have a GPS position.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedExportController.py" line="270"/>
+        <source>Export Complete</source>
+        <translation type="unfinished">Esportazione Completata</translation>
+    </message>
+</context>
+<context>
+    <name>CombinedExportDialog</name>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/CombinedExportDialog.py" line="32"/>
+        <source>Map</source>
+        <translation type="unfinished">Mappa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/CombinedExportDialog.py" line="33"/>
+        <source>Satellite</source>
+        <translation type="unfinished">Satellite</translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/CombinedExportDialog.py" line="36"/>
+        <source>Export</source>
+        <translation type="unfinished">Esporta</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="20"/>
+        <source>Export Combined Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="32"/>
+        <source>Choose what to make from the scanned results. Every output covers the same AOIs, numbered as in the PDF report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="39"/>
+        <source>PDF report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="64"/>
+        <source>Organization:</source>
+        <translation type="unfinished">Organizzazione:</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="71"/>
+        <source>Enter organization name</source>
+        <translation type="unfinished">Inserisci nome organizzazione</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="78"/>
+        <source>Search Name:</source>
+        <translation type="unfinished">Nome Ricerca:</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="85"/>
+        <source>Enter search name</source>
+        <translation type="unfinished">Inserisci nome ricerca</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="92"/>
+        <source>Map Tiles:</source>
+        <translation type="unfinished">Tile mappa:</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="99"/>
+        <source>Choose the background tiles for the PDF overview map.</source>
+        <translation type="unfinished">Scegli le tile di sfondo per la mappa panoramica del PDF.</translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="109"/>
+        <source>One placemark per AOI, in a folder per result set, named as in the PDF report. Opens in Google Earth and imports into CalTopo or SARTopo.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="112"/>
+        <source>KML file of detections</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="119"/>
+        <source>Add a marker for every AOI to a CalTopo map. You will choose how to sign in and which map next.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="122"/>
+        <source>Add detections to CalTopo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="144"/>
+        <source>Upload each AOI&apos;s photo from the PDF report (the full image with zoomed insets) to its marker. Turn off on a slow connection.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="147"/>
+        <source>Attach the report photo to each marker</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="167"/>
+        <source>Applies to every output. When unchecked, only flagged AOIs (and AOIs a reviewer commented on) are exported. When checked, images with no flagged AOIs are also exported, with all of their AOIs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../resources/views/images/viewer/CombinedExportDialog.ui" line="170"/>
+        <source>Include images without flagged AOIs</source>
+        <translation type="unfinished">Includi immagini senza AOI contrassegnate</translation>
+    </message>
+</context>
+<context>
+    <name>CombinedPdfExportController</name>
+    <message>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="99"/>
         <source>Generating Combined PDF</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="116"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="101"/>
         <source>Preparing combined report...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="136"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="121"/>
         <source>Error</source>
         <translation type="unfinished">Errore</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="137"/>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="178"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="122"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="163"/>
         <source>Failed to generate combined PDF: {error}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="169"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="154"/>
         <source>Export Complete</source>
         <translation type="unfinished">Esportazione Completata</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="170"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="155"/>
         <source>The combined PDF report was created.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="177"/>
+        <location filename="../app/core/controllers/images/exports/CombinedPdfExportController.py" line="162"/>
         <source>Export Failed</source>
         <translation type="unfinished">Esportazione Fallita</translation>
     </message>
@@ -9204,12 +9380,12 @@ Risoluzioni più basse = elaborazione più veloce ma possono perdere oggetti pic
     </message>
     <message>
         <location filename="../app/core/controllers/images/MainWindow.py" line="1073"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1707"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1730"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1760"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1776"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1792"/>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1808"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1708"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1731"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1761"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1777"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1793"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1809"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>
@@ -9231,91 +9407,86 @@ Risoluzioni più basse = elaborazione più veloce ma possono perdere oggetti pic
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1356"/>
-        <source>Failed to export combined PDF: {error}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1374"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1375"/>
         <source>Failed to load settings: {error}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1403"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1404"/>
         <source>The selected file is not a valid XML file: {path}</source>
         <translation>Il file selezionato non è un file XML valido: {path}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1653"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1654"/>
         <source>Error Loading Results</source>
         <translation>Errore Caricamento Risultati</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1654"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1655"/>
         <source>Failed to load results file:
 {error}</source>
         <translation>Impossibile caricare il file dei risultati:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1708"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1709"/>
         <source>Failed to open Streaming Detector:
 {error}</source>
         <translation>Impossibile aprire il Rilevatore Streaming:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1731"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1732"/>
         <source>Failed to open Flight Viewer:
 {error}</source>
         <translation>Impossibile aprire il Visore voli:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1761"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1762"/>
         <source>Failed to open Search Coordinator:
 {error}</source>
         <translation>Impossibile aprire il Coordinatore di Ricerca:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1777"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1778"/>
         <source>Failed to open Help documentation:
 {error}</source>
         <translation>Impossibile aprire la documentazione di Aiuto:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1793"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1794"/>
         <source>Failed to open Community Help:
 {error}</source>
         <translation>Impossibile aprire l&apos;Aiuto della Community:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1809"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1810"/>
         <source>Failed to open YouTube Channel:
 {error}</source>
         <translation>Impossibile aprire il canale YouTube:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1889"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1890"/>
         <source> Open Search Coordinator</source>
         <translation> Apri Coordinatore di Ricerca</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1892"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1893"/>
         <source>Open the Search Coordinator to review every batch in this run.</source>
         <translation>Apri il Coordinatore di Ricerca per esaminare tutti i batch di questa esecuzione.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1898"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1899"/>
         <source>Open the Results Viewer to review detection results.</source>
         <translation>Apri il Visualizzatore Risultati per esaminare i risultati dei rilevamenti.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1984"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1985"/>
         <source>Invalid Value</source>
         <translation>Valore Non Valido</translation>
     </message>
@@ -9496,6 +9667,11 @@ AI PERSON DETECTOR: modello di deep learning per il rilevamento accurato di pers
         <location filename="../app/core/controllers/images/MainWindow.py" line="1332"/>
         <source>Failed to open viewer: {error}</source>
         <translation>Impossibile aprire il visualizzatore: {error}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1357"/>
+        <source>Failed to export combined results: {error}</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../resources/views/images/MainWindow.ui" line="468"/>
@@ -10013,7 +10189,7 @@ Il Visualizzatore Risultati offre:
 Usa per rivedere, verificare ed esportare i risultati dell&apos;analisi.</translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/MainWindow.py" line="1895"/>
+        <location filename="../app/core/controllers/images/MainWindow.py" line="1896"/>
         <location filename="../resources/views/images/MainWindow.ui" line="1018"/>
         <source> View Results</source>
         <translation> Visualizza Risultati</translation>
@@ -13177,142 +13353,147 @@ Valori più alti = unisce rilevamenti più distanti (può unire troppo).</transl
 <context>
     <name>ResultsFolderDialog</name>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="127"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="128"/>
         <source>Load Results Folder</source>
         <translation>Carica Cartella Risultati</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="136"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="137"/>
         <source>Found {count} result(s)</source>
         <translation>Trovati {count} risultati</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="144"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
         <source>Folder</source>
         <translation>Cartella</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="144"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
         <source>Algorithm</source>
         <translation>Algoritmo</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="144"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
         <source>Images</source>
         <translation>Immagini</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="146"/>
         <source>Missing</source>
         <translation>Mancanti</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="146"/>
         <source>AOIs</source>
         <translation>AOI</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="145"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="146"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="146"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="147"/>
         <source>Map</source>
         <translation>Mappa</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="147"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="148"/>
         <source>View</source>
         <translation>Visualizza</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="190"/>
-        <source>Export Combined PDF</source>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="191"/>
+        <source>Export Combined Results...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="198"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="194"/>
+        <source>Make a combined PDF report, a KML of the detections, and/or add the detections to CalTopo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="202"/>
         <source>Close</source>
         <translation>Chiudi</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="252"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="256"/>
         <source>Click to load this run&apos;s settings into the main window</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="274"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="278"/>
         <source>Open in Google Maps</source>
         <translation>Apri in Google Maps</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="284"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="288"/>
         <source>No images available - cannot get GPS location</source>
         <translation>Nessuna immagine disponibile - impossibile ottenere la posizione GPS</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="286"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="290"/>
         <source>No GPS coordinates found in images</source>
         <translation>Nessuna coordinata GPS trovata nelle immagini</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="306"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="310"/>
         <source>Open in Results Viewer</source>
         <translation>Apri nel Visualizzatore Risultati</translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="331"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="335"/>
         <source>No settings recorded for this run</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="334"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="338"/>
         <source>Algorithm: {value}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="337"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="341"/>
         <source>Thermal: Yes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="339"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="343"/>
         <source>Input folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="340"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="344"/>
         <source>Output folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="347"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="351"/>
         <source>Identifier color: {value}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="349"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="353"/>
         <source>Min area</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="350"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="354"/>
         <source>Max area</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="351"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="355"/>
         <source>AOI radius</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="359"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="363"/>
         <source>Options:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="362"/>
+        <location filename="../app/core/views/images/viewer/dialogs/ResultsFolderDialog.py" line="366"/>
         <source>  ... and {count} more</source>
         <translation type="unfinished"></translation>
     </message>
@@ -18187,47 +18368,47 @@ Installalo usando: pip install qimage2ndarray</translation>
 <context>
     <name>WingtraDataController</name>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="93"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="94"/>
         <source>Select Wingtra CSV File</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="96"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="97"/>
         <source>CSV files (*.csv);;All files (*.*)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="165"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="166"/>
         <source>Empty CSV</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="167"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="168"/>
         <source>The CSV file contains no valid data rows.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="225"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="226"/>
         <source>Wingtra data loaded: {matched} images matched, {agl} AGL computed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="229"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="230"/>
         <source>Wingtra data loaded: {matched} images matched</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="245"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="246"/>
         <source>Wingtra Geotags Found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="247"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="248"/>
         <source>You can also load geotags later with Shift+W.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="254"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="255"/>
         <source>Wingtra geotags found - Load?
 
 {file}
@@ -18237,12 +18418,12 @@ Installalo usando: pip install qimage2ndarray</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="262"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="263"/>
         <source>{file} ({matched} of {total} images match)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="271"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="272"/>
         <source>Wingtra geotags found - Load?
 
 More than one geotags file matches these results. Choose one, or Cancel to skip.
@@ -18251,12 +18432,12 @@ More than one geotags file matches these results. Choose one, or Cancel to skip.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="286"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="287"/>
         <source>Wingtra Imagery</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="293"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="294"/>
         <source>Load Wingtra GeoTag .csv file?
 
 These results are Wingtra imagery. Its geotags CSV supplies the camera orientation and altitude needed for accurate footprints, bearings and AGL.
@@ -18265,19 +18446,19 @@ You can also load it later with Shift+W.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="331"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="332"/>
         <source>CSV Parse Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="332"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="333"/>
         <source>Failed to parse Wingtra CSV:
 
 {errors}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="346"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="347"/>
         <source>No images in the CSV match the current results.
 
 CSV images: {csv_count}
@@ -18287,25 +18468,25 @@ Result images: {image_count}
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="349"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="350"/>
         <source>CSV examples: {names}
 </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="352"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="353"/>
         <source>Result examples: {names}
 </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="357"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="358"/>
         <source>
 Ensure image filenames in the CSV match exactly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="359"/>
+        <location filename="../app/core/controllers/images/viewer/WingtraDataController.py" line="360"/>
         <source>No Matching Images</source>
         <translation type="unfinished"></translation>
     </message>

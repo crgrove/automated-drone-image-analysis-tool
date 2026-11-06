@@ -1,20 +1,18 @@
 """
 CombinedPdfExportController - Exports a folder of results into one PDF.
 
-Launched from the results-folder scan dialog: the scan already found every
-ADIAT_Data.xml, so this controller collects the report options (reusing the
-single-run PDFExportDialog), runs CombinedPdfReportService on a worker
-thread, and shows the standard export progress dialog.
+Part of the results-folder scan's combined export (CombinedExportController
+collects the options and the save path): runs CombinedPdfReportService on a
+worker thread and shows the standard export progress dialog.
 """
 
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from core.services.LoggerService import LoggerService
 from core.services.SettingsService import SettingsService
 from core.services.export.CombinedPdfReportService import CombinedPdfReportService
 from core.views.images.viewer.dialogs.ExportProgressDialog import ExportProgressDialog
-from core.views.images.viewer.dialogs.PDFExportDialog import PDFExportDialog
 from helpers.TranslationMixin import TranslationMixin
 
 
@@ -72,42 +70,29 @@ class CombinedPdfExportController(TranslationMixin):
         self.logger = logger or LoggerService()
         self.pdf_thread = None
         self.progress_dialog = None
+        self._recovery_session = None
 
-    def export_combined_pdf(self, results, recovery_session=None):
-        """Collect options and build one PDF from the scanned results.
+    def generate_combined_pdf(self, output_path, xml_paths, options, recovery_session=None):
+        """Build one PDF from the scanned results, behind a progress dialog.
+
+        Returns once the build has finished, failed or been cancelled.
 
         Args:
-            results: List of ResultsScanResult from the folder scan.
+            output_path: Destination PDF path, already chosen by the user.
+            xml_paths: The ADIAT_Data.xml files to collate.
+            options: Report options exposing get_organization(),
+                get_search_name(), get_include_images_without_flagged_aois()
+                and get_map_tile_source() (CombinedExportDialog).
             recovery_session: Optional RecoverySession from the scan, so an
                 XML that travelled without its images (a reviewer's copy)
                 can find them under the scanned tree.
 
         Returns:
-            bool: True when the export was started, False when cancelled.
+            bool: True when the build was started, False when it failed to.
         """
         self._recovery_session = recovery_session
         try:
-            xml_paths = [r.xml_path for r in results if getattr(r, 'xml_path', None)]
-            if not xml_paths:
-                QMessageBox.warning(
-                    self.parent,
-                    self.tr("Nothing to Export"),
-                    self.tr("The scan found no results files to collate."))
-                return False
-
-            settings_dialog = PDFExportDialog(self.parent)
-            if settings_dialog.exec() != QDialog.Accepted:
-                return False
-
-            file_name, _ = QFileDialog.getSaveFileName(
-                self.parent,
-                self.tr("Save Combined PDF"),
-                "",
-                self.tr("PDF files (*.pdf)"))
-            if not file_name:
-                return False
-
-            service = self._build_service(settings_dialog)
+            service = self._build_service(options)
 
             self.progress_dialog = ExportProgressDialog(
                 self.parent,
@@ -115,7 +100,7 @@ class CombinedPdfExportController(TranslationMixin):
                 total_items=100)
             self.progress_dialog.set_title(self.tr("Preparing combined report..."))
 
-            self.pdf_thread = CombinedPdfGenerationThread(service, file_name, xml_paths)
+            self.pdf_thread = CombinedPdfGenerationThread(service, output_path, xml_paths)
             self.pdf_thread.success.connect(self._on_success)
             self.pdf_thread.errorOccurred.connect(self._on_error)
             self.pdf_thread.progressUpdated.connect(self._on_progress)
@@ -137,23 +122,23 @@ class CombinedPdfExportController(TranslationMixin):
                 self.tr("Failed to generate combined PDF: {error}").format(error=str(e)))
             return False
 
-    def _build_service(self, settings_dialog):
-        """Assemble the report service from dialog options + app preferences."""
+    def _build_service(self, options):
+        """Assemble the report service from the export options + app preferences."""
         settings_service = SettingsService()
         distance_setting = settings_service.get_setting('DistanceUnit', 'Feet')
         distance_unit = 'ft' if str(distance_setting).lower() in ('feet', 'ft') else 'm'
         return CombinedPdfReportService(
-            organization=settings_dialog.get_organization(),
-            search_name=settings_dialog.get_search_name(),
+            organization=options.get_organization(),
+            search_name=options.get_search_name(),
             include_images_without_flagged_aois=(
-                settings_dialog.get_include_images_without_flagged_aois()),
-            map_tile_source=settings_dialog.get_map_tile_source(),
+                options.get_include_images_without_flagged_aois()),
+            map_tile_source=options.get_map_tile_source(),
             position_format=settings_service.get_setting(
                 'PositionFormat', 'Lat/Long - Decimal Degrees'),
             distance_unit=distance_unit,
             use_terrain_elevation=settings_service.get_bool_setting(
                 'UseTerrainElevation', True),
-            recovery_session=getattr(self, '_recovery_session', None),
+            recovery_session=self._recovery_session,
         )
 
     def _on_progress(self, current, total, message):

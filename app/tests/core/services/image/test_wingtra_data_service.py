@@ -24,8 +24,12 @@ import piexif
 import pytest
 
 from core.services.image.WingtraDataService import (
+    GEOTAGS_DECLINED,
+    GEOTAGS_LOADED,
     METERS_TO_FEET,
     WingtraImageData,
+    apply_geotag,
+    attach_geotags,
     build_column_map,
     candidate_folders,
     compute_agl,
@@ -36,6 +40,7 @@ from core.services.image.WingtraDataService import (
     parse_wingtra_csv,
     read_csv_image_names,
     resolve_altitude_ft,
+    resolve_geotags_csv,
     summarize_errors,
     wingtra_agl_ft,
 )
@@ -488,3 +493,120 @@ def test_without_either_the_image_metadata_decides(image):
 def test_a_non_positive_override_is_no_override():
     """The altitude dialog stores -1 when the operator declines it."""
     assert resolve_altitude_ft({'wingtra_agl_ft': 318.0}, -1) == 318.0
+
+
+# ---------------------------------------------------------------------------
+# applying geotags without a viewer (combined exports)
+# ---------------------------------------------------------------------------
+
+def test_a_geotag_sets_bearing_and_agl_in_feet():
+    data = _parsed("A.JPG")["A.JPG"]
+    data.kappa = 90.0
+    data.altitude_agl = 100.0
+    image = {}
+
+    apply_geotag(image, data)
+
+    assert image['bearing'] == pytest.approx(270.0)
+    assert image['wingtra_agl_ft'] == pytest.approx(100.0 * METERS_TO_FEET)
+
+
+def test_a_geotag_without_agl_sets_only_the_bearing():
+    image = {}
+    apply_geotag(image, _parsed("A.JPG")["A.JPG"])
+    assert 'bearing' in image
+    assert 'wingtra_agl_ft' not in image
+
+
+def test_a_declined_link_stands(tmp_path):
+    _write(tmp_path, _row("A.JPG"))
+    link = {'csv_path': '', 'status': GEOTAGS_DECLINED}
+
+    assert resolve_geotags_csv(link, _images(tmp_path, "A.JPG"), ["A.JPG"]) is None
+
+
+def test_a_loaded_link_wins_over_the_search(tmp_path):
+    linked = _write(tmp_path, _row("A.JPG"), name="chosen.csv")
+    _write(tmp_path, _row("A.JPG"), _row("B.JPG"), name="more_matches.csv")
+    link = {'csv_path': linked, 'status': GEOTAGS_LOADED}
+
+    assert resolve_geotags_csv(link, _images(tmp_path, "A.JPG", "B.JPG"), ["A.JPG", "B.JPG"]) == linked
+
+
+def test_a_moved_linked_csv_falls_back_to_the_search(tmp_path):
+    found = _write(tmp_path, _row("A.JPG"))
+    link = {'csv_path': str(tmp_path / "moved.csv"), 'status': GEOTAGS_LOADED}
+
+    assert resolve_geotags_csv(link, _images(tmp_path, "A.JPG"), ["A.JPG"]) == found
+
+
+@pytest.mark.parametrize('link', [None, {'csv_path': '', 'status': ''}])
+def test_unlinked_results_use_the_best_csv_beside_them(tmp_path, link):
+    """Results never opened in a viewer have no link (every XML written before
+    the link existed, too); the CSV the viewer would offer first is used."""
+    _write(tmp_path, _row("A.JPG"), name="partial.csv")
+    best = _write(tmp_path, _row("A.JPG"), _row("B.JPG"), name="full.csv")
+
+    assert resolve_geotags_csv(link, _images(tmp_path, "A.JPG", "B.JPG"), ["A.JPG", "B.JPG"]) == best
+
+
+def test_attach_writes_bearing_and_agl_into_matching_images(tmp_path):
+    csv_path = _write(tmp_path, _row("A.JPG", alt=350.0, kappa=90.0))
+    # Display names may carry a run prefix; matching uses the file name
+    images = [{'path': str(tmp_path / "A.JPG"), 'name': "[2] A.JPG"},
+              {'path': str(tmp_path / "Z.JPG"), 'name': "[2] Z.JPG"}]
+
+    applied = attach_geotags(images, None, terrain_service=_Terrain(elevation_m=100.0))
+
+    assert applied == csv_path
+    assert images[0]['bearing'] == pytest.approx(270.0)
+    assert images[0]['wingtra_agl_ft'] == pytest.approx(250.0 * METERS_TO_FEET)
+    assert 'bearing' not in images[1]
+
+
+def test_attach_without_a_csv_changes_nothing(tmp_path):
+    images = [{'path': str(tmp_path / "A.JPG")}]
+    terrain = _Terrain()
+
+    assert attach_geotags(images, None, terrain_service=terrain) is None
+    assert images == [{'path': str(tmp_path / "A.JPG")}]
+    assert terrain.queries == []
+
+
+def test_attach_skips_a_csv_with_no_usable_rows(tmp_path):
+    bad = _write(tmp_path, "A.JPG,not-a-number,-97,350,0,0,45,0.02,0.03")
+    images = [{'path': str(tmp_path / "A.JPG")}]
+
+    assert attach_geotags(images, {'csv_path': bad, 'status': GEOTAGS_LOADED},
+                          terrain_service=_Terrain()) is None
+    assert 'bearing' not in images[0]
+
+
+def test_attach_keeps_the_good_rows_of_a_damaged_csv(tmp_path):
+    """Nobody is there to fix the file, so one bad row costs only its image."""
+    csv_path = _write(tmp_path, _row("A.JPG"), "B.JPG,not-a-number,-97,350,0,0,45,0.02,0.03")
+    images = [{'path': str(tmp_path / "A.JPG")}, {'path': str(tmp_path / "B.JPG")}]
+
+    assert attach_geotags(images, {'csv_path': csv_path, 'status': GEOTAGS_LOADED},
+                          terrain_service=_Terrain()) == csv_path
+    assert 'bearing' in images[0]
+    assert 'bearing' not in images[1]
+
+
+def test_attach_builds_its_own_terrain_service_with_the_geoid(tmp_path, monkeypatch):
+    """Built on the calling thread, not shared, and with the geoid on: the
+    CSV altitude is ellipsoidal."""
+    import core.services.image.WingtraDataService as module
+    built = []
+
+    def fake_terrain(**kwargs):
+        built.append(kwargs)
+        return _Terrain(elevation_m=100.0)
+
+    monkeypatch.setattr(module, 'TerrainService', fake_terrain)
+    monkeypatch.setattr(module, 'SettingsService', lambda: 'settings')
+    _write(tmp_path, _row("A.JPG"))
+
+    attach_geotags([{'path': str(tmp_path / "A.JPG")}], None)
+
+    assert built == [{'settings_service': 'settings'}]

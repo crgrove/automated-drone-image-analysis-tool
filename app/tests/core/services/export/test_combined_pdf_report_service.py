@@ -231,3 +231,84 @@ def test_context_collects_duplicate_sightings_before_filtering(tmp_path):
     assert [img['name'] for img in ctx.images] == ['primary.jpg']
     sightings = ctx.duplicate_sightings[1]
     assert [(s.image_name, s.number) for s in sightings] == [('dup.jpg', 2)]
+
+
+# ---------------------------------------------------------------------------
+# Wingtra geotags (load_run_contexts)
+# ---------------------------------------------------------------------------
+
+_GEOTAGS_HEADER = (
+    "# image name,latitude [decimal degrees],longitude [decimal degrees],"
+    "altitude [meter],omega [degrees],phi [degrees],kappa [degrees],"
+    "accuracy horizontal [meter],accuracy vertical [meter]"
+)
+
+
+class _FlatTerrain:
+    """Terrain stub: 100 m ground everywhere, no network (CLAUDE.md 3.3)."""
+
+    def __init__(self, **kwargs):
+        pass
+
+    def get_elevation(self, lat, lon):
+        from types import SimpleNamespace
+        return SimpleNamespace(elevation_m=100.0, geoid_undulation_m=None, source='terrain')
+
+
+def _wingtra_run(tmp_path, link_status=None):
+    """A one-image run with a geotags CSV beside its image.
+
+    Args:
+        link_status: None writes no <wingtra_geotags> block (every XML from
+            before the link existed); otherwise the block's status.
+    """
+    xml_path = _write_run(tmp_path, "Wingtra", [("W1.JPG", True, "False", ["True"])])
+    csv_path = tmp_path / "Wingtra" / "geotags.csv"
+    csv_path.write_text(
+        _GEOTAGS_HEADER + "\nW1.JPG,43.78,-110.72,350.0,0.5,1.2,90.0,0.02,0.03\n",
+        encoding="utf-8")
+    if link_status is not None:
+        with open(xml_path, encoding="utf-8") as handle:
+            xml = handle.read()
+        block = f'<wingtra_geotags csv_path="{csv_path}" status="{link_status}" />'
+        with open(xml_path, "w", encoding="utf-8") as handle:
+            handle.write(xml.replace("</data>", block + "</data>"))
+    return xml_path
+
+
+@pytest.mark.parametrize('link_status', [None, 'loaded'])
+def test_load_run_contexts_applies_wingtra_geotags(tmp_path, link_status):
+    """Without the geotags a Wingtra AOI has no position but the camera's."""
+    from core.services.export.CombinedPdfReportService import load_run_contexts
+    xml_path = _wingtra_run(tmp_path, link_status)
+
+    with patch("core.services.image.WingtraDataService.TerrainService", _FlatTerrain):
+        contexts = load_run_contexts([xml_path], 'Lat/Long - Decimal Degrees', 'ft')
+
+    image = contexts[0].images[0]
+    assert image['bearing'] == pytest.approx(270.0)
+    assert image['wingtra_agl_ft'] == pytest.approx(250.0 * 3.28084)
+
+
+def test_load_run_contexts_respects_a_declined_link(tmp_path):
+    from core.services.export.CombinedPdfReportService import load_run_contexts
+    xml_path = _wingtra_run(tmp_path, 'declined')
+
+    with patch("core.services.image.WingtraDataService.TerrainService", _FlatTerrain):
+        contexts = load_run_contexts([xml_path], 'Lat/Long - Decimal Degrees', 'ft')
+
+    assert 'wingtra_agl_ft' not in contexts[0].images[0]
+
+
+def test_a_geotags_failure_keeps_the_run(tmp_path):
+    from unittest.mock import MagicMock
+    from core.services.export.CombinedPdfReportService import load_run_contexts
+    xml_path = _wingtra_run(tmp_path)
+    logger = MagicMock()
+
+    with patch("core.services.export.CombinedPdfReportService.attach_geotags",
+               side_effect=RuntimeError("no DEM")):
+        contexts = load_run_contexts([xml_path], 'Lat/Long - Decimal Degrees', 'ft', logger=logger)
+
+    assert [ctx.run_name for ctx in contexts] == ["Wingtra"]
+    assert "no DEM" in logger.warning.call_args.args[0]

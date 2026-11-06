@@ -108,7 +108,8 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
             load_settings_callback: Function to call to load a run's settings
                 into the main window; the Settings column is disabled when None
             export_combined_callback: Function to call with the scan results to
-                build one collated PDF report; the button is hidden when None
+                export them together (PDF report, KML, CalTopo); the button
+                is hidden when None
         """
         super().__init__(parent)
         self.results = results
@@ -183,15 +184,18 @@ class ResultsFolderDialog(TranslationMixin, QDialog):
         # Button row
         button_layout = QHBoxLayout()
 
-        # Collate every scanned run into one PDF report. The dialog stays
-        # open (the export's own progress dialog sits on top).
-        self.export_pdf_button = None
+        # Export every scanned run together - PDF report, KML and/or CalTopo.
+        # The dialog stays open (the export's own dialogs sit on top).
+        self.export_combined_button = None
         if self.export_combined_callback is not None:
-            self.export_pdf_button = QPushButton(self.tr("Export Combined PDF"))
-            self.export_pdf_button.setEnabled(bool(self.results))
-            self.export_pdf_button.clicked.connect(
+            self.export_combined_button = QPushButton(self.tr("Export Combined Results..."))
+            self.export_combined_button.setToolTip(self.tr(
+                "Make a combined PDF report, a KML of the detections, "
+                "and/or add the detections to CalTopo"))
+            self.export_combined_button.setEnabled(bool(self.results))
+            self.export_combined_button.clicked.connect(
                 lambda: self.export_combined_callback(self.results))
-            button_layout.addWidget(self.export_pdf_button)
+            button_layout.addWidget(self.export_combined_button)
 
         button_layout.addStretch()
 
