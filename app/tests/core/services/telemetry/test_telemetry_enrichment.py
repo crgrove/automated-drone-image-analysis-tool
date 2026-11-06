@@ -130,7 +130,7 @@ class TestPreferences:
 
 
 class TestAnchoredCorrection:
-    """AGL measured against the terrain under the first fix."""
+    """AGL measured against the terrain under the first near-ground fix."""
 
     def test_flat_terrain_returns_the_reported_value(self, service):
         """Hovering over the takeoff point: correction is a no-op.
@@ -139,7 +139,7 @@ class TestAnchoredCorrection:
         ``MSL − terrain`` gave 0.0 m for an aircraft 14.9 m up.
         """
         lat, lon = 30.6487, -97.6759
-        service.enrich(envelope(lat, lon))          # sets the anchor
+        service.enrich(envelope(lat, lon, agl=0.0))  # on the pad: the anchor
         _seed_terrain(service, lat, lon, 215.0)     # DEM at the anchor
         out = service.enrich(envelope(lat, lon))
 
@@ -151,7 +151,7 @@ class TestAnchoredCorrection:
 
     def test_flying_over_lower_ground_increases_agl(self, service):
         """The whole point: terrain drop must add to height above ground."""
-        service.enrich(envelope(30.0, -97.0, agl=100.0))
+        service.enrich(envelope(30.0, -97.0, agl=0.0))     # on the pad
         _seed_terrain(service, 30.0, -97.0, 500.0)   # anchor terrain
         service.enrich(envelope(30.0, -97.0, agl=100.0))
 
@@ -166,7 +166,7 @@ class TestAnchoredCorrection:
         assert out["aircraft_altitude_agl_m"] == pytest.approx(100.0)
 
     def test_flying_over_higher_ground_decreases_agl(self, service):
-        service.enrich(envelope(30.0, -97.0, agl=100.0))
+        service.enrich(envelope(30.0, -97.0, agl=0.0))     # on the pad
         _seed_terrain(service, 30.0, -97.0, 500.0)
         service.enrich(envelope(30.0, -97.0, agl=100.0))
 
@@ -177,7 +177,7 @@ class TestAnchoredCorrection:
         assert out["aircraft_altitude_agl_m"] == pytest.approx(100.0)
 
     def test_climbing_is_tracked(self, service):
-        service.enrich(envelope(30.0, -97.0, agl=100.0))
+        service.enrich(envelope(30.0, -97.0, agl=0.0))     # on the pad
         _seed_terrain(service, 30.0, -97.0, 500.0)
         out = service.enrich(envelope(30.0, -97.0, agl=150.0))
         assert out[TERRAIN_AGL_KEY] == pytest.approx(150.0)
@@ -206,13 +206,36 @@ class TestAnchoredCorrection:
                         "aircraft_altitude_msl_m": 207.0})
         _seed_terrain(service, lat, lon, 500.0)
 
-        # AGL starts arriving from here on.
-        service.enrich(envelope(lat, lon, agl=100.0))
+        # ATO starts arriving from here on.
+        service.enrich(envelope(lat, lon, agl=0.0))
         out = service.enrich(envelope(lat, lon, agl=100.0))
 
-        assert service._anchor_reported_agl == pytest.approx(100.0)
+        assert service._anchor_reported_agl == pytest.approx(0.0)
         assert out["agl_source"] == AGL_SOURCE_TERRAIN
         assert out[TERRAIN_AGL_KEY] == pytest.approx(100.0)
+
+    def test_a_mid_flight_first_fix_is_not_an_anchor(self, service):
+        """A DJI clip almost always starts in the air.
+
+        Anchoring there assumed the ground under the first fix was the
+        launch point, so over flat ground "AGL" was the ATO reading under
+        another name - 100 ft high on a real clip that opened at 114 m ATO
+        over ground 30 m above the launch. No evidence of the takeoff
+        elevation means no AGL, not a borrowed ATO.
+        """
+        service.enrich(envelope(30.0, -97.0, agl=114.0))
+        _seed_terrain(service, 30.0, -97.0, 306.0)
+        out = service.enrich(envelope(30.0, -97.0, agl=114.0))
+
+        assert service._anchor_position is None
+        assert out.get(TERRAIN_AGL_KEY) is None
+        assert out["agl_source"] == AGL_SOURCE_REPORTED
+
+    def test_a_later_near_ground_fix_anchors(self, service):
+        """A clip that lands, or a feed joined on the pad, anchors there."""
+        service.enrich(envelope(30.1, -97.1, agl=114.0))
+        service.enrich(envelope(30.0, -97.0, agl=2.0))
+        assert service._anchor_position == (30.0, -97.0)
 
     def test_waits_for_the_anchor_elevation(self, service):
         """Until the anchor's terrain is known, AGL stays unresolved.
@@ -221,7 +244,7 @@ class TestAnchoredCorrection:
         gain from publishing the takeoff-relative figure as an AGL in the
         meantime - and no way for it to mislead.
         """
-        service.enrich(envelope(30.0, -97.0, agl=50.0))
+        service.enrich(envelope(30.0, -97.0, agl=0.0))
         # Terrain known here, but NOT at the anchor... which is the same
         # point, so seed a different current position instead.
         _seed_terrain(service, 30.5, -97.5, 400.0)
@@ -327,7 +350,7 @@ class TestResolution:
         emitted = []
         service.envelopeEnriched.connect(emitted.append)
 
-        service.enrich(envelope(30.0, -97.0, agl=50.0))
+        service.enrich(envelope(30.0, -97.0, agl=5.0))
         service._on_resolved(30.0, -97.0, 400.0)
 
         assert len(emitted) == 1
@@ -358,9 +381,31 @@ class TestResolution:
         assert len(service._cache) <= _CACHE_MAX_ENTRIES
 
 
+class TestNearbyTerrain:
+    """At survey speed the aircraft crosses a ~11 m cache cell twice a second.
+
+    Rendering AGL only from an exact cell hit blanked it on roughly half
+    the frames of a real 44 mph clip, so the HUD flickered between a value
+    and an em-dash. A miss beside a just-resolved sample uses that sample.
+    """
+
+    def test_an_uncached_cell_uses_the_last_resolved_terrain(self, service):
+        service.enrich(envelope(30.0, -97.0, agl=2.0))           # anchor
+        service._on_resolved(30.0, -97.0, 300.0)
+        # ~11 m north: a different cache cell, never looked up.
+        out = service.enrich(envelope(30.0001, -97.0, agl=50.0))
+        assert out[TERRAIN_AGL_KEY] == pytest.approx(50.0)
+
+    def test_a_distant_cell_does_not(self, service):
+        service.enrich(envelope(30.0, -97.0, agl=2.0))
+        service._on_resolved(30.0, -97.0, 300.0)
+        out = service.enrich(envelope(30.001, -97.0, agl=50.0))  # ~110 m
+        assert out.get(TERRAIN_AGL_KEY) is None
+
+
 class TestLifecycle:
     def test_reset_clears_the_anchor(self, service):
-        service.enrich(envelope(30.0, -97.0, agl=50.0))
+        service.enrich(envelope(30.0, -97.0, agl=5.0))
         assert service._anchor_position is not None
         service.reset()
         assert service._anchor_position is None
@@ -507,7 +552,8 @@ class TestPublisherSuppliedAgl:
 
     def test_takeoff_reference_agl_is_replaced_by_ours(self, service):
         env = dict(agl=100.0, agl_terrain=100.0, source="TAKEOFF_REFERENCE")
-        service.enrich(envelope(30.0, -97.0, **env))
+        service.enrich(envelope(30.0, -97.0, agl=0.0, agl_terrain=0.0,
+                                source="TAKEOFF_REFERENCE"))   # on the pad
         _seed_terrain(service, 30.0, -97.0, 500.0)
         service.enrich(envelope(30.0, -97.0, **env))
 
@@ -530,7 +576,7 @@ class TestPublisherSuppliedAgl:
         service's own last answer as authoritative would freeze the AGL at
         whatever the first corrected fix said.
         """
-        service.enrich(envelope(30.0, -97.0, agl=100.0))
+        service.enrich(envelope(30.0, -97.0, agl=0.0))     # on the pad
         _seed_terrain(service, 30.0, -97.0, 500.0)
         first = service.enrich(envelope(30.0, -97.0, agl=100.0))
         assert first["agl_source"] == AGL_SOURCE_TERRAIN
@@ -726,7 +772,7 @@ class TestPublisherSourceKey:
         desktop-DEM value as the publisher's.
         """
         env = dict(agl=100.0)
-        first = envelope(30.0, -97.0, **env)
+        first = envelope(30.0, -97.0, agl=0.0)                  # on the pad
         first[PUBLISHER_AGL_SOURCE_KEY] = "TAKEOFF_REFERENCE"
         service.enrich(first)
         _seed_terrain(service, 30.0, -97.0, 500.0)
@@ -805,7 +851,7 @@ class TestTakeoffCoordinateAnchor:
 
     def test_a_takeoff_anchor_supersedes_a_first_fix_anchor(self, service):
         """An old-build session upgraded mid-flight by a newer publisher."""
-        service.enrich(envelope(30.0, -97.0, agl=100.0))   # first-fix anchor
+        service.enrich(envelope(30.0, -97.0, agl=0.0))     # near-ground anchor
         assert service._anchor_position == (30.0, -97.0)
 
         service.enrich(self._with_takeoff())
@@ -845,17 +891,17 @@ class TestTakeoffCoordinateAnchor:
         assert service._anchor_reported_agl == 0.0
 
     def test_junk_coordinates_are_ignored(self, service):
-        env = envelope(30.0, -97.0, agl=100.0)
+        env = envelope(30.0, -97.0, agl=0.0)
         env["takeoff_latitude"] = "not-a-number"
         env["takeoff_longitude"] = None
         service.enrich(env)
-        # Falls back to the first-fix rule.
+        # Falls back to the near-ground rule.
         assert service._anchor_position == (30.0, -97.0)
-        assert service._anchor_reported_agl == pytest.approx(100.0)
+        assert service._anchor_reported_agl == pytest.approx(0.0)
 
     def test_absent_fields_keep_legacy_behaviour(self, service):
-        """Publishers that predate the fields anchor exactly as before."""
-        service.enrich(envelope(30.0, -97.0, agl=100.0))
+        """Publishers that predate the fields anchor on a near-ground fix."""
+        service.enrich(envelope(30.0, -97.0, agl=0.0))
         assert service._anchor_position == (30.0, -97.0)
         assert service._anchor_is_takeoff is False
 

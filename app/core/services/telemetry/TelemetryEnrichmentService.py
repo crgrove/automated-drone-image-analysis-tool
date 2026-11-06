@@ -37,11 +37,11 @@ of terrain, so the naive subtraction yields a *negative* AGL for an
 aircraft that was demonstrably 14.9 m up. Applying the correction that
 way would be worse than not correcting at all.
 
-Instead the aircraft is anchored to the terrain under its **first fix**,
+Instead the aircraft is anchored to the terrain at its **launch point**,
 which is datum-free because it only ever uses *relative* altitude and
 *differences* between DEM samples::
 
-    reference_ground = DEM(first fix)
+    reference_ground = DEM(launch point)
     aircraft_elevation(t) = reference_ground + ATO(t)
     AGL(t) = aircraft_elevation(t) − DEM(lat(t), lon(t))
 
@@ -75,7 +75,13 @@ produces one tile fetch rather than four per second.
    the launch point and under the aircraft and differences them - no
    geoid, no cross-app datum agreement, correct however late the viewer
    connected.
-3. The first-fix anchor below, for publishers that predate the fields.
+3. The first **near-ground** fix (ATO within
+   :data:`~core.services.image.AltitudeAnchorService.NEAR_GROUND_ATO_M`
+   of the takeoff plane - the image path's rule), for publishers that
+   predate the fields. A stream that never comes near the ground, such as
+   a DJI clip recorded entirely in the air, has no anchor and therefore no
+   AGL: the ground under its first fix is not the launch point, and
+   pretending it is turns the ATO reading into a false AGL.
 
 **ADIAT Flight's AGL wins.** When the publisher already sent a
 terrain-referenced AGL this service passes the envelope straight
@@ -100,6 +106,7 @@ from typing import Dict, Optional, Tuple
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from core.services.LoggerService import LoggerService
+from core.services.image.AltitudeAnchorService import NEAR_GROUND_ATO_M
 from core.services.telemetry.TelemetryTrack import haversine_meters
 
 # Cache key resolution: 1e-4 degrees is ~11 m at the equator, comfortably
@@ -401,11 +408,14 @@ class TelemetryEnrichmentService(QObject):
         self._last_query_time: float = 0.0
         self._inflight: Optional[Tuple[float, float]] = None
         self._last_envelope: Optional[dict] = None
+        # Most recent resolved DEM sample as (lat, lon, elevation). Terrain,
+        # not session state, so reset() keeps it like the cache.
+        self._last_terrain: Optional[Tuple[float, float, float]] = None
 
         # Datum-free anchor. Best case: the publisher's takeoff
         # coordinates, where ATO is zero by definition - the anchor is the
         # true launch point however late this viewer connected. Fallback:
-        # the first fix we see (that position's terrain + its ATO reading).
+        # the first near-ground fix (its terrain + its ATO reading).
         # Every later AGL is measured against the anchor, so the
         # ellipsoidal-vs-MSL question never enters the arithmetic.
         self._anchor_position: Optional[Tuple[float, float]] = None
@@ -460,13 +470,16 @@ class TelemetryEnrichmentService(QObject):
         self._adopt_takeoff_anchor(enriched)
 
         # Fallback anchor: the first fix that carries BOTH a position and
-        # an ATO reading. Anchoring on position alone would latch
-        # ``_anchor_reported_agl = None`` when the publisher's first
-        # envelope omits altitude (every telemetry field is individually
-        # nullable), and the anchored path would then be disabled for the
-        # rest of the session.
+        # a near-ground ATO reading - the image path's rule, for the same
+        # reason. Anchoring treats the ground under the fix as the launch
+        # point, which holds only on the pad; a DJI clip that opens 114 m
+        # up made "AGL" the ATO reading plus a terrain difference against
+        # wherever recording happened to start. Anchoring on position
+        # alone would also latch ``_anchor_reported_agl = None`` when the
+        # first envelope omits altitude (every field is nullable).
         ato = enriched.get("aircraft_altitude_agl_m")
-        if self._anchor_position is None and _is_coord(ato):
+        if (self._anchor_position is None and _is_coord(ato)
+                and float(ato) <= NEAR_GROUND_ATO_M):
             self._anchor_position = (float(lat), float(lon))
             self._anchor_reported_agl = float(ato)
 
@@ -482,8 +495,13 @@ class TelemetryEnrichmentService(QObject):
         key = _cache_key(lat, lon)
         if key in self._cache:
             self._apply_elevation(enriched, self._cache[key])
-        elif not self._request_anchor_terrain():
-            self._maybe_request(float(lat), float(lon))
+        else:
+            # A fresh cell at survey speed is the common case, not the
+            # exception; until its own lookup lands, the last resolved
+            # sample stands in when it is as near as _on_resolved accepts.
+            self._apply_elevation(enriched, self._nearby_terrain(lat, lon))
+            if not self._request_anchor_terrain():
+                self._maybe_request(float(lat), float(lon))
 
         self._last_envelope = enriched
         return enriched
@@ -655,7 +673,10 @@ class TelemetryEnrichmentService(QObject):
         while len(self._geoid_cache) > _CACHE_MAX_ENTRIES:
             self._geoid_cache.popitem(last=False)
 
-        if value is None or not isinstance(self._last_envelope, dict):
+        if value is None:
+            return
+        self._last_terrain = (lat, lon, value)
+        if not isinstance(self._last_envelope, dict):
             return
 
         # The publisher started supplying its own AGL while this lookup
@@ -677,6 +698,19 @@ class TelemetryEnrichmentService(QObject):
         if self._apply_elevation(corrected, value):
             self._last_envelope = corrected
             self.envelopeEnriched.emit(corrected)
+
+    def _nearby_terrain(self, lat, lon) -> Optional[float]:
+        """The last resolved DEM sample, if it lies close enough to reuse.
+
+        Same tolerance :meth:`_on_resolved` applies before re-emitting a
+        result for a position the aircraft has since moved on from.
+        """
+        if self._last_terrain is None:
+            return None
+        t_lat, t_lon, elevation = self._last_terrain
+        if haversine_meters(t_lat, t_lon, float(lat), float(lon)) > self._min_move * 2:
+            return None
+        return elevation
 
     def _apply_elevation(self, envelope: dict, elevation) -> bool:
         """Write terrain-derived AGL into ``envelope``. True if changed.
@@ -714,7 +748,7 @@ class TelemetryEnrichmentService(QObject):
         return True
 
     def _anchored_agl(self, envelope: dict, terrain_here: float) -> Optional[float]:
-        """Preferred path: measure against the first fix's terrain.
+        """Preferred path: measure against the launch-point anchor.
 
         Uses only the ATO reading and a *difference* of DEM samples, so
         it is immune to whether the aircraft reports ellipsoidal or
@@ -736,7 +770,7 @@ class TelemetryEnrichmentService(QObject):
                 return None
             self._anchor_elevation = float(cached)
 
-        # Aircraft's true elevation, anchored at the first fix.
+        # Aircraft's true elevation, anchored at the launch point.
         aircraft_elevation = self._anchor_elevation + float(self._anchor_reported_agl)
         # ...advanced by however much the aircraft has climbed since then.
         aircraft_elevation += float(reported) - float(self._anchor_reported_agl)
