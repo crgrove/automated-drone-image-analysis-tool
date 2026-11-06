@@ -297,17 +297,17 @@ class DjiThermalParserService:
         if system == "Windows":
             if architecture == "32bit":
                 return [os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libdirp.dll',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_dirp.dll',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x86/libv_iirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x86/libdirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x86/libv_dirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x86/libv_iirp.dll',
                         'exiftool.exe',
                         ]
                         ]
             elif architecture == "64bit":
                 return [os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libdirp.dll',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_dirp.dll',
-                        'dji_thermal_sdk_v1.7_20241205/windows/release_x64/libv_iirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x64/libdirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x64/libv_dirp.dll',
+                        'dji_thermal_sdk_v1.9_20260526/windows/release_x64/libv_iirp.dll',
                         'exiftool.exe',
                         ]
                         ]
@@ -315,18 +315,18 @@ class DjiThermalParserService:
             if architecture == "32bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x86/libv_iirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x86/libdirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x86/libv_dirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x86/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]
             elif architecture == "64bit":
                 return [
                     *[os.path.join(folder_plugin, v) for v in [
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libdirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_dirp.so',
-                        'dji_thermal_sdk_v1.7_20241205/linux/release_x64/libv_iirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x64/libdirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x64/libv_dirp.so',
+                        'dji_thermal_sdk_v1.9_20260526/linux/release_x64/libv_iirp.so',
                     ]],
                     'exiftool'
                 ]

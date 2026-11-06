@@ -122,7 +122,7 @@ if platform.system() == 'Windows':
                 binaries=[
                     ('LICENSE','.'),
                     ('app/external/exiftool.exe','external'),
-                    ('app/external/dji_thermal_sdk_v1.7_20241205','external/dji_thermal_sdk_v1.7_20241205'),
+                    ('app/external/dji_thermal_sdk_v1.9_20260526','external/dji_thermal_sdk_v1.9_20260526'),
                     ('app/external/autel', 'external/autel')
                 ],
                 datas=[
