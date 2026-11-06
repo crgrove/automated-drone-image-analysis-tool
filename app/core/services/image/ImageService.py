@@ -119,9 +119,19 @@ class ImageService:
 
     def _load_img_array(self):
         """Read and decode the image from disk as an RGB array."""
-        img = cv2.imdecode(np.fromfile(self.path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        return ImageService.load_rgb_array(self.path)
+
+    @staticmethod
+    def load_rgb_array(path):
+        """Read and decode an image as an RGB array: pixels only, no metadata read.
+
+        The same decode as img_array, for callers that need the pixels in the
+        coordinate space AOIs were recorded in without paying for an EXIF/XMP
+        read (the XMP read launches ExifTool).
+        """
+        img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         if img is None:
-            raise ValueError(f"Could not load image: {self.path}")
+            raise ValueError(f"Could not load image: {path}")
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     @property

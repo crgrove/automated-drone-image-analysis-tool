@@ -12,10 +12,15 @@ import platform
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QApplication, QDialog
 from PySide6.QtCore import QThread, Signal
+from core.services.export.AOIThumbnailService import AOIThumbnailService
 from core.services.export.ZipBundleService import ZipBundleService
 from core.services.LoggerService import LoggerService
 from core.services.XmlService import XmlService
-from core.services.image.ImageService import ImageService
+from core.services.image.ImageService import (
+    ImageService,
+    DEFAULT_AOI_CIRCLE_THICKNESS,
+    get_aoi_circle_thickness,
+)
 from core.services.image.ImageHighlightService import ImageHighlightService
 from helpers.MetaDataHelper import MetaDataHelper
 
@@ -48,10 +53,18 @@ class ZipExportThread(QThread):
         try:
             # Export step-by-step to update progress
             if self.export_mode == 'results_only':
-                # Just the XML + detection masks: the emailable transfer.
+                # The XML + detection masks, plus AOI close-ups instead of the
+                # full images: the emailable transfer.
                 self.progressUpdated.emit(0, total, "Collecting results files...")
                 self.controller._export_results_only(staging_root)
-                current = total
+                for img in self.images:
+                    if self._cancel:
+                        self.canceled.emit()
+                        return
+                    self.controller._export_aoi_thumbnails(img, staging_root)
+                    current += 1
+                    self.progressUpdated.emit(
+                        current, total, f"Cropping AOIs from {os.path.basename(img.get('path', ''))}")
             elif self.export_mode == 'native':
                 # Native export: copy images preserving structure; update XML
                 self.controller._export_native_prepare(self.images, staging_root)
@@ -109,6 +122,9 @@ class ZipExportController(TranslationMixin):
         """
         self.parent = parent_widget
         self.logger = logger or LoggerService()
+        # Snapshot of the AOI circle thickness preference, taken on the GUI
+        # thread in export_zip so the render thread never touches QSettings.
+        self._aoi_circle_thickness = DEFAULT_AOI_CIRCLE_THICKNESS
 
     def export_zip(self, images):
         """
@@ -142,8 +158,8 @@ class ZipExportController(TranslationMixin):
 
             if export_mode == 'results_only':
                 # The complete results file travels regardless of visibility
-                # or flags; no per-image staging happens.
-                visible_images = []
+                # or flags, and so does a close-up of every AOI in it.
+                visible_images = list(images)
             else:
                 # Filter visible images and track original indices
                 visible_images = []
@@ -181,6 +197,9 @@ class ZipExportController(TranslationMixin):
                 total_items=total_items
             )
             self.progress_dialog.set_title("Preparing ZIP export...")
+
+            self._aoi_circle_thickness = get_aoi_circle_thickness(
+                getattr(self.parent, 'settings_service', None))
 
             # Create worker thread
             self.zip_thread = ZipExportThread(self, visible_images, export_mode, file_name)
@@ -466,9 +485,13 @@ class ZipExportController(TranslationMixin):
         try:
             calculated_bearing = img.get('bearing', None)
             image_service = ImageService(src_path, img.get('mask_path', ''), calculated_bearing=calculated_bearing)
+            # Before any overlay is drawn, so the close-ups show the clean pixels.
+            self._export_aoi_thumbnails(img, staging_root, image_service.img_array)
             augmented = image_service.img_array
             if show_aois:
-                augmented = image_service.circle_areas_of_interest(identifier_color, img.get('areas_of_interest', []))
+                augmented = image_service.circle_areas_of_interest(
+                    identifier_color, img.get('areas_of_interest', []),
+                    thickness=self._aoi_circle_thickness)
             if show_pois:
                 if img.get('mask_path'):
                     augmented = ImageHighlightService.apply_mask_highlight(
@@ -498,6 +521,41 @@ class ZipExportController(TranslationMixin):
 
         except Exception as e:
             self.logger.error(f"Failed to render augmented image for {src_path}: {e}")
+
+    def _export_aoi_thumbnails(self, img, staging_root, img_array=None):
+        """Write a named close-up of each of the image's AOIs to aoi_thumbnails/.
+
+        Loose JPEGs so operators can drop them on a phone or email them; the
+        viewer's own thumbnail cache is a single thumbnails.db now, so it no
+        longer serves this purpose. Files are named by the run-wide AOI number
+        the viewer shows (#N), or the AOI's position when it has none.
+
+        Args:
+            img: Image dict with 'path' and 'areas_of_interest'.
+            staging_root: Export staging directory.
+            img_array: The image's RGB pixels, free of overlays, when the caller
+                already decoded them; otherwise they are decoded here once
+                (pixels only, no metadata read) for all of the image's AOIs.
+        """
+        aois = img.get('areas_of_interest') or []
+        src_path = img.get('path', '')
+        if not aois or not src_path or not os.path.exists(src_path):
+            return
+        if img_array is None:
+            try:
+                img_array = ImageService.load_rgb_array(src_path)
+            except Exception as e:
+                self.logger.error(f"Could not load {src_path} for AOI close-ups: {e}")
+                return
+
+        identifier_color = getattr(self.parent, 'settings', {}).get('identifier_color', (255, 255, 0))
+        thumbnails = AOIThumbnailService(os.path.join(staging_root, "aoi_thumbnails"), logger=self.logger)
+        stem = os.path.splitext(os.path.basename(src_path))[0]
+        for aoi_idx, aoi in enumerate(aois):
+            number = aoi.get('number')
+            thumbnails.generate_thumbnail(
+                src_path, aoi, output_name=f"{stem}_AOI{number if number is not None else aoi_idx + 1}",
+                highlight_rgb=identifier_color, image_array=img_array)
 
     def _on_progress_updated(self, current, total, message):
         if hasattr(self, 'progress_dialog') and self.progress_dialog:

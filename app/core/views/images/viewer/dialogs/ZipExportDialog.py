@@ -25,9 +25,10 @@ class ZipExportDialog(TranslationMixin, QDialog):
             self.tr(
                 "Choose what to export:\n\n"
                 "- Native: Original images, TIFF masks, and XML (paths made portable).\n"
-                "- Augmented: What you see in the viewer (AOIs/POIs), keeps EXIF/XMP.\n"
-                "- Results only: Just the XML and detection masks — small enough to "
-                "email. The recipient relinks to their own copy of the images."
+                "- Augmented: What you see in the viewer (AOIs/POIs), keeps EXIF/XMP, "
+                "plus a close-up of every AOI in an aoi_thumbnails folder.\n"
+                "- Results only: The XML, detection masks, and a close-up of every AOI, "
+                "without the full images. The recipient relinks to their own copy of the images."
             )
         )
         instructions.setWordWrap(True)
@@ -35,7 +36,7 @@ class ZipExportDialog(TranslationMixin, QDialog):
 
         self.native_radio = QRadioButton(self.tr("Export Native data (original files + XML)"))
         self.augmented_radio = QRadioButton(self.tr("Export Augmented images (viewer overlays + metadata)"))
-        self.results_only_radio = QRadioButton(self.tr("Export Results only (XML + masks, no images)"))
+        self.results_only_radio = QRadioButton(self.tr("Export Results only (XML + masks + AOI close-ups, no full images)"))
 
         self.native_radio.setChecked(True)
 

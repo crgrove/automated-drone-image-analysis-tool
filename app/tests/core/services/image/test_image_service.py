@@ -1286,3 +1286,25 @@ def test_wingtra_rgb61_resolves_full_frame_sensor(terminated):
         }
     finally:
         os.unlink(tmp_path)
+
+
+def test_load_rgb_array_decodes_pixels_as_rgb_without_reading_metadata(tmp_path):
+    """The pixel-only decode returns RGB and never touches EXIF/XMP."""
+    path = str(tmp_path / "red.png")
+    bgr = np.zeros((4, 4, 3), dtype=np.uint8)
+    bgr[:, :, 2] = 255  # red in OpenCV's BGR order
+    cv2.imwrite(path, bgr)
+
+    with patch('core.services.image.ImageService.MetaDataHelper') as meta:
+        rgb = ImageService.load_rgb_array(path)
+
+    assert tuple(rgb[0, 0]) == (255, 0, 0)
+    meta.assert_not_called()
+    assert not meta.method_calls
+
+
+def test_load_rgb_array_raises_on_an_undecodable_file(tmp_path):
+    path = tmp_path / "junk.jpg"
+    path.write_bytes(b"not an image")
+    with pytest.raises(ValueError):
+        ImageService.load_rgb_array(str(path))

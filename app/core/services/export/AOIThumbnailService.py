@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -72,7 +73,8 @@ class AOIThumbnailService:
 
     def generate_thumbnail(self, image_path: str, aoi: Dict[str, Any], output_name: Optional[str] = None,
                            context_multiplier: Optional[float] = None, draw_highlight: bool = True,
-                           highlight_rgb: Optional[Tuple[int, int, int]] = None) -> Optional[str]:
+                           highlight_rgb: Optional[Tuple[int, int, int]] = None,
+                           image_array: Optional[np.ndarray] = None) -> Optional[str]:
         """
         Generate a zoomed image centered on an AOI.
 
@@ -85,12 +87,15 @@ class AOIThumbnailService:
                 AOI, as a multiple of the AOI radius.
             draw_highlight (bool): Whether to draw a circle around the AOI.
             highlight_rgb (tuple, optional): RGB color of the highlight circle.
+            image_array (np.ndarray, optional): The image already decoded as an RGB
+                array. When given it is cropped instead of re-reading image_path, so
+                a caller writing every AOI of an image decodes the image once.
 
         Returns:
             str: Path to the generated image, or None if it could not be created.
         """
         try:
-            if not image_path or not os.path.exists(image_path):
+            if image_array is None and (not image_path or not os.path.exists(image_path)):
                 return None
 
             center = aoi.get('center')
@@ -102,8 +107,8 @@ class AOIThumbnailService:
             multiplier = context_multiplier if context_multiplier is not None else self.DEFAULT_CONTEXT_MULTIPLIER
             crop_radius = max(radius * multiplier, self.MIN_CROP_RADIUS_PX)
 
-            with Image.open(image_path) as img:
-                width, height = img.size
+            with (Image.open(image_path) if image_array is None else nullcontext()) as img:
+                width, height = img.size if img is not None else (image_array.shape[1], image_array.shape[0])
 
                 x1 = max(0, int(round(cx - crop_radius)))
                 y1 = max(0, int(round(cy - crop_radius)))
@@ -113,7 +118,8 @@ class AOIThumbnailService:
                 if x2 <= x1 or y2 <= y1:
                     return None
 
-                cropped = img.crop((x1, y1, x2, y2))
+                cropped = (img.crop((x1, y1, x2, y2)) if img is not None
+                           else Image.fromarray(np.ascontiguousarray(image_array[y1:y2, x1:x2])))
                 if cropped.mode != 'RGB':
                     cropped = cropped.convert('RGB')
 
@@ -136,7 +142,7 @@ class AOIThumbnailService:
                 self._draw_highlight(cropped, (cx - x1) * scale, (cy - y1) * scale, radius * scale,
                                      highlight_rgb or self.DEFAULT_HIGHLIGHT_RGB)
 
-            output_path = self._build_output_path(output_name or Path(image_path).stem)
+            output_path = self._build_output_path(output_name or Path(image_path or '').stem)
             cropped.save(output_path, format="JPEG", quality=self.JPEG_QUALITY)
             return str(output_path)
 

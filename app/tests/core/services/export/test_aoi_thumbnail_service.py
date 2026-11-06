@@ -104,6 +104,20 @@ def test_generate_thumbnail_center_outside_image(service, source_image):
     assert service.generate_thumbnail(source_image, {'center': (5000, 5000), 'radius': 10}) is None
 
 
+def test_generate_thumbnail_crops_a_supplied_array_without_reading_the_file(service):
+    """An already-decoded array is cropped directly; the path is only a name."""
+    array = np.zeros((600, 800, 3), dtype=np.uint8)
+    array[290:310, 390:410] = (0, 255, 0)
+
+    path = service.generate_thumbnail("/does/not/exist.jpg", {'center': (400, 300), 'radius': 20},
+                                      draw_highlight=False, image_array=array)
+
+    assert os.path.basename(path) == "exist.jpg"
+    with Image.open(path) as generated:
+        red, green, blue = generated.getpixel((generated.width // 2, generated.height // 2))
+    assert green > 200 and red < 60 and blue < 60
+
+
 def test_generate_thumbnail_custom_output_dir(tmp_path, source_image):
     """A caller-supplied output directory is used and left in place by cleanup."""
     output_dir = tmp_path / "thumbs"

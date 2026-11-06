@@ -284,7 +284,8 @@ def test_show_toast_no_handler_doesnt_crash():
 # ---------------------------------------------------------------------------
 def test_thread_results_only_calls_the_results_stager():
     controller = MagicMock()
-    thread = ZipExportThread(controller, [], "results_only", "/out.zip")
+    images = [{"path": "a.jpg"}, {"path": "b.jpg"}]
+    thread = ZipExportThread(controller, images, "results_only", "/out.zip")
     successes = []
     thread.success.connect(lambda: successes.append(True))
 
@@ -293,8 +294,57 @@ def test_thread_results_only_calls_the_results_stager():
 
     assert successes == [True]
     controller._export_results_only.assert_called_once()
+    assert [c.args[0] for c in controller._export_aoi_thumbnails.call_args_list] == images
     controller._export_native_prepare.assert_not_called()
     controller._export_augmented_one.assert_not_called()
+
+
+def test_export_zip_results_only_hands_every_image_to_the_thread():
+    """Results-only carries the whole run, hidden images included, so every
+    AOI's close-up travels with the XML."""
+    controller = ZipExportController(_parent())
+    images = [{"path": "a.jpg", "hidden": False}, {"path": "b.jpg", "hidden": True}]
+
+    with patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ZipExportDialog"
+    ) as MockDialog, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.QFileDialog"
+    ) as MockFile, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ExportProgressDialog"
+    ) as MockProgressDialog, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ZipExportThread"
+    ) as MockThread:
+        MockDialog.return_value.exec.return_value = QDialog.Accepted
+        MockDialog.return_value.get_export_mode.return_value = "results_only"
+        MockDialog.return_value.should_include_images_without_flagged_aois.return_value = False
+        MockFile.getSaveFileName.return_value = ("/out.zip", "*.zip")
+        MockProgressDialog.return_value.exec.return_value = QDialog.Accepted
+
+        controller.export_zip(images)
+
+    assert MockThread.call_args.args[1] == images
+
+
+def test_aoi_thumbnails_decode_the_image_when_no_array_is_given(tmp_path):
+    """Results-only has no decoded image to hand over, so the helper reads the
+    pixels itself; images without AOIs or without a file are skipped."""
+    import cv2
+    import numpy as np
+
+    controller = ZipExportController(_parent())
+    src_path = str(tmp_path / "DJI_0007.tif")
+    cv2.imwrite(src_path, np.zeros((200, 200, 3), dtype=np.uint8))
+    staging = tmp_path / "staging"
+
+    controller._export_aoi_thumbnails(
+        {"path": src_path, "areas_of_interest": [{"center": (100, 100), "radius": 10, "number": 3}]},
+        str(staging))
+    controller._export_aoi_thumbnails({"path": src_path, "areas_of_interest": []}, str(staging))
+    controller._export_aoi_thumbnails(
+        {"path": str(tmp_path / "gone.tif"), "areas_of_interest": [{"center": (1, 1), "radius": 1}]},
+        str(staging))
+
+    assert os.listdir(staging / "aoi_thumbnails") == ["DJI_0007_AOI3.jpg"]
 
 
 def _results_xml(images):
@@ -470,3 +520,86 @@ def test_b5_other_drive_mask_is_contained(tmp_path, monkeypatch):
     from core.services.XmlService import XmlService
     imgs = XmlService(str(staged / "ADIAT_Data.xml")).get_images()
     assert imgs[0]['xml'].get('mask_path') == "external_masks/z_drive_mask.tif"
+
+
+# ---------------------------------------------------------------------------
+# Augmented export: AOI circle colour and thickness
+# ---------------------------------------------------------------------------
+
+def test_export_zip_snapshots_circle_thickness_before_starting_the_thread():
+    """The render thread must not read QSettings, so export_zip captures the
+    preference on the GUI thread."""
+    parent = _parent()
+    parent.settings_service.get_setting.side_effect = (
+        lambda key, default=None: '8' if key == 'AOICircleThickness' else default)
+    controller = ZipExportController(parent)
+    images = [{"path": "a.jpg", "hidden": False, "areas_of_interest": []}]
+
+    with patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ZipExportDialog"
+    ) as MockDialog, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.QFileDialog"
+    ) as MockFile, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ExportProgressDialog"
+    ) as MockProgressDialog, patch(
+        "core.controllers.images.viewer.exports.ZipExportController.ZipExportThread"
+    ):
+        MockDialog.return_value.exec.return_value = QDialog.Accepted
+        MockDialog.return_value.get_export_mode.return_value = "augmented"
+        MockDialog.return_value.should_include_images_without_flagged_aois.return_value = True
+        MockFile.getSaveFileName.return_value = ("/out.zip", "*.zip")
+        MockProgressDialog.return_value.exec.return_value = QDialog.Accepted
+
+        controller.export_zip(images)
+
+    assert controller._aoi_circle_thickness == 8
+
+
+def test_augmented_export_draws_circles_in_the_identifier_colour_and_weight():
+    """The exported JPEG must carry the operator's colour (red, not blue) at
+    the chosen weight."""
+    import cv2
+    import numpy as np
+
+    controller = ZipExportController(_parent())  # identifier_color is red
+    controller._aoi_circle_thickness = 8
+    aoi = {"center": (50, 50), "radius": 20}
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_path = os.path.join(tmp_dir, "src.tif")  # lossless, and piexif-readable
+        cv2.imwrite(src_path, np.zeros((100, 100, 3), dtype=np.uint8))
+        staging = os.path.join(tmp_dir, "staging")
+
+        with patch("core.controllers.images.viewer.exports.ZipExportController.MetaDataHelper"):
+            controller._export_augmented_one({"path": src_path, "areas_of_interest": [aoi]}, staging)
+
+        exported = cv2.imread(os.path.join(staging, "images", "src.jpg"))  # BGR
+
+    # 23 px above centre: inside the 8 px band, clear of its JPEG-softened edges.
+    blue, green, red = (int(c) for c in exported[27, 50])
+    assert red > 200
+    assert blue < 60 and green < 60
+    # 25 px above centre: outside a default 2 px circle, inside the heavy one.
+    assert int(exported[25, 50][2]) > 200
+
+
+def test_augmented_export_writes_a_named_close_up_per_aoi():
+    """Each AOI gets a loose JPEG in aoi_thumbnails/, named by its run-wide
+    number (the #N the viewer shows), or its position when it has none."""
+    import cv2
+    import numpy as np
+
+    controller = ZipExportController(_parent())
+    aois = [{"center": (50, 50), "radius": 10, "number": 42}, {"center": (150, 150), "radius": 10}]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_path = os.path.join(tmp_dir, "DJI_0001.tif")
+        cv2.imwrite(src_path, np.zeros((200, 200, 3), dtype=np.uint8))
+        staging = os.path.join(tmp_dir, "staging")
+
+        with patch("core.controllers.images.viewer.exports.ZipExportController.MetaDataHelper"):
+            controller._export_augmented_one({"path": src_path, "areas_of_interest": aois}, staging)
+
+        written = sorted(os.listdir(os.path.join(staging, "aoi_thumbnails")))
+
+    assert written == ["DJI_0001_AOI2.jpg", "DJI_0001_AOI42.jpg"]
