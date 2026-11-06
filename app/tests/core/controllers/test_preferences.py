@@ -208,3 +208,51 @@ def test_control_scheme_change_persists_and_pushes_live(preferences):
     preferences.parent.settings_service.set_setting.assert_any_call(
         'ViewerControlScheme', 'standard')
     preferences.parent.viewer.apply_control_scheme.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# AOI circle thickness
+# ---------------------------------------------------------------------------
+
+def test_circle_thickness_defaults_to_the_legacy_weight(preferences):
+    """With nothing stored, the circles keep the 2 px weight they always had."""
+    assert preferences.AOICircleThicknessSpinBox.value() == 2
+
+
+def test_circle_thickness_loads_the_stored_value(qtbot):
+    parent = _make_parent()
+    base_get_setting = parent.settings_service.get_setting.side_effect
+    parent.settings_service.get_setting.side_effect = (
+        lambda key, default=None: '7' if key == 'AOICircleThickness' else base_get_setting(key, default))
+
+    dialog = Preferences(parent)
+    qtbot.addWidget(dialog)
+
+    assert dialog.AOICircleThicknessSpinBox.value() == 7
+
+
+def test_changing_circle_thickness_persists_it_and_pushes_it_to_the_viewer(preferences):
+    preferences.parent.settings_service.set_setting.reset_mock()
+
+    preferences.AOICircleThicknessSpinBox.setValue(9)
+
+    preferences.parent.settings_service.set_setting.assert_called_once_with('AOICircleThickness', 9)
+    preferences.parent.viewer.apply_aoi_circle_thickness.assert_called_once_with()
+
+
+def test_changing_circle_thickness_without_a_viewer_still_persists(preferences):
+    preferences.parent.viewer = None
+
+    preferences.AOICircleThicknessSpinBox.setValue(9)
+
+    preferences.parent.settings_service.set_setting.assert_any_call('AOICircleThickness', 9)
+
+
+def test_changing_circle_thickness_tolerates_a_viewer_without_the_hook(preferences):
+    """The streaming window also opens Preferences; anything without the
+    hook just keeps the setting for the next results viewer."""
+    preferences.parent.viewer = MagicMock(spec=[])
+
+    preferences.AOICircleThicknessSpinBox.setValue(9)
+
+    preferences.parent.settings_service.set_setting.assert_any_call('AOICircleThickness', 9)

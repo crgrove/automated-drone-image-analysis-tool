@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from core.views.Preferences_ui import Ui_Preferences
 from core.services.LoggerService import LoggerService
 from core.services.SettingsService import SettingsService
+from core.services.image.ImageService import AOI_CIRCLE_THICKNESS_SETTING, get_aoi_circle_thickness
 from core.services.terrain import (
     TerrainProviderFactory,
     PROVIDER_USGS_3DEP_LOCAL,
@@ -258,6 +259,7 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
         self.maxAOIsSpinBox.setValue(int(self.parent.settings_service.get_setting('MaxAOIs', 100)))
         self.themeComboBox.setCurrentText(self.parent.settings_service.get_setting('Theme'))
         self.AOIRadiusSpinBox.setValue(int(self.parent.settings_service.get_setting('AOIRadius', 15)))
+        self.AOICircleThicknessSpinBox.setValue(get_aoi_circle_thickness(self.parent.settings_service))
         self.positionFormatComboBox.setCurrentText(self.parent.settings_service.get_setting('PositionFormat'))
 
         # Image viewer control scheme. Items are populated in code with stable
@@ -342,6 +344,7 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
         self.languageComboBox.currentIndexChanged.connect(self._update_language)
         self.maxAOIsSpinBox.valueChanged.connect(self._update_max_aois)
         self.AOIRadiusSpinBox.valueChanged.connect(self._update_aoi_radius)
+        self.AOICircleThicknessSpinBox.valueChanged.connect(self._update_aoi_circle_thickness)
         self.themeComboBox.currentTextChanged.connect(self._update_theme)
         self.positionFormatComboBox.currentTextChanged.connect(self._update_position_format)
         self.controlSchemeComboBox.currentIndexChanged.connect(self._update_viewer_control_scheme)
@@ -373,6 +376,15 @@ class Preferences(TranslationMixin, QDialog, Ui_Preferences):
     def _update_aoi_radius(self):
         """Updates the area of interest radius setting based on the spinbox value."""
         self.parent.settings_service.set_setting('AOIRadius', self.AOIRadiusSpinBox.value())
+
+    def _update_aoi_circle_thickness(self):
+        """Persist the AOI circle thickness and push it to an open viewer."""
+        self.parent.settings_service.set_setting(
+            AOI_CIRCLE_THICKNESS_SETTING, self.AOICircleThicknessSpinBox.value())
+        # Live apply: a viewer open right now redraws its circles immediately.
+        viewer = getattr(self.parent, 'viewer', None)
+        if viewer is not None and hasattr(viewer, 'apply_aoi_circle_thickness'):
+            viewer.apply_aoi_circle_thickness()
 
     def _update_theme(self):
         """Updates the theme setting based on the selected combobox value and applies it."""

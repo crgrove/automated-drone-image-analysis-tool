@@ -112,6 +112,29 @@ class Ui_Preferences(object):
 
         self.verticalLayout_2.addWidget(self.radiuisWidget)
 
+        self.circleThicknessWidget = QWidget(self.mainWidget)
+        self.circleThicknessWidget.setObjectName(u"circleThicknessWidget")
+        self.horizontalLayout_circleThickness = QHBoxLayout(self.circleThicknessWidget)
+        self.horizontalLayout_circleThickness.setObjectName(u"horizontalLayout_circleThickness")
+        self.AOICircleThicknessLabel = QLabel(self.circleThicknessWidget)
+        self.AOICircleThicknessLabel.setObjectName(u"AOICircleThicknessLabel")
+        self.AOICircleThicknessLabel.setFont(font)
+
+        self.horizontalLayout_circleThickness.addWidget(self.AOICircleThicknessLabel)
+
+        self.AOICircleThicknessSpinBox = QSpinBox(self.circleThicknessWidget)
+        self.AOICircleThicknessSpinBox.setObjectName(u"AOICircleThicknessSpinBox")
+        self.AOICircleThicknessSpinBox.setFont(font)
+        self.AOICircleThicknessSpinBox.setKeyboardTracking(False)
+        self.AOICircleThicknessSpinBox.setMinimum(1)
+        self.AOICircleThicknessSpinBox.setMaximum(50)
+        self.AOICircleThicknessSpinBox.setValue(2)
+
+        self.horizontalLayout_circleThickness.addWidget(self.AOICircleThicknessSpinBox)
+
+
+        self.verticalLayout_2.addWidget(self.circleThicknessWidget)
+
         self.positionFormatWidget = QWidget(self.mainWidget)
         self.positionFormatWidget.setObjectName(u"positionFormatWidget")
         self.horizontalLayout_4 = QHBoxLayout(self.positionFormatWidget)
@@ -401,6 +424,18 @@ class Ui_Preferences(object):
 "\u2022 Larger values: Combines more distant detections (fewer total AOIs)\n"
 "\u2022 Smaller values: Keeps detections separate (more individual AOIs)\n"
 "Use to consolidate clustered detections into single objects.", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(tooltip)
+        self.AOICircleThicknessLabel.setToolTip(QCoreApplication.translate("Preferences", u"Line weight of the circles drawn around areas of interest in the results viewer.", None))
+#endif // QT_CONFIG(tooltip)
+        self.AOICircleThicknessLabel.setText(QCoreApplication.translate("Preferences", u"Area of Interest Circle Thickness(px):", None))
+#if QT_CONFIG(tooltip)
+        self.AOICircleThicknessSpinBox.setToolTip(QCoreApplication.translate("Preferences", u"Set the line weight of the AOI circles, in image pixels.\n"
+"\u2022 Range: 1 to 50 pixels\n"
+"\u2022 Default: 2 pixels\n"
+"Heavier circles are easier to spot when the whole image is in view.\n"
+"The circle grows outward, so it does not cover more of the detection.\n"
+"Also applies to images exported with AOIs drawn on them.", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(tooltip)
         self.positionFormatLabel.setToolTip(QCoreApplication.translate("Preferences", u"Format for displaying geographic coordinates throughout the application.\n"

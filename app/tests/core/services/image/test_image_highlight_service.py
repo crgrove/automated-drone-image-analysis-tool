@@ -74,3 +74,22 @@ def test_apply_boolean_mask_highlight_blends_highlight_color(test_image):
 
     assert np.array_equal(highlighted[0, 0], test_image[0, 0])
     assert not np.array_equal(highlighted[100, 100], test_image[100, 100])
+
+
+@pytest.mark.parametrize('identifier_color', [(255, 0, 0), (0, 0, 255)])
+def test_apply_mask_highlight_tints_in_the_identifier_colour(tmp_path, identifier_color):
+    """The viewer passes an RGB image, so a red identifier must tint the
+    detected pixels red, not blue (regression: the colour was swapped to BGR)."""
+    import cv2
+
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    mask = np.zeros((10, 10), dtype=np.uint8)
+    mask[5, 5] = 255
+    mask_path = str(tmp_path / 'mask.png')
+    cv2.imwrite(mask_path, mask)
+
+    highlighted = ImageHighlightService.apply_mask_highlight(image, mask_path, identifier_color)
+
+    expected = tuple(int(channel * 0.7) for channel in identifier_color)
+    assert tuple(highlighted[5, 5]) == expected
+    assert tuple(highlighted[0, 0]) == (0, 0, 0)

@@ -27,7 +27,8 @@ class ImageHighlightService:
         Applies a mask overlay to highlight detected pixels.
 
         Args:
-            image_array (np.ndarray): The input image array in BGR format.
+            image_array (np.ndarray): The input image array in RGB format
+                (ImageService.img_array), as the viewer and ZIP export pass it.
             mask_path (str): Path to the mask file (.tif or .png).
             identifier_color (tuple): RGB color tuple for highlighting (uses Object Identifier color).
             areas_of_interest (list, optional): Not used currently, but kept for future filtering.
@@ -59,9 +60,10 @@ class ImageHighlightService:
 
         highlighted_image = image_array.copy()
 
-        # Apply the mask - blend highlight color with original image
-        # Image is in BGR format, identifier_color is RGB, so convert
-        bgr_color = np.array([int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0])], dtype=np.uint8)
+        # Apply the mask - blend highlight color with original image.
+        # Image and identifier_color are both RGB, so no channel swap: a swap
+        # here turns a red identifier blue and leaves the default green as-is.
+        rgb_color = np.array([int(identifier_color[0]), int(identifier_color[1]), int(identifier_color[2])], dtype=np.uint8)
 
         # Create a blended overlay where mask pixels are highlighted
         mask_indices = mask > 0
@@ -69,7 +71,7 @@ class ImageHighlightService:
             # Blend with 70% original image and 30% highlight color for visibility
             alpha = 0.7  # Highlight strength
             highlighted_image[mask_indices] = (
-                highlighted_image[mask_indices] * (1 - alpha) + bgr_color * alpha
+                highlighted_image[mask_indices] * (1 - alpha) + rgb_color * alpha
             ).astype(np.uint8)
 
         return highlighted_image

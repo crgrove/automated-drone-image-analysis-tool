@@ -412,6 +412,140 @@ def test_circle_areas_of_interest_none(image_service):
     assert augmented.shape == image_service.img_array.shape
 
 
+# ---------------------------------------------------------------------------
+# AOI circle colour and thickness
+#
+# img_array is RGB and the viewer hands it straight to array2qimage, so the
+# identifier colour must reach the pixels unswapped. The default identifier
+# is green, which an R<->B swap leaves unchanged, so a swap passes every test
+# that uses the default. These tests use colours a swap would change.
+# ---------------------------------------------------------------------------
+
+_CIRCLE_AOI = {'center': (50, 50), 'radius': 20}
+# (row, col) of a pixel on the default-weight circle: straight above centre.
+_ON_CIRCLE = (30, 50)
+
+
+def _distance_from(center, shape):
+    rows, cols = np.indices(shape[:2])
+    return np.hypot(cols - center[0], rows - center[1])
+
+
+@pytest.mark.parametrize('identifier_color', [(255, 0, 0), (0, 0, 255), (120, 40, 220)])
+def test_circle_is_drawn_in_the_identifier_colour_not_channel_swapped(image_service, identifier_color):
+    """A red identifier must draw red circles, not blue (regression: the
+    colour was swapped to BGR onto an RGB image)."""
+    augmented = image_service.circle_areas_of_interest(identifier_color, [_CIRCLE_AOI])
+
+    assert tuple(augmented[_ON_CIRCLE]) == identifier_color
+
+
+def test_circle_colour_reaches_the_displayed_image_as_chosen(qapp):
+    """End to end over the viewer's path: file on disk -> ImageService ->
+    circle -> array2qimage. What the operator sees must be the colour they
+    picked, whatever channel order the intermediate layers use."""
+    import qimage2ndarray
+    from PySide6.QtGui import QColor
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = os.path.join(tmp_dir, 'aoi.tif')  # lossless, and piexif-readable
+        cv2.imwrite(path, np.zeros((100, 100, 3), dtype=np.uint8))
+        service = ImageService(path)
+
+        augmented = service.circle_areas_of_interest((255, 0, 0), [_CIRCLE_AOI])
+        displayed = qimage2ndarray.array2qimage(augmented)
+
+    row, col = _ON_CIRCLE
+    assert displayed.pixelColor(col, row) == QColor(255, 0, 0)
+
+
+def test_circle_default_thickness_renders_as_before(image_service):
+    """Without a thickness preference the circles are pixel-identical to the
+    2 px circles ADIAT has always drawn."""
+    color = (255, 0, 0)
+    expected = image_service.img_array.copy()
+    cv2.circle(expected, _CIRCLE_AOI['center'], _CIRCLE_AOI['radius'], color, thickness=2)
+
+    augmented = image_service.circle_areas_of_interest(color, [_CIRCLE_AOI])
+
+    assert np.array_equal(augmented, expected)
+
+
+def test_heavier_circle_is_heavier_and_the_extra_weight_lands_outside(image_service):
+    color = (255, 0, 0)
+    default = image_service.circle_areas_of_interest(color, [_CIRCLE_AOI])
+    heavy = image_service.circle_areas_of_interest(color, [_CIRCLE_AOI], thickness=10)
+
+    default_painted = np.any(default != 0, axis=2)
+    heavy_painted = np.any(heavy != 0, axis=2)
+
+    assert heavy_painted.sum() > 3 * default_painted.sum()
+    # 27 px above centre: well outside the default circle's 20 px radius.
+    assert tuple(heavy[_ON_CIRCLE[0] - 7, _ON_CIRCLE[1]]) == color
+
+
+@pytest.mark.parametrize('radius', [0, 3, 8, 20])
+@pytest.mark.parametrize('thickness', [1, 3, 4, 5, 10, 25, 50])
+def test_heavier_circle_never_covers_more_of_the_detection(image_service, radius, thickness):
+    """However heavy the line, it must not paint a pixel inside the AOI radius
+    that the default-weight line leaves visible, and must still meet the
+    default line rather than float away from the detection."""
+    image_service.img_array = np.zeros((160, 160, 3), dtype=np.uint8)
+    aoi = {'center': (80, 80), 'radius': radius}
+    default = image_service.circle_areas_of_interest((255, 0, 0), [aoi])
+    heavy = image_service.circle_areas_of_interest((255, 0, 0), [aoi], thickness=thickness)
+
+    default_painted = np.any(default != 0, axis=2)
+    heavy_painted = np.any(heavy != 0, axis=2)
+    inside = _distance_from(aoi['center'], heavy.shape) < radius
+
+    assert not np.any(heavy_painted & ~default_painted & inside)
+    assert np.any(heavy_painted & default_painted)
+
+
+@pytest.mark.parametrize('stored, expected', [
+    (8, 8),
+    ('8', 8),        # QSettings returns strings on some platforms
+    ('8.0', 8),
+    (None, 2),
+    ('', 2),
+    ('heavy', 2),
+    (0, 1),          # clamped to the minimum
+    (-3, 1),
+    (999, 50),       # clamped to the maximum
+])
+def test_normalize_aoi_circle_thickness(stored, expected):
+    from core.services.image.ImageService import normalize_aoi_circle_thickness
+
+    assert normalize_aoi_circle_thickness(stored) == expected
+
+
+def test_circle_areas_of_interest_tolerates_a_bad_thickness(image_service):
+    """A corrupt thickness falls back to the default instead of raising, so a
+    bad preference can never stop images from displaying."""
+    augmented = image_service.circle_areas_of_interest((255, 0, 0), [_CIRCLE_AOI], thickness='heavy')
+
+    assert tuple(augmented[_ON_CIRCLE]) == (255, 0, 0)
+
+
+def test_get_aoi_circle_thickness_reads_the_preference():
+    from core.services.image.ImageService import (
+        AOI_CIRCLE_THICKNESS_SETTING, DEFAULT_AOI_CIRCLE_THICKNESS, get_aoi_circle_thickness)
+
+    settings_service = MagicMock()
+    settings_service.get_setting.return_value = '6'
+
+    assert get_aoi_circle_thickness(settings_service) == 6
+    settings_service.get_setting.assert_called_once_with(
+        AOI_CIRCLE_THICKNESS_SETTING, DEFAULT_AOI_CIRCLE_THICKNESS)
+
+
+def test_get_aoi_circle_thickness_without_settings_is_the_default():
+    from core.services.image.ImageService import DEFAULT_AOI_CIRCLE_THICKNESS, get_aoi_circle_thickness
+
+    assert get_aoi_circle_thickness(None) == DEFAULT_AOI_CIRCLE_THICKNESS
+
+
 def test_get_thermal_data_no_mask(image_service):
     """Test getting thermal data when no mask path is provided."""
     thermal_data = image_service.get_thermal_data('C')

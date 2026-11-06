@@ -232,3 +232,36 @@ def test_the_scale_bar_gsd_uses_a_wingtra_agl(qtbot):
     controller._update_overlay(svc)
 
     svc.get_average_gsd.assert_called_once_with(custom_altitude_ft=318.0)
+
+
+def _augmentation_parent(thickness_setting):
+    parent = MagicMock()
+    parent.showAOIsButton.isChecked.return_value = True
+    parent.showPOIsButton.isChecked.return_value = False
+    parent.is_thermal = False
+    parent.color_histogram_controller = None
+    parent.settings = {'identifier_color': (255, 0, 0)}
+    parent.settings_service.get_setting.side_effect = (
+        lambda key, default=None: thickness_setting if key == 'AOICircleThickness' else default)
+    return parent
+
+
+def test_aoi_circles_are_drawn_with_the_thickness_preference():
+    parent = _augmentation_parent('8')
+    controller = ImageLoadController(parent)
+    service = MagicMock()
+    aois = [{'center': (10, 10), 'radius': 5}]
+
+    controller._apply_augmentations(service, {'areas_of_interest': aois}, '')
+
+    service.circle_areas_of_interest.assert_called_once_with((255, 0, 0), aois, thickness=8)
+
+
+def test_aoi_circles_fall_back_to_the_default_thickness_when_unset():
+    parent = _augmentation_parent(None)
+    controller = ImageLoadController(parent)
+    service = MagicMock()
+
+    controller._apply_augmentations(service, {'areas_of_interest': []}, '')
+
+    service.circle_areas_of_interest.assert_called_once_with((255, 0, 0), [], thickness=2)

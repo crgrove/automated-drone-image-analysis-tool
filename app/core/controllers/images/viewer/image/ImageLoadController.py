@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QMessageBox, QApplication
 
 from core.services.AOIInteractionLogService import REASON_IMAGE_CHANGE
 from core.services.LoggerService import LoggerService
-from core.services.image.ImageService import ImageService
+from core.services.image.ImageService import ImageService, get_aoi_circle_thickness
 from core.services.image.ImageHighlightService import ImageHighlightService
 from core.services.image.WingtraDataService import wingtra_agl_ft
 from helpers.LocationInfo import LocationInfo
@@ -329,7 +329,8 @@ class ImageLoadController(TranslationMixin):
         if hasattr(self.parent, 'showAOIsButton') and self.parent.showAOIsButton.isChecked():
             augmented_image = image_service.circle_areas_of_interest(
                 self.parent.settings['identifier_color'],
-                image['areas_of_interest']
+                image['areas_of_interest'],
+                thickness=get_aoi_circle_thickness(getattr(self.parent, 'settings_service', None))
             )
         else:
             # Use reference instead of copy to avoid crash

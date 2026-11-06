@@ -1484,6 +1484,21 @@ class Viewer(TranslationMixin, QMainWindow, Ui_Viewer):
             self.main_image.set_control_scheme(
                 self.settings_service.get_setting('ViewerControlScheme', 'classic'))
 
+    def apply_aoi_circle_thickness(self):
+        """Redraw the current image with the AOICircleThickness setting.
+
+        Pushed by the Preferences dialog when the user changes the thickness
+        while this viewer is open, so the new weight shows immediately. The
+        drawing reads the setting itself, so applying it is a redraw from the
+        cached image. A closed viewer is only hidden (MainWindow keeps it), so
+        it is skipped rather than re-rendered on every spinbox step.
+        """
+        if not self.isVisible():
+            return
+        if getattr(self, 'main_image', None) is None or getattr(self, 'current_image', None) is None:
+            return
+        self.image_load_controller.refresh_image_preserving_view_from_cache()
+
     def _load_initial_image(self):
         """Loads the initial image and its areas of interest."""
         try:

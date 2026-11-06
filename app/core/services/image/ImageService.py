@@ -23,6 +23,35 @@ from helpers.MetaDataHelper import MetaDataHelper, XMP_ALTITUDE_TYPE_TERRAIN
 from helpers.PickleHelper import PickleHelper
 from helpers.LocationInfo import LocationInfo
 
+# Line weight, in image pixels, of the AOI circles drawn by
+# circle_areas_of_interest. Stored as a user preference under this key; the
+# default is the weight the circles have always been drawn at.
+AOI_CIRCLE_THICKNESS_SETTING = 'AOICircleThickness'
+DEFAULT_AOI_CIRCLE_THICKNESS = 2
+MIN_AOI_CIRCLE_THICKNESS = 1
+MAX_AOI_CIRCLE_THICKNESS = 50
+
+
+def normalize_aoi_circle_thickness(value):
+    """Coerce a stored AOI circle thickness to a drawable int within bounds.
+
+    QSettings returns strings on some platforms, and a missing or corrupt
+    value must fall back to the default rather than break image display.
+    """
+    try:
+        thickness = int(float(value))
+    except (TypeError, ValueError):
+        return DEFAULT_AOI_CIRCLE_THICKNESS
+    return max(MIN_AOI_CIRCLE_THICKNESS, min(MAX_AOI_CIRCLE_THICKNESS, thickness))
+
+
+def get_aoi_circle_thickness(settings_service):
+    """Return the operator's AOI circle thickness preference, or the default."""
+    if settings_service is None:
+        return DEFAULT_AOI_CIRCLE_THICKNESS
+    return normalize_aoi_circle_thickness(
+        settings_service.get_setting(AOI_CIRCLE_THICKNESS_SETTING, DEFAULT_AOI_CIRCLE_THICKNESS))
+
 
 @dataclass
 class AltitudeReadings:
@@ -1292,17 +1321,37 @@ class ImageService:
         yaw = float(yaw)
         return 360 + yaw if yaw < 0 else yaw
 
-    def circle_areas_of_interest(self, identifier_color, areas_of_interest):
+    def circle_areas_of_interest(self, identifier_color, areas_of_interest,
+                                 thickness=DEFAULT_AOI_CIRCLE_THICKNESS):
         """
-        Augments the image with contour outlines or circles for areas of interest.
+        Augments the image with circles for areas of interest.
+
+        Args:
+            identifier_color: RGB tuple for the circles.
+            areas_of_interest: AOI dicts with 'center' and 'radius'.
+            thickness: Line weight in image pixels.
 
         Returns:
-            (augmented_image: np.ndarray, areas_of_interest: list[dict])
+            np.ndarray: RGB copy of img_array with the circles drawn.
         """
         image_copy = self.img_array.copy()
 
-        # Expect identifier_color as RGB; OpenCV uses BGR
-        bgr = (int(identifier_color[2]), int(identifier_color[1]), int(identifier_color[0]))
+        # img_array is RGB (see _load_img_array), and cv2 drawing functions
+        # write the colour tuple straight into the array's channel order, so
+        # the RGB identifier colour is used as-is. Swapping it to BGR here
+        # turns a red identifier blue on screen while leaving the default
+        # green untouched, which is how this regressed unnoticed before.
+        # The PDF and CalTopo composites are different: they convert the
+        # image to BGR first and swap the colour to match.
+        color = (int(identifier_color[0]), int(identifier_color[1]), int(identifier_color[2]))
+
+        thickness = normalize_aoi_circle_thickness(thickness)
+        # cv2 widens a stroke inward as much as outward. Pushing a heavier
+        # stroke out by (thickness + 1) // 2 keeps it from painting any pixel
+        # inside the radius that the default stroke leaves visible, while still
+        # overlapping it, so the circle grows away from the detection. Checked
+        # exhaustively against cv2 for radii 0-100 and every allowed thickness.
+        radius_offset = 0 if thickness <= DEFAULT_AOI_CIRCLE_THICKNESS else (thickness + 1) // 2
 
         for aoi in areas_of_interest or []:
             # Get center and radius for circle drawing
@@ -1310,7 +1359,7 @@ class ImageService:
             r = int(aoi.get("radius", 0))
             center = (int(cx), int(cy))
 
-            cv2.circle(image_copy, center, r, bgr, thickness=2)
+            cv2.circle(image_copy, center, r + radius_offset, color, thickness=thickness)
 
             # Add confidence label if available
             # Turning off for now

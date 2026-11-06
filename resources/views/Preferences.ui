@@ -196,6 +196,56 @@ Use to consolidate clustered detections into single objects.</string>
        </widget>
       </item>
       <item>
+       <widget class="QWidget" name="circleThicknessWidget" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout_circleThickness">
+         <item>
+          <widget class="QLabel" name="AOICircleThicknessLabel">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Line weight of the circles drawn around areas of interest in the results viewer.</string>
+           </property>
+           <property name="text">
+            <string>Area of Interest Circle Thickness(px):</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="AOICircleThicknessSpinBox">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>Set the line weight of the AOI circles, in image pixels.
+• Range: 1 to 50 pixels
+• Default: 2 pixels
+Heavier circles are easier to spot when the whole image is in view.
+The circle grows outward, so it does not cover more of the detection.
+Also applies to images exported with AOIs drawn on them.</string>
+           </property>
+           <property name="keyboardTracking">
+            <bool>false</bool>
+           </property>
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>50</number>
+           </property>
+           <property name="value">
+            <number>2</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
        <widget class="QWidget" name="positionFormatWidget" native="true">
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <item>
