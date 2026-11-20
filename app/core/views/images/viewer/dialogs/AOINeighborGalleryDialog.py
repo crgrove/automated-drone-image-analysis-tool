@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF
 from PySide6.QtGui import (
-    QImage, QPixmap, QPainter, QColor, QPen, QFont, QBrush,
+    QImage, QPixmap, QPainter, QColor, QPen, QFont, QFontMetricsF, QBrush,
     QWheelEvent, QMouseEvent
 )
 from PySide6.QtWidgets import (
@@ -174,10 +174,16 @@ class NeighborGalleryView(QGraphicsView):
                 if is_current:
                     label_text += self.tr(" (Current)")
 
-                text_item = QGraphicsTextItem(label_text)
+                text_item = QGraphicsTextItem()
                 text_item.setDefaultTextColor(QColor(255, 255, 255))
                 font = QFont("Arial", 9)
                 text_item.setFont(font)
+                # Elide to the tile width so long names don't run into the neighbors' labels
+                max_width = self.thumbnail_size - 2 * text_item.document().documentMargin()
+                shown = QFontMetricsF(font).elidedText(label_text, Qt.ElideMiddle, max_width)
+                text_item.setPlainText(shown)
+                if shown != label_text:
+                    text_item.setToolTip(label_text)
 
                 # Center the label
                 text_width = text_item.boundingRect().width()

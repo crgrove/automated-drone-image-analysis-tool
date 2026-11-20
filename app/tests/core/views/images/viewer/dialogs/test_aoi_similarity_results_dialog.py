@@ -133,6 +133,21 @@ class TestSimilarityGalleryView:
         assert gold.name() == '#ffd700'
         assert gray.name() == '#aaaaaa'
 
+    def test_long_image_name_elided_to_tile_width(self, app, sample_results):
+        """A long name must not spill into the neighboring tiles' captions; hover shows it in full."""
+        from PySide6.QtWidgets import QGraphicsTextItem
+        long_name = "DJI_20251107_0105_V_map-plan-" + "x" * 80 + ".JPG"
+        sample_results[1]['image_name'] = long_name
+        view = SimilarityGalleryView()
+        view.load_thumbnails(sample_results)
+
+        captions = [i for i in view.scene.items() if isinstance(i, QGraphicsTextItem)]
+        elided = [i for i in captions if i.toolTip() == long_name]
+        assert len(elided) == 1
+        assert "…" in elided[0].toPlainText()
+        assert elided[0].boundingRect().width() <= view.thumbnail_size
+        assert any(i.toPlainText() == 'DJI_0002.JPG' and not i.toolTip() for i in captions)
+
     def test_grayscale_thumbnail_supported(self, app):
         results = [{
             'image_idx': 0, 'aoi_idx': 0, 'image_name': 'thermal.JPG',

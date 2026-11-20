@@ -324,6 +324,21 @@ class TestAOINeighborGalleryDialog:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
+    def test_long_image_name_elided_to_tile_width(self, app, sample_results):
+        """A long name must not spill into the neighboring tiles' labels; hover shows it in full."""
+        from PySide6.QtWidgets import QGraphicsTextItem
+        long_name = "DJI_20251107_0105_V_map-plan-" + "x" * 80 + ".JPG"
+        sample_results[0]['image_name'] = long_name
+        view = NeighborGalleryView()
+        view.load_thumbnails(sample_results)
+
+        labels = [i for i in view.scene.items() if isinstance(i, QGraphicsTextItem)]
+        elided = [i for i in labels if i.toolTip() == long_name]
+        assert len(elided) == 1
+        assert "…" in elided[0].toPlainText()
+        assert elided[0].boundingRect().width() <= view.thumbnail_size
+        assert any(i.toPlainText() == 'DJI_0003.JPG' and not i.toolTip() for i in labels)
+
     def test_load_invalid_thumbnail_shape(self, app):
         """Test loading thumbnail with unexpected shape."""
         results = [

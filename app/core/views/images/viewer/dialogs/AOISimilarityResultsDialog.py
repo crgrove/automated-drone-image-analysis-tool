@@ -11,7 +11,7 @@ import numpy as np
 import cv2
 from PySide6.QtCore import Qt, Signal, QRectF, QPointF
 from PySide6.QtGui import (
-    QImage, QPixmap, QPainter, QColor, QPen, QFont, QBrush,
+    QImage, QPixmap, QPainter, QColor, QPen, QFont, QFontMetricsF, QBrush,
     QWheelEvent, QMouseEvent
 )
 from PySide6.QtWidgets import (
@@ -216,12 +216,21 @@ class SimilarityGalleryView(TranslationMixin, QGraphicsView):
                           self.thumbnail_spacing + self.thumbnail_size / 2)
 
     def _add_caption(self, text, color, tile_x, text_y, bold=False):
-        """Add a centered caption line under a tile and return its item."""
-        text_item = QGraphicsTextItem(text)
+        """Add a centered caption line under a tile and return its item.
+
+        Text wider than the tile is elided in the middle (full text in the tooltip);
+        otherwise long image names run into the neighboring tiles' captions.
+        """
+        text_item = QGraphicsTextItem()
         text_item.setDefaultTextColor(color)
         font = QFont("Arial", 9)
         font.setBold(bold)
         text_item.setFont(font)
+        max_width = self.thumbnail_size - 2 * text_item.document().documentMargin()
+        shown = QFontMetricsF(font).elidedText(text, Qt.ElideMiddle, max_width)
+        text_item.setPlainText(shown)
+        if shown != text:
+            text_item.setToolTip(text)
         text_item.setData(0, tile_x)  # Tile left edge, for re-centering on refresh
         text_width = text_item.boundingRect().width()
         text_item.setPos(tile_x + (self.thumbnail_size - text_width) / 2, text_y)
