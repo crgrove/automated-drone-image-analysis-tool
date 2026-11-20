@@ -35,12 +35,9 @@ class RecordingConfig:
 
 
 # Which (backend, fourcc) produced a working writer on this machine.
-# Encoder availability is a property of the machine, not of a recording:
-# probing used to happen on EVERY recording start, and each doomed H.264
-# attempt made FFMPEG print a wall of "Failed to load OpenH264 library /
-# Unable to create encoder / Failed to initialize VideoWriter" to the
-# console. Caching the winner makes any such noise a once-per-process
-# event at worst, and zero on machines where the first candidate works.
+# Encoder availability is a property of the machine, not of a recording,
+# so probing happens once per process rather than on every recording start
+# and segment rotation.
 _CODEC_CACHE_LOCK = threading.Lock()
 _working_codec: Optional[Tuple[Optional[int], str, str]] = None  # (api, fourcc, label)
 
@@ -56,15 +53,20 @@ def _codec_candidates() -> list:
     1. **Media Foundation H.264** (Windows). Ships with Windows itself,
        uses the hardware encoder where one exists, and produces real
        H.264 at roughly half mp4v's size. No OpenH264 involved.
-    2. **FFMPEG avc1** — H.264 for builds that do have an encoder.
+    2. **FFMPEG avc1** (not Windows) — H.264 for builds that do have an
+       encoder. On Windows it can only work if the operator installs
+       Cisco's OpenH264 DLL by hand, and when it fails it prints "Failed to
+       load OpenH264 library ... Please check environment" to the console
+       — which a field operator read as "configure your system" while the
+       recording was succeeding on the next candidate. Its CAP_ANY fallback
+       is Media Foundation again, which already said no in step 1.
     3. **mp4v** — MPEG-4 Part 2, the always-works floor.
     """
-    candidates = []
     if sys.platform == "win32":
-        candidates.append((cv2.CAP_MSMF, "H264", "H.264 (Media Foundation)"))
-    candidates.append((None, "avc1", "H.264 (FFMPEG)"))
-    candidates.append((None, "mp4v", "MPEG-4 (mp4v)"))
-    return candidates
+        h264 = (cv2.CAP_MSMF, "H264", "H.264 (Media Foundation)")
+    else:
+        h264 = (None, "avc1", "H.264 (FFMPEG)")
+    return [h264, (None, "mp4v", "MPEG-4 (mp4v)")]
 
 
 def reset_codec_cache() -> None:
@@ -269,7 +271,8 @@ class VideoRecorder(QThread):
                     f"Cached recording codec {label} stopped opening; re-probing"
                 )
 
-            for api, fourcc, label in _codec_candidates():
+            candidates = _codec_candidates()
+            for api, fourcc, label in candidates:
                 if cached is not None and (api, fourcc) == cached[:2]:
                     continue  # already failed just above
                 writer = self._open_writer(api, fourcc)
@@ -277,9 +280,18 @@ class VideoRecorder(QThread):
                     self._current_writer = writer
                     with _CODEC_CACHE_LOCK:
                         _working_codec = (api, fourcc, label)
-                    self.logger.info(
-                        f"Recording codec: {label} at {width}x{height}"
-                    )
+                    if (api, fourcc) == candidates[0][:2]:
+                        self.logger.info(f"Recording codec: {label} at {width}x{height}")
+                    else:
+                        # WARNING so packaged builds record it: the field log
+                        # should say what happened, not leave the operator
+                        # with only the encoder's own console output.
+                        self.logger.warning(
+                            f"Recording codec: {label} at {width}x{height}. "
+                            f"{candidates[0][2]} is not available for this stream on "
+                            f"this machine; the recording is unaffected and nothing "
+                            f"needs to be installed."
+                        )
                     return True
 
             self.logger.error("Failed to initialize video writer")
