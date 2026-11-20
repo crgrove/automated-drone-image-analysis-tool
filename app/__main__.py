@@ -7,7 +7,7 @@ from multiprocessing import freeze_support
 from helpers.PickleHelper import PickleHelper
 from helpers.TranslationHelper import install_translator
 from helpers.ThemeHelper import apply_theme
-from core.services.LoggerService import LoggerService
+from core.services.LoggerService import LoggerService, fatal_excepthook, install_qt_message_handler
 from core.services.SettingsService import SettingsService
 from core.controllers.streaming.StreamingGuide import StreamingGuide
 from core.controllers.streaming.StreamViewerWindow import StreamViewerWindow
@@ -412,29 +412,8 @@ if __name__ == "__main__":
     # benign COM exceptions like RPC_E_WRONGTHREAD 0x8001010d from Qt internals)
     if sys.stderr is not None and sys.platform != 'win32':
         faulthandler.enable()
-    # Install a global exception hook that exits the app on any uncaught error
-
-    def _fatal_excepthook(exctype, value, tb):
-        """Handle uncaught exceptions by printing traceback and exiting cleanly.
-
-        Args:
-            exctype: The exception class.
-            value: The exception instance.
-            tb: The traceback object.
-        """
-        # Print full traceback to stderr for debugging
-        traceback.print_exception(exctype, value, tb)
-        # Try to stop a running Qt event loop cleanly
-        try:
-            inst = QApplication.instance()
-            if inst is not None:
-                inst.quit()
-        except Exception:
-            pass
-        # Ensure process terminates with non-zero status so it doesn't hang
-        os._exit(1)
-
-    sys.excepthook = _fatal_excepthook
+    # Any uncaught error is logged, then exits the app.
+    sys.excepthook = fatal_excepthook
 
     freeze_support()
 
@@ -445,6 +424,9 @@ if __name__ == "__main__":
     # LoggerService.resolve_log_level. (LoggerService also applies this by
     # default, so any earlier log line is already at the right level.)
     LoggerService.set_level()
+    # Qt reports some fatal errors (e.g. a QThread destroyed while running)
+    # only through its message handler, then aborts; record them.
+    install_qt_message_handler()
 
     # Report any PROJ/GDAL variables the sanitizer cleared at import time
     # (deferred to here so the message respects the logging policy above).

@@ -178,3 +178,104 @@ def test_runtime_hook_preserves_operator_override():
     with patch.dict(os.environ, {'ADIAT_LOG_LEVEL': 'DEBUG'}):
         exec(src, {})
         assert os.environ['ADIAT_LOG_LEVEL'] == 'DEBUG'
+
+
+# ---------------------------------------------------------------------------
+# Qt's own messages. Some Qt failures are reported only through its message
+# handler - "QThread: Destroyed while thread is still running" arrives as a
+# fatal message just before Qt aborts - and the default handler writes to
+# stderr, which the windowed build does not have. A field hard crash left
+# adiat_logs.txt with nothing to say about it.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("mode_name, method", [
+    ("QtFatalMsg", "error"),
+    ("QtCriticalMsg", "error"),
+    ("QtWarningMsg", "warning"),
+    ("QtInfoMsg", "debug"),
+    ("QtDebugMsg", "debug"),
+])
+def test_qt_messages_reach_the_log_at_matching_levels(mode_name, method):
+    from PySide6.QtCore import QtMsgType
+    with patch.object(LoggerService, method) as log:
+        logger_module.qt_message_handler(getattr(QtMsgType, mode_name), None, "qt says hello")
+    log.assert_called_once()
+    assert "qt says hello" in log.call_args[0][0]
+
+
+def test_qt_fatal_abort_is_in_the_log_file_before_the_process_dies():
+    import subprocess
+    import sys
+    import textwrap
+    import uuid
+
+    marker = f"crash-marker-{uuid.uuid4().hex}"
+    app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    script = textwrap.dedent(f"""
+        import sys, time
+        sys.path.insert(0, {app_dir!r})
+        from PySide6.QtCore import QCoreApplication, QThread
+        from core.services.LoggerService import install_qt_message_handler
+        install_qt_message_handler()
+        app = QCoreApplication([])
+
+        class Stuck(QThread):
+            def run(self):
+                time.sleep(2)
+
+        thread = Stuck()
+        thread.setObjectName({marker!r})
+        thread.start()
+        del thread  # dropping a running QThread: Qt aborts the process
+        time.sleep(3)
+    """)
+    # Inherits PYTEST_CURRENT_TEST, so the child logs to the throwaway file.
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
+
+    assert result.returncode != 0, "scenario was expected to abort"
+    with open(resolve_log_path(), encoding="utf-8", errors="replace") as handle:
+        log_text = handle.read()
+    assert f"Destroyed while thread '{marker}' is still running" in log_text
+
+
+# ---------------------------------------------------------------------------
+# Uncaught Python exceptions. The app's excepthook used to print the
+# traceback to stderr - which the windowed build does not have - and exit,
+# so a crash left adiat_logs.txt silent.
+# ---------------------------------------------------------------------------
+
+def test_uncaught_exception_is_logged_with_its_traceback_before_exit():
+    import subprocess
+    import sys
+    import textwrap
+    import uuid
+
+    marker = f"crash-marker-{uuid.uuid4().hex}"
+    app_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {app_dir!r})
+        from core.services.LoggerService import fatal_excepthook
+        sys.excepthook = fatal_excepthook
+
+        def where_it_broke():
+            raise RuntimeError({marker!r})
+
+        where_it_broke()
+    """)
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
+
+    assert result.returncode == 1
+    with open(resolve_log_path(), encoding="utf-8", errors="replace") as handle:
+        log_text = handle.read()
+    entry = log_text[log_text.rindex("Uncaught exception"):]
+    assert f"RuntimeError: {marker}" in entry
+    assert "where_it_broke" in entry  # the traceback, not just the message
+
+
+def test_excepthook_still_exits_when_logging_fails():
+    """A full disk or locked log file must not leave a crashed app running."""
+    with patch.object(logger_module, "LoggerService", side_effect=OSError("disk full")), \
+            patch.object(logger_module.os, "_exit") as exit_:
+        logger_module.fatal_excepthook(RuntimeError, RuntimeError("boom"), None)
+    exit_.assert_called_once_with(1)

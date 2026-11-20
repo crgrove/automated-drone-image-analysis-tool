@@ -89,6 +89,49 @@ def resolve_console_log_level():
     return logging.WARNING
 
 
+def qt_message_handler(mode, context, message):
+    """Route one of Qt's own messages into the ADIAT log.
+
+    Some Qt failures are reported only here: "QThread: Destroyed while
+    thread is still running" arrives as a fatal message just before Qt
+    aborts the process. Qt's default handler writes to stderr, which the
+    windowed build does not have, so those crashes left adiat_logs.txt
+    with nothing to say.
+    """
+    from PySide6.QtCore import QtMsgType  # local: keeps Qt out of non-GUI importers
+
+    log = LoggerService()
+    if mode == QtMsgType.QtFatalMsg:
+        log.error(f"Qt fatal error, the process is about to abort: {message}")
+    elif mode == QtMsgType.QtCriticalMsg:
+        log.error(f"Qt: {message}")
+    elif mode == QtMsgType.QtWarningMsg:
+        log.warning(f"Qt: {message}")
+    else:
+        log.debug(f"Qt: {message}")
+
+
+def install_qt_message_handler():
+    """Send Qt's messages to the ADIAT log instead of stderr."""
+    from PySide6.QtCore import qInstallMessageHandler
+    qInstallMessageHandler(qt_message_handler)
+
+
+def fatal_excepthook(exctype, value, tb):
+    """The app's sys.excepthook: log the uncaught exception, then exit.
+
+    It used to print the traceback to stderr, which the windowed build does
+    not have, so a crash left adiat_logs.txt with nothing to say about it.
+    os._exit guarantees a non-zero exit instead of a hung app.
+    """
+    try:
+        text = "".join(traceback.format_exception(exctype, value, tb))
+        LoggerService().logger.critical(f"Uncaught exception, ADIAT is exiting:\n{text}")
+    except Exception:
+        traceback.print_exception(exctype, value, tb)
+    os._exit(1)
+
+
 class LoggerService:
     """Service to write errors and warnings to an application log file.
 
