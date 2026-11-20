@@ -348,6 +348,25 @@ class TestColorDetectionService:
         assert service._target_hsv is not None
         assert service._hsv_ranges is not None
 
+    @pytest.mark.parametrize('field', ['hsv_ranges_list', 'hsv_ranges'])
+    def test_a_hue_range_across_zero_detects_both_sides(self, field):
+        """Red +/-20 degrees must match 340-360 as well as 0-20. The bounds were
+        clamped to 0..179 before the wrap check, so the 340-360 half was dropped."""
+        red = {'h': 0.0, 's': 1.0, 'v': 1.0, 'h_minus': 20 / 360, 'h_plus': 20 / 360,
+               's_minus': 0.5, 's_plus': 0.0, 'v_minus': 0.5, 'v_plus': 0.0}
+        service = ColorDetectionService()
+        service.update_config(HSVConfig(target_color_rgb=(255, 0, 0),
+                                        **{field: [red] if field == 'hsv_ranges_list' else red}))
+
+        every_hue = np.zeros((1, 180, 3), dtype=np.uint8)
+        every_hue[0, :, 0] = np.arange(180)
+        every_hue[0, :, 1:] = 255
+        mask = np.zeros((1, 180), dtype=np.uint8)
+        for lower, upper in service._hsv_ranges:
+            mask |= cv2.inRange(every_hue, lower, upper)
+
+        assert set(np.nonzero(mask[0])[0].tolist()) == set(range(170, 180)) | set(range(0, 11))
+
 
 # ---------------------------------------------------------------------------
 # Pure helper coverage

@@ -5,7 +5,7 @@ from ast import literal_eval
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.HSVColorRange.views.HSVColorRange_ui import Ui_HSVColorRange
 from algorithms.Shared.views import HSVColorRowWidget
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
+from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 from core.services.LoggerService import LoggerService
 from algorithms.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.CustomColorsService import get_custom_colors_service
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QWidget, QColorDialog, QLabel, QSizePolicy, QScro
 
 from algorithms import DetectionExpansion as _DE
 from PySide6.QtCore import Qt
+from helpers.ColorUtils import ColorUtils
 
 
 class HSVColorRangeController(TranslationMixin, QWidget, Ui_HSVColorRange, AlgorithmController):
@@ -380,8 +381,8 @@ class HSVColorRangeController(TranslationMixin, QWidget, Ui_HSVColorRange, Algor
             # Convert fractional ranges (0-1) to OpenCV format (0-179 for hue, 0-255 for sat/val)
             hsv_ranges_list.append({
                 'rgb': rgb,
-                'hue_minus': int(hsv_ranges['h_minus'] * 179),  # Convert fractional to OpenCV (0-179)
-                'hue_plus': int(hsv_ranges['h_plus'] * 179),
+                'hue_minus': ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_minus']),  # Convert fractional to OpenCV (0-179)
+                'hue_plus': ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_plus']),
                 'sat_minus': int(hsv_ranges['s_minus'] * 255),  # Convert fractional to OpenCV (0-255)
                 'sat_plus': int(hsv_ranges['s_plus'] * 255),
                 'val_minus': int(hsv_ranges['v_minus'] * 255),

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from .HSVColorRangeAssistant import HSVColorRangeAssistant
 from helpers.TranslationMixin import TranslationMixin
 from core.views.components.HueRingSelector import HueRingSelector
+from helpers.ColorUtils import ColorUtils
 
 
 class HSVRangePickerWidget(TranslationMixin, QWidget):
@@ -417,7 +418,7 @@ class HSVRangePickerWidget(TranslationMixin, QWidget):
     def apply_hsv_assistant_ranges(self, ranges):
         """Apply ranges from HSV Assistant."""
         # Extract values from ranges dict
-        h_center = ranges['h_center'] / 179  # Convert from OpenCV to 0-1
+        h_center = ranges['h_center'] / 180  # OpenCV units (2 degrees each) to a fraction of 360
         s_center = ranges['s_center'] / 255
         v_center = ranges['v_center'] / 255
 
@@ -643,11 +644,11 @@ class HSVRangePickerWidget(TranslationMixin, QWidget):
 
     def get_hsv_ranges(self):
         """Get current HSV ranges in OpenCV format (0-179, 0-255, 0-255)."""
-        h_center = int(self.h * 179)
+        h_center = ColorUtils.hue_fraction_to_opencv(self.h) % 180
         s_center = int(self.s * 255)
         v_center = int(self.v * 255)
 
-        h_range = int(self.h_minus * 179), int(self.h_plus * 179)
+        h_range = ColorUtils.hue_fraction_to_opencv(self.h_minus), ColorUtils.hue_fraction_to_opencv(self.h_plus)
         s_range = int(self.s_minus * 255), int(self.s_plus * 255)
         v_range = int(self.v_minus * 255), int(self.v_plus * 255)
 

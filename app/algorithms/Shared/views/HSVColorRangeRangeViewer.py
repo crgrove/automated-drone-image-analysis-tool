@@ -183,28 +183,14 @@ class HSVColorRangeRangeViewer(QDialog, Ui_ColorRangeViewer):
             s_center = int(target_hsv[1])
             v_center = int(target_hsv[2])
 
-            h_low = max(0, h_center - hue_minus)
-            h_high = min(179, h_center + hue_plus)
+            # Hue bounds stay unclamped so a range across 0 keeps both halves
             s_low = max(0, s_center - sat_minus)
             s_high = min(255, s_center + sat_plus)
             v_low = max(0, v_center - val_minus)
             v_high = min(255, v_center + val_plus)
-
-            # Handle hue wrapping if necessary
-            if h_low > h_high:
-                # Hue wraps around (e.g., 350° to 10°) - create two ranges
-                bounds = [
-                    (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                     np.array([179, s_high, v_high], dtype=np.uint8)),
-                    (np.array([0, s_low, v_low], dtype=np.uint8),
-                     np.array([h_high, s_high, v_high], dtype=np.uint8))
-                ]
-            else:
-                # Normal range - single range
-                bounds = [
-                    (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                     np.array([h_high, s_high, v_high], dtype=np.uint8))
-                ]
+            bounds = [(np.array([lo, s_low, v_low], dtype=np.uint8),
+                       np.array([hi, s_high, v_high], dtype=np.uint8))
+                      for lo, hi in ColorUtils.opencv_hue_spans(h_center - hue_minus, h_center + hue_plus)]
 
             # Generate mask for this color range
             mask = None

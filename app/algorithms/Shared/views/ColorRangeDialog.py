@@ -23,6 +23,7 @@ from algorithms.Shared.views.ColorPickerDialog import ColorPickerDialog
 from core.services.color.CustomColorsService import get_custom_colors_service
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
+from helpers.ColorUtils import ColorUtils
 
 
 class ColorRangeDialog(TranslationMixin, QDialog):
@@ -398,7 +399,7 @@ class ColorRangeDialog(TranslationMixin, QDialog):
     def apply_image_picker_ranges(self, ranges):
         """Apply ranges from HSV Color Range Assistant."""
         # Extract values from ranges dict
-        h_center = ranges['h_center'] / 179  # Convert from OpenCV to 0-1
+        h_center = ranges['h_center'] / 180  # OpenCV units (2 degrees each) to a fraction of 360
         s_center = ranges['s_center'] / 255
         v_center = ranges['v_center'] / 255
 
@@ -457,8 +458,6 @@ class ColorRangeDialog(TranslationMixin, QDialog):
             (h_minus, h_plus), (s_minus, s_plus), (v_minus, v_plus) = ranges['ranges']
 
             # Calculate HSV bounds
-            h_low = max(0, center_h - h_minus)
-            h_high = min(179, center_h + h_plus)
             s_low = max(0, center_s - s_minus)
             s_high = min(255, center_s + s_plus)
             v_low = max(0, center_v - v_minus)
@@ -467,10 +466,13 @@ class ColorRangeDialog(TranslationMixin, QDialog):
             # Convert image to HSV
             hsv_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2HSV)
 
-            # Create mask
-            mask = cv2.inRange(hsv_image,
-                               np.array([h_low, s_low, v_low]),
-                               np.array([h_high, s_high, v_high]))
+            # Create mask; hue bounds stay unclamped so a range across 0 keeps both halves
+            mask = None
+            for lo, hi in ColorUtils.opencv_hue_spans(center_h - h_minus, center_h + h_plus):
+                span = cv2.inRange(hsv_image,
+                                   np.array([lo, s_low, v_low], dtype=np.uint8),
+                                   np.array([hi, s_high, v_high], dtype=np.uint8))
+                mask = span if mask is None else cv2.bitwise_or(mask, span)
 
             # Create result image
             if hasattr(self, 'show_mask_cb') and self.show_mask_cb.isChecked():

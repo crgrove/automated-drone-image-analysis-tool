@@ -16,11 +16,12 @@ from ast import literal_eval
 from algorithms.AlgorithmController import AlgorithmController
 from algorithms.images.HSVColorRange.views.HSVColorRangeWizard_ui import Ui_HSVColorRangeWizard
 from algorithms.images.HSVColorRange.views.HSVColorRowWizardWidget import HSVColorRowWizardWidget
-from algorithms.images.HSVColorRange.controllers.HSVColorRangeViewerController import HSVColorRangeRangeViewer
+from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeViewer
 from algorithms.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.LoggerService import LoggerService
 from helpers.IconHelper import IconHelper
 from helpers.TranslationMixin import TranslationMixin
+from helpers.ColorUtils import ColorUtils
 
 
 class HSVColorRangeWizardController(TranslationMixin, QWidget, Ui_HSVColorRangeWizard, AlgorithmController):
@@ -137,7 +138,7 @@ class HSVColorRangeWizardController(TranslationMixin, QWidget, Ui_HSVColorRangeW
             h, s, v = hsv_data['center_hsv']
         elif 'h' in hsv_data and 's' in hsv_data and 'v' in hsv_data:
             # Convert from 0-1 range to OpenCV range (0-179, 0-255, 0-255)
-            h = int(hsv_data['h'] * 179)
+            h = ColorUtils.hue_fraction_to_opencv(hsv_data['h']) % 180
             s = int(hsv_data['s'] * 255)
             v = int(hsv_data['v'] * 255)
         else:
@@ -147,7 +148,7 @@ class HSVColorRangeWizardController(TranslationMixin, QWidget, Ui_HSVColorRangeW
         # If we have fractional values, use them directly
         if 'h' in hsv_data and isinstance(hsv_data['h'], float) and 0 <= hsv_data['h'] <= 1:
             # Already in 0-1 range, convert to OpenCV for RGB conversion
-            h_cv = int(hsv_data['h'] * 179)
+            h_cv = ColorUtils.hue_fraction_to_opencv(hsv_data['h']) % 180
             s_cv = int(hsv_data['s'] * 255)
             v_cv = int(hsv_data['v'] * 255)
         else:
@@ -276,8 +277,8 @@ class HSVColorRangeWizardController(TranslationMixin, QWidget, Ui_HSVColorRangeW
                 ranges = row.get_hsv_ranges_fractional()
                 hsv_ranges_list.append({
                     'rgb': rgb,
-                    'hue_minus': int(ranges.get('h_minus', 0.1) * 179),  # Convert fractional to OpenCV (0-179)
-                    'hue_plus': int(ranges.get('h_plus', 0.1) * 179),
+                    'hue_minus': ColorUtils.hue_fraction_to_opencv(ranges.get('h_minus', 0.1)),  # Convert fractional to OpenCV (0-179)
+                    'hue_plus': ColorUtils.hue_fraction_to_opencv(ranges.get('h_plus', 0.1)),
                     'sat_minus': int(ranges.get('s_minus', 0.2) * 255),  # Convert fractional to OpenCV (0-255)
                     'sat_plus': int(ranges.get('s_plus', 0.2) * 255),
                     'val_minus': int(ranges.get('v_minus', 0.2) * 255),

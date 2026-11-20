@@ -22,6 +22,7 @@ from algorithms.Shared.views.HSVColorRangeRangeViewer import HSVColorRangeRangeV
 from algorithms.Shared.views.ColorSelectionMenu import ColorSelectionMenu
 from core.services.color.RecentColorsService import get_recent_colors_service
 from helpers.TranslationMixin import TranslationMixin
+from helpers.ColorUtils import ColorUtils
 
 
 class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget):
@@ -309,7 +310,7 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
             h, s, v = hsv_data['center_hsv']
         elif 'h' in hsv_data and 's' in hsv_data and 'v' in hsv_data:
             # Convert from 0-1 range to OpenCV range (0-179, 0-255, 0-255)
-            h = int(hsv_data['h'] * 179)
+            h = ColorUtils.hue_fraction_to_opencv(hsv_data['h']) % 180
             s = int(hsv_data['s'] * 255)
             v = int(hsv_data['v'] * 255)
         else:
@@ -318,7 +319,7 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
         # Convert HSV to RGB (OpenCV format: H=0-179, S=0-255, V=0-255)
         if 'h' in hsv_data and isinstance(hsv_data['h'], float) and 0 <= hsv_data['h'] <= 1:
             # Already in 0-1 range, convert to OpenCV for RGB conversion
-            h_cv = int(hsv_data['h'] * 179)
+            h_cv = ColorUtils.hue_fraction_to_opencv(hsv_data['h']) % 180
             s_cv = int(hsv_data['s'] * 255)
             v_cv = int(hsv_data['v'] * 255)
         else:
@@ -341,8 +342,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
         new_range = {
             'name': self.tr("Color_{index}").format(index=len(self.color_ranges) + 1),
             'color': color,
-            'hue_minus': int(h_minus_frac * 179),
-            'hue_plus': int(h_plus_frac * 179),
+            'hue_minus': ColorUtils.hue_fraction_to_opencv(h_minus_frac),
+            'hue_plus': ColorUtils.hue_fraction_to_opencv(h_plus_frac),
             'sat_minus': int(s_minus_frac * 255),
             'sat_plus': int(s_plus_frac * 255),
             'val_minus': int(v_minus_frac * 255),
@@ -394,8 +395,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
                 new_range = {
                     'name': self.tr("Color_{index}").format(index=len(self.color_ranges) + 1),
                     'color': color,
-                    'hue_minus': int(h_minus_frac * 179),
-                    'hue_plus': int(h_plus_frac * 179),
+                    'hue_minus': ColorUtils.hue_fraction_to_opencv(h_minus_frac),
+                    'hue_plus': ColorUtils.hue_fraction_to_opencv(h_plus_frac),
                     'sat_minus': int(s_minus_frac * 255),
                     'sat_plus': int(s_plus_frac * 255),
                     'val_minus': int(v_minus_frac * 255),
@@ -465,8 +466,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
 
                     # Update self.color_ranges with current widget values
                     self.color_ranges[i]['color'] = color
-                    self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
-                    self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                    self.color_ranges[i]['hue_minus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_minus'])
+                    self.color_ranges[i]['hue_plus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_plus'])
                     self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
                     self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
                     self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
@@ -528,8 +529,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
                         hsv_ranges = w.get_hsv_ranges()
                         color = w.get_color()
                         self.color_ranges[i]['color'] = color
-                        self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
-                        self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                        self.color_ranges[i]['hue_minus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_minus'])
+                        self.color_ranges[i]['hue_plus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_plus'])
                         self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
                         self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
                         self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
@@ -561,8 +562,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
 
                     # Update self.color_ranges with current widget values
                     self.color_ranges[i]['color'] = color
-                    self.color_ranges[i]['hue_minus'] = int(hsv_ranges['h_minus'] * 179)
-                    self.color_ranges[i]['hue_plus'] = int(hsv_ranges['h_plus'] * 179)
+                    self.color_ranges[i]['hue_minus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_minus'])
+                    self.color_ranges[i]['hue_plus'] = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_plus'])
                     self.color_ranges[i]['sat_minus'] = int(hsv_ranges['s_minus'] * 255)
                     self.color_ranges[i]['sat_plus'] = int(hsv_ranges['s_plus'] * 255)
                     self.color_ranges[i]['val_minus'] = int(hsv_ranges['v_minus'] * 255)
@@ -652,8 +653,8 @@ class ColorDetectionControlWidget(TranslationMixin, QWidget, Ui_HSVControlWidget
 
             # Convert normalized ranges back to OpenCV format
             # h_minus/h_plus are fractions of 360°, convert to 0-179
-            hue_minus = int(hsv_ranges['h_minus'] * 179)
-            hue_plus = int(hsv_ranges['h_plus'] * 179)
+            hue_minus = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_minus'])
+            hue_plus = ColorUtils.hue_fraction_to_opencv(hsv_ranges['h_plus'])
             # s_minus/s_plus are fractions of 100%, convert to 0-255
             sat_minus = int(hsv_ranges['s_minus'] * 255)
             sat_plus = int(hsv_ranges['s_plus'] * 255)

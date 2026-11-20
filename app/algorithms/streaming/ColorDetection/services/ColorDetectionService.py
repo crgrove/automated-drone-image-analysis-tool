@@ -273,42 +273,11 @@ class ColorDetectionService(QObject):
             # Check if we have multiple HSV ranges for multi-color detection
             if self._config.hsv_ranges_list and len(self._config.hsv_ranges_list) > 0:
                 # Process all color ranges
+                # One or two bound pairs per colour (two where its hue wraps
+                # past 0); _detect_colors maps them back to colours by count
                 all_ranges = []
                 for hsv_data in self._config.hsv_ranges_list:
-                    h, s, v = hsv_data['h'], hsv_data['s'], hsv_data['v']
-                    h_minus, h_plus = hsv_data['h_minus'], hsv_data['h_plus']
-                    s_minus, s_plus = hsv_data['s_minus'], hsv_data['s_plus']
-                    v_minus, v_plus = hsv_data['v_minus'], hsv_data['v_plus']
-
-                    # Calculate bounds in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
-                    h_center = int(h * 179)
-                    s_center = int(s * 255)
-                    v_center = int(v * 255)
-
-                    h_low = max(0, h_center - int(h_minus * 179))
-                    h_high = min(179, h_center + int(h_plus * 179))
-                    s_low = max(0, s_center - int(s_minus * 255))
-                    s_high = min(255, s_center + int(s_plus * 255))
-                    v_low = max(0, v_center - int(v_minus * 255))
-                    v_high = min(255, v_center + int(v_plus * 255))
-
-                    # Handle hue wrapping if necessary
-                    if h_low > h_high:
-                        # Hue wraps around (e.g., 350° to 10°) - create two ranges
-                        all_ranges.append(
-                            (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                             np.array([179, s_high, v_high], dtype=np.uint8))
-                        )
-                        all_ranges.append(
-                            (np.array([0, s_low, v_low], dtype=np.uint8),
-                             np.array([h_high, s_high, v_high], dtype=np.uint8))
-                        )
-                    else:
-                        # Normal range - single range
-                        all_ranges.append(
-                            (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                             np.array([h_high, s_high, v_high], dtype=np.uint8))
-                        )
+                    all_ranges.extend(ColorUtils.hsv_ranges_to_bounds(hsv_data))
 
                 self._hsv_ranges = all_ranges
                 # self.logger.info(f"Loaded {len(self._config.hsv_ranges_list)} color ranges ({len(all_ranges)} HSV ranges after hue wrapping)")
@@ -316,39 +285,7 @@ class ColorDetectionService(QObject):
             # Check if we have a single precise HSV range from the new picker (backward compatibility)
             elif self._config.hsv_ranges:
                 # Use precise HSV ranges from the new picker
-                hsv_data = self._config.hsv_ranges
-                h, s, v = hsv_data['h'], hsv_data['s'], hsv_data['v']
-                h_minus, h_plus = hsv_data['h_minus'], hsv_data['h_plus']
-                s_minus, s_plus = hsv_data['s_minus'], hsv_data['s_plus']
-                v_minus, v_plus = hsv_data['v_minus'], hsv_data['v_plus']
-
-                # Calculate bounds in OpenCV format (H: 0-179, S: 0-255, V: 0-255)
-                h_center = int(h * 179)
-                s_center = int(s * 255)
-                v_center = int(v * 255)
-
-                h_low = max(0, h_center - int(h_minus * 179))
-                h_high = min(179, h_center + int(h_plus * 179))
-                s_low = max(0, s_center - int(s_minus * 255))
-                s_high = min(255, s_center + int(s_plus * 255))
-                v_low = max(0, v_center - int(v_minus * 255))
-                v_high = min(255, v_center + int(v_plus * 255))
-
-                # Handle hue wrapping if necessary
-                if h_low > h_high:
-                    # Hue wraps around (e.g., 350° to 10°) - create two ranges
-                    self._hsv_ranges = [
-                        (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                         np.array([179, s_high, v_high], dtype=np.uint8)),
-                        (np.array([0, s_low, v_low], dtype=np.uint8),
-                         np.array([h_high, s_high, v_high], dtype=np.uint8))
-                    ]
-                else:
-                    # Normal range - single range
-                    self._hsv_ranges = [
-                        (np.array([h_low, s_low, v_low], dtype=np.uint8),
-                         np.array([h_high, s_high, v_high], dtype=np.uint8))
-                    ]
+                self._hsv_ranges = ColorUtils.hsv_ranges_to_bounds(self._config.hsv_ranges)
 
             elif self._target_hsv is not None:
                 # Fallback to old ColorUtils method for backward compatibility
@@ -944,21 +881,9 @@ class ColorDetectionService(QObject):
             # Map each HSV range to its color_id
             range_idx = 0
             for color_id, hsv_data in enumerate(config.hsv_ranges_list):
-                # Each color can have 1 or 2 ranges (if hue wraps)
-                h = hsv_data['h']
-                h_center = int(h * 179)
-                h_minus, h_plus = hsv_data['h_minus'], hsv_data['h_plus']
-                h_low = max(0, h_center - int(h_minus * 179))
-                h_high = min(179, h_center + int(h_plus * 179))
-
-                if h_low > h_high:
-                    # Hue wraps - two ranges for this color
-                    color_range_map[range_idx] = color_id
-                    range_idx += 1
-                    color_range_map[range_idx] = color_id
-                    range_idx += 1
-                else:
-                    # Single range
+                # One or two bound pairs per colour, exactly as
+                # _update_hsv_values built them, so the indices line up
+                for _ in ColorUtils.hsv_ranges_to_bounds(hsv_data):
                     color_range_map[range_idx] = color_id
                     range_idx += 1
 
@@ -1020,12 +945,13 @@ class ColorDetectionService(QObject):
                         min_dist = float('inf')
                         best_color_id = 0
                         for cid, hsv_data in enumerate(config.hsv_ranges_list):
-                            h_center = int(hsv_data['h'] * 179)
+                            h_center = ColorUtils.hue_fraction_to_opencv(hsv_data['h']) % 180
                             s_center = int(hsv_data['s'] * 255)
                             v_center = int(hsv_data['v'] * 255)
 
-                            # Calculate distance in HSV space
-                            h_dist = min(abs(mean_hsv[0] - h_center), 179 - abs(mean_hsv[0] - h_center))
+                            # Calculate distance in HSV space; hue is a 180-unit circle
+                            h_gap = abs(int(mean_hsv[0]) - h_center)
+                            h_dist = min(h_gap, 180 - h_gap)
                             s_dist = abs(mean_hsv[1] - s_center)
                             v_dist = abs(mean_hsv[2] - v_center)
                             dist = h_dist + s_dist + v_dist

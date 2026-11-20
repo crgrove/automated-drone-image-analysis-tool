@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabe
                                QGraphicsTextItem, QMessageBox)
 from core.services.LoggerService import LoggerService
 from helpers.TranslationMixin import TranslationMixin
+from helpers.ColorUtils import ColorUtils
 
 
 @dataclass
@@ -1349,15 +1350,17 @@ class HSVColorRangeAssistant(TranslationMixin, QDialog):
         self.v_center_label.setText(f"{int(v / 2.55)}%")
 
         # Calculate final ranges
-        h_low = max(0, h - self.hsv_ranges['h_minus'])
-        h_high = min(179, h + self.hsv_ranges['h_plus'])
+        # Hue is circular: leave its bounds unclamped and show them mod 360,
+        # so a range across 0 reads e.g. 340°-20° rather than 0°-20°
+        h_low = h - self.hsv_ranges['h_minus']
+        h_high = h + self.hsv_ranges['h_plus']
         s_low = max(0, s - self.hsv_ranges['s_minus'])
         s_high = min(255, s + self.hsv_ranges['s_plus'])
         v_low = max(0, v - self.hsv_ranges['v_minus'])
         v_high = min(255, v + self.hsv_ranges['v_plus'])
 
         # Update range labels
-        self.h_range_label.setText(f"{int(h_low * 2)}°-{int(h_high * 2)}°")
+        self.h_range_label.setText(f"{int(h_low * 2) % 360}°-{int(h_high * 2) % 360}°")
         self.s_range_label.setText(f"{int(s_low / 2.55)}%-{int(s_high / 2.55)}%")
         self.v_range_label.setText(f"{int(v_low / 2.55)}%-{int(v_high / 2.55)}%")
 
@@ -1386,21 +1389,16 @@ class HSVColorRangeAssistant(TranslationMixin, QDialog):
         v_minus = float(self.hsv_ranges['v_minus'])
         v_plus = float(self.hsv_ranges['v_plus'])
 
-        # Calculate bounds with proper clamping
-        lower = np.array([
-            int(np.clip(h - h_minus, 0, 179)),
-            int(np.clip(s - s_minus, 0, 255)),
-            int(np.clip(v - v_minus, 0, 255))
-        ], dtype=np.uint8)
+        s_low, s_high = int(np.clip(s - s_minus, 0, 255)), int(np.clip(s + s_plus, 0, 255))
+        v_low, v_high = int(np.clip(v - v_minus, 0, 255)), int(np.clip(v + v_plus, 0, 255))
 
-        upper = np.array([
-            int(np.clip(h + h_plus, 0, 179)),
-            int(np.clip(s + s_plus, 0, 255)),
-            int(np.clip(v + v_plus, 0, 255))
-        ], dtype=np.uint8)
-
-        # Create mask
-        mask = cv2.inRange(self.viewer.image_hsv, lower, upper)
+        # Hue bounds stay unclamped so a range across 0 keeps both halves
+        mask = None
+        for lo, hi in ColorUtils.opencv_hue_spans(int(round(h - h_minus)), int(round(h + h_plus))):
+            span = cv2.inRange(self.viewer.image_hsv,
+                               np.array([lo, s_low, v_low], dtype=np.uint8),
+                               np.array([hi, s_high, v_high], dtype=np.uint8))
+            mask = span if mask is None else cv2.bitwise_or(mask, span)
 
         # Get the actual image dimensions
         if self.viewer.image_hsv is not None:

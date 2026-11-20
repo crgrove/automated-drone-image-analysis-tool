@@ -150,6 +150,20 @@ def test_create_mask_from_hsv_ranges_wraparound(hsv_color_range_service):
     assert mask.shape == (100, 100)
 
 
+def test_mask_selects_exactly_the_hues_typed_across_zero(hsv_color_range_service):
+    """'H 200-20' around red must detect 200-360 and 0-20 degrees: OpenCV hue
+    100-179 and 0-10. Scaling by 179 and truncating gave 101-179 and 0-9."""
+    every_hue = np.zeros((1, 180, 3), dtype=np.uint8)
+    every_hue[0, :, 0] = np.arange(180)
+    every_hue[0, :, 1:] = 255
+    hsv_ranges = {'h': 0.0, 's': 1.0, 'v': 1.0, 'h_minus': 160 / 360, 'h_plus': 20 / 360,
+                  's_minus': 0.5, 's_plus': 0.0, 'v_minus': 0.5, 'v_plus': 0.0}
+
+    mask = hsv_color_range_service._create_mask_from_hsv_ranges(every_hue, hsv_ranges)
+
+    assert set(np.nonzero(mask[0])[0].tolist()) == set(range(100, 180)) | set(range(0, 11))
+
+
 def test_process_image_single_config(hsv_color_range_service, test_image):
     """Test processing an image with single HSV config."""
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -94,6 +94,72 @@ class ColorUtils:
             return [(lower_bound, upper_bound)]
 
     @staticmethod
+    def hue_fraction_to_opencv(fraction):
+        """A hue, or hue offset, stored as a fraction of 360 degrees, in OpenCV units.
+
+        OpenCV hue runs 0-179 in 2-degree steps, so a full turn is 180 units.
+        Scaling by 179 and truncating put each bound up to 2 degrees off the
+        value typed. Rounding also reads back offsets stored as units / 179
+        (presets, saved settings) unchanged for anything under 90 units.
+
+        Args:
+            fraction (float): Hue as a fraction of 360 degrees; may be negative
+                or past 1 for a bound that wraps.
+
+        Returns:
+            int: Hue in OpenCV units, unwrapped.
+        """
+        return int(round(fraction * 180))
+
+    @staticmethod
+    def opencv_hue_spans(low, high):
+        """Split an unclamped OpenCV hue range into the spans cv2.inRange needs.
+
+        Hue is circular, so a range reaching below 0 or past 179 continues from
+        the other end. Clamping the bounds before checking for a wrap - the
+        mistake this replaces - makes a wrapping range look like it never wraps
+        and silently drops the part across 0.
+
+        Args:
+            low (int): Lower hue bound in OpenCV units, unclamped.
+            high (int): Upper hue bound in OpenCV units, unclamped.
+
+        Returns:
+            list[tuple[int, int]]: One (low, high) span, or two when it wraps.
+        """
+        if high - low >= 179:
+            return [(0, 179)]
+        shift = (low // 180) * 180  # bring low into 0..179; high moves with it
+        low, high = low - shift, high - shift
+        if high > 179:
+            return [(low, 179), (0, high - 180)]
+        return [(low, high)]
+
+    @staticmethod
+    def hsv_ranges_to_bounds(hsv_ranges):
+        """cv2.inRange (lower, upper) pairs for an HSV range stored as fractions.
+
+        Args:
+            hsv_ranges (dict): Centre 'h', 's', 'v' and offsets 'h_minus',
+                'h_plus', 's_minus', 's_plus', 'v_minus', 'v_plus'. Hue values
+                are fractions of 360 degrees; S/V are fractions of full scale.
+
+        Returns:
+            list[tuple[np.ndarray, np.ndarray]]: One pair, or two when the hue
+                range wraps past 0.
+        """
+        h, s, v = hsv_ranges['h'], hsv_ranges['s'], hsv_ranges['v']
+        h_low = ColorUtils.hue_fraction_to_opencv(h - hsv_ranges['h_minus'])
+        h_high = ColorUtils.hue_fraction_to_opencv(h + hsv_ranges['h_plus'])
+        s_center, v_center = int(s * 255), int(v * 255)
+        s_low = max(0, s_center - int(hsv_ranges['s_minus'] * 255))
+        s_high = min(255, s_center + int(hsv_ranges['s_plus'] * 255))
+        v_low = max(0, v_center - int(hsv_ranges['v_minus'] * 255))
+        v_high = min(255, v_center + int(hsv_ranges['v_plus'] * 255))
+        return [(np.array([lo, s_low, v_low], dtype=np.uint8), np.array([hi, s_high, v_high], dtype=np.uint8))
+                for lo, hi in ColorUtils.opencv_hue_spans(h_low, h_high)]
+
+    @staticmethod
     def parse_rgb_string(value):
         """Parse RGB values from string like '(0, 85, 255)' or similar formats.
 

@@ -212,3 +212,45 @@ def test_parse_rgb_string_non_string():
 
     result = ColorUtils.parse_rgb_string(None)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Hue: stored fractions of 360 degrees -> OpenCV units (0-179, 2 degrees each)
+# ---------------------------------------------------------------------------
+
+def test_hue_fraction_maps_typed_degrees_exactly():
+    """A full turn is 180 OpenCV units; scaling by 179 and truncating moved
+    a typed 200 degrees to 202 and 20 degrees to 18."""
+    assert ColorUtils.hue_fraction_to_opencv(200 / 360) == 100
+    assert ColorUtils.hue_fraction_to_opencv(20 / 360) == 10
+    assert ColorUtils.hue_fraction_to_opencv(-160 / 360) == -80
+
+
+@pytest.mark.parametrize('units', [5, 10, 15, 20, 35, 89])
+def test_hue_fraction_reads_offsets_stored_as_units_over_179(units):
+    """Presets and saved settings store offsets as units / 179; they must read
+    back as the same number of units."""
+    assert ColorUtils.hue_fraction_to_opencv(units / 179) == units
+
+
+@pytest.mark.parametrize('low, high, expected', [
+    (-80, 10, [(100, 179), (0, 10)]),     # wraps below 0
+    (150, 190, [(150, 179), (0, 10)]),    # wraps past 179
+    (50, 70, [(50, 70)]),                 # no wrap
+    (-90, 90, [(0, 179)]),                # a full turn is every hue
+    (-200, -150, [(160, 179), (0, 30)]),  # more than a turn below 0
+], ids=['below-0', 'past-179', 'no-wrap', 'full-turn', 'far-below-0'])
+def test_opencv_hue_spans(low, high, expected):
+    assert ColorUtils.opencv_hue_spans(low, high) == expected
+
+
+def test_hsv_ranges_to_bounds_for_a_range_typed_across_zero():
+    """The HSV row's 'H 200-20, S 43-100, V 25-100' around pure red."""
+    hsv_ranges = {'h': 0.0, 's': 1.0, 'v': 1.0,
+                  'h_minus': 160 / 360, 'h_plus': 20 / 360,
+                  's_minus': 0.57, 's_plus': 0.0, 'v_minus': 0.75, 'v_plus': 0.0}
+
+    bounds = ColorUtils.hsv_ranges_to_bounds(hsv_ranges)
+
+    assert [(int(lo[0]), int(hi[0])) for lo, hi in bounds] == [(100, 179), (0, 10)]
+    assert all(lo[1] == 110 and hi[1] == 255 and lo[2] == 64 and hi[2] == 255 for lo, hi in bounds)
