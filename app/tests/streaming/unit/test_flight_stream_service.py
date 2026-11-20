@@ -224,6 +224,22 @@ def test_connect_normalizes_pairing_code_and_starts_service(manager):
     assert statuses and statuses[0][0] is False  # interim "pairing" status
 
 
+def test_disconnect_retires_a_receive_thread_that_will_not_stop(manager, monkeypatch):
+    """Dropping a still-running QThread makes Qt abort the process."""
+    import core.services.streaming.FlightStreamService as fss
+
+    retired = []
+    monkeypatch.setattr(fss, "retire_running_thread", lambda thread: retired.append(thread))
+    assert manager.connect_to_stream("k7q-m3p", StreamType.WEBRTC) is True
+    service = manager._created["service"]
+    service.isRunning = lambda: True
+    service.wait = lambda ms: False
+
+    manager.disconnect_stream(emit_status=False)
+
+    assert retired == [service]
+
+
 def test_connect_rejects_malformed_pairing_code(manager):
     statuses = []
     manager.connectionChanged.connect(lambda ok, msg: statuses.append((ok, msg)))

@@ -108,6 +108,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from core.services.LoggerService import LoggerService
 from core.services.image.AltitudeAnchorService import NEAR_GROUND_ATO_M
 from core.services.telemetry.TelemetryTrack import haversine_meters
+from helpers.ThreadHelper import retire_running_thread
 
 # Cache key resolution: 1e-4 degrees is ~11 m at the equator, comfortably
 # finer than the DEM's own ~38 m resolution at the default zoom, so
@@ -572,13 +573,14 @@ class TelemetryEnrichmentService(QObject):
 
     def cleanup(self) -> None:
         """Stop the worker thread. Safe to call more than once."""
-        thread = self._thread
+        thread, worker = self._thread, self._worker
         self._thread = None
         self._worker = None
         if thread is not None:
             thread.quit()
             if not thread.wait(2000):
                 self.logger.warning("Telemetry enrichment thread did not stop within 2s")
+                retire_running_thread(thread, worker)
 
     # ------------------------------------------------------------------
     # internals

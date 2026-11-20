@@ -51,6 +51,7 @@ from core.services.streaming.TelemetryFeedService import (
     TelemetryFeedService,
 )
 from core.services.streaming.WebRTCStreamService import WebRTCStreamService
+from helpers.ThreadHelper import retire_running_thread
 from core.services.streaming.signaling import (
     SignalingChannel,
     default_signaling_channel,
@@ -364,13 +365,13 @@ class FlightStreamManager(QObject):
                 self.logger.warning(f"ADIAT Flight: error during disconnect: {exc}")
 
             # Deleting a QThread that is still running trips Qt's
-            # "destroyed while thread is still running" abort, so defer to
-            # ``finished`` when the wait timed out (mirrors StreamManager).
+            # "destroyed while thread is still running" abort, so keep it
+            # alive until ``finished`` when the wait timed out.
             try:
                 if stopped:
                     service.deleteLater()
                 else:
-                    service.finished.connect(service.deleteLater)
+                    retire_running_thread(service)
             except (AttributeError, RuntimeError):
                 pass
 

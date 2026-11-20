@@ -421,6 +421,22 @@ class TestLifecycle:
         service.cleanup()
         service.cleanup()
 
+    def test_cleanup_retires_a_worker_thread_that_will_not_stop(self, service):
+        """A DEM fetch stuck past the wait must not be dropped while running.
+
+        Dropping it deletes a running QThread (and the worker still executing
+        on it), which Qt answers by aborting the process.
+        """
+        thread, worker = MagicMock(), service._worker
+        thread.wait.return_value = False
+        service._thread = thread
+        with patch(
+            "core.services.telemetry.TelemetryEnrichmentService.retire_running_thread"
+        ) as retire:
+            service.cleanup()
+        retire.assert_called_once_with(thread, worker)
+        assert service._thread is None and service._worker is None
+
 
 class TestTerrainServiceIsolation:
     """Each worker owns its TerrainService; it is never shared across threads.

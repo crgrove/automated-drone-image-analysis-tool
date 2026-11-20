@@ -9,6 +9,7 @@ color detection applications. Designed for <250ms latency processing.
 from core.services.LoggerService import LoggerService
 from helpers.VideoFileHelper import detect_thumbnail_track, remux_to_main_track, is_ffmpeg_available, _FFMPEG_USER_MSG
 from PySide6.QtCore import QObject, QThread, Signal
+from helpers.ThreadHelper import retire_running_thread
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple, Callable, Dict, Any
@@ -478,10 +479,15 @@ class RTMPStreamService(QThread):
 
                     # Try each backend until one works
                     for backend_id, backend_name in backends_to_try:
+                        # Debug trail for ADIAT_LOG_LEVEL=DEBUG: a capture device
+                        # that hangs inside a native call leaves its last step
+                        # as the final line in the log.
+                        self.logger.debug(f"HDMI device {device_index}: opening with {backend_name} ({backend_id})")
                         self._cap = cv2.VideoCapture(device_index, backend_id)
                         if self._cap is not None and self._cap.isOpened():
-                            # self.logger.info(f"HDMI: Connected using {backend_name} backend")
+                            self.logger.debug(f"HDMI device {device_index}: opened with {backend_name}")
                             break
+                        self.logger.debug(f"HDMI device {device_index}: {backend_name} could not open it")
                         if self._cap is not None:
                             self._cap.release()
                             self._cap = None
@@ -520,6 +526,7 @@ class RTMPStreamService(QThread):
                 # Try to set preferred resolution, but accept device defaults if it fails
                 # Some devices don't support resolution changes
                 target_width, target_height = 1280, 720
+                self.logger.debug(f"HDMI device: requesting {target_width}x{target_height}")
                 self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_width)
                 self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_height)
 
@@ -532,6 +539,7 @@ class RTMPStreamService(QThread):
                 # self.logger.info(f"Capture device configured: {actual_width}x{actual_height}")
 
             # Test frame read
+            self.logger.debug(f"Reading first frame from {self.config.stream_type.value} source")
             ret, frame = self._cap.read()
             if not ret or frame is None:
                 self.logger.error("Failed to read initial frame")
@@ -1291,7 +1299,7 @@ class StreamManager(QObject):
             if service_stopped:
                 self._service.deleteLater()
             else:
-                self._service.finished.connect(self._service.deleteLater)
+                retire_running_thread(self._service)
             self._service = None
 
             # Additional delay to ensure capture device is fully released by OS

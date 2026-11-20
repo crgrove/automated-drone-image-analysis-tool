@@ -485,6 +485,37 @@ def _build_mock_service():
     return service
 
 
+class TestStreamManagerDisconnect:
+    """A capture thread that will not stop must be retired, not dropped."""
+
+    def test_stuck_service_is_retired_not_dropped(self):
+        manager = StreamManager()
+        service = _build_mock_service()
+        service.wait = Mock(return_value=False)  # hung in a native open/read
+        manager._service = service
+
+        with patch("core.services.streaming.RTMPStreamService.retire_running_thread") as retire, \
+                patch("core.services.streaming.RTMPStreamService.time.sleep"):
+            manager.disconnect_stream()
+
+        retire.assert_called_once_with(service)
+        service.deleteLater.assert_not_called()
+        assert manager._service is None
+
+    def test_stopped_service_is_deleted_normally(self):
+        manager = StreamManager()
+        service = _build_mock_service()
+        service.wait = Mock(return_value=True)
+        manager._service = service
+
+        with patch("core.services.streaming.RTMPStreamService.retire_running_thread") as retire, \
+                patch("core.services.streaming.RTMPStreamService.time.sleep"):
+            manager.disconnect_stream()
+
+        retire.assert_not_called()
+        service.deleteLater.assert_called_once()
+
+
 class TestStreamManagerFpsLimit:
     """Test FPS-limit mapping from UI/controller into stream config."""
 
