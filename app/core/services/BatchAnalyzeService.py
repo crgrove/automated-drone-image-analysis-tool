@@ -367,14 +367,6 @@ class BatchAnalyzeService(QObject):
         finally:
             self._current_service = None
             result['elapsed'] = round(time.time() - batch_start, 2)
-            if service is not None:
-                # close()/join() inside process_files() already ended the
-                # workers; terminate() is a no-op there but cleans up if the
-                # pass was cancelled or raised partway through.
-                try:
-                    service.pool.terminate()
-                except Exception:
-                    pass
 
         return result
 

@@ -11,7 +11,7 @@ import hashlib
 from importlib import import_module
 
 from pathlib import Path
-from multiprocessing import Pool, pool, TimeoutError as MPTimeoutError
+from multiprocessing import Pipe
 from PySide6.QtCore import QObject, Signal, Slot
 
 from algorithms.AlgorithmService import AnalysisResult
@@ -20,26 +20,14 @@ from core.services.advancedFeatures.HistogramNormalizationService import Histogr
 from core.services.advancedFeatures.KMeansClustersService import KMeansClustersService
 from core.services.XmlService import XmlService
 from helpers.PathHelper import build_image_cache_identities, cross_platform_path_key
+from helpers.WorkerProcessHelper import run_in_workers
 # Algorithm services imported lazily in process_file() to avoid worker startup overhead
 
 
-# Maximum wall-clock time to wait for any single image's analysis result. A
-# worker process that crashes or wedges on a problematic image hits this
-# limit; that image is recorded as failed and the run continues, instead of
-# the whole analysis hanging forever.
+# Maximum wall-clock time any single image may take. A worker that wedges on a
+# problematic image is killed at this limit; that image is recorded as failed
+# and the run continues, instead of the whole analysis hanging forever.
 PROCESS_TIMEOUT_SECONDS = 300
-
-# Granularity for polling a worker result. Cancellation terminates the pool,
-# which leaves any in-flight AsyncResult permanently unset; waiting for it with
-# one long get(timeout=PROCESS_TIMEOUT_SECONDS) would stall the whole run for
-# the full timeout before the cancel is noticed. Polling in short slices lets
-# the retrieval loop react to a cancel within a fraction of a second while
-# still enforcing the real per-image timeout budget for a wedged worker.
-RESULT_POLL_INTERVAL_SECONDS = 0.2
-
-
-class _AnalysisCancelled(Exception):
-    """Internal signal that the run was cancelled while awaiting a result."""
 
 
 class AnalyzeService(QObject):
@@ -114,7 +102,8 @@ class AnalyzeService(QObject):
         self._completed_images = 0
         self.ttl_images = 0
         self.is_thermal = (self.algorithm['type'] == 'Thermal')
-        self.pool = Pool(self.num_processes)
+        # process_cancel (GUI thread) writes here to wake the worker loop.
+        self._cancel_reader, self._cancel_writer = Pipe(duplex=False)
 
     @Slot()
     def process_files(self):
@@ -175,90 +164,68 @@ class AnalyzeService(QObject):
             self._completed_images = 0
             self._total_aois = 0
 
-            # Queue each image for multiprocessing, keeping its AsyncResult so
-            # the result can later be retrieved with a timeout.
-            pending = []
+            tasks = []
             for file in image_files:
+                if self.cancelled:
+                    break
                 if os.path.isdir(file):
                     self.ttl_images -= 1
                     continue
-                if self.pool._state == pool.RUN:
-                    try:
-                        with Image.open(file) as img:
-                            img.verify()  # Check if it's a valid image
-                        is_valid_image = True
-                    except (UnidentifiedImageError, OSError):
-                        is_valid_image = False
+                try:
+                    with Image.open(file) as img:
+                        img.verify()  # Check if it's a valid image
+                    is_valid_image = True
+                except (UnidentifiedImageError, OSError):
+                    is_valid_image = False
 
-                    if is_valid_image and self.pool._state == pool.RUN:
-                        async_result = self.pool.apply_async(
-                            AnalyzeService.process_file,
-                            (
-                                self.algorithm,
-                                self.identifier_color,
-                                self.min_area,
-                                self.max_area,
-                                self.aoi_radius,
-                                self.options,
-                                file,
-                                self.input,
-                                self.output,
-                                self.hist_ref_path,
-                                self.kmeans_clusters,
-                                self.is_thermal,
-                                self.processing_resolution,
-                                image_identities.get(cross_platform_path_key(file))
-                            )
+                if is_valid_image:
+                    tasks.append((
+                        file,
+                        (
+                            self.algorithm,
+                            self.identifier_color,
+                            self.min_area,
+                            self.max_area,
+                            self.aoi_radius,
+                            self.options,
+                            file,
+                            self.input,
+                            self.output,
+                            self.hist_ref_path,
+                            self.kmeans_clusters,
+                            self.is_thermal,
+                            self.processing_resolution,
+                            image_identities.get(cross_platform_path_key(file))
                         )
-                        pending.append((file, async_result))
-                    else:
-                        self.ttl_images -= 1
-                        self.sig_msg.emit(
-                            self.tr("Skipping {file} :: File is not an image").format(file=file)
-                        )
+                    ))
+                else:
+                    self.ttl_images -= 1
+                    self.sig_msg.emit(
+                        self.tr("Skipping {file} :: File is not an image").format(file=file)
+                    )
 
             # Notify that images are queued and processing has started
             self.sig_msg.emit(
                 self.tr("All {count} images queued, processing started...").format(count=self.ttl_images)
             )
 
-            # No more tasks will be submitted; workers drain the queue.
-            self.pool.close()
-
-            # Retrieve each result with a per-image timeout. Doing the wait
-            # here -- instead of a fire-and-forget callback plus an unbounded
-            # pool.join() -- means a single image whose worker crashes or
-            # never returns can no longer wedge the entire run. Such an image
-            # is recorded as a failure and processing continues with the rest.
-            for file, async_result in pending:
-                if self.cancelled:
-                    break
-                try:
-                    result = self._await_result(async_result)
-                except _AnalysisCancelled:
-                    # Cancel was requested while waiting; stop retrieving
-                    # results and fall through to pool teardown below.
-                    break
-                except MPTimeoutError:
-                    self._handle_failed_image(
-                        file, f"Processing exceeded {PROCESS_TIMEOUT_SECONDS}s and was skipped"
-                    )
-                    continue
-                except Exception as e:
+            # Results arrive as images finish. A cancel returns from the loop
+            # at once and the generator kills every worker, including those
+            # mid-image; results already processed are kept.
+            results = run_in_workers(tasks, self.num_processes, self._cancel_reader,
+                                     AnalyzeService.process_file, PROCESS_TIMEOUT_SECONDS)
+            try:
+                for file, result in results:
                     if self.cancelled:
                         break
-                    self._handle_failed_image(file, str(e))
-                    continue
-                if result is None:
-                    self._handle_failed_image(file, "No result returned (see log for details)")
-                    continue
-                self._process_complete(result)
-
-            # terminate() rather than join(): a worker still stuck on a bad
-            # image would make join() hang forever -- the exact failure being
-            # fixed here. The stuck worker is killed; finished work is kept.
-            self.pool.terminate()
-            self.pool.join()
+                    if isinstance(result, Exception):
+                        self._handle_failed_image(file, str(result))
+                    elif result is None:
+                        self._handle_failed_image(file, "No result returned (see log for details)")
+                    else:
+                        self._process_complete(result)
+            finally:
+                results.close()
 
             # Generate the output XML with the information gathered during processing
             self.images_with_aois = sorted(self.images_with_aois, key=operator.itemgetter('path'))
@@ -592,51 +559,17 @@ class AnalyzeService(QObject):
             eta = 0.0
         self.sig_progress.emit(self._completed_images, self.ttl_images, eta)
 
-    def _await_result(self, async_result):
-        """Wait for a worker's result while staying responsive to cancellation.
-
-        Polls the AsyncResult in short slices (RESULT_POLL_INTERVAL_SECONDS)
-        instead of a single long blocking get(). Cancellation terminates the
-        pool, which leaves an in-flight AsyncResult permanently unset; without
-        polling, the retrieval loop would block for the full
-        PROCESS_TIMEOUT_SECONDS before noticing the cancel, leaving the UI
-        stuck on "Cancelling Image Processing". The real per-image timeout
-        budget is still enforced for a genuinely wedged worker.
-
-        Args:
-            async_result: The multiprocessing AsyncResult to wait on.
-
-        Returns:
-            The worker's return value.
-
-        Raises:
-            _AnalysisCancelled: If cancellation was requested while waiting.
-            multiprocessing.TimeoutError: If PROCESS_TIMEOUT_SECONDS elapses.
-            Exception: Whatever the worker raised, propagated by get().
-        """
-        deadline = time.monotonic() + PROCESS_TIMEOUT_SECONDS
-        while True:
-            if self.cancelled:
-                raise _AnalysisCancelled()
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise MPTimeoutError()
-            try:
-                return async_result.get(timeout=min(RESULT_POLL_INTERVAL_SECONDS, remaining))
-            except MPTimeoutError:
-                # This poll slice elapsed with no result; loop to re-check the
-                # cancel flag and the real per-image deadline.
-                continue
-
     @Slot()
     def process_cancel(self):
-        """Cancel any ongoing asynchronous processes.
+        """Request cancellation of the run.
 
-        Sets cancellation flag and terminates the process pool.
+        Called from the GUI thread, so it only signals: the wake-up pipe ends
+        process_files()'s wait for results, and that thread - which owns the
+        workers - kills them, including any mid-image.
         """
         self.cancelled = True
+        self._cancel_writer.send(None)
         self.sig_msg.emit(self.tr("--- Cancelling Image Processing ---"))
-        self.pool.terminate()
 
     @staticmethod
     def _generate_main_image_thumbnail(img, image_path, output_dir, input_root=None):

@@ -9,6 +9,7 @@ import tempfile
 import os
 import numpy as np
 from unittest.mock import patch, MagicMock
+from PIL import Image as PILImage
 from PySide6.QtCore import QObject
 from core.services.AnalyzeService import AnalyzeService
 
@@ -312,76 +313,68 @@ def test_resolve_algorithm_service_handles_legacy_typo():
 # process_cancel
 # ---------------------------------------------------------------------------
 
-def test_process_cancel_sets_flag_and_terminates_pool(analyze_service):
-    analyze_service.pool = MagicMock()
+def _write_images(service, count):
+    for i in range(count):
+        PILImage.new("RGB", (4, 4)).save(os.path.join(service.input, f"img{i}.png"))
+
+
+def test_cancelled_run_still_reports_done(analyze_service):
+    """Regression: a cancel left the run without sig_done, so View Results never
+    enabled. Cancelling before work starts must still finish the run."""
+    _write_images(analyze_service, 1)
+    done = []
+    analyze_service.sig_done.connect(lambda *args: done.append(args))
+
     analyze_service.process_cancel()
     assert analyze_service.cancelled is True
-    analyze_service.pool.terminate.assert_called_once()
+    assert analyze_service._cancel_reader.poll()  # wakes the worker loop
+
+    analyze_service.process_files()
+    assert len(done) == 1
 
 
-# ---------------------------------------------------------------------------
-# _await_result (cancel responsiveness)
-# ---------------------------------------------------------------------------
-
-def test_await_result_returns_worker_value(analyze_service):
-    """A ready result is returned straight through."""
-    async_result = MagicMock()
-    async_result.get.return_value = "payload"
-    assert analyze_service._await_result(async_result) == "payload"
-
-
-def test_await_result_bails_out_immediately_when_already_cancelled(analyze_service):
-    """If cancel is already requested, the wait aborts without blocking on get().
-
-    Reproduces the regression where a terminated pool leaves the in-flight
-    AsyncResult permanently unset: the cancel flag must be honoured before
-    ever waiting on get(), so the run cannot stall for PROCESS_TIMEOUT_SECONDS.
-    """
-    from core.services.AnalyzeService import _AnalysisCancelled
-
-    async_result = MagicMock()
-    analyze_service.cancelled = True
-    with pytest.raises(_AnalysisCancelled):
-        analyze_service._await_result(async_result)
-    async_result.get.assert_not_called()
-
-
-def test_await_result_detects_cancel_mid_wait(analyze_service):
-    """A cancel that arrives while polling stops the wait promptly.
-
-    Simulates a terminated-pool in-flight result whose get() only ever times
-    out; once cancellation is flagged mid-wait, _await_result must raise
-    instead of looping until the real per-image deadline.
-    """
-    from multiprocessing import TimeoutError as MPTimeoutError
-    from core.services.AnalyzeService import _AnalysisCancelled
-
-    async_result = MagicMock()
-
-    def timeout_then_flag(*args, **kwargs):
-        # Model the worker being killed by pool.terminate(): the result never
-        # arrives, and the cancel flag flips between poll slices.
-        analyze_service.cancelled = True
-        raise MPTimeoutError()
-
-    async_result.get.side_effect = timeout_then_flag
-    with pytest.raises(_AnalysisCancelled):
-        analyze_service._await_result(async_result)
-
-
-def test_await_result_enforces_per_image_timeout(analyze_service, monkeypatch):
-    """A wedged worker (no cancel) still hits the real per-image timeout."""
+def test_cancel_mid_run_stops_at_once_and_closes_the_workers(analyze_service, monkeypatch):
+    """A cancel stops taking results immediately - it does not wait for images
+    still in progress - and closing the generator is what kills their workers."""
     import core.services.AnalyzeService as analyze_module
-    from multiprocessing import TimeoutError as MPTimeoutError
+    events = []
 
-    # Force the deadline into the past so the wedged-worker path is reached
-    # without waiting the real PROCESS_TIMEOUT_SECONDS.
-    monkeypatch.setattr(analyze_module, "PROCESS_TIMEOUT_SECONDS", -1)
+    def fake_run_in_workers(tasks, *args):
+        try:
+            for file, _ in tasks:
+                events.append("result")
+                analyze_service.process_cancel()
+                yield file, None
+        finally:
+            events.append("closed")
 
-    async_result = MagicMock()
-    async_result.get.side_effect = MPTimeoutError()
-    with pytest.raises(MPTimeoutError):
-        analyze_service._await_result(async_result)
+    monkeypatch.setattr(analyze_module, "run_in_workers", fake_run_in_workers)
+    _write_images(analyze_service, 3)
+    done = []
+    analyze_service.sig_done.connect(lambda *args: done.append(args))
+
+    analyze_service.process_files()
+    assert events == ["result", "closed"]
+    assert len(done) == 1
+
+
+def test_failed_worker_is_recorded_and_run_continues(analyze_service, monkeypatch):
+    """A crashed or timed-out worker costs only its own image."""
+    import core.services.AnalyzeService as analyze_module
+
+    def fake_run_in_workers(tasks, *args):
+        (first, _), (second, _) = tasks
+        yield first, TimeoutError("Processing exceeded 300s and was skipped")
+        yield second, None
+
+    monkeypatch.setattr(analyze_module, "run_in_workers", fake_run_in_workers)
+    _write_images(analyze_service, 2)
+    analyze_service._handle_failed_image = MagicMock()
+
+    analyze_service.process_files()
+    reasons = [call.args[1] for call in analyze_service._handle_failed_image.call_args_list]
+    assert "exceeded" in reasons[0]
+    assert len(reasons) == 2  # the run went on to the second image
 
 
 # ---------------------------------------------------------------------------

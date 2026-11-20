@@ -255,26 +255,9 @@ def main_window(qtbot):
                         except Exception:
                             pass
 
-                    # Terminate the process pool if it exists
-                    if analyze_service is not None and hasattr(analyze_service, 'pool'):
-                        try:
-                            analyze_service.pool.terminate()
-                            analyze_service.pool.join(timeout=1)
-                        except Exception:
-                            pass
-
-                    # Stop the thread
+                    # Stop the thread (the cancel above already killed its workers)
                     thread.quit()
                     thread.wait(3000)  # Wait up to 3 seconds for thread to finish
-
-        # Also check for any remaining analyzeService
-        if hasattr(mw, 'analyzeService') and mw.analyzeService is not None:
-            if hasattr(mw.analyzeService, 'pool'):
-                try:
-                    mw.analyzeService.pool.terminate()
-                    mw.analyzeService.pool.join(timeout=1)
-                except Exception:
-                    pass
 
         # Close the main window
         mw.close()

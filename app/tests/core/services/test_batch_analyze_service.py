@@ -37,7 +37,6 @@ class FakeAnalyzeService(QObject):
         self.output_dir = output_dir
         self.behavior = behavior
         self.images_with_aois = images_with_aois
-        self.pool = MagicMock()
 
     def process_files(self):
         """Simulate a pass: write a minimal XML and emit sig_done, fail, or stall."""
